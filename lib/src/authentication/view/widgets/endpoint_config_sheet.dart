@@ -14,8 +14,7 @@ class EndpointConfigSheet extends StatefulWidget {
   final bool compact;
 
   static Future<void> show(BuildContext context) {
-    final commandSurface =
-        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    final commandSurface = resolveCommandSurface(context);
     final bool compact = commandSurface == CommandSurface.sheet;
     return showAdaptiveBottomSheet<void>(
       context: context,

@@ -42,6 +42,7 @@ abstract interface class XmppDatabase implements Database {
   Future<int> countChatMessages(
     String jid, {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    bool includePseudoMessages = true,
   });
 
   Future<List<Message>> getAllMessagesForChat(
@@ -1107,6 +1108,7 @@ WHERE subject_token IS NOT NULL
   Future<int> countChatMessages(
     String jid, {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    bool includePseudoMessages = true,
   }) async {
     final filterValue = filter.index;
     final query = await customSelect(
@@ -1118,6 +1120,7 @@ WHERE subject_token IS NOT NULL
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
       WHERE m.chat_jid = ?
+        AND (? = 1 OR m.pseudo_message_type IS NULL)
         AND (
           CASE WHEN ? = 0 THEN
             (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
@@ -1129,6 +1132,7 @@ WHERE subject_token IS NOT NULL
       variables: [
         Variable<String>(jid),
         Variable<String>(jid),
+        Variable<int>(includePseudoMessages ? 1 : 0),
         Variable<int>(filterValue),
       ],
       readsFrom: {

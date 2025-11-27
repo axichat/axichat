@@ -569,9 +569,36 @@ class EmailDeltaTransport implements ChatTransport {
       return existing;
     }
     final remote = await _context!.getChat(chatId);
-    final emailAddress = _normalizedAddress(remote?.contactAddress, chatId);
+    final chat = _chatFromRemote(
+      chatId: chatId,
+      remote: remote,
+    );
+    final existingByAddress = await db.getChat(chat.jid);
+    if (existingByAddress != null) {
+      final merged = existingByAddress.copyWith(
+        deltaChatId: chatId,
+        emailAddress: chat.emailAddress,
+        contactDisplayName: chat.contactDisplayName,
+        contactID: chat.contactID,
+        contactJid: chat.contactJid,
+      );
+      await db.updateChat(merged);
+      return merged;
+    }
+    await db.createChat(chat);
+    return chat;
+  }
+
+  Chat _chatFromRemote({
+    required int chatId,
+    required DeltaChat? remote,
+  }) {
+    final emailAddress = _normalizedAddress(
+      remote?.contactAddress,
+      chatId,
+    );
     final title = remote?.name ?? remote?.contactName ?? emailAddress;
-    final chat = Chat(
+    return Chat(
       jid: emailAddress,
       title: title,
       type: _mapChatType(remote?.type),
@@ -583,8 +610,6 @@ class EmailDeltaTransport implements ChatTransport {
       emailAddress: emailAddress,
       deltaChatId: chatId,
     );
-    await db.createChat(chat);
-    return chat;
   }
 
   Future<File> _deltaDatabaseFile(String prefix) async {

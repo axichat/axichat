@@ -1,16 +1,17 @@
 import 'package:axichat/src/home/home_search_models.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 
-const chatsSearchFilters = [
-  HomeSearchFilter(id: 'all', label: 'All chats'),
-  HomeSearchFilter(id: 'contacts', label: 'Contacts'),
-  HomeSearchFilter(id: 'nonContacts', label: 'Non-contacts'),
-  HomeSearchFilter(id: 'xmpp', label: 'XMPP only'),
-  HomeSearchFilter(id: 'email', label: 'Email only'),
-  HomeSearchFilter(id: 'hidden', label: 'Hidden'),
-];
+List<HomeSearchFilter> chatsSearchFilters(AppLocalizations l10n) => [
+      HomeSearchFilter(id: 'all', label: l10n.chatsFilterAll),
+      HomeSearchFilter(id: 'contacts', label: l10n.chatsFilterContacts),
+      HomeSearchFilter(id: 'nonContacts', label: l10n.chatsFilterNonContacts),
+      HomeSearchFilter(id: 'xmpp', label: l10n.chatsFilterXmppOnly),
+      HomeSearchFilter(id: 'email', label: l10n.chatsFilterEmailOnly),
+      HomeSearchFilter(id: 'hidden', label: l10n.chatsFilterHidden),
+    ];
 
-const spamSearchFilters = [
-  HomeSearchFilter(id: 'all', label: 'All spam'),
-  HomeSearchFilter(id: 'email', label: 'Email'),
-  HomeSearchFilter(id: 'xmpp', label: 'XMPP'),
-];
+List<HomeSearchFilter> spamSearchFilters(AppLocalizations l10n) => [
+      HomeSearchFilter(id: 'all', label: l10n.spamFilterAll),
+      HomeSearchFilter(id: 'email', label: l10n.spamFilterEmail),
+      HomeSearchFilter(id: 'xmpp', label: l10n.spamFilterXmpp),
+    ];

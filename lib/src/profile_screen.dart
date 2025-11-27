@@ -16,6 +16,7 @@ import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -112,10 +113,11 @@ class _ProfileBodyState extends State<_ProfileBody> {
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, state) {
+        final l10n = context.l10n;
         final ConnectionState connectionState = _xmppStateFor(state);
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Profile'),
+            title: Text(l10n.profileTitle),
             backgroundColor: context.colorScheme.background,
             surfaceTintColor: Colors.transparent,
             elevation: 0,
@@ -130,7 +132,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   height: AxiIconButton.kDefaultSize,
                   child: AxiIconButton(
                     iconData: LucideIcons.arrowLeft,
-                    tooltip: 'Back',
+                    tooltip: l10n.commonBack,
                     color: context.colorScheme.foreground,
                     borderColor: context.colorScheme.border,
                     onPressed: () => _profileRoute == _ProfileRoute.main
@@ -277,6 +279,7 @@ class _ProfileCardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: BlocBuilder<ProfileCubit, ProfileState>(
@@ -346,10 +349,8 @@ class _ProfileCardSection extends StatelessWidget {
                               builder: (_) => ConstrainedBox(
                                 constraints:
                                     const BoxConstraints(maxWidth: 300.0),
-                                child: const Text(
-                                  'This is your Jabber ID. Comprised of your '
-                                  'username and domain, it\'s a unique address '
-                                  'that represents you on the XMPP network.',
+                                child: Text(
+                                  l10n.profileJidDescription,
                                   textAlign: TextAlign.left,
                                 ),
                               ),
@@ -371,11 +372,8 @@ class _ProfileCardSection extends StatelessWidget {
                                 builder: (_) => ConstrainedBox(
                                   constraints:
                                       const BoxConstraints(maxWidth: 300.0),
-                                  child: const Text(
-                                    'This is your XMPP resource. Every device '
-                                    'you use has a different one, which is why '
-                                    'your phone can have a different presence '
-                                    'to your desktop.',
+                                  child: Text(
+                                    l10n.profileResourceDescription,
                                     textAlign: TextAlign.left,
                                   ),
                                 ),
@@ -413,7 +411,7 @@ class _ProfileCardSection extends StatelessWidget {
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: AxiTextFormField(
-                          placeholder: const Text('Status message'),
+                          placeholder: Text(l10n.profileStatusPlaceholder),
                           initialValue: profileState.status,
                           onSubmitted: (value) => context
                               .read<ProfileCubit?>()
@@ -428,7 +426,7 @@ class _ProfileCardSection extends StatelessWidget {
                       children: [
                         ShadButton.outline(
                           size: ShadButtonSize.sm,
-                          child: const Text('View archives'),
+                          child: Text(l10n.profileArchives),
                           onPressed: () => context.push(
                             const ArchivesRoute().location,
                             extra: locate,
@@ -436,13 +434,13 @@ class _ProfileCardSection extends StatelessWidget {
                         ).withTapBounce(),
                         ShadButton.outline(
                           size: ShadButtonSize.sm,
-                          child: const Text('Change password'),
+                          child: Text(l10n.profileChangePassword),
                           onPressed: () =>
                               onNavigate(_ProfileRoute.changePassword),
                         ).withTapBounce(),
                         ShadButton.destructive(
                           size: ShadButtonSize.sm,
-                          child: const Text('Delete account'),
+                          child: Text(l10n.profileDeleteAccount),
                           onPressed: () => onNavigate(_ProfileRoute.delete),
                         ).withTapBounce(),
                       ],

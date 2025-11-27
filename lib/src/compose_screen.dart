@@ -5,6 +5,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -64,7 +65,7 @@ class ComposeScreen extends StatelessWidget {
                     height: AxiIconButton.kDefaultSize,
                     child: AxiIconButton(
                       iconData: LucideIcons.arrowLeft,
-                      tooltip: 'Back',
+                      tooltip: context.l10n.commonBack,
                       color: context.colorScheme.foreground,
                       borderColor: context.colorScheme.border,
                       onPressed: () => Navigator.pop(context),
@@ -73,7 +74,7 @@ class ComposeScreen extends StatelessWidget {
                 ),
               )
             : null,
-        title: const Text('Compose'),
+        title: Text(context.l10n.composeTitle),
       ),
       body: Center(
         child: Padding(

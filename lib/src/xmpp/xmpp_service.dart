@@ -36,7 +36,6 @@ import 'package:omemo_dart/omemo_dart.dart'
     show RatchetMapKey, OmemoDataPackage; // For persistence types only
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:path/path.dart' as p;
-import 'package:http/http.dart' as http;
 import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
 import 'package:uuid/uuid.dart';

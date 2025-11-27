@@ -42,13 +42,13 @@ Future<void> main() async {
 
   const capability = Capability();
   final notificationService = NotificationService();
+  await notificationService.init();
 
   withForeground = capability.canForegroundService &&
       await notificationService.hasAllNotificationPermissions();
   foregroundServiceActive.value = withForeground;
   if (withForeground) {
     initForegroundService();
-    await notificationService.init();
   }
 
   runApp(
@@ -63,6 +63,7 @@ Future<void> main() async {
             ),
           )
         : Axichat(
+            notificationService: notificationService,
             capability: capability,
             storageManager: storageManager,
           ),

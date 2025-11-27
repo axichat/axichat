@@ -33,7 +33,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -247,15 +246,8 @@ class MaterialAxichat extends StatelessWidget {
           neutrals: chatNeutrals,
         );
         final app = ShadApp.router(
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: const [
-            Locale('en', ''),
-          ],
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
           theme: lightTheme,
           darkTheme: darkTheme,
@@ -538,6 +530,10 @@ class ToggleCalendarIntent extends Intent {
   const ToggleCalendarIntent();
 }
 
+class OpenFindActionIntent extends Intent {
+  const OpenFindActionIntent();
+}
+
 class _ShortcutBindings extends StatelessWidget {
   const _ShortcutBindings({
     required this.enabled,
@@ -569,6 +565,7 @@ class _ShortcutBindings extends StatelessWidget {
     final shortcuts = <ShortcutActivator, Intent>{
       _composeActivator(env.platform): const ComposeIntent(),
       _searchActivator(env.platform): const ToggleSearchIntent(),
+      _findActionActivator(env.platform): const OpenFindActionIntent(),
     };
     if (env.supportsDesktopShortcuts) {
       shortcuts[_calendarActivator(env.platform)] =
@@ -659,6 +656,15 @@ SingleActivator _calendarActivator(TargetPlatform platform) {
     meta: isApple,
     control: !isApple,
     shift: true,
+  );
+}
+
+SingleActivator _findActionActivator(TargetPlatform platform) {
+  final isApple = _isApplePlatform(platform);
+  return SingleActivator(
+    LogicalKeyboardKey.keyK,
+    meta: isApple,
+    control: !isApple,
   );
 }
 

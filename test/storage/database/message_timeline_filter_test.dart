@@ -128,4 +128,45 @@ void main() {
       contains('direct-1'),
     );
   });
+
+  test('countChatMessages can exclude pseudo messages', () async {
+    final contact = Chat(
+      jid: 'dc-1@delta.chat',
+      title: 'Bob',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime(2024, 1, 1),
+      deltaChatId: 1,
+      emailAddress: 'bob@example.com',
+    );
+    await db.createChat(contact);
+
+    final realMessage = Message(
+      stanzaID: 'real-1',
+      senderJid: contact.jid,
+      chatJid: contact.jid,
+      timestamp: DateTime.utc(2024, 1, 1),
+      body: 'hello',
+      encryptionProtocol: EncryptionProtocol.none,
+    );
+    final pseudoMessage = Message(
+      stanzaID: 'pseudo-1',
+      senderJid: contact.jid,
+      chatJid: contact.jid,
+      timestamp: DateTime.utc(2024, 1, 2),
+      pseudoMessageType: PseudoMessageType.newDevice,
+      pseudoMessageData: const {'device': 'new'},
+    );
+
+    await db.saveMessage(realMessage);
+    await db.saveMessage(pseudoMessage);
+
+    final totalCount = await db.countChatMessages(contact.jid);
+    final archivedCount = await db.countChatMessages(
+      contact.jid,
+      includePseudoMessages: false,
+    );
+
+    expect(totalCount, 2);
+    expect(archivedCount, 1);
+  });
 }

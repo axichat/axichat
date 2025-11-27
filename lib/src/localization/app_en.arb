@@ -2,5 +2,475 @@
   "appTitle": "axichat",
   "@appTitle": {
     "description": "The title of the application"
-  }
+  },
+  "homeTabChats": "Chats",
+  "homeTabDrafts": "Drafts",
+  "homeTabSpam": "Spam",
+  "homeTabBlocked": "Blocked",
+  "homeNoModules": "No modules available",
+  "homeRailShowMenu": "Show menu",
+  "homeRailHideMenu": "Hide menu",
+  "homeRailCalendar": "Calendar",
+  "homeSearchPlaceholderTabs": "Search tabs",
+  "homeSearchPlaceholderForTab": "Search {tab}",
+  "@homeSearchPlaceholderForTab": {
+    "placeholders": {
+      "tab": {}
+    }
+  },
+  "homeSearchFilterLabel": "Filter: {filter}",
+  "@homeSearchFilterLabel": {
+    "placeholders": {
+      "filter": {}
+    }
+  },
+  "blocklistFilterAll": "All blocked",
+  "draftsFilterAll": "All drafts",
+  "draftsFilterAttachments": "With attachments",
+  "chatsFilterAll": "All chats",
+  "chatsFilterContacts": "Contacts",
+  "chatsFilterNonContacts": "Non-contacts",
+  "chatsFilterXmppOnly": "XMPP only",
+  "chatsFilterEmailOnly": "Email only",
+  "chatsFilterHidden": "Hidden",
+  "spamFilterAll": "All spam",
+  "spamFilterEmail": "Email",
+  "spamFilterXmpp": "XMPP",
+  "chatFilterDirectOnly": "Direct only",
+  "chatFilterAllWithContact": "All with contact",
+  "chatSearchMessages": "Search messages",
+  "chatSearchSortNewestFirst": "Newest first",
+  "chatSearchSortOldestFirst": "Oldest first",
+  "chatSearchAnySubject": "Any subject",
+  "chatSearchExcludeSubject": "Exclude subject",
+  "chatSearchFailed": "Search failed",
+  "chatSearchInProgress": "Searching…",
+  "chatSearchEmptyPrompt": "Matches will appear in the conversation below.",
+  "chatSearchNoMatches": "No matches. Adjust filters or try another query.",
+  "chatSearchMatchCount": "{count, plural, one {# match shown below.} other {# matches shown below.}}",
+  "filterTooltip": "Filter • {label}",
+  "@filterTooltip": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "chatSearchClose": "Close search",
+  "commonSearch": "Search",
+  "commonClear": "Clear",
+  "commonCancel": "Cancel",
+  "spamEmpty": "No spam yet",
+  "spamMoveToInbox": "Move to inbox",
+  "spamMoveToastTitle": "Moved",
+  "spamMoveToastMessage": "Returned {chatTitle} to inbox.",
+  "@spamMoveToastMessage": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatSpamUpdateFailed": "Failed to update spam status.",
+  "chatSpamSent": "Sent {chatTitle} to spam.",
+  "@chatSpamSent": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatSpamRestored": "Returned {chatTitle} to inbox.",
+  "@chatSpamRestored": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatSpamReportedTitle": "Reported",
+  "chatSpamRestoredTitle": "Restored",
+  "chatMembersLoading": "Loading members",
+  "chatMembersLoadingEllipsis": "Loading members…",
+  "chatAttachmentConfirmTitle": "Load attachment?",
+  "chatAttachmentConfirmMessage": "Only load attachments from contacts you trust.\n\n{sender} is not in your contacts yet. Continue?",
+  "@chatAttachmentConfirmMessage": {
+    "placeholders": {
+      "sender": {}
+    }
+  },
+  "chatAttachmentConfirmButton": "Load",
+  "chatOpenLinkTitle": "Open external link?",
+  "chatOpenLinkMessage": "You are about to open:\n{url}\n\nOnly tap OK if you trust the site (host: {host}).",
+  "@chatOpenLinkMessage": {
+    "placeholders": {
+      "url": {},
+      "host": {}
+    }
+  },
+  "chatOpenLinkConfirm": "Open link",
+  "chatInvalidLink": "Invalid link: {url}",
+  "@chatInvalidLink": {
+    "placeholders": {
+      "url": {}
+    }
+  },
+  "chatUnableToOpenHost": "Unable to open {host}",
+  "@chatUnableToOpenHost": {
+    "placeholders": {
+      "host": {}
+    }
+  },
+  "chatSaveAsDraft": "Save as draft",
+  "chatDraftUnavailable": "Drafts are unavailable right now.",
+  "chatDraftMissingContent": "Add a message, subject, or attachment before saving.",
+  "chatDraftSaved": "Saved to Drafts.",
+  "chatDraftSaveFailed": "Failed to save draft. Try again.",
+  "chatAttachmentInaccessible": "Selected file is not accessible.",
+  "chatAttachmentFailed": "Unable to attach file.",
+  "chatAttachmentView": "View",
+  "chatAttachmentRetry": "Retry upload",
+  "chatAttachmentRemove": "Remove attachment",
+  "commonClose": "Close",
+  "toastWhoopsTitle": "Whoops",
+  "toastHeadsUpTitle": "Heads up",
+  "toastAllSetTitle": "All set",
+  "chatRoomMembers": "Room members",
+  "chatCloseSettings": "Close settings",
+  "chatSettings": "Chat settings",
+  "chatEmptySearch": "No matches",
+  "chatEmptyMessages": "No messages",
+  "chatComposerEmailHint": "Send email message",
+  "chatComposerMessageHint": "Send message",
+  "chatReadOnly": "Read only",
+  "chatUnarchivePrompt": "Unarchive to send new messages.",
+  "chatEmojiPicker": "Emoji picker",
+  "chatShowingDirectOnly": "Showing direct only",
+  "chatShowingAll": "Showing all",
+  "chatMuteNotifications": "Mute notifications",
+  "chatEnableNotifications": "Enable notifications",
+  "chatMoveToInbox": "Move to inbox",
+  "chatReportSpam": "Report spam",
+  "chatSignatureToggleLabel": "Include share token footer for email",
+  "chatSignatureHintEnabled": "Helps keep multi-recipient email threads intact.",
+  "chatSignatureHintDisabled": "Disabled globally; replies may not thread.",
+  "chatSignatureHintWarning": "Disabling can break threading and attachment grouping.",
+  "chatInviteRevoked": "Invite revoked",
+  "chatInvite": "Invite",
+  "chatReactionsNone": "No reactions yet",
+  "chatReactionsPrompt": "Tap a reaction to add or remove yours",
+  "chatReactionsPick": "Pick an emoji to react",
+  "chatActionReply": "Reply",
+  "chatActionForward": "Forward",
+  "chatActionResend": "Resend",
+  "chatActionEdit": "Edit",
+  "chatActionRevoke": "Revoke",
+  "chatActionCopy": "Copy",
+  "chatActionShare": "Share",
+  "chatActionAddToCalendar": "Add to calendar",
+  "chatActionDetails": "Details",
+  "chatActionSelect": "Select",
+  "chatActionReact": "React",
+  "chatContactRenameAction": "Rename",
+  "chatContactRenameTooltip": "Rename contact",
+  "chatContactRenameTitle": "Rename contact",
+  "chatContactRenameDescription": "Choose how this contact appears across Axichat.",
+  "chatContactRenamePlaceholder": "Display name",
+  "chatContactRenameReset": "Reset to default",
+  "chatContactRenameSave": "Save",
+  "chatContactRenameSuccess": "Display name updated",
+  "chatContactRenameFailure": "Could not rename contact",
+  "chatComposerSemantics": "Message input",
+  "draftSaved": "Draft saved",
+  "draftErrorTitle": "Whoops",
+  "draftNoRecipients": "No recipients",
+  "draftSubjectSemantics": "Email subject",
+  "draftSubjectHintOptional": "Subject (optional)",
+  "draftMessageSemantics": "Message body",
+  "draftMessageHint": "Message",
+  "draftSendingStatus": "Sending...",
+  "draftSendingEllipsis": "Sending…",
+  "draftSend": "Send draft",
+  "draftDiscard": "Discard",
+  "draftSave": "Save draft",
+  "draftAttachmentInaccessible": "Selected file is not accessible.",
+  "draftAttachmentFailed": "Unable to attach file.",
+  "draftDiscarded": "Draft discarded.",
+  "draftSendFailed": "Failed to send draft.",
+  "draftSent": "Sent",
+  "draftValidationNoContent": "Add a subject, message, or attachment",
+  "draftFileMissing": "File no longer exists at {path}.",
+  "@draftFileMissing": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "draftAttachmentPreview": "Preview",
+  "draftRemoveAttachment": "Remove attachment",
+  "draftNoAttachments": "No attachments yet",
+  "draftAttachmentsLabel": "Attachments",
+  "draftAddAttachment": "Add attachment",
+  "draftTaskDue": "Due {date}",
+  "@draftTaskDue": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "draftTaskNoSchedule": "No schedule",
+  "draftTaskUntitled": "Untitled task",
+  "chatBack": "Back",
+  "chatErrorLabel": "Error!",
+  "chatSenderYou": "You",
+  "chatInviteAlreadyInRoom": "Already in this room.",
+  "chatInviteWrongAccount": "Invite is not for this account.",
+  "chatShareNoText": "Message has no text to share",
+  "chatShareFallbackSubject": "Axichat message",
+  "chatShareSubjectPrefix": "Shared from {chatTitle}",
+  "@chatShareSubjectPrefix": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatCalendarNoText": "Message has no text to add to calendar",
+  "chatCalendarUnavailable": "Calendar is unavailable right now",
+  "chatCopyNoText": "Selected messages have no text to copy",
+  "chatShareSelectedNoText": "Selected messages have no text to share",
+  "chatForwardInviteForbidden": "Invites cannot be forwarded.",
+  "chatAddToCalendarNoText": "Selected messages have no text to add to calendar",
+  "chatForwardDialogTitle": "Forward to...",
+  "chatComposerAttachmentWarning": "Large attachments are sent separately to each recipient and may take longer to deliver.",
+  "chatFanOutRecipientLabel": "{count, plural, one {recipient} other {recipients}}",
+  "@chatFanOutRecipientLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatFanOutFailureWithSubject": "Subject \"{subject}\" failed to send to {count} {recipientLabel}.",
+  "@chatFanOutFailureWithSubject": {
+    "placeholders": {
+      "subject": {},
+      "count": {
+        "type": "int"
+      },
+      "recipientLabel": {}
+    }
+  },
+  "chatFanOutFailure": "Failed to send to {count} {recipientLabel}.",
+  "@chatFanOutFailure": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "recipientLabel": {}
+    }
+  },
+  "chatFanOutRetry": "Retry",
+  "chatSubjectSemantics": "Email subject",
+  "chatSubjectHint": "Subject",
+  "chatAttachmentTooltip": "Attachments",
+  "chatSendMessageTooltip": "Send message",
+  "chatBlockAction": "Block",
+  "chatReactionMore": "More",
+  "chatQuotedNoContent": "(no content)",
+  "chatReplyingTo": "Replying to...",
+  "chatCancelReply": "Cancel reply",
+  "chatMessageRetracted": "(retracted)",
+  "chatMessageEdited": "(edited)",
+  "chatGuestAttachmentsDisabled": "Attachments are disabled in preview.",
+  "chatGuestSubtitle": "Guest preview • Stored locally",
+  "recipientsOverflowMore": "{count, plural, one {+1 more} other {+{count} more}}",
+  "@recipientsOverflowMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recipientsCollapse": "Collapse",
+  "recipientsSemantics": "Recipients {count}, {state}",
+  "@recipientsSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "state": {}
+    }
+  },
+  "recipientsStateCollapsed": "collapsed",
+  "recipientsStateExpanded": "expanded",
+  "recipientsHintExpand": "Press to expand",
+  "recipientsHintCollapse": "Press to collapse",
+  "recipientsHeaderTitle": "Send to...",
+  "recipientsFallbackLabel": "Recipient",
+  "recipientsAddHint": "Add...",
+  "chatGuestScriptWelcome": "Welcome to Axichat—chat, email, and calendar in one place.",
+  "chatGuestScriptExternalQuestion": "Looks clean. Can I message people who aren't on Axichat?",
+  "chatGuestScriptExternalAnswer": "Yep—send chat-formatted email to Gmail, Outlook, Tuta, and more. If both of you use Axichat you also get groupchats, reactions, delivery receipts, and more.",
+  "chatGuestScriptOfflineQuestion": "Does it work offline or in guest mode?",
+  "chatGuestScriptOfflineAnswer": "Yes—offline functionality is built in, and the calendar even works in Guest Mode without an account or internet.",
+  "chatGuestScriptKeepUpQuestion": "How does it help me keep up with everything?",
+  "chatGuestScriptKeepUpAnswer": "Our calendar does natural language scheduling, Eisenhower Matrix triage, drag-and-drop, and reminders so you can focus on what matters.",
+  "calendarParserUnavailable": "Parser unavailable ({errorType})",
+  "@calendarParserUnavailable": {
+    "placeholders": {
+      "errorType": {}
+    }
+  },
+  "calendarAddTaskTitle": "Add Task",
+  "calendarTaskNameRequired": "Task name *",
+  "calendarTaskNameHint": "Task name",
+  "calendarDescriptionHint": "Description (optional)",
+  "calendarLocationHint": "Location (optional)",
+  "calendarScheduleLabel": "Schedule",
+  "calendarDeadlineLabel": "Deadline",
+  "calendarRepeatLabel": "Repeat",
+  "calendarCancel": "Cancel",
+  "calendarAddTaskAction": "Add Task",
+  "calendarSelectionMode": "Selection mode",
+  "calendarExit": "Exit",
+  "calendarTasksSelected": "{count, plural, one {# task selected} other {# tasks selected}}",
+  "@calendarTasksSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarActions": "Actions",
+  "calendarSetPriority": "Set priority",
+  "calendarClearSelection": "Clear Selection",
+  "calendarExportSelected": "Export selected",
+  "calendarDeleteSelected": "Delete selected",
+  "calendarBatchEdit": "Batch edit",
+  "calendarBatchTitle": "Title",
+  "calendarBatchTitleHint": "Set title for selected tasks",
+  "calendarBatchDescription": "Description",
+  "calendarBatchDescriptionHint": "Set description (leave blank to clear)",
+  "calendarBatchLocation": "Location",
+  "calendarBatchLocationHint": "Set location (leave blank to clear)",
+  "calendarApplyChanges": "Apply changes",
+  "calendarAdjustTime": "Adjust time",
+  "calendarSelectionRequired": "Select tasks before applying changes.",
+  "calendarSelectionNone": "Select tasks to export first.",
+  "calendarSelectionChangesApplied": "Changes applied to selected tasks.",
+  "calendarSelectionNoPending": "No pending changes to apply.",
+  "calendarSelectionTitleBlank": "Title cannot be blank.",
+  "calendarExportReady": "Export ready to share.",
+  "calendarExportFailed": "Failed to export selected tasks: {error}",
+  "@calendarExportFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "commonBack": "Back",
+  "composeTitle": "Compose",
+  "draftComposeMessage": "Compose a message",
+  "draftCompose": "Compose",
+  "draftNewMessage": "New message",
+  "draftRestore": "Restore",
+  "draftMinimize": "Minimize",
+  "draftExpand": "Expand",
+  "draftExitFullscreen": "Exit fullscreen",
+  "draftCloseComposer": "Close composer",
+  "draftsEmpty": "No drafts yet",
+  "draftsDeleteConfirm": "Delete draft?",
+  "draftNoSubject": "(no subject)",
+  "draftRecipientCount": "{count, plural, one {1 recipient} other {{count} recipients}}",
+  "authCreatingAccount": "Creating your account…",
+  "authSecuringLogin": "Securing your login…",
+  "authLoggingIn": "Logging you in…",
+  "authToggleSignup": "New? Sign up",
+  "authToggleLogin": "Already registered? Log in",
+  "authGuestCalendarCta": "Try Calendar (Guest Mode)",
+  "authLogin": "Log in",
+  "authSignUp": "Sign up",
+  "authToggleSelected": "Current selection",
+  "authToggleSelectHint": "Activate to select {label}",
+  "authUsername": "Username",
+  "authUsernameRequired": "Enter a username",
+  "authUsernameRules": "4-20 alphanumeric, allowing \".\", \"_\" and \"-\".",
+  "authUsernameCaseInsensitive": "Case insensitive",
+  "authPassword": "Password",
+  "authPasswordConfirm": "Confirm password",
+  "authPasswordRequired": "Enter a password",
+  "authPasswordMaxLength": "Must be {max} characters or fewer",
+  "authPasswordsMismatch": "Passwords don't match",
+  "authPasswordPending": "Checking password safety",
+  "authSignupPending": "Waiting for signup",
+  "authLoginPending": "Waiting for login",
+  "signupTitle": "Sign up",
+  "signupStepUsername": "Choose username",
+  "signupStepPassword": "Create password",
+  "signupStepCaptcha": "Verify captcha",
+  "signupStepSetup": "Setup",
+  "signupErrorPrefix": "Error: {message}",
+  "signupCaptchaUnavailable": "Captcha unavailable",
+  "signupCaptchaChallenge": "Captcha challenge",
+  "signupCaptchaFailed": "Captcha failed to load. Use reload to try again.",
+  "signupCaptchaLoading": "Captcha loading",
+  "signupCaptchaInstructions": "Enter the characters shown in this captcha image.",
+  "signupCaptchaReload": "Reload captcha",
+  "signupCaptchaReloadHint": "Get a new captcha image if you cannot read this one.",
+  "signupCaptchaPlaceholder": "Enter the above text",
+  "signupCaptchaValidation": "Enter the text from the image",
+  "signupContinue": "Continue",
+  "signupProgressLabel": "Signup progress",
+  "signupProgressValue": "Step {current} of {total}: {currentLabel}. {percent}% complete.",
+  "signupProgressSection": "Account setup",
+  "signupPasswordStrength": "Password strength",
+  "signupPasswordBreached": "This password has been found in a hacked database.",
+  "signupStrengthNone": "None",
+  "signupStrengthWeak": "Weak",
+  "signupStrengthMedium": "Medium",
+  "signupStrengthStronger": "Stronger",
+  "signupRiskAcknowledgement": "I understand the risk",
+  "signupRiskError": "Check the box above to continue.",
+  "signupRiskAllowBreach": "Allow this password even though it appeared in a breach.",
+  "signupRiskAllowWeak": "Allow this password even though it is considered weak.",
+  "signupCaptchaErrorMessage": "Unable to load captcha.\nTap refresh to try again.",
+  "notificationsRestartTitle": "Restart app to enable notifications",
+  "notificationsRestartSubtitle": "Required permissions already granted",
+  "notificationsMessageToggle": "Message notifications",
+  "notificationsRequiresRestart": "Requires restart",
+  "notificationsDialogTitle": "Enable message notifications",
+  "notificationsDialogIgnore": "Ignore",
+  "notificationsDialogContinue": "Continue",
+  "notificationsDialogDescription": "Chats can always be muted later.",
+  "calendarAdjustStartMinus": "Start -15m",
+  "calendarAdjustStartPlus": "Start +15m",
+  "calendarAdjustEndMinus": "End -15m",
+  "calendarAdjustEndPlus": "End +15m",
+  "calendarCopyToClipboardAction": "Copy to Clipboard",
+  "calendarCopyLocation": "Location: {location}",
+  "@calendarCopyLocation": {
+    "placeholders": {
+      "location": {}
+    }
+  },
+  "calendarTaskCopied": "Task copied",
+  "calendarTaskCopiedClipboard": "Task copied to clipboard",
+  "calendarCopyTask": "Copy Task",
+  "calendarDeleteTask": "Delete Task",
+  "calendarSelectionNoneShort": "No tasks selected.",
+  "calendarSelectionMixedRecurrence": "Tasks have different recurrence settings. Updates will apply to all selected tasks.",
+  "calendarSelectionNoTasksHint": "No tasks selected. Use the Select option in the calendar to pick tasks to edit.",
+  "calendarSelectionRemove": "Remove from selection",
+  "calendarQuickTaskHint": "Quick task (e.g., \"Meeting at 2pm in Room 101\")",
+  "calendarAdvancedHide": "Hide advanced options",
+  "calendarAdvancedShow": "Show advanced options",
+  "calendarUnscheduledTitle": "Unscheduled tasks",
+  "calendarUnscheduledEmptyLabel": "No unscheduled tasks",
+  "calendarUnscheduledEmptyHint": "Tasks you add will appear here",
+  "calendarRemindersTitle": "Reminders",
+  "calendarRemindersEmptyLabel": "No reminders yet",
+  "calendarRemindersEmptyHint": "Add a deadline to create a reminder",
+  "calendarNothingHere": "Nothing here yet",
+  "calendarTaskNotFound": "Task not found",
+  "profileTitle": "Profile",
+  "profileJidDescription": "This is your Jabber ID. Comprised of your username and domain, it's a unique address that represents you on the XMPP network.",
+  "profileResourceDescription": "This is your XMPP resource. Every device you use has a different one, which is why your phone can have a different presence to your desktop.",
+  "profileStatusPlaceholder": "Status message",
+  "profileArchives": "View archives",
+  "profileChangePassword": "Change password",
+  "profileDeleteAccount": "Delete account",
+  "termsAcceptLabel": "I accept the terms and conditions",
+  "termsAgreementPrefix": "You agree to our ",
+  "termsAgreementTerms": "terms",
+  "termsAgreementAnd": " and ",
+  "termsAgreementPrivacy": "privacy policy",
+  "termsAgreementError": "You must accept the terms and conditions"
 }

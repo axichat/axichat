@@ -17,6 +17,20 @@ enum CommandSurface {
   menu,
 }
 
+CommandSurface resolveCommandSurface(BuildContext context) {
+  final env = EnvScope.maybeOf(context);
+  if (env != null) return env.commandSurface;
+  final mediaQuery = MediaQuery.maybeOf(context);
+  final platform = Theme.of(context).platform;
+  final bool desktopPlatform = platform == TargetPlatform.macOS ||
+      platform == TargetPlatform.linux ||
+      platform == TargetPlatform.windows;
+  final bool desktopWidth = (mediaQuery?.size.width ?? 0) >= 900;
+  return desktopPlatform || desktopWidth
+      ? CommandSurface.menu
+      : CommandSurface.sheet;
+}
+
 @immutable
 class Env {
   Env({

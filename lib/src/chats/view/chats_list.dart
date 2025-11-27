@@ -9,6 +9,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/calendar_tile.dart';
+import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -16,6 +17,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -194,7 +196,9 @@ bool _chatMatchesFilter(
 bool _chatMatchesQuery(Chat chat, String query) {
   if (query.isEmpty) return true;
   final lower = query.toLowerCase();
+  final alias = chat.contactDisplayName?.toLowerCase() ?? '';
   return chat.title.toLowerCase().contains(lower) ||
+      alias.contains(lower) ||
       chat.jid.toLowerCase().contains(lower) ||
       (chat.lastMessage?.toLowerCase().contains(lower) ?? false) ||
       (chat.alert?.toLowerCase().contains(lower) ?? false);
@@ -267,6 +271,7 @@ class _ChatListTileState extends State<ChatListTile> {
       }
     }
 
+    final displayName = item.displayName;
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
     final double unreadThickness = showUnreadBadge
@@ -366,7 +371,7 @@ class _ChatListTileState extends State<ChatListTile> {
       contentPadding: tilePadding,
       tapBounce: false,
       leading: TransportAwareAvatar(chat: item),
-      title: item.title,
+      title: displayName,
       subtitle: subtitleText,
       subtitlePlaceholder: 'No messages',
     );
@@ -501,7 +506,7 @@ class _ChatListTileState extends State<ChatListTile> {
         container: true,
         button: true,
         selected: isSelected,
-        label: item.title,
+        label: displayName,
         value: semanticsValue,
         hint: semanticsHint,
         onTap: tileOnTap,
@@ -589,7 +594,7 @@ class _ChatListTileState extends State<ChatListTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Delete chat: ${chat.title}',
+                      'Delete chat: ${chat.displayName}',
                       style: context.textTheme.small,
                     ),
                     const SizedBox.square(dimension: 10.0),
@@ -674,7 +679,7 @@ class _ChatListTileState extends State<ChatListTile> {
       await Share.shareXFiles(
         [XFile(file.path)],
         text: 'Chat export from Axichat',
-        subject: 'Chat with ${chat.title}',
+        subject: 'Chat with ${chat.displayName}',
       );
       if (!mounted) return;
       _showMessage('Chat exported');
@@ -781,6 +786,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     final iconSize = scaled(16);
     final spacing = scaled(8);
     final chatsCubit = context.read<ChatsCubit?>();
+    final l10n = context.l10n;
     return Wrap(
       spacing: spacing,
       runSpacing: spacing,
@@ -796,6 +802,13 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
                   widget.onClose();
                 },
         ),
+        if (widget.chat.type == ChatType.chat)
+          ContextActionButton(
+            icon: Icon(LucideIcons.pencilLine, size: iconSize),
+            label: l10n.chatContactRenameAction,
+            onPressed:
+                chatsCubit == null ? null : () => _renameContact(chatsCubit),
+          ),
         ContextActionButton(
           icon: Icon(
             widget.chat.favorited ? LucideIcons.starOff : LucideIcons.star,
@@ -873,6 +886,27 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     );
   }
 
+  Future<void> _renameContact(ChatsCubit chatsCubit) async {
+    final l10n = context.l10n;
+    final result = await showContactRenameDialog(
+      context: context,
+      initialValue: widget.chat.displayName,
+    );
+    if (result == null) return;
+    try {
+      await chatsCubit.renameContact(
+        jid: widget.chat.jid,
+        displayName: result,
+      );
+      if (!mounted) return;
+      _showSnack(l10n.chatContactRenameSuccess);
+      widget.onClose();
+    } on Exception {
+      if (!mounted) return;
+      _showSnack(l10n.chatContactRenameFailure);
+    }
+  }
+
   Future<void> _exportChat() async {
     final chatsCubit = context.read<ChatsCubit?>();
     if (chatsCubit == null) return;
@@ -893,7 +927,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
       await Share.shareXFiles(
         [XFile(file.path)],
         text: 'Chat export from Axichat',
-        subject: 'Chat with ${widget.chat.title}',
+        subject: 'Chat with ${widget.chat.displayName}',
       );
       if (!mounted) return;
       _showSnack('Chat exported');

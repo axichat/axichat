@@ -11,6 +11,7 @@ import 'package:axichat/src/authentication/view/widgets/operation_progress_bar.d
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -80,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen>
       setState(() {
         _signupButtonLoading = isLoading;
         if (isLoading && _operationLabel.isEmpty) {
-          _operationLabel = 'Creating your account…';
+          _operationLabel = context.l10n.authCreatingAccount;
         }
       });
     }
@@ -157,10 +158,10 @@ class _LoginScreenState extends State<LoginScreen>
     final isSubmissionSignup = signupState?.fromSubmission ?? false;
     if (flow == null) {
       if (isSubmissionSignup) {
-        _restoreSignupFlow('Creating your account…');
+        _restoreSignupFlow(context.l10n.authCreatingAccount);
         flow = _AuthFlow.signup;
       } else if (state is AuthenticationLogInInProgress && state.fromSignup) {
-        _restoreSignupFlow('Securing your login…');
+        _restoreSignupFlow(context.l10n.authSecuringLogin);
         flow = _AuthFlow.signup;
       } else {
         return;
@@ -168,19 +169,19 @@ class _LoginScreenState extends State<LoginScreen>
     }
     if (isSubmissionSignup && flow == _AuthFlow.signup) {
       _operationAcknowledged = true;
-      _ensureOperationVisible('Creating your account…');
+      _ensureOperationVisible(context.l10n.authCreatingAccount);
       return;
     }
     if (state is AuthenticationLogInInProgress) {
       if (flow == _AuthFlow.signup) {
         _operationAcknowledged = true;
-        _ensureOperationVisible('Securing your login…');
+        _ensureOperationVisible(context.l10n.authSecuringLogin);
         unawaited(_operationProgressController.reach(0.75));
         return;
       }
       if (flow == _AuthFlow.login) {
         _operationAcknowledged = true;
-        _ensureOperationVisible('Logging you in…');
+        _ensureOperationVisible(context.l10n.authLoggingIn);
         unawaited(_operationProgressController.reach(
           0.75,
           duration: const Duration(milliseconds: 500),
@@ -210,6 +211,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final showProgressBar = _activeFlow != null || _signupButtonLoading;
     final size = MediaQuery.sizeOf(context);
     final allowSplitView = size.shortestSide >= compactDeviceBreakpoint &&
@@ -296,7 +298,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               onSubmitStart: () =>
                                                   _handleSubmissionRequested(
                                                 _AuthFlow.login,
-                                                label: 'Logging you in…',
+                                                label: l10n.authLoggingIn,
                                               ),
                                             ),
                                           ),
@@ -319,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               onSubmitStart: () =>
                                                   _handleSubmissionRequested(
                                                 _AuthFlow.signup,
-                                                label: 'Creating your account…',
+                                                label: l10n.authCreatingAccount,
                                               ),
                                               onLoadingChanged:
                                                   _handleSignupLoadingChanged,
@@ -370,8 +372,8 @@ class _LoginScreenState extends State<LoginScreen>
                                           },
                                           child: Text(
                                             _login
-                                                ? 'New? Sign up'
-                                                : 'Already registered? Log in',
+                                                ? l10n.authToggleSignup
+                                                : l10n.authToggleLogin,
                                           ),
                                         ).withTapBounce(),
                                       ),
@@ -379,12 +381,12 @@ class _LoginScreenState extends State<LoginScreen>
                               const SizedBox(height: 18),
                               ShadButton.outline(
                                 onPressed: () => context.go('/guest-calendar'),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.calendar_today),
-                                    SizedBox(width: 8),
-                                    Text('Try Calendar (Guest Mode)'),
+                                    const Icon(Icons.calendar_today),
+                                    const SizedBox(width: 8),
+                                    Text(l10n.authGuestCalendarCta),
                                   ],
                                 ),
                               ).withTapBounce(),
@@ -423,6 +425,7 @@ class _AuthModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth =
@@ -435,7 +438,7 @@ class _AuthModeToggle extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _MorphingAuthButton(
-                  label: 'Log in',
+                  label: l10n.authLogin,
                   selected: loginSelected,
                   cutoutEdge: CutoutEdge.bottom,
                   width: width,
@@ -445,7 +448,7 @@ class _AuthModeToggle extends StatelessWidget {
                 Transform.translate(
                   offset: const Offset(0, -_AuthModeToggle._overlap),
                   child: _MorphingAuthButton(
-                    label: 'Sign up',
+                    label: l10n.authSignUp,
                     selected: !loginSelected,
                     cutoutEdge: CutoutEdge.top,
                     width: width,
@@ -650,8 +653,8 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
               selected: widget.selected,
               label: widget.label,
               hint: widget.selected
-                  ? 'Current selection'
-                  : 'Activate to select ${widget.label}',
+                  ? context.l10n.authToggleSelected
+                  : context.l10n.authToggleSelectHint(widget.label),
               onTap: widget.onTap,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,

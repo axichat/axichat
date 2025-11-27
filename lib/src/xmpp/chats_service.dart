@@ -356,6 +356,45 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       (db) => db.removeChatMessages(jid),
     );
   }
+
+  Future<void> renameChatContact({
+    required String jid,
+    required String displayName,
+  }) async {
+    final trimmed = displayName.trim();
+    MessageTransport? transport;
+    String? rosterTitle;
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        final chat = await db.getChat(jid);
+        transport = chat?.transport;
+        if (chat != null) {
+          rosterTitle = chat.title.trim().isNotEmpty ? chat.title : null;
+          final updated = chat.copyWith(
+            contactDisplayName: trimmed.isNotEmpty ? trimmed : null,
+          );
+          await db.updateChat(updated);
+        }
+        final rosterItem = await db.getRosterItem(jid);
+        if (rosterItem != null) {
+          rosterTitle ??= rosterItem.title;
+          if (trimmed.isNotEmpty) {
+            rosterTitle = trimmed;
+            await db.updateRosterItem(rosterItem.copyWith(title: trimmed));
+          } else if (rosterTitle != null) {
+            await db.updateRosterItem(rosterItem.copyWith(title: rosterTitle!));
+          }
+        }
+      },
+    );
+    rosterTitle ??= mox.JID.fromString(jid).local;
+    if (transport?.isXmpp == true && rosterTitle != null) {
+      final renamed = await _connection.addToRoster(jid, title: rosterTitle);
+      if (!renamed) {
+        throw XmppRosterException();
+      }
+    }
+  }
 }
 
 class MUCManager extends mox.MUCManager {

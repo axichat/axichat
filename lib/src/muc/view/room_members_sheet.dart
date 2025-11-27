@@ -122,6 +122,7 @@ class RoomMembersSheet extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       useRootNavigator: false,
+      surfacePadding: EdgeInsets.zero,
       dialogMaxWidth: 520,
       builder: (context) => const _InviteChipsSheet(
         initialRecipients: [],
@@ -340,20 +341,20 @@ class _MemberTileState extends State<_MemberTile> {
       onTap: widget.actions.isEmpty ? null : _toggleActions,
       leading: AxiAvatar(
         jid: _avatarKey(widget.occupant),
-        size: 44,
+        size: 40,
       ),
       title: widget.occupant.nick,
       subtitle: widget.subtitle,
       selected: widget.isSelf,
       paintSurface: true,
       tapBounce: true,
-      minTileHeight: 64,
+      minTileHeight: 56,
       surfaceColor: colors.card,
       surfaceShape: SquircleBorder(
-        cornerRadius: 18,
-        side: BorderSide(color: borderColor),
+        cornerRadius: 14,
+        side: BorderSide(color: borderColor, width: 1.2),
       ),
-      contentPadding: const EdgeInsetsDirectional.fromSTEB(16, 10, 16, 10),
+      contentPadding: const EdgeInsetsDirectional.fromSTEB(14, 8, 14, 8),
     );
 
     final actionsPanel = widget.actions.isEmpty
@@ -520,6 +521,14 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final titleStyle = context.textTheme.h4.copyWith(
+      fontFamily: gabaritoFontFamily,
+      fontFamilyFallback: gabaritoFontFallback,
+      fontWeight: FontWeight.w700,
+      color: colors.foreground,
+      letterSpacing: -0.2,
+    );
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
     return SafeArea(
       child: Padding(
@@ -532,7 +541,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Text('Invite users', style: context.textTheme.h4),
+              child: Text('Invite users', style: titleStyle),
             ),
             RecipientChipsBar(
               recipients: _recipients,
@@ -642,6 +651,13 @@ class _NicknameSheetState extends State<_NicknameSheet> {
   Widget build(BuildContext context) {
     final textTheme = context.textTheme;
     final colors = context.colorScheme;
+    final titleStyle = textTheme.h4.copyWith(
+      fontFamily: gabaritoFontFamily,
+      fontFamilyFallback: gabaritoFontFallback,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.2,
+      color: colors.foreground,
+    );
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -649,7 +665,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
         children: [
           Text(
             'Change nickname',
-            style: textTheme.h4.copyWith(color: colors.foreground),
+            style: titleStyle,
           ),
           const SizedBox(height: 12),
           AxiTextFormField(
@@ -694,11 +710,18 @@ class _HeaderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.textTheme;
     final colors = context.colorScheme;
+    final headerStyle = theme.h4.copyWith(
+      fontFamily: gabaritoFontFamily,
+      fontFamilyFallback: gabaritoFontFallback,
+      fontWeight: FontWeight.w700,
+      color: colors.foreground,
+      letterSpacing: -0.2,
+    );
     return Row(
       children: [
         Text(
           'Members',
-          style: theme.h4.copyWith(color: colors.foreground),
+          style: headerStyle,
         ),
         const Spacer(),
         if (canInvite)

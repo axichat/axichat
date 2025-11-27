@@ -7,6 +7,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -77,12 +78,13 @@ class _ComposeWindowHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final l10n = context.l10n;
     final subject = seed.subject.trim();
     final recipients =
         seed.jids.where((jid) => jid.trim().isNotEmpty).take(3).join(', ');
     final detailLabel = subject.isNotEmpty
         ? subject
-        : (recipients.isNotEmpty ? recipients : 'New message');
+        : (recipients.isNotEmpty ? recipients : l10n.draftNewMessage);
     final minimizeIcon = minimized ? LucideIcons.chevronUp : LucideIcons.minus;
     final expandIcon = expanded ? LucideIcons.minimize2 : LucideIcons.maximize2;
 
@@ -114,7 +116,7 @@ class _ComposeWindowHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Compose',
+                    l10n.composeTitle,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.small.copyWith(
                       fontWeight: FontWeight.w700,
@@ -132,19 +134,19 @@ class _ComposeWindowHeader extends StatelessWidget {
               ),
             ),
             _ComposeHeaderButton(
-              tooltip: minimized ? 'Restore' : 'Minimize',
+              tooltip: minimized ? l10n.draftRestore : l10n.draftMinimize,
               icon: minimizeIcon,
               onPressed: onMinimize,
             ),
             const SizedBox(width: 6),
             _ComposeHeaderButton(
-              tooltip: expanded ? 'Exit fullscreen' : 'Expand',
+              tooltip: expanded ? l10n.draftExitFullscreen : l10n.draftExpand,
               icon: expandIcon,
               onPressed: onToggleExpanded,
             ),
             const SizedBox(width: 6),
             _ComposeHeaderButton(
-              tooltip: 'Close composer',
+              tooltip: l10n.draftCloseComposer,
               icon: LucideIcons.x,
               onPressed: onClose,
               destructive: true,

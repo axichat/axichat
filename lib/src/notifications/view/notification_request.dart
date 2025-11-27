@@ -1,6 +1,7 @@
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -23,6 +24,7 @@ class _NotificationRequestState extends State<NotificationRequest> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return FutureBuilder(
       initialData: foregroundServiceActive.value,
       future: _future,
@@ -37,17 +39,17 @@ class _NotificationRequestState extends State<NotificationRequest> {
             }
 
             if (snapshot.requireData) {
-              return const ShadSwitch(
+              return ShadSwitch(
                 enabled: false,
                 value: true,
-                label: Text('Restart app to enable notifications'),
-                sublabel: Text('Required permissions already granted'),
+                label: Text(l10n.notificationsRestartTitle),
+                sublabel: Text(l10n.notificationsRestartSubtitle),
               );
             }
 
             return ShadSwitch(
-              label: const Text('Message notifications'),
-              sublabel: const Text('Requires restart'),
+              label: Text(l10n.notificationsMessageToggle),
+              sublabel: Text(l10n.notificationsRequiresRestart),
               value: snapshot.requireData,
               onChanged: (enabled) async {
                 await widget.notificationService

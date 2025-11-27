@@ -27,6 +27,7 @@ import '../utils/responsive_helper.dart';
 import '../utils/task_share_formatter.dart';
 import '../utils/task_title_validation.dart';
 import '../utils/time_formatter.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'calendar_transfer_sheet.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_draft_controller.dart';
@@ -289,7 +290,11 @@ class TaskSidebarState extends State<TaskSidebar>
       _lastParserResult = null;
       _clearParserDrivenFields();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Parser unavailable (${error.runtimeType})')),
+        SnackBar(
+          content: Text(
+            context.l10n.calendarParserUnavailable(error.runtimeType),
+          ),
+        ),
       );
     }
   }
@@ -752,13 +757,14 @@ class TaskSidebarState extends State<TaskSidebar>
   bool get wantKeepAlive => true;
 
   Future<void> _exportSelectedTasks(List<CalendarTask> tasks) async {
+    final l10n = context.l10n;
     if (tasks.isEmpty) {
-      FeedbackSystem.showInfo(context, 'Select tasks to export first.');
+      FeedbackSystem.showInfo(context, l10n.calendarSelectionNone);
       return;
     }
     final format = await showCalendarExportFormatSheet(
       context,
-      title: 'Export selected tasks',
+      title: l10n.calendarExportSelected,
     );
     if (!mounted || format == null) return;
     try {
@@ -769,16 +775,16 @@ class TaskSidebarState extends State<TaskSidebar>
       );
       await Share.shareXFiles(
         [XFile(file.path)],
-        subject: 'Axichat tasks export',
-        text: 'Selected tasks export (${format.label})',
+        subject: l10n.calendarExportSelected,
+        text: '${l10n.calendarExportSelected} (${format.label})',
       );
       if (!mounted) return;
-      FeedbackSystem.showSuccess(context, 'Export ready to share.');
+      FeedbackSystem.showSuccess(context, l10n.calendarExportReady);
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(
         context,
-        'Failed to export selected tasks: $error',
+        l10n.calendarExportFailed('$error'),
       );
     }
   }
@@ -904,7 +910,7 @@ class TaskSidebarState extends State<TaskSidebar>
   void _applySelectionBatchChanges() {
     final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
-      _showSelectionMessage('Select tasks before applying changes.');
+      _showSelectionMessage(context.l10n.calendarSelectionRequired);
       return;
     }
 
@@ -928,21 +934,21 @@ class TaskSidebarState extends State<TaskSidebar>
     }
 
     if (applied && !hadError) {
-      _showSelectionMessage('Changes applied to selected tasks.');
+      _showSelectionMessage(context.l10n.calendarSelectionChangesApplied);
     } else if (!applied && !hadError) {
-      _showSelectionMessage('No pending changes to apply.');
+      _showSelectionMessage(context.l10n.calendarSelectionNoPending);
     }
   }
 
   bool _applySelectionTitle() {
     final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
-      _showSelectionMessage('Select tasks before applying changes.');
+      _showSelectionMessage(context.l10n.calendarSelectionRequired);
       return false;
     }
     final title = _selectionTitleController.text.trim();
     if (title.isEmpty) {
-      _showSelectionMessage('Title cannot be blank.');
+      _showSelectionMessage(context.l10n.calendarSelectionTitleBlank);
       return false;
     }
     bloc.add(CalendarEvent.selectionTitleChanged(title: title));
@@ -955,7 +961,7 @@ class TaskSidebarState extends State<TaskSidebar>
   bool _applySelectionDescription() {
     final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
-      _showSelectionMessage('Select tasks before applying changes.');
+      _showSelectionMessage(context.l10n.calendarSelectionRequired);
       return false;
     }
     final raw = _selectionDescriptionController.text.trim();
@@ -972,7 +978,7 @@ class TaskSidebarState extends State<TaskSidebar>
   bool _applySelectionLocation() {
     final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
-      _showSelectionMessage('Select tasks before applying changes.');
+      _showSelectionMessage(context.l10n.calendarSelectionRequired);
       return false;
     }
     final raw = _selectionLocationController.text.trim();
@@ -995,7 +1001,7 @@ class TaskSidebarState extends State<TaskSidebar>
     }
     final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
-      _showSelectionMessage('Select tasks before adjusting time.');
+      _showSelectionMessage(context.l10n.calendarSelectionRequired);
       return;
     }
     bloc.add(
@@ -1207,7 +1213,7 @@ class TaskSidebarState extends State<TaskSidebar>
   String _selectionScheduleLabel(CalendarTask task) {
     final DateTime? start = task.scheduledTime;
     if (start == null) {
-      return 'No scheduled time';
+      return context.l10n.draftTaskNoSchedule;
     }
 
     final DateTime? end = task.effectiveEndDate;
@@ -1273,7 +1279,7 @@ class TaskSidebarState extends State<TaskSidebar>
         model.tasks[dropped.id] ?? model.tasks[dropped.baseId];
     source ??= model.resolveTaskInstance(dropped.id);
     if (source == null) {
-      FeedbackSystem.showError(context, 'Task not found');
+      FeedbackSystem.showError(context, context.l10n.calendarTaskNotFound);
       return;
     }
     final CalendarTask unscheduled = source.copyWith(
@@ -1482,12 +1488,12 @@ class TaskSidebarState extends State<TaskSidebar>
     return [
       TaskContextAction(
         icon: Icons.copy_outlined,
-        label: 'Copy',
+        label: context.l10n.chatActionCopy,
         onSelected: () => _copyTaskDetails(task),
       ),
       TaskContextAction(
         icon: Icons.share_outlined,
-        label: 'Copy to Clipboard',
+        label: context.l10n.calendarCopyToClipboardAction,
         onSelected: () => _copyTaskShareText(task),
       ),
     ];
@@ -1504,12 +1510,14 @@ class TaskSidebarState extends State<TaskSidebar>
     }
     final location = task.location?.trim();
     if (location != null && location.isNotEmpty) {
-      buffer.writeln('Location: $location');
+      buffer.writeln(context.l10n.calendarCopyLocation(location));
     }
     final deadline = task.deadline;
     if (deadline != null) {
       buffer.writeln(
-        'Due: ${TimeFormatter.formatFriendlyDateTime(deadline)}',
+        context.l10n.draftTaskDue(
+          TimeFormatter.formatFriendlyDateTime(deadline),
+        ),
       );
     }
     final payload = buffer.toString().trim().isEmpty
@@ -1517,7 +1525,7 @@ class TaskSidebarState extends State<TaskSidebar>
         : buffer.toString().trim();
     Clipboard.setData(ClipboardData(text: payload));
     if (mounted) {
-      FeedbackSystem.showSuccess(context, 'Task copied');
+      FeedbackSystem.showSuccess(context, context.l10n.calendarTaskCopied);
     }
   }
 
@@ -1525,7 +1533,10 @@ class TaskSidebarState extends State<TaskSidebar>
     final String payload = task.toShareText();
     await Clipboard.setData(ClipboardData(text: payload));
     if (mounted) {
-      FeedbackSystem.showSuccess(context, 'Task copied to clipboard');
+      FeedbackSystem.showSuccess(
+        context,
+        context.l10n.calendarTaskCopiedClipboard,
+      );
     }
   }
 
@@ -1540,17 +1551,17 @@ class TaskSidebarState extends State<TaskSidebar>
       ShadContextMenuItem(
         leading: const Icon(Icons.copy_outlined),
         onPressed: () => _copyTaskDetails(task),
-        child: const Text('Copy Task'),
+        child: Text(context.l10n.calendarCopyTask),
       ),
       ShadContextMenuItem(
         leading: const Icon(Icons.share_outlined),
         onPressed: () => _copyTaskShareText(task),
-        child: const Text('Copy to Clipboard'),
+        child: Text(context.l10n.calendarCopyToClipboardAction),
       ),
       ShadContextMenuItem(
         leading: const Icon(Icons.delete_outline),
         onPressed: () => _deleteSidebarTask(task),
-        child: const Text('Delete Task'),
+        child: Text(context.l10n.calendarDeleteTask),
       ),
     ];
   }
@@ -1558,8 +1569,7 @@ class TaskSidebarState extends State<TaskSidebar>
   bool _shouldUseSheetMenus(BuildContext context) {
     final bool hasMouse =
         RendererBinding.instance.mouseTracker.mouseIsConnected;
-    final commandSurface =
-        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    final commandSurface = resolveCommandSurface(context);
     if (commandSurface == CommandSurface.menu) {
       return false;
     }
@@ -1926,6 +1936,7 @@ class _SelectionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final total = tasks.length;
     final hasTasks = total > 0;
     final bool allCompleted =
@@ -1955,22 +1966,22 @@ class _SelectionPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TaskSectionHeader(
-                title: 'Selection mode',
+                title: l10n.calendarSelectionMode,
                 padding: const EdgeInsets.only(bottom: calendarGutterSm),
                 trailing: ShadButton.outline(
                   size: ShadButtonSize.sm,
                   onPressed: onExitSelection,
-                  child: const Text('Exit'),
+                  child: Text(l10n.calendarExit),
                 ),
               ),
               Text(
-                '$total task${total == 1 ? '' : 's'} selected',
+                l10n.calendarTasksSelected(total),
                 style: calendarSubtitleTextStyle,
               ),
               const TaskSectionDivider(
                 verticalPadding: calendarGutterMd,
               ),
-              const TaskSectionHeader(title: 'Actions'),
+              TaskSectionHeader(title: l10n.calendarActions),
               const SizedBox(height: calendarGutterSm),
               _SelectionActionsRow(
                 hasTasks: hasTasks,
@@ -1997,7 +2008,7 @@ class _SelectionPanel extends StatelessWidget {
               const TaskSectionDivider(
                 verticalPadding: calendarGutterMd,
               ),
-              const TaskSectionHeader(title: 'Set priority'),
+              TaskSectionHeader(title: l10n.calendarSetPriority),
               const SizedBox(height: calendarGutterSm),
               _SelectionPriorityControls(
                 tasks: tasks,
@@ -2054,20 +2065,21 @@ class _SelectionActionsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return TaskFormActionsRow(
       padding: EdgeInsets.zero,
       gap: calendarGutterSm,
       children: [
         TaskSecondaryButton(
-          label: 'Clear Selection',
+          label: l10n.calendarClearSelection,
           onPressed: hasTasks ? onClearSelection : null,
         ),
         TaskSecondaryButton(
-          label: 'Export selected',
+          label: l10n.calendarExportSelected,
           onPressed: hasTasks ? onExportSelected : null,
         ),
         TaskDestructiveButton(
-          label: 'Delete selected',
+          label: l10n.calendarDeleteSelected,
           onPressed: hasTasks ? onDeleteSelected : null,
         ),
       ],
@@ -2104,23 +2116,24 @@ class _SelectionBatchEditSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const TaskSectionHeader(title: 'Batch edit'),
+        TaskSectionHeader(title: l10n.calendarBatchEdit),
         const SizedBox(height: calendarGutterSm),
         _SelectionTextField(
-          label: 'Title',
+          label: l10n.calendarBatchTitle,
           controller: titleController,
-          hint: 'Set title for selected tasks',
+          hint: l10n.calendarBatchTitleHint,
           enabled: hasTasks,
           onChanged: onTitleChanged,
         ),
         const SizedBox(height: calendarGutterSm),
         _SelectionTextField(
-          label: 'Description',
+          label: l10n.calendarBatchDescription,
           controller: descriptionController,
-          hint: 'Set description (leave blank to clear)',
+          hint: l10n.calendarBatchDescriptionHint,
           enabled: hasTasks,
           minLines: 2,
           maxLines: 3,
@@ -2132,12 +2145,14 @@ class _SelectionBatchEditSection extends StatelessWidget {
           helper: locationHelper,
           enabled: hasTasks,
           onChanged: onLocationChanged,
+          label: l10n.calendarBatchLocation,
+          hint: l10n.calendarBatchLocationHint,
         ),
         const SizedBox(height: calendarGutterMd),
         Align(
           alignment: Alignment.centerLeft,
           child: TaskPrimaryButton(
-            label: 'Apply changes',
+            label: l10n.calendarApplyChanges,
             size: ShadButtonSize.sm,
             onPressed:
                 hasTasks && hasPendingSelectionEdits ? onApplyChanges : null,
@@ -2147,7 +2162,7 @@ class _SelectionBatchEditSection extends StatelessWidget {
         const TaskSectionDivider(
           verticalPadding: calendarGutterMd,
         ),
-        const TaskSectionHeader(title: 'Adjust time'),
+        TaskSectionHeader(title: l10n.calendarAdjustTime),
         const SizedBox(height: calendarGutterSm),
         _SelectionTimeAdjustRow(
           enabled: hasTasks,
@@ -2215,21 +2230,25 @@ class _SelectionLocationField extends StatelessWidget {
     required this.helper,
     required this.enabled,
     required this.onChanged,
+    required this.label,
+    required this.hint,
   });
 
   final TextEditingController controller;
   final LocationAutocompleteHelper helper;
   final bool enabled;
   final ValueChanged<String> onChanged;
+  final String label;
+  final String hint;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'LOCATION',
-          style: TextStyle(
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
             color: calendarSubtitleColor,
@@ -2239,7 +2258,7 @@ class _SelectionLocationField extends StatelessWidget {
         const SizedBox(height: calendarInsetMd),
         TaskLocationField(
           controller: controller,
-          hintText: 'Set location (leave blank to clear)',
+          hintText: hint,
           textCapitalization: TextCapitalization.words,
           enabled: enabled,
           onChanged: onChanged,
@@ -2265,24 +2284,25 @@ class _SelectionTimeAdjustRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Wrap(
       spacing: calendarGutterSm,
       runSpacing: calendarGutterSm,
       children: [
         _SelectionAdjustButton(
-          label: 'Start -15m',
+          label: l10n.calendarAdjustStartMinus,
           onPressed: enabled ? callbacks.onStartMinus : null,
         ),
         _SelectionAdjustButton(
-          label: 'Start +15m',
+          label: l10n.calendarAdjustStartPlus,
           onPressed: enabled ? callbacks.onStartPlus : null,
         ),
         _SelectionAdjustButton(
-          label: 'End -15m',
+          label: l10n.calendarAdjustEndMinus,
           onPressed: enabled ? callbacks.onEndMinus : null,
         ),
         _SelectionAdjustButton(
-          label: 'End +15m',
+          label: l10n.calendarAdjustEndPlus,
           onPressed: enabled ? callbacks.onEndPlus : null,
         ),
       ],
@@ -2403,9 +2423,9 @@ class _SelectionRecurrenceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasTasks) {
-      return const Text(
-        'No tasks selected.',
-        style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
+      return Text(
+        context.l10n.calendarSelectionNoneShort,
+        style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
       );
     }
 
@@ -2431,9 +2451,9 @@ class _SelectionRecurrenceSection extends StatelessWidget {
                       color: calendarWarningColor.withValues(alpha: 0.4),
                     ),
                   ),
-                  child: const Text(
-                    'Tasks have different recurrence settings. Updates will apply to all selected tasks.',
-                    style: TextStyle(
+                  child: Text(
+                    context.l10n.calendarSelectionMixedRecurrence,
+                    style: const TextStyle(
                       fontSize: 12,
                       color: calendarSubtitleColor,
                     ),
@@ -2489,9 +2509,9 @@ class _SelectedTaskList extends StatelessWidget {
           borderRadius: BorderRadius.circular(calendarBorderRadius + 2),
           border: Border.all(color: calendarBorderColor),
         ),
-        child: const Text(
-          'No tasks selected. Use the Select option in the calendar to pick tasks to edit.',
-          style: TextStyle(
+        child: Text(
+          context.l10n.calendarSelectionNoTasksHint,
+          style: const TextStyle(
             fontSize: 12,
             color: calendarSubtitleColor,
           ),
@@ -2557,7 +2577,7 @@ class _SelectionTaskTile extends StatelessWidget {
                 task: task,
                 scheduleLabel: scheduleLabel,
                 trailing: Tooltip(
-                  message: 'Remove from selection',
+                  message: context.l10n.calendarSelectionRemove,
                   child: ShadIconButton.ghost(
                     onPressed: () => onRemoveTask(task),
                     icon: const Icon(
@@ -2775,6 +2795,7 @@ class _AddTaskSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Container(
       padding: calendarSidebarSectionPadding,
       decoration: const BoxDecoration(
@@ -2793,7 +2814,7 @@ class _AddTaskSection extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'ADD TASK',
+                  l10n.calendarAddTaskAction,
                   style: calendarHeaderTextStyle.copyWith(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -2810,7 +2831,7 @@ class _AddTaskSection extends StatelessWidget {
                   final button = ShadButton.outline(
                     size: ShadButtonSize.sm,
                     onPressed: enabled ? onClearFieldsPressed : null,
-                    child: const Text('Clear'),
+                    child: Text(l10n.commonClear),
                   );
                   final decorated = button.withTapBounce(enabled: enabled);
                   return AnimatedOpacity(
@@ -3042,7 +3063,7 @@ class _TaskSectionsPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SidebarAccordionSection(
-          title: 'UNSCHEDULED TASKS',
+          title: context.l10n.calendarUnscheduledTitle,
           section: CalendarSidebarSection.unscheduled,
           uiState: uiState,
           itemCount: unscheduledTasks.length,
@@ -3058,8 +3079,8 @@ class _TaskSectionsPanel extends StatelessWidget {
             ),
             child: _SidebarTaskList(
               tasks: unscheduledTasks,
-              emptyLabel: 'No unscheduled tasks',
-              emptyHint: 'Tasks you add will appear here',
+              emptyLabel: context.l10n.calendarUnscheduledEmptyLabel,
+              emptyHint: context.l10n.calendarUnscheduledEmptyHint,
               onDragHover: onTaskListHover,
               onDragLeave: onTaskListLeave,
               onDrop: onTaskListDrop,
@@ -3069,7 +3090,7 @@ class _TaskSectionsPanel extends StatelessWidget {
         ),
         const SizedBox(height: calendarInsetMd),
         _SidebarAccordionSection(
-          title: 'REMINDERS',
+          title: context.l10n.calendarRemindersTitle,
           section: CalendarSidebarSection.reminders,
           uiState: uiState,
           itemCount: reminderTasks.length,
@@ -3085,8 +3106,8 @@ class _TaskSectionsPanel extends StatelessWidget {
             ),
             child: _SidebarTaskList(
               tasks: reminderTasks,
-              emptyLabel: 'No reminders yet',
-              emptyHint: 'Add a deadline to create a reminder',
+              emptyLabel: context.l10n.calendarRemindersEmptyLabel,
+              emptyHint: context.l10n.calendarRemindersEmptyHint,
               onDragHover: onTaskListHover,
               onDragLeave: onTaskListLeave,
               onDrop: onTaskListDrop,
@@ -3278,9 +3299,9 @@ class _CollapsedTaskPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tasks.isEmpty) {
-      return const Text(
-        'Nothing here yet',
-        style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
+      return Text(
+        context.l10n.calendarNothingHere,
+        style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
       );
     }
 
@@ -3872,6 +3893,7 @@ class _QuickTaskInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     const padding = EdgeInsets.symmetric(
       horizontal: calendarGutterLg,
       vertical: 14,
@@ -3879,7 +3901,7 @@ class _QuickTaskInput extends StatelessWidget {
     final field = TaskTextField(
       controller: controller,
       focusNode: focusNode,
-      hintText: 'Quick task (e.g., "Meeting at 2pm in Room 101")',
+      hintText: l10n.calendarQuickTaskHint,
       textCapitalization: TextCapitalization.sentences,
       textInputAction: TextInputAction.done,
       onChanged: onChanged,
@@ -3948,6 +3970,7 @@ class _AdvancedToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Align(
       alignment: Alignment.centerLeft,
       child: ShadButton.ghost(
@@ -3963,8 +3986,8 @@ class _AdvancedToggle extends StatelessWidget {
         ),
         child: Text(
           uiState.showAdvancedOptions
-              ? 'Hide advanced options'
-              : 'Show advanced options',
+              ? l10n.calendarAdvancedHide
+              : l10n.calendarAdvancedShow,
         ),
       ),
     );
@@ -3997,6 +4020,7 @@ class _AdvancedOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.only(top: calendarGutterMd),
       child: Column(
@@ -4004,7 +4028,7 @@ class _AdvancedOptions extends StatelessWidget {
         children: [
           TaskDescriptionField(
             controller: descriptionController,
-            hintText: 'Description (optional)',
+            hintText: l10n.calendarDescriptionHint,
             minLines: 2,
             maxLines: 4,
             contentPadding: const EdgeInsets.symmetric(
@@ -4015,7 +4039,7 @@ class _AdvancedOptions extends StatelessWidget {
           const SizedBox(height: calendarFormGap),
           TaskLocationField(
             controller: locationController,
-            hintText: 'Location (optional)',
+            hintText: l10n.calendarLocationHint,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: calendarGutterLg,
               vertical: calendarGutterMd,
@@ -4023,7 +4047,7 @@ class _AdvancedOptions extends StatelessWidget {
             autocomplete: locationHelper,
           ),
           const SizedBox(height: calendarGutterMd),
-          const TaskSectionHeader(title: 'Deadline'),
+          TaskSectionHeader(title: l10n.calendarDeadlineLabel),
           const SizedBox(height: calendarInsetLg),
           AnimatedBuilder(
             animation: draftController,
@@ -4139,7 +4163,7 @@ class _AddTaskButton extends StatelessWidget {
         return SizedBox(
           width: double.infinity,
           child: TaskPrimaryButton(
-            label: 'Add Task',
+            label: context.l10n.calendarAddTaskAction,
             onPressed: isDisabled ? null : onPressed,
           ),
         );

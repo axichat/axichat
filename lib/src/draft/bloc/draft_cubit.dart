@@ -6,6 +6,7 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -24,9 +25,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         _settingsState = settingsCubit.state,
         _emailService = emailService,
         super(const DraftsAvailable(items: null)) {
-    _draftsSubscription = _messageService
-        .draftsStream()
-        .listen((items) => emit(DraftsAvailable(items: items)));
+    _draftsSubscription = _messageService.draftsStream().listen((items) {
+      _items = items;
+      emit(DraftsAvailable(items: items));
+    });
     _settingsSubscription = _settingsCubit.stream.listen((state) {
       _settingsState = state;
     });
@@ -36,6 +38,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   final EmailService? _emailService;
   final SettingsCubit _settingsCubit;
   SettingsState _settingsState;
+  List<Draft>? _items;
 
   late final StreamSubscription<List<Draft>> _draftsSubscription;
   StreamSubscription<SettingsState>? _settingsSubscription;
@@ -46,6 +49,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final current = change.currentState;
     if (current is DraftsAvailable) {
       cache['items'] = current.items;
+      _items = current.items;
     }
   }
 
@@ -61,10 +65,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required List<String> xmppJids,
     required List<FanOutTarget> emailTargets,
     required String body,
+    required AppLocalizations l10n,
     String? subject,
     List<EmailAttachment> attachments = const [],
   }) async {
-    emit(DraftSending());
+    emit(DraftSending(items: _items));
     try {
       if (emailTargets.isNotEmpty) {
         await _sendEmailDraft(
@@ -82,21 +87,34 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         );
       }
     } on FanOutValidationException catch (error) {
-      emit(DraftFailure(error.message));
+      emit(
+        DraftFailure(
+          _mapFanOutValidationMessage(error.message, l10n),
+          items: _items,
+        ),
+      );
       return false;
     } on XmppMessageException catch (_) {
-      emit(const DraftFailure(
-          'Failed to send message. Ensure recipient address exists.'));
+      emit(
+        DraftFailure(
+          l10n.draftSendFailed,
+          items: _items,
+        ),
+      );
       return false;
     } on Exception catch (_) {
-      emit(const DraftFailure(
-          'Failed to send email. Ensure recipient address exists.'));
+      emit(
+        DraftFailure(
+          l10n.draftSendFailed,
+          items: _items,
+        ),
+      );
       return false;
     }
     if (id != null) {
       await deleteDraft(id: id);
     }
-    emit(DraftSendComplete());
+    emit(DraftSendComplete(items: _items));
     return true;
   }
 
@@ -114,8 +132,24 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       subject: subject,
       attachments: attachments,
     );
-    emit(DraftSaveComplete());
+    emit(DraftSaveComplete(items: _items));
     return result;
+  }
+
+  String _mapFanOutValidationMessage(
+    String message,
+    AppLocalizations l10n,
+  ) {
+    switch (message) {
+      case 'Select at least one recipient.':
+        return l10n.draftNoRecipients;
+      case 'Message cannot be empty.':
+        return l10n.draftValidationNoContent;
+      case 'Unable to resolve recipients.':
+        return l10n.draftNoRecipients;
+      default:
+        return message;
+    }
   }
 
   Future<void> deleteDraft({required int id}) async {

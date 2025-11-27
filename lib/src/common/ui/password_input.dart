@@ -1,5 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -32,8 +34,10 @@ class _PasswordInputState extends State<PasswordInput> {
 
   @override
   Widget build(BuildContext context) {
-    final defaultLabel =
-        widget.confirmValidator != null ? 'Confirm password' : 'Password';
+    final l10n = context.l10n;
+    final defaultLabel = widget.confirmValidator != null
+        ? l10n.authPasswordConfirm
+        : l10n.authPassword;
     final semanticsLabel = widget.semanticsLabel ?? defaultLabel;
     return Semantics(
       label: semanticsLabel,
@@ -64,8 +68,12 @@ class _PasswordInputState extends State<PasswordInput> {
           },
         ).withTapBounce(),
         validator: (text) {
-          final confirmationValidator =
-              widget.confirmValidator ?? _defaultValidator;
+          final localizations = context.l10n;
+          final confirmationValidator = widget.confirmValidator ??
+              (value) => _defaultValidator(
+                    localizations,
+                    value,
+                  );
           final baseResult = confirmationValidator(text);
           if (baseResult != null) {
             return baseResult;
@@ -79,12 +87,12 @@ class _PasswordInputState extends State<PasswordInput> {
     );
   }
 
-  String? _defaultValidator(String text) {
+  String? _defaultValidator(AppLocalizations l10n, String text) {
     if (text.isEmpty) {
-      return 'Enter a password';
+      return l10n.authPasswordRequired;
     }
     if (text.length > passwordMaxLength) {
-      return 'Must be $passwordMaxLength characters or fewer';
+      return l10n.authPasswordMaxLength(passwordMaxLength);
     }
     return null;
   }
