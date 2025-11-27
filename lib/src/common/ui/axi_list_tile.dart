@@ -7,6 +7,7 @@ class AxiListTile extends StatelessWidget {
   static const EdgeInsets _defaultContentPadding =
       EdgeInsets.symmetric(horizontal: 16, vertical: 8);
   static const double _defaultMinTileHeight = 72.0;
+  static const double _compactMinTileHeight = 56.0;
 
   const AxiListTile({
     super.key,
@@ -63,12 +64,16 @@ class AxiListTile extends StatelessWidget {
           cornerRadius: 18,
           side: BorderSide(color: colors.border),
         );
+    final resolvedMinTileHeight = minTileHeight ??
+        (subtitle == null && subtitlePlaceholder == null
+            ? _compactMinTileHeight
+            : _defaultMinTileHeight);
 
     Widget child = ListTile(
       titleAlignment: ListTileTitleAlignment.center,
       horizontalTitleGap: 16.0,
       contentPadding: contentPadding ?? _defaultContentPadding,
-      minTileHeight: minTileHeight ?? _defaultMinTileHeight,
+      minTileHeight: resolvedMinTileHeight,
       selected: selected,
       selectedTileColor: Colors.transparent,
       hoverColor: selectionOverlay,

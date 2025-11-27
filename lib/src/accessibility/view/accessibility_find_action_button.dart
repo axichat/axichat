@@ -28,7 +28,7 @@ class AccessibilityFindActionButton extends StatelessWidget {
         child: ShadButton.ghost(
           onPressed: () => bloc.add(const AccessibilityMenuOpened()),
           padding: const EdgeInsets.all(12),
-          child: const Icon(LucideIcons.accessibility, size: 18),
+          child: const Icon(LucideIcons.lifeBuoy, size: 18),
         ),
       );
     }
@@ -37,7 +37,7 @@ class AccessibilityFindActionButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(LucideIcons.accessibility, size: 18),
+          const Icon(LucideIcons.lifeBuoy, size: 18),
           const SizedBox(width: 10),
           ShortcutHint(
             shortcut: shortcut,

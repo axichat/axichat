@@ -524,20 +524,31 @@ class _HideCompletedButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final bool hiding = value;
-    final Color background =
-        hiding ? colors.primary.withValues(alpha: 0.08) : colors.card;
-    final Color border = hiding ? colors.primary : colors.border;
     final Color foreground = hiding ? colors.primary : colors.mutedForeground;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
-      child: AxiIconButton(
-        iconData: hiding ? Icons.visibility_off : Icons.visibility,
-        tooltip: hiding ? 'Show completed' : 'Hide completed',
-        color: foreground,
-        backgroundColor: background,
-        borderColor: border,
+      child: ShadButton.ghost(
+        size: ShadButtonSize.sm,
         onPressed: () => onChanged(!value),
-      ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hiding ? Icons.visibility_off : Icons.visibility,
+              size: 16,
+              color: foreground,
+            ),
+            const SizedBox(width: calendarInsetSm),
+            Text(
+              hiding ? 'Show completed' : 'Hide completed',
+              style: context.textTheme.small.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ).withTapBounce(),
     );
   }
 }

@@ -7,6 +7,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/calendar_task.dart';
+import '../utils/time_formatter.dart';
 import 'controllers/task_interaction_controller.dart';
 import 'widgets/calendar_task_tile_render.dart';
 
@@ -316,6 +317,12 @@ class _ResizableTaskBody extends StatelessWidget {
     required this.timeLabel,
   });
 
+  static const double _minDescriptionHeight = 56;
+  static const double _minLocationHeight = 64;
+  static const double _minLocationWidth = 120;
+  static const double _minDeadlineHeight = 72;
+  static const double _minDeadlineWidth = 140;
+
   final CalendarTask task;
   final bool isHovering;
   final bool isDragging;
@@ -445,8 +452,14 @@ class _ResizableTaskBody extends StatelessWidget {
     final stackedTime = innerHeight >= 36;
     final inlineTime = !stackedTime && innerHeight >= 16 && width >= 140;
     final showTime = stackedTime || inlineTime;
-    final showDescription =
-        task.description?.isNotEmpty == true && innerHeight >= 56;
+    final showDescription = task.description?.isNotEmpty == true &&
+        innerHeight >= _minDescriptionHeight;
+    final bool showLocation = task.location?.isNotEmpty == true &&
+        innerHeight >= _minLocationHeight &&
+        width >= _minLocationWidth;
+    final bool showDeadline = task.deadline != null &&
+        innerHeight >= _minDeadlineHeight &&
+        width >= _minDeadlineWidth;
 
     final double spacing = innerHeight >= 90
         ? calendarInsetLg
@@ -546,6 +559,20 @@ class _ResizableTaskBody extends StatelessWidget {
       );
     }
 
+    if (showDeadline) {
+      if (spacing > 0) {
+        children.add(SizedBox(height: spacing));
+      }
+      children.add(_TaskDeadlineBadge(deadline: task.deadline!));
+    }
+
+    if (showLocation) {
+      if (spacing > 0) {
+        children.add(SizedBox(height: spacing));
+      }
+      children.add(_TaskLocationRow(location: task.location!));
+    }
+
     return Container(
       margin: const EdgeInsets.all(2),
       decoration: decoration,
@@ -608,4 +635,95 @@ class _TaskAccentStripe extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TaskDeadlineBadge extends StatelessWidget {
+  const _TaskDeadlineBadge({required this.deadline});
+
+  final DateTime deadline;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = _deadlineColor(deadline);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterSm,
+        vertical: calendarInsetMd,
+      ),
+      decoration: BoxDecoration(
+        color: _deadlineBackgroundColor(deadline),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.calendar_today_outlined,
+            size: 12,
+            color: color,
+          ),
+          const SizedBox(width: calendarInsetMd),
+          Text(
+            _deadlineLabel(deadline),
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskLocationRow extends StatelessWidget {
+  const _TaskLocationRow({required this.location});
+
+  final String location;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Text('📍 ', style: TextStyle(fontSize: 11)),
+        Expanded(
+          child: Text(
+            location,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              color: calendarSubtitleColor,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Color _deadlineColor(DateTime deadline) {
+  final now = DateTime.now();
+  if (deadline.isBefore(now)) {
+    return calendarDangerColor;
+  } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
+    return calendarWarningColor;
+  }
+  return calendarPrimaryColor;
+}
+
+Color _deadlineBackgroundColor(DateTime deadline) {
+  final now = DateTime.now();
+  if (deadline.isBefore(now)) {
+    return calendarDangerColor.withValues(alpha: 0.1);
+  } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
+    return calendarWarningColor.withValues(alpha: 0.1);
+  }
+  return calendarPrimaryColor.withValues(alpha: 0.08);
+}
+
+String _deadlineLabel(DateTime deadline) {
+  return TimeFormatter.formatFriendlyDateTime(deadline);
 }

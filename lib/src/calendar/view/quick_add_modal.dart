@@ -177,59 +177,42 @@ class _QuickAddModalState extends State<QuickAddModal>
         ),
       );
     }
-    return AnimatedBuilder(
-      animation: _fadeAnimation,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            // Semi-transparent backdrop
-            GestureDetector(
-              onTap: _dismissModal,
-              child: Container(
-                color:
-                    Colors.black.withValues(alpha: 0.4 * _fadeAnimation.value),
-                width: double.infinity,
-                height: double.infinity,
-              ),
-            ),
-
-            // Modal content
-            Center(
-              child: AnimatedBuilder(
-                animation: _scaleAnimation,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: _QuickAddModalContent(
-                      isSheet: false,
-                      formController: _formController,
-                      taskNameController: _taskNameController,
-                      descriptionController: _descriptionController,
-                      locationController: _locationController,
-                      taskNameFocusNode: _taskNameFocusNode,
-                      titleValidationMessage: _titleValidationMessage,
-                      locationHelper: widget.locationHelper,
-                      onTaskNameChanged: _handleTaskNameChanged,
-                      onTaskSubmit: _submitTask,
-                      onClose: _dismissModal,
-                      onLocationChanged: _handleLocationEdited,
-                      onStartChanged: _onUserStartChanged,
-                      onEndChanged: _onUserEndChanged,
-                      onScheduleCleared: _onUserScheduleCleared,
-                      onDeadlineChanged: _onUserDeadlineChanged,
-                      onRecurrenceChanged: _onUserRecurrenceChanged,
-                      onImportantChanged: _onUserImportantChanged,
-                      onUrgentChanged: _onUserUrgentChanged,
-                      actionInsetBuilder: _quickAddActionInset,
-                      fallbackDate: widget.prefilledDateTime,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Center(
+        child: AnimatedBuilder(
+          animation: _scaleAnimation,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _scaleAnimation.value,
+              child: child,
+            );
+          },
+          child: _QuickAddModalContent(
+            isSheet: false,
+            formController: _formController,
+            taskNameController: _taskNameController,
+            descriptionController: _descriptionController,
+            locationController: _locationController,
+            taskNameFocusNode: _taskNameFocusNode,
+            titleValidationMessage: _titleValidationMessage,
+            locationHelper: widget.locationHelper,
+            onTaskNameChanged: _handleTaskNameChanged,
+            onTaskSubmit: _submitTask,
+            onClose: _dismissModal,
+            onLocationChanged: _handleLocationEdited,
+            onStartChanged: _onUserStartChanged,
+            onEndChanged: _onUserEndChanged,
+            onScheduleCleared: _onUserScheduleCleared,
+            onDeadlineChanged: _onUserDeadlineChanged,
+            onRecurrenceChanged: _onUserRecurrenceChanged,
+            onImportantChanged: _onUserImportantChanged,
+            onUrgentChanged: _onUserUrgentChanged,
+            actionInsetBuilder: _quickAddActionInset,
+            fallbackDate: widget.prefilledDateTime,
+          ),
+        ),
+      ),
     );
   }
 
@@ -1113,7 +1096,6 @@ Future<void> showQuickAddModal({
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.transparent,
     showDragHandle: useSheet,
     isDismissible: useSheet,
     dialogMaxWidth: 760,
