@@ -1,4 +1,3 @@
-import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
@@ -78,50 +77,22 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
     }
     return ShadPopover(
       controller: popoverController,
+      closeOnTapOutside: true,
+      padding: EdgeInsets.zero,
       popover: (context) {
-        return IntrinsicWidth(
-          child: Material(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(LucideIcons.listFilter, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        selectedFilter.label,
-                        style: context.textTheme.small,
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: context.colorScheme.border,
-                ),
-                for (final option in filters)
-                  ShadButton.ghost(
-                    width: double.infinity,
-                    foregroundColor: option.id == selectedFilter.id
-                        ? context.colorScheme.primary
-                        : context.colorScheme.foreground,
-                    onPressed: () {
-                      locate<HomeSearchCubit?>()
-                          ?.updateFilter(option.id, tab: HomeTab.chats);
-                      popoverController.toggle();
-                    },
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(option.label),
-                    ),
-                  ).withTapBounce(),
-              ],
-            ),
-          ),
+        return AxiMenu(
+          actions: [
+            for (final option in filters)
+              AxiMenuAction(
+                icon: option.id == selectedFilter.id ? LucideIcons.check : null,
+                label: option.label,
+                onPressed: () {
+                  locate<HomeSearchCubit?>()
+                      ?.updateFilter(option.id, tab: HomeTab.chats);
+                  popoverController.hide();
+                },
+              ),
+          ],
         );
       },
       child: trigger,

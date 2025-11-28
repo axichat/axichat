@@ -160,6 +160,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
               offset: Offset(0, 8),
             ),
           ];
+    final BaseCalendarBloc bloc = context.read<BaseCalendarBloc>();
     final Widget body = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -221,6 +222,18 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                   onChanged: (value) => setState(() => _isCompleted = value),
                 ),
                 const SizedBox(height: calendarFormGap),
+                if (!widget.isSheet) ...[
+                  TaskSecondaryButton(
+                    label: 'Add to critical path',
+                    icon: Icons.route,
+                    onPressed: () => addTaskToCriticalPath(
+                      context: context,
+                      bloc: bloc,
+                      task: widget.task,
+                    ),
+                  ),
+                  const SizedBox(height: calendarFormGap),
+                ],
               ],
             ),
           ),
@@ -235,7 +248,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             top: false,
             child: _EditTaskActionsRow(
               task: widget.task,
-              includeCriticalPathAction: !widget.isSheet,
               onDelete: () {
                 widget.onTaskDeleted(widget.task.id);
                 widget.onClose();
@@ -807,36 +819,23 @@ class _EditTaskCompletionToggle extends StatelessWidget {
 class _EditTaskActionsRow extends StatelessWidget {
   const _EditTaskActionsRow({
     required this.task,
-    this.includeCriticalPathAction = true,
     required this.onDelete,
     required this.onCancel,
     required this.onSave,
   });
 
   final CalendarTask task;
-  final bool includeCriticalPathAction;
   final VoidCallback onDelete;
   final VoidCallback onCancel;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
-    final BaseCalendarBloc bloc = context.read<BaseCalendarBloc>();
     return TaskFormActionsRow(
       includeTopBorder: true,
       padding: calendarPaddingLg,
       gap: 8,
       children: [
-        if (includeCriticalPathAction)
-          TaskSecondaryButton(
-            label: 'Add to critical path',
-            icon: Icons.route,
-            onPressed: () => addTaskToCriticalPath(
-              context: context,
-              bloc: bloc,
-              task: task,
-            ),
-          ),
         TaskDestructiveButton(
           label: 'Delete',
           onPressed: onDelete,

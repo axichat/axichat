@@ -232,6 +232,7 @@ class _CalendarAppBar extends StatelessWidget {
           padding: calendarMarginLarge,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               AxiIconButton(
                 iconData: LucideIcons.arrowLeft,
@@ -242,8 +243,11 @@ class _CalendarAppBar extends StatelessWidget {
               ),
               const SizedBox(width: calendarGutterMd),
               Expanded(
-                child: SyncControls(
-                  state: state,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SyncControls(
+                    state: state,
+                  ),
                 ),
               ),
             ],

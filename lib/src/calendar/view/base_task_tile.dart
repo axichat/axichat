@@ -2,6 +2,7 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
@@ -689,7 +690,7 @@ class _TaskTimeLabel extends StatelessWidget {
   }
 }
 
-class _TaskActionMenu extends StatelessWidget {
+class _TaskActionMenu extends StatefulWidget {
   const _TaskActionMenu({
     required this.onEdit,
     required this.onDelete,
@@ -703,45 +704,61 @@ class _TaskActionMenu extends StatelessWidget {
   final double? iconSize;
 
   @override
+  State<_TaskActionMenu> createState() => _TaskActionMenuState();
+}
+
+class _TaskActionMenuState extends State<_TaskActionMenu> {
+  late final ShadPopoverController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ShadPopoverController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleEdit() {
+    _controller.hide();
+    widget.onEdit();
+  }
+
+  void _handleDelete() {
+    _controller.hide();
+    widget.onDelete();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      iconSize: iconSize,
-      onSelected: (value) {
-        switch (value) {
-          case 'edit':
-            onEdit();
-            break;
-          case 'delete':
-            onDelete();
-            break;
-        }
-      },
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          value: 'edit',
-          child: showIcons
-              ? const Row(
-                  children: [
-                    Icon(Icons.edit, size: 16),
-                    SizedBox(width: calendarGutterSm),
-                    Text('Edit'),
-                  ],
-                )
-              : const Text('Edit'),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: showIcons
-              ? const Row(
-                  children: [
-                    Icon(Icons.delete, size: 16),
-                    SizedBox(width: calendarGutterSm),
-                    Text('Delete'),
-                  ],
-                )
-              : const Text('Delete'),
-        ),
-      ],
+    return ShadPopover(
+      controller: _controller,
+      closeOnTapOutside: true,
+      padding: EdgeInsets.zero,
+      popover: (context) => AxiMenu(
+        actions: [
+          AxiMenuAction(
+            label: 'Edit',
+            icon: widget.showIcons ? Icons.edit : null,
+            onPressed: _handleEdit,
+          ),
+          AxiMenuAction(
+            label: 'Delete',
+            icon: widget.showIcons ? Icons.delete : null,
+            destructive: true,
+            onPressed: _handleDelete,
+          ),
+        ],
+      ),
+      child: IconButton(
+        iconSize: widget.iconSize,
+        tooltip: 'Task actions',
+        icon: const Icon(Icons.more_vert),
+        onPressed: _controller.toggle,
+      ),
     );
   }
 }

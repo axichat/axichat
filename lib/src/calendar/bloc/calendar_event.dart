@@ -204,6 +204,11 @@ class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.criticalPathFocused({
     String? pathId,
   }) = CalendarCriticalPathFocused;
+
+  const factory CalendarEvent.criticalPathReordered({
+    required String pathId,
+    required List<String> orderedTaskIds,
+  }) = CalendarCriticalPathReordered;
 }
 
 enum CalendarView { week, day, month }

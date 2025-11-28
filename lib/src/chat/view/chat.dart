@@ -121,9 +121,9 @@ const _reactionChipSpacing = 0.6;
 const _reactionOverflowSpacing = 4.0;
 const _reactionSubscriptPadding = 3.0;
 const _reactionCornerClearance = 12.0;
-const _cutoutMaxWidthFraction = 0.9;
-const _compactBubbleWidthFraction = 0.96;
-const _regularBubbleWidthFraction = 0.92;
+const _cutoutMaxWidthFraction = 1.0;
+const _compactBubbleWidthFraction = 0.7;
+const _regularBubbleWidthFraction = 0.7;
 const _reactionOverflowGlyphWidth = 18.0;
 const _recipientCutoutDepth = 16.0;
 const _recipientCutoutRadius = 18.0;
@@ -197,6 +197,7 @@ const _messageListTailSpacer = 36.0;
 const _subjectFieldHeight = 24.0;
 const _subjectDividerPadding = 2.0;
 const _subjectDividerThickness = 1.0;
+const _messageListHorizontalPadding = 12.0;
 
 class _MessageFilterOption {
   const _MessageFilterOption(this.filter, this.label);
@@ -3652,17 +3653,19 @@ class _ChatState extends State<Chat> {
                                                             0;
                                                         double extraOuterRight =
                                                             0;
-                                                        const selfEdgePadding =
-                                                            0.0;
                                                         final outerPadding =
                                                             EdgeInsets.only(
                                                           top: 2,
                                                           bottom: baseOuterBottom +
                                                               extraOuterBottom,
-                                                          left: selfEdgePadding +
-                                                              extraOuterLeft,
-                                                          right: selfEdgePadding +
-                                                              extraOuterRight,
+                                                          left: self
+                                                              ? 0
+                                                              : _messageListHorizontalPadding +
+                                                                  extraOuterLeft,
+                                                          right: self
+                                                              ? _messageListHorizontalPadding +
+                                                                  extraOuterRight
+                                                              : 0,
                                                         );
                                                         final bubble =
                                                             TweenAnimationBuilder<
@@ -4370,44 +4373,40 @@ class _ChatState extends State<Chat> {
                                                     readOnly: true,
                                                   ),
                                                 ),
-                                                if (typingVisible)
-                                                  Positioned(
-                                                    left:
-                                                        _chatHorizontalPadding,
-                                                    bottom: 8,
-                                                    child: IgnorePointer(
-                                                      child: DecoratedBox(
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: context
-                                                              .colorScheme.card,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                            999,
-                                                          ),
-                                                          border: Border.all(
-                                                            color: context
-                                                                .colorScheme
-                                                                .border,
-                                                          ),
-                                                        ),
-                                                        child: const Padding(
-                                                          padding: EdgeInsets
-                                                              .symmetric(
-                                                            horizontal: 12,
-                                                            vertical: 8,
-                                                          ),
-                                                          child:
-                                                              TypingIndicator(),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
                                               ],
                                             ),
                                           ),
                                         ),
+                                        if (typingVisible)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              left:
+                                                  _messageListHorizontalPadding,
+                                              bottom: 8,
+                                            ),
+                                            child: IgnorePointer(
+                                              child: DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      context.colorScheme.card,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          999),
+                                                  border: Border.all(
+                                                    color: context
+                                                        .colorScheme.border,
+                                                  ),
+                                                ),
+                                                child: const Padding(
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 8,
+                                                  ),
+                                                  child: TypingIndicator(),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                         quoteSection,
                                         if (_multiSelectActive &&
                                             selectedMessages.isNotEmpty)

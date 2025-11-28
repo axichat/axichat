@@ -14,6 +14,7 @@ class CalendarSidebarHost<B extends BaseCalendarBloc> extends StatelessWidget {
     required this.onDragSessionStarted,
     required this.onDragSessionEnded,
     required this.onDragGlobalPositionChanged,
+    this.onOpenCriticalPathSandbox,
   });
 
   final B? bloc;
@@ -21,6 +22,7 @@ class CalendarSidebarHost<B extends BaseCalendarBloc> extends StatelessWidget {
   final VoidCallback onDragSessionStarted;
   final VoidCallback onDragSessionEnded;
   final ValueChanged<Offset> onDragGlobalPositionChanged;
+  final ValueChanged<String>? onOpenCriticalPathSandbox;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +37,7 @@ class CalendarSidebarHost<B extends BaseCalendarBloc> extends StatelessWidget {
         onDragSessionStarted: onDragSessionStarted,
         onDragSessionEnded: onDragSessionEnded,
         onDragGlobalPositionChanged: onDragGlobalPositionChanged,
+        onOpenCriticalPathSandbox: onOpenCriticalPathSandbox,
       ),
     );
   }

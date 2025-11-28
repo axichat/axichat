@@ -23,6 +23,7 @@ class CriticalPathPanel extends StatefulWidget {
     required this.onDeletePath,
     required this.onFocusPath,
     required this.animationDuration,
+    this.onOpenSandbox,
   });
 
   final List<CalendarCriticalPath> paths;
@@ -33,6 +34,7 @@ class CriticalPathPanel extends StatefulWidget {
   final void Function(CalendarCriticalPath path) onDeletePath;
   final void Function(CalendarCriticalPath? path) onFocusPath;
   final Duration animationDuration;
+  final ValueChanged<String>? onOpenSandbox;
 
   @override
   State<CriticalPathPanel> createState() => _CriticalPathPanelState();
@@ -136,6 +138,8 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
                         ),
                         onRename: () => widget.onRenamePath(path),
                         onDelete: () => widget.onDeletePath(path),
+                        onOpenSandbox: () =>
+                            widget.onOpenSandbox?.call(path.id),
                       ),
                       const SizedBox(height: calendarInsetMd),
                     ],
@@ -178,6 +182,7 @@ class CriticalPathCard extends StatelessWidget {
     required this.onRename,
     required this.onDelete,
     required this.animationDuration,
+    required this.onOpenSandbox,
   });
 
   final CalendarCriticalPath path;
@@ -187,60 +192,67 @@ class CriticalPathCard extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onDelete;
   final Duration animationDuration;
+  final VoidCallback onOpenSandbox;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final double progressValue =
         progress.total == 0 ? 0 : progress.completed / progress.total;
-    return Container(
-      padding: const EdgeInsets.all(calendarGutterMd),
-      decoration: BoxDecoration(
-        color: colors.muted.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(
-          color: isFocused ? colors.primary : colors.border,
-          width: isFocused ? 1.5 : 1,
+    final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
+    return InkWell(
+      borderRadius: radius,
+      mouseCursor: SystemMouseCursors.click,
+      onTap: onOpenSandbox,
+      child: Container(
+        padding: const EdgeInsets.all(calendarGutterMd),
+        decoration: BoxDecoration(
+          color: colors.muted.withValues(alpha: 0.04),
+          borderRadius: radius,
+          border: Border.all(
+            color: isFocused ? colors.primary : colors.border,
+            width: isFocused ? 1.5 : 1,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  path.name,
-                  style: context.textTheme.h4.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    path.name,
+                    style: context.textTheme.h4.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              _PathActions(
-                onFocus: onFocus,
-                onRename: onRename,
-                onDelete: onDelete,
-                isFocused: isFocused,
-              ),
-            ],
-          ),
-          const SizedBox(height: calendarInsetSm),
-          Text(
-            '${progress.completed} of ${progress.total} tasks completed in order',
-            style: context.textTheme.muted.copyWith(fontSize: 12),
-          ),
-          const SizedBox(height: calendarInsetSm),
-          Text(
-            'Complete tasks in the listed order to advance',
-            style: context.textTheme.muted.copyWith(fontSize: 11),
-          ),
-          const SizedBox(height: calendarInsetSm),
-          _CriticalPathProgressBar(
-            progressValue: progressValue,
-            animationDuration: animationDuration,
-          ),
-        ],
+                _PathActions(
+                  onFocus: onFocus,
+                  onRename: onRename,
+                  onDelete: onDelete,
+                  isFocused: isFocused,
+                ),
+              ],
+            ),
+            const SizedBox(height: calendarInsetSm),
+            Text(
+              '${progress.completed} of ${progress.total} tasks completed in order',
+              style: context.textTheme.muted.copyWith(fontSize: 12),
+            ),
+            const SizedBox(height: calendarInsetSm),
+            Text(
+              'Complete tasks in the listed order to advance',
+              style: context.textTheme.muted.copyWith(fontSize: 11),
+            ),
+            const SizedBox(height: calendarInsetSm),
+            _CriticalPathProgressBar(
+              progressValue: progressValue,
+              animationDuration: animationDuration,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -410,45 +422,26 @@ class _PathActionsState extends State<_PathActions> {
             closeOnTapOutside: true,
             padding: EdgeInsets.zero,
             popover: (context) {
-              return Material(
-                color: Colors.transparent,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.card,
-                    borderRadius: BorderRadius.circular(calendarBorderRadius),
-                    border: Border.all(color: colors.border),
-                    boxShadow: calendarElevation2,
+              return AxiMenu(
+                actions: [
+                  AxiMenuAction(
+                    icon: Icons.drive_file_rename_outline,
+                    label: 'Rename',
+                    onPressed: () {
+                      _closeMenu();
+                      widget.onRename();
+                    },
                   ),
-                  child: IntrinsicWidth(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _PathMenuItem(
-                          icon: Icons.drive_file_rename_outline,
-                          label: 'Rename',
-                          onTap: () {
-                            _closeMenu();
-                            widget.onRename();
-                          },
-                        ),
-                        Divider(
-                          height: calendarBorderStroke,
-                          thickness: calendarBorderStroke,
-                          color: colors.border,
-                        ),
-                        _PathMenuItem(
-                          icon: Icons.delete_outline,
-                          label: 'Delete',
-                          destructive: true,
-                          onTap: () {
-                            _closeMenu();
-                            widget.onDelete();
-                          },
-                        ),
-                      ],
-                    ),
+                  AxiMenuAction(
+                    icon: Icons.delete_outline,
+                    label: 'Delete',
+                    destructive: true,
+                    onPressed: () {
+                      _closeMenu();
+                      widget.onDelete();
+                    },
                   ),
-                ),
+                ],
               );
             },
             child: AxiIconButton(
@@ -464,57 +457,6 @@ class _PathActionsState extends State<_PathActions> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _PathMenuItem extends StatelessWidget {
-  const _PathMenuItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final Color foreground =
-        destructive ? colors.destructive : colors.foreground;
-    final BorderRadius radius =
-        BorderRadius.circular(calendarBorderRadius.toDouble());
-    final Color hoverColor = colors.muted.withValues(alpha: 0.08);
-    return Material(
-      color: Colors.transparent,
-      borderRadius: radius,
-      child: InkWell(
-        borderRadius: radius,
-        hoverColor: hoverColor,
-        focusColor: hoverColor,
-        onTap: onTap,
-        child: Padding(
-          padding: calendarMenuItemPadding,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: foreground),
-              const SizedBox(width: calendarGutterSm),
-              Text(
-                label,
-                style: context.textTheme.small.copyWith(
-                  color: foreground,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
