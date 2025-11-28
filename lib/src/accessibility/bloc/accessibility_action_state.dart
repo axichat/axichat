@@ -15,6 +15,7 @@ class AccessibilityActionState extends Equatable {
     required this.recipients,
     required this.messages,
     required this.activeChatJid,
+    required this.discardWarningActive,
   });
 
   const AccessibilityActionState.initial()
@@ -30,7 +31,8 @@ class AccessibilityActionState extends Equatable {
         errorMessage = null,
         recipients = const [],
         messages = const [],
-        activeChatJid = null;
+        activeChatJid = null,
+        discardWarningActive = false;
 
   final bool visible;
   final List<AccessibilityStepEntry> stack;
@@ -43,6 +45,7 @@ class AccessibilityActionState extends Equatable {
   final List<AccessibilityContact> recipients;
   final List<Message> messages;
   final String? activeChatJid;
+  final bool discardWarningActive;
 
   AccessibilityStepEntry get currentEntry => stack.last;
 
@@ -58,6 +61,7 @@ class AccessibilityActionState extends Equatable {
     List<AccessibilityContact>? recipients,
     List<Message>? messages,
     Object? activeChatJid = _unset,
+    bool? discardWarningActive,
   }) =>
       AccessibilityActionState(
         visible: visible ?? this.visible,
@@ -77,6 +81,7 @@ class AccessibilityActionState extends Equatable {
         activeChatJid: activeChatJid == _unset
             ? this.activeChatJid
             : activeChatJid as String?,
+        discardWarningActive: discardWarningActive ?? this.discardWarningActive,
       );
 
   @override
@@ -92,5 +97,6 @@ class AccessibilityActionState extends Equatable {
         recipients,
         messages,
         activeChatJid,
+        discardWarningActive,
       ];
 }
