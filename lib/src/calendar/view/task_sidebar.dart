@@ -3197,6 +3197,8 @@ class _AddTaskSection extends StatelessWidget {
                     onEndChanged: onEndChanged,
                     onScheduleCleared: onScheduleCleared,
                     onRecurrenceChanged: onRecurrenceChanged,
+                    titleController: titleController,
+                    onAddToCriticalPath: onAddToCriticalPath,
                   )
                 : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
           ),
@@ -3205,19 +3207,6 @@ class _AddTaskSection extends StatelessWidget {
             padding: EdgeInsets.zero,
             gap: calendarGutterSm,
             children: [
-              Expanded(
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: titleController,
-                  builder: (context, value, _) {
-                    final bool enabled = value.text.trim().isNotEmpty;
-                    return TaskSecondaryButton(
-                      label: 'Add to critical path',
-                      icon: Icons.route,
-                      onPressed: enabled ? onAddToCriticalPath : null,
-                    );
-                  },
-                ),
-              ),
               Expanded(
                 child: _AddTaskButton(
                   titleController: titleController,
@@ -4424,6 +4413,8 @@ class _AdvancedOptions extends StatelessWidget {
     required this.onEndChanged,
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
+    required this.titleController,
+    required this.onAddToCriticalPath,
   });
 
   final LocationAutocompleteHelper locationHelper;
@@ -4435,6 +4426,8 @@ class _AdvancedOptions extends StatelessWidget {
   final ValueChanged<DateTime?> onEndChanged;
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
+  final TextEditingController titleController;
+  final VoidCallback onAddToCriticalPath;
 
   @override
   Widget build(BuildContext context) {
@@ -4487,6 +4480,20 @@ class _AdvancedOptions extends StatelessWidget {
           _AdvancedRecurrenceSection(
             draftController: draftController,
             onChanged: onRecurrenceChanged,
+          ),
+          const TaskSectionDivider(
+            verticalPadding: calendarGutterLg,
+          ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: titleController,
+            builder: (context, value, _) {
+              final bool enabled = value.text.trim().isNotEmpty;
+              return TaskSecondaryButton(
+                label: 'Add to critical path',
+                icon: Icons.route,
+                onPressed: enabled ? onAddToCriticalPath : null,
+              );
+            },
           ),
         ],
       ),

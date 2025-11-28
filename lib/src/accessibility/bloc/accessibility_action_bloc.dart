@@ -387,21 +387,26 @@ class AccessibilityActionBloc
       return false;
     }
     final messageService = _messageService;
-    if (messageService is! XmppService) {
-      return true;
-    }
+    if (messageService is! XmppService) return true;
     final myJid = messageService.myJid;
-    if (myJid == null) {
-      return true;
-    }
+    // If we don't know our JID, default to XMPP to avoid bogus email routing.
+    if (myJid == null) return false;
     try {
       final mine = mox.JID.fromString(myJid);
       final target = mox.JID.fromString(contact.jid);
       final myDomain = mine.domain.toLowerCase();
       final targetDomain = target.domain.toLowerCase();
-      return targetDomain != myDomain && !targetDomain.endsWith('.$myDomain');
-    } on Exception {
+      // Never email local/first-party domains.
+      if (targetDomain == myDomain ||
+          targetDomain.endsWith('.$myDomain') ||
+          targetDomain == 'axi.im' ||
+          targetDomain.endsWith('.axi.im')) {
+        return false;
+      }
       return true;
+    } on Exception {
+      // If parsing fails, stick with XMPP to avoid bad fallback addresses.
+      return false;
     }
   }
 

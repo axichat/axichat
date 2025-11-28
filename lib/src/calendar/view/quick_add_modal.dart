@@ -1198,6 +1198,8 @@ Future<void> showQuickAddModal({
     showDragHandle: useSheet,
     isDismissible: true,
     barrierColor: Colors.black54,
+    backgroundColor: Colors.transparent,
+    surfacePadding: EdgeInsets.zero,
     dialogMaxWidth: 760,
     builder: (sheetContext) => QuickAddModal(
       surface: surface,

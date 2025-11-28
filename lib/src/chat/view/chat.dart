@@ -145,7 +145,6 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Centers the 28px indicator within the 40px cutout.
 const _messageAvatarSize = 36.0;
-const _messageRowAvatarReservation = 44.0;
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
 const _selectionBubbleOutboundSpacingBoost = 6.0;
@@ -2462,12 +2461,15 @@ class _ChatState extends State<Chat> {
                               children: [
                                 LayoutBuilder(
                                   builder: (context, constraints) {
-                                    final contentWidth = math.max(
-                                      0.0,
-                                      constraints.maxWidth,
-                                    );
+                                    final rawContentWidth =
+                                        math.max(0.0, constraints.maxWidth);
+                                    final availableWidth = math.max(
+                                        0.0,
+                                        rawContentWidth -
+                                            (_messageListHorizontalPadding *
+                                                2));
                                     final isCompact =
-                                        contentWidth < smallScreen;
+                                        availableWidth < smallScreen;
                                     final messageById = {
                                       for (final item in state.items)
                                         item.stanzaID: item,
@@ -2514,35 +2516,25 @@ class _ChatState extends State<Chat> {
                                                 _selectionSpacerHeight,
                                               )
                                             : _messageListTailSpacer;
-                                    final baseBubbleMaxWidth = contentWidth *
+                                    final baseBubbleMaxWidth = availableWidth *
                                         (isCompact
                                             ? _compactBubbleWidthFraction
                                             : _regularBubbleWidthFraction);
-                                    final inboundAvatarReservation = isGroupChat
-                                        ? _messageRowAvatarReservation
-                                        : 0.0;
                                     final inboundClampedBubbleWidth =
-                                        baseBubbleMaxWidth.clamp(
-                                      0.0,
-                                      contentWidth - inboundAvatarReservation,
-                                    );
+                                        baseBubbleMaxWidth;
                                     final outboundClampedBubbleWidth =
-                                        baseBubbleMaxWidth.clamp(
-                                      0.0,
-                                      contentWidth,
+                                        baseBubbleMaxWidth;
+                                    final inboundMessageRowMaxWidth =
+                                        inboundClampedBubbleWidth +
+                                            _selectionOuterInset;
+                                    final outboundMessageRowMaxWidth =
+                                        outboundClampedBubbleWidth +
+                                            _selectionOuterInset;
+                                    final messageRowConstraintWidth = math.min(
+                                      rawContentWidth,
+                                      baseBubbleMaxWidth +
+                                          (_messageListHorizontalPadding * 2),
                                     );
-                                    final inboundMessageRowMaxWidth = math.min(
-                                      contentWidth - inboundAvatarReservation,
-                                      inboundClampedBubbleWidth +
-                                          _selectionOuterInset,
-                                    );
-                                    final outboundMessageRowMaxWidth = math.min(
-                                      contentWidth,
-                                      outboundClampedBubbleWidth +
-                                          _selectionOuterInset,
-                                    );
-                                    final messageRowConstraintWidth =
-                                        contentWidth;
                                     final dashMessages = <ChatMessage>[];
                                     final shownSubjectShares = <String>{};
                                     final revokedInviteTokens = <String>{
@@ -2831,6 +2823,7 @@ class _ChatState extends State<Chat> {
                                     final typingVisible =
                                         state.typing == true ||
                                             remoteTyping != null;
+                                    const showMessageAvatars = false;
                                     return Column(
                                       children: [
                                         Expanded(
@@ -2854,9 +2847,9 @@ class _ChatState extends State<Chat> {
                                                     messageOptions:
                                                         MessageOptions(
                                                       showOtherUsersAvatar:
-                                                          false,
+                                                          showMessageAvatars,
                                                       showCurrentUserAvatar:
-                                                          false,
+                                                          showMessageAvatars,
                                                       showOtherUsersName: false,
                                                       borderRadius: 0,
                                                       maxWidth:
@@ -3592,9 +3585,7 @@ class _ChatState extends State<Chat> {
                                                         final cappedBubbleWidth =
                                                             math.min(
                                                           bubbleMaxWidth,
-                                                          (self
-                                                                  ? outboundClampedBubbleWidth
-                                                                  : inboundClampedBubbleWidth) +
+                                                          baseBubbleMaxWidth +
                                                               selectionAllowance,
                                                         );
                                                         final bubbleConstraints =
@@ -4237,73 +4228,16 @@ class _ChatState extends State<Chat> {
                                                             ],
                                                           );
                                                         }
-                                                        final hasAvatarSlot =
-                                                            isGroupChat &&
-                                                                isRenderableBubble &&
-                                                                !self;
-                                                        if (hasAvatarSlot) {
-                                                          bubbleWithSlack =
-                                                              ConstrainedBox(
-                                                            constraints:
-                                                                BoxConstraints(
-                                                              maxWidth:
-                                                                  messageRowConstraintWidth,
-                                                            ),
-                                                            child: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .end,
-                                                              children: [
-                                                                if (!self)
-                                                                  SizedBox(
-                                                                    width:
-                                                                        _messageRowAvatarReservation,
-                                                                    child:
-                                                                        Align(
-                                                                      alignment:
-                                                                          Alignment
-                                                                              .bottomLeft,
-                                                                      child:
-                                                                          _MessageAvatar(
-                                                                        jid: messageModel
-                                                                            .senderJid,
-                                                                        size:
-                                                                            _messageAvatarSize,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                Flexible(
-                                                                  fit: FlexFit
-                                                                      .loose,
-                                                                  child:
-                                                                      ConstrainedBox(
-                                                                    constraints:
-                                                                        BoxConstraints(
-                                                                      maxWidth:
-                                                                          bubbleMaxWidth,
-                                                                    ),
-                                                                    child:
-                                                                        bubbleWithSlack,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          );
-                                                        } else {
-                                                          bubbleWithSlack =
-                                                              ConstrainedBox(
-                                                            constraints:
-                                                                BoxConstraints(
-                                                              maxWidth:
-                                                                  bubbleMaxWidth,
-                                                            ),
-                                                            child:
-                                                                bubbleWithSlack,
-                                                          );
-                                                        }
+                                                        bubbleWithSlack =
+                                                            ConstrainedBox(
+                                                          constraints:
+                                                              BoxConstraints(
+                                                            maxWidth:
+                                                                bubbleMaxWidth,
+                                                          ),
+                                                          child:
+                                                              bubbleWithSlack,
+                                                        );
                                                         final messageRowAlignment =
                                                             isSingleSelection
                                                                 ? Alignment
@@ -5137,10 +5071,13 @@ _CutoutLayoutResult<chat_models.Chat> _layoutRecipientStrip(
   );
 }
 
+// ignore: unused_element
 class _MessageAvatar extends StatelessWidget {
+  // ignore: unused_element_parameter
   const _MessageAvatar({required this.jid, this.size = _messageAvatarSize});
 
   final String jid;
+  // ignore: unused_element_parameter
   final double size;
 
   @override
