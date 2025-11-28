@@ -196,6 +196,42 @@ class CalendarModel with _$CalendarModel {
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
 
+  CalendarModel reorderCriticalPath({
+    required String pathId,
+    required List<String> orderedTaskIds,
+  }) {
+    final CalendarCriticalPath? path = criticalPaths[pathId];
+    if (path == null || path.isArchived) {
+      return this;
+    }
+    final now = DateTime.now();
+    final Set<String> unique = <String>{};
+    final List<String> normalized = <String>[];
+    for (final String id in orderedTaskIds) {
+      final String baseId = baseTaskIdFrom(id);
+      if (!path.taskIds.contains(baseId) || !unique.add(baseId)) {
+        continue;
+      }
+      normalized.add(baseId);
+    }
+    for (final String id in path.taskIds) {
+      if (unique.add(id)) {
+        normalized.add(id);
+      }
+    }
+    final CalendarCriticalPath updatedPath = path.copyWith(
+      taskIds: normalized,
+      modifiedAt: now,
+    );
+    final nextPaths = Map<String, CalendarCriticalPath>.from(criticalPaths)
+      ..[pathId] = updatedPath;
+    final updated = copyWith(
+      criticalPaths: nextPaths,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
   Map<String, CalendarCriticalPath> _removeTaskFromPaths(
     String taskId, {
     required DateTime now,

@@ -5,8 +5,8 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -122,8 +122,8 @@ class _AccessibilityMenuScaffold extends StatefulWidget {
       _AccessibilityMenuScaffoldState();
 }
 
-class _AccessibilityMenuScaffoldState
-    extends State<_AccessibilityMenuScaffold> {
+class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
+    with WidgetsBindingObserver {
   final FocusScopeNode _focusScopeNode =
       FocusScopeNode(debugLabel: 'accessibility_menu_scope');
   final GlobalKey<_AccessibilitySectionListState> _listKey = GlobalKey();
@@ -157,6 +157,7 @@ class _AccessibilityMenuScaffoldState
       _restoreFocusNode = FocusManager.instance.primaryFocus;
       _scheduleInitialFocus();
     }
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -177,6 +178,10 @@ class _AccessibilityMenuScaffoldState
       }
       _lastAnnouncedStep = null;
     }
+    if (widget.state.currentEntry != oldWidget.state.currentEntry &&
+        widget.state.visible) {
+      _scheduleInitialFocus();
+    }
     _announceStepChange();
     _wasVisible = widget.state.visible;
   }
@@ -188,11 +193,20 @@ class _AccessibilityMenuScaffoldState
       HardwareKeyboard.instance.removeHandler(handler);
     }
     FocusManager.instance.removeListener(_handleFocusChange);
+    WidgetsBinding.instance.removeObserver(this);
     _shortcutLegendFocusNode.dispose();
     _composerFocusNode.dispose();
     _newContactFocusNode.dispose();
     _focusScopeNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    if (state == AppLifecycleState.resumed && widget.state.visible) {
+      _scheduleInitialFocus();
+    }
   }
 
   @override
@@ -360,17 +374,15 @@ class _AccessibilityMenuScaffoldState
 
   List<_AccessibilityGroup> _groupOrder() {
     final order = <_AccessibilityGroup>[];
-    switch (widget.state.currentEntry.kind) {
-      case AccessibilityStepKind.composer:
-        order.add(_AccessibilityGroup.composer);
-        order.add(_AccessibilityGroup.shortcuts);
-        break;
-      case AccessibilityStepKind.newContact:
-        order.add(_AccessibilityGroup.newContact);
-        order.add(_AccessibilityGroup.shortcuts);
-        break;
-      default:
-        order.add(_AccessibilityGroup.shortcuts);
+    order.add(_AccessibilityGroup.shortcuts);
+    final kind = widget.state.currentEntry.kind;
+    if (kind == AccessibilityStepKind.composer ||
+        kind == AccessibilityStepKind.chatMessages ||
+        kind == AccessibilityStepKind.conversation) {
+      order.add(_AccessibilityGroup.composer);
+    }
+    if (kind == AccessibilityStepKind.newContact) {
+      order.add(_AccessibilityGroup.newContact);
     }
     if (widget.state.sections.isNotEmpty) {
       order.add(_AccessibilityGroup.sections);
@@ -414,7 +426,9 @@ class _AccessibilityMenuScaffoldState
 
   bool _shouldWarnOnExit(AccessibilityActionState state) {
     final entry = state.currentEntry;
-    if (entry.kind == AccessibilityStepKind.composer) {
+    if (entry.kind == AccessibilityStepKind.composer ||
+        entry.kind == AccessibilityStepKind.chatMessages ||
+        entry.kind == AccessibilityStepKind.conversation) {
       return state.composerText.trim().isNotEmpty ||
           entry.recipients.isNotEmpty;
     }
@@ -429,29 +443,34 @@ class _AccessibilityMenuScaffoldState
       if (!mounted) return;
       _focusScopeNode.requestFocus();
       final groups = _groupOrder();
-      if (widget.state.currentEntry.kind == AccessibilityStepKind.composer &&
-          groups.contains(_AccessibilityGroup.composer)) {
-        _focusGroup(_AccessibilityGroup.composer);
-        return;
+      _AccessibilityGroup? target;
+      for (final group in groups) {
+        if (group != _AccessibilityGroup.shortcuts) {
+          target = group;
+          break;
+        }
       }
-      if (widget.state.currentEntry.kind == AccessibilityStepKind.newContact &&
-          groups.contains(_AccessibilityGroup.newContact)) {
-        _focusGroup(_AccessibilityGroup.newContact);
-        return;
-      }
-      if (groups.isNotEmpty) {
-        _focusGroup(groups.first);
+      target ??= groups.isNotEmpty ? groups.first : null;
+      if (target != null) {
+        _focusGroup(target);
       }
     });
   }
 
   void _handleFocusChange() {
     final editing = _isTextInputFocused();
-    if (editing == _isEditingText) return;
     if (!mounted) return;
-    setState(() {
-      _isEditingText = editing;
-    });
+    if (editing != _isEditingText) {
+      setState(() {
+        _isEditingText = editing;
+      });
+    }
+    final primary = FocusManager.instance.primaryFocus;
+    if (widget.state.visible &&
+        (primary == null || primary.context == null) &&
+        _groupOrder().isNotEmpty) {
+      _scheduleInitialFocus();
+    }
   }
 
   bool _handleMenuShortcut(KeyEvent event) {
@@ -509,6 +528,13 @@ class _AccessibilityMenuScaffoldState
             ? entry.recipients.first.displayName
             : '';
         return name.isNotEmpty ? 'Messages with $name' : 'Messages';
+      case AccessibilityStepKind.conversation:
+        final conversationName = entry.recipients.isNotEmpty
+            ? entry.recipients.first.displayName
+            : '';
+        return conversationName.isNotEmpty
+            ? 'Conversation with $conversationName'
+            : 'Conversation';
     }
   }
 }
@@ -582,7 +608,9 @@ class _AccessibilityActionContent extends StatelessWidget {
         ? breadcrumbLabels.last
         : _entryLabel(state.currentEntry, context);
     final hasComposer =
-        state.currentEntry.kind == AccessibilityStepKind.composer;
+        state.currentEntry.kind == AccessibilityStepKind.composer ||
+            state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
+            state.currentEntry.kind == AccessibilityStepKind.conversation;
     final hasNewContact =
         state.currentEntry.kind == AccessibilityStepKind.newContact;
     final hasSections = state.sections.isNotEmpty;
@@ -625,7 +653,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: MainAxisSize.max,
       children: [
         FocusTraversalOrder(
           order: headerOrder,
@@ -703,8 +731,7 @@ class _AccessibilityActionContent extends StatelessWidget {
             order: sectionsOrder,
             child: _AccessibilityGroupMarker(
               group: _AccessibilityGroup.sections,
-              child: Flexible(
-                fit: FlexFit.loose,
+              child: Expanded(
                 child: Shortcuts(
                   shortcuts: enableActivationShortcut
                       ? {_activateItemActivator: const _ActivateItemIntent()}
@@ -722,8 +749,7 @@ class _AccessibilityActionContent extends StatelessWidget {
         else
           FocusTraversalOrder(
             order: sectionsOrder,
-            child: const Flexible(
-              fit: FlexFit.loose,
+            child: const Expanded(
               child: Center(child: Text('No actions available right now')),
             ),
           ),
@@ -754,6 +780,11 @@ class _AccessibilityActionContent extends StatelessWidget {
             ? entry.recipients.first.displayName
             : 'Messages';
         return 'Messages with $name';
+      case AccessibilityStepKind.conversation:
+        final name = entry.recipients.isNotEmpty
+            ? entry.recipients.first.displayName
+            : 'Conversation';
+        return 'Conversation with $name';
     }
   }
 
@@ -1055,34 +1086,37 @@ class _KeyboardShortcutLegend extends StatelessWidget {
               final colors = context.colorScheme;
               final borderColor = hasFocus ? colors.primary : colors.border;
               final borderWidth = hasFocus ? 2.5 : 1.0;
-              return AnimatedContainer(
-                duration: baseAnimationDuration,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: borderColor, width: borderWidth),
-                  color: colors.card,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        'Keyboard shortcuts',
-                        style: context.textTheme.small.copyWith(
-                          fontWeight: FontWeight.w700,
+              return SizedBox(
+                width: double.infinity,
+                child: AnimatedContainer(
+                  duration: baseAnimationDuration,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderColor, width: borderWidth),
+                    color: colors.card,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          'Keyboard shortcuts',
+                          style: context.textTheme.small.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: entries,
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: entries,
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -1131,9 +1165,10 @@ class _ShortcutLegendEntry extends StatelessWidget {
                 color: colors.muted.withValues(alpha: 0.04),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 child: Wrap(
-                  spacing: 8,
+                  spacing: 6,
+                  runSpacing: 2,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(label, style: textStyle),
@@ -1719,18 +1754,38 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
   void _scrollToIndex(int index, int? previousIndex) {
     if (index < 0 || index >= _itemNodes.length) return;
     final focusContext = _itemNodes[index].context;
-    if (focusContext != null) {
-      final alignmentPolicy = previousIndex != null && index < previousIndex
-          ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
-          : ScrollPositionAlignmentPolicy.keepVisibleAtEnd;
-      Scrollable.ensureVisible(
-        focusContext,
+    if (focusContext == null) return;
+    final renderObject = focusContext.findRenderObject();
+    if (_scrollController.hasClients && renderObject != null) {
+      final viewport = RenderAbstractViewport.of(renderObject);
+      final position = _scrollController.position;
+      final target = viewport
+          .getOffsetToReveal(
+            renderObject,
+            previousIndex != null && index < previousIndex ? 0 : 1,
+          )
+          .offset;
+      final clampedTarget = target.clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      position.animateTo(
+        clampedTarget,
         duration: baseAnimationDuration,
         curve: Curves.easeInOutCubic,
-        alignment: previousIndex != null && index < previousIndex ? 0.0 : 1.0,
-        alignmentPolicy: alignmentPolicy,
       );
+      return;
     }
+    final alignmentPolicy = previousIndex != null && index < previousIndex
+        ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+        : ScrollPositionAlignmentPolicy.keepVisibleAtEnd;
+    Scrollable.ensureVisible(
+      focusContext,
+      duration: baseAnimationDuration,
+      curve: Curves.easeInOutCubic,
+      alignment: previousIndex != null && index < previousIndex ? 0.0 : 1.0,
+      alignmentPolicy: alignmentPolicy,
+    );
   }
 
   void _disposeNodes() {

@@ -19,6 +19,7 @@ export 'axi_link.dart';
 export 'axi_list_divider.dart';
 export 'axi_list_tile.dart';
 export 'axi_more.dart';
+export 'axi_menu.dart';
 export 'axi_progress_indicator.dart';
 export 'axi_text_form_field.dart';
 export 'axi_tooltip.dart';

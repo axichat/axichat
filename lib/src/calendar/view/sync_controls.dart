@@ -351,26 +351,18 @@ class _TransferMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AxiMore(
-      options: [
-        (toggle) => _TransferMenuItem(
-              icon: LucideIcons.upload,
-              label: 'Export calendar',
-              enabled: hasTasks,
-              onTap: () {
-                toggle();
-                if (hasTasks) {
-                  onExport();
-                }
-              },
-            ),
-        (toggle) => _TransferMenuItem(
-              icon: LucideIcons.download,
-              label: 'Import calendar',
-              onTap: () {
-                toggle();
-                onImport();
-              },
-            ),
+      actions: [
+        AxiMenuAction(
+          icon: LucideIcons.upload,
+          label: 'Export calendar',
+          enabled: hasTasks,
+          onPressed: hasTasks ? onExport : null,
+        ),
+        AxiMenuAction(
+          icon: LucideIcons.download,
+          label: 'Import calendar',
+          onPressed: onImport,
+        ),
       ],
     );
   }
@@ -402,50 +394,5 @@ class _CompactSyncButton extends StatelessWidget {
       ),
     );
     return button.withTapBounce(enabled: onPressed != null);
-  }
-}
-
-class _TransferMenuItem extends StatelessWidget {
-  const _TransferMenuItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.enabled = true,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    return ShadButton.ghost(
-      onPressed: enabled ? onTap : null,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: enabled
-                ? colors.onSurface
-                : colors.onSurface.withValues(alpha: 0.4),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: textTheme.bodySmall?.copyWith(
-              color: enabled
-                  ? colors.onSurface
-                  : colors.onSurface.withValues(alpha: 0.4),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

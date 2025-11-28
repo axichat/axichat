@@ -10,6 +10,7 @@ enum AccessibilityStepKind {
   invites,
   newContact,
   chatMessages,
+  conversation,
 }
 
 enum AccessibilityFlowPurpose {

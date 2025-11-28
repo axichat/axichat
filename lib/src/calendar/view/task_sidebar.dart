@@ -56,11 +56,13 @@ class TaskSidebar extends StatefulWidget {
     this.onDragSessionStarted,
     this.onDragSessionEnded,
     this.onDragGlobalPositionChanged,
+    this.onOpenCriticalPathSandbox,
   });
 
   final VoidCallback? onDragSessionStarted;
   final VoidCallback? onDragSessionEnded;
   final ValueChanged<Offset>? onDragGlobalPositionChanged;
+  final ValueChanged<String>? onOpenCriticalPathSandbox;
 
   @override
   State<TaskSidebar> createState() => TaskSidebarState();
@@ -561,10 +563,6 @@ class TaskSidebarState extends State<TaskSidebar>
           decoration: const BoxDecoration(
             color: sidebarBackgroundColor,
             border: Border(
-              right: BorderSide(
-                color: calendarBorderColor,
-                width: calendarBorderStroke,
-              ),
               top: BorderSide(
                 color: calendarBorderColor,
                 width: calendarBorderStroke,
@@ -618,6 +616,7 @@ class TaskSidebarState extends State<TaskSidebar>
                       onRenamePath: _handleRenameCriticalPath,
                       onDeletePath: _handleDeleteCriticalPath,
                       onFocusPath: _handleFocusCriticalPath,
+                      onOpenSandbox: widget.onOpenCriticalPathSandbox,
                     );
 
                     List<CalendarTask> unscheduledTasks = const [];
@@ -731,7 +730,9 @@ class TaskSidebarState extends State<TaskSidebar>
                         titleFocusNode: _titleFocusNode,
                         quickTaskError: _quickTaskError,
                         onQuickTaskChanged: _handleQuickTaskInputChanged,
-                        onQuickTaskSubmitted: _addTask,
+                        onQuickTaskSubmitted: () {
+                          _addTask();
+                        },
                         draftController: _draftController,
                         onImportantChanged: _onUserImportantChanged,
                         onUrgentChanged: _onUserUrgentChanged,
@@ -743,7 +744,11 @@ class TaskSidebarState extends State<TaskSidebar>
                         onEndChanged: _onUserEndChanged,
                         onScheduleCleared: _onUserScheduleCleared,
                         onRecurrenceChanged: _onUserRecurrenceChanged,
-                        onAddTask: _addTask,
+                        onAddTask: () {
+                          _addTask();
+                        },
+                        onAddToCriticalPath: () =>
+                            _addTask(addToCriticalPath: true),
                         unscheduledTasks: unscheduledTasks,
                         reminderTasks: reminderTasks,
                         hideCompletedUnscheduled:
@@ -1934,7 +1939,7 @@ class TaskSidebarState extends State<TaskSidebar>
     return _draftController.selectedPriority;
   }
 
-  void _addTask() {
+  Future<void> _addTask({bool addToCriticalPath = false}) async {
     final validationError = TaskTitleValidation.validate(_titleController.text);
     if (validationError != null) {
       setState(() {
@@ -1953,6 +1958,11 @@ class TaskSidebarState extends State<TaskSidebar>
     final hasSchedule =
         _draftController.startTime != null && _draftController.endTime != null;
     final hasRecurrence = _advancedRecurrence.isActive;
+
+    Set<String>? previousIds;
+    if (addToCriticalPath) {
+      previousIds = _bloc.state.model.tasks.keys.toSet();
+    }
 
     if (!hasLocation && !hasSchedule && !hasRecurrence) {
       _bloc.add(
@@ -1994,6 +2004,25 @@ class TaskSidebarState extends State<TaskSidebar>
     }
 
     _resetForm();
+
+    if (addToCriticalPath && previousIds != null) {
+      final CalendarTask? createdTask = await _waitForNewTask(previousIds);
+      if (!mounted) {
+        return;
+      }
+      if (createdTask != null) {
+        await addTaskToCriticalPath(
+          context: context,
+          bloc: _bloc,
+          task: createdTask,
+        );
+      } else {
+        FeedbackSystem.showWarning(
+          context,
+          'Task saved but could not be added to a critical path.',
+        );
+      }
+    }
   }
 
   void _handleClearFieldsPressed() {
@@ -2019,6 +2048,25 @@ class TaskSidebarState extends State<TaskSidebar>
     }
     if (mounted) {
       FocusScope.of(context).requestFocus(_titleFocusNode);
+    }
+  }
+
+  Future<CalendarTask?> _waitForNewTask(Set<String> previousIds) async {
+    try {
+      final CalendarState state = await _bloc.stream
+          .firstWhere(
+            (state) => state.model.tasks.length > previousIds.length,
+          )
+          .timeout(const Duration(seconds: 2));
+      final Set<String> nextIds = state.model.tasks.keys.toSet();
+      final Set<String> difference = nextIds.difference(previousIds);
+      if (difference.isEmpty) {
+        return null;
+      }
+      final String taskId = difference.first;
+      return state.model.tasks[taskId];
+    } on TimeoutException {
+      return null;
     }
   }
 
@@ -3019,6 +3067,7 @@ class _AddTaskSection extends StatelessWidget {
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
     required this.addTask,
+    required this.onAddToCriticalPath,
   });
 
   final CalendarSidebarState uiState;
@@ -3043,6 +3092,7 @@ class _AddTaskSection extends StatelessWidget {
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final VoidCallback addTask;
+  final VoidCallback onAddToCriticalPath;
 
   @override
   Widget build(BuildContext context) {
@@ -3151,9 +3201,30 @@ class _AddTaskSection extends StatelessWidget {
                 : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
           ),
           const SizedBox(height: calendarSidebarSectionSpacing),
-          _AddTaskButton(
-            titleController: titleController,
-            onPressed: addTask,
+          TaskFormActionsRow(
+            padding: EdgeInsets.zero,
+            gap: calendarGutterSm,
+            children: [
+              Expanded(
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: titleController,
+                  builder: (context, value, _) {
+                    final bool enabled = value.text.trim().isNotEmpty;
+                    return TaskSecondaryButton(
+                      label: 'Add to critical path',
+                      icon: Icons.route,
+                      onPressed: enabled ? onAddToCriticalPath : null,
+                    );
+                  },
+                ),
+              ),
+              Expanded(
+                child: _AddTaskButton(
+                  titleController: titleController,
+                  onPressed: addTask,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -3189,6 +3260,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
     required this.onAddTask,
+    required this.onAddToCriticalPath,
     required this.unscheduledTasks,
     required this.reminderTasks,
     required this.hideCompletedUnscheduled,
@@ -3227,6 +3299,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final VoidCallback onAddTask;
+  final VoidCallback onAddToCriticalPath;
   final List<CalendarTask> unscheduledTasks;
   final List<CalendarTask> reminderTasks;
   final bool hideCompletedUnscheduled;
@@ -3270,6 +3343,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
           onScheduleCleared: onScheduleCleared,
           onRecurrenceChanged: onRecurrenceChanged,
           addTask: onAddTask,
+          onAddToCriticalPath: onAddToCriticalPath,
         ),
         _TaskSectionsPanel(
           unscheduledTasks: unscheduledTasks,

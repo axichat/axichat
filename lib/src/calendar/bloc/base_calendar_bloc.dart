@@ -89,6 +89,7 @@ abstract class BaseCalendarBloc
     on<CalendarCriticalPathTaskAdded>(_onCriticalPathTaskAdded);
     on<CalendarCriticalPathTaskRemoved>(_onCriticalPathTaskRemoved);
     on<CalendarCriticalPathFocused>(_onCriticalPathFocused);
+    on<CalendarCriticalPathReordered>(_onCriticalPathReordered);
   }
 
   final CalendarReminderController? _reminderController;
@@ -1913,6 +1914,41 @@ abstract class BaseCalendarBloc
       await _handleError(
         error,
         'Failed to remove task from critical path',
+        emit,
+      );
+    }
+  }
+
+  Future<void> _onCriticalPathReordered(
+    CalendarCriticalPathReordered event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      final CalendarCriticalPath? path =
+          state.model.criticalPaths[event.pathId];
+      if (path == null || path.isArchived) {
+        throw const CalendarValidationException(
+          'criticalPath',
+          'Critical path not found',
+        );
+      }
+
+      _recordUndoSnapshot();
+      final CalendarModel updatedModel = state.model.reorderCriticalPath(
+        pathId: event.pathId,
+        orderedTaskIds: event.orderedTaskIds,
+      );
+      emitModel(
+        updatedModel,
+        emit,
+        focusedCriticalPathId: state.focusedCriticalPathId,
+        focusedCriticalPathSpecified: true,
+      );
+      await onCriticalPathsChanged(updatedModel);
+    } catch (error) {
+      await _handleError(
+        error,
+        'Failed to reorder critical path',
         emit,
       );
     }
