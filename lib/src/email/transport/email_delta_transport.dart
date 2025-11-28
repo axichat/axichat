@@ -644,8 +644,9 @@ class EmailDeltaTransport implements ChatTransport {
     if (address == null) {
       return 'dc-anon@$_selfDomain';
     }
-    final local = address.replaceAll('@', '-at-').replaceAll('.', '-dot-');
-    return '$local@$_selfDomain';
+    // Use the real address so stored messages and status updates reflect the
+    // actual sender instead of a Delta-style synthetic domain.
+    return address;
   }
 
   void addEventListener(void Function(DeltaCoreEvent event) listener) {

@@ -112,41 +112,6 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
                 ),
               ),
               const SizedBox(width: calendarGutterMd),
-              Flexible(
-                fit: FlexFit.loose,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: calendarInsetLg,
-                    vertical: calendarInsetSm,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colors.muted.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: colors.border),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.route,
-                        size: 16,
-                        color: colors.mutedForeground,
-                      ),
-                      const SizedBox(width: calendarInsetMd),
-                      Flexible(
-                        child: Text(
-                          widget.path.name,
-                          style: textTheme.small.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: calendarGutterMd),
               ShadButton.secondary(
                 onPressed: widget.onExit,
                 child: const Row(
@@ -209,6 +174,7 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
                               textTheme: textTheme,
                               taskForLocation: _taskForLocation,
                               onAddRequested: _handleAddToSlot,
+                              onTaskTapped: _handleTaskTapped,
                               onDropReceived: _handleDrop,
                             ),
                           ),
@@ -316,6 +282,54 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
     _commitOrder();
   }
 
+  Future<void> _handleTaskTapped(
+    _SlotLocation location,
+    CalendarTask task,
+  ) async {
+    final _SlotTapAction? action = await showModalBottomSheet<_SlotTapAction>(
+      context: context,
+      backgroundColor: context.colorScheme.card,
+      useSafeArea: true,
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.swap_horiz),
+                title: const Text('Replace task'),
+                subtitle: const Text('Pick a different task for this slot'),
+                onTap: () => Navigator.of(context).pop(_SlotTapAction.replace),
+              ),
+              ListTile(
+                leading: const Icon(Icons.remove_circle_outline),
+                title: const Text('Remove from path'),
+                onTap: () => Navigator.of(context).pop(_SlotTapAction.remove),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (action == _SlotTapAction.remove) {
+      _removeTaskFromSlot(location, task.id);
+      return;
+    }
+    if (action == _SlotTapAction.replace) {
+      await _handleAddToSlot(location);
+    }
+  }
+
+  void _removeTaskFromSlot(_SlotLocation location, String taskId) {
+    setState(() {
+      _slotOccupants[location] = null;
+      _taskLocations.remove(taskId);
+    });
+    _commitOrder();
+  }
+
   void _handleDrop(_SlotLocation target, _DragPayload payload) {
     setState(() {
       final _SlotLocation source = payload.from;
@@ -409,6 +423,7 @@ class _GridColumn extends StatelessWidget {
     required this.textTheme,
     required this.taskForLocation,
     required this.onAddRequested,
+    required this.onTaskTapped,
     required this.onDropReceived,
   });
 
@@ -420,6 +435,7 @@ class _GridColumn extends StatelessWidget {
   final ShadTextTheme textTheme;
   final CalendarTask? Function(_SlotLocation) taskForLocation;
   final Future<void> Function(_SlotLocation) onAddRequested;
+  final void Function(_SlotLocation, CalendarTask) onTaskTapped;
   final void Function(_SlotLocation, _DragPayload) onDropReceived;
 
   @override
@@ -456,6 +472,7 @@ class _GridColumn extends StatelessWidget {
           size: slotSize,
           task: taskForLocation(top),
           onAddRequested: onAddRequested,
+          onTaskTapped: onTaskTapped,
           onDropReceived: onDropReceived,
         ),
         SizedBox(height: gap),
@@ -471,6 +488,7 @@ class _GridColumn extends StatelessWidget {
               size: slotSize,
               task: taskForLocation(left),
               onAddRequested: onAddRequested,
+              onTaskTapped: onTaskTapped,
               onDropReceived: onDropReceived,
             ),
             SizedBox(width: gap),
@@ -484,6 +502,7 @@ class _GridColumn extends StatelessWidget {
               task: taskForLocation(center),
               prominent: true,
               onAddRequested: onAddRequested,
+              onTaskTapped: onTaskTapped,
               onDropReceived: onDropReceived,
             ),
             SizedBox(width: gap),
@@ -495,6 +514,7 @@ class _GridColumn extends StatelessWidget {
               size: slotSize,
               task: taskForLocation(right),
               onAddRequested: onAddRequested,
+              onTaskTapped: onTaskTapped,
               onDropReceived: onDropReceived,
             ),
           ],
@@ -508,6 +528,7 @@ class _GridColumn extends StatelessWidget {
           size: slotSize,
           task: taskForLocation(bottom),
           onAddRequested: onAddRequested,
+          onTaskTapped: onTaskTapped,
           onDropReceived: onDropReceived,
         ),
       ],
@@ -523,6 +544,7 @@ class _TaskSlot extends StatelessWidget {
     required this.textTheme,
     required this.onAddRequested,
     required this.onDropReceived,
+    required this.onTaskTapped,
     this.task,
     this.size,
     this.width,
@@ -541,6 +563,7 @@ class _TaskSlot extends StatelessWidget {
   final bool prominent;
   final Future<void> Function(_SlotLocation) onAddRequested;
   final void Function(_SlotLocation, _DragPayload) onDropReceived;
+  final void Function(_SlotLocation, CalendarTask) onTaskTapped;
 
   @override
   Widget build(BuildContext context) {
@@ -564,6 +587,7 @@ class _TaskSlot extends StatelessWidget {
                 colors: colors,
                 textTheme: textTheme,
                 location: location,
+                onTap: () => onTaskTapped(location, task!),
               )
             : _EmptySlot(
                 label: label,
@@ -653,6 +677,7 @@ class _DraggableTaskCard extends StatelessWidget {
     required this.colors,
     required this.textTheme,
     required this.location,
+    this.onTap,
   });
 
   final CalendarTask task;
@@ -660,6 +685,7 @@ class _DraggableTaskCard extends StatelessWidget {
   final ShadColorScheme colors;
   final ShadTextTheme textTheme;
   final _SlotLocation location;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -668,6 +694,7 @@ class _DraggableTaskCard extends StatelessWidget {
       label: label,
       colors: colors,
       textTheme: textTheme,
+      onTap: onTap,
     );
 
     return LongPressDraggable<_DragPayload>(
@@ -698,50 +725,60 @@ class _TaskCard extends StatelessWidget {
     required this.label,
     required this.colors,
     required this.textTheme,
+    this.onTap,
   });
 
   final CalendarTask task;
   final String label;
   final ShadColorScheme colors;
   final ShadTextTheme textTheme;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final bool completed = task.isCompleted;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              completed ? Icons.check_circle : Icons.radio_button_unchecked,
-              size: 16,
-              color: completed ? colors.primary : colors.mutedForeground,
-            ),
-            const SizedBox(width: calendarInsetSm),
-            Expanded(
-              child: Text(
-                task.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.small.copyWith(
-                  fontWeight: FontWeight.w700,
-                  decoration: completed ? TextDecoration.lineThrough : null,
+            Row(
+              children: [
+                Icon(
+                  completed ? Icons.check_circle : Icons.radio_button_unchecked,
+                  size: 16,
+                  color: completed ? colors.primary : colors.mutedForeground,
                 ),
+                const SizedBox(width: calendarInsetSm),
+                Expanded(
+                  child: Text(
+                    task.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.small.copyWith(
+                      fontWeight: FontWeight.w700,
+                      decoration: completed ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: calendarInsetSm),
+            Text(
+              label,
+              style: textTheme.small.copyWith(
+                fontSize: 11,
+                color: colors.mutedForeground,
               ),
             ),
           ],
         ),
-        const SizedBox(height: calendarInsetSm),
-        Text(
-          label,
-          style: textTheme.small.copyWith(
-            fontSize: 11,
-            color: colors.mutedForeground,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -907,6 +944,8 @@ class _SlotLocation {
 }
 
 enum _SlotAlignment { left, right, top, bottom, center }
+
+enum _SlotTapAction { replace, remove }
 
 class _DragPayload {
   const _DragPayload({required this.taskId, required this.from});
