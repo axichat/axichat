@@ -109,8 +109,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final hasMeta = event.isMetaPressed;
-    final hasControl = event.isControlPressed;
+    final hardware = HardwareKeyboard.instance;
+    final hasMeta = hardware.isLogicalKeyPressed(LogicalKeyboardKey.metaLeft) ||
+        hardware.isLogicalKeyPressed(LogicalKeyboardKey.metaRight) ||
+        hardware.isLogicalKeyPressed(LogicalKeyboardKey.meta);
+    final hasControl =
+        hardware.isLogicalKeyPressed(LogicalKeyboardKey.controlLeft) ||
+            hardware.isLogicalKeyPressed(LogicalKeyboardKey.controlRight) ||
+            hardware.isLogicalKeyPressed(LogicalKeyboardKey.control);
     final shouldOpen =
         event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
     if (shouldOpen) {
@@ -148,8 +154,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _handleGlobalShortcut(KeyEvent event) {
     if (!mounted || event is! KeyDownEvent) return false;
-    final hasMeta = event.isMetaPressed;
-    final hasControl = event.isControlPressed;
+    final hardware = HardwareKeyboard.instance;
+    final hasMeta = hardware.isLogicalKeyPressed(LogicalKeyboardKey.metaLeft) ||
+        hardware.isLogicalKeyPressed(LogicalKeyboardKey.metaRight) ||
+        hardware.isLogicalKeyPressed(LogicalKeyboardKey.meta);
+    final hasControl =
+        hardware.isLogicalKeyPressed(LogicalKeyboardKey.controlLeft) ||
+            hardware.isLogicalKeyPressed(LogicalKeyboardKey.controlRight) ||
+            hardware.isLogicalKeyPressed(LogicalKeyboardKey.control);
     if (event.logicalKey == LogicalKeyboardKey.keyK &&
         (hasMeta || hasControl)) {
       final bloc = _currentAccessibilityBloc();
