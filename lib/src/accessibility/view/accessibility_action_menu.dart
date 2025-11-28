@@ -6,6 +6,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -142,12 +143,15 @@ class _AccessibilityMenuScaffoldState
   bool _wasVisible = false;
   bool _isEditingText = false;
   String? _lastAnnouncedStep;
+  bool Function(KeyEvent event)? _menuShortcutHandler;
 
   @override
   void initState() {
     super.initState();
     _isEditingText = _isTextInputFocused();
     FocusManager.instance.addListener(_handleFocusChange);
+    _menuShortcutHandler = _handleMenuShortcut;
+    HardwareKeyboard.instance.addHandler(_menuShortcutHandler!);
     _wasVisible = widget.state.visible;
     if (_wasVisible) {
       _restoreFocusNode = FocusManager.instance.primaryFocus;
@@ -179,6 +183,10 @@ class _AccessibilityMenuScaffoldState
 
   @override
   void dispose() {
+    final handler = _menuShortcutHandler;
+    if (handler != null) {
+      HardwareKeyboard.instance.removeHandler(handler);
+    }
     FocusManager.instance.removeListener(_handleFocusChange);
     _shortcutLegendFocusNode.dispose();
     _composerFocusNode.dispose();
@@ -203,10 +211,6 @@ class _AccessibilityMenuScaffoldState
         _lastItemActivator: const _LastItemIntent(),
       },
     };
-    final shortcutManager = ShortcutManager(
-      shortcuts: shortcuts,
-      modal: true,
-    );
     return Stack(
       children: [
         Positioned.fill(
@@ -219,7 +223,6 @@ class _AccessibilityMenuScaffoldState
         ),
         Center(
           child: Shortcuts(
-            manager: shortcutManager,
             shortcuts: shortcuts,
             child: Actions(
               actions: {
@@ -268,20 +271,19 @@ class _AccessibilityMenuScaffoldState
                     padding: const EdgeInsets.all(20),
                     child: Material(
                       type: MaterialType.transparency,
-                    child: Semantics(
-                      scopesRoute: true,
-                      namesRoute: true,
-                      label: 'Accessibility actions dialog',
-                      hint:
-                          'Press Tab to reach shortcut instructions, use arrow keys inside lists, Shift plus arrows to move between groups, or Escape to exit.',
-                      role: SemanticsRole.dialog,
-                      explicitChildNodes: true,
-                      child: FocusTraversalGroup(
-                        policy: OrderedTraversalPolicy(),
-                        child: _AccessibilityActionContent(
-                          state: widget.state,
-                          listKey: _listKey,
-                          enableActivationShortcut: !_isEditingText,
+                      child: Semantics(
+                        scopesRoute: true,
+                        namesRoute: true,
+                        label: 'Accessibility actions dialog',
+                        hint:
+                            'Press Tab to reach shortcut instructions, use arrow keys inside lists, Shift plus arrows to move between groups, or Escape to exit.',
+                        explicitChildNodes: true,
+                        child: FocusTraversalGroup(
+                          policy: OrderedTraversalPolicy(),
+                          child: _AccessibilityActionContent(
+                            state: widget.state,
+                            listKey: _listKey,
+                            enableActivationShortcut: !_isEditingText,
                             registerGroup: _registerGroup,
                             unregisterGroup: _unregisterGroup,
                             legendFocusNode: _shortcutLegendFocusNode,
@@ -435,6 +437,25 @@ class _AccessibilityMenuScaffoldState
     });
   }
 
+  bool _handleMenuShortcut(KeyEvent event) {
+    if (!widget.state.visible || event is! KeyDownEvent) {
+      return false;
+    }
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final hasShift = pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight) ||
+        pressed.contains(LogicalKeyboardKey.shift);
+    if (hasShift && event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _focusNextGroup();
+      return true;
+    }
+    if (hasShift && event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      _focusPreviousGroup();
+      return true;
+    }
+    return false;
+  }
+
   void _announceStepChange() {
     if (!mounted || !widget.state.visible) return;
     final label = _stepLabel(widget.state.currentEntry);
@@ -442,7 +463,12 @@ class _AccessibilityMenuScaffoldState
     _lastAnnouncedStep = label;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.state.visible) return;
-      SemanticsService.announce(label, Directionality.of(context));
+      final view = View.of(context);
+      SemanticsService.sendAnnouncement(
+        view,
+        label,
+        Directionality.of(context),
+      );
     });
   }
 
@@ -462,8 +488,9 @@ class _AccessibilityMenuScaffoldState
       case AccessibilityStepKind.newContact:
         return 'Start a new address';
       case AccessibilityStepKind.chatMessages:
-        final name =
-            entry.recipients.isNotEmpty ? entry.recipients.first.displayName : '';
+        final name = entry.recipients.isNotEmpty
+            ? entry.recipients.first.displayName
+            : '';
         return name.isNotEmpty ? 'Messages with $name' : 'Messages';
     }
   }
@@ -543,10 +570,9 @@ class _AccessibilityActionContent extends StatelessWidget {
         state.currentEntry.kind == AccessibilityStepKind.newContact;
     final hasSections = state.sections.isNotEmpty;
     const headerOrder = NumericFocusOrder(0);
-    final composerOrder = const NumericFocusOrder(1);
-    final newContactOrder = const NumericFocusOrder(1);
-    final legendOrder =
-        NumericFocusOrder(hasComposer || hasNewContact ? 2 : 1);
+    const composerOrder = NumericFocusOrder(1);
+    const newContactOrder = NumericFocusOrder(1);
+    final legendOrder = NumericFocusOrder(hasComposer || hasNewContact ? 2 : 1);
     final statusOrder =
         NumericFocusOrder(hasComposer || hasNewContact ? 1.5 : 1.2);
     final sectionsOrder =
@@ -1088,8 +1114,7 @@ class _ShortcutLegendEntry extends StatelessWidget {
                 color: colors.muted.withValues(alpha: 0.04),
               ),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 child: Wrap(
                   spacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -1316,10 +1341,6 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
             ),
             padding: const EdgeInsets.all(2),
             child: Shortcuts(
-              manager: ShortcutManager(
-                shortcuts: navigationShortcuts,
-                modal: true,
-              ),
               shortcuts: navigationShortcuts,
               child: ShadInput(
                 controller: _controller,
