@@ -12,6 +12,7 @@ import '../utils/recurrence_utils.dart';
 import '../utils/task_title_validation.dart';
 import 'models/task_context_action.dart';
 import 'widgets/deadline_picker_field.dart';
+import 'widgets/critical_path_panel.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
@@ -233,6 +234,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           child: SafeArea(
             top: false,
             child: _EditTaskActionsRow(
+              task: widget.task,
+              includeCriticalPathAction: !widget.isSheet,
               onDelete: () {
                 widget.onTaskDeleted(widget.task.id);
                 widget.onClose();
@@ -803,22 +806,37 @@ class _EditTaskCompletionToggle extends StatelessWidget {
 
 class _EditTaskActionsRow extends StatelessWidget {
   const _EditTaskActionsRow({
+    required this.task,
+    this.includeCriticalPathAction = true,
     required this.onDelete,
     required this.onCancel,
     required this.onSave,
   });
 
+  final CalendarTask task;
+  final bool includeCriticalPathAction;
   final VoidCallback onDelete;
   final VoidCallback onCancel;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
+    final BaseCalendarBloc bloc = context.read<BaseCalendarBloc>();
     return TaskFormActionsRow(
       includeTopBorder: true,
       padding: calendarPaddingLg,
       gap: 8,
       children: [
+        if (includeCriticalPathAction)
+          TaskSecondaryButton(
+            label: 'Add to critical path',
+            icon: Icons.route,
+            onPressed: () => addTaskToCriticalPath(
+              context: context,
+              bloc: bloc,
+              task: task,
+            ),
+          ),
         TaskDestructiveButton(
           label: 'Delete',
           onPressed: onDelete,

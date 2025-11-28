@@ -538,7 +538,7 @@ class _HideCompletedButton extends StatelessWidget {
               size: 16,
               color: foreground,
             ),
-            const SizedBox(width: calendarInsetSm),
+            const SizedBox(width: calendarInsetMd),
             Text(
               'Completed',
               style: context.textTheme.small.copyWith(

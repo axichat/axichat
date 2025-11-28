@@ -42,6 +42,7 @@ class AccessibilityActionBloc
     on<AccessibilityRecipientRemoved>(_onRecipientRemoved);
     on<AccessibilityNewContactChanged>(_onNewContactChanged);
     on<AccessibilityConfirmNewContact>(_onConfirmNewContact);
+    on<AccessibilityDiscardWarningRequested>(_onDiscardWarningRequested);
     on<AccessibilityMenuJumpedTo>(_onMenuJumpedTo);
     on<AccessibilityDataUpdated>(_onDataUpdated);
     on<AccessibilityLocaleUpdated>(_onLocaleUpdated);
@@ -49,6 +50,9 @@ class AccessibilityActionBloc
 
     _chatSubscription = _chatsService.chatsStream().listen(
           (items) => add(AccessibilityDataUpdated(chats: items)),
+        );
+    _draftSubscription = _messageService.draftsStream().listen(
+          (items) => add(AccessibilityDataUpdated(drafts: items)),
         );
     final rosterService = _rosterService;
     if (rosterService != null) {
@@ -74,10 +78,12 @@ class AccessibilityActionBloc
   StreamSubscription<List<RosterItem>>? _rosterSubscription;
   StreamSubscription<List<Invite>>? _inviteSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
+  StreamSubscription<List<Draft>>? _draftSubscription;
 
   List<Chat> _chats = const [];
   List<RosterItem> _roster = const [];
   List<Invite> _invites = const [];
+  List<Draft> _drafts = const [];
   List<AccessibilityContact> _contacts = const [];
   final Set<String> _dismissedHighlights = <String>{};
 
@@ -87,6 +93,7 @@ class AccessibilityActionBloc
     await _rosterSubscription?.cancel();
     await _inviteSubscription?.cancel();
     await _messageSubscription?.cancel();
+    await _draftSubscription?.cancel();
     return super.close();
   }
 
@@ -99,6 +106,7 @@ class AccessibilityActionBloc
         visible: true,
         statusMessage: null,
         errorMessage: null,
+        discardWarningActive: false,
       ),
     );
     _rebuildSections(emit, state);
@@ -121,6 +129,7 @@ class AccessibilityActionBloc
         errorMessage: null,
         messages: const [],
         activeChatJid: null,
+        discardWarningActive: false,
       ),
     );
     _rebuildSections(emit, state);
@@ -131,7 +140,15 @@ class AccessibilityActionBloc
     Emitter<AccessibilityActionState> emit,
   ) {
     if (state.stack.length <= 1) {
-      emit(state.copyWith(visible: false));
+      emit(
+        state.copyWith(
+          visible: false,
+          composerText: '',
+          newContactInput: '',
+          statusMessage: null,
+          errorMessage: null,
+        ),
+      );
       return;
     }
     final nextStack = List<AccessibilityStepEntry>.of(state.stack)
@@ -148,6 +165,8 @@ class AccessibilityActionBloc
         errorMessage: null,
         messages: keepChatMessages ? state.messages : const [],
         activeChatJid: keepChatMessages ? state.activeChatJid : null,
+        composerText: '',
+        newContactInput: '',
       ),
     );
     _rebuildSections(emit, state);
@@ -169,9 +188,27 @@ class AccessibilityActionBloc
         errorMessage: null,
         messages: const [],
         activeChatJid: null,
+        discardWarningActive: false,
       ),
     );
     _rebuildSections(emit, state);
+  }
+
+  void _onDiscardWarningRequested(
+    AccessibilityDiscardWarningRequested event,
+    Emitter<AccessibilityActionState> emit,
+  ) {
+    if (!_hasUnsavedInput(state) || state.discardWarningActive) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        discardWarningActive: true,
+        statusMessage:
+            'Press Escape again to discard your message and close this step.',
+        errorMessage: null,
+      ),
+    );
   }
 
   void _onMenuJumpedTo(
@@ -192,6 +229,7 @@ class AccessibilityActionBloc
         errorMessage: null,
         messages: keepChatMessages ? state.messages : const [],
         activeChatJid: keepChatMessages ? state.activeChatJid : null,
+        discardWarningActive: false,
       ),
     );
     _rebuildSections(emit, state);
@@ -231,7 +269,7 @@ class AccessibilityActionBloc
     Emitter<AccessibilityActionState> emit,
   ) {
     final nextState = state.copyWith(composerText: event.value);
-    emit(nextState);
+    emit(nextState.copyWith(discardWarningActive: false));
     _rebuildSections(emit, nextState);
   }
 
@@ -256,6 +294,7 @@ class AccessibilityActionBloc
         busy: true,
         statusMessage: null,
         errorMessage: null,
+        discardWarningActive: false,
       ),
     );
     final failures = <String>[];
@@ -323,6 +362,7 @@ class AccessibilityActionBloc
         composerText: failures.isEmpty ? '' : state.composerText,
         statusMessage: failures.isEmpty ? _l10n.chatDraftSaved : null,
         errorMessage: failures.isEmpty ? null : _l10n.chatSendMessageTooltip,
+        discardWarningActive: false,
       ),
     );
     _rebuildSections(emit, state);
@@ -382,6 +422,7 @@ class AccessibilityActionBloc
       state.copyWith(
         newContactInput: event.value,
         errorMessage: null,
+        discardWarningActive: false,
       ),
     );
     _rebuildSections(emit, state);
@@ -434,6 +475,9 @@ class AccessibilityActionBloc
     if (event.invites != null) {
       _invites = event.invites!;
       _purgeDismissedHighlights();
+    }
+    if (event.drafts != null) {
+      _drafts = event.drafts!;
     }
     _refreshContacts();
     _syncActiveChatRecipient(emit);
@@ -494,6 +538,18 @@ class AccessibilityActionBloc
     );
   }
 
+  bool _hasUnsavedInput(AccessibilityActionState state) {
+    final entry = state.currentEntry;
+    if (entry.kind == AccessibilityStepKind.composer) {
+      return state.composerText.trim().isNotEmpty ||
+          entry.recipients.isNotEmpty;
+    }
+    if (entry.kind == AccessibilityStepKind.newContact) {
+      return state.newContactInput.trim().isNotEmpty;
+    }
+    return false;
+  }
+
   Set<String> _unreadDigest() {
     final digests = <String>{};
     for (final chat in _chats.where((chat) => chat.unreadCount > 0)) {
@@ -526,6 +582,7 @@ class AccessibilityActionBloc
         errorMessage: null,
         messages: leavingChat ? const [] : state.messages,
         activeChatJid: leavingChat ? null : state.activeChatJid,
+        discardWarningActive: false,
       ),
     );
     _rebuildSections(emit, state);
@@ -535,6 +592,9 @@ class AccessibilityActionBloc
     AccessibilityCommandAction action,
     Emitter<AccessibilityActionState> emit,
   ) {
+    if (state.discardWarningActive) {
+      emit(state.copyWith(discardWarningActive: false));
+    }
     switch (action.command) {
       case AccessibilityCommand.openChat:
         final contact = action.contact;
@@ -556,7 +616,97 @@ class AccessibilityActionBloc
       case AccessibilityCommand.confirmNewContact:
         add(const AccessibilityConfirmNewContact());
         break;
+      case AccessibilityCommand.saveDraft:
+        _saveDraft(emit);
+        break;
+      case AccessibilityCommand.resumeDraft:
+        final draft = action.draft;
+        if (draft == null) return;
+        _openDraftComposer(draft, emit);
+        break;
     }
+  }
+
+  Future<void> _saveDraft(Emitter<AccessibilityActionState> emit) async {
+    final entry = state.currentEntry;
+    if (entry.kind != AccessibilityStepKind.composer) return;
+    final recipients = entry.recipients;
+    final body = state.composerText.trim();
+    if (recipients.isEmpty || body.isEmpty) {
+      emit(
+        state.copyWith(
+          errorMessage: _l10n.chatDraftMissingContent,
+          discardWarningActive: false,
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        busy: true,
+        statusMessage: null,
+        errorMessage: null,
+        discardWarningActive: false,
+      ),
+    );
+    try {
+      final result = await _messageService.saveDraft(
+        id: entry.draftId,
+        jids: recipients.map((recipient) => recipient.jid).toList(),
+        body: body,
+      );
+      final nextStack = List<AccessibilityStepEntry>.of(state.stack);
+      final lastIndex = nextStack.length - 1;
+      nextStack[lastIndex] = nextStack[lastIndex].copyWith(
+        draftId: result.draftId,
+      );
+      emit(
+        state.copyWith(
+          busy: false,
+          stack: nextStack,
+          statusMessage: _l10n.chatDraftSaved,
+          errorMessage: null,
+          discardWarningActive: false,
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+          'Failed to save draft from accessibility modal', error, stackTrace);
+      emit(
+        state.copyWith(
+          busy: false,
+          errorMessage: _l10n.chatDraftMissingContent,
+          discardWarningActive: false,
+        ),
+      );
+    }
+  }
+
+  void _openDraftComposer(
+    Draft draft,
+    Emitter<AccessibilityActionState> emit,
+  ) {
+    final recipients = draft.jids.map(_contactForJid).toList();
+    final nextStack = List<AccessibilityStepEntry>.of(state.stack)
+      ..add(
+        AccessibilityStepEntry(
+          kind: AccessibilityStepKind.composer,
+          purpose: AccessibilityFlowPurpose.sendMessage,
+          recipients: recipients,
+          draftId: draft.id,
+        ),
+      );
+    final nextState = state.copyWith(
+      stack: nextStack,
+      composerText: draft.body ?? '',
+      newContactInput: '',
+      statusMessage:
+          'Draft loaded. Press Escape to exit or Save to keep edits.',
+      errorMessage: null,
+      discardWarningActive: false,
+    );
+    emit(nextState);
+    _rebuildSections(emit, nextState);
   }
 
   void _enterRecipientPicker(Emitter<AccessibilityActionState> emit) {
@@ -620,6 +770,7 @@ class AccessibilityActionBloc
           newContactInput: '',
           statusMessage: null,
           errorMessage: null,
+          discardWarningActive: false,
         );
         emit(nextState);
         _rebuildSections(emit, nextState);
@@ -647,6 +798,7 @@ class AccessibilityActionBloc
           newContactInput: '',
           statusMessage: null,
           errorMessage: null,
+          discardWarningActive: false,
         ),
       );
       _rebuildSections(emit, state);
@@ -662,6 +814,21 @@ class AccessibilityActionBloc
     );
     existing[next.jid] = next;
     return existing.values.toList();
+  }
+
+  AccessibilityContact _contactForJid(String jid) {
+    return _contacts.firstWhere(
+      (contact) => contact.jid == jid,
+      orElse: () => AccessibilityContact(
+        jid: jid,
+        displayName: jid,
+        subtitle: jid,
+        source: AccessibilityContactSource.manual,
+        encryptionProtocol: EncryptionProtocol.omemo,
+        chatType: ChatType.chat,
+        unreadCount: 0,
+      ),
+    );
   }
 
   void _handleInviteDecision(
@@ -730,6 +897,7 @@ class AccessibilityActionBloc
       activeChatJid: contact.jid,
       statusMessage: null,
       errorMessage: null,
+      discardWarningActive: false,
     );
     emit(nextState);
     _rebuildSections(emit, nextState);
@@ -839,6 +1007,10 @@ class AccessibilityActionBloc
       );
     }
 
+    final orderedDrafts = List<Draft>.of(_drafts)
+      ..sort((a, b) => b.id.compareTo(a.id));
+    final latestDraft = orderedDrafts.isNotEmpty ? orderedDrafts.first : null;
+
     final quickChats = _chats.take(5).map((chat) {
       final contact = _contacts.firstWhere(
         (contact) => contact.jid == chat.jid,
@@ -914,6 +1086,22 @@ class AccessibilityActionBloc
           icon: Icons.person_add_alt,
         ),
     ];
+    if (latestDraft != null) {
+      rootActions.insert(
+        0,
+        AccessibilityMenuItem(
+          id: 'draft-latest-${latestDraft.id}',
+          label: 'Continue draft',
+          description: _draftDescription(latestDraft),
+          kind: AccessibilityMenuItemKind.command,
+          action: AccessibilityCommandAction(
+            command: AccessibilityCommand.resumeDraft,
+            draft: latestDraft,
+          ),
+          icon: Icons.note_alt_outlined,
+        ),
+      );
+    }
 
     return [
       if (highlightItems.isNotEmpty)
@@ -927,6 +1115,12 @@ class AccessibilityActionBloc
         title: _l10n.homeTabChats,
         items: rootActions,
       ),
+      if (orderedDrafts.isNotEmpty)
+        AccessibilityMenuSection(
+          id: 'drafts',
+          title: 'Drafts',
+          items: _draftMenuItems(orderedDrafts),
+        ),
       if (quickChats.isNotEmpty)
         AccessibilityMenuSection(
           id: 'recents',
@@ -934,6 +1128,43 @@ class AccessibilityActionBloc
           items: quickChats,
         ),
     ];
+  }
+
+  List<AccessibilityMenuItem> _draftMenuItems(List<Draft> drafts) {
+    return drafts.take(10).map((draft) {
+      final description = _draftDescription(draft);
+      final recipientsLabel = _draftRecipientsLabel(draft.jids);
+      final label = recipientsLabel.isEmpty
+          ? 'Draft ${draft.id}'
+          : 'Draft to $recipientsLabel';
+      return AccessibilityMenuItem(
+        id: 'draft-${draft.id}',
+        label: label,
+        description: description,
+        kind: AccessibilityMenuItemKind.command,
+        action: AccessibilityCommandAction(
+          command: AccessibilityCommand.resumeDraft,
+          draft: draft,
+        ),
+        icon: Icons.note_outlined,
+      );
+    }).toList();
+  }
+
+  String _draftDescription(Draft draft) {
+    final recipientsLabel = _draftRecipientsLabel(draft.jids);
+    final body = (draft.body ?? '').trim();
+    final preview = body.isEmpty
+        ? 'No message body'
+        : (body.length > 80 ? '${body.substring(0, 80)}…' : body);
+    if (recipientsLabel.isEmpty) return preview;
+    return '$recipientsLabel — $preview';
+  }
+
+  String _draftRecipientsLabel(List<String> jids) {
+    if (jids.isEmpty) return '';
+    final names = jids.map((jid) => _contactForJid(jid).displayName).toList();
+    return names.join(', ');
   }
 
   List<AccessibilityMenuSection> _buildContactSections(
@@ -1146,6 +1377,17 @@ class AccessibilityActionBloc
           command: AccessibilityCommand.sendMessage,
         ),
         icon: Icons.send,
+        disabled: state.composerText.trim().isEmpty || entry.recipients.isEmpty,
+      ),
+      AccessibilityMenuItem(
+        id: 'composer-save-draft',
+        label: 'Save draft',
+        description: 'Save this message to finish later',
+        kind: AccessibilityMenuItemKind.command,
+        action: const AccessibilityCommandAction(
+          command: AccessibilityCommand.saveDraft,
+        ),
+        icon: Icons.save_outlined,
         disabled: state.composerText.trim().isEmpty || entry.recipients.isEmpty,
       ),
       AccessibilityMenuItem(

@@ -110,6 +110,8 @@ enum AccessibilityCommand {
   backToContacts,
   closeMenu,
   confirmNewContact,
+  saveDraft,
+  resumeDraft,
 }
 
 class AccessibilityCommandAction extends AccessibilityMenuAction {
@@ -117,14 +119,16 @@ class AccessibilityCommandAction extends AccessibilityMenuAction {
     required this.command,
     this.contact,
     this.highlightId,
+    this.draft,
   });
 
   final AccessibilityCommand command;
   final AccessibilityContact? contact;
   final String? highlightId;
+  final Draft? draft;
 
   @override
-  List<Object?> get props => [command, contact, highlightId];
+  List<Object?> get props => [command, contact, highlightId, draft];
 }
 
 class AccessibilitySelectContactAction extends AccessibilityMenuAction {
@@ -173,28 +177,33 @@ class AccessibilityStepEntry extends Equatable {
     this.purpose,
     this.recipients = const <AccessibilityContact>[],
     this.addingRecipient = false,
+    this.draftId,
   });
 
   final AccessibilityStepKind kind;
   final AccessibilityFlowPurpose? purpose;
   final List<AccessibilityContact> recipients;
   final bool addingRecipient;
+  final int? draftId;
 
   AccessibilityStepEntry copyWith({
     AccessibilityStepKind? kind,
     AccessibilityFlowPurpose? purpose,
     List<AccessibilityContact>? recipients,
     bool? addingRecipient,
+    int? draftId,
   }) =>
       AccessibilityStepEntry(
         kind: kind ?? this.kind,
         purpose: purpose ?? this.purpose,
         recipients: recipients ?? this.recipients,
         addingRecipient: addingRecipient ?? this.addingRecipient,
+        draftId: draftId ?? this.draftId,
       );
 
   @override
-  List<Object?> get props => [kind, purpose, recipients, addingRecipient];
+  List<Object?> get props =>
+      [kind, purpose, recipients, addingRecipient, draftId];
 }
 
 enum AccessibilityContactSource {

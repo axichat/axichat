@@ -180,6 +180,10 @@ class _SignupFormState extends State<SignupForm>
       document = XmlDocument.parse(response.body);
     } on HttpException catch (_) {
       return '';
+    } on SocketException catch (_) {
+      return '';
+    } on http.ClientException catch (_) {
+      return '';
     } on XmlParserException catch (_) {
       return '';
     } on XmlTagException catch (_) {

@@ -229,6 +229,11 @@ class _AccessibilityMenuScaffoldState
                 _AccessibilityDismissIntent:
                     CallbackAction<_AccessibilityDismissIntent>(
                   onInvoke: (_) {
+                    final shouldWarn = _shouldWarnOnExit(widget.state);
+                    if (shouldWarn && !widget.state.discardWarningActive) {
+                      bloc.add(const AccessibilityDiscardWarningRequested());
+                      return null;
+                    }
                     if (widget.state.stack.length > 1) {
                       bloc.add(const AccessibilityMenuBack());
                     } else {
@@ -405,6 +410,18 @@ class _AccessibilityMenuScaffoldState
     final focusContext = focus?.context;
     if (focusContext == null) return null;
     return _AccessibilityGroupMarker.maybeOf(focusContext);
+  }
+
+  bool _shouldWarnOnExit(AccessibilityActionState state) {
+    final entry = state.currentEntry;
+    if (entry.kind == AccessibilityStepKind.composer) {
+      return state.composerText.trim().isNotEmpty ||
+          entry.recipients.isNotEmpty;
+    }
+    if (entry.kind == AccessibilityStepKind.newContact) {
+      return state.newContactInput.trim().isNotEmpty;
+    }
+    return false;
   }
 
   void _scheduleInitialFocus() {
@@ -1263,6 +1280,7 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
   late FocusNode _focusNode = widget.focusNode ??
       FocusNode(debugLabel: 'accessibility-text-${widget.label}');
   late bool _ownsFocusNode = widget.focusNode == null;
+  bool _didAutofocus = false;
 
   @override
   void initState() {
@@ -1281,6 +1299,7 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
       _focusNode = widget.focusNode!;
       _ownsFocusNode = false;
       _focusNode.addListener(_onFocusChanged);
+      _didAutofocus = false;
     }
     if (oldWidget.text != widget.text && _controller.text != widget.text) {
       _controller.text = widget.text;
@@ -1305,11 +1324,12 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final hasFocus = _focusNode.hasFocus;
-    if (widget.autofocus && !_focusNode.hasFocus) {
+    if (widget.autofocus && !_focusNode.hasFocus && !_didAutofocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (_focusNode.canRequestFocus) {
           _focusNode.requestFocus();
+          _didAutofocus = true;
         }
       });
     }

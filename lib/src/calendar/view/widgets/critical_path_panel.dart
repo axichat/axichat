@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../common/ui/ui.dart';
+import '../../bloc/base_calendar_bloc.dart';
+import '../../bloc/calendar_event.dart';
+import '../../bloc/calendar_state.dart';
 import '../../models/calendar_critical_path.dart';
 import '../../models/calendar_task.dart';
 import '../../utils/recurrence_utils.dart';
@@ -392,11 +397,11 @@ class _PathActionsState extends State<_PathActions> {
                   size: 14,
                   color: colors.primary,
                 ),
-                const SizedBox(width: calendarInsetSm),
+                const SizedBox(width: calendarInsetMd),
                 Text(widget.isFocused ? 'Unfocus' : 'Focus'),
               ],
             ),
-          ),
+          ).withTapBounce(),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
@@ -481,23 +486,33 @@ class _PathMenuItem extends StatelessWidget {
     final colors = context.colorScheme;
     final Color foreground =
         destructive ? colors.destructive : colors.foreground;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: calendarMenuItemPadding,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: foreground),
-            const SizedBox(width: calendarGutterSm),
-            Text(
-              label,
-              style: context.textTheme.small.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w700,
+    final BorderRadius radius =
+        BorderRadius.circular(calendarBorderRadius.toDouble());
+    final Color hoverColor = colors.muted.withValues(alpha: 0.08);
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        hoverColor: hoverColor,
+        focusColor: hoverColor,
+        onTap: onTap,
+        child: Padding(
+          padding: calendarMenuItemPadding,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: foreground),
+              const SizedBox(width: calendarGutterSm),
+              Text(
+                label,
+                style: context.textTheme.small.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -538,97 +553,123 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
     dialogMaxWidth: 420,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
     builder: (sheetContext) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Add to critical path',
-                style: textTheme.h3.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              AxiIconButton(
-                iconData: Icons.close,
-                iconSize: 16,
-                buttonSize: 34,
-                tapTargetSize: 40,
-                backgroundColor: Colors.transparent,
-                borderColor: Colors.transparent,
-                color: colors.mutedForeground,
-                onPressed: () => Navigator.of(sheetContext).maybePop(),
-              ),
-            ],
-          ),
-          const SizedBox(height: calendarGutterMd),
-          if (paths.isEmpty) ...[
-            Text(
-              'Create a critical path to start tracking dependencies.',
-              style: textTheme.muted,
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final screenHeight = MediaQuery.sizeOf(context).height;
+          final availableHeight = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : screenHeight;
+          final listViewportHeight = availableHeight * 0.7;
+
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: constraints.maxWidth,
+              maxHeight: availableHeight,
             ),
-            const SizedBox(height: calendarGutterMd),
-          ] else
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 320),
-              child: Scrollbar(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: paths.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(height: calendarInsetSm),
-                  itemBuilder: (_, index) {
-                    final path = paths[index];
-                    return ShadButton.ghost(
-                      size: ShadButtonSize.sm,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: calendarGutterMd,
-                        vertical: calendarInsetMd,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Add to critical path',
+                      style: textTheme.h3.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
-                      onPressed: () => Navigator.of(sheetContext).pop(
-                        CriticalPathPickerResult.path(path.id),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.route, size: 16),
-                          const SizedBox(width: calendarInsetMd),
-                          Expanded(
-                            child: Text(
-                              path.name,
-                              style: textTheme.small.copyWith(
-                                fontWeight: FontWeight.w700,
+                    ),
+                    const Spacer(),
+                    AxiIconButton(
+                      iconData: Icons.close,
+                      iconSize: 16,
+                      buttonSize: 34,
+                      tapTargetSize: 40,
+                      backgroundColor: Colors.transparent,
+                      borderColor: Colors.transparent,
+                      color: colors.mutedForeground,
+                      onPressed: () => Navigator.of(sheetContext).maybePop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: calendarGutterMd),
+                if (paths.isEmpty) ...[
+                  Text(
+                    'Create a critical path to start tracking dependencies.',
+                    style: textTheme.muted,
+                  ),
+                  const SizedBox(height: calendarGutterMd),
+                ] else
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: listViewportHeight,
+                    ),
+                    child: Scrollbar(
+                      child: ListView.separated(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: paths.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: calendarInsetSm),
+                        itemBuilder: (_, index) {
+                          final path = paths[index];
+                          return Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(
+                              calendarBorderRadius.toDouble(),
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: calendarGutterMd,
+                                vertical: calendarInsetMd,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  calendarBorderRadius.toDouble(),
+                                ),
+                              ),
+                              hoverColor: colors.muted.withValues(
+                                alpha: 0.08,
+                              ),
+                              mouseCursor: SystemMouseCursors.click,
+                              leading: const Icon(Icons.route, size: 16),
+                              title: Text(
+                                path.name,
+                                style: textTheme.small.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                size: 18,
+                                color: colors.mutedForeground,
+                              ),
+                              onTap: () => Navigator.of(sheetContext).pop(
+                                CriticalPathPickerResult.path(path.id),
                               ),
                             ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            size: 18,
-                            color: colors.mutedForeground,
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ShadButton(
-            onPressed: () => Navigator.of(sheetContext).pop(
-              const CriticalPathPickerResult.createNew(),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add, size: 16),
-                SizedBox(width: calendarInsetSm),
-                Text('New critical path'),
+                    ),
+                  ),
+                ShadButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(
+                    const CriticalPathPickerResult.createNew(),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add, size: 16),
+                      SizedBox(width: calendarInsetSm),
+                      Text('New critical path'),
+                    ],
+                  ),
+                ).withTapBounce(),
               ],
             ),
-          ).withTapBounce(),
-        ],
+          );
+        },
       );
     },
   );
@@ -717,4 +758,103 @@ Future<String?> promptCriticalPathName({
     return null;
   }
   return result.trim();
+}
+
+Future<void> addTaskToCriticalPath({
+  required BuildContext context,
+  required BaseCalendarBloc bloc,
+  required CalendarTask task,
+}) async {
+  await addTasksToCriticalPath(
+    context: context,
+    bloc: bloc,
+    tasks: [task],
+  );
+}
+
+Future<void> addTasksToCriticalPath({
+  required BuildContext context,
+  required BaseCalendarBloc bloc,
+  required List<CalendarTask> tasks,
+}) async {
+  if (tasks.isEmpty) return;
+
+  final CriticalPathPickerResult? result = await showCriticalPathPicker(
+    context: context,
+    paths: bloc.state.criticalPaths,
+  );
+  if (!context.mounted) {
+    return;
+  }
+  if (result == null) {
+    return;
+  }
+
+  if (result.createNew) {
+    final String? name = await promptCriticalPathName(
+      context: context,
+      title: 'New critical path',
+    );
+    if (!context.mounted) {
+      return;
+    }
+    if (name == null) {
+      return;
+    }
+    final Set<String> previousIds =
+        bloc.state.criticalPaths.map((path) => path.id).toSet();
+    bloc.add(
+      CalendarEvent.criticalPathCreated(
+        name: name,
+        taskId: tasks.first.id,
+      ),
+    );
+    final String? createdId = await _waitForNewPathId(
+      bloc: bloc,
+      previousIds: previousIds,
+    );
+    if (createdId == null) {
+      return;
+    }
+    for (final CalendarTask task in tasks.skip(1)) {
+      bloc.add(
+        CalendarEvent.criticalPathTaskAdded(
+          pathId: createdId,
+          taskId: task.id,
+        ),
+      );
+    }
+    return;
+  }
+
+  final String? pathId = result.pathId;
+  if (pathId == null) {
+    return;
+  }
+  for (final CalendarTask task in tasks) {
+    bloc.add(
+      CalendarEvent.criticalPathTaskAdded(
+        pathId: pathId,
+        taskId: task.id,
+      ),
+    );
+  }
+}
+
+Future<String?> _waitForNewPathId({
+  required BaseCalendarBloc bloc,
+  required Set<String> previousIds,
+}) async {
+  try {
+    final Set<String> updatedIds = await bloc.stream
+        .map(
+          (state) => state.criticalPaths.map((path) => path.id).toSet(),
+        )
+        .firstWhere((ids) => ids.length > previousIds.length)
+        .timeout(const Duration(seconds: 2));
+    final Set<String> difference = updatedIds.difference(previousIds);
+    return difference.isNotEmpty ? difference.first : null;
+  } on TimeoutException {
+    return null;
+  }
 }

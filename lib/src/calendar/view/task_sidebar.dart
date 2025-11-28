@@ -2199,6 +2199,7 @@ class _SelectionPanel extends StatelessWidget {
               const SizedBox(height: calendarGutterSm),
               _SelectionActionsRow(
                 hasTasks: hasTasks,
+                tasks: tasks,
                 onClearSelection: onClearSelection,
                 onExportSelected: onExportSelected,
                 onDeleteSelected: onDeleteSelected,
@@ -2268,12 +2269,14 @@ class _SelectionPanel extends StatelessWidget {
 class _SelectionActionsRow extends StatelessWidget {
   const _SelectionActionsRow({
     required this.hasTasks,
+    required this.tasks,
     required this.onClearSelection,
     required this.onExportSelected,
     required this.onDeleteSelected,
   });
 
   final bool hasTasks;
+  final List<CalendarTask> tasks;
   final VoidCallback onClearSelection;
   final VoidCallback onExportSelected;
   final VoidCallback onDeleteSelected;
@@ -2281,10 +2284,22 @@ class _SelectionActionsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final BaseCalendarBloc bloc = context.read<BaseCalendarBloc>();
     return TaskFormActionsRow(
       padding: EdgeInsets.zero,
       gap: calendarGutterSm,
       children: [
+        TaskSecondaryButton(
+          label: 'Add to critical path',
+          icon: Icons.route,
+          onPressed: hasTasks
+              ? () => addTasksToCriticalPath(
+                    context: context,
+                    bloc: bloc,
+                    tasks: tasks,
+                  )
+              : null,
+        ),
         TaskSecondaryButton(
           label: l10n.calendarClearSelection,
           onPressed: hasTasks ? onClearSelection : null,
@@ -3588,7 +3603,7 @@ class _HideCompletedToggle extends StatelessWidget {
               size: 16,
               color: foreground,
             ),
-            const SizedBox(width: calendarInsetSm),
+            const SizedBox(width: calendarInsetMd),
             Text(
               'Completed',
               style: context.textTheme.small.copyWith(

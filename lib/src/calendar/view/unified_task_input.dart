@@ -11,6 +11,7 @@ import '../utils/responsive_helper.dart';
 import '../utils/task_title_validation.dart';
 import '../utils/time_formatter.dart';
 import 'error_display.dart';
+import 'widgets/critical_path_panel.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_field_character_hint.dart';
 
@@ -110,6 +111,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       onSave: _saveTask,
     );
     final Widget dialogActions = _UnifiedTaskDialogActions<T>(
+      editingTask: widget.editingTask,
       isSubmitting: _isSubmitting,
       onSave: _saveTask,
       onSubmissionReset: () => setState(() => _isSubmitting = false),
@@ -565,12 +567,14 @@ class _UnifiedTaskSaveButton<T extends BaseCalendarBloc>
 class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
     extends StatelessWidget {
   const _UnifiedTaskDialogActions({
+    required this.editingTask,
     required this.isSubmitting,
     required this.onSave,
     required this.onSubmissionReset,
     required this.onClearError,
   });
 
+  final CalendarTask? editingTask;
   final bool isSubmitting;
   final VoidCallback onSave;
   final VoidCallback onSubmissionReset;
@@ -589,6 +593,13 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
         }
       },
       builder: (context, state) {
+        final T bloc = context.read<T>();
+        CalendarTask? resolvedTask = editingTask;
+        if (editingTask != null) {
+          resolvedTask = state.model.tasks[editingTask!.id] ?? editingTask;
+        }
+        final bool canAddToCriticalPath =
+            resolvedTask != null && !(state.isLoading || isSubmitting);
         return Container(
           padding: calendarPaddingXl,
           decoration: BoxDecoration(
@@ -612,6 +623,17 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
                 padding: EdgeInsets.zero,
                 gap: calendarGutterMd,
                 children: [
+                  TaskSecondaryButton(
+                    label: 'Add to critical path',
+                    icon: Icons.route,
+                    onPressed: canAddToCriticalPath
+                        ? () => addTaskToCriticalPath(
+                              context: context,
+                              bloc: bloc,
+                              task: resolvedTask!,
+                            )
+                        : null,
+                  ),
                   const Spacer(),
                   TaskSecondaryButton(
                     label: 'Cancel',

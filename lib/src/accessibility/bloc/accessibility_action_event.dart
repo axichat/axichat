@@ -32,6 +32,10 @@ class AccessibilityMenuReset extends AccessibilityActionEvent {
   const AccessibilityMenuReset();
 }
 
+class AccessibilityDiscardWarningRequested extends AccessibilityActionEvent {
+  const AccessibilityDiscardWarningRequested();
+}
+
 class AccessibilityMenuActionTriggered extends AccessibilityActionEvent {
   const AccessibilityMenuActionTriggered(this.action);
 
@@ -81,14 +85,16 @@ class AccessibilityDataUpdated extends AccessibilityActionEvent {
     this.chats,
     this.roster,
     this.invites,
+    this.drafts,
   });
 
   final List<Chat>? chats;
   final List<RosterItem>? roster;
   final List<Invite>? invites;
+  final List<Draft>? drafts;
 
   @override
-  List<Object?> get props => [chats, roster, invites];
+  List<Object?> get props => [chats, roster, invites, drafts];
 }
 
 class AccessibilityLocaleUpdated extends AccessibilityActionEvent {
