@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _kMenuItemHeight = 52;
-const double _kMenuMinWidth = 220;
+const double _kMenuMinWidth = 0;
 const double _kMenuMaxWidth = 360;
 const double _kMenuMaxHeight = 320;
 
@@ -46,12 +46,13 @@ class AxiMenu extends StatefulWidget {
 
 class _AxiMenuState extends State<AxiMenu> {
   late List<FocusNode> _focusNodes;
+  late final FocusNode _menuScopeNode;
 
   @override
   void initState() {
     super.initState();
+    _menuScopeNode = FocusNode(debugLabel: 'AxiMenuScope');
     _focusNodes = _buildFocusNodes(widget.actions.length);
-    _autofocusFirst();
   }
 
   @override
@@ -62,7 +63,6 @@ class _AxiMenuState extends State<AxiMenu> {
         node.dispose();
       }
       _focusNodes = _buildFocusNodes(widget.actions.length);
-      _autofocusFirst();
     }
   }
 
@@ -71,17 +71,8 @@ class _AxiMenuState extends State<AxiMenu> {
     for (final node in _focusNodes) {
       node.dispose();
     }
+    _menuScopeNode.dispose();
     super.dispose();
-  }
-
-  void _autofocusFirst() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _focusNodes.isEmpty) return;
-      final FocusNode node = _focusNodes.first;
-      if (node.canRequestFocus) {
-        node.requestFocus();
-      }
-    });
   }
 
   List<FocusNode> _buildFocusNodes(int count) =>
@@ -95,6 +86,43 @@ class _AxiMenuState extends State<AxiMenu> {
     final action = widget.actions[index];
     if (!action.enabled) return;
     action.onPressed?.call();
+  }
+
+  void _focusFirstIfNone() {
+    if (_focusNodes.isEmpty) return;
+    final FocusNode? primary = FocusManager.instance.primaryFocus;
+    if (primary == null || !_focusNodes.contains(primary)) {
+      _focusNodes.first.requestFocus();
+    }
+  }
+
+  void _focusLastIfNone() {
+    if (_focusNodes.isEmpty) return;
+    final FocusNode? primary = FocusManager.instance.primaryFocus;
+    if (primary == null || !_focusNodes.contains(primary)) {
+      _focusNodes.last.requestFocus();
+    }
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final FocusNode? primary = FocusManager.instance.primaryFocus;
+    final bool hasMenuFocus = primary != null && _focusNodes.contains(primary);
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      if (!hasMenuFocus) {
+        _focusFirstIfNone();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (!hasMenuFocus) {
+        _focusLastIfNone();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
@@ -112,34 +140,60 @@ class _AxiMenuState extends State<AxiMenu> {
     );
     final scrollable = widget.actions.length * _kMenuItemHeight > height;
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        minWidth: widget.minWidth,
-        maxWidth: widget.maxWidth,
-        maxHeight: widget.maxHeight,
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.card,
-          borderRadius: borderRadius,
-          border: Border.all(color: colors.border.withValues(alpha: 0.9)),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x1F000000),
-              blurRadius: 28,
-              offset: Offset(0, 18),
-            ),
-            BoxShadow(
-              color: Color(0x0D000000),
-              blurRadius: 8,
-              offset: Offset(0, 6),
-            ),
-          ],
+    final TextDirection textDirection =
+        Directionality.maybeOf(context) ?? TextDirection.ltr;
+    final double computedWidth =
+        widget.actions.fold<double>(widget.minWidth, (current, action) {
+      final double textWidth = _measureLabelWidth(
+        action.label,
+        textTheme.small.copyWith(
+          fontWeight: FontWeight.w700,
         ),
-        child: ClipRRect(
-          borderRadius: borderRadius,
-          child: Material(
-            color: Colors.transparent,
+        textDirection,
+      );
+      final double iconWidth = action.icon != null ? 28 : 0; // 16 icon + 12 gap
+      final double paddedWidth = 14 * 2 + iconWidth + textWidth;
+      return math.max(current, paddedWidth);
+    });
+
+    final double menuWidth = computedWidth.clamp(
+      widget.minWidth,
+      widget.maxWidth,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1F000000),
+            blurRadius: 28,
+            offset: Offset(0, 18),
+          ),
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 8,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: menuWidth,
+          maxWidth: widget.maxWidth,
+          maxHeight: widget.maxHeight,
+        ),
+        child: Material(
+          color: colors.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: borderRadius,
+            side: BorderSide(color: colors.border.withValues(alpha: 0.9)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Focus(
+            focusNode: _menuScopeNode,
+            autofocus: true,
+            onKeyEvent: _handleKeyEvent,
             child: Shortcuts(
               shortcuts: const {
                 SingleActivator(LogicalKeyboardKey.arrowDown):
@@ -160,6 +214,7 @@ class _AxiMenuState extends State<AxiMenu> {
                 },
                 child: FocusTraversalGroup(
                   child: SizedBox(
+                    width: menuWidth,
                     height: height,
                     child: ListView.separated(
                       padding: EdgeInsets.zero,
@@ -200,6 +255,20 @@ class _AxiMenuState extends State<AxiMenu> {
         ),
       ),
     );
+  }
+
+  double _measureLabelWidth(
+    String label,
+    TextStyle style,
+    TextDirection textDirection,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: style),
+      textDirection: textDirection,
+      maxLines: 1,
+      ellipsis: null,
+    )..layout();
+    return painter.width;
   }
 }
 

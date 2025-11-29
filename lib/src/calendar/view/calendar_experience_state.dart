@@ -272,11 +272,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
 
   void _handleOpenCriticalPathSandbox(String pathId) {
     setState(() {
-      _activeSandboxPathId = pathId;
+      _activeSandboxPathId = _activeSandboxPathId == pathId ? null : pathId;
     });
-    calendarBloc?.add(
-      CalendarEvent.criticalPathFocused(pathId: pathId),
-    );
   }
 
   void _closeSandbox() {

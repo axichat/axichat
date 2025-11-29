@@ -73,7 +73,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = false;
   late final VoidCallback _focusFallbackListener;
@@ -87,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
     FocusManager.instance.addListener(_focusFallbackListener);
     _globalShortcutHandler = _handleGlobalShortcut;
     HardwareKeyboard.instance.addHandler(_globalShortcutHandler!);
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) {
         _shortcutFocusNode.requestFocus();
@@ -102,9 +103,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (handler != null) {
       HardwareKeyboard.instance.removeHandler(handler);
     }
+    WidgetsBinding.instance.removeObserver(this);
     _accessibilityBloc = null;
     _shortcutFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _shortcutFocusNode.canRequestFocus) {
+      _shortcutFocusNode.requestFocus();
+    }
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {

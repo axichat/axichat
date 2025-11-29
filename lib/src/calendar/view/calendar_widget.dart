@@ -241,15 +241,8 @@ class _CalendarAppBar extends StatelessWidget {
                 borderColor: colors.border,
                 onPressed: onBackPressed,
               ),
-              const SizedBox(width: calendarGutterMd),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: SyncControls(
-                    state: state,
-                  ),
-                ),
-              ),
+              const Spacer(),
+              SyncControls(state: state),
             ],
           ),
         ),

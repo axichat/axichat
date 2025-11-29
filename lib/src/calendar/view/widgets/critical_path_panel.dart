@@ -409,7 +409,7 @@ class _PathActionsState extends State<_PathActions> {
                   size: 14,
                   color: colors.primary,
                 ),
-                const SizedBox(width: calendarInsetMd),
+                const SizedBox(width: calendarInsetLg),
                 Text(widget.isFocused ? 'Unfocus' : 'Focus'),
               ],
             ),

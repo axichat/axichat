@@ -145,6 +145,7 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Centers the 28px indicator within the 40px cutout.
 const _messageAvatarSize = 36.0;
+const _messageRowAvatarReservation = 44.0;
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
 const _selectionBubbleOutboundSpacingBoost = 6.0;
@@ -161,6 +162,8 @@ const _messageArrivalDuration = Duration(milliseconds: 420);
 const _messageArrivalCurve = Curves.easeOutCubic;
 const _chatHorizontalPadding = 16.0;
 const _selectionAutoscrollSlop = 4.0;
+const _selectionAutoscrollReboundCurve = Curves.easeOutCubic;
+const _selectionAutoscrollReboundDuration = Duration(milliseconds: 260);
 const _selectionAttachmentBaseGap = 16.0;
 const _selectionAttachmentSelectedGap = 8.0;
 const _selectionExtrasViewportGap = 50.0;
@@ -670,6 +673,7 @@ class _ChatState extends State<Chat> {
   bool _selectionAutoscrollActive = false;
   bool _selectionAutoscrollScheduled = false;
   bool _selectionAutoscrollInProgress = false;
+  double _selectionAutoscrollAccumulated = 0.0;
   bool _selectionControlsMeasurementPending = false;
   int? _dismissPointer;
   Offset? _dismissPointerDownPosition;
@@ -1576,6 +1580,7 @@ class _ChatState extends State<Chat> {
 
   void _clearMessageSelection() {
     if (_selectedMessageId == null) return;
+    unawaited(_reboundSelectionScroll());
     setState(() {
       _selectedMessageId = null;
       _activeSelectionExtrasKey = null;
@@ -1587,6 +1592,7 @@ class _ChatState extends State<Chat> {
       _selectionAutoscrollActive = false;
       _selectionAutoscrollScheduled = false;
       _selectionAutoscrollInProgress = false;
+      _selectionAutoscrollAccumulated = 0.0;
     });
   }
 
@@ -1697,6 +1703,7 @@ class _ChatState extends State<Chat> {
     if (_scrollController.hasClients) {
       _updateSelectionSpacerBase(_scrollController.position.viewportDimension);
     }
+    _selectionAutoscrollAccumulated = 0.0;
     setState(() {
       _selectedMessageId = messageId;
       _activeSelectionExtrasKey = null;
@@ -1809,7 +1816,8 @@ class _ChatState extends State<Chat> {
     final position = _scrollController.position;
     final directionSign = _axisDirectionSign(position.axisDirection);
     final scrollDelta = gapDelta * directionSign;
-    final rawTarget = position.pixels + scrollDelta;
+    final start = position.pixels;
+    final rawTarget = start + scrollDelta;
     final minExtent = position.minScrollExtent.toDouble();
     final maxExtent = position.maxScrollExtent.toDouble();
     if (rawTarget > maxExtent + _selectionHeadroomTolerance ||
@@ -1825,6 +1833,7 @@ class _ChatState extends State<Chat> {
       duration: _bubbleFocusDuration,
       curve: _bubbleFocusCurve,
     );
+    _selectionAutoscrollAccumulated += (target - start);
     return _SelectionShiftOutcome.animated;
   }
 
@@ -1912,6 +1921,27 @@ class _ChatState extends State<Chat> {
     });
   }
 
+  Future<void> _reboundSelectionScroll() async {
+    if (!_scrollController.hasClients) return;
+    final accumulated = _selectionAutoscrollAccumulated;
+    _selectionAutoscrollAccumulated = 0.0;
+    if (accumulated.abs() < 0.5) return;
+    final position = _scrollController.position;
+    final target = (position.pixels - accumulated).clamp(
+      position.minScrollExtent.toDouble(),
+      position.maxScrollExtent.toDouble(),
+    );
+    if ((position.pixels - target).abs() < (_selectionAutoscrollSlop / 2)) {
+      position.jumpTo(target);
+      return;
+    }
+    await position.animateTo(
+      target,
+      duration: _selectionAutoscrollReboundDuration,
+      curve: _selectionAutoscrollReboundCurve,
+    );
+  }
+
   Future<void> _settleResidualSelectionGap() async {
     if (!_scrollController.hasClients || _selectedMessageId == null) return;
     await _waitForPostFrame();
@@ -1928,14 +1958,18 @@ class _ChatState extends State<Chat> {
       position.maxScrollExtent.toDouble(),
     );
     if ((position.pixels - target).abs() < (_selectionAutoscrollSlop / 2)) {
+      final delta = target - position.pixels;
       position.jumpTo(target);
+      _selectionAutoscrollAccumulated += delta;
       return;
     }
+    final start = position.pixels;
     await position.animateTo(
       target,
       duration: _bubbleFocusDuration ~/ 2,
       curve: _bubbleFocusCurve,
     );
+    _selectionAutoscrollAccumulated += (target - start);
   }
 
   void _requestSelectionControlsMeasurement() {
@@ -2464,10 +2498,10 @@ class _ChatState extends State<Chat> {
                                     final rawContentWidth =
                                         math.max(0.0, constraints.maxWidth);
                                     final availableWidth = math.max(
-                                        0.0,
-                                        rawContentWidth -
-                                            (_messageListHorizontalPadding *
-                                                2));
+                                      0.0,
+                                      rawContentWidth -
+                                          (_messageListHorizontalPadding * 2),
+                                    );
                                     final isCompact =
                                         availableWidth < smallScreen;
                                     final messageById = {
@@ -2520,16 +2554,29 @@ class _ChatState extends State<Chat> {
                                         (isCompact
                                             ? _compactBubbleWidthFraction
                                             : _regularBubbleWidthFraction);
+                                    final inboundAvatarReservation = isGroupChat
+                                        ? _messageRowAvatarReservation
+                                        : 0.0;
                                     final inboundClampedBubbleWidth =
-                                        baseBubbleMaxWidth;
+                                        baseBubbleMaxWidth.clamp(
+                                      0.0,
+                                      availableWidth - inboundAvatarReservation,
+                                    );
                                     final outboundClampedBubbleWidth =
-                                        baseBubbleMaxWidth;
-                                    final inboundMessageRowMaxWidth =
-                                        inboundClampedBubbleWidth +
-                                            _selectionOuterInset;
-                                    final outboundMessageRowMaxWidth =
-                                        outboundClampedBubbleWidth +
-                                            _selectionOuterInset;
+                                        baseBubbleMaxWidth.clamp(
+                                      0.0,
+                                      availableWidth,
+                                    );
+                                    final inboundMessageRowMaxWidth = math.min(
+                                      availableWidth - inboundAvatarReservation,
+                                      inboundClampedBubbleWidth +
+                                          _selectionOuterInset,
+                                    );
+                                    final outboundMessageRowMaxWidth = math.min(
+                                      availableWidth,
+                                      outboundClampedBubbleWidth +
+                                          _selectionOuterInset,
+                                    );
                                     final messageRowConstraintWidth = math.min(
                                       rawContentWidth,
                                       baseBubbleMaxWidth +
@@ -2823,7 +2870,6 @@ class _ChatState extends State<Chat> {
                                     final typingVisible =
                                         state.typing == true ||
                                             remoteTyping != null;
-                                    const showMessageAvatars = false;
                                     return Column(
                                       children: [
                                         Expanded(
@@ -2847,9 +2893,9 @@ class _ChatState extends State<Chat> {
                                                     messageOptions:
                                                         MessageOptions(
                                                       showOtherUsersAvatar:
-                                                          showMessageAvatars,
+                                                          false,
                                                       showCurrentUserAvatar:
-                                                          showMessageAvatars,
+                                                          false,
                                                       showOtherUsersName: false,
                                                       borderRadius: 0,
                                                       maxWidth:
@@ -3585,7 +3631,9 @@ class _ChatState extends State<Chat> {
                                                         final cappedBubbleWidth =
                                                             math.min(
                                                           bubbleMaxWidth,
-                                                          baseBubbleMaxWidth +
+                                                          (self
+                                                                  ? outboundClampedBubbleWidth
+                                                                  : inboundClampedBubbleWidth) +
                                                               selectionAllowance,
                                                         );
                                                         final bubbleConstraints =
@@ -4065,25 +4113,29 @@ class _ChatState extends State<Chat> {
                                                                 Tween<Offset>(
                                                               begin:
                                                                   const Offset(
-                                                                      0, -0.05),
+                                                                      0, -0.18),
                                                               end: Offset.zero,
                                                             ).animate(
                                                               curvedAnimation,
                                                             );
-                                                            return FadeTransition(
-                                                              opacity:
-                                                                  curvedAnimation,
+                                                            return ClipRect(
                                                               child:
-                                                                  SizeTransition(
-                                                                sizeFactor:
+                                                                  FadeTransition(
+                                                                opacity:
                                                                     curvedAnimation,
-                                                                axisAlignment:
-                                                                    -1,
                                                                 child:
-                                                                    SlideTransition(
-                                                                  position:
-                                                                      slideAnimation,
-                                                                  child: child,
+                                                                    SizeTransition(
+                                                                  sizeFactor:
+                                                                      curvedAnimation,
+                                                                  axisAlignment:
+                                                                      -1,
+                                                                  child:
+                                                                      SlideTransition(
+                                                                    position:
+                                                                        slideAnimation,
+                                                                    child:
+                                                                        child,
+                                                                  ),
                                                                 ),
                                                               ),
                                                             );
@@ -4228,16 +4280,73 @@ class _ChatState extends State<Chat> {
                                                             ],
                                                           );
                                                         }
-                                                        bubbleWithSlack =
-                                                            ConstrainedBox(
-                                                          constraints:
-                                                              BoxConstraints(
-                                                            maxWidth:
-                                                                bubbleMaxWidth,
-                                                          ),
-                                                          child:
-                                                              bubbleWithSlack,
-                                                        );
+                                                        final hasAvatarSlot =
+                                                            isGroupChat &&
+                                                                isRenderableBubble &&
+                                                                !self;
+                                                        if (hasAvatarSlot) {
+                                                          bubbleWithSlack =
+                                                              ConstrainedBox(
+                                                            constraints:
+                                                                BoxConstraints(
+                                                              maxWidth:
+                                                                  messageRowConstraintWidth,
+                                                            ),
+                                                            child: Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .end,
+                                                              children: [
+                                                                if (!self)
+                                                                  SizedBox(
+                                                                    width:
+                                                                        _messageRowAvatarReservation,
+                                                                    child:
+                                                                        Align(
+                                                                      alignment:
+                                                                          Alignment
+                                                                              .bottomLeft,
+                                                                      child:
+                                                                          _MessageAvatar(
+                                                                        jid: messageModel
+                                                                            .senderJid,
+                                                                        size:
+                                                                            _messageAvatarSize,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                Flexible(
+                                                                  fit: FlexFit
+                                                                      .loose,
+                                                                  child:
+                                                                      ConstrainedBox(
+                                                                    constraints:
+                                                                        BoxConstraints(
+                                                                      maxWidth:
+                                                                          bubbleMaxWidth,
+                                                                    ),
+                                                                    child:
+                                                                        bubbleWithSlack,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          );
+                                                        } else {
+                                                          bubbleWithSlack =
+                                                              ConstrainedBox(
+                                                            constraints:
+                                                                BoxConstraints(
+                                                              maxWidth:
+                                                                  bubbleMaxWidth,
+                                                            ),
+                                                            child:
+                                                                bubbleWithSlack,
+                                                          );
+                                                        }
                                                         final messageRowAlignment =
                                                             isSingleSelection
                                                                 ? Alignment
@@ -5071,13 +5180,10 @@ _CutoutLayoutResult<chat_models.Chat> _layoutRecipientStrip(
   );
 }
 
-// ignore: unused_element
 class _MessageAvatar extends StatelessWidget {
-  // ignore: unused_element_parameter
   const _MessageAvatar({required this.jid, this.size = _messageAvatarSize});
 
   final String jid;
-  // ignore: unused_element_parameter
   final double size;
 
   @override
