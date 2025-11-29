@@ -126,7 +126,11 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     with WidgetsBindingObserver {
   final FocusScopeNode _focusScopeNode =
       FocusScopeNode(debugLabel: 'accessibility_menu_scope');
-  final GlobalKey<_AccessibilitySectionListState> _listKey = GlobalKey();
+  final GlobalKey<_AccessibilitySectionListState> _sectionsListKey =
+      GlobalKey();
+  final GlobalKey<_AccessibilitySectionListState> _messagesListKey =
+      GlobalKey();
+  final GlobalKey<_AccessibilitySectionListState> _actionsListKey = GlobalKey();
   final GlobalKey _legendGroupKey = GlobalKey(debugLabel: 'legend_group');
   final GlobalKey _composerGroupKey = GlobalKey(debugLabel: 'composer_group');
   final GlobalKey _newContactGroupKey =
@@ -301,7 +305,9 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                           policy: OrderedTraversalPolicy(),
                           child: _AccessibilityActionContent(
                             state: widget.state,
-                            listKey: _listKey,
+                            sectionsListKey: _sectionsListKey,
+                            messagesListKey: _messagesListKey,
+                            actionsListKey: _actionsListKey,
                             enableActivationShortcut: !_isEditingText,
                             registerGroup: _registerGroup,
                             unregisterGroup: _unregisterGroup,
@@ -326,9 +332,25 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
   }
 
   void _withList(void Function(_AccessibilitySectionListState list) action) {
-    final list = _listKey.currentState;
+    final group = _currentGroup();
+    final list = _listForGroup(group);
     if (list == null || list.isEditingText) return;
     action(list);
+  }
+
+  _AccessibilitySectionListState? _listForGroup(
+    _AccessibilityGroup? group,
+  ) {
+    switch (group) {
+      case _AccessibilityGroup.messages:
+        return _messagesListKey.currentState;
+      case _AccessibilityGroup.actions:
+        return _actionsListKey.currentState ?? _sectionsListKey.currentState;
+      case _AccessibilityGroup.sections:
+        return _sectionsListKey.currentState;
+      default:
+        return _sectionsListKey.currentState;
+    }
   }
 
   void _handleDirectionalMove({required bool forward}) {
@@ -375,16 +397,27 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
   List<_AccessibilityGroup> _groupOrder() {
     final order = <_AccessibilityGroup>[];
     order.add(_AccessibilityGroup.shortcuts);
+    final hasMessages =
+        widget.state.sections.any((section) => section.id == 'chat-messages');
+    final hasActions =
+        widget.state.sections.any((section) => section.id != 'chat-messages');
     final kind = widget.state.currentEntry.kind;
     if (kind == AccessibilityStepKind.composer ||
         kind == AccessibilityStepKind.chatMessages ||
         kind == AccessibilityStepKind.conversation) {
+      if (hasMessages) {
+        order.add(_AccessibilityGroup.messages);
+      }
       order.add(_AccessibilityGroup.composer);
-    }
-    if (kind == AccessibilityStepKind.newContact) {
+      if (hasActions) {
+        order.add(_AccessibilityGroup.actions);
+      }
+    } else if (kind == AccessibilityStepKind.newContact) {
       order.add(_AccessibilityGroup.newContact);
-    }
-    if (widget.state.sections.isNotEmpty) {
+      if (hasActions) {
+        order.add(_AccessibilityGroup.sections);
+      }
+    } else if (hasActions) {
       order.add(_AccessibilityGroup.sections);
     }
     return order;
@@ -429,8 +462,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     if (entry.kind == AccessibilityStepKind.composer ||
         entry.kind == AccessibilityStepKind.chatMessages ||
         entry.kind == AccessibilityStepKind.conversation) {
-      return state.composerText.trim().isNotEmpty ||
-          entry.recipients.isNotEmpty;
+      return state.composerText.trim().isNotEmpty;
     }
     if (entry.kind == AccessibilityStepKind.newContact) {
       return state.newContactInput.trim().isNotEmpty;
@@ -548,7 +580,9 @@ bool _isTextInputFocused() {
 
 enum _AccessibilityGroup {
   shortcuts,
+  messages,
   composer,
+  actions,
   newContact,
   sections,
 }
@@ -573,7 +607,9 @@ class _AccessibilityGroupMarker extends InheritedWidget {
 class _AccessibilityActionContent extends StatelessWidget {
   const _AccessibilityActionContent({
     required this.state,
-    required this.listKey,
+    required this.sectionsListKey,
+    required this.messagesListKey,
+    required this.actionsListKey,
     required this.enableActivationShortcut,
     required this.registerGroup,
     required this.unregisterGroup,
@@ -586,7 +622,9 @@ class _AccessibilityActionContent extends StatelessWidget {
   });
 
   final AccessibilityActionState state;
-  final GlobalKey<_AccessibilitySectionListState> listKey;
+  final GlobalKey<_AccessibilitySectionListState> sectionsListKey;
+  final GlobalKey<_AccessibilitySectionListState> messagesListKey;
+  final GlobalKey<_AccessibilitySectionListState> actionsListKey;
   final bool enableActivationShortcut;
   final void Function(
     _AccessibilityGroup group,
@@ -607,26 +645,47 @@ class _AccessibilityActionContent extends StatelessWidget {
     final headerTitle = breadcrumbLabels.isNotEmpty
         ? breadcrumbLabels.last
         : _entryLabel(state.currentEntry, context);
-    final hasComposer =
+    final isConversation =
         state.currentEntry.kind == AccessibilityStepKind.composer ||
             state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
             state.currentEntry.kind == AccessibilityStepKind.conversation;
+    final hasComposer = isConversation;
     final hasNewContact =
         state.currentEntry.kind == AccessibilityStepKind.newContact;
-    final hasSections = state.sections.isNotEmpty;
+    final messageSections = state.sections
+        .where((section) => section.id == 'chat-messages')
+        .toList();
+    final actionSections = state.sections
+        .where((section) => section.id != 'chat-messages')
+        .toList();
+    final hasMessages = messageSections.isNotEmpty;
+    final hasSections = actionSections.isNotEmpty;
     const headerOrder = NumericFocusOrder(0);
-    const composerOrder = NumericFocusOrder(1);
-    const newContactOrder = NumericFocusOrder(1);
-    final legendOrder = NumericFocusOrder(hasComposer || hasNewContact ? 2 : 1);
-    final statusOrder =
-        NumericFocusOrder(hasComposer || hasNewContact ? 1.5 : 1.2);
+    const messagesOrder = NumericFocusOrder(2);
+    const composerOrder = NumericFocusOrder(3);
+    const newContactOrder = NumericFocusOrder(3);
+    const actionsOrder = NumericFocusOrder(4);
+    final legendOrder =
+        NumericFocusOrder(hasComposer || hasNewContact || hasMessages ? 2 : 1);
+    final statusOrder = NumericFocusOrder(
+        hasComposer || hasNewContact || hasMessages ? 1.5 : 1.2);
     final sectionsOrder =
-        NumericFocusOrder(hasComposer || hasNewContact ? 3 : 2);
+        NumericFocusOrder(hasComposer || hasNewContact || hasMessages ? 3 : 2);
 
     registerGroup(
       _AccessibilityGroup.shortcuts,
       () => legendFocusNode.requestFocus(),
     );
+    if (hasMessages) {
+      registerGroup(
+        _AccessibilityGroup.messages,
+        () => messagesListKey.currentState?.focusInitial(
+          fallbackIndex: state.messageInitialIndex,
+        ),
+      );
+    } else {
+      unregisterGroup(_AccessibilityGroup.messages);
+    }
     if (hasComposer) {
       registerGroup(
         _AccessibilityGroup.composer,
@@ -643,13 +702,21 @@ class _AccessibilityActionContent extends StatelessWidget {
     } else {
       unregisterGroup(_AccessibilityGroup.newContact);
     }
-    if (hasSections) {
+    if (isConversation && hasSections) {
+      registerGroup(
+        _AccessibilityGroup.actions,
+        () => actionsListKey.currentState?.focusInitial(fallbackIndex: 0),
+      );
+      unregisterGroup(_AccessibilityGroup.sections);
+    } else if (hasSections) {
       registerGroup(
         _AccessibilityGroup.sections,
-        () => listKey.currentState?.focusFirstItem(),
+        () => sectionsListKey.currentState?.focusInitial(),
       );
+      unregisterGroup(_AccessibilityGroup.actions);
     } else {
       unregisterGroup(_AccessibilityGroup.sections);
+      unregisterGroup(_AccessibilityGroup.actions);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -702,6 +769,29 @@ class _AccessibilityActionContent extends StatelessWidget {
           ),
         if (state.statusMessage != null || state.errorMessage != null)
           const SizedBox(height: 12),
+        if (hasMessages)
+          Flexible(
+            fit: FlexFit.tight,
+            child: FocusTraversalOrder(
+              order: messagesOrder,
+              child: _AccessibilityGroupMarker(
+                group: _AccessibilityGroup.messages,
+                child: Shortcuts(
+                  shortcuts: enableActivationShortcut
+                      ? {_activateItemActivator: const _ActivateItemIntent()}
+                      : const {},
+                  child: _AccessibilitySectionList(
+                    key: messagesListKey,
+                    sections: messageSections,
+                    headerLabel: headerTitle,
+                    autofocus: false,
+                    initialIndex: state.messageInitialIndex,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (hasMessages) const SizedBox(height: 10),
         if (hasComposer)
           FocusTraversalOrder(
             order: composerOrder,
@@ -726,31 +816,56 @@ class _AccessibilityActionContent extends StatelessWidget {
               ),
             ),
           ),
-        if (hasSections)
-          FocusTraversalOrder(
-            order: sectionsOrder,
-            child: _AccessibilityGroupMarker(
-              group: _AccessibilityGroup.sections,
-              child: Expanded(
+        if (isConversation && hasSections) const SizedBox(height: 10),
+        if (isConversation && hasSections)
+          Flexible(
+            fit: FlexFit.loose,
+            child: FocusTraversalOrder(
+              order: actionsOrder,
+              child: _AccessibilityGroupMarker(
+                group: _AccessibilityGroup.actions,
                 child: Shortcuts(
                   shortcuts: enableActivationShortcut
                       ? {_activateItemActivator: const _ActivateItemIntent()}
                       : const {},
                   child: _AccessibilitySectionList(
-                    key: listKey,
-                    sections: state.sections,
+                    key: actionsListKey,
+                    sections: actionSections,
                     headerLabel: headerTitle,
-                    autofocus: !hasComposer && !hasNewContact,
+                    autofocus: false,
+                    initialIndex: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (!isConversation && hasSections)
+          Expanded(
+            child: FocusTraversalOrder(
+              order: sectionsOrder,
+              child: _AccessibilityGroupMarker(
+                group: _AccessibilityGroup.sections,
+                child: Shortcuts(
+                  shortcuts: enableActivationShortcut
+                      ? {_activateItemActivator: const _ActivateItemIntent()}
+                      : const {},
+                  child: _AccessibilitySectionList(
+                    key: sectionsListKey,
+                    sections: actionSections,
+                    headerLabel: headerTitle,
+                    autofocus: !hasComposer && !hasNewContact && !hasMessages,
                   ),
                 ),
               ),
             ),
           )
-        else
-          FocusTraversalOrder(
-            order: sectionsOrder,
-            child: const Expanded(
-              child: Center(child: Text('No actions available right now')),
+        else if (!isConversation && !hasSections)
+          Expanded(
+            child: FocusTraversalOrder(
+              order: sectionsOrder,
+              child: const Center(
+                child: Text('No actions available right now'),
+              ),
             ),
           ),
       ],
@@ -1090,7 +1205,7 @@ class _KeyboardShortcutLegend extends StatelessWidget {
                 width: double.infinity,
                 child: AnimatedContainer(
                   duration: baseAnimationDuration,
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: borderColor, width: borderWidth),
@@ -1110,7 +1225,7 @@ class _KeyboardShortcutLegend extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Wrap(
-                        spacing: 4,
+                        spacing: 3,
                         runSpacing: 2,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: entries,
@@ -1165,7 +1280,7 @@ class _ShortcutLegendEntry extends StatelessWidget {
                 color: colors.muted.withValues(alpha: 0.04),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 child: Wrap(
                   spacing: 6,
                   runSpacing: 2,
@@ -1200,46 +1315,52 @@ class _ComposerSection extends StatelessWidget {
     final bloc = context.read<AccessibilityActionBloc>();
     return FocusTraversalGroup(
       key: groupKey,
-      policy: WidgetOrderTraversalPolicy(),
+      policy: OrderedTraversalPolicy(),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Material(
-              type: MaterialType.transparency,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: state.recipients
-                    .map(
-                      (recipient) => Semantics(
-                        label: 'Recipient ${recipient.displayName}',
-                        button: true,
-                        hint: 'Press backspace or delete to remove',
-                        child: InputChip(
-                          label: Text(recipient.displayName),
-                          onDeleted: () => bloc.add(
-                            AccessibilityRecipientRemoved(recipient.jid),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(0),
+              child: _AccessibilityTextField(
+                label: context.l10n.chatComposerMessageHint,
+                text: state.composerText,
+                onChanged: (value) =>
+                    bloc.add(AccessibilityComposerChanged(value)),
+                hintText: 'Type a message',
+                minLines: 3,
+                maxLines: 5,
+                enabled: !state.busy,
+                focusNode: focusNode,
+                autofocus: false,
               ),
             ),
             const SizedBox(height: 8),
-            _AccessibilityTextField(
-              label: context.l10n.chatComposerMessageHint,
-              text: state.composerText,
-              onChanged: (value) =>
-                  bloc.add(AccessibilityComposerChanged(value)),
-              hintText: 'Type a message',
-              minLines: 3,
-              maxLines: 5,
-              enabled: !state.busy,
-              focusNode: focusNode,
-              autofocus: true,
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(1),
+              child: Material(
+                type: MaterialType.transparency,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: state.recipients
+                      .map(
+                        (recipient) => Semantics(
+                          label: 'Recipient ${recipient.displayName}',
+                          button: true,
+                          hint: 'Press backspace or delete to remove',
+                          child: InputChip(
+                            label: Text(recipient.displayName),
+                            onDeleted: () => bloc.add(
+                              AccessibilityRecipientRemoved(recipient.jid),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
             ),
           ],
         ),
@@ -1427,11 +1548,13 @@ class _AccessibilitySectionList extends StatefulWidget {
     required this.sections,
     required this.headerLabel,
     this.autofocus = true,
+    this.initialIndex,
   });
 
   final List<AccessibilityMenuSection> sections;
   final String headerLabel;
   final bool autofocus;
+  final int? initialIndex;
 
   @override
   State<_AccessibilitySectionList> createState() =>
@@ -1472,6 +1595,14 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
 
   void focusFirstItem() => _focusIndex(0);
   void focusLastItem() => _focusIndex(_itemNodes.length - 1);
+  void focusInitial({int? fallbackIndex}) {
+    final current = _currentIndex();
+    if (current != null) {
+      _focusIndex(current);
+      return;
+    }
+    _focusIndex(fallbackIndex ?? widget.initialIndex ?? 0);
+  }
 
   void focusNextItem() {
     final current = _currentIndex();
@@ -1591,9 +1722,6 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxHeight = constraints.maxHeight.isFinite
-            ? constraints.maxHeight
-            : double.infinity;
         final borderColor = _hasFocusedItem ? colors.primary : colors.border;
         final borderWidth = _hasFocusedItem ? 3.0 : 1.0;
         return Semantics(
@@ -1609,15 +1737,12 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: borderColor, width: borderWidth),
             ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: maxHeight),
-              child: ListView(
-                controller: _scrollController,
-                shrinkWrap: true,
-                physics: const ClampingScrollPhysics(),
-                semanticChildCount: children.length,
-                children: children,
-              ),
+            child: ListView.builder(
+              controller: _scrollController,
+              physics: const ClampingScrollPhysics(),
+              semanticChildCount: children.length,
+              itemCount: children.length,
+              itemBuilder: (context, index) => children[index],
             ),
           ),
         );
@@ -1648,7 +1773,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         _lastFocusedIndex == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          focusFirstItem();
+          final target =
+              (widget.initialIndex ?? 0).clamp(0, _itemNodes.length - 1);
+          _focusIndex(target);
         }
       });
     }
@@ -1759,10 +1886,12 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
     if (_scrollController.hasClients && renderObject != null) {
       final viewport = RenderAbstractViewport.of(renderObject);
       final position = _scrollController.position;
+      final movingUp = previousIndex != null && index < previousIndex;
+      final alignment = movingUp ? 0.05 : 0.95;
       final target = viewport
           .getOffsetToReveal(
             renderObject,
-            previousIndex != null && index < previousIndex ? 0 : 1,
+            alignment,
           )
           .offset;
       final clampedTarget = target.clamp(
@@ -1776,14 +1905,15 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
       );
       return;
     }
-    final alignmentPolicy = previousIndex != null && index < previousIndex
+    final movingUp = previousIndex != null && index < previousIndex;
+    final alignmentPolicy = movingUp
         ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
         : ScrollPositionAlignmentPolicy.keepVisibleAtEnd;
     Scrollable.ensureVisible(
       focusContext,
       duration: baseAnimationDuration,
       curve: Curves.easeInOutCubic,
-      alignment: previousIndex != null && index < previousIndex ? 0.0 : 1.0,
+      alignment: movingUp ? 0.05 : 0.95,
       alignmentPolicy: alignmentPolicy,
     );
   }

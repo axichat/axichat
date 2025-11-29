@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1188,9 +1189,33 @@ Future<void> showQuickAddModal({
   String? initialValidationMessage,
 }) {
   final commandSurface = resolveCommandSurface(context);
-  final bool useSheet = commandSurface == CommandSurface.sheet;
+  final bool isDesktop = !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux);
+  final bool useSheet = !isDesktop && commandSurface == CommandSurface.sheet;
   final surface =
       useSheet ? QuickAddModalSurface.bottomSheet : QuickAddModalSurface.dialog;
+
+  if (!useSheet) {
+    return showDialog<void>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (dialogContext) => QuickAddModal(
+        surface: surface,
+        prefilledDateTime: prefilledDateTime,
+        prefilledText: prefilledText,
+        onTaskAdded: onTaskAdded,
+        locationHelper: locationHelper,
+        initialValidationMessage: initialValidationMessage,
+        onDismiss: () {
+          if (Navigator.of(dialogContext).canPop()) {
+            Navigator.of(dialogContext).maybePop();
+          }
+        },
+      ),
+    );
+  }
 
   return showAdaptiveBottomSheet<void>(
     context: context,

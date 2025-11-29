@@ -33,6 +33,7 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
   static const double _centerWidth = 220;
   static const double _slotGap = calendarGutterMd;
   static const double _columnGap = calendarGutterLg;
+  static const double _canvasBorderWidth = 3;
 
   late List<int> _columns;
   late Map<_SlotLocation, String?> _slotOccupants;
@@ -77,6 +78,10 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final ShadTextTheme textTheme = context.textTheme;
+    final bool isDesktop = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -118,7 +123,7 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.grid_view, size: 16),
-                    SizedBox(width: calendarInsetMd),
+                    SizedBox(width: calendarInsetLg),
                     Text('Back to calendar'),
                   ],
                 ),
@@ -127,62 +132,46 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
           ),
         ),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(calendarGutterLg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: calendarGutterSm,
-                  runSpacing: calendarGutterSm,
-                  children: [
-                    _LegendPill(
-                      color: colors.border,
-                      label: 'Unoccupied slot',
-                      dotted: true,
-                    ),
-                    _LegendPill(
-                      color: colors.primary,
-                      label: 'Drop target',
-                      dotted: false,
-                      muted: true,
-                    ),
-                    _LegendPill(
-                      color: colors.border,
-                      label: 'Branch (top/bottom)',
-                      dotted: true,
-                    ),
-                  ],
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: colors.border,
+                  width: _canvasBorderWidth,
                 ),
-                const SizedBox(height: calendarGutterLg),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _columns
-                        .map(
-                          (index) => Padding(
-                            padding: EdgeInsets.only(
-                              right:
-                                  index == _columns.length - 1 ? 0 : _columnGap,
-                            ),
-                            child: _GridColumn(
-                              columnIndex: index,
-                              slotSize: _slotSize,
-                              centerWidth: _centerWidth,
-                              gap: _slotGap,
-                              colors: colors,
-                              textTheme: textTheme,
-                              taskForLocation: _taskForLocation,
-                              onAddRequested: _handleAddToSlot,
-                              onTaskTapped: _handleTaskTapped,
-                              onDropReceived: _handleDrop,
-                            ),
+              ),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(calendarGutterLg),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _columns
+                      .map(
+                        (index) => Padding(
+                          padding: EdgeInsets.only(
+                            right:
+                                index == _columns.length - 1 ? 0 : _columnGap,
                           ),
-                        )
-                        .toList(growable: false),
-                  ),
+                          child: _GridColumn(
+                            columnIndex: index,
+                            slotSize: _slotSize,
+                            centerWidth: _centerWidth,
+                            gap: _slotGap,
+                            colors: colors,
+                            textTheme: textTheme,
+                            taskForLocation: _taskForLocation,
+                            onAddRequested: (location) =>
+                                _handleAddToSlot(location, isDesktop),
+                            onTaskTapped: (location, task) =>
+                                _handleTaskTapped(location, task, isDesktop),
+                            onDropReceived: _handleDrop,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -195,82 +184,18 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
     return taskId != null ? widget.tasks[taskId] : null;
   }
 
-  Future<void> _handleAddToSlot(_SlotLocation location) async {
+  Future<void> _handleAddToSlot(
+    _SlotLocation location,
+    bool isDesktop,
+  ) async {
     final List<CalendarTask> available = widget.tasks.values
         .where((task) => !_taskLocations.containsKey(task.id))
         .toList()
       ..sort((a, b) => a.title.compareTo(b.title));
 
     if (!mounted) return;
-    final CalendarTask? selected = await showModalBottomSheet<CalendarTask>(
-      context: context,
-      backgroundColor: context.colorScheme.card,
-      useSafeArea: true,
-      builder: (context) {
-        if (available.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.all(calendarGutterLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'All tasks are placed already',
-                  style: context.textTheme.h4,
-                ),
-                const SizedBox(height: calendarInsetMd),
-                Text(
-                  'Drag a task off a slot first, then try again.',
-                  style: context.textTheme.muted,
-                ),
-              ],
-            ),
-          );
-        }
-        return ListView.separated(
-          padding: const EdgeInsets.all(calendarGutterLg),
-          shrinkWrap: true,
-          itemBuilder: (context, index) {
-            final CalendarTask task = available[index];
-            final DateTime? deadline = task.deadline?.toLocal();
-            final String? deadlineLabel = deadline != null
-                ? 'Deadline: ${deadline.toIso8601String().split('T').first}'
-                : null;
-            return ListTile(
-              dense: true,
-              onTap: () => Navigator.of(context).pop(task),
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                task.isCompleted ? Icons.check_circle : Icons.circle_outlined,
-                color: task.isCompleted
-                    ? context.colorScheme.primary
-                    : context.colorScheme.mutedForeground,
-                size: 20,
-              ),
-              title: Text(
-                task.title,
-                style: context.textTheme.small.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: deadlineLabel != null
-                  ? Text(
-                      deadlineLabel,
-                      style: context.textTheme.muted,
-                    )
-                  : null,
-              trailing: Icon(
-                Icons.add,
-                size: 18,
-                color: context.colorScheme.mutedForeground,
-              ),
-            );
-          },
-          separatorBuilder: (context, _) => const Divider(height: 1),
-          itemCount: available.length,
-        );
-      },
-    );
+    final CalendarTask? selected =
+        await _showTaskPicker(available: available, isDesktop: isDesktop);
 
     if (selected == null) {
       return;
@@ -285,40 +210,16 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
   Future<void> _handleTaskTapped(
     _SlotLocation location,
     CalendarTask task,
+    bool isDesktop,
   ) async {
-    final _SlotTapAction? action = await showModalBottomSheet<_SlotTapAction>(
-      context: context,
-      backgroundColor: context.colorScheme.card,
-      useSafeArea: true,
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.swap_horiz),
-                title: const Text('Replace task'),
-                subtitle: const Text('Pick a different task for this slot'),
-                onTap: () => Navigator.of(context).pop(_SlotTapAction.replace),
-              ),
-              ListTile(
-                leading: const Icon(Icons.remove_circle_outline),
-                title: const Text('Remove from path'),
-                onTap: () => Navigator.of(context).pop(_SlotTapAction.remove),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    final _SlotTapAction? action = await _showSlotActions(isDesktop);
 
     if (action == _SlotTapAction.remove) {
       _removeTaskFromSlot(location, task.id);
       return;
     }
     if (action == _SlotTapAction.replace) {
-      await _handleAddToSlot(location);
+      await _handleAddToSlot(location, isDesktop);
     }
   }
 
@@ -482,7 +383,7 @@ class _GridColumn extends StatelessWidget {
           children: [
             _TaskSlot(
               location: left,
-              label: 'Depends on',
+              label: 'Previous',
               colors: colors,
               textTheme: textTheme,
               size: slotSize,
@@ -508,7 +409,7 @@ class _GridColumn extends StatelessWidget {
             SizedBox(width: gap),
             _TaskSlot(
               location: right,
-              label: 'Unlocks',
+              label: 'Next',
               colors: colors,
               textTheme: textTheme,
               size: slotSize,
@@ -744,103 +645,46 @@ class _TaskCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  completed ? Icons.check_circle : Icons.radio_button_unchecked,
-                  size: 16,
-                  color: completed ? colors.primary : colors.mutedForeground,
-                ),
-                const SizedBox(width: calendarInsetSm),
-                Expanded(
-                  child: Text(
-                    task.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.small.copyWith(
-                      fontWeight: FontWeight.w700,
-                      decoration: completed ? TextDecoration.lineThrough : null,
+        child: Padding(
+          padding: const EdgeInsets.all(calendarInsetMd),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    completed
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    size: 16,
+                    color: completed ? colors.primary : colors.mutedForeground,
+                  ),
+                  const SizedBox(width: calendarInsetSm),
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.small.copyWith(
+                        fontWeight: FontWeight.w700,
+                        decoration:
+                            completed ? TextDecoration.lineThrough : null,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: calendarInsetSm),
-            Text(
-              label,
-              style: textTheme.small.copyWith(
-                fontSize: 11,
-                color: colors.mutedForeground,
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: calendarInsetSm),
+              Text(
+                label,
+                style: textTheme.small.copyWith(
+                  fontSize: 11,
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _LegendPill extends StatelessWidget {
-  const _LegendPill({
-    required this.color,
-    required this.label,
-    required this.dotted,
-    this.muted = false,
-  });
-
-  final Color color;
-  final String label;
-  final bool dotted;
-  final bool muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final ShadColorScheme colors = context.colorScheme;
-    final ShadTextTheme textTheme = context.textTheme;
-    final Color resolved = muted ? color.withValues(alpha: 0.4) : color;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarInsetLg,
-        vertical: calendarInsetSm,
-      ),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 24,
-            height: 10,
-            child: dotted
-                ? _DashedBorder(
-                    color: resolved,
-                    radius: 4,
-                    thickness: 1.5,
-                    gap: 4,
-                  )
-                : Container(
-                    decoration: BoxDecoration(
-                      color: resolved,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-          ),
-          const SizedBox(width: calendarInsetSm),
-          Text(
-            label,
-            style: textTheme.small.copyWith(
-              color: colors.mutedForeground,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -850,7 +694,9 @@ class _DashedBorder extends StatelessWidget {
   const _DashedBorder({
     required this.color,
     required this.radius,
+    // ignore: unused_element_parameter
     this.thickness = 1,
+    // ignore: unused_element_parameter
     this.gap = 6,
     this.child,
   });
@@ -952,4 +798,144 @@ class _DragPayload {
 
   final String taskId;
   final _SlotLocation from;
+}
+
+extension on _CriticalPathSandboxState {
+  Future<CalendarTask?> _showTaskPicker({
+    required List<CalendarTask> available,
+    required bool isDesktop,
+  }) {
+    final Widget content = available.isEmpty
+        ? Padding(
+            padding: const EdgeInsets.all(calendarGutterLg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'All tasks are placed already',
+                  style: context.textTheme.h4,
+                ),
+                const SizedBox(height: calendarInsetMd),
+                Text(
+                  'Drag a task off a slot first, then try again.',
+                  style: context.textTheme.muted,
+                ),
+              ],
+            ),
+          )
+        : ListView.separated(
+            padding: const EdgeInsets.all(calendarGutterLg),
+            shrinkWrap: true,
+            itemBuilder: (context, index) {
+              final CalendarTask task = available[index];
+              final DateTime? deadline = task.deadline?.toLocal();
+              final String? deadlineLabel = deadline != null
+                  ? 'Deadline: ${deadline.toIso8601String().split('T').first}'
+                  : null;
+              return ListTile(
+                dense: true,
+                hoverColor: context.colorScheme.muted.withValues(alpha: 0.08),
+                onTap: () => Navigator.of(context).pop(task),
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  task.isCompleted ? Icons.check_circle : Icons.circle_outlined,
+                  color: task.isCompleted
+                      ? context.colorScheme.primary
+                      : context.colorScheme.mutedForeground,
+                  size: 20,
+                ),
+                title: Text(
+                  task.title,
+                  style: context.textTheme.small.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: deadlineLabel != null
+                    ? Text(
+                        deadlineLabel,
+                        style: context.textTheme.muted,
+                      )
+                    : null,
+                trailing: Icon(
+                  Icons.add,
+                  size: 18,
+                  color: context.colorScheme.mutedForeground,
+                ),
+              );
+            },
+            separatorBuilder: (context, _) => const Divider(height: 1),
+            itemCount: available.length,
+          );
+
+    if (isDesktop) {
+      return showDialog<CalendarTask>(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: context.colorScheme.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(calendarBorderRadius),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: content,
+          ),
+        ),
+      );
+    }
+
+    return showModalBottomSheet<CalendarTask>(
+      context: context,
+      backgroundColor: context.colorScheme.card,
+      useSafeArea: true,
+      builder: (_) => content,
+    );
+  }
+
+  Future<_SlotTapAction?> _showSlotActions(bool isDesktop) {
+    final Widget content = SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            hoverColor: context.colorScheme.muted.withValues(alpha: 0.08),
+            leading: const Icon(Icons.swap_horiz),
+            title: const Text('Replace task'),
+            subtitle: const Text('Pick a different task for this slot'),
+            onTap: () => Navigator.of(context).pop(_SlotTapAction.replace),
+          ),
+          ListTile(
+            hoverColor: context.colorScheme.muted.withValues(alpha: 0.08),
+            leading: const Icon(Icons.remove_circle_outline),
+            title: const Text('Remove from path'),
+            onTap: () => Navigator.of(context).pop(_SlotTapAction.remove),
+          ),
+        ],
+      ),
+    );
+
+    if (isDesktop) {
+      return showDialog<_SlotTapAction>(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: context.colorScheme.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(calendarBorderRadius),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: content,
+          ),
+        ),
+      );
+    }
+
+    return showModalBottomSheet<_SlotTapAction>(
+      context: context,
+      backgroundColor: context.colorScheme.card,
+      useSafeArea: true,
+      builder: (_) => content,
+    );
+  }
 }
