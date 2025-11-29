@@ -56,13 +56,11 @@ class TaskSidebar extends StatefulWidget {
     this.onDragSessionStarted,
     this.onDragSessionEnded,
     this.onDragGlobalPositionChanged,
-    this.onOpenCriticalPathSandbox,
   });
 
   final VoidCallback? onDragSessionStarted;
   final VoidCallback? onDragSessionEnded;
   final ValueChanged<Offset>? onDragGlobalPositionChanged;
-  final ValueChanged<String>? onOpenCriticalPathSandbox;
 
   @override
   State<TaskSidebar> createState() => TaskSidebarState();
@@ -99,6 +97,9 @@ class TaskSidebarState extends State<TaskSidebar>
   BaseCalendarBloc? _calendarBloc;
   final CalendarTransferService _transferService =
       const CalendarTransferService();
+  bool _criticalPathsExpanded = false;
+  List<String> _unscheduledOrder = <String>[];
+  List<String> _reminderOrder = <String>[];
 
   BaseCalendarBloc get _bloc {
     final BaseCalendarBloc? bloc = _calendarBloc;
@@ -607,6 +608,7 @@ class TaskSidebarState extends State<TaskSidebar>
                         return true;
                       }).toList();
                     }
+                    final bool showAddTaskSection = !_criticalPathsExpanded;
                     final Widget criticalPathsPanel = CriticalPathPanel(
                       paths: state.criticalPaths,
                       tasks: state.model.tasks,
@@ -616,11 +618,20 @@ class TaskSidebarState extends State<TaskSidebar>
                       onRenamePath: _handleRenameCriticalPath,
                       onDeletePath: _handleDeleteCriticalPath,
                       onFocusPath: _handleFocusCriticalPath,
-                      onOpenSandbox: widget.onOpenCriticalPathSandbox,
+                      onReorderPath: _handleCriticalPathReorder,
+                      taskTileBuilder: (task, trailing) =>
+                          _buildSidebarTaskTile(
+                        task,
+                        trailing: trailing,
+                      ),
+                      isExpanded: _criticalPathsExpanded,
+                      onToggleExpanded: _toggleCriticalPathsExpanded,
                     );
 
                     List<CalendarTask> unscheduledTasks = const [];
                     List<CalendarTask> reminderTasks = const [];
+                    List<CalendarTask> orderedUnscheduled = const [];
+                    List<CalendarTask> orderedReminders = const [];
                     Widget contentBody;
                     if (state.isSelectionMode) {
                       contentBody = _SelectionPanel(
@@ -705,6 +716,13 @@ class TaskSidebarState extends State<TaskSidebar>
                           return true;
                         }).toList(),
                       );
+                      final List<String> unscheduledOrder =
+                          _deriveOrder(unscheduledTasks, _unscheduledOrder);
+                      _unscheduledOrder = unscheduledOrder;
+                      orderedUnscheduled = _orderedTasksFromOrder(
+                        unscheduledTasks,
+                        unscheduledOrder,
+                      );
                       reminderTasks = _sortTasksByDeadline(
                         state.unscheduledTasks.where((task) {
                           if (!state.isTaskInFocusedPath(task)) {
@@ -720,6 +738,15 @@ class TaskSidebarState extends State<TaskSidebar>
                           return true;
                         }).toList(),
                       );
+                      final List<String> reminderOrder =
+                          _deriveOrder(reminderTasks, _reminderOrder);
+                      _reminderOrder = reminderOrder;
+                      orderedReminders = _orderedTasksFromOrder(
+                        reminderTasks,
+                        reminderOrder,
+                      );
+                      unscheduledTasks = orderedUnscheduled;
+                      reminderTasks = orderedReminders;
                       contentBody = _UnscheduledSidebarContent(
                         uiState: uiState,
                         locationHelper: locationHelper,
@@ -749,8 +776,9 @@ class TaskSidebarState extends State<TaskSidebar>
                         },
                         onAddToCriticalPath: () =>
                             _addTask(addToCriticalPath: true),
-                        unscheduledTasks: unscheduledTasks,
-                        reminderTasks: reminderTasks,
+                        showAddTaskSection: showAddTaskSection,
+                        unscheduledTasks: orderedUnscheduled,
+                        reminderTasks: orderedReminders,
                         hideCompletedUnscheduled:
                             settings.state.hideCompletedUnscheduled,
                         hideCompletedReminders:
@@ -775,10 +803,29 @@ class TaskSidebarState extends State<TaskSidebar>
                             details.payload.task,
                           );
                         },
-                        taskTileBuilder: (task) => _SidebarDraggableTaskTile(
-                          host: this,
-                          task: task,
+                        onUnscheduledReorder: (oldIndex, newIndex) {
+                          _handleTaskListReorder(
+                            tasks: orderedUnscheduled,
+                            cache: _unscheduledOrder,
+                            updateCache: (next) => _unscheduledOrder = next,
+                            oldIndex: oldIndex,
+                            newIndex: newIndex,
+                          );
+                        },
+                        onReminderReorder: (oldIndex, newIndex) {
+                          _handleTaskListReorder(
+                            tasks: orderedReminders,
+                            cache: _reminderOrder,
+                            updateCache: (next) => _reminderOrder = next,
+                            oldIndex: oldIndex,
+                            newIndex: newIndex,
+                          );
+                        },
+                        taskTileBuilder: (task, trailing) =>
+                            _buildDraggableSidebarTaskTile(
+                          task,
                           uiState: uiState,
+                          trailing: trailing,
                         ),
                       );
                     }
@@ -1571,6 +1618,36 @@ class TaskSidebarState extends State<TaskSidebar>
     );
   }
 
+  Widget _buildSidebarTaskTile(
+    CalendarTask task, {
+    Widget? trailing,
+    String? scheduleLabel,
+  }) {
+    final CalendarSidebarState uiState = _sidebarController.state;
+    return _SidebarTaskTile(
+      host: this,
+      task: task,
+      uiState: uiState,
+      trailing: trailing,
+      scheduleLabel: scheduleLabel,
+      onToggleCompletion: (completed) =>
+          _toggleSidebarTaskCompletion(task, completed),
+    );
+  }
+
+  Widget _buildDraggableSidebarTaskTile(
+    CalendarTask task, {
+    required CalendarSidebarState uiState,
+    Widget? trailing,
+  }) {
+    return _SidebarDraggableTaskTile(
+      host: this,
+      task: task,
+      uiState: uiState,
+      trailing: trailing,
+    );
+  }
+
   List<TaskContextAction> _sidebarInlineActions(CalendarTask task) {
     return [
       TaskContextAction(
@@ -1674,6 +1751,24 @@ class TaskSidebarState extends State<TaskSidebar>
   void _handleFocusCriticalPath(CalendarCriticalPath? path) {
     _bloc.add(
       CalendarEvent.criticalPathFocused(pathId: path?.id),
+    );
+  }
+
+  void _toggleCriticalPathsExpanded() {
+    setState(() {
+      _criticalPathsExpanded = !_criticalPathsExpanded;
+    });
+  }
+
+  void _handleCriticalPathReorder(
+    String pathId,
+    List<String> orderedTaskIds,
+  ) {
+    _bloc.add(
+      CalendarEvent.criticalPathReordered(
+        pathId: pathId,
+        orderedTaskIds: orderedTaskIds,
+      ),
     );
   }
 
@@ -1933,6 +2028,70 @@ class TaskSidebarState extends State<TaskSidebar>
     });
 
     return tasksCopy;
+  }
+
+  List<String> _deriveOrder(List<CalendarTask> tasks, List<String> cache) {
+    final Set<String> presentIds = tasks.map((task) => task.id).toSet();
+    final Set<String> seen = <String>{};
+    final List<String> order = <String>[];
+    for (final String id in cache) {
+      if (presentIds.contains(id) && seen.add(id)) {
+        order.add(id);
+      }
+    }
+    for (final CalendarTask task in tasks) {
+      if (seen.add(task.id)) {
+        order.add(task.id);
+      }
+    }
+    return order;
+  }
+
+  List<CalendarTask> _orderedTasksFromOrder(
+    List<CalendarTask> tasks,
+    List<String> order,
+  ) {
+    final Map<String, int> positions = {
+      for (var i = 0; i < order.length; i++) order[i]: i,
+    };
+    final List<CalendarTask> ordered = tasks.toList()
+      ..sort(
+        (a, b) {
+          final int indexA = positions[a.id] ?? order.length;
+          final int indexB = positions[b.id] ?? order.length;
+          return indexA.compareTo(indexB);
+        },
+      );
+    return ordered;
+  }
+
+  void _handleTaskListReorder({
+    required List<CalendarTask> tasks,
+    required List<String> cache,
+    required void Function(List<String> nextOrder) updateCache,
+    required int oldIndex,
+    required int newIndex,
+  }) {
+    if (tasks.isEmpty) {
+      return;
+    }
+    final List<String> order = _deriveOrder(tasks, cache);
+    if (oldIndex < 0 || oldIndex >= order.length) {
+      return;
+    }
+    int targetIndex = newIndex;
+    if (newIndex > oldIndex) {
+      targetIndex -= 1;
+    }
+    if (targetIndex < 0 || targetIndex > order.length) {
+      return;
+    }
+    setState(() {
+      final List<String> nextOrder = List<String>.from(order);
+      final String moved = nextOrder.removeAt(oldIndex);
+      nextOrder.insert(targetIndex, moved);
+      updateCache(nextOrder);
+    });
   }
 
   TaskPriority _currentPriority() {
@@ -3250,6 +3409,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onRecurrenceChanged,
     required this.onAddTask,
     required this.onAddToCriticalPath,
+    required this.showAddTaskSection,
     required this.unscheduledTasks,
     required this.reminderTasks,
     required this.hideCompletedUnscheduled,
@@ -3263,6 +3423,8 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onTaskListHover,
     required this.onTaskListLeave,
     required this.onTaskListDrop,
+    required this.onUnscheduledReorder,
+    required this.onReminderReorder,
     required this.taskTileBuilder,
   });
 
@@ -3289,6 +3451,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final VoidCallback onAddTask;
   final VoidCallback onAddToCriticalPath;
+  final bool showAddTaskSection;
   final List<CalendarTask> unscheduledTasks;
   final List<CalendarTask> reminderTasks;
   final bool hideCompletedUnscheduled;
@@ -3302,38 +3465,49 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final _CalendarDragDetailsCallback onTaskListHover;
   final VoidCallback onTaskListLeave;
   final _CalendarDragDetailsCallback onTaskListDrop;
-  final Widget Function(CalendarTask task) taskTileBuilder;
+  final void Function(int oldIndex, int newIndex) onUnscheduledReorder;
+  final void Function(int oldIndex, int newIndex) onReminderReorder;
+  final Widget Function(CalendarTask task, Widget? trailing) taskTileBuilder;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _AddTaskSection(
-          uiState: uiState,
-          locationHelper: locationHelper,
-          formActivityListenable: formActivityListenable,
-          hasSidebarFormValues: hasSidebarFormValues,
-          onClearFieldsPressed: onClearFieldsPressed,
-          titleController: titleController,
-          titleFocusNode: titleFocusNode,
-          quickTaskError: quickTaskError,
-          onQuickTaskChanged: onQuickTaskChanged,
-          onQuickTaskSubmitted: onQuickTaskSubmitted,
-          draftController: draftController,
-          onImportantChanged: onImportantChanged,
-          onUrgentChanged: onUrgentChanged,
-          sidebarController: sidebarController,
-          descriptionController: descriptionController,
-          locationController: locationController,
-          onDeadlineChanged: onDeadlineChanged,
-          onStartChanged: onStartChanged,
-          onEndChanged: onEndChanged,
-          onScheduleCleared: onScheduleCleared,
-          onRecurrenceChanged: onRecurrenceChanged,
-          addTask: onAddTask,
-          onAddToCriticalPath: onAddToCriticalPath,
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 180),
+          crossFadeState: showAddTaskSection
+              ? CrossFadeState.showFirst
+              : CrossFadeState.showSecond,
+          sizeCurve: Curves.easeInOut,
+          firstChild: _AddTaskSection(
+            uiState: uiState,
+            locationHelper: locationHelper,
+            formActivityListenable: formActivityListenable,
+            hasSidebarFormValues: hasSidebarFormValues,
+            onClearFieldsPressed: onClearFieldsPressed,
+            titleController: titleController,
+            titleFocusNode: titleFocusNode,
+            quickTaskError: quickTaskError,
+            onQuickTaskChanged: onQuickTaskChanged,
+            onQuickTaskSubmitted: onQuickTaskSubmitted,
+            draftController: draftController,
+            onImportantChanged: onImportantChanged,
+            onUrgentChanged: onUrgentChanged,
+            sidebarController: sidebarController,
+            descriptionController: descriptionController,
+            locationController: locationController,
+            onDeadlineChanged: onDeadlineChanged,
+            onStartChanged: onStartChanged,
+            onEndChanged: onEndChanged,
+            onScheduleCleared: onScheduleCleared,
+            onRecurrenceChanged: onRecurrenceChanged,
+            addTask: onAddTask,
+            onAddToCriticalPath: onAddToCriticalPath,
+          ),
+          secondChild: const SizedBox.shrink(),
         ),
+        if (!showAddTaskSection) const SizedBox(height: calendarInsetMd),
         _TaskSectionsPanel(
           unscheduledTasks: unscheduledTasks,
           reminderTasks: reminderTasks,
@@ -3349,6 +3523,8 @@ class _UnscheduledSidebarContent extends StatelessWidget {
           onTaskListHover: onTaskListHover,
           onTaskListLeave: onTaskListLeave,
           onTaskListDrop: onTaskListDrop,
+          onUnscheduledReorder: onUnscheduledReorder,
+          onReminderReorder: onReminderReorder,
           taskTileBuilder: taskTileBuilder,
         ),
       ],
@@ -3372,6 +3548,8 @@ class _TaskSectionsPanel extends StatelessWidget {
     required this.onTaskListHover,
     required this.onTaskListLeave,
     required this.onTaskListDrop,
+    required this.onUnscheduledReorder,
+    required this.onReminderReorder,
     required this.taskTileBuilder,
   });
 
@@ -3389,7 +3567,9 @@ class _TaskSectionsPanel extends StatelessWidget {
   final _CalendarDragDetailsCallback onTaskListHover;
   final VoidCallback onTaskListLeave;
   final _CalendarDragDetailsCallback onTaskListDrop;
-  final Widget Function(CalendarTask task) taskTileBuilder;
+  final void Function(int oldIndex, int newIndex) onUnscheduledReorder;
+  final void Function(int oldIndex, int newIndex) onReminderReorder;
+  final Widget Function(CalendarTask task, Widget? trailing) taskTileBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -3422,6 +3602,8 @@ class _TaskSectionsPanel extends StatelessWidget {
               onDragHover: onTaskListHover,
               onDragLeave: onTaskListLeave,
               onDrop: onTaskListDrop,
+              reorderable: true,
+              onReorder: onUnscheduledReorder,
               taskTileBuilder: taskTileBuilder,
             ),
           ),
@@ -3453,6 +3635,8 @@ class _TaskSectionsPanel extends StatelessWidget {
               onDragHover: onTaskListHover,
               onDragLeave: onTaskListLeave,
               onDrop: onTaskListDrop,
+              reorderable: true,
+              onReorder: onReminderReorder,
               taskTileBuilder: taskTileBuilder,
             ),
           ),
@@ -3726,6 +3910,8 @@ class _SidebarTaskList extends StatelessWidget {
     required this.onDragHover,
     required this.onDragLeave,
     required this.onDrop,
+    this.reorderable = false,
+    this.onReorder,
     required this.taskTileBuilder,
   });
 
@@ -3735,7 +3921,9 @@ class _SidebarTaskList extends StatelessWidget {
   final _CalendarDragDetailsCallback onDragHover;
   final VoidCallback onDragLeave;
   final _CalendarDragDetailsCallback onDrop;
-  final Widget Function(CalendarTask task) taskTileBuilder;
+  final bool reorderable;
+  final void Function(int oldIndex, int newIndex)? onReorder;
+  final Widget Function(CalendarTask task, Widget? trailing) taskTileBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -3761,18 +3949,47 @@ class _SidebarTaskList extends StatelessWidget {
                   hint: emptyHint,
                   isHovering: isHovering,
                 )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: calendarInsetLg,
-                    vertical: 2,
-                  ),
-                  itemCount: tasks.length,
-                  itemBuilder: (context, index) {
-                    return taskTileBuilder(tasks[index]);
-                  },
-                ),
+              : reorderable && onReorder != null
+                  ? ReorderableListView.builder(
+                      shrinkWrap: true,
+                      buildDefaultDragHandles: false,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: calendarInsetLg,
+                        vertical: 2,
+                      ),
+                      itemCount: tasks.length,
+                      onReorder: onReorder!,
+                      proxyDecorator: (child, __, ___) {
+                        return Material(
+                          color: Colors.transparent,
+                          child: child,
+                        );
+                      },
+                      itemBuilder: (context, index) {
+                        final CalendarTask task = tasks[index];
+                        final Widget handle = ReorderableDragStartListener(
+                          index: index,
+                          child: const _SidebarReorderHandle(),
+                        );
+                        return KeyedSubtree(
+                          key: ValueKey(task.id),
+                          child: taskTileBuilder(task, handle),
+                        );
+                      },
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: calendarInsetLg,
+                        vertical: 2,
+                      ),
+                      itemCount: tasks.length,
+                      itemBuilder: (context, index) {
+                        return taskTileBuilder(tasks[index], null);
+                      },
+                    ),
         );
       },
     );
@@ -3833,6 +4050,26 @@ class _SidebarEmptyState extends StatelessWidget {
   }
 }
 
+class _SidebarReorderHandle extends StatelessWidget {
+  const _SidebarReorderHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(calendarInsetMd),
+      decoration: BoxDecoration(
+        color: calendarPrimaryColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Icon(
+        Icons.drag_indicator,
+        size: 18,
+        color: calendarSubtitleColor,
+      ),
+    );
+  }
+}
+
 class _SectionCountBadge extends StatelessWidget {
   const _SectionCountBadge({
     required this.count,
@@ -3880,11 +4117,13 @@ class _SidebarDraggableTaskTile extends StatelessWidget {
     required this.host,
     required this.task,
     required this.uiState,
+    this.trailing,
   });
 
   final TaskSidebarState host;
   final CalendarTask task;
   final CalendarSidebarState uiState;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -3894,6 +4133,7 @@ class _SidebarDraggableTaskTile extends StatelessWidget {
         host: host,
         task: task,
         uiState: uiState,
+        trailing: trailing,
         onToggleCompletion: (completed) =>
             host._toggleSidebarTaskCompletion(task, completed),
       ),
@@ -3904,6 +4144,7 @@ class _SidebarDraggableTaskTile extends StatelessWidget {
         host: host,
         task: task,
         uiState: uiState,
+        trailing: trailing,
         enableInteraction: false,
         onToggleCompletion: (completed) =>
             host._toggleSidebarTaskCompletion(task, completed),
@@ -3919,6 +4160,7 @@ class _SidebarDraggableTaskTile extends StatelessWidget {
             host: host,
             task: task,
             uiState: uiState,
+            trailing: trailing,
             enableInteraction: false,
             onToggleCompletion: (completed) =>
                 host._toggleSidebarTaskCompletion(task, completed),
@@ -3946,6 +4188,8 @@ class _SidebarTaskTile extends StatelessWidget {
     required this.task,
     required this.uiState,
     this.enableInteraction = true,
+    this.trailing,
+    this.scheduleLabel,
     this.onToggleCompletion,
   });
 
@@ -3953,6 +4197,8 @@ class _SidebarTaskTile extends StatelessWidget {
   final CalendarTask task;
   final CalendarSidebarState uiState;
   final bool enableInteraction;
+  final Widget? trailing;
+  final String? scheduleLabel;
   final ValueChanged<bool>? onToggleCompletion;
 
   @override
@@ -3992,6 +4238,8 @@ class _SidebarTaskTile extends StatelessWidget {
                                 host._showTaskEditSheet(tileContext, task),
                             child: _SidebarTaskTileBody(
                               task: task,
+                              trailing: trailing,
+                              scheduleLabel: scheduleLabel,
                               onToggleCompletion: onToggleCompletion,
                             ),
                           ),
@@ -4201,6 +4449,8 @@ class _SidebarTaskTile extends StatelessWidget {
                             onTap: () => host._toggleTaskPopover(task.id),
                             child: _SidebarTaskTileBody(
                               task: task,
+                              trailing: trailing,
+                              scheduleLabel: scheduleLabel,
                               onToggleCompletion: onToggleCompletion,
                             ),
                           ),
@@ -4210,6 +4460,8 @@ class _SidebarTaskTile extends StatelessWidget {
                   )
                 : _SidebarTaskTileBody(
                     task: task,
+                    trailing: trailing,
+                    scheduleLabel: scheduleLabel,
                     onToggleCompletion: onToggleCompletion,
                   ),
           ),

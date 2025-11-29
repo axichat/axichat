@@ -7,7 +7,6 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
-import '../models/calendar_critical_path.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/responsive_helper.dart';
@@ -23,7 +22,6 @@ import 'widgets/calendar_loading_overlay.dart';
 import 'widgets/calendar_mobile_tab_shell.dart';
 import 'widgets/calendar_scaffolds.dart';
 import 'widgets/calendar_sidebar_host.dart';
-import 'widgets/critical_path_sandbox.dart';
 import 'task_sidebar.dart';
 
 /// Base [State] used by both the authenticated and guest calendar surfaces to
@@ -39,7 +37,6 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   final GlobalKey<TaskSidebarState> _sidebarKey = GlobalKey<TaskSidebarState>();
   final ValueNotifier<bool> _cancelBucketHoverNotifier =
       ValueNotifier<bool>(false);
-  String? _activeSandboxPathId;
 
   bool get _hasMouseDevice =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
@@ -112,9 +109,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
           onDragSessionStarted: handleGridDragSessionStarted,
           onDragSessionEnded: handleGridDragSessionEnded,
           onDragGlobalPositionChanged: handleGridDragPositionChanged,
-          onOpenCriticalPathSandbox: _handleOpenCriticalPathSandbox,
         );
-        Widget calendarGrid = CalendarGridHost<B>(
+        final Widget calendarGrid = CalendarGridHost<B>(
           bloc: calendarBloc,
           state: state,
           onEmptySlotTapped: _onEmptySlotTapped,
@@ -124,28 +120,6 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
           onDragSessionEnded: _handleCalendarGridDragSessionEnded,
           cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
         );
-
-        if (_activeSandboxPathId != null) {
-          final CalendarCriticalPath? sandboxPath =
-              state.model.criticalPaths[_activeSandboxPathId!];
-          if (sandboxPath == null || sandboxPath.isArchived) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() => _activeSandboxPathId = null);
-              }
-            });
-          } else {
-            calendarGrid = CriticalPathSandbox(
-              path: sandboxPath,
-              tasks: state.model.tasks,
-              onOrderChanged: (ordered) => _handleSandboxOrderChanged(
-                sandboxPath.id,
-                ordered,
-              ),
-              onExit: _closeSandbox,
-            );
-          }
-        }
         final Widget dragTargets = buildDragEdgeTargets();
         final double keyboardInset = mediaQuery.viewInsets.bottom;
         final double bottomInset =
@@ -268,30 +242,6 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     }
     final CalendarTask normalized = task.normalizedForInteraction(newTime);
     bloc.commitTaskInteraction(normalized);
-  }
-
-  void _handleOpenCriticalPathSandbox(String pathId) {
-    setState(() {
-      _activeSandboxPathId = _activeSandboxPathId == pathId ? null : pathId;
-    });
-  }
-
-  void _closeSandbox() {
-    if (_activeSandboxPathId == null) {
-      return;
-    }
-    setState(() {
-      _activeSandboxPathId = null;
-    });
-  }
-
-  void _handleSandboxOrderChanged(String pathId, List<String> orderedTaskIds) {
-    calendarBloc?.add(
-      CalendarEvent.criticalPathReordered(
-        pathId: pathId,
-        orderedTaskIds: orderedTaskIds,
-      ),
-    );
   }
 
   void _showQuickAddModal(Offset position, {required DateTime prefilledTime}) {

@@ -235,15 +235,15 @@ List<Widget> _buildKeycaps({
   required ShadColorScheme colors,
   required TextStyle textStyle,
 }) {
-  final topSheen = Color.lerp(colors.card, Colors.white, 0.38)!;
-  final midTone = Color.lerp(colors.card, Colors.white, 0.16)!;
-  final borderWidth = dense ? 1.1 : 1.35;
-  const paddingDense = EdgeInsets.symmetric(horizontal: 8, vertical: 5);
-  const paddingComfort = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+  final topSheen = Color.lerp(colors.card, Colors.white, 0.32)!;
+  final midTone = Color.lerp(colors.card, Colors.white, 0.12)!;
+  final borderWidth = dense ? 1.0 : 1.2;
+  const paddingDense = EdgeInsets.symmetric(horizontal: 7, vertical: 4);
+  const paddingComfort = EdgeInsets.symmetric(horizontal: 9, vertical: 5);
   final EdgeInsets padding = dense ? paddingDense : paddingComfort;
-  const radiusValue = 8.0;
+  const radiusValue = 8.5;
   final radius = BorderRadius.circular(radiusValue);
-  final drop = dense ? 3.0 : 4.0;
+  final drop = dense ? 3.0 : 4.2;
   final keyStyle = textStyle.copyWith(
     color: colors.foreground,
     fontWeight: FontWeight.w700,
@@ -255,7 +255,7 @@ List<Widget> _buildKeycaps({
   );
 
   Widget keycap(String label) {
-    final backplateColor = Color.lerp(colors.card, colors.border, 0.45)!;
+    final backplateColor = colors.border.withValues(alpha: 0.9);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -272,7 +272,7 @@ List<Widget> _buildKeycaps({
                   color: colors.foreground.withValues(alpha: 0.18),
                   offset: Offset(0, drop / 2),
                   blurRadius: drop * 1.6,
-                  spreadRadius: 0.2,
+                  spreadRadius: 0.0,
                 ),
               ],
             ),

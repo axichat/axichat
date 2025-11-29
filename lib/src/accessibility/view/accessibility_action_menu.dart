@@ -2,8 +2,10 @@ import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -134,6 +136,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
   final GlobalKey _composerGroupKey = GlobalKey(debugLabel: 'composer_group');
   final GlobalKey _newContactGroupKey =
       GlobalKey(debugLabel: 'new_contact_group');
+  final GlobalKey _actionsGroupKey = GlobalKey(debugLabel: 'actions_group');
   final FocusNode _shortcutLegendFocusNode =
       FocusNode(debugLabel: 'accessibility_shortcut_legend');
   final FocusNode _messageFocusNode =
@@ -142,6 +145,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       FocusNode(debugLabel: 'accessibility_composer_field');
   final FocusNode _newContactFocusNode =
       FocusNode(debugLabel: 'accessibility_new_contact_field');
+  final FocusNode _actionsFocusNode =
+      FocusNode(debugLabel: 'accessibility_actions_group');
   final Map<_AccessibilityGroup, VoidCallback> _groupFocusHandlers =
       <_AccessibilityGroup, VoidCallback>{};
   FocusNode? _restoreFocusNode;
@@ -203,6 +208,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     _messageFocusNode.dispose();
     _composerFocusNode.dispose();
     _newContactFocusNode.dispose();
+    _actionsFocusNode.dispose();
     _focusScopeNode.dispose();
     super.dispose();
   }
@@ -339,6 +345,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                             legendGroupKey: _legendGroupKey,
                             messageCarouselKey: _messageCarouselKey,
                             composerGroupKey: _composerGroupKey,
+                            actionsGroupKey: _actionsGroupKey,
+                            actionsFocusNode: _actionsFocusNode,
                             newContactGroupKey: _newContactGroupKey,
                           ),
                         ),
@@ -394,6 +402,10 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       _moveWithinGroup(_newContactGroupKey, forward: forward);
       return;
     }
+    if (current == _AccessibilityGroup.actions) {
+      _moveWithinGroup(_actionsGroupKey, forward: forward);
+      return;
+    }
     if (current == _AccessibilityGroup.shortcuts) {
       _moveWithinGroup(_legendGroupKey, forward: forward);
       return;
@@ -440,9 +452,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
         order.add(_AccessibilityGroup.messages);
       }
       order.add(_AccessibilityGroup.composer);
-      if (hasActions) {
-        order.add(_AccessibilityGroup.actions);
-      }
+      order.add(_AccessibilityGroup.actions);
     } else if (kind == AccessibilityStepKind.newContact) {
       order.add(_AccessibilityGroup.newContact);
       if (hasActions) {
@@ -650,6 +660,8 @@ class _AccessibilityActionContent extends StatelessWidget {
     required this.legendGroupKey,
     required this.messageCarouselKey,
     required this.composerGroupKey,
+    required this.actionsGroupKey,
+    required this.actionsFocusNode,
     required this.newContactGroupKey,
   });
 
@@ -666,9 +678,11 @@ class _AccessibilityActionContent extends StatelessWidget {
   final FocusNode messageFocusNode;
   final FocusNode composerFocusNode;
   final FocusNode newContactFocusNode;
+  final FocusNode actionsFocusNode;
   final GlobalKey legendGroupKey;
   final GlobalKey<_MessageCarouselState> messageCarouselKey;
   final GlobalKey composerGroupKey;
+  final GlobalKey actionsGroupKey;
   final GlobalKey newContactGroupKey;
 
   @override
@@ -726,6 +740,14 @@ class _AccessibilityActionContent extends StatelessWidget {
       );
     } else {
       unregisterGroup(_AccessibilityGroup.composer);
+    }
+    if (isConversation) {
+      registerGroup(
+        _AccessibilityGroup.actions,
+        () => actionsFocusNode.requestFocus(),
+      );
+    } else {
+      unregisterGroup(_AccessibilityGroup.actions);
     }
     if (hasNewContact) {
       registerGroup(
@@ -804,7 +826,7 @@ class _AccessibilityActionContent extends StatelessWidget {
           const SizedBox(height: 12),
         if (hasMessages)
           Flexible(
-            fit: FlexFit.tight,
+            fit: FlexFit.loose,
             child: FocusTraversalOrder(
               order: messagesOrder,
               child: _AccessibilityGroupMarker(
@@ -828,6 +850,37 @@ class _AccessibilityActionContent extends StatelessWidget {
                 state: state,
                 focusNode: composerFocusNode,
                 groupKey: composerGroupKey,
+              ),
+            ),
+          ),
+        if (isConversation)
+          FocusTraversalOrder(
+            order: actionsOrder,
+            child: _AccessibilityGroupMarker(
+              group: _AccessibilityGroup.actions,
+              child: _ActionButtonsGroup(
+                focusNode: actionsFocusNode,
+                groupKey: actionsGroupKey,
+                saveEnabled: state.composerText.trim().isNotEmpty &&
+                    state.recipients.isNotEmpty &&
+                    !state.busy,
+                sendEnabled: state.composerText.trim().isNotEmpty &&
+                    state.recipients.isNotEmpty &&
+                    !state.busy,
+                onSave: () => bloc.add(
+                  const AccessibilityMenuActionTriggered(
+                    AccessibilityCommandAction(
+                      command: AccessibilityCommand.saveDraft,
+                    ),
+                  ),
+                ),
+                onSend: () => bloc.add(
+                  const AccessibilityMenuActionTriggered(
+                    AccessibilityCommandAction(
+                      command: AccessibilityCommand.sendMessage,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1232,7 +1285,7 @@ class _KeyboardShortcutLegend extends StatelessWidget {
                 width: double.infinity,
                 child: AnimatedContainer(
                   duration: baseAnimationDuration,
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: borderColor, width: borderWidth),
@@ -1252,8 +1305,8 @@ class _KeyboardShortcutLegend extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Wrap(
-                        spacing: 3,
-                        runSpacing: 2,
+                        spacing: 2,
+                        runSpacing: 1,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: entries,
                       ),
@@ -1390,6 +1443,93 @@ class _ComposerSection extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionButtonsGroup extends StatelessWidget {
+  const _ActionButtonsGroup({
+    required this.focusNode,
+    required this.groupKey,
+    required this.saveEnabled,
+    required this.sendEnabled,
+    required this.onSave,
+    required this.onSend,
+  });
+
+  final FocusNode focusNode;
+  final GlobalKey groupKey;
+  final bool saveEnabled;
+  final bool sendEnabled;
+  final VoidCallback onSave;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return FocusTraversalGroup(
+      key: groupKey,
+      policy: OrderedTraversalPolicy(),
+      child: Focus(
+        focusNode: focusNode,
+        child: Builder(
+          builder: (context) {
+            final hasFocus = Focus.of(context).hasFocus;
+            final borderColor = hasFocus ? colors.primary : colors.border;
+            final borderWidth = hasFocus ? 3.0 : 1.2;
+            final isNarrow = MediaQuery.sizeOf(context).width < 460;
+            final saveButton = ShadButton.outline(
+              onPressed: saveEnabled ? onSave : null,
+              child: const Text('Save draft'),
+            );
+            final sendButton = ShadButton(
+              onPressed: sendEnabled ? onSend : null,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Send'),
+                  SizedBox(width: 8),
+                  ShortcutHint(
+                    shortcut: _activateShortcut,
+                    dense: true,
+                  ),
+                ],
+              ),
+            );
+            final buttons = isNarrow
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      saveButton,
+                      const SizedBox(height: 8),
+                      sendButton,
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: saveButton),
+                      const SizedBox(width: 12),
+                      Expanded(child: sendButton),
+                    ],
+                  );
+            return Semantics(
+              container: true,
+              label: 'Message actions',
+              hint: 'Save as draft or send this message',
+              child: AnimatedContainer(
+                duration: baseAnimationDuration,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colors.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: borderColor, width: borderWidth),
+                ),
+                child: buttons,
+              ),
+            );
+          },
         ),
       ),
     );
@@ -1553,6 +1693,11 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
                 maxLines: widget.maxLines,
                 placeholder: Text(widget.hintText),
                 onChanged: widget.onChanged,
+                decoration: const ShadDecoration(
+                  border: ShadBorder.none,
+                  focusedBorder: ShadBorder.none,
+                  errorBorder: ShadBorder.none,
+                ),
               ),
             ),
           ),
@@ -1687,11 +1832,31 @@ class _MessageCarouselState extends State<_MessageCarousel> {
     final clampedIndex =
         _currentIndex.clamp(0, hasItems ? items.length - 1 : 0);
     final currentItem = hasItems ? items[clampedIndex] : null;
+    final currentMessage = currentItem?.message;
+    final attachment = currentItem?.attachment;
+    final showMetadata = currentItem?.showMetadata ?? false;
+    final senderLabel = currentItem?.senderLabel ?? '';
+    final timestampLabel = currentItem?.timestampLabel ?? '';
+    final attachmentLabel = currentItem?.attachmentLabel;
+    final rawBody = (currentMessage?.body ?? '').trim();
+    final contentParts = <String>[];
+    if (rawBody.isNotEmpty) {
+      contentParts.add(rawBody);
+    }
+    if (attachmentLabel != null && attachmentLabel.isNotEmpty) {
+      contentParts.add(attachmentLabel);
+    }
+    final fallbackContent = currentItem?.label ?? 'No messages yet';
+    final messageContent =
+        contentParts.isEmpty ? fallbackContent : contentParts.join(' — ');
     final positionLabel = hasItems
-        ? 'Message ${clampedIndex + 1} of ${items.length} in ${widget.section.title ?? 'conversation'}'
+        ? 'Message ${clampedIndex + 1} of ${items.length}'
         : 'No messages';
-    final messageLabel = currentItem?.label ?? 'No messages yet';
-    final messageDescription = currentItem?.description;
+    final messageValue = showMetadata && senderLabel.isNotEmpty
+        ? 'Sent by $senderLabel'
+            '${timestampLabel.isNotEmpty ? ' at $timestampLabel' : ''}: '
+            '$messageContent'
+        : messageContent;
     final borderColor = hasFocus ? scheme.primary : scheme.border;
     final borderWidth = hasFocus ? 3.0 : 1.0;
     final shadows = hasFocus
@@ -1710,49 +1875,82 @@ class _MessageCarouselState extends State<_MessageCarousel> {
         container: true,
         focusable: true,
         label: positionLabel,
-        value: messageLabel,
+        value: messageValue,
         hint:
             'Use Tab or arrow keys to move between messages. Shift plus arrows switches groups. Press Escape to exit.',
         child: AnimatedContainer(
           duration: baseAnimationDuration,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: scheme.card,
+            color:
+                hasFocus ? scheme.primary.withValues(alpha: 0.06) : scheme.card,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: borderColor, width: borderWidth),
             boxShadow: shadows,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   positionLabel,
                   style: (textTheme.bodySmall ?? const TextStyle()).copyWith(
                     color: scheme.mutedForeground,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-              Text(
-                messageLabel,
-                style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-                  color: scheme.foreground,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (messageDescription != null &&
-                  messageDescription.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  messageDescription,
-                  style: (textTheme.bodySmall ?? const TextStyle()).copyWith(
-                    color: scheme.mutedForeground,
+                const SizedBox(height: 8),
+                if (showMetadata && senderLabel.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      [
+                        'From $senderLabel',
+                        if (timestampLabel.isNotEmpty) timestampLabel,
+                      ].join(' • '),
+                      style:
+                          (textTheme.bodySmall ?? const TextStyle()).copyWith(
+                        color: scheme.mutedForeground,
+                      ),
+                    ),
                   ),
-                ),
+                if (rawBody.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      rawBody,
+                      style:
+                          (textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                        color: scheme.foreground,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                if (attachment != null)
+                  ChatAttachmentPreview(
+                    metadataFuture: Future<FileMetadataData?>.value(attachment),
+                    allowed: true,
+                  )
+                else if (attachmentLabel != null && rawBody.isEmpty)
+                  Text(
+                    attachmentLabel,
+                    style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                      color: scheme.foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                if (rawBody.isEmpty &&
+                    attachment == null &&
+                    (attachmentLabel == null || attachmentLabel.isEmpty))
+                  Text(
+                    'No message content',
+                    style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                      color: scheme.mutedForeground,
+                    ),
+                  ),
               ],
-            ],
+            ),
           ),
         ),
       ),

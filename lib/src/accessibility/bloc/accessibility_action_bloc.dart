@@ -149,6 +149,7 @@ class AccessibilityActionBloc
       activeChatJid: null,
       discardWarningActive: false,
       recipients: const [],
+      attachments: const {},
     );
     emit(nextState);
     _rebuildSections(emit, nextState);
@@ -193,6 +194,7 @@ class AccessibilityActionBloc
       newContactInput: '',
       recipients: nextStack.last.recipients,
       discardWarningActive: false,
+      attachments: keepChatMessages ? state.attachments : const {},
     );
     emit(nextState);
     _rebuildSections(emit, nextState);
@@ -215,6 +217,7 @@ class AccessibilityActionBloc
       activeChatJid: null,
       discardWarningActive: false,
       recipients: const [],
+      attachments: const {},
     );
     emit(nextState);
     _rebuildSections(emit, nextState);
@@ -965,6 +968,8 @@ class AccessibilityActionBloc
       stack: nextStack,
       recipients: [contact],
       activeChatJid: contact.jid,
+      messages: const [],
+      attachments: const {},
       statusMessage: null,
       errorMessage: null,
       discardWarningActive: false,
@@ -995,10 +1000,10 @@ class AccessibilityActionBloc
     _messageSubscription = null;
   }
 
-  void _onMessagesUpdated(
+  Future<void> _onMessagesUpdated(
     AccessibilityMessagesUpdated event,
     Emitter<AccessibilityActionState> emit,
-  ) {
+  ) async {
     if (state.activeChatJid != event.jid) return;
     final previousIds =
         state.messages.map((message) => _messageId(message)).toSet();
@@ -1007,6 +1012,7 @@ class AccessibilityActionBloc
         (a, b) => (a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
             .compareTo(b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0)),
       );
+    final attachments = await _loadAttachments(ordered);
     final newMessages = ordered
         .where((message) => !previousIds.contains(_messageId(message)))
         .toList();
@@ -1017,10 +1023,38 @@ class AccessibilityActionBloc
             '${_formatTimestamp(latest.timestamp)}';
     final nextState = state.copyWith(
       messages: ordered,
+      attachments: attachments,
       statusMessage: incomingStatus ?? state.statusMessage,
     );
     emit(nextState);
     _rebuildSections(emit, nextState);
+  }
+
+  Future<Map<String, FileMetadataData>> _loadAttachments(
+    List<Message> messages,
+  ) async {
+    final pairs = <String, String>{};
+    for (final message in messages) {
+      final metadataId = message.fileMetadataID;
+      if (metadataId != null && metadataId.isNotEmpty) {
+        pairs[_messageId(message)] = metadataId;
+      }
+    }
+    if (pairs.isEmpty) return const {};
+    try {
+      final db = await _messageService.database;
+      final results = <String, FileMetadataData>{};
+      for (final entry in pairs.entries) {
+        final metadata = await db.getFileMetadata(entry.value);
+        if (metadata != null) {
+          results[entry.key] = metadata;
+        }
+      }
+      return results;
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to load attachment metadata', error, stackTrace);
+      return const {};
+    }
   }
 
   void _rebuildSections(
@@ -1334,15 +1368,18 @@ class AccessibilityActionBloc
     final messages = state.messages;
     final items = <AccessibilityMenuItem>[];
     var lastSender = '';
+    final attachmentIndex = state.attachments;
     for (final message in messages) {
       final senderLabel = _senderLabelFor(message);
       final timestampLabel = _formatTimestamp(message.timestamp);
-      final body = (message.body ?? '').trim().isEmpty
-          ? 'Empty message'
-          : message.body!.trim();
+      final attachment = attachmentIndex[_messageId(message)];
+      final body = (message.body ?? '').trim();
+      final attachmentNote = _attachmentLabelFor(message, metadata: attachment);
+      final fullBody =
+          body.isNotEmpty ? body : (attachmentNote ?? 'Empty message');
       final showSender = senderLabel != lastSender;
       final label =
-          showSender ? '$senderLabel at $timestampLabel: $body' : body;
+          showSender ? '$senderLabel at $timestampLabel: $fullBody' : fullBody;
       items.add(
         AccessibilityMenuItem(
           id: 'msg-${_messageId(message)}',
@@ -1350,6 +1387,12 @@ class AccessibilityActionBloc
           description: showSender ? null : senderLabel,
           kind: AccessibilityMenuItemKind.readOnly,
           action: const AccessibilityNoopAction(),
+          message: message,
+          attachment: attachment,
+          attachmentLabel: attachmentNote,
+          senderLabel: senderLabel,
+          timestampLabel: timestampLabel,
+          showMetadata: showSender,
         ),
       );
       lastSender = senderLabel;
@@ -1379,49 +1422,12 @@ class AccessibilityActionBloc
     );
   }
 
-  List<AccessibilityMenuSection> _buildComposerSections(
-    AccessibilityStepEntry entry,
-  ) {
-    final items = [
-      AccessibilityMenuItem(
-        id: 'composer-save-draft',
-        label: 'Save draft',
-        description: 'Save this message to finish later',
-        kind: AccessibilityMenuItemKind.command,
-        action: const AccessibilityCommandAction(
-          command: AccessibilityCommand.saveDraft,
-        ),
-        icon: Icons.save_outlined,
-        disabled: state.composerText.trim().isEmpty || entry.recipients.isEmpty,
-      ),
-      AccessibilityMenuItem(
-        id: 'composer-send',
-        label: _l10n.chatSendMessageTooltip,
-        description: _l10n.chatComposerMessageHint,
-        kind: AccessibilityMenuItemKind.command,
-        action: const AccessibilityCommandAction(
-          command: AccessibilityCommand.sendMessage,
-        ),
-        icon: Icons.send,
-        disabled: state.composerText.trim().isEmpty || entry.recipients.isEmpty,
-      ),
-    ];
-    return [
-      AccessibilityMenuSection(
-        id: 'composer-actions',
-        title: _l10n.chatComposerMessageHint,
-        items: items,
-      ),
-    ];
-  }
-
   _ConversationSectionsResult _buildConversationSections(
     AccessibilityStepEntry entry,
   ) {
     final messages = _buildChatMessageSections(entry);
-    final actions = _buildComposerSections(entry);
     return _ConversationSectionsResult(
-      sections: [messages.section, ...actions],
+      sections: [messages.section],
       initialMessageIndex: messages.initialIndex,
     );
   }
@@ -1535,6 +1541,26 @@ class AccessibilityActionBloc
   String _formatTimestamp(DateTime? timestamp) {
     final safe = timestamp ?? DateTime.now();
     return DateFormat.yMMMd().add_jm().format(safe);
+  }
+
+  String? _attachmentLabelFor(
+    Message message, {
+    FileMetadataData? metadata,
+  }) {
+    final filename = metadata?.filename.trim();
+    if (filename != null && filename.isNotEmpty) {
+      return 'Attachment: $filename';
+    }
+    if (message.fileMetadataID != null) {
+      return 'Attachment';
+    }
+    if (message.isFileUploadNotification) {
+      return 'Upload available';
+    }
+    if (message.pseudoMessageType != null) {
+      return message.pseudoMessageType!.name;
+    }
+    return null;
   }
 
   String _messageId(Message message) => message.id ?? message.stanzaID;
