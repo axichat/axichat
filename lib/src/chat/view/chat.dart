@@ -4370,21 +4370,17 @@ class _ChatState extends State<Chat> {
                                                         );
                                                         final Widget
                                                             animatedMessage =
-                                                            isSingleSelection
-                                                                ? AnimatedSize(
-                                                                    duration:
-                                                                        _bubbleFocusDuration,
-                                                                    curve:
-                                                                        _bubbleFocusCurve,
-                                                                    alignment:
-                                                                        Alignment
-                                                                            .topCenter,
-                                                                    clipBehavior:
-                                                                        Clip.none,
-                                                                    child:
-                                                                        messageBody,
-                                                                  )
-                                                                : messageBody;
+                                                            AnimatedSize(
+                                                          duration:
+                                                              _bubbleFocusDuration,
+                                                          curve:
+                                                              _bubbleFocusCurve,
+                                                          alignment: Alignment
+                                                              .topCenter,
+                                                          clipBehavior:
+                                                              Clip.none,
+                                                          child: messageBody,
+                                                        );
                                                         final alignedMessage =
                                                             SizedBox(
                                                           width:
