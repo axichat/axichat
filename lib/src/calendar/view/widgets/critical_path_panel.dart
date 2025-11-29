@@ -12,7 +12,7 @@ import '../../models/calendar_critical_path.dart';
 import '../../models/calendar_task.dart';
 import '../../utils/recurrence_utils.dart';
 
-class CriticalPathPanel extends StatefulWidget {
+class CriticalPathPanel extends StatelessWidget {
   const CriticalPathPanel({
     super.key,
     required this.paths,
@@ -23,7 +23,11 @@ class CriticalPathPanel extends StatefulWidget {
     required this.onDeletePath,
     required this.onFocusPath,
     required this.animationDuration,
-    this.onOpenSandbox,
+    required this.onReorderPath,
+    required this.taskTileBuilder,
+    required this.isExpanded,
+    required this.onToggleExpanded,
+    this.onExpandedChanged,
   });
 
   final List<CalendarCriticalPath> paths;
@@ -34,34 +38,19 @@ class CriticalPathPanel extends StatefulWidget {
   final void Function(CalendarCriticalPath path) onDeletePath;
   final void Function(CalendarCriticalPath? path) onFocusPath;
   final Duration animationDuration;
-  final ValueChanged<String>? onOpenSandbox;
-
-  @override
-  State<CriticalPathPanel> createState() => _CriticalPathPanelState();
-}
-
-class _CriticalPathPanelState extends State<CriticalPathPanel> {
-  bool _isExpanded = false;
-
-  void _toggleExpanded() {
-    setState(() {
-      _isExpanded = !_isExpanded;
-    });
-  }
-
-  void _expand() {
-    if (_isExpanded) {
-      return;
-    }
-    setState(() {
-      _isExpanded = true;
-    });
-  }
+  final void Function(String pathId, List<String> orderedTaskIds) onReorderPath;
+  final Widget Function(CalendarTask task, Widget? trailing) taskTileBuilder;
+  final bool isExpanded;
+  final VoidCallback onToggleExpanded;
+  final ValueChanged<bool>? onExpandedChanged;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final bool hasPaths = widget.paths.isNotEmpty;
+    final ShadColorScheme colors = context.colorScheme;
+    final bool hasPaths = paths.isNotEmpty;
+    final CalendarCriticalPath? focusedPath = _focusedPath();
+    final List<CalendarTask> focusedTasks =
+        focusedPath != null ? _tasksForPath(focusedPath) : const [];
     return Container(
       decoration: BoxDecoration(
         color: colors.card,
@@ -75,14 +64,14 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           InkWell(
-            onTap: _toggleExpanded,
+            onTap: _handleToggleExpanded,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
               child: Row(
                 children: [
                   AnimatedRotation(
-                    turns: _isExpanded ? 0.25 : 0,
-                    duration: widget.animationDuration,
+                    turns: isExpanded ? 0.25 : 0,
+                    duration: animationDuration,
                     child: Icon(
                       Icons.chevron_right,
                       size: 18,
@@ -100,8 +89,8 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
                   ShadButton.ghost(
                     size: ShadButtonSize.sm,
                     onPressed: () {
-                      _expand();
-                      widget.onCreatePath();
+                      _handleExpand();
+                      onCreatePath();
                     },
                     child: const Text('New path'),
                   ),
@@ -111,9 +100,9 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
           ),
           ClipRect(
             child: AnimatedCrossFade(
-              duration: widget.animationDuration,
+              duration: animationDuration,
               alignment: Alignment.topCenter,
-              crossFadeState: _isExpanded
+              crossFadeState: isExpanded
                   ? CrossFadeState.showSecond
                   : CrossFadeState.showFirst,
               firstChild: const SizedBox.shrink(),
@@ -127,22 +116,35 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
                       style: context.textTheme.muted,
                     )
                   else ...[
-                    for (final CalendarCriticalPath path in widget.paths) ...[
+                    for (final CalendarCriticalPath path in paths) ...[
                       CriticalPathCard(
                         path: path,
-                        animationDuration: widget.animationDuration,
-                        isFocused: widget.focusedPathId == path.id,
+                        animationDuration: animationDuration,
+                        isFocused: focusedPathId == path.id,
                         progress: _progressFor(path),
-                        onFocus: () => widget.onFocusPath(
-                          widget.focusedPathId == path.id ? null : path,
+                        onFocus: () => onFocusPath(
+                          focusedPathId == path.id ? null : path,
                         ),
-                        onRename: () => widget.onRenamePath(path),
-                        onDelete: () => widget.onDeletePath(path),
-                        onOpenSandbox: () =>
-                            widget.onOpenSandbox?.call(path.id),
+                        onRename: () => onRenamePath(path),
+                        onDelete: () => onDeletePath(path),
+                        onOpen: _handleExpand,
                       ),
                       const SizedBox(height: calendarInsetMd),
                     ],
+                    if (focusedPath == null)
+                      Text(
+                        'Focus a critical path to reorder tasks.',
+                        style: context.textTheme.muted,
+                      )
+                    else
+                      _FocusedPathTasks(
+                        path: focusedPath,
+                        tasks: focusedTasks,
+                        animationDuration: animationDuration,
+                        taskTileBuilder: taskTileBuilder,
+                        onReorder: (oldIndex, newIndex) =>
+                            _handleReorder(focusedPath, oldIndex, newIndex),
+                      ),
                   ],
                 ],
               ),
@@ -159,7 +161,7 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
     var completed = 0;
     for (final String id in path.taskIds) {
       final String baseId = baseTaskIdFrom(id);
-      final CalendarTask? task = widget.tasks[baseId] ?? widget.tasks[id];
+      final CalendarTask? task = tasks[baseId] ?? tasks[id];
       if (task == null || !task.isCompleted) {
         break;
       }
@@ -169,6 +171,57 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
       total: total,
       completed: completed,
     );
+  }
+
+  CalendarCriticalPath? _focusedPath() {
+    if (focusedPathId == null) {
+      return null;
+    }
+    for (final CalendarCriticalPath path in paths) {
+      if (path.id == focusedPathId) {
+        return path;
+      }
+    }
+    return null;
+  }
+
+  List<CalendarTask> _tasksForPath(CalendarCriticalPath path) {
+    final List<CalendarTask> ordered = <CalendarTask>[];
+    for (final String id in path.taskIds) {
+      final String baseId = baseTaskIdFrom(id);
+      final CalendarTask? task = tasks[baseId] ?? tasks[id];
+      if (task != null) {
+        ordered.add(task);
+      }
+    }
+    return ordered;
+  }
+
+  void _handleReorder(
+    CalendarCriticalPath path,
+    int oldIndex,
+    int newIndex,
+  ) {
+    final List<String> ordered = List<String>.from(path.taskIds);
+    if (newIndex > oldIndex) {
+      newIndex -= 1;
+    }
+    final String moved = ordered.removeAt(oldIndex);
+    ordered.insert(newIndex, moved);
+    onReorderPath(path.id, ordered);
+  }
+
+  void _handleToggleExpanded() {
+    onToggleExpanded();
+    onExpandedChanged?.call(!isExpanded);
+  }
+
+  void _handleExpand() {
+    if (isExpanded) {
+      return;
+    }
+    onToggleExpanded();
+    onExpandedChanged?.call(true);
   }
 }
 
@@ -182,7 +235,7 @@ class CriticalPathCard extends StatelessWidget {
     required this.onRename,
     required this.onDelete,
     required this.animationDuration,
-    required this.onOpenSandbox,
+    required this.onOpen,
   });
 
   final CalendarCriticalPath path;
@@ -192,7 +245,7 @@ class CriticalPathCard extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onDelete;
   final Duration animationDuration;
-  final VoidCallback onOpenSandbox;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +256,7 @@ class CriticalPathCard extends StatelessWidget {
     return InkWell(
       borderRadius: radius,
       mouseCursor: SystemMouseCursors.click,
-      onTap: onOpenSandbox,
+      onTap: onOpen,
       child: Container(
         padding: const EdgeInsets.all(calendarGutterMd),
         decoration: BoxDecoration(
@@ -457,6 +510,107 @@ class _PathActionsState extends State<_PathActions> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FocusedPathTasks extends StatelessWidget {
+  const _FocusedPathTasks({
+    required this.path,
+    required this.tasks,
+    required this.animationDuration,
+    required this.taskTileBuilder,
+    required this.onReorder,
+  });
+
+  final CalendarCriticalPath path;
+  final List<CalendarTask> tasks;
+  final Duration animationDuration;
+  final Widget Function(CalendarTask task, Widget? trailing) taskTileBuilder;
+  final void Function(int oldIndex, int newIndex) onReorder;
+
+  @override
+  Widget build(BuildContext context) {
+    final ShadTextTheme textTheme = context.textTheme;
+    final ShadColorScheme colors = context.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: calendarGutterSm),
+        Text(
+          'Task order',
+          style: textTheme.h4.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: calendarInsetSm),
+        Text(
+          'Drag to set the required completion order.',
+          style: textTheme.muted,
+        ),
+        const SizedBox(height: calendarGutterSm),
+        if (tasks.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(calendarGutterMd),
+            decoration: BoxDecoration(
+              color: colors.muted.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(calendarBorderRadius),
+              border: Border.all(color: colors.border),
+            ),
+            child: Text(
+              'No tasks in this critical path yet.',
+              style: textTheme.muted,
+            ),
+          )
+        else
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: tasks.length,
+            buildDefaultDragHandles: false,
+            onReorder: onReorder,
+            proxyDecorator: (child, __, ___) {
+              return Material(
+                color: Colors.transparent,
+                child: child,
+              );
+            },
+            itemBuilder: (context, index) {
+              final CalendarTask task = tasks[index];
+              final Widget handle = ReorderableDragStartListener(
+                index: index,
+                child: const _ReorderHandle(),
+              );
+              return KeyedSubtree(
+                key: ValueKey(task.id),
+                child: taskTileBuilder(task, handle),
+              );
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _ReorderHandle extends StatelessWidget {
+  const _ReorderHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    final ShadColorScheme colors = context.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(calendarInsetMd),
+      decoration: BoxDecoration(
+        color: colors.muted.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Icon(
+        Icons.drag_indicator,
+        size: 18,
+        color: colors.mutedForeground,
+      ),
     );
   }
 }

@@ -58,6 +58,12 @@ class AccessibilityMenuItem extends Equatable {
     this.badge,
     this.dismissId,
     this.disabled = false,
+    this.message,
+    this.attachment,
+    this.attachmentLabel,
+    this.senderLabel,
+    this.timestampLabel,
+    this.showMetadata = false,
   });
 
   final String id;
@@ -71,6 +77,12 @@ class AccessibilityMenuItem extends Equatable {
   final String? badge;
   final String? dismissId;
   final bool disabled;
+  final Message? message;
+  final FileMetadataData? attachment;
+  final String? attachmentLabel;
+  final String? senderLabel;
+  final String? timestampLabel;
+  final bool showMetadata;
 
   @override
   List<Object?> get props => [
@@ -84,6 +96,12 @@ class AccessibilityMenuItem extends Equatable {
         badge,
         dismissId,
         disabled,
+        message,
+        attachment,
+        attachmentLabel,
+        senderLabel,
+        timestampLabel,
+        showMetadata,
       ];
 }
 

@@ -4368,13 +4368,19 @@ class _ChatState extends State<Chat> {
                                                             attachments,
                                                           ],
                                                         );
+                                                        final shouldAnimateSize =
+                                                            isSingleSelection;
                                                         final Widget
                                                             animatedMessage =
                                                             AnimatedSize(
                                                           duration:
-                                                              _bubbleFocusDuration,
-                                                          curve:
-                                                              _bubbleFocusCurve,
+                                                              shouldAnimateSize
+                                                                  ? _bubbleFocusDuration
+                                                                  : Duration
+                                                                      .zero,
+                                                          curve: shouldAnimateSize
+                                                              ? _bubbleFocusCurve
+                                                              : Curves.linear,
                                                           alignment: Alignment
                                                               .topCenter,
                                                           clipBehavior:
