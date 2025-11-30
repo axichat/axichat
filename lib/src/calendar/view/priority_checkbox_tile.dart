@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'widgets/calendar_checkbox.dart';
 
 class PriorityCheckboxTile extends StatelessWidget {

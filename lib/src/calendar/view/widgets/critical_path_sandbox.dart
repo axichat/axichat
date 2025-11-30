@@ -7,8 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../models/calendar_critical_path.dart';
-import '../../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 class CriticalPathSandbox extends StatefulWidget {
   const CriticalPathSandbox({
@@ -194,8 +194,9 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
       ..sort((a, b) => a.title.compareTo(b.title));
 
     if (!mounted) return;
-    final CalendarTask? selected =
-        await _showTaskPicker(available: available, isDesktop: isDesktop);
+    final CalendarTask? selected = await _showTaskPicker(
+      available: available,
+    );
 
     if (selected == null) {
       return;
@@ -212,7 +213,7 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
     CalendarTask task,
     bool isDesktop,
   ) async {
-    final _SlotTapAction? action = await _showSlotActions(isDesktop);
+    final _SlotTapAction? action = await _showSlotActions();
 
     if (action == _SlotTapAction.remove) {
       _removeTaskFromSlot(location, task.id);
@@ -311,6 +312,73 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
     }
 
     return ordered;
+  }
+}
+
+class _SlotActionTile extends StatelessWidget {
+  const _SlotActionTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ShadColorScheme colors = context.colorScheme;
+    final ShadTextTheme textTheme = context.textTheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(calendarBorderRadius),
+      child: Container(
+        padding: const EdgeInsets.all(calendarGutterMd),
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: BorderRadius.circular(calendarBorderRadius),
+          border: Border.all(color: colors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: colors.mutedForeground,
+            ),
+            const SizedBox(width: calendarGutterSm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: textTheme.small.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: calendarInsetSm),
+                    Text(
+                      subtitle!,
+                      style: textTheme.muted,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: colors.mutedForeground,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -803,139 +871,203 @@ class _DragPayload {
 extension on _CriticalPathSandboxState {
   Future<CalendarTask?> _showTaskPicker({
     required List<CalendarTask> available,
-    required bool isDesktop,
   }) {
-    final Widget content = available.isEmpty
-        ? Padding(
-            padding: const EdgeInsets.all(calendarGutterLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return showAdaptiveBottomSheet<CalendarTask>(
+      context: context,
+      dialogMaxWidth: 560,
+      surfacePadding: const EdgeInsets.all(calendarGutterLg),
+      builder: (sheetContext) {
+        final ShadTextTheme textTheme = sheetContext.textTheme;
+        final ShadColorScheme colors = sheetContext.colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                Text(
-                  'All tasks are placed already',
-                  style: context.textTheme.h4,
+                Expanded(
+                  child: Text(
+                    'Add task to path',
+                    style: textTheme.h3.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: calendarInsetMd),
-                Text(
-                  'Drag a task off a slot first, then try again.',
-                  style: context.textTheme.muted,
+                AxiIconButton(
+                  iconData: Icons.close,
+                  iconSize: 16,
+                  buttonSize: 34,
+                  tapTargetSize: 40,
+                  backgroundColor: Colors.transparent,
+                  borderColor: Colors.transparent,
+                  color: colors.mutedForeground,
+                  onPressed: () => Navigator.of(sheetContext).maybePop(),
                 ),
               ],
             ),
-          )
-        : ListView.separated(
-            padding: const EdgeInsets.all(calendarGutterLg),
-            shrinkWrap: true,
-            itemBuilder: (context, index) {
-              final CalendarTask task = available[index];
-              final DateTime? deadline = task.deadline?.toLocal();
-              final String? deadlineLabel = deadline != null
-                  ? 'Deadline: ${deadline.toIso8601String().split('T').first}'
-                  : null;
-              return ListTile(
-                dense: true,
-                hoverColor: context.colorScheme.muted.withValues(alpha: 0.08),
-                onTap: () => Navigator.of(context).pop(task),
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  task.isCompleted ? Icons.check_circle : Icons.circle_outlined,
-                  color: task.isCompleted
-                      ? context.colorScheme.primary
-                      : context.colorScheme.mutedForeground,
-                  size: 20,
+            const SizedBox(height: calendarGutterSm),
+            if (available.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(calendarGutterMd),
+                decoration: BoxDecoration(
+                  color: colors.muted.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(calendarBorderRadius),
+                  border: Border.all(color: colors.border),
                 ),
-                title: Text(
-                  task.title,
-                  style: context.textTheme.small.copyWith(
-                    fontWeight: FontWeight.w700,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'All tasks are placed already',
+                      style: textTheme.h4,
+                    ),
+                    const SizedBox(height: calendarInsetMd),
+                    Text(
+                      'Drag a task off a slot first, then try again.',
+                      style: textTheme.muted,
+                    ),
+                  ],
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: Scrollbar(
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemBuilder: (context, index) {
+                      final CalendarTask task = available[index];
+                      final DateTime? deadline = task.deadline?.toLocal();
+                      final String? deadlineLabel = deadline != null
+                          ? 'Deadline: ${deadline.toIso8601String().split('T').first}'
+                          : null;
+                      return InkWell(
+                        onTap: () => Navigator.of(sheetContext).pop(task),
+                        borderRadius:
+                            BorderRadius.circular(calendarBorderRadius),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: calendarGutterMd,
+                            vertical: calendarInsetMd,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.card,
+                            borderRadius: BorderRadius.circular(
+                              calendarBorderRadius,
+                            ),
+                            border: Border.all(color: colors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                task.isCompleted
+                                    ? Icons.check_circle
+                                    : Icons.circle_outlined,
+                                size: 20,
+                                color: task.isCompleted
+                                    ? colors.primary
+                                    : colors.mutedForeground,
+                              ),
+                              const SizedBox(width: calendarGutterSm),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      task.title,
+                                      style: textTheme.small.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    if (deadlineLabel != null) ...[
+                                      const SizedBox(height: calendarInsetSm),
+                                      Text(
+                                        deadlineLabel,
+                                        style: textTheme.muted,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.add,
+                                size: 18,
+                                color: colors.mutedForeground,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: calendarInsetSm),
+                    itemCount: available.length,
                   ),
                 ),
-                subtitle: deadlineLabel != null
-                    ? Text(
-                        deadlineLabel,
-                        style: context.textTheme.muted,
-                      )
-                    : null,
-                trailing: Icon(
-                  Icons.add,
-                  size: 18,
-                  color: context.colorScheme.mutedForeground,
-                ),
-              );
-            },
-            separatorBuilder: (context, _) => const Divider(height: 1),
-            itemCount: available.length,
-          );
-
-    if (isDesktop) {
-      return showDialog<CalendarTask>(
-        context: context,
-        builder: (context) => Dialog(
-          backgroundColor: context.colorScheme.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(calendarBorderRadius),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: content,
-          ),
-        ),
-      );
-    }
-
-    return showModalBottomSheet<CalendarTask>(
-      context: context,
-      backgroundColor: context.colorScheme.card,
-      useSafeArea: true,
-      builder: (_) => content,
+              ),
+          ],
+        );
+      },
     );
   }
 
-  Future<_SlotTapAction?> _showSlotActions(bool isDesktop) {
-    final Widget content = SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            hoverColor: context.colorScheme.muted.withValues(alpha: 0.08),
-            leading: const Icon(Icons.swap_horiz),
-            title: const Text('Replace task'),
-            subtitle: const Text('Pick a different task for this slot'),
-            onTap: () => Navigator.of(context).pop(_SlotTapAction.replace),
-          ),
-          ListTile(
-            hoverColor: context.colorScheme.muted.withValues(alpha: 0.08),
-            leading: const Icon(Icons.remove_circle_outline),
-            title: const Text('Remove from path'),
-            onTap: () => Navigator.of(context).pop(_SlotTapAction.remove),
-          ),
-        ],
-      ),
-    );
-
-    if (isDesktop) {
-      return showDialog<_SlotTapAction>(
-        context: context,
-        builder: (context) => Dialog(
-          backgroundColor: context.colorScheme.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(calendarBorderRadius),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: content,
-          ),
-        ),
-      );
-    }
-
-    return showModalBottomSheet<_SlotTapAction>(
+  Future<_SlotTapAction?> _showSlotActions() {
+    return showAdaptiveBottomSheet<_SlotTapAction>(
       context: context,
-      backgroundColor: context.colorScheme.card,
-      useSafeArea: true,
-      builder: (_) => content,
+      dialogMaxWidth: 440,
+      surfacePadding: const EdgeInsets.all(calendarGutterLg),
+      builder: (sheetContext) {
+        final ShadTextTheme textTheme = sheetContext.textTheme;
+        final ShadColorScheme colors = sheetContext.colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Slot options',
+                    style: textTheme.h3.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                AxiIconButton(
+                  iconData: Icons.close,
+                  iconSize: 16,
+                  buttonSize: 34,
+                  tapTargetSize: 40,
+                  backgroundColor: Colors.transparent,
+                  borderColor: Colors.transparent,
+                  color: colors.mutedForeground,
+                  onPressed: () => Navigator.of(sheetContext).maybePop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: calendarGutterSm),
+            _SlotActionTile(
+              icon: Icons.swap_horiz,
+              title: 'Replace task',
+              subtitle: 'Pick a different task for this slot',
+              onTap: () => Navigator.of(sheetContext).pop(
+                _SlotTapAction.replace,
+              ),
+            ),
+            const SizedBox(height: calendarInsetSm),
+            _SlotActionTile(
+              icon: Icons.remove_circle_outline,
+              title: 'Remove from path',
+              onTap: () => Navigator.of(sheetContext).pop(
+                _SlotTapAction.remove,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

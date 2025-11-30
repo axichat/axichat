@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/calendar_task.dart';
-import '../view/base_task_tile.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/base_task_tile.dart';
 import 'guest_calendar_bloc.dart';
 import 'guest_task_input.dart' as guest_input;
 

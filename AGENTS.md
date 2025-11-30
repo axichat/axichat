@@ -305,4 +305,6 @@ Examples:
 
 - Calendar screens stay declarative—wire interactions into bloc helpers (for example `commitTaskInteraction`) and never mutate calendar models from widgets or controllers.
 
+- All new popovers, dialogs, and bottom sheets must use the existing Shad/Axi styling (colors, padding, borders) and never ship with the default Material look.
+
 **After model changes:** `dart run build_runner build --delete-conflicting-outputs`

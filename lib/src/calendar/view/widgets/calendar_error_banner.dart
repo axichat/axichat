@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../common/ui/ui.dart';
-import '../error_display.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/view/error_display.dart';
 
 /// Shared error banner wrapper for calendar surfaces (full calendar + guest)
 /// so the ErrorDisplay layout and margin logic stay consistent.

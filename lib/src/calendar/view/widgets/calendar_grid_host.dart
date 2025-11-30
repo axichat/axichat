@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../bloc/base_calendar_bloc.dart';
-import '../../bloc/calendar_event.dart';
-import '../../bloc/calendar_state.dart';
-import '../../models/calendar_task.dart';
-import '../calendar_grid.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/calendar_grid.dart';
 
 /// Shared CalendarGrid wrapper that wires the bloc callbacks for both guest
 /// and authenticated surfaces.

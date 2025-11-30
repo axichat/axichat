@@ -7,13 +7,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../common/ui/ui.dart';
-import '../bloc/calendar_bloc.dart';
-import '../bloc/calendar_event.dart';
-import '../bloc/calendar_state.dart';
-import '../models/calendar_task.dart';
-import '../utils/calendar_transfer_service.dart';
-import '../utils/time_formatter.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'calendar_transfer_sheet.dart';
 import 'feedback_system.dart';
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 /// High level responsive buckets used across the calendar surfaces.
 enum CalendarSizeClass { compact, medium, expanded }

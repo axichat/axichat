@@ -31,6 +31,8 @@ class SettingsState with _$SettingsState {
     @Default(false) bool hideCompletedScheduled,
     @Default(false) bool hideCompletedUnscheduled,
     @Default(false) bool hideCompletedReminders,
+    @Default(<String>[]) List<String> unscheduledSidebarOrder,
+    @Default(<String>[]) List<String> reminderSidebarOrder,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>

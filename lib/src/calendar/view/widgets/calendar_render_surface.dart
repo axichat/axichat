@@ -6,11 +6,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../../common/ui/ui.dart';
-import '../../models/calendar_task.dart';
-import '../controllers/task_interaction_controller.dart';
-import '../layout/calendar_layout.dart';
-import '../models/calendar_drag_payload.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
+import 'package:axichat/src/calendar/view/layout/calendar_layout.dart';
+import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_surface.dart';
 

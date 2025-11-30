@@ -13,16 +13,17 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 
-import '../bloc/base_calendar_bloc.dart';
-import '../bloc/calendar_event.dart';
-import '../bloc/calendar_state.dart';
-import '../models/calendar_model.dart';
-import '../models/calendar_task.dart';
-import '../utils/location_autocomplete.dart';
-import '../utils/recurrence_utils.dart';
-import '../utils/responsive_helper.dart';
-import '../utils/task_share_formatter.dart';
-import '../utils/time_formatter.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'models/task_context_action.dart';
 import 'layout/calendar_layout.dart'
@@ -39,6 +40,7 @@ import 'resizable_task_widget.dart';
 import 'widgets/calendar_render_surface.dart';
 import 'widgets/calendar_surface_drag_target.dart';
 import 'widgets/calendar_task_surface.dart';
+import 'widgets/day_event_editor.dart';
 import 'widgets/calendar_task_geometry.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/task_form_section.dart';
@@ -1243,6 +1245,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                         scheduledTime: updatedTask.scheduledTime,
                         duration: updatedTask.duration,
                         endDate: updatedTask.endDate,
+                        checklist: updatedTask.checklist,
                       ),
                     );
 
@@ -1253,6 +1256,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                       deadline: updatedTask.deadline,
                       priority: updatedTask.priority,
                       isCompleted: updatedTask.isCompleted,
+                      checklist: updatedTask.checklist,
+                      modifiedAt: DateTime.now(),
                     );
 
                     if (seriesUpdate != latestTask) {
@@ -1968,6 +1973,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                               updatedTask.scheduledTime,
                                           duration: updatedTask.duration,
                                           endDate: updatedTask.endDate,
+                                          checklist: updatedTask.checklist,
                                         ),
                                       );
 
@@ -1978,6 +1984,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                     deadline: updatedTask.deadline,
                                     priority: updatedTask.priority,
                                     isCompleted: updatedTask.isCompleted,
+                                    checklist: updatedTask.checklist,
+                                    modifiedAt: DateTime.now(),
                                   );
 
                                   if (seriesUpdate != latestTask) {
@@ -2803,6 +2811,54 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         date1.day == date2.day;
   }
 
+  Future<void> _openDayEventEditor({
+    required DateTime date,
+    DayEvent? existing,
+  }) async {
+    final DayEventEditorResult? result = await showDayEventEditor(
+      context: context,
+      initialDate: date,
+      existing: existing,
+    );
+    if (result == null) {
+      return;
+    }
+    if (result.deleted && existing != null) {
+      _capturedBloc.add(
+        CalendarEvent.dayEventDeleted(eventId: existing.id),
+      );
+      return;
+    }
+    final DayEventDraft? draft = result.draft;
+    if (draft == null) {
+      return;
+    }
+    if (existing == null) {
+      _capturedBloc.add(
+        CalendarEvent.dayEventAdded(
+          title: draft.title,
+          startDate: draft.startDate,
+          endDate: draft.endDate,
+          description: draft.description,
+          reminders: draft.reminders,
+        ),
+      );
+      return;
+    }
+
+    final DayEvent updated = existing.normalizedCopy(
+      title: draft.title,
+      description: draft.description,
+      startDate: draft.startDate,
+      endDate: draft.endDate,
+      reminders: draft.reminders,
+      modifiedAt: DateTime.now(),
+    );
+    _capturedBloc.add(
+      CalendarEvent.dayEventUpdated(event: updated),
+    );
+  }
+
   String _getDayOfWeekShort(DateTime date) {
     const dayNames = [
       'SUNDAY',
@@ -2862,6 +2918,10 @@ class _CalendarWeekView extends StatelessWidget {
                     (!compact || allowWeekViewInCompact);
             final headerDates =
                 isWeekView ? weekDates : [gridState.widget.state.selectedDate];
+            final List<DayEvent> selectedDayEvents = isWeekView
+                ? const <DayEvent>[]
+                : gridState.widget.state
+                    .dayEventsForDate(gridState.widget.state.selectedDate);
             final responsive = ResponsiveHelper.spec(context);
             final double horizontalPadding =
                 compact ? 0 : responsive.gridHorizontalPadding;
@@ -2939,6 +2999,26 @@ class _CalendarWeekView extends StatelessWidget {
                               : null,
                         ),
                       ),
+                      if (!isWeekView)
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontalPadding,
+                            calendarGutterSm,
+                            horizontalPadding,
+                            calendarGutterSm,
+                          ),
+                          child: _DayEventsStrip(
+                            events: selectedDayEvents,
+                            onAdd: () => gridState._openDayEventEditor(
+                              date: gridState.widget.state.selectedDate,
+                            ),
+                            onEdit: (DayEvent event) =>
+                                gridState._openDayEventEditor(
+                              date: event.normalizedStart,
+                              existing: event,
+                            ),
+                          ),
+                        ),
                       Expanded(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
@@ -3037,6 +3117,149 @@ class _CalendarWeekView extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _DayEventsStrip extends StatelessWidget {
+  const _DayEventsStrip({
+    required this.events,
+    required this.onAdd,
+    required this.onEdit,
+  });
+
+  final List<DayEvent> events;
+  final VoidCallback onAdd;
+  final ValueChanged<DayEvent> onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final bool hasEvents = events.isNotEmpty;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(calendarGutterMd),
+      decoration: BoxDecoration(
+        color: calendarSelectedDayColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Day events',
+                style: TextStyle(
+                  color: colors.onSurface,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add'),
+              ),
+            ],
+          ),
+          const SizedBox(height: calendarGutterSm),
+          if (!hasEvents)
+            Text(
+              'No day-level events for this date',
+              style: TextStyle(
+                color: colors.secondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ...events.map(
+            (DayEvent event) => _DayEventBulletRow(
+              event: event,
+              onTap: () => onEdit(event),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayEventBulletRow extends StatelessWidget {
+  const _DayEventBulletRow({
+    required this.event,
+    required this.onTap,
+  });
+
+  final DayEvent event;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final bool isRange = !event.normalizedEnd.isAtSameMomentAs(
+      event.normalizedStart,
+    );
+    final String rangeLabel = isRange
+        ? '${TimeFormatter.formatFriendlyDate(event.normalizedStart)} → ${TimeFormatter.formatFriendlyDate(event.normalizedEnd)}'
+        : 'All day';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(top: 6),
+              decoration: BoxDecoration(
+                color: colors.primary,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    style: TextStyle(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    rangeLabel,
+                    style: TextStyle(
+                      color: colors.secondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: onTap,
+              icon: Icon(
+                Icons.edit_outlined,
+                color: colors.secondary,
+                size: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3410,6 +3633,7 @@ class _CalendarDayHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isToday = gridState._isToday(date);
+    final int dayEventCount = gridState.widget.state.dayEventCountForDate(date);
 
     return InkWell(
       onTap: gridState.widget.state.viewMode == CalendarView.week
@@ -3423,23 +3647,58 @@ class _CalendarDayHeader extends StatelessWidget {
           color: calendarBorderDarkColor,
           drawRightBorder: showRightDivider,
         ),
-        child: Container(
-          color: isToday
-              ? calendarPrimaryColor.withValues(
-                  alpha: calendarDayHeaderHighlightOpacity,
-                )
-              : calendarBackgroundColor,
-          child: Center(
-            child: Text(
-              '${gridState._getDayOfWeekShort(date).substring(0, 3)} ${date.day}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isToday ? calendarPrimaryColor : calendarTitleColor,
-                letterSpacing: calendarDayHeaderLetterSpacing,
+        child: Stack(
+          children: [
+            Container(
+              color: isToday
+                  ? calendarPrimaryColor.withValues(
+                      alpha: calendarDayHeaderHighlightOpacity,
+                    )
+                  : calendarBackgroundColor,
+              child: Center(
+                child: Text(
+                  '${gridState._getDayOfWeekShort(date).substring(0, 3)} ${date.day}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isToday ? calendarPrimaryColor : calendarTitleColor,
+                    letterSpacing: calendarDayHeaderLetterSpacing,
+                  ),
+                ),
               ),
             ),
-          ),
+            if (dayEventCount > 0)
+              Positioned(
+                top: 6,
+                right: 8,
+                child: _DayEventBadge(count: dayEventCount),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DayEventBadge extends StatelessWidget {
+  const _DayEventBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: calendarPrimaryColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        count.toString(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

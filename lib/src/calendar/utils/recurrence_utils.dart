@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import '../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 const _occurrenceSeparator = '::';
 
@@ -137,6 +137,7 @@ extension CalendarTaskInstanceX on CalendarTask {
       titleOverride: override?.title,
       descriptionOverride: override?.description,
       locationOverride: override?.location,
+      checklistOverride: override?.checklist,
     );
   }
 
@@ -216,6 +217,7 @@ extension CalendarTaskInstanceX on CalendarTask {
           titleOverride: override?.title,
           descriptionOverride: override?.description,
           locationOverride: override?.location,
+          checklistOverride: override?.checklist,
         ),
       );
     }
@@ -245,6 +247,7 @@ extension CalendarTaskInstanceX on CalendarTask {
     String? titleOverride,
     String? descriptionOverride,
     String? locationOverride,
+    List<TaskChecklistItem>? checklistOverride,
   }) {
     final actualStart = scheduledOverride ?? originalStart;
     final adjustedDuration = durationOverride ?? duration;
@@ -287,6 +290,7 @@ extension CalendarTaskInstanceX on CalendarTask {
       title: titleOverride ?? title,
       description: descriptionOverride ?? description,
       location: locationOverride ?? location,
+      checklist: checklistOverride ?? checklist,
     );
   }
 }

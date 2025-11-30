@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 /// Shared calendar text field with consistent styling across the quick add
 /// modal, popover editor, and sidebar forms. The widget keeps the legacy

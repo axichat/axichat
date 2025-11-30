@@ -4,8 +4,9 @@ import 'package:crypto/crypto.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 
-import '../utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'calendar_critical_path.dart';
+import 'day_event.dart';
 import 'calendar_task.dart';
 
 part 'calendar_model.freezed.dart';
@@ -13,10 +14,12 @@ part 'calendar_model.g.dart';
 
 @freezed
 @HiveType(typeId: 33)
+@JsonSerializable(explicitToJson: true)
 class CalendarModel with _$CalendarModel {
   const factory CalendarModel({
     @HiveField(0) @Default({}) Map<String, CalendarTask> tasks,
     @HiveField(1) required DateTime lastModified,
+    @HiveField(2) @Default({}) Map<String, DayEvent> dayEvents,
     @HiveField(3) required String checksum,
     @HiveField(4) @Default({}) Map<String, CalendarCriticalPath> criticalPaths,
   }) = _CalendarModel;
@@ -29,6 +32,7 @@ class CalendarModel with _$CalendarModel {
     final model = CalendarModel(
       lastModified: now,
       checksum: '',
+      dayEvents: const {},
       criticalPaths: const {},
     );
     return model.copyWith(checksum: model.calculateChecksum());
@@ -40,11 +44,15 @@ class CalendarModel with _$CalendarModel {
     final sortedTasks = Map.fromEntries(
       tasks.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
+    final sortedDayEvents = Map.fromEntries(
+      dayEvents.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
     final sortedCriticalPaths = Map.fromEntries(
       criticalPaths.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
     final content = jsonEncode({
       'tasks': sortedTasks.map((k, v) => MapEntry(k, v.toJson())),
+      'dayEvents': sortedDayEvents.map((k, v) => MapEntry(k, v.toJson())),
       'lastModified': lastModified.toIso8601String(),
       'criticalPaths':
           sortedCriticalPaths.map((k, v) => MapEntry(k, v.toJson())),
@@ -91,6 +99,56 @@ class CalendarModel with _$CalendarModel {
     final now = DateTime.now();
     final updated = copyWith(
       tasks: updatedTasks,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel addDayEvent(DayEvent event) {
+    final updatedDayEvents = <String, DayEvent>{
+      ...dayEvents,
+      event.id: event,
+    };
+    final DateTime now = DateTime.now();
+    final CalendarModel updated = copyWith(
+      dayEvents: updatedDayEvents,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel updateDayEvent(DayEvent event) {
+    if (!dayEvents.containsKey(event.id)) {
+      return this;
+    }
+    return addDayEvent(event);
+  }
+
+  CalendarModel deleteDayEvent(String eventId) {
+    if (!dayEvents.containsKey(eventId)) {
+      return this;
+    }
+    final Map<String, DayEvent> updatedEvents =
+        Map<String, DayEvent>.from(dayEvents)..remove(eventId);
+    final DateTime now = DateTime.now();
+    final CalendarModel updated = copyWith(
+      dayEvents: updatedEvents,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel replaceDayEvents(Map<String, DayEvent> replacements) {
+    if (replacements.isEmpty) {
+      return this;
+    }
+    final Map<String, DayEvent> updatedEvents = <String, DayEvent>{
+      ...dayEvents,
+      ...replacements,
+    };
+    final DateTime now = DateTime.now();
+    final CalendarModel updated = copyWith(
+      dayEvents: updatedEvents,
       lastModified: now,
     );
     return updated.copyWith(checksum: updated.calculateChecksum());

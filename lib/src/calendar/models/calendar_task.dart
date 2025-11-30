@@ -5,10 +5,24 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'reminder_preferences.dart';
 
 part 'calendar_task.freezed.dart';
 part 'calendar_task.g.dart';
+
+@freezed
+@HiveType(typeId: 38)
+class TaskChecklistItem with _$TaskChecklistItem {
+  const factory TaskChecklistItem({
+    @HiveField(0) required String id,
+    @HiveField(1) required String label,
+    @HiveField(2) @Default(false) bool isCompleted,
+  }) = _TaskChecklistItem;
+
+  factory TaskChecklistItem.fromJson(Map<String, dynamic> json) =>
+      _$TaskChecklistItemFromJson(json);
+}
 
 @freezed
 @HiveType(typeId: 36)
@@ -23,6 +37,7 @@ class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
     @HiveField(6) String? title,
     @HiveField(7) String? description,
     @HiveField(8) String? location,
+    @HiveField(9) List<TaskChecklistItem>? checklist,
   }) = _TaskOccurrenceOverride;
 
   factory TaskOccurrenceOverride.fromJson(Map<String, dynamic> json) =>
@@ -83,6 +98,7 @@ enum TaskPriority {
 
 @freezed
 @HiveType(typeId: 30)
+@JsonSerializable(explicitToJson: true)
 class CalendarTask with _$CalendarTask {
   const factory CalendarTask({
     @HiveField(0) required String id,
@@ -102,6 +118,10 @@ class CalendarTask with _$CalendarTask {
     @HiveField(14)
     @Default({})
     Map<String, TaskOccurrenceOverride> occurrenceOverrides,
+    @HiveField(15) ReminderPreferences? reminders,
+    @HiveField(16, defaultValue: <TaskChecklistItem>[])
+    @Default([])
+    List<TaskChecklistItem> checklist,
   }) = _CalendarTask;
 
   factory CalendarTask.fromJson(Map<String, dynamic> json) =>
@@ -118,6 +138,8 @@ class CalendarTask with _$CalendarTask {
     TaskPriority priority = TaskPriority.none,
     double? startHour,
     RecurrenceRule? recurrence,
+    ReminderPreferences? reminders,
+    List<TaskChecklistItem> checklist = const [],
   }) {
     final now = DateTime.now();
     return CalendarTask(
@@ -133,6 +155,8 @@ class CalendarTask with _$CalendarTask {
       startHour: startHour,
       recurrence: recurrence?.isNone == true ? null : recurrence,
       occurrenceOverrides: const {},
+      checklist: checklist,
+      reminders: reminders?.normalized() ?? ReminderPreferences.defaults(),
       createdAt: now,
       modifiedAt: now,
     );
@@ -284,4 +308,19 @@ extension CalendarTaskExtensions on CalendarTask {
 
     return start.add(Duration(minutes: splitMinutes));
   }
+
+  bool get hasChecklist => checklist.isNotEmpty;
+
+  int get completedChecklistCount =>
+      checklist.where((item) => item.isCompleted).length;
+
+  double get checklistProgress {
+    if (checklist.isEmpty) {
+      return 0;
+    }
+    return completedChecklistCount / checklist.length;
+  }
+
+  ReminderPreferences get effectiveReminders =>
+      (reminders ?? ReminderPreferences.defaults()).normalized();
 }

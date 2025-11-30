@@ -3,11 +3,12 @@ import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
 
-import '../models/calendar_exceptions.dart';
-import '../models/calendar_critical_path.dart';
-import '../models/calendar_model.dart';
-import '../models/calendar_sync_message.dart';
-import '../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_exceptions.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/day_event.dart';
 
 class CalendarSyncManager {
   CalendarSyncManager({
@@ -91,6 +92,11 @@ class CalendarSyncManager {
     if (message.data == null || message.taskId == null) return;
 
     try {
+      if (message.entity == 'day_event') {
+        final DayEvent event = DayEvent.fromJson(message.data!);
+        await _mergeDayEvent(event, message.operation ?? 'update');
+        return;
+      }
       final task = CalendarTask.fromJson(message.data!);
       await _mergeTask(task, message.operation ?? 'update');
     } catch (e) {
@@ -116,7 +122,22 @@ class CalendarSyncManager {
   /// Send task update to other devices
   Future<void> sendTaskUpdate(CalendarTask task, String operation) async {
     await _flushPendingEnvelopes();
-    await _sendTaskUpdate(task, operation);
+    await _sendUpdate(
+      payloadId: task.id,
+      operation: operation,
+      data: task.toJson(),
+      entity: 'task',
+    );
+  }
+
+  Future<void> sendDayEventUpdate(DayEvent event, String operation) async {
+    await _flushPendingEnvelopes();
+    await _sendUpdate(
+      payloadId: event.id,
+      operation: operation,
+      data: event.toJson(),
+      entity: 'day_event',
+    );
   }
 
   /// Request full calendar sync from other devices
@@ -137,11 +158,17 @@ class CalendarSyncManager {
     await _sendFullCalendar(model);
   }
 
-  Future<void> _sendTaskUpdate(CalendarTask task, String operation) async {
+  Future<void> _sendUpdate({
+    required String payloadId,
+    required String operation,
+    required Map<String, dynamic> data,
+    required String entity,
+  }) async {
     final syncMessage = CalendarSyncMessage.update(
-      taskId: task.id,
+      taskId: payloadId,
       operation: operation,
-      data: task.toJson(),
+      data: data,
+      entity: entity,
     );
 
     final messageJson = jsonEncode({
@@ -187,6 +214,35 @@ class CalendarSyncManager {
       }
     }
 
+    final Map<String, DayEvent> mergedDayEvents = <String, DayEvent>{};
+    final Set<String> allEventIds = <String>{
+      ...local.dayEvents.keys,
+      ...remote.dayEvents.keys,
+    };
+
+    for (final String id in allEventIds) {
+      final DayEvent? localEvent = local.dayEvents[id];
+      final DayEvent? remoteEvent = remote.dayEvents[id];
+
+      if (localEvent == null && remoteEvent != null) {
+        mergedDayEvents[id] = remoteEvent;
+        continue;
+      }
+
+      if (localEvent != null && remoteEvent == null) {
+        mergedDayEvents[id] = localEvent;
+        continue;
+      }
+
+      if (localEvent != null && remoteEvent != null) {
+        mergedDayEvents[id] = remoteEvent.modifiedAt.isAfter(
+          localEvent.modifiedAt,
+        )
+            ? remoteEvent
+            : localEvent;
+      }
+    }
+
     final mergedPaths = <String, CalendarCriticalPath>{};
     final allPathIds = <String>{
       ...local.criticalPaths.keys,
@@ -216,6 +272,7 @@ class CalendarSyncManager {
 
     final merged = CalendarModel(
       tasks: mergedTasks,
+      dayEvents: mergedDayEvents,
       criticalPaths: mergedPaths,
       lastModified: DateTime.now(),
       checksum: '',
@@ -248,6 +305,38 @@ class CalendarSyncManager {
         break;
       default:
         developer.log('Unknown task operation: $operation');
+        return;
+    }
+
+    await _applyModel(updatedModel);
+  }
+
+  Future<void> _mergeDayEvent(DayEvent remoteEvent, String operation) async {
+    final CalendarModel currentModel = _readModel();
+
+    CalendarModel updatedModel;
+    switch (operation) {
+      case 'add':
+      case 'update':
+        final DayEvent? localEvent = currentModel.dayEvents[remoteEvent.id];
+        if (localEvent == null) {
+          updatedModel = currentModel.addDayEvent(remoteEvent);
+        } else if (remoteEvent.modifiedAt.isAfter(localEvent.modifiedAt)) {
+          updatedModel = currentModel.updateDayEvent(remoteEvent);
+        } else {
+          return;
+        }
+        break;
+      case 'delete':
+        final DayEvent? existing = currentModel.dayEvents[remoteEvent.id];
+        if (existing != null &&
+            existing.modifiedAt.isAfter(remoteEvent.modifiedAt)) {
+          return;
+        }
+        updatedModel = currentModel.deleteDayEvent(remoteEvent.id);
+        break;
+      default:
+        developer.log('Unknown day event operation: $operation');
         return;
     }
 

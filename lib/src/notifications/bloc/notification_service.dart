@@ -23,6 +23,8 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
   bool _tzInitialized = false;
+  bool _tzDataLoaded = false;
+  String? _lastTimeZoneName;
   bool _schedulingUnsupported = false;
   final Map<int, Timer> _inAppTimers = {};
   Completer<void>? _initializationCompleter;
@@ -91,7 +93,7 @@ class NotificationService {
         onDidReceiveNotificationResponse: notificationTapBackground,
       );
 
-      await _ensureTimeZones();
+      await _ensureTimeZones(force: true);
 
       try {
         final launchDetails = await _plugin.getNotificationAppLaunchDetails();
@@ -241,7 +243,7 @@ class NotificationService {
       );
       return;
     }
-    await _ensureTimeZones();
+    await _ensureTimeZones(force: true);
 
     final notificationDetails = await _notificationDetails();
     final scheduled = tz.TZDateTime.from(scheduledLocal, tz.local);
@@ -274,6 +276,8 @@ class NotificationService {
     await _ensureInitialized();
     await _plugin.cancel(id);
   }
+
+  Future<void> refreshTimeZone() => _ensureTimeZones(force: true);
 
   void _markSchedulingUnsupported({Object? error, StackTrace? stackTrace}) {
     if (_schedulingUnsupported) {
@@ -324,17 +328,30 @@ class NotificationService {
     _inAppTimers.remove(id)?.cancel();
   }
 
-  Future<void> _ensureTimeZones() async {
-    if (_tzInitialized) {
+  Future<void> _ensureTimeZones({bool force = false}) async {
+    if (!_tzDataLoaded) {
+      tz.initializeTimeZones();
+      _tzDataLoaded = true;
+    }
+
+    String? timeZoneName;
+    try {
+      timeZoneName = await FlutterNativeTimezone.getLocalTimezone();
+    } catch (_) {
+      timeZoneName = null;
+    }
+
+    final String resolved = timeZoneName ?? 'UTC';
+    if (_tzInitialized && !force && _lastTimeZoneName == resolved) {
       return;
     }
 
-    tz.initializeTimeZones();
     try {
-      final name = await FlutterNativeTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(name));
+      tz.setLocalLocation(tz.getLocation(resolved));
+      _lastTimeZoneName = resolved;
     } catch (_) {
       tz.setLocalLocation(tz.UTC);
+      _lastTimeZoneName = 'UTC';
     }
 
     _tzInitialized = true;

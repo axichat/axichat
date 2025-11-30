@@ -27,6 +27,11 @@ class CalendarTaskNotFoundException extends CalendarException {
       : super('Task not found', 'taskId=$taskId');
 }
 
+class CalendarDayEventNotFoundException extends CalendarException {
+  const CalendarDayEventNotFoundException(String eventId)
+      : super('Day event not found', 'eventId=$eventId');
+}
+
 class CalendarConflictException extends CalendarException {
   const CalendarConflictException(super.message, [super.context]);
 }

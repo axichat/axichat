@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../models/calendar_task.dart';
-import '../widgets/recurrence_editor.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/widgets/recurrence_editor.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 
 /// Reusable controller that owns the mutable state for composing a task draft.
 /// Widgets can listen to this controller to rebuild when priority, schedule,
@@ -14,12 +15,15 @@ class TaskDraftController extends ChangeNotifier {
     RecurrenceFormValue initialRecurrence = const RecurrenceFormValue(),
     bool initialImportant = false,
     bool initialUrgent = false,
+    ReminderPreferences? initialReminders,
   })  : _startTime = initialStart,
         _endTime = initialEnd,
         _deadline = initialDeadline,
         _recurrence = initialRecurrence,
         _isImportant = initialImportant,
-        _isUrgent = initialUrgent;
+        _isUrgent = initialUrgent,
+        _reminders =
+            (initialReminders ?? ReminderPreferences.defaults()).normalized();
 
   bool _isImportant;
   bool _isUrgent;
@@ -27,6 +31,7 @@ class TaskDraftController extends ChangeNotifier {
   DateTime? _endTime;
   DateTime? _deadline;
   RecurrenceFormValue _recurrence;
+  ReminderPreferences _reminders;
 
   bool get isImportant => _isImportant;
   bool get isUrgent => _isUrgent;
@@ -34,6 +39,7 @@ class TaskDraftController extends ChangeNotifier {
   DateTime? get endTime => _endTime;
   DateTime? get deadline => _deadline;
   RecurrenceFormValue get recurrence => _recurrence;
+  ReminderPreferences get reminders => _reminders;
 
   void setImportant(bool value) {
     if (_isImportant == value) return;
@@ -128,6 +134,15 @@ class TaskDraftController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setReminders(ReminderPreferences value) {
+    final ReminderPreferences normalized = value.normalized();
+    if (_reminders == normalized) {
+      return;
+    }
+    _reminders = normalized;
+    notifyListeners();
+  }
+
   TaskPriority get selectedPriority {
     if (_isImportant && _isUrgent) {
       return TaskPriority.critical;
@@ -166,7 +181,8 @@ class TaskDraftController extends ChangeNotifier {
         _startTime != null ||
         _endTime != null ||
         _deadline != null ||
-        _recurrence.isActive;
+        _recurrence.isActive ||
+        _reminders != ReminderPreferences.defaults();
 
     _isImportant = false;
     _isUrgent = false;
@@ -174,6 +190,7 @@ class TaskDraftController extends ChangeNotifier {
     _endTime = null;
     _deadline = null;
     _recurrence = const RecurrenceFormValue();
+    _reminders = ReminderPreferences.defaults();
 
     if (didChange) {
       notifyListeners();

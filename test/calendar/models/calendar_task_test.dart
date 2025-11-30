@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:test/test.dart';
 
@@ -72,6 +73,29 @@ void main() {
         expect(json['is_completed'], isTrue);
         expect(json['scheduled_time'], isNotNull);
         expect(json['duration'], equals(7200000000)); // 2 hours in microseconds
+      });
+
+      test('includes reminder preferences in serialization', () {
+        final CalendarTask withReminders = task.copyWith(
+          reminders: const ReminderPreferences(
+            enabled: true,
+            startOffsets: <Duration>[Duration(hours: 1)],
+            deadlineOffsets: <Duration>[Duration(hours: 4)],
+          ),
+        );
+
+        final Map<String, dynamic> json = withReminders.toJson();
+        final CalendarTask restored = CalendarTask.fromJson(json);
+
+        expect(restored.reminders?.enabled, isTrue);
+        expect(
+          restored.effectiveReminders.startOffsets,
+          contains(const Duration(hours: 1)),
+        );
+        expect(
+          restored.effectiveReminders.deadlineOffsets,
+          contains(const Duration(hours: 4)),
+        );
       });
 
       test('fromJson reconstructs task correctly', () {

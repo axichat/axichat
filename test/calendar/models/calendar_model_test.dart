@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -217,6 +219,79 @@ void main() {
           expect(modelWithTasks.tasks, hasLength(2));
           expect(result.tasks, hasLength(1));
         });
+      });
+    });
+
+    group('day event operations', () {
+      late CalendarModel baseModel;
+      late DayEvent birthday;
+
+      setUp(() {
+        baseModel = CalendarModel.empty();
+        birthday = DayEvent.create(
+          title: 'Birthday',
+          startDate: DateTime(2024, 5, 5),
+          reminders: ReminderPreferences.defaults(),
+        );
+      });
+
+      test('addDayEvent stores event and updates checksum', () {
+        final CalendarModel updated = baseModel.addDayEvent(birthday);
+
+        expect(updated.dayEvents, contains(birthday.id));
+        expect(
+          updated.dayEvents[birthday.id]?.effectiveReminders.isEnabled,
+          isTrue,
+        );
+        expect(updated.checksum, isNot(equals(baseModel.checksum)));
+      });
+
+      test('updateDayEvent replaces existing entry', () {
+        final CalendarModel withEvent = baseModel.addDayEvent(birthday);
+        final DayEvent revised = birthday.normalizedCopy(
+          title: 'Updated birthday',
+          endDate: birthday.startDate.add(const Duration(days: 1)),
+          reminders: const ReminderPreferences(
+            startOffsets: <Duration>[Duration(hours: 2)],
+          ),
+        );
+
+        final CalendarModel updated = withEvent.updateDayEvent(revised);
+
+        expect(updated.dayEvents[birthday.id]?.title, 'Updated birthday');
+        expect(
+          updated.dayEvents[birthday.id]?.normalizedEnd
+              .isAfter(updated.dayEvents[birthday.id]!.normalizedStart),
+          isTrue,
+        );
+        expect(
+          updated.dayEvents[birthday.id]?.effectiveReminders.startOffsets,
+          contains(const Duration(hours: 2)),
+        );
+      });
+
+      test('deleteDayEvent removes event', () {
+        final CalendarModel withEvent = baseModel.addDayEvent(birthday);
+        final CalendarModel updated = withEvent.deleteDayEvent(birthday.id);
+
+        expect(updated.dayEvents, isEmpty);
+        expect(updated.checksum, isNot(equals(withEvent.checksum)));
+      });
+
+      test('replaceDayEvents merges without dropping tasks', () {
+        final CalendarModel withTask =
+            baseModel.addTask(testTask1).addDayEvent(birthday);
+        final DayEvent holiday = DayEvent.create(
+          title: 'Holiday',
+          startDate: DateTime(2024, 5, 20),
+        );
+
+        final CalendarModel merged = withTask.replaceDayEvents(
+          {holiday.id: holiday},
+        );
+
+        expect(merged.dayEvents, hasLength(2));
+        expect(merged.tasks, contains(testTask1.id));
       });
     });
 

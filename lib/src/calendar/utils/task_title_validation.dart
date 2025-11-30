@@ -1,6 +1,6 @@
 import 'package:characters/characters.dart';
 
-import '../constants.dart';
+import 'package:axichat/src/calendar/constants.dart';
 
 /// Shared helpers for validating calendar task titles so inline inputs,
 /// quick-add surfaces, and full editors stay consistent.

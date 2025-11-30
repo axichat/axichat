@@ -6,13 +6,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../bloc/calendar_bloc.dart';
-import '../bloc/calendar_event.dart';
-import '../bloc/calendar_state.dart';
-import '../utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'calendar_task_search.dart';
 import 'calendar_experience_state.dart';
 import 'feedback_system.dart';
 import 'sync_controls.dart';
+import 'task_sidebar.dart';
 import 'widgets/calendar_mobile_tab_shell.dart';
 
 class CalendarWidget extends StatefulWidget {
@@ -169,6 +172,46 @@ class _CalendarWidgetState
         ),
         Expanded(child: tintedLayout),
       ],
+    );
+  }
+
+  @override
+  VoidCallback? buildNavigationSearchAction(
+    BuildContext context,
+    CalendarState state,
+    bool usesDesktopLayout,
+  ) {
+    final CalendarBloc? bloc = calendarBloc;
+    if (bloc == null) {
+      return null;
+    }
+    return () => _openTaskSearch(bloc);
+  }
+
+  Future<void> _openTaskSearch(CalendarBloc bloc) async {
+    final TaskSidebarState? sidebarState = sidebarKey.currentState;
+    await showCalendarTaskSearch(
+      context: context,
+      bloc: bloc,
+      requiresLongPressForDrag: sidebarState?.requiresLongPressForDrag ?? false,
+      taskTileBuilder: sidebarState == null
+          ? null
+          : (
+              CalendarTask task, {
+              Widget? trailing,
+              bool requiresLongPress = false,
+              VoidCallback? onTap,
+              VoidCallback? onDragStart,
+              bool allowContextMenu = false,
+            }) =>
+              sidebarState.buildSearchTaskTile(
+                task,
+                trailing: trailing,
+                requiresLongPress: requiresLongPress,
+                onTap: onTap,
+                onDragStart: onDragStart,
+                allowContextMenu: allowContextMenu,
+              ),
     );
   }
 

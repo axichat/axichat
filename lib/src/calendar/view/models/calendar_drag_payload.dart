@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import '../../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 /// Payload shared between calendar draggables and drag targets.
 class CalendarDragPayload {

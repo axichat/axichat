@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import '../../common/ui/ui.dart';
-import '../bloc/calendar_event.dart';
-import '../bloc/calendar_state.dart';
-import '../utils/responsive_helper.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'widgets/task_form_section.dart';
 
 const double _compactDateLabelCollapseWidth = smallScreen;
@@ -27,6 +27,7 @@ class CalendarNavigation extends StatelessWidget {
     this.canRedo = false,
     this.hideCompletedScheduled = false,
     this.onToggleHideCompletedScheduled,
+    this.onSearchRequested,
   });
 
   final CalendarState state;
@@ -40,6 +41,7 @@ class CalendarNavigation extends StatelessWidget {
   final bool canRedo;
   final bool hideCompletedScheduled;
   final ValueChanged<bool>? onToggleHideCompletedScheduled;
+  final VoidCallback? onSearchRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -126,6 +128,7 @@ class CalendarNavigation extends StatelessWidget {
           undoRedoGroup: undoRedoGroup,
           hideCompletedScheduled: hideCompletedScheduled,
           onToggleHideCompletedScheduled: onToggleHideCompletedScheduled,
+          onSearchRequested: onSearchRequested,
         );
 
         const Border? border = null;
@@ -464,6 +467,7 @@ class _TrailingControls extends StatelessWidget {
     required this.undoRedoGroup,
     required this.hideCompletedScheduled,
     required this.onToggleHideCompletedScheduled,
+    this.onSearchRequested,
   });
 
   final CalendarState state;
@@ -474,6 +478,7 @@ class _TrailingControls extends StatelessWidget {
   final Widget undoRedoGroup;
   final bool hideCompletedScheduled;
   final ValueChanged<bool>? onToggleHideCompletedScheduled;
+  final VoidCallback? onSearchRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -489,6 +494,11 @@ class _TrailingControls extends StatelessWidget {
           );
 
     final trailingChildren = <Widget>[
+      if (onSearchRequested != null)
+        _SearchButton(
+          onPressed: onSearchRequested!,
+          compact: isCompact,
+        ),
       ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxDateLabelWidth),
         child: _DateLabel(
@@ -550,6 +560,48 @@ class _HideCompletedButton extends StatelessWidget {
         ),
       ).withTapBounce(),
     );
+  }
+}
+
+class _SearchButton extends StatelessWidget {
+  const _SearchButton({
+    required this.onPressed,
+    required this.compact,
+  });
+
+  final VoidCallback onPressed;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    if (compact) {
+      return ShadButton.ghost(
+        size: ShadButtonSize.sm,
+        onPressed: onPressed,
+        child: Icon(
+          Icons.search,
+          size: 16,
+          color: colors.primary,
+        ),
+      ).withTapBounce();
+    }
+    return ShadButton.secondary(
+      size: ShadButtonSize.sm,
+      onPressed: onPressed,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.search,
+            size: 16,
+            color: colors.primary,
+          ),
+          const SizedBox(width: calendarInsetSm),
+          const Text('Search'),
+        ],
+      ),
+    ).withTapBounce();
   }
 }
 

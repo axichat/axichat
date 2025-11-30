@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../models/calendar_task.dart';
-import '../utils/time_formatter.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'controllers/task_interaction_controller.dart';
 import 'widgets/calendar_task_tile_render.dart';
 

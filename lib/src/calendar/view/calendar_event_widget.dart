@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../common/ui/ui.dart';
-import '../bloc/calendar_bloc.dart';
-import '../bloc/calendar_event.dart';
-import '../bloc/calendar_state.dart';
-import '../models/calendar_task.dart';
-import '../utils/recurrence_utils.dart';
-import '../utils/time_formatter.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'widgets/task_checklist.dart';
 
 class CalendarEventWidget extends StatefulWidget {
   final CalendarTask task;
@@ -600,6 +601,14 @@ class _CalendarEventContent extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 maxLines: 3,
               ),
+            ),
+          ],
+          if (task.hasChecklist && height > 32) ...[
+            const SizedBox(height: calendarInsetSm),
+            TaskChecklistProgressBar(
+              progress: task.checklistProgress,
+              activeColor: Colors.white,
+              backgroundColor: Colors.white.withValues(alpha: 0.25),
             ),
           ],
           if (height > 45 && task.location?.isNotEmpty == true) ...[

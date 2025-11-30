@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../../common/ui/ui.dart';
-import '../../models/calendar_task.dart';
-import '../widgets/deadline_picker_field.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/widgets/deadline_picker_field.dart';
 
 class RecurrenceFormValue {
   const RecurrenceFormValue({

@@ -2,14 +2,17 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../bloc/calendar_state.dart';
-import '../utils/responsive_helper.dart';
-import '../view/calendar_experience_state.dart';
-import '../view/feedback_system.dart';
-import '../view/widgets/calendar_loading_overlay.dart';
-import '../view/widgets/calendar_mobile_tab_shell.dart';
-import '../view/widgets/calendar_task_feedback_observer.dart';
-import '../view/widgets/task_form_section.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
+import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/calendar/view/calendar_task_search.dart';
+import 'package:axichat/src/calendar/view/task_sidebar.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_loading_overlay.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
+import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'guest_calendar_bloc.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
@@ -130,6 +133,46 @@ class _GuestCalendarWidgetState
   @override
   Widget wrapWithTaskFeedback(BuildContext context, Widget child) {
     return CalendarTaskFeedbackObserver<GuestCalendarBloc>(child: child);
+  }
+
+  @override
+  VoidCallback? buildNavigationSearchAction(
+    BuildContext context,
+    CalendarState state,
+    bool usesDesktopLayout,
+  ) {
+    final GuestCalendarBloc? bloc = calendarBloc;
+    if (bloc == null) {
+      return null;
+    }
+    return () => _openTaskSearch(bloc);
+  }
+
+  Future<void> _openTaskSearch(GuestCalendarBloc bloc) async {
+    final TaskSidebarState? sidebarState = sidebarKey.currentState;
+    await showCalendarTaskSearch(
+      context: context,
+      bloc: bloc,
+      requiresLongPressForDrag: sidebarState?.requiresLongPressForDrag ?? false,
+      taskTileBuilder: sidebarState == null
+          ? null
+          : (
+              CalendarTask task, {
+              Widget? trailing,
+              bool requiresLongPress = false,
+              VoidCallback? onTap,
+              VoidCallback? onDragStart,
+              bool allowContextMenu = false,
+            }) =>
+              sidebarState.buildSearchTaskTile(
+                task,
+                trailing: trailing,
+                requiresLongPress: requiresLongPress,
+                onTap: onTap,
+                onDragStart: onDragStart,
+                allowContextMenu: allowContextMenu,
+              ),
+    );
   }
 
   @override

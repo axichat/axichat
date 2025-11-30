@@ -5,7 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 enum CalendarExportFormat { ics, json }
 

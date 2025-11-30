@@ -4,15 +4,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../bloc/base_calendar_bloc.dart';
-import '../bloc/calendar_event.dart';
-import '../bloc/calendar_state.dart';
-import '../models/calendar_task.dart';
-import '../utils/recurrence_utils.dart';
-import '../utils/responsive_helper.dart';
-import '../utils/time_formatter.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'feedback_system.dart';
 import 'widgets/calendar_completion_checkbox.dart';
+import 'widgets/task_checklist.dart';
 
 abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
   const BaseTaskTile({
@@ -254,6 +255,7 @@ class _CompactTaskTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color indicatorColor =
         task.isCompleted ? taskCompletedColor : taskColor;
+    final colors = context.colorScheme;
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -282,6 +284,14 @@ class _CompactTaskTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _TaskTitle(task: task, maxLines: 1, fontSize: 14),
+                      if (task.hasChecklist) ...[
+                        const SizedBox(height: calendarInsetMd),
+                        TaskChecklistProgressBar(
+                          progress: task.checklistProgress,
+                          activeColor: colors.primary,
+                          backgroundColor: colors.muted.withValues(alpha: 0.2),
+                        ),
+                      ],
                       if (timeLabel != null) ...[
                         const SizedBox(height: calendarInsetMd),
                         _TaskTimeLabel(
@@ -345,6 +355,7 @@ class _MediumTaskTile extends StatelessWidget {
     const Color textColor = Colors.white;
     final Color backgroundColor =
         task.isCompleted ? taskCompletedColor : taskColor;
+    final Color progressTrack = textColor.withValues(alpha: 0.25);
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -387,6 +398,14 @@ class _MediumTaskTile extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (task.hasChecklist) ...[
+                  const SizedBox(height: calendarGutterSm),
+                  TaskChecklistProgressBar(
+                    progress: task.checklistProgress,
+                    activeColor: textColor,
+                    backgroundColor: progressTrack,
+                  ),
+                ],
                 if (timeLabel != null) ...[
                   const SizedBox(height: calendarGutterSm),
                   Row(
@@ -467,6 +486,7 @@ class _FullTaskTile extends StatelessWidget {
     final colors = context.colorScheme;
     final Color indicatorColor =
         task.isCompleted ? taskCompletedColor : task.priorityColor;
+    final Color progressTrack = colors.muted.withValues(alpha: 0.2);
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -511,6 +531,14 @@ class _FullTaskTile extends StatelessWidget {
                               fontSize: 13,
                             ),
                           ),
+                        ),
+                      ],
+                      if (task.hasChecklist) ...[
+                        const SizedBox(height: calendarGutterSm),
+                        TaskChecklistProgressBar(
+                          progress: task.checklistProgress,
+                          activeColor: colors.primary,
+                          backgroundColor: progressTrack,
                         ),
                       ],
                       if (timeLabel != null) ...[
