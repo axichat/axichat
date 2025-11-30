@@ -4,16 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:uuid/uuid.dart';
 
-import '../constants.dart';
-import '../models/calendar_exceptions.dart';
-import '../models/calendar_critical_path.dart';
-import '../models/calendar_model.dart';
-import '../models/calendar_task.dart';
-import '../reminders/calendar_reminder_controller.dart';
-import '../storage/calendar_storage_registry.dart';
-import '../utils/nl_parser_service.dart';
-import '../utils/nl_schedule_adapter.dart';
-import '../utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/calendar/models/calendar_exceptions.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
+import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
+import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
 
@@ -60,6 +62,9 @@ abstract class BaseCalendarBloc
     on<CalendarTaskPriorityChanged>(_onTaskPriorityChanged);
     on<CalendarTaskSplit>(_onTaskSplit);
     on<CalendarTaskRepeated>(_onTaskRepeated);
+    on<CalendarDayEventAdded>(_onDayEventAdded);
+    on<CalendarDayEventUpdated>(_onDayEventUpdated);
+    on<CalendarDayEventDeleted>(_onDayEventDeleted);
     on<CalendarQuickTaskAdded>(_onQuickTaskAdded);
     on<CalendarViewChanged>(_onViewChanged);
     on<CalendarDayViewSelected>(_onDayViewSelected);
@@ -75,7 +80,9 @@ abstract class BaseCalendarBloc
     on<CalendarSelectionTitleChanged>(_onSelectionTitleChanged);
     on<CalendarSelectionDescriptionChanged>(_onSelectionDescriptionChanged);
     on<CalendarSelectionLocationChanged>(_onSelectionLocationChanged);
+    on<CalendarSelectionChecklistChanged>(_onSelectionChecklistChanged);
     on<CalendarSelectionTimeShifted>(_onSelectionTimeShifted);
+    on<CalendarSelectionRemindersChanged>(_onSelectionRemindersChanged);
     on<CalendarSelectionIdsAdded>(_onSelectionIdsAdded);
     on<CalendarSelectionIdsRemoved>(_onSelectionIdsRemoved);
     on<CalendarUndoRequested>(_onUndoRequested);
@@ -298,6 +305,29 @@ abstract class BaseCalendarBloc
     _redoStack.clear();
   }
 
+  void _restoreLastUndoSnapshot(
+    Emitter<CalendarState> emit, {
+    bool clearRedo = true,
+  }) {
+    if (_undoStack.isEmpty) {
+      return;
+    }
+    final _CalendarUndoSnapshot snapshot = _undoStack.removeLast();
+    if (clearRedo) {
+      _redoStack.clear();
+    }
+    emitModel(
+      snapshot.model,
+      emit,
+      selectedDate: state.selectedDate,
+      isSelectionMode: snapshot.isSelectionMode,
+      selectedTaskIds: snapshot.selectedTaskIds,
+      focusedCriticalPathId: snapshot.focusedCriticalPathId,
+      focusedCriticalPathSpecified: true,
+      isLoading: false,
+    );
+  }
+
   void _emitSelectionState({
     required Emitter<CalendarState> emit,
     required bool isSelectionMode,
@@ -370,6 +400,9 @@ abstract class BaseCalendarBloc
               ? event.scheduledTime!.add(event.duration!)
               : null);
 
+      final List<TaskChecklistItem> checklist =
+          _normalizedChecklist(event.checklist);
+
       final task = CalendarTask.create(
         title: event.title,
         description: event.description,
@@ -381,6 +414,8 @@ abstract class BaseCalendarBloc
         priority: event.priority,
         startHour: computedStartHour,
         recurrence: event.recurrence,
+        checklist: checklist,
+        reminders: event.reminders,
       ).copyWith(modifiedAt: now);
 
       final updatedModel = state.model.addTask(task);
@@ -412,7 +447,13 @@ abstract class BaseCalendarBloc
 
       _recordUndoSnapshot();
 
-      final updatedTask = event.task.copyWith(modifiedAt: _now());
+      final List<TaskChecklistItem> checklist =
+          _normalizedChecklist(event.task.checklist);
+
+      final updatedTask = event.task.copyWith(
+        modifiedAt: _now(),
+        checklist: checklist,
+      );
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit, isLoading: false);
 
@@ -679,6 +720,7 @@ abstract class BaseCalendarBloc
         duration: event.duration ?? existing?.duration,
         endDate: event.endDate ?? existing?.endDate,
         isCancelled: event.isCancelled ?? existing?.isCancelled,
+        checklist: event.checklist ?? existing?.checklist,
       );
 
       if (_isOccurrenceOverrideEmpty(updatedOverride)) {
@@ -979,6 +1021,118 @@ abstract class BaseCalendarBloc
     }
   }
 
+  Future<void> _onDayEventAdded(
+    CalendarDayEventAdded event,
+    Emitter<CalendarState> emit,
+  ) async {
+    bool snapshotRecorded = false;
+    try {
+      if (event.title.trim().isEmpty) {
+        throw const CalendarValidationException(
+          'title',
+          'Title cannot be empty',
+        );
+      }
+
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      snapshotRecorded = true;
+
+      if (event.endDate != null && event.endDate!.isBefore(event.startDate)) {
+        throw const CalendarValidationException(
+          'date',
+          'End date cannot be before the start date',
+        );
+      }
+
+      final DayEvent dayEvent = DayEvent.create(
+        title: event.title,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        description: event.description,
+        reminders: event.reminders,
+      );
+
+      final CalendarModel updatedModel = state.model.addDayEvent(dayEvent);
+      emitModel(updatedModel, emit, isLoading: false);
+      await onDayEventAdded(dayEvent);
+    } catch (error) {
+      if (snapshotRecorded) {
+        _restoreLastUndoSnapshot(emit);
+      }
+      await _handleError(error, 'Failed to add day event', emit);
+    }
+  }
+
+  Future<void> _onDayEventUpdated(
+    CalendarDayEventUpdated event,
+    Emitter<CalendarState> emit,
+  ) async {
+    bool snapshotRecorded = false;
+    try {
+      final DayEvent? existing = state.model.dayEvents[event.event.id];
+      if (existing == null) {
+        throw CalendarDayEventNotFoundException(event.event.id);
+      }
+      if (event.event.title.trim().isEmpty) {
+        throw const CalendarValidationException(
+          'title',
+          'Title cannot be empty',
+        );
+      }
+
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      snapshotRecorded = true;
+
+      if (event.event.normalizedEnd.isBefore(event.event.normalizedStart)) {
+        throw const CalendarValidationException(
+          'date',
+          'End date cannot be before the start date',
+        );
+      }
+
+      final DayEvent normalized = event.event.normalizedCopy(
+        modifiedAt: _now(),
+      );
+      final CalendarModel updatedModel = state.model.updateDayEvent(normalized);
+      emitModel(updatedModel, emit, isLoading: false);
+      await onDayEventUpdated(normalized);
+    } catch (error) {
+      if (snapshotRecorded) {
+        _restoreLastUndoSnapshot(emit);
+      }
+      await _handleError(error, 'Failed to update day event', emit);
+    }
+  }
+
+  Future<void> _onDayEventDeleted(
+    CalendarDayEventDeleted event,
+    Emitter<CalendarState> emit,
+  ) async {
+    bool snapshotRecorded = false;
+    try {
+      final DayEvent? existing = state.model.dayEvents[event.eventId];
+      if (existing == null) {
+        throw CalendarDayEventNotFoundException(event.eventId);
+      }
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      snapshotRecorded = true;
+
+      final DayEvent deleted = existing.copyWith(modifiedAt: _now());
+      final CalendarModel updatedModel =
+          state.model.deleteDayEvent(event.eventId);
+      emitModel(updatedModel, emit, isLoading: false);
+      await onDayEventDeleted(deleted);
+    } catch (error) {
+      if (snapshotRecorded) {
+        _restoreLastUndoSnapshot(emit);
+      }
+      await _handleError(error, 'Failed to delete day event', emit);
+    }
+  }
+
   Future<void> _onQuickTaskAdded(
     CalendarQuickTaskAdded event,
     Emitter<CalendarState> emit,
@@ -1005,7 +1159,10 @@ abstract class BaseCalendarBloc
         priority: event.priority == TaskPriority.none
             ? parsed.priority
             : event.priority,
+        checklist: _normalizedChecklist(event.checklist),
         modifiedAt: now,
+        reminders: (event.reminders ?? parsed.reminders)?.normalized() ??
+            ReminderPreferences.defaults(),
       );
 
       final updatedModel = state.model.addTask(task);
@@ -1384,6 +1541,97 @@ abstract class BaseCalendarBloc
     }
   }
 
+  Future<void> _onSelectionChecklistChanged(
+    CalendarSelectionChecklistChanged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    if (state.selectedTaskIds.isEmpty) {
+      return;
+    }
+    final List<TaskChecklistItem> checklist =
+        _normalizedChecklist(event.checklist);
+    final now = _now();
+    final updates = <String, CalendarTask>{};
+    final baseOverrideUpdates = <String, Map<String, TaskOccurrenceOverride>>{};
+
+    for (final id in state.selectedTaskIds) {
+      final CalendarTask? direct = state.model.tasks[id];
+      if (direct != null) {
+        if (!_checklistsEqual(direct.checklist, checklist)) {
+          updates[id] = direct.copyWith(
+            checklist: checklist,
+            modifiedAt: now,
+          );
+        }
+        continue;
+      }
+
+      final String baseId = baseTaskIdFrom(id);
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+
+      final String? occurrenceKey = occurrenceKeyFrom(id);
+      if (occurrenceKey == null || occurrenceKey.isEmpty) {
+        continue;
+      }
+
+      final CalendarTask baseReference = updates[baseId] ?? baseTask;
+      final Map<String, TaskOccurrenceOverride> overrides =
+          baseOverrideUpdates.putIfAbsent(
+        baseId,
+        () => Map<String, TaskOccurrenceOverride>.from(
+          baseReference.occurrenceOverrides,
+        ),
+      );
+
+      final TaskOccurrenceOverride existing = overrides[occurrenceKey] ??
+          baseReference.occurrenceOverrides[occurrenceKey] ??
+          const TaskOccurrenceOverride();
+      final bool matchesBase = _checklistsEqual(checklist, baseTask.checklist);
+      final TaskOccurrenceOverride updatedOverride = existing.copyWith(
+        checklist: matchesBase ? null : checklist,
+      );
+
+      if (_overrideIsEmpty(updatedOverride)) {
+        overrides.remove(occurrenceKey);
+      } else {
+        overrides[occurrenceKey] = updatedOverride;
+      }
+    }
+
+    if (updates.isEmpty && baseOverrideUpdates.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+    final mergedUpdates = <String, CalendarTask>{...updates};
+    for (final entry in baseOverrideUpdates.entries) {
+      final String baseId = entry.key;
+      final CalendarTask? baseTask =
+          mergedUpdates[baseId] ?? state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+      mergedUpdates[baseId] = baseTask.copyWith(
+        occurrenceOverrides: entry.value,
+        modifiedAt: now,
+      );
+    }
+
+    final updatedModel = state.model.replaceTasks(mergedUpdates);
+    emitModel(
+      updatedModel,
+      emit,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+
+    for (final task in mergedUpdates.values) {
+      await onTaskUpdated(task);
+    }
+  }
+
   Future<void> _onSelectionTimeShifted(
     CalendarSelectionTimeShifted event,
     Emitter<CalendarState> emit,
@@ -1487,6 +1735,47 @@ abstract class BaseCalendarBloc
     }
   }
 
+  Future<void> _onSelectionRemindersChanged(
+    CalendarSelectionRemindersChanged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    if (state.selectedTaskIds.isEmpty) {
+      return;
+    }
+    final ReminderPreferences normalized = event.reminders.normalized();
+    final DateTime now = _now();
+    final Set<String> baseIds = state.selectedTaskIds
+        .map(baseTaskIdFrom)
+        .where(state.model.tasks.containsKey)
+        .toSet();
+    if (baseIds.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+    final Map<String, CalendarTask> updates = <String, CalendarTask>{};
+    for (final String id in baseIds) {
+      final CalendarTask? task = state.model.tasks[id];
+      if (task == null) {
+        continue;
+      }
+      updates[id] = task.copyWith(
+        reminders: normalized,
+        modifiedAt: now,
+      );
+    }
+    if (updates.isEmpty) {
+      return;
+    }
+    final CalendarModel updatedModel = state.model.replaceTasks(updates);
+    emitModel(
+      updatedModel,
+      emit,
+      isSelectionMode: state.isSelectionMode,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+  }
+
   Set<String> _selectionGroupFor(String id) {
     return {id};
   }
@@ -1500,7 +1789,44 @@ abstract class BaseCalendarBloc
         override.isCompleted == null &&
         override.title == null &&
         override.description == null &&
-        override.location == null;
+        override.location == null &&
+        (override.checklist == null || override.checklist!.isEmpty);
+  }
+
+  List<TaskChecklistItem> _normalizedChecklist(
+    List<TaskChecklistItem> source,
+  ) {
+    final List<TaskChecklistItem> normalized = <TaskChecklistItem>[];
+    for (final TaskChecklistItem item in source) {
+      final String label = item.label.trim();
+      if (label.isEmpty) {
+        continue;
+      }
+      normalized.add(item.copyWith(label: label));
+    }
+    return List<TaskChecklistItem>.unmodifiable(normalized);
+  }
+
+  bool _checklistsEqual(
+    List<TaskChecklistItem> a,
+    List<TaskChecklistItem> b,
+  ) {
+    if (identical(a, b)) {
+      return true;
+    }
+    final List<TaskChecklistItem> normalizedA = _normalizedChecklist(a);
+    final List<TaskChecklistItem> normalizedB = _normalizedChecklist(b);
+    if (normalizedA.length != normalizedB.length) {
+      return false;
+    }
+    for (var i = 0; i < normalizedA.length; i++) {
+      final TaskChecklistItem left = normalizedA[i];
+      final TaskChecklistItem right = normalizedB[i];
+      if (left.label != right.label || left.isCompleted != right.isCompleted) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Duration _taskDuration(CalendarTask task) {
@@ -2448,7 +2774,10 @@ abstract class BaseCalendarBloc
     );
     emit(nextState);
     _pendingReminderSync = _pendingReminderSync.then(
-      (_) => _reminderController?.syncWithTasks(model.tasks.values),
+      (_) => _reminderController?.syncWithTasks(
+        model.tasks.values,
+        dayEvents: model.dayEvents.values,
+      ),
     );
   }
 
@@ -2533,6 +2862,9 @@ abstract class BaseCalendarBloc
   Future<void> onTaskUpdated(CalendarTask task);
   Future<void> onTaskDeleted(CalendarTask task);
   Future<void> onTaskCompleted(CalendarTask task);
+  Future<void> onDayEventAdded(DayEvent event);
+  Future<void> onDayEventUpdated(DayEvent event);
+  Future<void> onDayEventDeleted(DayEvent event);
   void logError(String message, Object error);
 }
 
@@ -2543,5 +2875,6 @@ bool _isOccurrenceOverrideEmpty(TaskOccurrenceOverride override) {
       override.duration == null &&
       override.endDate == null &&
       override.priority == null &&
-      override.isCompleted == null;
+      override.isCompleted == null &&
+      (override.checklist == null || override.checklist!.isEmpty);
 }

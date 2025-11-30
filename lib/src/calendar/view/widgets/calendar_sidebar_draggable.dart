@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter/widgets.dart';
 
-import '../../models/calendar_task.dart';
-import '../models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 
 class CalendarSidebarDraggable extends StatefulWidget {
   const CalendarSidebarDraggable({

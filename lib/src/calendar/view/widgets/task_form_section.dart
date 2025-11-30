@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../../common/ui/ui.dart';
-import '../../utils/location_autocomplete.dart';
-import '../priority_checkbox_tile.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/view/priority_checkbox_tile.dart';
 import 'recurrence_editor.dart';
 import 'schedule_range_fields.dart';
 import 'task_text_field.dart';

@@ -5,7 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 
 class LoadingIndicator extends StatelessWidget {
   const LoadingIndicator({

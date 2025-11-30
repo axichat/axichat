@@ -1,8 +1,9 @@
 import 'dart:developer' as developer;
 
-import '../bloc/base_calendar_bloc.dart';
-import '../models/calendar_task.dart';
-import '../storage/storage_builders.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/storage/storage_builders.dart';
 
 class GuestCalendarBloc extends BaseCalendarBloc {
   GuestCalendarBloc({
@@ -30,6 +31,21 @@ class GuestCalendarBloc extends BaseCalendarBloc {
 
   @override
   Future<void> onTaskCompleted(CalendarTask task) async {
+    // Guest mode: no sync required
+  }
+
+  @override
+  Future<void> onDayEventAdded(DayEvent event) async {
+    // Guest mode: no sync required
+  }
+
+  @override
+  Future<void> onDayEventUpdated(DayEvent event) async {
+    // Guest mode: no sync required
+  }
+
+  @override
+  Future<void> onDayEventDeleted(DayEvent event) async {
     // Guest mode: no sync required
   }
 

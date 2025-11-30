@@ -4,16 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../common/env.dart';
-import '../../common/ui/ui.dart';
-import '../constants.dart';
-import '../models/calendar_task.dart';
-import '../utils/location_autocomplete.dart';
-import '../utils/nl_parser_service.dart';
-import '../utils/nl_schedule_adapter.dart';
-import '../utils/responsive_helper.dart';
-import '../utils/task_title_validation.dart';
+import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
+import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'controllers/quick_add_controller.dart';
+import 'controllers/task_checklist_controller.dart';
 import 'feedback_system.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
@@ -22,9 +24,11 @@ import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
+import 'widgets/task_checklist.dart';
+import 'widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import '../bloc/base_calendar_bloc.dart';
-import '../bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'widgets/critical_path_panel.dart';
 
 enum QuickAddModalSurface { dialog, bottomSheet }
@@ -70,6 +74,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   final _taskNameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  late final TaskChecklistController _checklistController;
   final _taskNameFocusNode = FocusNode();
 
   late final QuickAddController _formController;
@@ -84,6 +89,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   bool _deadlineLocked = false;
   bool _recurrenceLocked = false;
   bool _priorityLocked = false;
+  bool _remindersLocked = false;
   NlAdapterResult? _lastParserResult;
   String? _titleValidationMessage;
 
@@ -91,6 +97,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   void initState() {
     super.initState();
     _titleValidationMessage = widget.initialValidationMessage;
+    _checklistController = TaskChecklistController();
 
     _animationController = AnimationController(
       duration: baseAnimationDuration,
@@ -151,6 +158,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     _taskNameController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _checklistController.dispose();
     _taskNameFocusNode.dispose();
     _formController.dispose();
     super.dispose();
@@ -170,6 +178,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             taskNameController: _taskNameController,
             descriptionController: _descriptionController,
             locationController: _locationController,
+            checklistController: _checklistController,
             taskNameFocusNode: _taskNameFocusNode,
             titleValidationMessage: _titleValidationMessage,
             locationHelper: widget.locationHelper,
@@ -186,6 +195,8 @@ class _QuickAddModalState extends State<QuickAddModal>
             onRecurrenceChanged: _onUserRecurrenceChanged,
             onImportantChanged: _onUserImportantChanged,
             onUrgentChanged: _onUserUrgentChanged,
+            reminders: _formController.reminders,
+            onRemindersChanged: _onRemindersChanged,
             actionInsetBuilder: _quickAddActionInset,
             fallbackDate: widget.prefilledDateTime,
             onAddToCriticalPath: () {
@@ -212,6 +223,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             taskNameController: _taskNameController,
             descriptionController: _descriptionController,
             locationController: _locationController,
+            checklistController: _checklistController,
             taskNameFocusNode: _taskNameFocusNode,
             titleValidationMessage: _titleValidationMessage,
             locationHelper: widget.locationHelper,
@@ -228,6 +240,8 @@ class _QuickAddModalState extends State<QuickAddModal>
             onRecurrenceChanged: _onUserRecurrenceChanged,
             onImportantChanged: _onUserImportantChanged,
             onUrgentChanged: _onUserUrgentChanged,
+            reminders: _formController.reminders,
+            onRemindersChanged: _onRemindersChanged,
             actionInsetBuilder: _quickAddActionInset,
             fallbackDate: widget.prefilledDateTime,
             onAddToCriticalPath: () {
@@ -364,6 +378,10 @@ class _QuickAddModalState extends State<QuickAddModal>
       );
     }
 
+    if (!_remindersLocked) {
+      _formController.setReminders(task.effectiveReminders);
+    }
+
     if (!_locationLocked) {
       _setLocationField(task.location);
     }
@@ -416,6 +434,9 @@ class _QuickAddModalState extends State<QuickAddModal>
     if (!_priorityLocked) {
       _formController.setImportant(false);
       _formController.setUrgent(false);
+    }
+    if (!_remindersLocked) {
+      _formController.setReminders(ReminderPreferences.defaults());
     }
     if (!_locationLocked && _locationController.text.isNotEmpty) {
       _locationController.clear();
@@ -477,12 +498,18 @@ class _QuickAddModalState extends State<QuickAddModal>
     _formController.setUrgent(value);
   }
 
+  void _onRemindersChanged(ReminderPreferences value) {
+    _remindersLocked = true;
+    _formController.setReminders(value);
+  }
+
   void _resetParserLocks() {
     _locationLocked = false;
     _scheduleLocked = false;
     _deadlineLocked = false;
     _recurrenceLocked = false;
     _priorityLocked = false;
+    _remindersLocked = false;
   }
 
   Future<void> _submitTask({bool addToCriticalPath = false}) async {
@@ -544,6 +571,8 @@ class _QuickAddModalState extends State<QuickAddModal>
       startHour: scheduledTime != null
           ? scheduledTime.hour + (scheduledTime.minute / 60.0)
           : null,
+      checklist: _checklistController.items.toList(),
+      reminders: _formController.reminders.normalized(),
     );
 
     widget.onTaskAdded(task);
@@ -634,6 +663,7 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.taskNameController,
     required this.descriptionController,
     required this.locationController,
+    required this.checklistController,
     required this.taskNameFocusNode,
     required this.titleValidationMessage,
     required this.locationHelper,
@@ -648,6 +678,8 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.onRecurrenceChanged,
     required this.onImportantChanged,
     required this.onUrgentChanged,
+    required this.reminders,
+    required this.onRemindersChanged,
     required this.actionInsetBuilder,
     required this.fallbackDate,
     required this.onAddToCriticalPath,
@@ -658,6 +690,7 @@ class _QuickAddModalContent extends StatelessWidget {
   final TextEditingController taskNameController;
   final TextEditingController descriptionController;
   final TextEditingController locationController;
+  final TaskChecklistController checklistController;
   final FocusNode taskNameFocusNode;
   final String? titleValidationMessage;
   final LocationAutocompleteHelper locationHelper;
@@ -672,6 +705,8 @@ class _QuickAddModalContent extends StatelessWidget {
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
+  final ReminderPreferences reminders;
+  final ValueChanged<ReminderPreferences> onRemindersChanged;
   final double Function(BuildContext context) actionInsetBuilder;
   final DateTime? fallbackDate;
   final VoidCallback onAddToCriticalPath;
@@ -728,6 +763,8 @@ class _QuickAddModalContent extends StatelessWidget {
                       controller: descriptionController,
                     ),
                     const SizedBox(height: calendarGutterMd),
+                    TaskChecklist(controller: checklistController),
+                    const SizedBox(height: calendarGutterMd),
                     _QuickAddLocationField(
                       controller: locationController,
                       helper: locationHelper,
@@ -752,6 +789,11 @@ class _QuickAddModalContent extends StatelessWidget {
                     _QuickAddDeadlineSection(
                       formController: formController,
                       onChanged: onDeadlineChanged,
+                    ),
+                    const SizedBox(height: calendarGutterMd),
+                    _QuickAddReminderSection(
+                      reminders: reminders,
+                      onChanged: onRemindersChanged,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -1082,6 +1124,25 @@ class _QuickAddDeadlineSection extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _QuickAddReminderSection extends StatelessWidget {
+  const _QuickAddReminderSection({
+    required this.reminders,
+    required this.onChanged,
+  });
+
+  final ReminderPreferences reminders;
+  final ValueChanged<ReminderPreferences> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ReminderPreferencesField(
+      value: reminders,
+      onChanged: onChanged,
+      title: 'Reminders',
     );
   }
 }

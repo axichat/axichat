@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../common/ui/feedback_toast.dart';
-import '../../common/ui/ui.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 class FeedbackMessage {
   final String? title;

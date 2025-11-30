@@ -3,10 +3,11 @@ import 'dart:developer' as developer;
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 
-import '../models/calendar_model.dart';
-import '../models/calendar_task.dart';
-import '../storage/storage_builders.dart';
-import '../sync/calendar_sync_manager.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/storage/storage_builders.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'base_calendar_bloc.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
@@ -70,6 +71,42 @@ class CalendarBloc extends BaseCalendarBloc {
     } catch (error) {
       developer.log('Failed to sync task completion: $error',
           name: 'CalendarBloc');
+    }
+  }
+
+  @override
+  Future<void> onDayEventAdded(DayEvent event) async {
+    try {
+      await _syncManager.sendDayEventUpdate(event, 'add');
+    } catch (error) {
+      developer.log(
+        'Failed to sync day event addition: $error',
+        name: 'CalendarBloc',
+      );
+    }
+  }
+
+  @override
+  Future<void> onDayEventUpdated(DayEvent event) async {
+    try {
+      await _syncManager.sendDayEventUpdate(event, 'update');
+    } catch (error) {
+      developer.log(
+        'Failed to sync day event update: $error',
+        name: 'CalendarBloc',
+      );
+    }
+  }
+
+  @override
+  Future<void> onDayEventDeleted(DayEvent event) async {
+    try {
+      await _syncManager.sendDayEventUpdate(event, 'delete');
+    } catch (error) {
+      developer.log(
+        'Failed to sync day event deletion: $error',
+        name: 'CalendarBloc',
+      );
     }
   }
 

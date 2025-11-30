@@ -10,7 +10,7 @@ import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 
-import '../sync/delta_event_consumer.dart';
+import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'chat_transport.dart';
 
 const _selfDomain = 'user.delta.chat';

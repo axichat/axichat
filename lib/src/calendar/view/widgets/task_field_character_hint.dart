@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../common/ui/ui.dart';
-import '../../constants.dart';
-import '../../utils/task_title_validation.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 
 /// Displays a live-updating character count for title fields and surfaces a
 /// warning when the task title exceeds the configured limit.

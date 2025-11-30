@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../common/ui/ui.dart';
-import '../constants.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/constants.dart';
 
 class ErrorDisplay extends StatelessWidget {
   const ErrorDisplay({

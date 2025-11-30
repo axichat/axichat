@@ -1,7 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
-import '../loading_indicator.dart';
+import 'package:axichat/src/calendar/view/loading_indicator.dart';
 
 /// Semi-transparent overlay with a centered [CalendarLoadingIndicator].
 /// Used when the calendar or guest calendar blocks interactions during syncs.

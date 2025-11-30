@@ -4,12 +4,12 @@ import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 
-import '../bloc/base_calendar_bloc.dart';
-import '../bloc/calendar_event.dart';
-import '../bloc/calendar_state.dart';
-import '../models/calendar_task.dart';
-import '../utils/location_autocomplete.dart';
-import '../utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'calendar_navigation.dart';
 import 'feedback_system.dart';
 import 'models/calendar_drag_payload.dart';
@@ -20,6 +20,7 @@ import 'widgets/calendar_grid_host.dart';
 import 'widgets/calendar_keyboard_scope.dart';
 import 'widgets/calendar_loading_overlay.dart';
 import 'widgets/calendar_mobile_tab_shell.dart';
+import 'widgets/calendar_month_host.dart';
 import 'widgets/calendar_scaffolds.dart';
 import 'widgets/calendar_sidebar_host.dart';
 import 'task_sidebar.dart';
@@ -110,17 +111,25 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
           onDragSessionEnded: handleGridDragSessionEnded,
           onDragGlobalPositionChanged: handleGridDragPositionChanged,
         );
-        final Widget calendarGrid = CalendarGridHost<B>(
-          bloc: calendarBloc,
-          state: state,
-          onEmptySlotTapped: _onEmptySlotTapped,
-          onTaskDragEnd: _onTaskDragEnd,
-          onDragSessionStarted: _handleCalendarGridDragSessionStarted,
-          onDragGlobalPositionChanged: _handleCalendarGridDragPositionChanged,
-          onDragSessionEnded: _handleCalendarGridDragSessionEnded,
-          cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
-        );
-        final Widget dragTargets = buildDragEdgeTargets();
+        final bool isMonthView = state.viewMode == CalendarView.month;
+        final Widget calendarSurface = isMonthView
+            ? CalendarMonthHost<B>(
+                bloc: calendarBloc,
+                state: state,
+              )
+            : CalendarGridHost<B>(
+                bloc: calendarBloc,
+                state: state,
+                onEmptySlotTapped: _onEmptySlotTapped,
+                onTaskDragEnd: _onTaskDragEnd,
+                onDragSessionStarted: _handleCalendarGridDragSessionStarted,
+                onDragGlobalPositionChanged:
+                    _handleCalendarGridDragPositionChanged,
+                onDragSessionEnded: _handleCalendarGridDragSessionEnded,
+                cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
+              );
+        final Widget dragTargets =
+            isMonthView ? const SizedBox.shrink() : buildDragEdgeTargets();
         final double keyboardInset = mediaQuery.viewInsets.bottom;
         final double bottomInset =
             keyboardInset > 0 ? 0 : mediaQuery.viewPadding.bottom;
@@ -148,7 +157,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
           navigation: navigation,
           errorBanner: errorBanner,
           sidebar: sidebar,
-          calendarGrid: calendarGrid,
+          calendarGrid: calendarSurface,
           dragOverlay: dragTargets,
           mobileTabShell: mobileTabShell,
         );
@@ -259,9 +268,14 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
           scheduledTime: task.scheduledTime,
           description: task.description,
           duration: task.duration,
+          deadline: task.deadline,
+          location: task.location,
           priority: task.priority ?? TaskPriority.none,
           recurrence: task.recurrence,
           startHour: task.startHour,
+          checklist: task.checklist,
+          endDate: task.endDate,
+          reminders: task.reminders,
         ),
       ),
     );
@@ -346,6 +360,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   ) {
     final B? bloc = calendarBloc;
     final SettingsCubit settingsCubit = context.watch<SettingsCubit>();
+    final VoidCallback? searchAction =
+        buildNavigationSearchAction(context, state, usesDesktopLayout);
     final Widget base = CalendarNavigation(
       state: state,
       sidebarVisible: usesDesktopLayout,
@@ -363,6 +379,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
       hideCompletedScheduled: settingsCubit.state.hideCompletedScheduled,
       onToggleHideCompletedScheduled:
           settingsCubit.toggleHideCompletedScheduled,
+      onSearchRequested: searchAction,
     );
     final EdgeInsets? padding = navigationPadding(spec, usesDesktopLayout);
     if (padding == null) {
@@ -375,6 +392,14 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   /// spacing.
   EdgeInsets? navigationPadding(
     CalendarResponsiveSpec spec,
+    bool usesDesktopLayout,
+  ) =>
+      null;
+
+  @protected
+  VoidCallback? buildNavigationSearchAction(
+    BuildContext context,
+    CalendarState state,
     bool usesDesktopLayout,
   ) =>
       null;

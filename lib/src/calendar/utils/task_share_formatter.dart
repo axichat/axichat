@@ -1,7 +1,7 @@
 import 'package:chrono_dart/chrono_dart.dart';
 import 'package:timezone/timezone.dart' as tz;
 
-import '../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'nl_schedule_adapter.dart';
 import 'schedule_parser.dart';
 import 'time_formatter.dart';

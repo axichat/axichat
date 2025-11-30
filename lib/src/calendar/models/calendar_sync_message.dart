@@ -15,6 +15,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     required DateTime timestamp,
     String? taskId,
     String? operation, // 'add', 'update', 'delete'
+    @Default('task') String entity, // 'task', 'day_event'
   }) = _CalendarSyncMessage;
 
   factory CalendarSyncMessage.fromJson(Map<String, dynamic> json) =>
@@ -40,6 +41,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     required String taskId,
     required String operation,
     Map<String, dynamic>? data,
+    String entity = 'task',
   }) =>
       CalendarSyncMessage(
         type: 'calendar_update',
@@ -47,6 +49,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
         timestamp: DateTime.now(),
         taskId: taskId,
         operation: operation,
+        entity: entity,
       );
 
   const CalendarSyncMessage._();
@@ -58,6 +61,10 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       XmlElement(XmlName('type'))..innerText = type,
       XmlElement(XmlName('timestamp'))..innerText = timestamp.toIso8601String(),
     ]);
+
+    element.children.add(
+      XmlElement(XmlName('entity'))..innerText = entity,
+    );
 
     if (checksum != null) {
       element.children.add(
@@ -112,6 +119,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     final checksum = getText('checksum');
     final taskId = getText('task_id');
     final operation = getText('operation');
+    final entity = getText('entity') ?? 'task';
 
     Map<String, dynamic>? data;
     final dataStr = getText('data');
@@ -130,6 +138,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       timestamp: timestamp,
       taskId: taskId,
       operation: operation,
+      entity: entity,
     );
   }
 

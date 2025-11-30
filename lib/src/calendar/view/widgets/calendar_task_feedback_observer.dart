@@ -2,11 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../bloc/base_calendar_bloc.dart';
-import '../../bloc/calendar_event.dart';
-import '../../bloc/calendar_state.dart';
-import '../../models/calendar_task.dart';
-import '../feedback_system.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/feedback_system.dart';
 
 class CalendarTaskFeedbackObserver<B extends BaseCalendarBloc>
     extends StatefulWidget {

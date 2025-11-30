@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
-import '../../models/calendar_task.dart';
-import '../controllers/task_interaction_controller.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 
 typedef TaskTileContextMenuCallback = void Function(
   Offset localPosition,

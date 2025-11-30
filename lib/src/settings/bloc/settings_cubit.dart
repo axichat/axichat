@@ -69,6 +69,14 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(hideCompletedReminders: hide));
   }
 
+  void saveUnscheduledSidebarOrder(List<String> order) {
+    emit(state.copyWith(unscheduledSidebarOrder: List<String>.from(order)));
+  }
+
+  void saveReminderSidebarOrder(List<String> order) {
+    emit(state.copyWith(reminderSidebarOrder: List<String>.from(order)));
+  }
+
   @override
   SettingsState? fromJson(Map<String, dynamic> json) {
     try {

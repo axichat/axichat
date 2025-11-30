@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:intl/intl.dart' as intl;
 import 'package:path_provider/path_provider.dart';
 
-import '../../storage/models.dart';
+import 'package:axichat/src/storage/models.dart';
 
 typedef ChatHistoryLoader = Future<List<Message>> Function(String jid);
 

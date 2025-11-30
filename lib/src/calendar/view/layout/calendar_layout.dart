@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
-import '../../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 /// Centralized layout constants for the calendar grid. Keeping these values in
 /// one place eliminates scattered magic numbers while preserving the legacy

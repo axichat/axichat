@@ -1097,6 +1097,44 @@ class AccessibilityActionBloc
 
   List<AccessibilityMenuSection> _buildRootSections() {
     final sections = <AccessibilityMenuSection>[];
+    final totalUnread = _contacts.fold<int>(
+      0,
+      (count, contact) =>
+          contact.unreadCount > 0 ? count + contact.unreadCount : count,
+    );
+
+    sections.add(
+      AccessibilityMenuSection(
+        id: 'actions',
+        title: _textRootActionsTitle,
+        items: [
+          AccessibilityMenuItem(
+            id: 'action-start-chat',
+            label: _textStartNewChat,
+            description: _textStartNewChatDescription,
+            kind: AccessibilityMenuItemKind.navigate,
+            action: const AccessibilityNavigateAction(
+              step: AccessibilityStepKind.contactPicker,
+              purpose: AccessibilityFlowPurpose.sendMessage,
+            ),
+            icon: Icons.add_comment_outlined,
+          ),
+          AccessibilityMenuItem(
+            id: 'action-unread',
+            label: _textReadNewMessages,
+            description: _textUnreadSummaryDescription,
+            kind: AccessibilityMenuItemKind.navigate,
+            action: const AccessibilityNavigateAction(
+              step: AccessibilityStepKind.unread,
+              purpose: AccessibilityFlowPurpose.reviewUnread,
+            ),
+            icon: Icons.mark_chat_unread_outlined,
+            badge: totalUnread > 0 ? totalUnread.toString() : null,
+          ),
+        ],
+      ),
+    );
+
     if (_invites.isNotEmpty) {
       sections.addAll(_buildInviteSections());
     }
@@ -1577,6 +1615,12 @@ class AccessibilityActionBloc
   // ignore: unused_element
   String get _textNeedsAttention => 'Needs attention';
   String get _textReadNewMessages => 'Read new messages';
+  String get _textUnreadSummaryDescription =>
+      'Focus on conversations with unread messages';
+  String get _textRootActionsTitle => 'Actions';
+  String get _textStartNewChat => 'Start a new chat';
+  String get _textStartNewChatDescription =>
+      'Pick a contact or type an address';
   String get _textInvitesTitle => 'Invites';
   // ignore: unused_element
   String get _textPendingInvites => 'Pending invites';

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../bloc/base_calendar_bloc.dart';
-import '../task_sidebar.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/view/task_sidebar.dart';
 
 /// Wraps [TaskSidebar] with the provided [BaseCalendarBloc] so drag sessions
 /// can be handled consistently in both authenticated and guest calendars.

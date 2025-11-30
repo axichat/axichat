@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
-import '../bloc/calendar_bloc.dart';
-import '../bloc/calendar_event.dart';
-import '../constants.dart';
-import '../models/calendar_task.dart';
-import '../utils/nl_parser_service.dart';
-import '../utils/nl_schedule_adapter.dart';
-import '../utils/task_title_validation.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
+import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
+import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'controllers/inline_task_composer_controller.dart';
 import 'feedback_system.dart';
 import 'widgets/task_field_character_hint.dart';
@@ -197,6 +197,8 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
               priority: task.priority ?? TaskPriority.none,
               startHour: startHour,
               recurrence: task.recurrence,
+              checklist: task.checklist,
+              reminders: task.effectiveReminders,
             ),
           );
 

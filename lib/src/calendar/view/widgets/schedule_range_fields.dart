@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'deadline_picker_field.dart';
 
 /// Displays paired date/time inputs for start and end selections, matching the

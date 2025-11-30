@@ -2,7 +2,7 @@ import 'dart:collection';
 
 import 'package:timezone/timezone.dart' as tz;
 
-import '../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'schedule_parser.dart';
 
 /// Context describing the device/environment used when mapping parser output

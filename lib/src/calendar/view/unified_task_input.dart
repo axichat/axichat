@@ -1,15 +1,19 @@
 import 'package:axichat/src/app.dart';
-import '../../common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import '../bloc/base_calendar_bloc.dart';
-import '../bloc/calendar_event.dart';
-import '../bloc/calendar_state.dart';
-import '../models/calendar_task.dart';
-import '../utils/responsive_helper.dart';
-import '../utils/task_title_validation.dart';
-import '../utils/time_formatter.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/task_title_validation.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/calendar/view/controllers/task_checklist_controller.dart';
+import 'package:axichat/src/calendar/view/widgets/task_checklist.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'widgets/reminder_preferences_field.dart';
 import 'error_display.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/task_form_section.dart';
@@ -35,6 +39,8 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     extends State<UnifiedTaskInput<T>> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TaskChecklistController _checklistController;
+  late ReminderPreferences _reminders;
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -60,6 +66,11 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
         TextEditingController(text: widget.editingTask?.title ?? '');
     _descriptionController =
         TextEditingController(text: widget.editingTask?.description ?? '');
+    _checklistController = TaskChecklistController(
+      initialItems: widget.editingTask?.checklist ?? const [],
+    );
+    _reminders = widget.editingTask?.effectiveReminders ??
+        ReminderPreferences.defaults();
 
     if (widget.editingTask != null) {
       _selectedDate = widget.editingTask!.scheduledTime != null
@@ -84,6 +95,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _checklistController.dispose();
     super.dispose();
   }
 
@@ -105,6 +117,13 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       },
       formatDate: _formatDate,
       formatDuration: _formatDuration,
+      checklistController: _checklistController,
+      reminders: _reminders,
+      onRemindersChanged: (value) {
+        setState(() {
+          _reminders = value;
+        });
+      },
     );
     final Widget saveButton = _UnifiedTaskSaveButton<T>(
       isSubmitting: _isSubmitting,
@@ -174,6 +193,8 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     final description = _descriptionController.text.trim().isNotEmpty
         ? _descriptionController.text.trim()
         : null;
+    final List<TaskChecklistItem> checklist =
+        List<TaskChecklistItem>.from(_checklistController.items);
 
     DateTime? scheduledTime;
     if (_selectedDate != null && _selectedTime != null) {
@@ -196,6 +217,8 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
         scheduledTime: scheduledTime,
         duration: _selectedDuration,
         modifiedAt: DateTime.now(),
+        checklist: checklist,
+        reminders: _reminders.normalized(),
       );
 
       context.read<T>().add(
@@ -208,6 +231,8 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
               description: description,
               scheduledTime: scheduledTime,
               duration: _selectedDuration,
+              checklist: checklist,
+              reminders: _reminders.normalized(),
             ),
           );
     }
@@ -354,11 +379,15 @@ class _UnifiedTaskForm extends StatelessWidget {
     required this.onDurationChanged,
     required this.formatDate,
     required this.formatDuration,
+    required this.checklistController,
+    required this.reminders,
+    required this.onRemindersChanged,
   });
 
   final GlobalKey<FormState> formKey;
   final TextEditingController titleController;
   final TextEditingController descriptionController;
+  final TaskChecklistController checklistController;
   final DateTime? selectedDate;
   final TimeOfDay? selectedTime;
   final Duration? selectedDuration;
@@ -368,6 +397,8 @@ class _UnifiedTaskForm extends StatelessWidget {
   final ValueChanged<Duration?> onDurationChanged;
   final String Function(DateTime?) formatDate;
   final String Function(Duration) formatDuration;
+  final ReminderPreferences reminders;
+  final ValueChanged<ReminderPreferences> onRemindersChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -384,6 +415,8 @@ class _UnifiedTaskForm extends StatelessWidget {
               controller: descriptionController,
             ),
             const SizedBox(height: calendarGutterLg),
+            TaskChecklist(controller: checklistController),
+            const SizedBox(height: calendarGutterLg),
             _UnifiedTaskDateTimeSection(
               selectedDate: selectedDate,
               selectedTime: selectedTime,
@@ -397,6 +430,11 @@ class _UnifiedTaskForm extends StatelessWidget {
               durationOptions: durationOptions,
               onDurationChanged: onDurationChanged,
               formatDuration: formatDuration,
+            ),
+            const SizedBox(height: calendarGutterLg),
+            ReminderPreferencesField(
+              value: reminders,
+              onChanged: onRemindersChanged,
             ),
           ],
         ),

@@ -3,8 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../../common/ui/ui.dart';
-import '../../utils/time_formatter.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 
 typedef DeadlineChanged = void Function(DateTime? value);
 

@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../../common/ui/ui.dart';
-import '../../models/calendar_task.dart';
-import '../controllers/task_interaction_controller.dart';
-import '../resizable_task_widget.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
+import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_draggable.dart';
 // Completion checkbox intentionally omitted on scheduled grid items.

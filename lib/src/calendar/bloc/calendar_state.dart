@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-import '../models/calendar_model.dart';
-import '../models/calendar_critical_path.dart';
-import '../models/calendar_task.dart';
-import '../utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'calendar_event.dart';
 
 part 'calendar_state.freezed.dart';
@@ -229,6 +230,32 @@ extension CalendarStateExtensions on CalendarState {
 
     return results;
   }
+
+  List<DayEvent> dayEventsForDate(DateTime date) {
+    final DateTime normalized = DateTime(date.year, date.month, date.day);
+    return dayEventsInRange(normalized, normalized);
+  }
+
+  List<DayEvent> dayEventsInRange(DateTime rangeStart, DateTime rangeEnd) {
+    final DateTime normalizedStart =
+        DateTime(rangeStart.year, rangeStart.month, rangeStart.day);
+    final DateTime normalizedEnd =
+        DateTime(rangeEnd.year, rangeEnd.month, rangeEnd.day);
+
+    final List<DayEvent> events = model.dayEvents.values
+        .where(
+          (DayEvent event) =>
+              !event.normalizedEnd.isBefore(normalizedStart) &&
+              !event.normalizedStart.isAfter(normalizedEnd),
+        )
+        .toList();
+    events.sort(
+      (a, b) => a.normalizedStart.compareTo(b.normalizedStart),
+    );
+    return events;
+  }
+
+  int dayEventCountForDate(DateTime date) => dayEventsForDate(date).length;
 
   CalendarTask? currentTaskAt(DateTime moment) {
     CalendarTask? active;

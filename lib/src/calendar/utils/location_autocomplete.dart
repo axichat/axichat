@@ -1,5 +1,5 @@
-import '../bloc/calendar_state.dart';
-import '../models/calendar_task.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 /// Describes a location suggestion along with its source metadata.
 class LocationSuggestion {

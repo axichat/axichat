@@ -2,21 +2,25 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../common/ui/ui.dart';
-import '../bloc/base_calendar_bloc.dart';
-import '../bloc/calendar_state.dart';
-import '../constants.dart';
-import '../models/calendar_task.dart';
-import '../utils/location_autocomplete.dart';
-import '../utils/recurrence_utils.dart';
-import '../utils/task_title_validation.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'models/task_context_action.dart';
+import 'controllers/task_checklist_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
+import 'widgets/task_checklist.dart';
 import 'widgets/task_text_field.dart';
+import 'widgets/reminder_preferences_field.dart';
 
 class EditTaskDropdown extends StatefulWidget {
   const EditTaskDropdown({
@@ -55,6 +59,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
+  late final TaskChecklistController _checklistController;
   String? _titleError;
 
   bool _isImportant = false;
@@ -66,6 +71,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   DateTime? _deadline;
 
   RecurrenceFormValue _recurrence = const RecurrenceFormValue();
+  ReminderPreferences _reminders = ReminderPreferences.defaults();
 
   @override
   void initState() {
@@ -73,6 +79,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     _titleController = TextEditingController();
     _descriptionController = TextEditingController();
     _locationController = TextEditingController();
+    _checklistController = TaskChecklistController()..addListener(_refresh);
 
     _hydrateFromTask(widget.task, rebuild: false);
   }
@@ -82,7 +89,17 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _checklistController
+      ..removeListener(_refresh)
+      ..dispose();
     super.dispose();
+  }
+
+  void _refresh() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
   }
 
   @override
@@ -122,6 +139,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         );
       }
 
+      _checklistController.setItems(task.checklist);
+
       _isImportant = task.isImportant || task.isCritical;
       _isUrgent = task.isUrgent || task.isCritical;
       _isCompleted = task.isCompleted;
@@ -133,6 +152,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       _deadline = task.deadline;
       _recurrence = RecurrenceFormValue.fromRule(task.recurrence)
           .resolveLinkedLimits(_startTime ?? task.scheduledTime);
+      _reminders = task.effectiveReminders;
       _titleError = null;
     }
 
@@ -194,6 +214,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                 const _EditTaskSectionDivider(),
                 _EditTaskDescriptionField(controller: _descriptionController),
                 const SizedBox(height: calendarFormGap),
+                TaskChecklist(controller: _checklistController),
+                const SizedBox(height: calendarFormGap),
                 _EditTaskLocationField(
                   controller: _locationController,
                   locationHelper: widget.locationHelper,
@@ -209,6 +231,13 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                 _EditTaskDeadlineField(
                   deadline: _deadline,
                   onChanged: (value) => setState(() => _deadline = value),
+                ),
+                const _EditTaskSectionDivider(),
+                _EditTaskReminderSection(
+                  reminders: _reminders,
+                  onChanged: (value) => setState(() {
+                    _reminders = value;
+                  }),
                 ),
                 const _EditTaskSectionDivider(),
                 _EditTaskRecurrenceSection(
@@ -423,6 +452,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       priority: priority == TaskPriority.none ? null : priority,
       isCompleted: _isCompleted,
       recurrence: recurrence?.isNone == true ? null : recurrence,
+      checklist: _checklistController.items.toList(),
+      reminders: _reminders,
     );
 
     if (widget.task.isOccurrence && widget.onOccurrenceUpdated != null) {
@@ -740,6 +771,24 @@ class _EditTaskDeadlineField extends StatelessWidget {
           onChanged: onChanged,
         ),
       ],
+    );
+  }
+}
+
+class _EditTaskReminderSection extends StatelessWidget {
+  const _EditTaskReminderSection({
+    required this.reminders,
+    required this.onChanged,
+  });
+
+  final ReminderPreferences reminders;
+  final ValueChanged<ReminderPreferences> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ReminderPreferencesField(
+      value: reminders,
+      onChanged: onChanged,
     );
   }
 }

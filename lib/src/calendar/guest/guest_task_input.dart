@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/calendar_task.dart';
-import '../view/unified_task_input.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/unified_task_input.dart';
 import 'guest_calendar_bloc.dart';
 
 // Legacy wrapper - use UnifiedTaskInput<GuestCalendarBloc> instead

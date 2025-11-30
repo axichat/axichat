@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 
 class LocationInlineSuggestion extends StatefulWidget {
   const LocationInlineSuggestion({

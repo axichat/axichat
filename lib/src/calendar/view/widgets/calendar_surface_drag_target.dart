@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import '../models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'calendar_render_surface.dart';
 
 /// Bridges Flutter's [DragTarget] events into the [RenderCalendarSurface].

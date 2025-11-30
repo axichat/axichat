@@ -1,16 +1,16 @@
 import 'dart:async';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/view/widgets/reorderable_tile_row.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-import '../../../common/ui/ui.dart';
-import '../../bloc/base_calendar_bloc.dart';
-import '../../bloc/calendar_event.dart';
-import '../../bloc/calendar_state.dart';
-import '../../models/calendar_critical_path.dart';
-import '../../models/calendar_task.dart';
-import '../../utils/recurrence_utils.dart';
 
 class CriticalPathPanel extends StatelessWidget {
   const CriticalPathPanel({
@@ -27,7 +27,9 @@ class CriticalPathPanel extends StatelessWidget {
     required this.taskTileBuilder,
     required this.isExpanded,
     required this.onToggleExpanded,
+    required this.requiresLongPressForReorder,
     this.onExpandedChanged,
+    this.onAddTaskToFocusedPath,
   });
 
   final List<CalendarCriticalPath> paths;
@@ -39,10 +41,16 @@ class CriticalPathPanel extends StatelessWidget {
   final void Function(CalendarCriticalPath? path) onFocusPath;
   final Duration animationDuration;
   final void Function(String pathId, List<String> orderedTaskIds) onReorderPath;
-  final Widget Function(CalendarTask task, Widget? trailing) taskTileBuilder;
+  final Widget Function(
+    CalendarTask task,
+    Widget? trailing, {
+    bool requiresLongPress,
+  }) taskTileBuilder;
   final bool isExpanded;
   final VoidCallback onToggleExpanded;
+  final bool requiresLongPressForReorder;
   final ValueChanged<bool>? onExpandedChanged;
+  final VoidCallback? onAddTaskToFocusedPath;
 
   @override
   Widget build(BuildContext context) {
@@ -142,8 +150,11 @@ class CriticalPathPanel extends StatelessWidget {
                         tasks: focusedTasks,
                         animationDuration: animationDuration,
                         taskTileBuilder: taskTileBuilder,
+                        requiresLongPressForReorder:
+                            requiresLongPressForReorder,
                         onReorder: (oldIndex, newIndex) =>
                             _handleReorder(focusedPath, oldIndex, newIndex),
+                        onAddTask: onAddTaskToFocusedPath,
                       ),
                   ],
                 ],
@@ -520,14 +531,22 @@ class _FocusedPathTasks extends StatelessWidget {
     required this.tasks,
     required this.animationDuration,
     required this.taskTileBuilder,
+    required this.requiresLongPressForReorder,
     required this.onReorder,
+    this.onAddTask,
   });
 
   final CalendarCriticalPath path;
   final List<CalendarTask> tasks;
   final Duration animationDuration;
-  final Widget Function(CalendarTask task, Widget? trailing) taskTileBuilder;
+  final Widget Function(
+    CalendarTask task,
+    Widget? trailing, {
+    bool requiresLongPress,
+  }) taskTileBuilder;
+  final bool requiresLongPressForReorder;
   final void Function(int oldIndex, int newIndex) onReorder;
+  final VoidCallback? onAddTask;
 
   @override
   Widget build(BuildContext context) {
@@ -537,12 +556,30 @@ class _FocusedPathTasks extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: calendarGutterSm),
-        Text(
-          'Task order',
-          style: textTheme.h4.copyWith(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
+        Row(
+          children: [
+            Text(
+              'Task order',
+              style: textTheme.h4.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const Spacer(),
+            if (onAddTask != null)
+              ShadButton.outline(
+                size: ShadButtonSize.sm,
+                onPressed: onAddTask,
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 14),
+                    SizedBox(width: calendarInsetSm),
+                    Text('Add task'),
+                  ],
+                ),
+              ).withTapBounce(),
+          ],
         ),
         const SizedBox(height: calendarInsetSm),
         Text(
@@ -579,13 +616,25 @@ class _FocusedPathTasks extends StatelessWidget {
             },
             itemBuilder: (context, index) {
               final CalendarTask task = tasks[index];
-              final Widget handle = ReorderableDragStartListener(
-                index: index,
-                child: const _ReorderHandle(),
-              );
+              final Widget handle = requiresLongPressForReorder
+                  ? ReorderableDelayedDragStartListener(
+                      index: index,
+                      child: const _ReorderHandle(),
+                    )
+                  : ReorderableDragStartListener(
+                      index: index,
+                      child: const _ReorderHandle(),
+                    );
               return KeyedSubtree(
                 key: ValueKey(task.id),
-                child: taskTileBuilder(task, handle),
+                child: ReorderableTileRow(
+                  tile: taskTileBuilder(
+                    task,
+                    null,
+                    requiresLongPress: requiresLongPressForReorder,
+                  ),
+                  handle: handle,
+                ),
               );
             },
           ),
@@ -709,39 +758,57 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                             const SizedBox(height: calendarInsetSm),
                         itemBuilder: (_, index) {
                           final path = paths[index];
-                          return Material(
-                            color: Colors.transparent,
+                          return InkWell(
                             borderRadius: BorderRadius.circular(
                               calendarBorderRadius.toDouble(),
                             ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
+                            mouseCursor: SystemMouseCursors.click,
+                            onTap: () => Navigator.of(sheetContext).pop(
+                              CriticalPathPickerResult.path(path.id),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: calendarGutterMd,
                                 vertical: calendarInsetMd,
                               ),
-                              shape: RoundedRectangleBorder(
+                              decoration: BoxDecoration(
+                                color: colors.card,
                                 borderRadius: BorderRadius.circular(
                                   calendarBorderRadius.toDouble(),
                                 ),
+                                border: Border.all(color: colors.border),
                               ),
-                              hoverColor: colors.muted.withValues(
-                                alpha: 0.08,
-                              ),
-                              mouseCursor: SystemMouseCursors.click,
-                              leading: const Icon(Icons.route, size: 16),
-                              title: Text(
-                                path.name,
-                                style: textTheme.small.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              trailing: Icon(
-                                Icons.chevron_right,
-                                size: 18,
-                                color: colors.mutedForeground,
-                              ),
-                              onTap: () => Navigator.of(sheetContext).pop(
-                                CriticalPathPickerResult.path(path.id),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: colors.muted.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.route,
+                                      size: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(width: calendarGutterSm),
+                                  Expanded(
+                                    child: Text(
+                                      path.name,
+                                      style: textTheme.small.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    size: 18,
+                                    color: colors.mutedForeground,
+                                  ),
+                                ],
                               ),
                             ),
                           );
@@ -779,70 +846,95 @@ Future<String?> promptCriticalPathName({
   final controller = TextEditingController(text: initialValue ?? '');
   final FocusNode focusNode = FocusNode();
   String? errorText;
-  final result = await showShadDialog<String>(
+  final result = await showAdaptiveBottomSheet<String>(
     context: context,
+    dialogMaxWidth: 420,
+    surfacePadding: const EdgeInsets.all(calendarGutterLg),
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {
           final colors = context.colorScheme;
           final textTheme = context.textTheme;
           FocusScope.of(dialogContext).requestFocus(focusNode);
-          return ShadDialog(
-            title: Text(
-              title,
-              style: textTheme.h4.copyWith(fontWeight: FontWeight.w700),
-            ),
-            actions: [
-              ShadButton.outline(
-                onPressed: () => Navigator.of(dialogContext).maybePop(),
-                child: const Text('Cancel'),
-              ).withTapBounce(),
-              ShadButton(
-                onPressed: () {
-                  final String trimmed = controller.text.trim();
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: textTheme.h3.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  AxiIconButton(
+                    iconData: Icons.close,
+                    iconSize: 16,
+                    buttonSize: 34,
+                    tapTargetSize: 40,
+                    backgroundColor: Colors.transparent,
+                    borderColor: Colors.transparent,
+                    color: colors.mutedForeground,
+                    onPressed: () => Navigator.of(dialogContext).maybePop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: calendarGutterSm),
+              Text(
+                'Name your critical path',
+                style: textTheme.muted,
+              ),
+              const SizedBox(height: calendarGutterSm),
+              AxiTextFormField(
+                controller: controller,
+                focusNode: focusNode,
+                placeholder: const Text('Path name'),
+                onSubmitted: (value) {
+                  final String trimmed = value.trim();
                   if (trimmed.isEmpty) {
                     setState(() => errorText = 'Name cannot be empty');
                     return;
                   }
                   Navigator.of(dialogContext).pop(trimmed);
                 },
-                child: const Text('Save'),
-              ).withTapBounce(),
-            ],
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+              ),
+              if (errorText != null) ...[
+                const SizedBox(height: calendarInsetMd),
                 Text(
-                  'Name your critical path',
-                  style: textTheme.muted,
-                ),
-                const SizedBox(height: calendarGutterSm),
-                AxiTextFormField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  placeholder: const Text('Path name'),
-                  onSubmitted: (value) {
-                    final String trimmed = value.trim();
-                    if (trimmed.isEmpty) {
-                      setState(() => errorText = 'Name cannot be empty');
-                      return;
-                    }
-                    Navigator.of(dialogContext).pop(trimmed);
-                  },
-                ),
-                if (errorText != null) ...[
-                  const SizedBox(height: calendarInsetMd),
-                  Text(
-                    errorText!,
-                    style: textTheme.small.copyWith(
-                      color: colors.destructive,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  errorText!,
+                  style: textTheme.small.copyWith(
+                    color: colors.destructive,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
+                ),
               ],
-            ),
+              const SizedBox(height: calendarGutterMd),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ShadButton.outline(
+                    onPressed: () => Navigator.of(dialogContext).maybePop(),
+                    child: const Text('Cancel'),
+                  ).withTapBounce(),
+                  const SizedBox(width: calendarInsetSm),
+                  ShadButton(
+                    onPressed: () {
+                      final String trimmed = controller.text.trim();
+                      if (trimmed.isEmpty) {
+                        setState(() => errorText = 'Name cannot be empty');
+                        return;
+                      }
+                      Navigator.of(dialogContext).pop(trimmed);
+                    },
+                    child: const Text('Save'),
+                  ).withTapBounce(),
+                ],
+              ),
+            ],
           );
         },
       );

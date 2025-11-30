@@ -1,7 +1,9 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-import '../models/calendar_model.dart';
-import '../models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 
 part 'calendar_event.freezed.dart';
 
@@ -22,6 +24,8 @@ class CalendarEvent with _$CalendarEvent {
     @Default(TaskPriority.none) TaskPriority priority,
     double? startHour,
     RecurrenceRule? recurrence,
+    @Default([]) List<TaskChecklistItem> checklist,
+    ReminderPreferences? reminders,
   }) = CalendarTaskAdded;
 
   const factory CalendarEvent.taskUpdated({
@@ -93,6 +97,7 @@ class CalendarEvent with _$CalendarEvent {
     Duration? duration,
     DateTime? endDate,
     bool? isCancelled,
+    List<TaskChecklistItem>? checklist,
   }) = CalendarTaskOccurrenceUpdated;
 
   const factory CalendarEvent.taskPriorityChanged({
@@ -110,11 +115,29 @@ class CalendarEvent with _$CalendarEvent {
     required DateTime scheduledTime,
   }) = CalendarTaskRepeated;
 
+  const factory CalendarEvent.dayEventAdded({
+    required String title,
+    required DateTime startDate,
+    DateTime? endDate,
+    String? description,
+    ReminderPreferences? reminders,
+  }) = CalendarDayEventAdded;
+
+  const factory CalendarEvent.dayEventUpdated({
+    required DayEvent event,
+  }) = CalendarDayEventUpdated;
+
+  const factory CalendarEvent.dayEventDeleted({
+    required String eventId,
+  }) = CalendarDayEventDeleted;
+
   const factory CalendarEvent.quickTaskAdded({
     required String text,
     String? description,
     DateTime? deadline,
     @Default(TaskPriority.none) TaskPriority priority,
+    @Default([]) List<TaskChecklistItem> checklist,
+    ReminderPreferences? reminders,
   }) = CalendarQuickTaskAdded;
 
   const factory CalendarEvent.selectionModeEntered({
@@ -153,10 +176,18 @@ class CalendarEvent with _$CalendarEvent {
     String? location,
   }) = CalendarSelectionLocationChanged;
 
+  const factory CalendarEvent.selectionChecklistChanged({
+    required List<TaskChecklistItem> checklist,
+  }) = CalendarSelectionChecklistChanged;
+
   const factory CalendarEvent.selectionTimeShifted({
     Duration? startDelta,
     Duration? endDelta,
   }) = CalendarSelectionTimeShifted;
+
+  const factory CalendarEvent.selectionRemindersChanged({
+    required ReminderPreferences reminders,
+  }) = CalendarSelectionRemindersChanged;
 
   const factory CalendarEvent.selectionIdsAdded({
     required Set<String> taskIds,
