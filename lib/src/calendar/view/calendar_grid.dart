@@ -37,6 +37,7 @@ import 'controllers/zoom_controls_controller.dart';
 import 'controllers/task_interaction_controller.dart';
 import 'controllers/task_popover_controller.dart';
 import 'resizable_task_widget.dart';
+import 'task_edit_session_tracker.dart';
 import 'widgets/calendar_render_surface.dart';
 import 'widgets/calendar_surface_drag_target.dart';
 import 'widgets/calendar_task_surface.dart';
@@ -98,7 +99,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         AutomaticKeepAliveClientMixin<CalendarGrid<T>> {
   static const int startHour = 0;
   static const int endHour = 24;
-  static const int _defaultZoomIndex = 1;
+  static const int _defaultZoomIndex = 0;
   static const double _mobileCompactHourHeight = 60;
   static const int _resizeStepMinutes = 15;
   static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
@@ -147,8 +148,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   double _resolvedHourHeight = 78;
   double? _pendingAnchorMinutes;
 
-  late T _capturedBloc;
-  bool _blocInitialized = false;
   late final TaskInteractionController _taskInteractionController;
   late final TaskPopoverController _taskPopoverController;
   late final ZoomControlsController _zoomControlsController;
@@ -450,7 +449,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final TaskFocusRequest request = _pendingFocusRequest!;
     _pendingFocusRequest = null;
     _scrollToSlot(request.anchor, allowDeferral: false);
-    _capturedBloc.add(const CalendarEvent.taskFocusCleared());
+    context.read<T>().add(const CalendarEvent.taskFocusCleared());
   }
 
   void _handleEdgeAutoScrollMove(double offsetPerFrame, Offset globalPosition) {
@@ -681,15 +680,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_blocInitialized) {
-      _capturedBloc = context.read<T>();
-      _blocInitialized = true;
-    }
     _processFocusRequest(widget.focusRequest);
   }
 
   @override
   void dispose() {
+    TaskEditSessionTracker.instance.endForOwner(this);
     _viewTransitionController.dispose();
     _clockTimer?.cancel();
     _verticalController.dispose();
@@ -757,26 +753,26 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _pasteTemplate(CalendarTask template, DateTime slotTime) {
-    _capturedBloc.add(
-      CalendarEvent.taskRepeated(
-        template: template,
-        scheduledTime: slotTime,
-      ),
-    );
+    context.read<T>().add(
+          CalendarEvent.taskRepeated(
+            template: template,
+            scheduledTime: slotTime,
+          ),
+        );
   }
 
   void _showZoomControls() {}
 
   void _enterSelectionMode(String taskId) {
-    _capturedBloc.add(CalendarEvent.selectionModeEntered(taskId: taskId));
+    context.read<T>().add(CalendarEvent.selectionModeEntered(taskId: taskId));
   }
 
   void _toggleTaskSelection(String taskId) {
-    _capturedBloc.add(CalendarEvent.selectionToggled(taskId: taskId));
+    context.read<T>().add(CalendarEvent.selectionToggled(taskId: taskId));
   }
 
   void _clearSelectionMode() {
-    _capturedBloc.add(const CalendarEvent.selectionCleared());
+    context.read<T>().add(const CalendarEvent.selectionCleared());
   }
 
   void _handleTaskDragStarted(CalendarTask task, Rect bounds) {
@@ -923,12 +919,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _splitTask(CalendarTask task, DateTime splitTime) {
-    _capturedBloc.add(
-      CalendarEvent.taskSplit(
-        target: task,
-        splitTime: splitTime,
-      ),
-    );
+    context.read<T>().add(
+          CalendarEvent.taskSplit(
+            target: task,
+            splitTime: splitTime,
+          ),
+        );
   }
 
   Future<void> _promptSplitTask(CalendarTask task) async {
@@ -1170,11 +1166,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Future<void> _showTaskEditSheet(CalendarTask task) async {
-    final bloc = _capturedBloc;
-    final CalendarState state = bloc.state;
+    if (!TaskEditSessionTracker.instance.begin(task.id, this)) {
+      return;
+    }
+
     final String baseId = baseTaskIdFrom(task.id);
-    final CalendarTask latestTask = state.model.tasks[baseId] ?? task;
-    final CalendarTask? storedTask = state.model.tasks[task.id];
+    final CalendarTask latestTask =
+        context.read<T>().state.model.tasks[baseId] ?? task;
+    final CalendarTask? storedTask =
+        context.read<T>().state.model.tasks[task.id];
     final String? occurrenceKey = occurrenceKeyFrom(task.id);
     final CalendarTask? occurrenceTask =
         storedTask == null && occurrenceKey != null
@@ -1191,96 +1191,102 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final double maxSheetHeight =
         hostMediaQuery.size.height - safeTopInset - safeBottomInset;
 
-    await showAdaptiveBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final double keyboardInset =
-            MediaQuery.of(sheetContext).viewInsets.bottom;
-        final double bottomInset = math.max(safeBottomInset, keyboardInset);
-        return AnimatedPadding(
-          padding: EdgeInsets.only(
-            top: safeTopInset,
-            bottom: bottomInset,
-          ),
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          child: EditTaskDropdown(
-            task: displayTask,
-            maxHeight: maxSheetHeight,
-            isSheet: true,
-            inlineActionsBloc: bloc,
-            inlineActionsBuilder: (state) {
-              final CalendarTask? latest = state.model.tasks[displayTask.id] ??
-                  state.model.tasks[displayTask.baseId];
-              final CalendarTask resolved = latest ?? displayTask;
-              return _taskContextActions(
-                task: resolved,
-                state: state,
-                onTaskDeleted: () => Navigator.of(sheetContext).maybePop(),
-                includeDeleteAction: false,
-                includeCompletionAction: false,
-                includePriorityActions: false,
-                includeSplitAction: true,
-                stripTaskKeyword: true,
-              );
-            },
-            onClose: () => Navigator.of(sheetContext).maybePop(),
-            scaffoldMessenger: scaffoldMessenger,
-            locationHelper: LocationAutocompleteHelper.fromState(state),
-            onTaskUpdated: (updatedTask) {
-              bloc.add(
-                CalendarEvent.taskUpdated(
-                  task: updatedTask,
-                ),
-              );
-            },
-            onOccurrenceUpdated: shouldUpdateOccurrence
-                ? (updatedTask) {
-                    bloc.add(
-                      CalendarEvent.taskOccurrenceUpdated(
-                        taskId: baseId,
-                        occurrenceId: task.id,
-                        scheduledTime: updatedTask.scheduledTime,
-                        duration: updatedTask.duration,
-                        endDate: updatedTask.endDate,
-                        checklist: updatedTask.checklist,
+    try {
+      await showAdaptiveBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          final double keyboardInset =
+              MediaQuery.of(sheetContext).viewInsets.bottom;
+          final double bottomInset = math.max(safeBottomInset, keyboardInset);
+          return AnimatedPadding(
+            padding: EdgeInsets.only(
+              top: safeTopInset,
+              bottom: bottomInset,
+            ),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: EditTaskDropdown<T>(
+              task: displayTask,
+              maxHeight: maxSheetHeight,
+              isSheet: true,
+              inlineActionsBloc: context.read<T>(),
+              inlineActionsBuilder: (state) {
+                final CalendarTask? latest =
+                    state.model.tasks[displayTask.id] ??
+                        state.model.tasks[displayTask.baseId];
+                final CalendarTask resolved = latest ?? displayTask;
+                return _taskContextActions(
+                  task: resolved,
+                  state: state,
+                  onTaskDeleted: () => Navigator.of(sheetContext).maybePop(),
+                  includeDeleteAction: false,
+                  includeCompletionAction: false,
+                  includePriorityActions: false,
+                  includeSplitAction: true,
+                  stripTaskKeyword: true,
+                );
+              },
+              onClose: () => Navigator.of(sheetContext).maybePop(),
+              scaffoldMessenger: scaffoldMessenger,
+              locationHelper: LocationAutocompleteHelper.fromState(
+                  sheetContext.read<T>().state),
+              onTaskUpdated: (updatedTask) {
+                sheetContext.read<T>().add(
+                      CalendarEvent.taskUpdated(
+                        task: updatedTask,
                       ),
                     );
+              },
+              onOccurrenceUpdated: shouldUpdateOccurrence
+                  ? (updatedTask) {
+                      sheetContext.read<T>().add(
+                            CalendarEvent.taskOccurrenceUpdated(
+                              taskId: baseId,
+                              occurrenceId: task.id,
+                              scheduledTime: updatedTask.scheduledTime,
+                              duration: updatedTask.duration,
+                              endDate: updatedTask.endDate,
+                              checklist: updatedTask.checklist,
+                            ),
+                          );
 
-                    final CalendarTask seriesUpdate = latestTask.copyWith(
-                      title: updatedTask.title,
-                      description: updatedTask.description,
-                      location: updatedTask.location,
-                      deadline: updatedTask.deadline,
-                      priority: updatedTask.priority,
-                      isCompleted: updatedTask.isCompleted,
-                      checklist: updatedTask.checklist,
-                      modifiedAt: DateTime.now(),
-                    );
-
-                    if (seriesUpdate != latestTask) {
-                      bloc.add(
-                        CalendarEvent.taskUpdated(
-                          task: seriesUpdate,
-                        ),
+                      final CalendarTask seriesUpdate = latestTask.copyWith(
+                        title: updatedTask.title,
+                        description: updatedTask.description,
+                        location: updatedTask.location,
+                        deadline: updatedTask.deadline,
+                        priority: updatedTask.priority,
+                        isCompleted: updatedTask.isCompleted,
+                        checklist: updatedTask.checklist,
+                        modifiedAt: DateTime.now(),
                       );
+
+                      if (seriesUpdate != latestTask) {
+                        sheetContext.read<T>().add(
+                              CalendarEvent.taskUpdated(
+                                task: seriesUpdate,
+                              ),
+                            );
+                      }
                     }
-                  }
-                : null,
-            onTaskDeleted: (taskId) {
-              bloc.add(
-                CalendarEvent.taskDeleted(
-                  taskId: taskId,
-                ),
-              );
-              Navigator.of(sheetContext).maybePop();
-            },
-          ),
-        );
-      },
-    );
+                  : null,
+              onTaskDeleted: (taskId) {
+                sheetContext.read<T>().add(
+                      CalendarEvent.taskDeleted(
+                        taskId: taskId,
+                      ),
+                    );
+                Navigator.of(sheetContext).maybePop();
+              },
+            ),
+          );
+        },
+      );
+    } finally {
+      TaskEditSessionTracker.instance.end(task.id, this);
+    }
   }
 
   void _updateCompactState(BuildContext context) {
@@ -1822,18 +1828,24 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _closeTaskPopover(String taskId, {String reason = 'manual'}) {
     _taskPopoverController.removeLayout(taskId);
     if (_taskPopoverController.activeTaskId != taskId) {
+      TaskEditSessionTracker.instance.end(taskId, this);
       return;
     }
 
     _taskPopoverController.deactivate();
     _activePopoverEntry?.remove();
     _activePopoverEntry = null;
+    TaskEditSessionTracker.instance.end(taskId, this);
   }
 
   void _openTaskPopover(CalendarTask task, TaskPopoverLayout layout) {
     final activeId = _taskPopoverController.activeTaskId;
     if (activeId != null && activeId != task.id) {
       _closeTaskPopover(activeId, reason: 'switch-target');
+    }
+
+    if (!TaskEditSessionTracker.instance.begin(task.id, this)) {
+      return;
     }
 
     _taskPopoverController.activate(task.id, layout);
@@ -1921,7 +1933,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 child: Material(
                   color: Colors.transparent,
                   child: BlocProvider<T>.value(
-                    value: _capturedBloc,
+                    value: context.read<T>(),
                     child: BlocBuilder<T, CalendarState>(
                       builder: (context, state) {
                         final baseId = baseTaskIdFrom(taskId);
@@ -1948,7 +1960,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                         final bool shouldUpdateOccurrence =
                             storedTask == null && occurrenceTask != null;
 
-                        return EditTaskDropdown(
+                        return EditTaskDropdown<T>(
                           task: displayTask,
                           maxHeight: layout.maxHeight,
                           onClose: () => _closeTaskPopover(taskId,
@@ -2198,12 +2210,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final String taskId = taskInstance.id;
     final CalendarTask? directTask = widget.state.model.tasks[taskId];
     if (directTask != null) {
-      _capturedBloc.add(
-        CalendarEvent.taskDropped(
-          taskId: taskId,
-          time: targetStart,
-        ),
-      );
+      context.read<T>().add(
+            CalendarEvent.taskDropped(
+              taskId: taskId,
+              time: targetStart,
+            ),
+          );
       return;
     }
 
@@ -2211,25 +2223,25 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final CalendarTask? baseTask = widget.state.model.tasks[baseId];
 
     if (taskInstance.isOccurrence && baseTask != null) {
-      _capturedBloc.add(
-        CalendarEvent.taskOccurrenceUpdated(
-          taskId: baseId,
-          occurrenceId: taskInstance.id,
-          scheduledTime: targetStart,
-          duration: taskInstance.duration,
-          endDate: taskInstance.endDate,
-        ),
-      );
+      context.read<T>().add(
+            CalendarEvent.taskOccurrenceUpdated(
+              taskId: baseId,
+              occurrenceId: taskInstance.id,
+              scheduledTime: targetStart,
+              duration: taskInstance.duration,
+              endDate: taskInstance.endDate,
+            ),
+          );
       return;
     }
 
     if (baseTask != null) {
-      _capturedBloc.add(
-        CalendarEvent.taskDropped(
-          taskId: baseId,
-          time: targetStart,
-        ),
-      );
+      context.read<T>().add(
+            CalendarEvent.taskDropped(
+              taskId: baseId,
+              time: targetStart,
+            ),
+          );
       return;
     }
 
@@ -2373,30 +2385,30 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }) {
     final TaskPriority next =
         _priorityFromFlags(important: important, urgent: urgent);
-    _capturedBloc.add(
-      CalendarEvent.taskPriorityChanged(
-        taskId: task.baseId,
-        priority: next,
-      ),
-    );
+    context.read<T>().add(
+          CalendarEvent.taskPriorityChanged(
+            taskId: task.baseId,
+            priority: next,
+          ),
+        );
   }
 
   void _toggleTaskCompletion(CalendarTask task) {
-    _capturedBloc.add(
-      CalendarEvent.taskCompleted(
-        taskId: task.baseId,
-        completed: !task.isCompleted,
-      ),
-    );
+    context.read<T>().add(
+          CalendarEvent.taskCompleted(
+            taskId: task.baseId,
+            completed: !task.isCompleted,
+          ),
+        );
   }
 
   void _setTaskCompletion(CalendarTask task, bool completed) {
-    _capturedBloc.add(
-      CalendarEvent.taskCompleted(
-        taskId: task.baseId,
-        completed: completed,
-      ),
-    );
+    context.read<T>().add(
+          CalendarEvent.taskCompleted(
+            taskId: task.baseId,
+            completed: completed,
+          ),
+        );
   }
 
   Future<void> _showAddToCriticalPathPicker(CalendarTask task) async {
@@ -2404,6 +2416,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       context: context,
       paths: widget.state.criticalPaths,
     );
+    if (!mounted) {
+      return;
+    }
     if (result == null) {
       return;
     }
@@ -2413,12 +2428,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     final String? pathId = result.pathId;
     if (pathId != null) {
-      _capturedBloc.add(
-        CalendarEvent.criticalPathTaskAdded(
-          pathId: pathId,
-          taskId: task.id,
-        ),
-      );
+      context.read<T>().add(
+            CalendarEvent.criticalPathTaskAdded(
+              pathId: pathId,
+              taskId: task.id,
+            ),
+          );
     }
   }
 
@@ -2428,15 +2443,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       context: context,
       title: 'New critical path',
     );
+    if (!mounted) {
+      return;
+    }
     if (name == null) {
       return;
     }
-    _capturedBloc.add(
-      CalendarEvent.criticalPathCreated(
-        name: name,
-        taskId: taskId,
-      ),
-    );
+    context.read<T>().add(
+          CalendarEvent.criticalPathCreated(
+            name: name,
+            taskId: taskId,
+          ),
+        );
   }
 
   List<TaskContextAction> _taskContextActions({
@@ -2560,13 +2578,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           label: seriesLabel,
           onSelected: () {
             if (isSeriesSelected) {
-              _capturedBloc.add(
-                CalendarEvent.selectionIdsRemoved(taskIds: seriesIds),
-              );
+              context.read<T>().add(
+                    CalendarEvent.selectionIdsRemoved(taskIds: seriesIds),
+                  );
             } else {
-              _capturedBloc.add(
-                CalendarEvent.selectionIdsAdded(taskIds: seriesIds),
-              );
+              context.read<T>().add(
+                    CalendarEvent.selectionIdsAdded(taskIds: seriesIds),
+                  );
             }
           },
         ),
@@ -2627,9 +2645,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           label: 'Delete Task',
           destructive: true,
           onSelected: () {
-            _capturedBloc.add(
-              CalendarEvent.taskDeleted(taskId: task.baseId),
-            );
+            context.read<T>().add(
+                  CalendarEvent.taskDeleted(taskId: task.baseId),
+                );
             onTaskDeleted?.call();
           },
         ),
@@ -2820,13 +2838,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       initialDate: date,
       existing: existing,
     );
+    if (!mounted) {
+      return;
+    }
     if (result == null) {
       return;
     }
     if (result.deleted && existing != null) {
-      _capturedBloc.add(
-        CalendarEvent.dayEventDeleted(eventId: existing.id),
-      );
+      context.read<T>().add(
+            CalendarEvent.dayEventDeleted(eventId: existing.id),
+          );
       return;
     }
     final DayEventDraft? draft = result.draft;
@@ -2834,15 +2855,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     if (existing == null) {
-      _capturedBloc.add(
-        CalendarEvent.dayEventAdded(
-          title: draft.title,
-          startDate: draft.startDate,
-          endDate: draft.endDate,
-          description: draft.description,
-          reminders: draft.reminders,
-        ),
-      );
+      context.read<T>().add(
+            CalendarEvent.dayEventAdded(
+              title: draft.title,
+              startDate: draft.startDate,
+              endDate: draft.endDate,
+              description: draft.description,
+              reminders: draft.reminders,
+            ),
+          );
       return;
     }
 
@@ -2854,9 +2875,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       reminders: draft.reminders,
       modifiedAt: DateTime.now(),
     );
-    _capturedBloc.add(
-      CalendarEvent.dayEventUpdated(event: updated),
-    );
+    context.read<T>().add(
+          CalendarEvent.dayEventUpdated(event: updated),
+        );
   }
 
   String _getDayOfWeekShort(DateTime date) {
@@ -2880,7 +2901,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _processFocusRequest(TaskFocusRequest? request) {
-    if (!_blocInitialized || request == null) {
+    if (request == null) {
       return;
     }
     if (_lastHandledFocusToken == request.token) {
@@ -3007,7 +3028,7 @@ class _CalendarWeekView extends StatelessWidget {
                             horizontalPadding,
                             calendarGutterSm,
                           ),
-                          child: _DayEventsStrip(
+                          child: DayEventsStrip(
                             events: selectedDayEvents,
                             onAdd: () => gridState._openDayEventEditor(
                               date: gridState.widget.state.selectedDate,
@@ -3121,8 +3142,9 @@ class _CalendarWeekView extends StatelessWidget {
   }
 }
 
-class _DayEventsStrip extends StatelessWidget {
-  const _DayEventsStrip({
+class DayEventsStrip extends StatelessWidget {
+  const DayEventsStrip({
+    super.key,
     required this.events,
     required this.onAdd,
     required this.onEdit,
@@ -3671,7 +3693,7 @@ class _CalendarDayHeader extends StatelessWidget {
               Positioned(
                 top: 6,
                 right: 8,
-                child: _DayEventBadge(count: dayEventCount),
+                child: DayEventBadge(count: dayEventCount),
               ),
           ],
         ),
@@ -3680,8 +3702,8 @@ class _CalendarDayHeader extends StatelessWidget {
   }
 }
 
-class _DayEventBadge extends StatelessWidget {
-  const _DayEventBadge({required this.count});
+class DayEventBadge extends StatelessWidget {
+  const DayEventBadge({super.key, required this.count});
 
   final int count;
 

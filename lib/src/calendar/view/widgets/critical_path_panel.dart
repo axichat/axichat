@@ -7,7 +7,6 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
-import 'package:axichat/src/calendar/view/widgets/reorderable_tile_row.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -18,10 +17,12 @@ class CriticalPathPanel extends StatelessWidget {
     required this.paths,
     required this.tasks,
     required this.focusedPathId,
+    required this.orderingPathId,
     required this.onCreatePath,
     required this.onRenamePath,
     required this.onDeletePath,
     required this.onFocusPath,
+    required this.onOpenPath,
     required this.animationDuration,
     required this.onReorderPath,
     required this.taskTileBuilder,
@@ -29,16 +30,19 @@ class CriticalPathPanel extends StatelessWidget {
     required this.onToggleExpanded,
     required this.requiresLongPressForReorder,
     this.onExpandedChanged,
+    this.onCloseOrdering,
     this.onAddTaskToFocusedPath,
   });
 
   final List<CalendarCriticalPath> paths;
   final Map<String, CalendarTask> tasks;
   final String? focusedPathId;
+  final String? orderingPathId;
   final VoidCallback onCreatePath;
   final void Function(CalendarCriticalPath path) onRenamePath;
   final void Function(CalendarCriticalPath path) onDeletePath;
   final void Function(CalendarCriticalPath? path) onFocusPath;
+  final void Function(CalendarCriticalPath path) onOpenPath;
   final Duration animationDuration;
   final void Function(String pathId, List<String> orderedTaskIds) onReorderPath;
   final Widget Function(
@@ -50,15 +54,20 @@ class CriticalPathPanel extends StatelessWidget {
   final VoidCallback onToggleExpanded;
   final bool requiresLongPressForReorder;
   final ValueChanged<bool>? onExpandedChanged;
+  final VoidCallback? onCloseOrdering;
   final VoidCallback? onAddTaskToFocusedPath;
 
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final bool hasPaths = paths.isNotEmpty;
-    final CalendarCriticalPath? focusedPath = _focusedPath();
+    final CalendarCriticalPath? orderingPath = _pathById(orderingPathId);
+    final CalendarCriticalPath? reorderTarget = orderingPath;
+    final bool showingSinglePath = orderingPath != null;
     final List<CalendarTask> focusedTasks =
-        focusedPath != null ? _tasksForPath(focusedPath) : const [];
+        reorderTarget != null ? _tasksForPath(reorderTarget) : const [];
+    final Iterable<CalendarCriticalPath> visiblePaths =
+        orderingPath != null ? <CalendarCriticalPath>[orderingPath] : paths;
     return Container(
       decoration: BoxDecoration(
         color: colors.card,
@@ -94,6 +103,16 @@ class CriticalPathPanel extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
+                  if (showingSinglePath && onCloseOrdering != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(right: calendarInsetSm),
+                      child: ShadButton.ghost(
+                        size: ShadButtonSize.sm,
+                        onPressed: onCloseOrdering,
+                        child: const Text('All paths'),
+                      ),
+                    ),
+                  ],
                   ShadButton.ghost(
                     size: ShadButtonSize.sm,
                     onPressed: () {
@@ -124,7 +143,7 @@ class CriticalPathPanel extends StatelessWidget {
                       style: context.textTheme.muted,
                     )
                   else ...[
-                    for (final CalendarCriticalPath path in paths) ...[
+                    for (final CalendarCriticalPath path in visiblePaths) ...[
                       CriticalPathCard(
                         path: path,
                         animationDuration: animationDuration,
@@ -135,25 +154,31 @@ class CriticalPathPanel extends StatelessWidget {
                         ),
                         onRename: () => onRenamePath(path),
                         onDelete: () => onDeletePath(path),
-                        onOpen: _handleExpand,
+                        onOpen: () {
+                          _handleExpand();
+                          onOpenPath(path);
+                        },
                       ),
                       const SizedBox(height: calendarInsetMd),
                     ],
-                    if (focusedPath == null)
+                    if (reorderTarget == null)
                       Text(
-                        'Focus a critical path to reorder tasks.',
+                        'Tap a critical path to reorder tasks.',
                         style: context.textTheme.muted,
                       )
                     else
                       _FocusedPathTasks(
-                        path: focusedPath,
+                        path: reorderTarget,
                         tasks: focusedTasks,
                         animationDuration: animationDuration,
                         taskTileBuilder: taskTileBuilder,
                         requiresLongPressForReorder:
                             requiresLongPressForReorder,
-                        onReorder: (oldIndex, newIndex) =>
-                            _handleReorder(focusedPath, oldIndex, newIndex),
+                        onReorder: (oldIndex, newIndex) => _handleReorder(
+                          reorderTarget,
+                          oldIndex,
+                          newIndex,
+                        ),
                         onAddTask: onAddTaskToFocusedPath,
                       ),
                   ],
@@ -184,12 +209,12 @@ class CriticalPathPanel extends StatelessWidget {
     );
   }
 
-  CalendarCriticalPath? _focusedPath() {
-    if (focusedPathId == null) {
+  CalendarCriticalPath? _pathById(String? pathId) {
+    if (pathId == null) {
       return null;
     }
     for (final CalendarCriticalPath path in paths) {
-      if (path.id == focusedPathId) {
+      if (path.id == pathId) {
         return path;
       }
     }
@@ -616,24 +641,16 @@ class _FocusedPathTasks extends StatelessWidget {
             },
             itemBuilder: (context, index) {
               final CalendarTask task = tasks[index];
-              final Widget handle = requiresLongPressForReorder
-                  ? ReorderableDelayedDragStartListener(
-                      index: index,
-                      child: const _ReorderHandle(),
-                    )
-                  : ReorderableDragStartListener(
-                      index: index,
-                      child: const _ReorderHandle(),
-                    );
+              final Widget handle = _CriticalPathReorderHandle(
+                index: index,
+                requiresLongPress: requiresLongPressForReorder,
+              );
               return KeyedSubtree(
                 key: ValueKey(task.id),
-                child: ReorderableTileRow(
-                  tile: taskTileBuilder(
-                    task,
-                    null,
-                    requiresLongPress: requiresLongPressForReorder,
-                  ),
-                  handle: handle,
+                child: taskTileBuilder(
+                  task,
+                  handle,
+                  requiresLongPress: requiresLongPressForReorder,
                 ),
               );
             },
@@ -643,23 +660,36 @@ class _FocusedPathTasks extends StatelessWidget {
   }
 }
 
-class _ReorderHandle extends StatelessWidget {
-  const _ReorderHandle();
+class _CriticalPathReorderHandle extends StatelessWidget {
+  const _CriticalPathReorderHandle({
+    required this.index,
+    required this.requiresLongPress,
+  });
+
+  final int index;
+  final bool requiresLongPress;
 
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    return Container(
+    final Widget icon = Container(
       padding: const EdgeInsets.all(calendarInsetMd),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
         Icons.drag_indicator,
         size: 18,
         color: colors.mutedForeground,
       ),
+    );
+    final Widget handle = requiresLongPress
+        ? ReorderableDelayedDragStartListener(index: index, child: icon)
+        : ReorderableDragStartListener(index: index, child: icon);
+    return MouseRegion(
+      cursor: SystemMouseCursors.grab,
+      child: handle,
     );
   }
 }

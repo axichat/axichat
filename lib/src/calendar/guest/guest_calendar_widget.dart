@@ -1,5 +1,6 @@
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
@@ -141,18 +142,20 @@ class _GuestCalendarWidgetState
     CalendarState state,
     bool usesDesktopLayout,
   ) {
-    final GuestCalendarBloc? bloc = calendarBloc;
-    if (bloc == null) {
-      return null;
-    }
-    return () => _openTaskSearch(bloc);
+    final locate = context.read;
+    return () => _openTaskSearch(calendarBloc, locate: locate);
   }
 
-  Future<void> _openTaskSearch(GuestCalendarBloc bloc) async {
-    final TaskSidebarState? sidebarState = sidebarKey.currentState;
+  Future<void> _openTaskSearch(
+    GuestCalendarBloc bloc, {
+    T Function<T>()? locate,
+  }) async {
+    final TaskSidebarState<GuestCalendarBloc>? sidebarState =
+        sidebarKey.currentState;
     await showCalendarTaskSearch(
       context: context,
       bloc: bloc,
+      locate: locate,
       requiresLongPressForDrag: sidebarState?.requiresLongPressForDrag ?? false,
       taskTileBuilder: sidebarState == null
           ? null

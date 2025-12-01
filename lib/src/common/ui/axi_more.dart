@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -33,8 +34,66 @@ class _AxiMoreState extends State<AxiMore> {
     super.dispose();
   }
 
+  Future<void> _showSheetActions(List<AxiMenuAction> actions) async {
+    if (!mounted) return;
+    const double sheetItemSpacing = 4;
+    const double sheetPadding = 8;
+    await showAdaptiveBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      dialogMaxWidth: 420,
+      builder: (sheetContext) {
+        final colors = ShadTheme.of(sheetContext).colorScheme;
+        final textTheme = ShadTheme.of(sheetContext).textTheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: sheetPadding,
+              vertical: sheetPadding,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final action in actions) ...[
+                  ListTile(
+                    enabled: action.enabled,
+                    leading: action.icon == null
+                        ? null
+                        : Icon(
+                            action.icon,
+                            color: action.destructive
+                                ? colors.destructive
+                                : colors.primary,
+                          ),
+                    title: Text(
+                      action.label,
+                      style: action.destructive
+                          ? textTheme.small.copyWith(
+                              color: colors.destructive,
+                              fontWeight: FontWeight.w700,
+                            )
+                          : null,
+                    ),
+                    onTap: action.enabled
+                        ? () {
+                            Navigator.of(sheetContext).pop();
+                            action.onPressed?.call();
+                          }
+                        : null,
+                  ),
+                  const SizedBox(height: sheetItemSpacing),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final commandSurface = resolveCommandSurface(context);
     final actions = widget.actions
         .map(
           (action) => AxiMenuAction(
@@ -51,6 +110,13 @@ class _AxiMoreState extends State<AxiMore> {
           ),
         )
         .toList(growable: false);
+    if (commandSurface == CommandSurface.sheet) {
+      return AxiIconButton(
+        iconData: LucideIcons.ellipsisVertical,
+        tooltip: widget.tooltip,
+        onPressed: widget.enabled ? () => _showSheetActions(actions) : null,
+      );
+    }
     return ShadPopover(
       controller: popoverController,
       closeOnTapOutside: true,

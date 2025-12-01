@@ -15,7 +15,7 @@ abstract class ChatTransport {
     required String address,
     required String password,
     required String displayName,
-    Map<String, String> additional,
+    Map<String, String> additional = const {},
   });
 
   /// Opens connections / event streams.

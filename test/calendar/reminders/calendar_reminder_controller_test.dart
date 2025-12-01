@@ -137,5 +137,26 @@ void main() {
         ]),
       );
     });
+
+    test('sync refreshes timezone data on subsequent runs', () async {
+      final CalendarReminderController controller = CalendarReminderController(
+        notificationService: notificationService,
+        now: () => DateTime(2024, 6, 1, 8),
+      );
+
+      final CalendarTask kickoff = CalendarTask.create(
+        title: 'Kickoff',
+        scheduledTime: DateTime(2024, 6, 2, 9),
+      );
+
+      await controller.syncWithTasks(<CalendarTask>[kickoff]);
+      await controller.syncWithTasks(<CalendarTask>[
+        kickoff.copyWith(
+          scheduledTime: DateTime(2024, 6, 3, 9),
+        )
+      ]);
+
+      verify(() => notificationService.refreshTimeZone()).called(2);
+    });
   });
 }

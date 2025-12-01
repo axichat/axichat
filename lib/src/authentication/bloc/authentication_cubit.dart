@@ -98,7 +98,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             lifeCycleState == AppLifecycleState.resumed ||
                 lifeCycleState == AppLifecycleState.inactive);
         await _emailService?.setClientState(
-          lifeCycleState != AppLifecycleState.detached,
+          active: lifeCycleState != AppLifecycleState.detached,
         );
       },
     );

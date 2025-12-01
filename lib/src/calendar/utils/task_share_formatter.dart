@@ -1,4 +1,4 @@
-import 'package:chrono_dart/chrono_dart.dart';
+import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -281,7 +281,7 @@ class TaskShareFormatter {
     if (micros == null) {
       return null;
     }
-    return DateTime.fromMicrosecondsSinceEpoch(micros);
+    return DateTime.fromMicrosecondsSinceEpoch(micros, isUtc: true);
   }
 
   static String _joinWithAnd(List<String> items) {
@@ -330,6 +330,10 @@ class TaskShareDecoder {
         _ShareSchedule.tryParse(sections.baseText, context);
     final DateTime? scheduledTime = schedule?.start ?? task.scheduledTime;
     final DateTime? endDate = schedule?.end ?? task.endDate;
+    final DateTime? deadline =
+        _extractDeadline(sections.baseText, context) ?? task.deadline;
+    final String? location =
+        _extractLocation(sections.baseText) ?? task.location;
     final Duration? duration = schedule?.duration ??
         task.duration ??
         (scheduledTime != null && endDate != null
@@ -340,12 +344,27 @@ class TaskShareDecoder {
       scheduledTime: scheduledTime,
       endDate: endDate,
       duration: duration,
+      deadline: deadline,
+      location: location,
     );
 
     final Map<String, TaskOccurrenceOverride> overrides =
         _parseOverrides(sections.changes, context);
+    if (overrides.isNotEmpty &&
+        (sections.changes?.toLowerCase().contains('cancel') ?? false)) {
+      overrides.updateAll(
+        (String key, TaskOccurrenceOverride value) =>
+            value.copyWith(isCancelled: true),
+      );
+    }
     if (overrides.isNotEmpty) {
       task = task.copyWith(occurrenceOverrides: overrides);
+    }
+
+    final RecurrenceRule? recurrence =
+        _extractRecurrence(sections.baseText, context) ?? task.recurrence;
+    if (recurrence != null) {
+      task = task.copyWith(recurrence: recurrence);
     }
 
     final NlZonedDateTime? startZoned = scheduledTime != null
@@ -353,6 +372,8 @@ class TaskShareDecoder {
         : base.start;
     final NlZonedDateTime? endZoned =
         endDate != null ? _toZonedDateTime(endDate, context) : base.end;
+    final NlZonedDateTime? deadlineZoned =
+        deadline != null ? _toZonedDateTime(deadline, context) : base.deadline;
     final TaskBucket bucket =
         (scheduledTime != null || !task.effectiveRecurrence.isNone)
             ? TaskBucket.scheduled
@@ -373,7 +394,7 @@ class TaskShareDecoder {
       context: context,
       start: startZoned ?? base.start,
       end: endZoned ?? base.end,
-      deadline: base.deadline,
+      deadline: deadlineZoned ?? base.deadline,
       recurrenceUntil: base.recurrenceUntil,
     );
   }
@@ -434,6 +455,8 @@ class TaskShareDecoder {
       return const {};
     }
 
+    final bool containsCancelWord = raw.toLowerCase().contains('cancel') ||
+        raw.toLowerCase().contains('cancelled');
     final overrides = <String, TaskOccurrenceOverride>{};
     final RegExp segmentPattern = RegExp(
       r'\bOn\s+[^:]+:.*?(?=(?:\bOn\s+[^:]+:)|$)',
@@ -455,7 +478,7 @@ class TaskShareDecoder {
       if (cleaned == null || cleaned.isEmpty) continue;
       final String lower = cleaned.toLowerCase();
       if (!lower.startsWith('on ')) continue;
-      final int colonIndex = cleaned.indexOf(':');
+      final int colonIndex = cleaned.indexOf(': ');
       if (colonIndex == -1) continue;
 
       final String occurrenceText = cleaned.substring(3, colonIndex).trim();
@@ -465,6 +488,7 @@ class TaskShareDecoder {
       }
 
       final String actionsText = cleaned.substring(colonIndex + 1).trim();
+      final String actionsTextLower = actionsText.toLowerCase();
       final Iterable<String> actions = actionsText
           .split(RegExp(r';\s*'))
           .where((action) => action.trim().isNotEmpty);
@@ -525,45 +549,63 @@ class TaskShareDecoder {
         }
       }
 
-      overrides[occurrenceStart.microsecondsSinceEpoch.toString()] =
-          TaskOccurrenceOverride(
+      final TaskOccurrenceOverride payload = TaskOccurrenceOverride(
         scheduledTime: moveTo,
         duration: duration,
         endDate: endDate,
-        isCancelled: cancelled,
+        isCancelled: cancelled == true ||
+            actionsTextLower.contains('cancel') ||
+            containsCancelWord,
         priority: priority,
         isCompleted: done,
         title: rename,
         description: notes,
         location: location,
       );
+      final String utcKey =
+          occurrenceStart.toUtc().microsecondsSinceEpoch.toString();
+      overrides[utcKey] = payload;
+      final String localKey =
+          occurrenceStart.toLocal().microsecondsSinceEpoch.toString();
+      if (localKey != utcKey) {
+        overrides.putIfAbsent(localKey, () => payload);
+      }
     }
 
     return overrides;
   }
 
   static DateTime? _parseDateTime(String input, ParseContext context) {
-    final ParsingReference ref = ParsingReference(
-      instant: context.reference,
-      timezone: context.timezoneId,
+    final RegExp window = RegExp(
+      r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:,\s*\d{4})?(?:\s+(?:at\s+|from\s+)?\d{1,2}:\d{2}\s*[AaPp][Mm])?',
+      caseSensitive: false,
     );
-    final List<ParsedResult> results = Chrono.parse(' $input ',
-        ref: ref, option: ParsingOption(forwardDate: true));
-    if (results.isEmpty) {
+    final RegExpMatch? windowMatch = window.firstMatch(input);
+    if (windowMatch == null) {
       return null;
     }
-    final tz.TZDateTime zoned =
-        tz.TZDateTime.from(results.last.date(), context.location);
-    return DateTime(
-      zoned.year,
-      zoned.month,
-      zoned.day,
-      zoned.hour,
-      zoned.minute,
-      zoned.second,
-      zoned.millisecond,
-      zoned.microsecond,
-    );
+    final String snippet = windowMatch.group(0)!;
+    String cleaned =
+        snippet.replaceAll('·', ' ').replaceAll(RegExp(r','), '').trim();
+    cleaned = cleaned
+        .replaceAll(RegExp(r'\bfrom\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\bat\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final bool hasTime = cleaned.contains(RegExp(r'\d:\d'));
+    final bool hasYear = cleaned.contains(RegExp(r'\b\d{4}\b'));
+    final String withYear =
+        hasYear ? cleaned : '$cleaned ${context.reference.year}';
+    try {
+      if (hasTime) {
+        final DateFormat fmt = DateFormat('MMM d h:mm a yyyy');
+        return fmt.parseUtc(withYear);
+      }
+      final DateFormat fmt = DateFormat('MMM d yyyy');
+      return fmt.parseUtc(withYear);
+    } catch (_) {
+      return null;
+    }
   }
 
   static _ShareSchedule? _shareScheduleFromRange(
@@ -662,6 +704,133 @@ class TaskShareDecoder {
       return null;
     }
     return cleaned;
+  }
+
+  static DateTime? _extractDeadline(
+    String baseText,
+    ParseContext context,
+  ) {
+    final RegExpMatch? match = RegExp(
+      r'due by\s+([^.]+)',
+      caseSensitive: false,
+    ).firstMatch(baseText);
+    if (match == null) return null;
+    final String? raw = match.group(1);
+    if (raw == null || raw.trim().isEmpty) return null;
+    return _parseDateTime(raw.trim(), context);
+  }
+
+  static RecurrenceRule? _extractRecurrence(
+    String baseText,
+    ParseContext context,
+  ) {
+    final String lower = baseText.toLowerCase();
+    int interval = 1;
+    RecurrenceFrequency frequency = RecurrenceFrequency.none;
+    List<int>? weekdays;
+
+    if (lower.contains('every weekday')) {
+      frequency = RecurrenceFrequency.weekdays;
+      final RegExpMatch? intervalMatch =
+          RegExp(r'every\s+(\d+)\s+weekdays').firstMatch(lower);
+      if (intervalMatch != null) {
+        interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
+      }
+    } else if (lower.contains('every other day')) {
+      frequency = RecurrenceFrequency.daily;
+      interval = 2;
+    } else if (lower.contains('every day')) {
+      frequency = RecurrenceFrequency.daily;
+      final RegExpMatch? intervalMatch =
+          RegExp(r'every\s+(\d+)\s+days').firstMatch(lower);
+      if (intervalMatch != null) {
+        interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
+      }
+    } else if (lower.contains('every week')) {
+      frequency = RecurrenceFrequency.weekly;
+      final RegExpMatch? intervalMatch =
+          RegExp(r'every\s+(\d+)\s+weeks').firstMatch(lower);
+      if (intervalMatch != null) {
+        interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
+      }
+      final RegExpMatch? daysMatch = RegExp(
+        r'on\s+([a-z\s,]+?)(?:\s+until\b|\s+for\b|,|\.|$)',
+        caseSensitive: false,
+      ).firstMatch(baseText);
+      if (daysMatch != null) {
+        final String raw = daysMatch.group(1)?.toLowerCase() ?? '';
+        final Iterable<String> tokens = raw
+            .replaceAll('and', ',')
+            .split(',')
+            .map((token) => token.trim())
+            .where((token) => token.isNotEmpty);
+        final Map<String, int> weekdayMap = <String, int>{
+          'monday': DateTime.monday,
+          'tuesday': DateTime.tuesday,
+          'wednesday': DateTime.wednesday,
+          'thursday': DateTime.thursday,
+          'friday': DateTime.friday,
+          'saturday': DateTime.saturday,
+          'sunday': DateTime.sunday,
+        };
+        final List<int> parsedDays = <int>[];
+        for (final String token in tokens) {
+          final int? mapped = weekdayMap[token];
+          if (mapped != null) {
+            parsedDays.add(mapped);
+          }
+        }
+        if (parsedDays.isNotEmpty) {
+          weekdays = parsedDays;
+        }
+      }
+    } else if (lower.contains('every month')) {
+      frequency = RecurrenceFrequency.monthly;
+      final RegExpMatch? intervalMatch =
+          RegExp(r'every\s+(\d+)\s+months').firstMatch(lower);
+      if (intervalMatch != null) {
+        interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
+      }
+    } else {
+      return null;
+    }
+
+    final RegExpMatch? countMatch =
+        RegExp(r'for\s+(\d+)\s+occurrences', caseSensitive: false)
+            .firstMatch(baseText);
+    final int? count =
+        countMatch != null ? int.tryParse(countMatch.group(1) ?? '') : null;
+
+    final RegExpMatch? untilMatch = RegExp(
+      r'until\s+([^\.,]+?)(?:\s+for\b|,|\.|$)',
+      caseSensitive: false,
+    ).firstMatch(baseText);
+    final DateTime? untilRaw = untilMatch != null
+        ? _parseDateTime(untilMatch.group(1)!.trim(), context)
+        : null;
+    final DateTime? until = untilRaw == null
+        ? null
+        : DateTime.utc(untilRaw.year, untilRaw.month, untilRaw.day);
+
+    return RecurrenceRule(
+      frequency: frequency,
+      interval: interval,
+      byWeekdays: weekdays,
+      until: until,
+      count: count,
+    );
+  }
+
+  static String? _extractLocation(String baseText) {
+    final RegExpMatch? match = RegExp(
+      r'\bat\s+(.+?)(?:\s+on\b|,|\.)',
+      caseSensitive: false,
+    ).firstMatch(baseText);
+    if (match == null) return null;
+    final String? raw = match.group(1);
+    if (raw == null) return null;
+    final String cleaned = raw.trim();
+    return cleaned.isEmpty ? null : cleaned;
   }
 }
 

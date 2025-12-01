@@ -631,7 +631,6 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
         }
       },
       builder: (context, state) {
-        final T bloc = context.read<T>();
         CalendarTask? resolvedTask = editingTask;
         if (editingTask != null) {
           resolvedTask = state.model.tasks[editingTask!.id] ?? editingTask;
@@ -667,7 +666,7 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
                     onPressed: canAddToCriticalPath
                         ? () => addTaskToCriticalPath(
                               context: context,
-                              bloc: bloc,
+                              bloc: context.read<T>(),
                               task: resolvedTask!,
                             )
                         : null,

@@ -107,7 +107,7 @@ class ComposeScreen extends StatelessWidget {
                           create: (context) => DraftCubit(
                             messageService: messageService,
                             emailService: emailService,
-                            settingsCubit: context.read<SettingsCubit>(),
+                            settingsCubit: context.watch<SettingsCubit>(),
                           ),
                         ),
                     ];

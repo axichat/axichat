@@ -79,13 +79,12 @@ class _SignupFormState extends State<SignupForm>
   var _currentIndex = 0;
   String? _errorText;
   bool? _lastReportedLoading;
-  late Future<String> _captchaSrc = _loadCaptchaSrc();
+  late Future<String> _captchaSrc;
+  bool _captchaSrcInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
-    _captchaSrc = _loadCaptchaSrc();
     _jidTextController = TextEditingController()
       ..addListener(_handleFieldProgressChanged);
     _passwordTextController = TextEditingController()
@@ -114,6 +113,17 @@ class _SignupFormState extends State<SignupForm>
     widget.onLoadingChanged?.call(false);
     _lastReportedLoading = null;
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_captchaSrcInitialized) {
+      return;
+    }
+    _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
+    _captchaSrc = _loadCaptchaSrc();
+    _captchaSrcInitialized = true;
   }
 
   void _handleFieldProgressChanged() {
@@ -439,7 +449,7 @@ class _SignupFormState extends State<SignupForm>
         const globalErrorPadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
         const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
         final animationDuration =
-            context.read<SettingsCubit>().animationDuration;
+            context.watch<SettingsCubit>().animationDuration;
         final showGlobalError =
             !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
         final l10n = context.l10n;
@@ -501,10 +511,11 @@ class _SignupFormState extends State<SignupForm>
                 Padding(
                   padding: horizontalPadding,
                   child: AnimatedSize(
-                    duration: context.read<SettingsCubit>().animationDuration,
+                    duration: context.watch<SettingsCubit>().animationDuration,
                     curve: Curves.easeIn,
                     child: AnimatedSwitcher(
-                      duration: context.read<SettingsCubit>().animationDuration,
+                      duration:
+                          context.watch<SettingsCubit>().animationDuration,
                       switchInCurve: Curves.easeIn,
                       switchOutCurve: Curves.easeOut,
                       transitionBuilder:

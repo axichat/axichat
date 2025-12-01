@@ -99,8 +99,12 @@ class CredentialStore
     required Map<RegisteredCredentialKey, String?> data,
   }) async {
     try {
-      data.forEach((key, value) async =>
-          await _secureStorage.write(key: key.value, value: value));
+      for (final entry in data.entries) {
+        await _secureStorage.write(
+          key: entry.key.value,
+          value: entry.value,
+        );
+      }
       return true;
     } on Exception catch (e) {
       _log.severe('Failed to write all values:', e);

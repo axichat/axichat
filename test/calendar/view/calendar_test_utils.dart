@@ -8,16 +8,44 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:bloc_test/bloc_test.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 
 class MockCalendarBloc extends MockBloc<CalendarEvent, CalendarState>
     implements CalendarBloc {}
+
+class _InMemoryStorage implements Storage {
+  final Map<String, dynamic> _store = {};
+
+  @override
+  dynamic read(String key) => _store[key];
+
+  @override
+  Future<void> write(String key, dynamic value) async {
+    _store[key] = value;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    _store.remove(key);
+  }
+
+  @override
+  Future<void> clear() async {
+    _store.clear();
+  }
+
+  @override
+  Future<void> close() async {}
+}
 
 bool _calendarFallbacksRegistered = false;
 
@@ -441,6 +469,12 @@ class CalendarWidgetHarness {
 
     final resolvedState = state ?? CalendarTestData.weekView();
     final bloc = MockCalendarBloc();
+    try {
+      HydratedBloc.storage;
+    } on StorageNotFound {
+      HydratedBloc.storage = _InMemoryStorage();
+    }
+    final SettingsCubit settingsCubit = SettingsCubit();
     final stateController = StreamController<CalendarState>.broadcast();
     var currentState = resolvedState;
 
@@ -473,6 +507,9 @@ class CalendarWidgetHarness {
           colorSchemeSeed: const Color(0xFF0F172A),
           brightness: Brightness.light,
         ),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: MediaQuery(
           data: mediaQueryData,
           child: ShadTheme(
@@ -485,6 +522,7 @@ class CalendarWidgetHarness {
                 providers: [
                   BlocProvider<CalendarBloc>.value(value: bloc),
                   BlocProvider<BaseCalendarBloc>.value(value: bloc),
+                  BlocProvider<SettingsCubit>.value(value: settingsCubit),
                 ],
                 child: const CalendarWidget(),
               ),
@@ -493,9 +531,11 @@ class CalendarWidgetHarness {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     addTearDown(bloc.close);
+    addTearDown(settingsCubit.close);
     addTearDown(() => stateController.close());
 
     final harness = CalendarWidgetHarness._(

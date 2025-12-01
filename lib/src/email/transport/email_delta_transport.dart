@@ -92,10 +92,14 @@ class EmailDeltaTransport implements ChatTransport {
     final completer = Completer<void>();
     late final StreamSubscription<DeltaCoreEvent> subscription;
     subscription = context.events().listen((event) {
+      final eventType = DeltaEventType.fromCode(event.type);
+      if (eventType == null) {
+        return;
+      }
       if (completer.isCompleted) {
         return;
       }
-      if (event.type == DeltaEventType.configureProgress) {
+      if (eventType == DeltaEventType.configureProgress) {
         if (event.data1 == 1000) {
           completer.complete();
         } else if (event.data1 == 0) {
@@ -107,7 +111,7 @@ class EmailDeltaTransport implements ChatTransport {
         }
         return;
       }
-      if (event.type == DeltaEventType.error) {
+      if (eventType == DeltaEventType.error) {
         completer.completeError(
           DeltaSafeException(
             event.data2Text ??

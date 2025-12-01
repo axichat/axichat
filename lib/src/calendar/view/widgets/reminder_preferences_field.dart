@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 /// Declarative reminder selector that exposes start/deadline offsets as a set
 /// of toggleable chips. Designed to be reused by quick add, sidebar, and
@@ -32,14 +34,8 @@ class ReminderPreferencesField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final ShadColorScheme colors = context.colorScheme;
     final bool enabled = !showEnabledToggle || value.enabled;
-    final TextStyle labelStyle = TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-      color: colors.secondary,
-      letterSpacing: 0.2,
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,9 +43,10 @@ class ReminderPreferencesField extends StatelessWidget {
         TaskSectionHeader(
           title: title,
           trailing: showEnabledToggle
-              ? Switch(
+              ? ShadSwitch(
                   value: value.enabled,
-                  activeThumbColor: colors.primary,
+                  label: const SizedBox.shrink(),
+                  hoverColor: colors.primary.withValues(alpha: 0.08),
                   onChanged: (bool next) => onChanged(
                     value
                         .copyWith(enabled: next)
@@ -72,9 +69,12 @@ class ReminderPreferencesField extends StatelessWidget {
                   selected: value.startOffsets,
                   onOptionToggled: (Duration offset) =>
                       onChanged(_toggled(value, offset, isStart: true)),
-                  labelStyle: labelStyle,
                   mixed: mixed,
                   zeroLabel: 'At start',
+                  chipPadding: const EdgeInsets.symmetric(
+                    horizontal: calendarGutterMd,
+                    vertical: calendarGutterSm,
+                  ),
                 ),
                 if (showDeadlineOptions) ...[
                   const SizedBox(height: 8),
@@ -84,9 +84,12 @@ class ReminderPreferencesField extends StatelessWidget {
                     selected: value.deadlineOffsets,
                     onOptionToggled: (Duration offset) =>
                         onChanged(_toggled(value, offset, isStart: false)),
-                    labelStyle: labelStyle,
                     mixed: mixed,
                     zeroLabel: 'At deadline',
+                    chipPadding: const EdgeInsets.symmetric(
+                      horizontal: calendarGutterMd,
+                      vertical: calendarGutterSm,
+                    ),
                   ),
                 ],
               ],
@@ -126,25 +129,29 @@ class _ReminderSection extends StatelessWidget {
     required this.options,
     required this.selected,
     required this.onOptionToggled,
-    required this.labelStyle,
     required this.zeroLabel,
     this.mixed = false,
+    this.chipPadding,
   });
 
   final String label;
   final List<Duration> options;
   final List<Duration> selected;
   final ValueChanged<Duration> onOptionToggled;
-  final TextStyle labelStyle;
   final bool mixed;
   final String zeroLabel;
+  final EdgeInsets? chipPadding;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final Color borderColor = colors.outline.withValues(alpha: 0.4);
-    final Color activeColor = colors.primary;
-    final Color inactiveBackground = colors.surfaceContainerHighest;
+    final ShadColorScheme colors = context.colorScheme;
+    final TextStyle labelStyle = context.textTheme.small.copyWith(
+      color: colors.mutedForeground,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.2,
+    );
+    final Color inactiveBackground = colors.secondary.withValues(alpha: 0.04);
+    final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,7 +170,7 @@ class _ReminderSection extends StatelessWidget {
                 child: Text(
                   'Mixed',
                   style: TextStyle(
-                    color: colors.onSecondaryContainer,
+                    color: colors.mutedForeground,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -180,9 +187,15 @@ class _ReminderSection extends StatelessWidget {
                 (Duration option) => _ReminderChip(
                   label: _labelFor(option),
                   selected: selected.contains(option),
-                  activeColor: activeColor,
-                  borderColor: borderColor,
+                  activeColor: colors.primary,
+                  borderColor: colors.border,
                   inactiveBackground: inactiveBackground,
+                  radius: radius,
+                  padding: chipPadding ??
+                      const EdgeInsets.symmetric(
+                        horizontal: calendarGutterMd,
+                        vertical: calendarGutterSm,
+                      ),
                   onTap: () => onOptionToggled(option),
                 ),
               )
@@ -215,6 +228,8 @@ class _ReminderChip extends StatelessWidget {
     required this.activeColor,
     required this.borderColor,
     required this.inactiveBackground,
+    required this.radius,
+    required this.padding,
     required this.onTap,
   });
 
@@ -223,33 +238,37 @@ class _ReminderChip extends StatelessWidget {
   final Color activeColor;
   final Color borderColor;
   final Color inactiveBackground;
+  final BorderRadius radius;
+  final EdgeInsets padding;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final Color textColor = selected ? colors.onPrimary : colors.onSurface;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? activeColor : inactiveBackground,
-          border: Border.all(
-            color: selected ? activeColor : borderColor,
-            width: 1,
-          ),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: textColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
-          ),
+    final ShadColorScheme colors = context.colorScheme;
+    final Color textColor =
+        selected ? Colors.white : colors.foreground.withValues(alpha: 0.9);
+
+    return ShadButton.raw(
+      size: ShadButtonSize.sm,
+      padding: padding,
+      backgroundColor:
+          selected ? activeColor : inactiveBackground.withValues(alpha: 0.7),
+      hoverBackgroundColor: selected
+          ? activeColor.withValues(alpha: 0.9)
+          : inactiveBackground.withValues(alpha: 0.9),
+      foregroundColor: textColor,
+      hoverForegroundColor: textColor,
+      border: ShadBorder.all(
+        color: selected ? activeColor : borderColor,
+        radius: radius,
+      ),
+      onPressed: onTap,
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
         ),
       ),
     );

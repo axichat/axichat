@@ -21,6 +21,7 @@ class AxiTextFormField extends ShadInputFormField {
     super.maxLines,
     super.autocorrect,
     super.textInputAction,
+    super.autofocus,
     super.style,
     super.placeholderStyle,
     super.placeholderAlignment,

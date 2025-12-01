@@ -31,88 +31,81 @@ class _ArchivesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chatsCubit = context.watch<ChatsCubit?>();
-    List<Chat> selectedChats = const <Chat>[];
-    if (chatsCubit != null &&
-        chatsCubit.state.selectedJids.isNotEmpty &&
-        chatsCubit.state.items != null) {
-      selectedChats = chatsCubit.state.items!
-          .where(
-            (chat) => chatsCubit.state.selectedJids.contains(chat.jid),
-          )
-          .toList();
-    }
-    final selectionActive = selectedChats.isNotEmpty && chatsCubit != null;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Archive'),
-        leadingWidth: AxiIconButton.kDefaultSize + 24,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: SizedBox(
-              width: AxiIconButton.kDefaultSize,
-              height: AxiIconButton.kDefaultSize,
-              child: AxiIconButton(
-                iconData: LucideIcons.arrowLeft,
-                tooltip: 'Back',
-                color: context.colorScheme.foreground,
-                borderColor: context.colorScheme.border,
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-            ),
-          ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Divider(
-            height: 1,
-            thickness: 1,
-            color: context.colorScheme.border,
-          ),
-        ),
-      ),
-      body: BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
-        selector: (state) =>
-            state.items?.where((chat) => chat.archived).toList(growable: false),
-        builder: (context, items) {
-          if (items == null) {
-            return Center(
-              child: AxiProgressIndicator(
-                color: context.colorScheme.foreground,
-              ),
-            );
-          }
-          if (items.isEmpty) {
-            return Center(
-              child: Text(
-                'No archived chats yet',
-                style: context.textTheme.muted,
-              ),
-            );
-          }
-          return ListView.builder(
-            itemCount: items.length,
-            itemBuilder: (context, index) => ListItemPadding(
-              child: ChatListTile(
-                item: items[index],
-                archivedContext: true,
-                onArchivedTap: (chat) => GoRouter.of(context).push(
-                  ArchivedChatRoute(jid: chat.jid).location,
-                  extra: locate,
+    return BlocBuilder<ChatsCubit, ChatsState>(
+      builder: (context, chatsState) {
+        final selectedJids = chatsState.selectedJids;
+        final selectedChats = selectedJids.isEmpty
+            ? const <Chat>[]
+            : (chatsState.items ?? const <Chat>[])
+                .where((chat) => selectedJids.contains(chat.jid))
+                .toList();
+        final selectionActive = selectedChats.isNotEmpty;
+        final archivedItems = chatsState.items
+            ?.where((chat) => chat.archived)
+            .toList(growable: false);
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Archive'),
+            leadingWidth: AxiIconButton.kDefaultSize + 24,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: AxiIconButton.kDefaultSize,
+                  height: AxiIconButton.kDefaultSize,
+                  child: AxiIconButton(
+                    iconData: LucideIcons.arrowLeft,
+                    tooltip: 'Back',
+                    color: context.colorScheme.foreground,
+                    borderColor: context.colorScheme.border,
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
                 ),
               ),
             ),
-          );
-        },
-      ),
-      bottomNavigationBar: selectionActive
-          ? ChatSelectionActionBar(
-              chatsCubit: chatsCubit,
-              selectedChats: selectedChats,
-            )
-          : null,
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Divider(
+                height: 1,
+                thickness: 1,
+                color: context.colorScheme.border,
+              ),
+            ),
+          ),
+          body: archivedItems == null
+              ? Center(
+                  child: AxiProgressIndicator(
+                    color: context.colorScheme.foreground,
+                  ),
+                )
+              : archivedItems.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No archived chats yet',
+                        style: context.textTheme.muted,
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: archivedItems.length,
+                      itemBuilder: (context, index) => ListItemPadding(
+                        child: ChatListTile(
+                          item: archivedItems[index],
+                          archivedContext: true,
+                          onArchivedTap: (chat) => GoRouter.of(context).push(
+                            ArchivedChatRoute(jid: chat.jid).location,
+                            extra: locate,
+                          ),
+                        ),
+                      ),
+                    ),
+          bottomNavigationBar: selectionActive
+              ? ChatSelectionActionBar(
+                  selectedChats: selectedChats,
+                )
+              : null,
+        );
+      },
     );
   }
 }

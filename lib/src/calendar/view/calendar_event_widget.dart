@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -360,26 +359,25 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
     setState(() => _isResizing = false);
 
     if (_tempStartTime != null && _tempDuration != null) {
-      final bloc = context.read<CalendarBloc>();
-      final CalendarState currentState = bloc.state;
       String targetId = widget.task.id;
-      CalendarTask? targetTask = currentState.model.tasks[targetId];
+      CalendarTask? targetTask =
+          context.read<CalendarBloc>().state.model.tasks[targetId];
       if (targetTask == null) {
         final String baseId = widget.task.baseId;
-        targetTask = currentState.model.tasks[baseId];
+        targetTask = context.read<CalendarBloc>().state.model.tasks[baseId];
         if (targetTask != null) {
           targetId = baseId;
         }
       }
 
-      bloc.add(
-        CalendarEvent.taskResized(
-          taskId: targetId,
-          scheduledTime: _tempStartTime,
-          duration: _tempDuration,
-          endDate: _tempEndDate,
-        ),
-      );
+      context.read<CalendarBloc>().add(
+            CalendarEvent.taskResized(
+              taskId: targetId,
+              scheduledTime: _tempStartTime,
+              duration: _tempDuration,
+              endDate: _tempEndDate,
+            ),
+          );
 
       _tempStartTime = null;
       _tempDuration = null;
@@ -465,6 +463,21 @@ class _CalendarEventContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    Color _foregroundFor(Color background) =>
+        background.computeLuminance() > 0.65
+            ? calendarTitleColor
+            : Colors.white;
+    final BorderRadius radius = BorderRadius.circular(calendarEventRadius);
+    final double blendAmount = isDragging ? 0.22 : 0.14;
+    final Color blendedBackground =
+        Color.lerp(colors.card, eventColor, blendAmount)!;
+    final Color background =
+        isGhost ? blendedBackground.withValues(alpha: 0.75) : blendedBackground;
+    final Color textColor = _foregroundFor(blendedBackground);
+    final Color mutedColor = textColor.withValues(alpha: 0.82);
+    final Color stripeColor = eventColor;
+
     return MouseRegion(
       onEnter: (_) {
         if (interactive) {
@@ -483,34 +496,47 @@ class _CalendarEventContainer extends StatelessWidget {
           duration: baseAnimationDuration,
           curve: Curves.easeInOut,
           decoration: BoxDecoration(
-            color: isGhost
-                ? eventColor.withValues(alpha: 0.3)
-                : isDragging
-                    ? eventColor.withValues(alpha: 0.9)
-                    : eventColor,
-            borderRadius: BorderRadius.circular(6.0),
+            color: background,
+            borderRadius: radius,
             boxShadow: isDragging
                 ? calendarMediumShadow
                 : isHovering
                     ? calendarLightShadow
-                    : calendarCardShadow,
-            border: isHovering && !isDragging
-                ? Border.all(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    width: 1,
-                  )
-                : null,
+                    : calendarLightShadow,
+            border: Border.all(
+              color: stripeColor.withValues(alpha: 0.35),
+              width: 1,
+            ),
           ),
           child: Stack(
             children: [
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: 4,
+                    decoration: BoxDecoration(
+                      color: stripeColor,
+                      borderRadius: BorderRadius.only(
+                        topLeft: radius.topLeft,
+                        bottomLeft: radius.bottomLeft,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               _CalendarEventContent(
                 task: task,
                 height: height,
                 showDescription: showDescription,
                 timeRange: timeRange,
+                textColor: textColor,
+                mutedColor: mutedColor,
+                accentColor: stripeColor,
               ),
               if (interactive && isHovering && !isDragging && isDayView)
                 _CalendarEventResizeHandles(
+                  gripColor: stripeColor.withValues(alpha: 0.6),
                   onResizeStart: onResizeStart,
                   onResizeUpdate: onResizeUpdate,
                   onResizeEnd: onResizeEnd,
@@ -529,12 +555,18 @@ class _CalendarEventContent extends StatelessWidget {
     required this.height,
     required this.showDescription,
     required this.timeRange,
+    required this.textColor,
+    required this.mutedColor,
+    required this.accentColor,
   });
 
   final CalendarTask task;
   final double height;
   final bool showDescription;
   final String timeRange;
+  final Color textColor;
+  final Color mutedColor;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -554,7 +586,7 @@ class _CalendarEventContent extends StatelessWidget {
                   width: 3,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
+                    color: accentColor,
                     borderRadius: BorderRadius.circular(1.5),
                   ),
                 ),
@@ -566,7 +598,7 @@ class _CalendarEventContent extends StatelessWidget {
                   style: TextStyle(
                     fontSize: height < 40 ? 11 : 13,
                     fontWeight: FontWeight.w500,
-                    color: Colors.white,
+                    color: textColor,
                     decoration:
                         task.isCompleted ? TextDecoration.lineThrough : null,
                     letterSpacing: -0.1,
@@ -583,7 +615,7 @@ class _CalendarEventContent extends StatelessWidget {
               timeRange,
               style: TextStyle(
                 fontSize: 10,
-                color: Colors.white.withValues(alpha: 0.85),
+                color: mutedColor,
                 fontWeight: FontWeight.w400,
               ),
             ),
@@ -595,7 +627,7 @@ class _CalendarEventContent extends StatelessWidget {
                 task.description!,
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.white.withValues(alpha: 0.75),
+                  color: mutedColor,
                   fontWeight: FontWeight.w400,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -607,8 +639,8 @@ class _CalendarEventContent extends StatelessWidget {
             const SizedBox(height: calendarInsetSm),
             TaskChecklistProgressBar(
               progress: task.checklistProgress,
-              activeColor: Colors.white,
-              backgroundColor: Colors.white.withValues(alpha: 0.25),
+              activeColor: accentColor,
+              backgroundColor: mutedColor.withValues(alpha: 0.25),
             ),
           ],
           if (height > 45 && task.location?.isNotEmpty == true) ...[
@@ -618,7 +650,7 @@ class _CalendarEventContent extends StatelessWidget {
                 Icon(
                   Icons.location_on,
                   size: 8,
-                  color: Colors.white.withValues(alpha: 0.7),
+                  color: mutedColor,
                 ),
                 const SizedBox(width: calendarInsetSm),
                 Expanded(
@@ -626,7 +658,7 @@ class _CalendarEventContent extends StatelessWidget {
                     task.location!,
                     style: TextStyle(
                       fontSize: 8,
-                      color: Colors.white.withValues(alpha: 0.7),
+                      color: mutedColor,
                       fontWeight: FontWeight.w400,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -644,11 +676,13 @@ class _CalendarEventContent extends StatelessWidget {
 
 class _CalendarEventResizeHandles extends StatelessWidget {
   const _CalendarEventResizeHandles({
+    required this.gripColor,
     required this.onResizeStart,
     required this.onResizeUpdate,
     required this.onResizeEnd,
   });
 
+  final Color gripColor;
   final void Function(ResizeDirection direction) onResizeStart;
   final void Function(DragUpdateDetails details, ResizeDirection direction)
       onResizeUpdate;
@@ -677,7 +711,7 @@ class _CalendarEventResizeHandles extends StatelessWidget {
                     width: 40,
                     height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.4),
+                      color: gripColor,
                       borderRadius: BorderRadius.circular(1.5),
                     ),
                   ),
@@ -705,7 +739,7 @@ class _CalendarEventResizeHandles extends StatelessWidget {
                     width: 40,
                     height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.4),
+                      color: gripColor,
                       borderRadius: BorderRadius.circular(1.5),
                     ),
                   ),

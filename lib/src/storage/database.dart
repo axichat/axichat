@@ -373,6 +373,24 @@ abstract interface class XmppDatabase implements Database {
 
   Future<bool> isEmailAddressSpam(String address);
 
+  Stream<List<DayEventEntry>> watchDayEvents({
+    required DateTime start,
+    required DateTime end,
+  });
+
+  Future<List<DayEventEntry>> getDayEvents({
+    required DateTime start,
+    required DateTime end,
+  });
+
+  Future<DayEventEntry?> getDayEvent(String id);
+
+  Future<void> saveDayEvent(DayEventEntry entry);
+
+  Future<void> deleteDayEvent(String id);
+
+  Future<void> replaceDayEvents(Iterable<DayEventEntry> entries);
+
   Future<void> deleteAll();
 
   Future<void> deleteFile();
@@ -896,6 +914,82 @@ class EmailSpamlistAccessor
   Stream<List<EmailSpamEntry>> watchEntries() => select(table).watch();
 }
 
+@DriftAccessor(tables: [DayEvents])
+class DayEventsAccessor extends BaseAccessor<DayEventEntry, $DayEventsTable>
+    with _$DayEventsAccessorMixin {
+  DayEventsAccessor(super.attachedDatabase);
+
+  @override
+  $DayEventsTable get table => dayEvents;
+
+  @override
+  Future<DayEventEntry?> selectOne(String id) =>
+      (select(table)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+
+  Stream<List<DayEventEntry>> watchRange(DateTime start, DateTime end) =>
+      (select(table)
+            ..where(
+              (tbl) =>
+                  tbl.startDate.isSmallerOrEqual(Variable(end)) &
+                  tbl.endDate.isBiggerOrEqual(Variable(start)),
+            )
+            ..orderBy([
+              (tbl) => OrderingTerm(
+                    expression: tbl.startDate,
+                    mode: OrderingMode.asc,
+                  ),
+            ]))
+          .watch();
+
+  Future<List<DayEventEntry>> selectRange(DateTime start, DateTime end) =>
+      (select(table)
+            ..where(
+              (tbl) =>
+                  tbl.startDate.isSmallerOrEqual(Variable(end)) &
+                  tbl.endDate.isBiggerOrEqual(Variable(start)),
+            )
+            ..orderBy([
+              (tbl) => OrderingTerm(
+                    expression: tbl.startDate,
+                    mode: OrderingMode.asc,
+                  ),
+            ]))
+          .get();
+
+  Future<void> insertAll(List<DayEventEntry> entries) async {
+    if (entries.isEmpty) {
+      return;
+    }
+    await batch(
+      (batch) => batch.insertAll(
+        table,
+        entries.map((entry) => DayEventsCompanion.insert(
+              id: entry.id,
+              title: entry.title,
+              startDate: entry.startDate,
+              endDate: entry.endDate,
+              description: Value(entry.description),
+              reminders: entry.reminders,
+              createdAt: entry.createdAt,
+              modifiedAt: entry.modifiedAt,
+            )),
+        mode: InsertMode.insertOrReplace,
+      ),
+    );
+  }
+
+  Future<void> replaceAll(List<DayEventEntry> entries) async {
+    await transaction(() async {
+      await delete(table).go();
+      await insertAll(entries);
+    });
+  }
+
+  @override
+  Future<void> deleteOne(String id) =>
+      (delete(table)..where((tbl) => tbl.id.equals(id))).go();
+}
+
 @DriftDatabase(tables: [
   Messages,
   MessageShares,
@@ -919,6 +1013,7 @@ class EmailSpamlistAccessor
   StickerPacks,
   EmailBlocklist,
   EmailSpamlist,
+  DayEvents,
 ], daos: [
   MessagesAccessor,
   MessageSharesAccessor,
@@ -938,6 +1033,7 @@ class EmailSpamlistAccessor
   BlocklistAccessor,
   EmailBlocklistAccessor,
   EmailSpamlistAccessor,
+  DayEventsAccessor,
 ])
 class XmppDrift extends _$XmppDrift implements XmppDatabase {
   XmppDrift._(this._file, super.e) : super();
@@ -956,6 +1052,9 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
   String _normalizeEmail(String address) => address.trim().toLowerCase();
 
+  DateTime _normalizeDate(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
   String _chatTitleForIdentifier(String identifier) {
     final trimmed = identifier.trim();
     if (trimmed.isEmpty) {
@@ -969,7 +1068,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration {
@@ -1066,6 +1165,9 @@ WHERE subject_token IS NOT NULL
         }
         if (from < 14) {
           await m.addColumn(chats, chats.shareSignatureEnabled);
+        }
+        if (from < 15) {
+          await m.createTable(dayEvents);
         }
       },
       beforeOpen: (_) async {
@@ -2403,6 +2505,41 @@ ON CONFLICT(address) DO UPDATE SET
     final existing = await emailSpamlistAccessor.selectOne(normalized);
     return existing != null;
   }
+
+  @override
+  Stream<List<DayEventEntry>> watchDayEvents({
+    required DateTime start,
+    required DateTime end,
+  }) {
+    final DateTime normalizedStart = _normalizeDate(start);
+    final DateTime normalizedEnd = _normalizeDate(end);
+    return dayEventsAccessor.watchRange(normalizedStart, normalizedEnd);
+  }
+
+  @override
+  Future<List<DayEventEntry>> getDayEvents({
+    required DateTime start,
+    required DateTime end,
+  }) {
+    final DateTime normalizedStart = _normalizeDate(start);
+    final DateTime normalizedEnd = _normalizeDate(end);
+    return dayEventsAccessor.selectRange(normalizedStart, normalizedEnd);
+  }
+
+  @override
+  Future<DayEventEntry?> getDayEvent(String id) =>
+      dayEventsAccessor.selectOne(id);
+
+  @override
+  Future<void> saveDayEvent(DayEventEntry entry) =>
+      dayEventsAccessor.insertOrUpdateOne(entry);
+
+  @override
+  Future<void> deleteDayEvent(String id) => dayEventsAccessor.deleteOne(id);
+
+  @override
+  Future<void> replaceDayEvents(Iterable<DayEventEntry> entries) =>
+      dayEventsAccessor.replaceAll(entries.toList(growable: false));
 
   Future<void> _rebuildMessagesTable(Migrator m) async {
     final tableName = messages.actualTableName;

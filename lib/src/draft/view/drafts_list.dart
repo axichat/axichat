@@ -8,6 +8,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 
 class DraftsList extends StatelessWidget {
   const DraftsList({super.key});
@@ -17,14 +18,8 @@ class DraftsList extends StatelessWidget {
     return BlocBuilder<DraftCubit, DraftState>(
       buildWhen: (_, current) => current is DraftsAvailable,
       builder: (context, state) {
-        late final List<Draft>? items;
         final l10n = context.l10n;
-
-        if (state is! DraftsAvailable) {
-          items = context.read<DraftCubit>()['items'];
-        } else {
-          items = state.items;
-        }
+        final List<Draft>? items = state.items;
 
         if (items == null) {
           return Center(
@@ -34,88 +29,109 @@ class DraftsList extends StatelessWidget {
           );
         }
 
-        var visibleItems = List<Draft>.from(items);
-
-        final searchState = context.watch<HomeSearchCubit?>()?.state;
-        final tabState = searchState?.stateFor(HomeTab.drafts);
-        final searchActive = searchState?.active ?? false;
-        final query =
-            searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-        final filterId = tabState?.filterId;
-        final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
-
-        if (filterId == 'attachments') {
-          visibleItems = visibleItems
-              .where((draft) => draft.attachmentMetadataIds.isNotEmpty)
-              .toList();
-        }
-
-        if (query.isNotEmpty) {
-          visibleItems = visibleItems
-              .where((draft) => _draftMatchesQuery(draft, query))
-              .toList();
-        }
-
-        visibleItems.sort(
-          (a, b) => sortOrder.isNewestFirst
-              ? b.id.compareTo(a.id)
-              : a.id.compareTo(b.id),
-        );
-
-        if (visibleItems.isEmpty) {
-          return Center(
-            child: Text(
-              l10n.draftsEmpty,
-              style: context.textTheme.muted,
-            ),
-          );
-        }
-
-        return ColoredBox(
-          color: context.colorScheme.background,
-          child: ListView.builder(
-            itemCount: visibleItems.length,
-            itemBuilder: (context, index) {
-              final item = visibleItems[index];
-              final recipients = item.jids.length;
-              return ListItemPadding(
-                child: AxiListTile(
-                  key: Key(item.id.toString()),
-                  onTap: () => context.read<ComposeWindowCubit>().openDraft(
-                        id: item.id,
-                        jids: item.jids,
-                        body: item.body ?? '',
-                        subject: item.subject ?? '',
-                        attachmentMetadataIds: item.attachmentMetadataIds,
-                      ),
-                  menuItems: [
-                    AxiDeleteMenuItem(
-                      onPressed: () async {
-                        if (await confirm(
-                                  context,
-                                  text: l10n.draftsDeleteConfirm,
-                                ) ==
-                                true &&
-                            context.mounted) {
-                          context.read<DraftCubit?>()?.deleteDraft(id: item.id);
-                        }
-                      },
-                    )
-                  ],
-                  leading: AxiAvatar(
-                    jid: recipients == 1 ? item.jids[0] : recipients.toString(),
-                  ),
-                  title:
-                      '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
-                  subtitle: item.body?.isNotEmpty == true
-                      ? item.body
-                      : item.jids.join(', '),
-                ),
-              );
-            },
+        return BlocBuilder<HomeSearchCubit, HomeSearchState>(
+          builder: (context, searchState) => _DraftsListBody(
+            items: items,
+            l10n: l10n,
+            searchState: searchState,
           ),
         );
       },
+    );
+  }
+}
+
+class _DraftsListBody extends StatelessWidget {
+  const _DraftsListBody({
+    required this.items,
+    required this.l10n,
+    this.searchState,
+  });
+
+  final List<Draft> items;
+  final AppLocalizations l10n;
+  final HomeSearchState? searchState;
+
+  @override
+  Widget build(BuildContext context) {
+    var visibleItems = List<Draft>.from(items);
+
+    final tabState = searchState?.stateFor(HomeTab.drafts);
+    final searchActive = searchState?.active ?? false;
+    final query =
+        searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
+    final filterId = tabState?.filterId;
+    final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
+
+    if (filterId == 'attachments') {
+      visibleItems = visibleItems
+          .where((draft) => draft.attachmentMetadataIds.isNotEmpty)
+          .toList();
+    }
+
+    if (query.isNotEmpty) {
+      visibleItems = visibleItems
+          .where((draft) => _draftMatchesQuery(draft, query))
+          .toList();
+    }
+
+    visibleItems.sort(
+      (a, b) =>
+          sortOrder.isNewestFirst ? b.id.compareTo(a.id) : a.id.compareTo(b.id),
+    );
+
+    if (visibleItems.isEmpty) {
+      return Center(
+        child: Text(
+          l10n.draftsEmpty,
+          style: context.textTheme.muted,
+        ),
+      );
+    }
+
+    return ColoredBox(
+      color: context.colorScheme.background,
+      child: ListView.builder(
+        itemCount: visibleItems.length,
+        itemBuilder: (context, index) {
+          final item = visibleItems[index];
+          final recipients = item.jids.length;
+          return ListItemPadding(
+            child: AxiListTile(
+              key: Key(item.id.toString()),
+              onTap: () => context.read<ComposeWindowCubit>().openDraft(
+                    id: item.id,
+                    jids: item.jids,
+                    body: item.body ?? '',
+                    subject: item.subject ?? '',
+                    attachmentMetadataIds: item.attachmentMetadataIds,
+                  ),
+              menuItems: [
+                AxiDeleteMenuItem(
+                  onPressed: () async {
+                    if (await confirm(
+                              context,
+                              text: l10n.draftsDeleteConfirm,
+                            ) ==
+                            true &&
+                        context.mounted) {
+                      context.read<DraftCubit?>()?.deleteDraft(id: item.id);
+                    }
+                  },
+                )
+              ],
+              leading: AxiAvatar(
+                jid: recipients == 1 ? item.jids[0] : recipients.toString(),
+              ),
+              title:
+                  '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
+              subtitle: item.body?.isNotEmpty == true
+                  ? item.body
+                  : item.jids.join(', '),
+            ),
+          );
+        },
+      ),
     );
   }
 }

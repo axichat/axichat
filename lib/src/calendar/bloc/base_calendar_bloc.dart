@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/day_event_repository.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
@@ -40,9 +41,11 @@ abstract class BaseCalendarBloc
     required String storagePrefix,
     String storageId = '',
     CalendarReminderController? reminderController,
+    DayEventRepository? dayEventRepository,
     DateTime Function()? now,
     NlScheduleParserService? parserService,
   })  : _reminderController = reminderController,
+        _dayEventRepository = dayEventRepository,
         _now = now ?? DateTime.now,
         _storagePrefix = storagePrefix,
         _storageId = storageId,
@@ -100,12 +103,14 @@ abstract class BaseCalendarBloc
   }
 
   final CalendarReminderController? _reminderController;
+  final DayEventRepository? _dayEventRepository;
   final DateTime Function() _now;
   final String _storagePrefix;
   final String _storageId;
   final Storage _storage;
   final NlScheduleParserService _nlParserService;
   Future<void> _pendingReminderSync = Future.value();
+  Future<void> _pendingDayEventPersist = Future.value();
   static const int _undoHistoryLimit = 50;
   final List<_CalendarUndoSnapshot> _undoStack = <_CalendarUndoSnapshot>[];
   final List<_CalendarUndoSnapshot> _redoStack = <_CalendarUndoSnapshot>[];
@@ -187,6 +192,9 @@ abstract class BaseCalendarBloc
       );
     }
   }
+
+  @protected
+  DayEventRepository? get dayEventRepository => _dayEventRepository;
 
   void commitTaskInteraction(CalendarTask snapshot) {
     final DateTime? scheduled = snapshot.scheduledTime;
@@ -349,17 +357,22 @@ abstract class BaseCalendarBloc
     );
   }
 
-  void _onStarted(CalendarStarted event, Emitter<CalendarState> emit) {
+  Future<void> _onStarted(
+    CalendarStarted event,
+    Emitter<CalendarState> emit,
+  ) async {
     emitModel(state.model, emit, selectedDate: state.selectedDate);
+    await syncDayEventsToRepository(state.model.dayEvents.values);
   }
 
-  void _onDataChanged(
+  Future<void> _onDataChanged(
     CalendarDataChanged event,
     Emitter<CalendarState> emit,
-  ) {
+  ) async {
     // When hydration restores or an explicit refresh is requested, recompute
     // reminder snapshots without mutating the model.
     emitModel(state.model, emit, selectedDate: state.selectedDate);
+    await syncDayEventsToRepository(state.model.dayEvents.values);
   }
 
   Future<void> _onTaskAdded(
@@ -1055,6 +1068,7 @@ abstract class BaseCalendarBloc
 
       final CalendarModel updatedModel = state.model.addDayEvent(dayEvent);
       emitModel(updatedModel, emit, isLoading: false);
+      await _persistDayEvent(dayEvent);
       await onDayEventAdded(dayEvent);
     } catch (error) {
       if (snapshotRecorded) {
@@ -1097,6 +1111,7 @@ abstract class BaseCalendarBloc
       );
       final CalendarModel updatedModel = state.model.updateDayEvent(normalized);
       emitModel(updatedModel, emit, isLoading: false);
+      await _persistDayEvent(normalized);
       await onDayEventUpdated(normalized);
     } catch (error) {
       if (snapshotRecorded) {
@@ -1124,6 +1139,7 @@ abstract class BaseCalendarBloc
       final CalendarModel updatedModel =
           state.model.deleteDayEvent(event.eventId);
       emitModel(updatedModel, emit, isLoading: false);
+      await _deleteDayEventFromRepository(event.eventId);
       await onDayEventDeleted(deleted);
     } catch (error) {
       if (snapshotRecorded) {
@@ -1774,6 +1790,10 @@ abstract class BaseCalendarBloc
       isSelectionMode: state.isSelectionMode,
       selectedTaskIds: state.selectedTaskIds,
     );
+
+    for (final task in updates.values) {
+      await onTaskUpdated(task);
+    }
   }
 
   Set<String> _selectionGroupFor(String id) {
@@ -2718,6 +2738,45 @@ abstract class BaseCalendarBloc
     emit(state.copyWith(isLoading: false, error: errorMessage));
   }
 
+  @protected
+  Future<void> syncDayEventsToRepository(
+    Iterable<DayEvent> events,
+  ) async {
+    final DayEventRepository? repo = _dayEventRepository;
+    if (repo == null) {
+      return;
+    }
+    final List<DayEvent> normalized = events
+        .map((DayEvent event) => event.normalizedCopy())
+        .toList(growable: false);
+    _pendingDayEventPersist = _pendingDayEventPersist.then(
+      (_) => repo.replaceAll(normalized),
+    );
+    await _pendingDayEventPersist;
+  }
+
+  Future<void> _persistDayEvent(DayEvent event) async {
+    final DayEventRepository? repo = _dayEventRepository;
+    if (repo == null) {
+      return;
+    }
+    _pendingDayEventPersist = _pendingDayEventPersist.then(
+      (_) => repo.upsert(event),
+    );
+    await _pendingDayEventPersist;
+  }
+
+  Future<void> _deleteDayEventFromRepository(String id) async {
+    final DayEventRepository? repo = _dayEventRepository;
+    if (repo == null) {
+      return;
+    }
+    _pendingDayEventPersist = _pendingDayEventPersist.then(
+      (_) => repo.delete(id),
+    );
+    await _pendingDayEventPersist;
+  }
+
   CalendarState _stateWithDerived(CalendarState state) {
     final dueReminders = _getDueReminders(state.model);
     final nextTask = _getNextTask(state.model);
@@ -2851,6 +2910,7 @@ abstract class BaseCalendarBloc
   @override
   Future<void> close() async {
     await _pendingReminderSync;
+    await _pendingDayEventPersist;
     return super.close();
   }
 

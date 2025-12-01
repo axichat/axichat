@@ -94,7 +94,6 @@ class AxiNavigationRail extends StatelessWidget {
         ? 0
         : selectedIndex.clamp(0, destinations.length - 1);
     final Color surfaceColor = backgroundColor ?? colors.background;
-    final animationDuration = context.read<SettingsCubit>().animationDuration;
     final titleStyle = context.textTheme.h2.copyWith(
       fontFamily: gabaritoFontFamily,
       fontFamilyFallback: gabaritoFontFallback,
@@ -103,7 +102,7 @@ class AxiNavigationRail extends StatelessWidget {
       color: colors.foreground,
     );
     return AnimatedContainer(
-      duration: animationDuration,
+      duration: context.watch<SettingsCubit>().animationDuration,
       curve: Curves.easeInOutCubic,
       width: railWidth,
       padding: const EdgeInsets.only(bottom: 14),

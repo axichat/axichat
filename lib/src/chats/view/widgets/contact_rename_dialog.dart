@@ -27,11 +27,6 @@ class _ContactRenameDialogState extends State<ContactRenameDialog> {
     _controller = TextEditingController(text: widget.initialValue);
     _focusNode = FocusNode();
     _controller.addListener(_handleChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _focusNode.requestFocus();
-      }
-    });
     _canSubmit = widget.initialValue.trim().isNotEmpty;
   }
 
@@ -100,6 +95,7 @@ class _ContactRenameDialogState extends State<ContactRenameDialog> {
           AxiTextFormField(
             controller: _controller,
             focusNode: _focusNode,
+            autofocus: true,
             placeholder: Text(l10n.chatContactRenamePlaceholder),
             onSubmitted: (_) => _submit(),
           ),

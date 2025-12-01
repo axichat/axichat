@@ -24,6 +24,7 @@ class LoginForm extends StatefulWidget {
 class _LoginFormState extends State<LoginForm> {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
+  var _loginTriggered = false;
 
   bool rememberMe = true;
 
@@ -37,6 +38,8 @@ class _LoginFormState extends State<LoginForm> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_loginTriggered) return;
+    _loginTriggered = true;
     context.read<AuthenticationCubit>().login();
   }
 
@@ -150,8 +153,6 @@ class _LoginFormState extends State<LoginForm> {
                     padding: horizontalPadding,
                     child: Builder(
                       builder: (context) {
-                        final animationDuration =
-                            context.read<SettingsCubit>().animationDuration;
                         final button = ShadButton(
                           key: loginSubmitKey,
                           enabled: !loading,
@@ -160,8 +161,9 @@ class _LoginFormState extends State<LoginForm> {
                             crossFadeState: loading
                                 ? CrossFadeState.showSecond
                                 : CrossFadeState.showFirst,
-                            duration:
-                                context.read<SettingsCubit>().animationDuration,
+                            duration: context
+                                .watch<SettingsCubit>()
+                                .animationDuration,
                             firstChild: const SizedBox(),
                             secondChild: AxiProgressIndicator(
                               color: context.colorScheme.primaryForeground,
@@ -172,7 +174,8 @@ class _LoginFormState extends State<LoginForm> {
                           child: Text(l10n.authLogin),
                         ).withTapBounce(enabled: !loading);
                         return AnimatedSize(
-                          duration: animationDuration,
+                          duration:
+                              context.watch<SettingsCubit>().animationDuration,
                           curve: Curves.easeInOut,
                           alignment: Alignment.centerLeft,
                           child: Align(

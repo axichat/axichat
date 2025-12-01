@@ -118,7 +118,8 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                       crossFadeState: loading
                           ? CrossFadeState.showSecond
                           : CrossFadeState.showFirst,
-                      duration: context.read<SettingsCubit>().animationDuration,
+                      duration:
+                          context.watch<SettingsCubit>().animationDuration,
                       firstChild: const SizedBox(),
                       secondChild: AxiProgressIndicator(
                         color: context.colorScheme.primaryForeground,

@@ -5,6 +5,7 @@ class ImpatientCompleter<T> {
 
   final Completer<T> completer;
   bool _hasListener = false;
+  bool _hasValue = false;
 
   Future<T> get future {
     _hasListener = true;
@@ -13,13 +14,14 @@ class ImpatientCompleter<T> {
 
   bool get isCompleted => completer.isCompleted;
 
-  T? get value => isCompleted ? _value : null;
+  T? get value => _hasValue ? _value : null;
   late final T _value;
 
   void complete(T value) {
     if (isCompleted) return;
     completer.complete(value);
     _value = value;
+    _hasValue = true;
   }
 
   void completeError(Object error, [StackTrace? stackTrace]) {

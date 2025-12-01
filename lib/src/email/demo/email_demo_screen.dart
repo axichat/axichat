@@ -21,10 +21,13 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
   EmailAccount? _account;
   bool _busy = false;
   String _status = 'Idle';
+  bool _requestedInitialLoad = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_requestedInitialLoad) return;
+    _requestedInitialLoad = true;
     _loadAccount();
   }
 

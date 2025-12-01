@@ -112,7 +112,11 @@ void main() {
     when(() => mockXmppService.disconnect()).thenAnswer((_) async {});
     when(() => mockEmailService.setForegroundKeepalive(any()))
         .thenAnswer((_) async {});
-    when(() => mockEmailService.setClientState(any())).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.setClientState(
+        active: any(named: 'active'),
+      ),
+    ).thenAnswer((_) async {});
     when(
       () => mockEmailService.shutdown(
         jid: any(named: 'jid'),

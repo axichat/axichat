@@ -418,8 +418,9 @@ class MaterialAxichat extends StatelessWidget {
               brightness: brightness,
             );
             final overlayStyle = _systemUiOverlayStyleFor(Theme.of(context));
-            final actionsEnabled = context.watch<AuthenticationCubit>().state
-                is AuthenticationComplete;
+            final actionsEnabled = context.select<AuthenticationCubit, bool>(
+              (cubit) => cubit.state is AuthenticationComplete,
+            );
             final routedContent = MultiBlocListener(
               listeners: [
                 BlocListener<AuthenticationCubit, AuthenticationState>(

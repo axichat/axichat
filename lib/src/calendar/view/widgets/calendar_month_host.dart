@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -11,11 +12,9 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
   const CalendarMonthHost({
     super.key,
     required this.state,
-    required this.bloc,
   });
 
   final CalendarState state;
-  final B? bloc;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +26,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
       state: state,
       visibleEvents: visibleEvents,
       onDateSelected: (DateTime date) =>
-          bloc?.add(CalendarEvent.dateSelected(date: date)),
+          context.read<B>().add(CalendarEvent.dateSelected(date: date)),
       onCreateEvent: (DateTime date) => _openComposer(
         context,
         initialDate: date,
@@ -45,7 +44,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
     required DateTime initialDate,
     DayEvent? existing,
   }) async {
-    final B? targetBloc = bloc;
+    final B? targetBloc = context.read<B?>();
     if (targetBloc == null) {
       return;
     }

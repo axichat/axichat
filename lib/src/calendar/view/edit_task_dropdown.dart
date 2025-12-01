@@ -22,7 +22,7 @@ import 'widgets/task_checklist.dart';
 import 'widgets/task_text_field.dart';
 import 'widgets/reminder_preferences_field.dart';
 
-class EditTaskDropdown extends StatefulWidget {
+class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   const EditTaskDropdown({
     super.key,
     required this.task,
@@ -48,14 +48,15 @@ class EditTaskDropdown extends StatefulWidget {
   final bool isSheet;
   final List<TaskContextAction> Function(CalendarState state)?
       inlineActionsBuilder;
-  final BaseCalendarBloc? inlineActionsBloc;
+  final B? inlineActionsBloc;
   final LocationAutocompleteHelper locationHelper;
 
   @override
-  State<EditTaskDropdown> createState() => _EditTaskDropdownState();
+  State<EditTaskDropdown<B>> createState() => _EditTaskDropdownState<B>();
 }
 
-class _EditTaskDropdownState extends State<EditTaskDropdown> {
+class _EditTaskDropdownState<B extends BaseCalendarBloc>
+    extends State<EditTaskDropdown<B>> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
@@ -103,7 +104,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   @override
-  void didUpdateWidget(EditTaskDropdown oldWidget) {
+  void didUpdateWidget(covariant EditTaskDropdown<B> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.task.id != widget.task.id ||
         oldWidget.task.modifiedAt != widget.task.modifiedAt) {
@@ -180,7 +181,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
               offset: Offset(0, 8),
             ),
           ];
-    final BaseCalendarBloc bloc = context.read<BaseCalendarBloc>();
     final Widget body = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -194,7 +194,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _EditTaskInlineActionsSection(
+                _EditTaskInlineActionsSection<B>(
                   inlineActionsBloc: widget.inlineActionsBloc,
                   inlineActionsBuilder: widget.inlineActionsBuilder,
                 ),
@@ -228,16 +228,16 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                   onEndChanged: _handleEndChanged,
                 ),
                 const _EditTaskSectionDivider(),
-                _EditTaskDeadlineField(
-                  deadline: _deadline,
-                  onChanged: (value) => setState(() => _deadline = value),
-                ),
-                const _EditTaskSectionDivider(),
                 _EditTaskReminderSection(
                   reminders: _reminders,
                   onChanged: (value) => setState(() {
                     _reminders = value;
                   }),
+                ),
+                const _EditTaskSectionDivider(),
+                _EditTaskDeadlineField(
+                  deadline: _deadline,
+                  onChanged: (value) => setState(() => _deadline = value),
                 ),
                 const _EditTaskSectionDivider(),
                 _EditTaskRecurrenceSection(
@@ -257,7 +257,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                     icon: Icons.route,
                     onPressed: () => addTaskToCriticalPath(
                       context: context,
-                      bloc: bloc,
+                      bloc: widget.inlineActionsBloc ?? context.read<B>(),
                       task: widget.task,
                     ),
                   ),
@@ -528,13 +528,14 @@ class _EditTaskHeader extends StatelessWidget {
   }
 }
 
-class _EditTaskInlineActionsSection extends StatelessWidget {
+class _EditTaskInlineActionsSection<B extends BaseCalendarBloc>
+    extends StatelessWidget {
   const _EditTaskInlineActionsSection({
     required this.inlineActionsBloc,
     required this.inlineActionsBuilder,
   });
 
-  final BaseCalendarBloc? inlineActionsBloc;
+  final B? inlineActionsBloc;
   final List<TaskContextAction> Function(CalendarState state)?
       inlineActionsBuilder;
 
@@ -545,7 +546,7 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
     if (builder == null || bloc == null) {
       return const SizedBox.shrink();
     }
-    return BlocBuilder<BaseCalendarBloc, CalendarState>(
+    return BlocBuilder<B, CalendarState>(
       bloc: bloc,
       builder: (context, state) {
         final actions = builder(state);

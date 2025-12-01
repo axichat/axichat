@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
-import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/widgets/reminder_preferences_field.dart';
+import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -41,59 +41,18 @@ Future<DayEventEditorResult?> showDayEventEditor({
 }) {
   final DateTime normalized =
       DateTime(initialDate.year, initialDate.month, initialDate.day);
-  return showModalBottomSheet<DayEventEditorResult>(
+  return showAdaptiveBottomSheet<DayEventEditorResult>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (BuildContext context) {
-      return _DayEventEditorSheet(
+    dialogMaxWidth: 720,
+    surfacePadding: const EdgeInsets.all(calendarGutterLg),
+    builder: (BuildContext sheetContext) {
+      return _DayEventEditorForm(
         initialDate: normalized,
         existing: existing,
       );
     },
   );
-}
-
-class _DayEventEditorSheet extends StatelessWidget {
-  const _DayEventEditorSheet({
-    required this.initialDate,
-    this.existing,
-  });
-
-  final DateTime initialDate;
-  final DayEvent? existing;
-
-  @override
-  Widget build(BuildContext context) {
-    final EdgeInsets viewInsets = MediaQuery.of(context).viewInsets;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: viewInsets.bottom),
-        child: Container(
-          margin: const EdgeInsets.all(calendarGutterLg),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x1F000000),
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
-          ),
-          child: _DayEventEditorForm(
-            initialDate: initialDate,
-            existing: existing,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _DayEventEditorForm extends StatefulWidget {
@@ -138,11 +97,12 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
   @override
   Widget build(BuildContext context) {
     final bool isEditing = widget.existing != null;
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme colors = theme.colorScheme;
-    final TextStyle titleStyle = theme.textTheme.titleMedium!.copyWith(
+    final colors = context.colorScheme;
+    final TextStyle titleStyle = context.textTheme.h3.copyWith(
+      fontSize: 16,
       fontWeight: FontWeight.w700,
     );
+    final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(context);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -160,69 +120,78 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                 style: titleStyle,
               ),
               const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Close',
+              AxiIconButton(
+                iconData: Icons.close,
+                iconSize: 16,
+                buttonSize: 34,
+                tapTargetSize: 40,
+                color: colors.mutedForeground,
+                backgroundColor: Colors.transparent,
+                borderColor: Colors.transparent,
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
             ],
           ),
         ),
-        const Divider(height: 1),
         Flexible(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterLg,
-              vertical: calendarGutterMd,
+            padding: EdgeInsets.fromLTRB(
+              calendarGutterLg,
+              calendarGutterSm,
+              calendarGutterLg,
+              calendarGutterLg + viewInsets.bottom,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
+                TaskTextField(
                   controller: _titleController,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Title',
-                    hintText: 'Birthday, holiday, or note',
-                    border: OutlineInputBorder(),
-                  ),
+                  labelText: 'Title',
+                  hintText: 'Birthday, holiday, or note',
+                  borderRadius: calendarBorderRadius,
+                  focusBorderColor: calendarPrimaryColor,
+                  textCapitalization: TextCapitalization.sentences,
                 ),
                 const SizedBox(height: calendarGutterMd),
-                TextField(
+                TaskDescriptionField(
                   controller: _descriptionController,
+                  hintText: 'Optional details',
+                  borderRadius: calendarBorderRadius,
+                  focusBorderColor: calendarPrimaryColor,
+                  minLines: 3,
                   maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    hintText: 'Optional details',
-                    border: OutlineInputBorder(),
-                  ),
                 ),
-                const SizedBox(height: calendarGutterMd),
+                const TaskSectionDivider(),
                 TaskSectionHeader(
                   title: 'Dates',
-                  trailing: TextButton(
-                    onPressed: () => setState(() {
-                      _startDate = widget.initialDate;
-                      _endDate = widget.initialDate;
-                    }),
-                    child: const Text('Reset'),
-                  ),
                 ),
-                const SizedBox(height: 8),
-                _DateRow(
-                  startDate: _startDate,
-                  endDate: _endDate,
-                  onStartChanged: (DateTime date) => setState(() {
-                    _startDate = date;
-                    if (_endDate.isBefore(date)) {
-                      _endDate = date;
+                const SizedBox(height: calendarInsetLg),
+                ScheduleRangeFields(
+                  start: _startDate,
+                  end: _endDate,
+                  showTimeSelectors: false,
+                  onStartChanged: (DateTime? date) {
+                    if (date == null) {
+                      return;
                     }
-                  }),
-                  onEndChanged: (DateTime date) => setState(() {
-                    _endDate = date.isBefore(_startDate) ? _startDate : date;
-                  }),
+                    setState(() {
+                      _startDate = date;
+                      if (_endDate.isBefore(date)) {
+                        _endDate = date;
+                      }
+                    });
+                  },
+                  onEndChanged: (DateTime? date) {
+                    if (date == null) {
+                      return;
+                    }
+                    setState(() {
+                      _endDate = date.isBefore(_startDate) ? _startDate : date;
+                    });
+                  },
                 ),
-                const SizedBox(height: calendarGutterMd),
+                const TaskSectionDivider(),
                 ReminderPreferencesField(
                   value: _reminders,
                   onChanged: (ReminderPreferences next) {
@@ -237,37 +206,32 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
             ),
           ),
         ),
-        const Divider(height: 1),
-        Padding(
-          padding: const EdgeInsets.all(calendarGutterMd),
-          child: Row(
-            children: [
-              if (isEditing)
-                TextButton.icon(
-                  onPressed: () => Navigator.of(context).pop(
-                    const DayEventEditorResult.deleted(),
-                  ),
-                  icon: Icon(
-                    Icons.delete_outline,
-                    color: colors.error,
-                  ),
-                  label: Text(
-                    'Delete',
-                    style: TextStyle(color: colors.error),
-                  ),
-                ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => Navigator.of(context).maybePop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: calendarGutterSm),
-              FilledButton(
-                onPressed: _submit,
-                child: Text(isEditing ? 'Save' : 'Add'),
-              ),
-            ],
+        TaskFormActionsRow(
+          includeTopBorder: true,
+          padding: EdgeInsets.fromLTRB(
+            calendarGutterLg,
+            calendarGutterMd,
+            calendarGutterLg,
+            calendarGutterMd + viewInsets.bottom,
           ),
+          children: [
+            if (isEditing)
+              TaskDestructiveButton(
+                label: 'Delete',
+                icon: Icons.delete_outline,
+                onPressed: () => Navigator.of(context).pop(
+                  const DayEventEditorResult.deleted(),
+                ),
+              ),
+            TaskSecondaryButton(
+              label: 'Cancel',
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            TaskPrimaryButton(
+              label: isEditing ? 'Save' : 'Add',
+              onPressed: _submit,
+            ),
+          ],
         ),
       ],
     );
@@ -295,84 +259,5 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       reminders: _reminders.normalized(),
     );
     Navigator.of(context).pop(DayEventEditorResult.save(draft));
-  }
-}
-
-class _DateRow extends StatelessWidget {
-  const _DateRow({
-    required this.startDate,
-    required this.endDate,
-    required this.onStartChanged,
-    required this.onEndChanged,
-  });
-
-  final DateTime startDate;
-  final DateTime endDate;
-  final ValueChanged<DateTime> onStartChanged;
-  final ValueChanged<DateTime> onEndChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _DateField(
-            label: 'Starts',
-            date: startDate,
-            onChanged: onStartChanged,
-          ),
-        ),
-        const SizedBox(width: calendarGutterSm),
-        Expanded(
-          child: _DateField(
-            label: 'Ends',
-            date: endDate,
-            onChanged: onEndChanged,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DateField extends StatelessWidget {
-  const _DateField({
-    required this.label,
-    required this.date,
-    required this.onChanged,
-  });
-
-  final String label;
-  final DateTime date;
-  final ValueChanged<DateTime> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final TextStyle labelStyle = Theme.of(context).textTheme.labelLarge!;
-    final String formatted = TimeFormatter.formatFriendlyDate(date);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: labelStyle),
-        const SizedBox(height: 6),
-        OutlinedButton(
-          onPressed: () async {
-            final DateTime? picked = await showDatePicker(
-              context: context,
-              initialDate: date,
-              firstDate: DateTime(date.year - 5),
-              lastDate: DateTime(date.year + 5),
-            );
-            if (picked != null) {
-              onChanged(DateTime(picked.year, picked.month, picked.day));
-            }
-          },
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(formatted),
-          ),
-        ),
-      ],
-    );
   }
 }

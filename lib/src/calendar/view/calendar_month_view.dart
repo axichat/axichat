@@ -260,7 +260,7 @@ class _MonthDayTile extends StatelessWidget {
       onTap: () => onSelected(date),
       onLongPress: () => onCreateEvent(date),
       child: Container(
-        height: 120,
+        constraints: const BoxConstraints(minHeight: 120),
         decoration: BoxDecoration(
           color: background,
           border: Border(

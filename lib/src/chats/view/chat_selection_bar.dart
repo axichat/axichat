@@ -8,17 +8,16 @@ import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatSelectionActionBar extends StatefulWidget {
   const ChatSelectionActionBar({
     super.key,
-    required this.chatsCubit,
     required this.selectedChats,
   });
 
-  final ChatsCubit chatsCubit;
   final List<Chat> selectedChats;
 
   @override
@@ -46,7 +45,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
         children: [
           SelectionSummaryHeader(
             count: count,
-            onClear: widget.chatsCubit.clearSelection,
+            onClear: () => context.read<ChatsCubit>().clearSelection(),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -61,9 +60,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 ),
                 label: shouldFavorite ? 'Favorite' : 'Unfavorite',
                 onPressed: () => unawaited(
-                  widget.chatsCubit.bulkToggleFavorited(
-                    favorited: shouldFavorite,
-                  ),
+                  context.read<ChatsCubit>().bulkToggleFavorited(
+                        favorited: shouldFavorite,
+                      ),
                 ),
               ),
               ContextActionButton(
@@ -73,9 +72,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 ),
                 label: shouldArchive ? 'Archive' : 'Unarchive',
                 onPressed: () => unawaited(
-                  widget.chatsCubit.bulkToggleArchived(
-                    archived: shouldArchive,
-                  ),
+                  context.read<ChatsCubit>().bulkToggleArchived(
+                        archived: shouldArchive,
+                      ),
                 ),
               ),
               ContextActionButton(
@@ -85,7 +84,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 ),
                 label: shouldHide ? 'Hide' : 'Show',
                 onPressed: () => unawaited(
-                  widget.chatsCubit.bulkToggleHidden(hidden: shouldHide),
+                  context.read<ChatsCubit>().bulkToggleHidden(
+                        hidden: shouldHide,
+                      ),
                 ),
               ),
               ChatExportActionButton(
@@ -96,7 +97,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 icon: const Icon(LucideIcons.trash2, size: 16),
                 label: 'Delete',
                 destructive: true,
-                onPressed: () => _confirmDelete(context),
+                onPressed: _confirmDelete,
               ),
             ],
           ),
@@ -115,7 +116,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     try {
       final result = await ChatHistoryExporter.exportChats(
         chats: widget.selectedChats,
-        loadHistory: widget.chatsCubit.loadChatHistory,
+        loadHistory: context.read<ChatsCubit>().loadChatHistory,
         fileLabel: widget.selectedChats.length == 1 ? null : 'chats',
       );
       final file = result.file;
@@ -155,7 +156,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context) async {
+  Future<void> _confirmDelete() async {
     final confirmed = await confirm(
       context,
       title: 'Delete chats?',
@@ -164,7 +165,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
       confirmLabel: 'Delete',
       barrierDismissible: false,
     );
-    if (confirmed != true) return;
-    await widget.chatsCubit.bulkDeleteSelectedChats();
+    if (!mounted || confirmed != true) return;
+    await context.read<ChatsCubit>().bulkDeleteSelectedChats();
   }
 }

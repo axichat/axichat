@@ -73,36 +73,6 @@ extension on MessageStatus {
       };
 }
 
-class _SizeReportingWidget extends StatefulWidget {
-  const _SizeReportingWidget({
-    required this.onSizeChanged,
-    required this.child,
-  });
-
-  final ValueChanged<Size> onSizeChanged;
-  final Widget child;
-
-  @override
-  State<_SizeReportingWidget> createState() => _SizeReportingWidgetState();
-}
-
-class _SizeReportingWidgetState extends State<_SizeReportingWidget> {
-  Size? _lastReportedSize;
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final renderSize = context.size;
-      if (renderSize == null) return;
-      if (_lastReportedSize == renderSize) return;
-      _lastReportedSize = renderSize;
-      widget.onSizeChanged(renderSize);
-    });
-    return widget.child;
-  }
-}
-
 enum _ChatRoute {
   main,
   details,
@@ -230,15 +200,16 @@ class _ChatSearchToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cubit = context.watch<ChatSearchCubit?>();
-    final active = cubit?.state.active ?? false;
-    final l10n = context.l10n;
-    return AxiIconButton(
-      iconData: active ? LucideIcons.x : LucideIcons.search,
-      tooltip: active ? l10n.chatSearchClose : l10n.chatSearchMessages,
-      onPressed: cubit == null
-          ? null
-          : () => context.read<ChatSearchCubit>().toggleActive(),
+    return BlocBuilder<ChatSearchCubit, ChatSearchState>(
+      builder: (context, state) {
+        final l10n = context.l10n;
+        return AxiIconButton(
+          iconData: state.active ? LucideIcons.x : LucideIcons.search,
+          tooltip:
+              state.active ? l10n.chatSearchClose : l10n.chatSearchMessages,
+          onPressed: () => context.read<ChatSearchCubit>().toggleActive(),
+        );
+      },
     );
   }
 }
@@ -288,9 +259,6 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final searchCubit = context.watch<ChatSearchCubit?>();
-    if (searchCubit == null) return const SizedBox.shrink();
-    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     return BlocConsumer<ChatSearchCubit, ChatSearchState>(
       listener: (context, state) {
         _syncController(state.query);
@@ -307,8 +275,8 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
         final l10n = context.l10n;
         final messageFilterOptions = _messageFilterOptions(l10n);
         return AnimatedCrossFade(
-          duration: animationDuration,
-          reverseDuration: animationDuration,
+          duration: context.watch<SettingsCubit>().animationDuration,
+          reverseDuration: context.watch<SettingsCubit>().animationDuration,
           sizeCurve: Curves.easeInOutCubic,
           crossFadeState: state.active
               ? CrossFadeState.showSecond
@@ -679,8 +647,6 @@ class _ChatState extends State<Chat> {
   Offset? _dismissPointerDownPosition;
   bool _dismissPointerMoved = false;
   var _sendingAttachment = false;
-  double _recipientBarHeight = 0;
-
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
   bool get _anySelectionActive =>
@@ -810,7 +776,6 @@ class _ChatState extends State<Chat> {
   }
 
   void _showMembers() {
-    final chatBloc = context.read<ChatBloc>();
     final navigator = Navigator.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     const drawerMaxWidth = 420.0;
@@ -833,20 +798,27 @@ class _ChatState extends State<Chat> {
               color: context.colorScheme.background,
               elevation: 12,
               child: BlocProvider.value(
-                value: chatBloc,
-                child: _RoomMembersDrawerContent(
-                  onInvite: (jid) => chatBloc.add(ChatInviteRequested(jid)),
-                  onAction: (occupantId, action) => chatBloc.add(
-                    ChatModerationActionRequested(
-                      occupantId: occupantId,
-                      action: action,
-                    ),
+                value: context.read<ChatBloc>(),
+                child: Builder(
+                  builder: (dialogContext) => _RoomMembersDrawerContent(
+                    onInvite: (jid) => dialogContext
+                        .read<ChatBloc>()
+                        .add(ChatInviteRequested(jid)),
+                    onAction: (occupantId, action) =>
+                        dialogContext.read<ChatBloc>().add(
+                              ChatModerationActionRequested(
+                                occupantId: occupantId,
+                                action: action,
+                              ),
+                            ),
+                    onChangeNickname: (nick) => dialogContext
+                        .read<ChatBloc>()
+                        .add(ChatNicknameChangeRequested(nick)),
+                    onLeaveRoom: () => dialogContext
+                        .read<ChatBloc>()
+                        .add(const ChatLeaveRoomRequested()),
+                    onClose: navigator.pop,
                   ),
-                  onChangeNickname: (nick) =>
-                      chatBloc.add(ChatNicknameChangeRequested(nick)),
-                  onLeaveRoom: () =>
-                      chatBloc.add(const ChatLeaveRoomRequested()),
-                  onClose: navigator.pop,
                 ),
               ),
             ),
@@ -874,36 +846,37 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _promptContactRename() async {
-    final bloc = context.read<ChatBloc>();
-    final chat = bloc.state.chat;
-    if (chat == null || chat.type != ChatType.chat) return;
+    if (context.read<ChatBloc>().state.chat == null ||
+        context.read<ChatBloc>().state.chat?.type != ChatType.chat) {
+      return;
+    }
     final l10n = context.l10n;
-    final initial = chat.displayName;
     final result = await showContactRenameDialog(
       context: context,
-      initialValue: initial,
+      initialValue: context.read<ChatBloc>().state.chat!.displayName,
     );
-    if (result == null) return;
-    bloc.add(
-      ChatContactRenameRequested(
-        result,
-        successMessage: l10n.chatContactRenameSuccess,
-        failureMessage: l10n.chatContactRenameFailure,
-      ),
-    );
+    if (!mounted || result == null) return;
+    context.read<ChatBloc>().add(
+          ChatContactRenameRequested(
+            result,
+            successMessage: l10n.chatContactRenameSuccess,
+            failureMessage: l10n.chatContactRenameFailure,
+          ),
+        );
   }
 
   Future<void> _handleSpamToggle({required bool sendToSpam}) async {
-    final chat = context.read<ChatBloc>().state.chat;
-    final jid = chat?.jid;
-    if (chat == null || jid == null) return;
+    final jid = context.read<ChatBloc>().state.chat?.jid;
+    if (context.read<ChatBloc>().state.chat == null || jid == null) return;
     final xmppService = context.read<XmppService>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
     final l10n = context.l10n;
     try {
       await xmppService.toggleChatSpam(jid: jid, spam: sendToSpam);
-      final address = chat.emailAddress?.trim();
-      if (chat.transport.isEmail && address?.isNotEmpty == true) {
+      if (!mounted) return;
+      final address = context.read<ChatBloc>().state.chat?.emailAddress?.trim();
+      if (context.read<ChatBloc>().state.chat?.transport.isEmail == true &&
+          address?.isNotEmpty == true) {
         if (sendToSpam) {
           await emailService?.spam.mark(address!);
         } else {
@@ -917,7 +890,7 @@ class _ChatState extends State<Chat> {
       return;
     }
     if (!mounted) return;
-    final contactName = chat.displayName;
+    final contactName = context.read<ChatBloc>().state.chat!.displayName;
     final toastMessage = sendToSpam
         ? l10n.chatSpamSent(contactName)
         : l10n.chatSpamRestored(contactName);
@@ -1016,34 +989,8 @@ class _ChatState extends State<Chat> {
     _dismissPointerMoved = false;
   }
 
-  void _handleRecipientBarSizeChanged(Size size) {
-    if (!mounted) return;
-    _setRecipientBarHeight(size.height);
-  }
-
-  void _setRecipientBarHeight(double height) {
-    final targetHeight =
-        height.isFinite ? math.max(0.0, height) : 0.0; // ignore invalid sizes
-    if ((_recipientBarHeight - targetHeight).abs() <=
-        _selectionHeadroomTolerance) {
-      return;
-    }
-    setState(() {
-      _recipientBarHeight = targetHeight;
-    });
-    if (_selectionAutoscrollActive) {
-      _scheduleSelectionAutoscroll();
-    }
-  }
-
   void _ensureRecipientBarHeightCleared() {
-    if (_recipientBarHeight <= _selectionHeadroomTolerance) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _setRecipientBarHeight(0);
-    });
+    // No-op now that recipient bar height is derived from layout constraints.
   }
 
   Future<FileMetadataData?> _metadataFutureFor(String id) {
@@ -1131,15 +1078,15 @@ class _ChatState extends State<Chat> {
 
   void _handleSendMessage() {
     final text = _textController.text.trim();
-    final bloc = context.read<ChatBloc>();
-    final pendingAttachments = bloc.state.pendingAttachments;
-    final hasQueuedAttachments = pendingAttachments.any(
-      (attachment) => attachment.status == PendingAttachmentStatus.queued,
-    );
+    final bool hasQueuedAttachments =
+        context.read<ChatBloc>().state.pendingAttachments.any(
+              (attachment) =>
+                  attachment.status == PendingAttachmentStatus.queued,
+            );
     final hasSubject = _subjectController.text.trim().isNotEmpty;
     final canSend = text.isNotEmpty || hasQueuedAttachments || hasSubject;
     if (!canSend) return;
-    bloc.add(ChatMessageSent(text: text));
+    context.read<ChatBloc>().add(ChatMessageSent(text: text));
     if (text.isNotEmpty) {
       _textController.clear();
     }
@@ -1174,11 +1121,9 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _saveComposerAsDraft() async {
-    final chatBloc = context.read<ChatBloc>();
-    final chat = chatBloc.state.chat;
-    final draftCubit = context.read<DraftCubit?>();
     final l10n = context.l10n;
-    if (chat == null || draftCubit == null) {
+    if (context.read<ChatBloc>().state.chat == null ||
+        context.read<DraftCubit?>() == null) {
       _showSnackbar(l10n.chatDraftUnavailable);
       return;
     }
@@ -1186,7 +1131,10 @@ class _ChatState extends State<Chat> {
     final subject = _subjectController.text;
     final trimmedBody = body.trim();
     final trimmedSubject = subject.trim();
-    final attachments = chatBloc.state.pendingAttachments
+    final attachments = context
+        .read<ChatBloc>()
+        .state
+        .pendingAttachments
         .map((pending) => pending.attachment)
         .toList();
     final hasContent = trimmedBody.isNotEmpty ||
@@ -1197,17 +1145,17 @@ class _ChatState extends State<Chat> {
       return;
     }
     final recipients = _resolveDraftRecipients(
-      chat: chat,
-      recipients: chatBloc.state.recipients,
+      chat: context.read<ChatBloc>().state.chat!,
+      recipients: context.read<ChatBloc>().state.recipients,
     );
     try {
-      await draftCubit.saveDraft(
-        id: null,
-        jids: recipients,
-        body: body,
-        subject: trimmedSubject.isEmpty ? null : subject,
-        attachments: attachments,
-      );
+      await context.read<DraftCubit>().saveDraft(
+            id: null,
+            jids: recipients,
+            body: body,
+            subject: trimmedSubject.isEmpty ? null : subject,
+            attachments: attachments,
+          );
       if (!mounted) return;
       _showSnackbar(l10n.chatDraftSaved);
     } catch (_) {
@@ -1217,25 +1165,27 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _stashComposerDraftIfDirty() async {
-    final chatBloc = context.read<ChatBloc>();
-    final chat = chatBloc.state.chat;
-    final draftCubit = context.read<DraftCubit?>();
-    if (chat == null || draftCubit == null) {
+    if (context.read<ChatBloc>().state.chat == null ||
+        context.read<DraftCubit?>() == null) {
       return;
     }
     final body = _textController.text;
     final subject = _subjectController.text;
     final trimmedBody = body.trim();
     final trimmedSubject = subject.trim();
-    final attachments = chatBloc.state.pendingAttachments
+    final attachments = context
+        .read<ChatBloc>()
+        .state
+        .pendingAttachments
         .map((pending) => pending.attachment)
         .toList();
     final recipients = _resolveDraftRecipients(
-      chat: chat,
-      recipients: chatBloc.state.recipients,
+      chat: context.read<ChatBloc>().state.chat!,
+      recipients: context.read<ChatBloc>().state.recipients,
     );
     final hasRecipientChanges = recipients.length > 1 ||
-        (recipients.isNotEmpty && recipients.first != chat.jid);
+        (recipients.isNotEmpty &&
+            recipients.first != context.read<ChatBloc>().state.chat!.jid);
     final hasContent = trimmedBody.isNotEmpty ||
         trimmedSubject.isNotEmpty ||
         attachments.isNotEmpty ||
@@ -1244,13 +1194,13 @@ class _ChatState extends State<Chat> {
       return;
     }
     try {
-      await draftCubit.saveDraft(
-        id: null,
-        jids: recipients,
-        body: body,
-        subject: trimmedSubject.isEmpty ? null : subject,
-        attachments: attachments,
-      );
+      await context.read<DraftCubit>().saveDraft(
+            id: null,
+            jids: recipients,
+            body: body,
+            subject: trimmedSubject.isEmpty ? null : subject,
+            attachments: attachments,
+          );
     } catch (_) {
       // Ignore best-effort auto-save failures.
     }
@@ -1399,7 +1349,6 @@ class _ChatState extends State<Chat> {
   }
 
   List<Widget> _pendingAttachmentMenuItems(PendingAttachment pending) {
-    final bloc = context.read<ChatBloc>();
     final l10n = context.l10n;
     final items = <Widget>[];
     if (pending.attachment.isImage) {
@@ -1415,7 +1364,9 @@ class _ChatState extends State<Chat> {
       items.add(
         ShadContextMenuItem(
           leading: const Icon(LucideIcons.refreshCw),
-          onPressed: () => bloc.add(ChatAttachmentRetryRequested(pending.id)),
+          onPressed: () => context
+              .read<ChatBloc>()
+              .add(ChatAttachmentRetryRequested(pending.id)),
           child: Text(l10n.chatAttachmentRetry),
         ),
       );
@@ -1423,7 +1374,9 @@ class _ChatState extends State<Chat> {
     items.add(
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.trash),
-        onPressed: () => bloc.add(ChatPendingAttachmentRemoved(pending.id)),
+        onPressed: () => context
+            .read<ChatBloc>()
+            .add(ChatPendingAttachmentRemoved(pending.id)),
         child: Text(l10n.chatAttachmentRemove),
       ),
     );
@@ -1467,6 +1420,7 @@ class _ChatState extends State<Chat> {
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
     if (!mounted) return;
     final l10n = context.l10n;
+    final locate = context.read;
     await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1474,50 +1428,61 @@ class _ChatState extends State<Chat> {
       builder: (sheetContext) {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes);
-        final bloc = context.read<ChatBloc>();
-        final colors = Theme.of(context).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(
-                    attachmentIcon(attachment),
-                    color: colors.primary,
+        final colors = Theme.of(sheetContext).colorScheme;
+        return BlocProvider.value(
+          value: locate<ChatBloc>(),
+          child: Builder(
+            builder: (context) {
+              return SafeArea(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: Icon(
+                          attachmentIcon(attachment),
+                          color: colors.primary,
+                        ),
+                        title: Text(attachment.fileName),
+                        subtitle: Text(sizeLabel),
+                      ),
+                      if (attachment.isImage)
+                        ListTile(
+                          leading: const Icon(LucideIcons.eye),
+                          title: Text(l10n.chatAttachmentView),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            _showAttachmentPreview(pending);
+                          },
+                        ),
+                      if (pending.status == PendingAttachmentStatus.failed)
+                        ListTile(
+                          leading: const Icon(LucideIcons.refreshCw),
+                          title: Text(l10n.chatAttachmentRetry),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            context.read<ChatBloc>().add(
+                                  ChatAttachmentRetryRequested(pending.id),
+                                );
+                          },
+                        ),
+                      ListTile(
+                        leading: const Icon(LucideIcons.trash),
+                        title: Text(l10n.chatAttachmentRemove),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          context.read<ChatBloc>().add(
+                                ChatPendingAttachmentRemoved(pending.id),
+                              );
+                        },
+                      ),
+                    ],
                   ),
-                  title: Text(attachment.fileName),
-                  subtitle: Text(sizeLabel),
                 ),
-                if (attachment.isImage)
-                  ListTile(
-                    leading: const Icon(LucideIcons.eye),
-                    title: Text(l10n.chatAttachmentView),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      _showAttachmentPreview(pending);
-                    },
-                  ),
-                if (pending.status == PendingAttachmentStatus.failed)
-                  ListTile(
-                    leading: const Icon(LucideIcons.refreshCw),
-                    title: Text(l10n.chatAttachmentRetry),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      bloc.add(ChatAttachmentRetryRequested(pending.id));
-                    },
-                  ),
-                ListTile(
-                  leading: const Icon(LucideIcons.trash),
-                  title: Text(l10n.chatAttachmentRemove),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    bloc.add(ChatPendingAttachmentRemoved(pending.id));
-                  },
-                ),
-              ],
-            ),
+              );
+            },
           ),
         );
       },
@@ -1859,10 +1824,7 @@ class _ChatState extends State<Chat> {
     final reactionBottom = reactionOrigin.dy + reactionBox.size.height;
     final inputOrigin = inputBox.localToGlobal(Offset.zero);
     final inputTop = inputOrigin.dy;
-    final recipientInset = _recipientBarHeight > _selectionHeadroomTolerance
-        ? _recipientBarHeight
-        : 0.0;
-    final currentGap = inputTop - reactionBottom - recipientInset;
+    final currentGap = inputTop - reactionBottom;
     final gapDelta = currentGap - _selectionExtrasViewportGap;
     if (gapDelta.abs() <= _selectionHeadroomTolerance) {
       return 0;
@@ -2212,7 +2174,6 @@ class _ChatState extends State<Chat> {
                 final chatEntity = state.chat;
                 final jid = chatEntity?.jid;
                 final isEmailChat = chatEntity?.deltaChatId != null;
-                final rosterContacts = context.watch<RosterCubit>().contacts;
                 final isDefaultEmail =
                     chatEntity?.defaultTransport.isEmail ?? false;
                 final currentUserId = isDefaultEmail
@@ -3539,8 +3500,10 @@ class _ChatState extends State<Chat> {
                                                                 messageModel
                                                                     .senderJid,
                                                             isSelf: self,
-                                                            knownContacts:
-                                                                rosterContacts,
+                                                            knownContacts: context
+                                                                .watch<
+                                                                    RosterCubit>()
+                                                                .contacts,
                                                             isEmailChat:
                                                                 isEmailChat,
                                                           );
@@ -4526,8 +4489,6 @@ class _ChatState extends State<Chat> {
                                               textFocusNode: _focusNode,
                                               onSubjectSubmitted: () =>
                                                   _focusNode.requestFocus(),
-                                              onRecipientBarSizeChanged:
-                                                  _handleRecipientBarSizeChanged,
                                               onRecipientAdded: (target) =>
                                                   context.read<ChatBloc>().add(
                                                         ChatComposerRecipientAdded(
@@ -4669,9 +4630,8 @@ class _ChatState extends State<Chat> {
       return;
     }
     context.read<ChatBloc>().add(ChatInviteJoinRequested(message));
-    final chatsCubit = context.read<ChatsCubit?>();
-    if (chatsCubit != null) {
-      await chatsCubit.toggleChat(jid: roomJid);
+    if (context.read<ChatsCubit?>() != null) {
+      await context.read<ChatsCubit>().toggleChat(jid: roomJid);
     }
   }
 
@@ -4685,11 +4645,12 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatShareNoText);
       return;
     }
-    final chatTitle = context.read<ChatBloc>().state.chat?.title ??
-        l10n.chatShareFallbackSubject;
     await Share.share(
       content,
-      subject: l10n.chatShareSubjectPrefix(chatTitle),
+      subject: l10n.chatShareSubjectPrefix(
+        context.read<ChatBloc>().state.chat?.title ??
+            l10n.chatShareFallbackSubject,
+      ),
     );
     _clearAllSelections();
   }
@@ -4718,35 +4679,33 @@ class _ChatState extends State<Chat> {
       return;
     }
 
-    final calendarBloc = context.read<CalendarBloc?>();
-    if (calendarBloc == null) {
+    if (context.read<CalendarBloc?>() == null) {
       _showSnackbar(l10n.chatCalendarUnavailable);
       return;
     }
-    final CalendarBloc availableCalendarBloc = calendarBloc;
-
-    final locationHelper =
-        LocationAutocompleteHelper.fromState(availableCalendarBloc.state);
+    final locationHelper = LocationAutocompleteHelper.fromState(
+        context.read<CalendarBloc>().state);
 
     await showQuickAddModal(
       context: context,
       prefilledText: seededText,
       locationHelper: locationHelper,
+      locate: context.read,
       onTaskAdded: (task) {
-        availableCalendarBloc.add(
-          CalendarEvent.taskAdded(
-            title: task.title,
-            scheduledTime: task.scheduledTime,
-            description: task.description,
-            duration: task.duration,
-            deadline: task.deadline,
-            location: task.location,
-            endDate: task.endDate,
-            priority: task.priority ?? TaskPriority.none,
-            startHour: task.startHour,
-            recurrence: task.recurrence,
-          ),
-        );
+        context.read<CalendarBloc>().add(
+              CalendarEvent.taskAdded(
+                title: task.title,
+                scheduledTime: task.scheduledTime,
+                description: task.description,
+                duration: task.duration,
+                deadline: task.deadline,
+                location: task.location,
+                endDate: task.endDate,
+                priority: task.priority ?? TaskPriority.none,
+                startHour: task.startHour,
+                recurrence: task.recurrence,
+              ),
+            );
       },
     );
   }
@@ -4789,11 +4748,12 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatShareSelectedNoText);
       return;
     }
-    final chatTitle = context.read<ChatBloc>().state.chat?.title ??
-        l10n.chatShareFallbackSubject;
     await Share.share(
       joined,
-      subject: l10n.chatShareSubjectPrefix(chatTitle),
+      subject: l10n.chatShareSubjectPrefix(
+        context.read<ChatBloc>().state.chat?.title ??
+            l10n.chatShareFallbackSubject,
+      ),
     );
     _clearMultiSelection();
   }
@@ -4831,33 +4791,32 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatAddToCalendarNoText);
       return;
     }
-    final calendarBloc = context.read<CalendarBloc?>();
-    if (calendarBloc == null) {
+    if (context.read<CalendarBloc?>() == null) {
       _showSnackbar(l10n.chatCalendarUnavailable);
       return;
     }
-    final CalendarBloc availableCalendarBloc = calendarBloc;
-    final locationHelper =
-        LocationAutocompleteHelper.fromState(availableCalendarBloc.state);
+    final locationHelper = LocationAutocompleteHelper.fromState(
+        context.read<CalendarBloc>().state);
     await showQuickAddModal(
       context: context,
       prefilledText: joined,
       locationHelper: locationHelper,
+      locate: context.read,
       onTaskAdded: (task) {
-        availableCalendarBloc.add(
-          CalendarEvent.taskAdded(
-            title: task.title,
-            scheduledTime: task.scheduledTime,
-            description: task.description,
-            duration: task.duration,
-            deadline: task.deadline,
-            location: task.location,
-            endDate: task.endDate,
-            priority: task.priority ?? TaskPriority.none,
-            startHour: task.startHour,
-            recurrence: task.recurrence,
-          ),
-        );
+        context.read<CalendarBloc>().add(
+              CalendarEvent.taskAdded(
+                title: task.title,
+                scheduledTime: task.scheduledTime,
+                description: task.description,
+                duration: task.duration,
+                deadline: task.deadline,
+                location: task.location,
+                endDate: task.endDate,
+                priority: task.priority ?? TaskPriority.none,
+                startHour: task.startHour,
+                recurrence: task.recurrence,
+              ),
+            );
       },
     );
     _clearMultiSelection();
@@ -4879,14 +4838,11 @@ class _ChatState extends State<Chat> {
   Future<chat_models.Chat?> _selectForwardTarget() async {
     if (!mounted) return null;
     final l10n = context.l10n;
-    final chatsCubit = context.read<ChatsCubit?>();
-    final items = chatsCubit?.state.items;
-    if (items == null || items.isEmpty) return null;
-    final currentJid = context.read<ChatBloc>().jid;
-    final options = items
-        .where((chat) => chat.jid != currentJid)
-        .cast<chat_models.Chat>()
-        .toList(growable: false);
+    final options =
+        (context.read<ChatsCubit?>()?.state.items ?? const <chat_models.Chat>[])
+            .where((chat) => chat.jid != context.read<ChatBloc>().jid)
+            .cast<chat_models.Chat>()
+            .toList(growable: false);
     if (options.isEmpty) return null;
     return showDialog<chat_models.Chat>(
       context: context,
@@ -5607,7 +5563,6 @@ class _ChatComposerSection extends StatelessWidget {
     required this.textController,
     required this.textFocusNode,
     required this.onSubjectSubmitted,
-    required this.onRecipientBarSizeChanged,
     required this.onRecipientAdded,
     required this.onRecipientRemoved,
     required this.onRecipientToggled,
@@ -5636,7 +5591,6 @@ class _ChatComposerSection extends StatelessWidget {
   final TextEditingController textController;
   final FocusNode textFocusNode;
   final VoidCallback onSubjectSubmitted;
-  final ValueChanged<Size> onRecipientBarSizeChanged;
   final ValueChanged<FanOutTarget> onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
   final ValueChanged<String> onRecipientToggled;
@@ -5805,19 +5759,16 @@ class _ChatComposerSection extends StatelessWidget {
       children.add(const SizedBox(height: 12));
     }
     children.add(
-      _SizeReportingWidget(
-        onSizeChanged: onRecipientBarSizeChanged,
-        child: RecipientChipsBar(
-          recipients: recipients,
-          availableChats: availableChats,
-          latestStatuses: latestStatuses,
-          collapsedByDefault: true,
-          suggestionAddresses: suggestionAddresses,
-          suggestionDomains: suggestionDomains,
-          onRecipientAdded: onRecipientAdded,
-          onRecipientRemoved: onRecipientRemoved,
-          onRecipientToggled: onRecipientToggled,
-        ),
+      RecipientChipsBar(
+        recipients: recipients,
+        availableChats: availableChats,
+        latestStatuses: latestStatuses,
+        collapsedByDefault: true,
+        suggestionAddresses: suggestionAddresses,
+        suggestionDomains: suggestionDomains,
+        onRecipientAdded: onRecipientAdded,
+        onRecipientRemoved: onRecipientRemoved,
+        onRecipientToggled: onRecipientToggled,
       ),
     );
     children.add(composer);
@@ -6541,7 +6492,6 @@ class _ChatSettingsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final panel = Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -6554,8 +6504,8 @@ class _ChatSettingsPanel extends StatelessWidget {
       child: child,
     );
     return AnimatedCrossFade(
-      duration: animationDuration,
-      reverseDuration: animationDuration,
+      duration: context.watch<SettingsCubit>().animationDuration,
+      reverseDuration: context.watch<SettingsCubit>().animationDuration,
       sizeCurve: Curves.easeInOutCubic,
       crossFadeState:
           visible ? CrossFadeState.showSecond : CrossFadeState.showFirst,

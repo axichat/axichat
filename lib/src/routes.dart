@@ -34,7 +34,7 @@ class TransitionGoRouteData extends GoRouteData {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    if (context.read<SettingsCubit>().state.lowMotion) {
+    if (context.watch<SettingsCubit>().state.lowMotion) {
       return NoTransitionPage(child: build(context, state));
     }
     return MaterialPage(child: build(context, state));

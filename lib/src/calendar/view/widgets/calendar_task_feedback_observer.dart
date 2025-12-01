@@ -29,16 +29,14 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final bloc = context.read<B>();
-    _lastTasks = Map<String, CalendarTask>.from(bloc.state.model.tasks);
+    _lastTasks =
+        Map<String, CalendarTask>.from(context.read<B>().state.model.tasks);
     _initialized = true;
   }
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<B>();
     return BlocListener<B, CalendarState>(
-      bloc: bloc,
       listenWhen: (previous, current) =>
           !mapEquals(previous.model.tasks, current.model.tasks),
       listener: (context, state) {
@@ -47,7 +45,7 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
           _initialized = true;
           return;
         }
-        _handleModelChanges(context, state, bloc);
+        _handleModelChanges(context, state);
       },
       child: widget.child,
     );
@@ -56,7 +54,6 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   void _handleModelChanges(
     BuildContext context,
     CalendarState state,
-    B bloc,
   ) {
     final currentTasks = state.model.tasks;
     final added = <CalendarTask>[];
@@ -74,11 +71,11 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
     });
 
     if (added.isNotEmpty) {
-      _showAddedFeedback(context, added, bloc);
+      _showAddedFeedback(context, added);
     }
 
     if (removed.isNotEmpty) {
-      _showRemovedFeedback(context, removed, bloc);
+      _showRemovedFeedback(context, removed);
     }
 
     _lastTasks = Map<String, CalendarTask>.from(currentTasks);
@@ -87,7 +84,6 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   void _showAddedFeedback(
     BuildContext context,
     List<CalendarTask> tasks,
-    B bloc,
   ) {
     final message = tasks.length == 1
         ? 'Task "${tasks.first.title}" added'
@@ -99,7 +95,7 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
       onAction: () {
         _awaitingUndoRemoval = true;
         _expectedRemovalIds = tasks.map((task) => task.id).toSet();
-        bloc.add(const CalendarEvent.undoRequested());
+        context.read<B>().add(const CalendarEvent.undoRequested());
       },
     );
   }
@@ -107,7 +103,6 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   void _showRemovedFeedback(
     BuildContext context,
     List<CalendarTask> tasks,
-    B bloc,
   ) {
     final removedIds = tasks.map((task) => task.id).toSet();
     final removalMatchesUndo = _awaitingUndoRemoval &&
@@ -128,9 +123,9 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
       actionLabel: 'Undo',
       onAction: () {
         if (removalMatchesUndo) {
-          bloc.add(const CalendarEvent.redoRequested());
+          context.read<B>().add(const CalendarEvent.redoRequested());
         } else {
-          bloc.add(const CalendarEvent.undoRequested());
+          context.read<B>().add(const CalendarEvent.undoRequested());
         }
       },
     );

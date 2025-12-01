@@ -809,7 +809,7 @@ class EmailService {
     return sendMessage(chat: chat, body: body);
   }
 
-  Future<void> setClientState([bool active = true]) async {
+  Future<void> setClientState({bool active = true}) async {
     if (active) {
       await start();
     } else {
@@ -964,7 +964,11 @@ class EmailService {
   }
 
   Future<void> _processDeltaEvent(DeltaCoreEvent event) async {
-    switch (event.type) {
+    final eventType = DeltaEventType.fromCode(event.type);
+    if (eventType == null) {
+      return;
+    }
+    switch (eventType) {
       case DeltaEventType.error:
         _handleCoreError(event.data2Text);
         break;

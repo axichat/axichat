@@ -207,8 +207,9 @@ class NlScheduleAdapter {
     final deadlineZoned = _zonedOrNull(item.deadline);
     final recurrenceUntilZoned = _zonedOrNull(item.recurrence?.until);
 
-    final DateTime? scheduledTime = startZoned?.wallTime;
-    final DateTime? endDate = endZoned?.wallTime;
+    final DateTime? scheduledTime = startZoned?.utc;
+    final DateTime? startWallTime = startZoned?.wallTime;
+    final DateTime? endDate = endZoned?.utc;
     final Duration? duration = _deriveDuration(
       start: scheduledTime,
       end: endDate,
@@ -220,10 +221,10 @@ class NlScheduleAdapter {
       scheduledTime: scheduledTime,
       duration: duration,
       location: _clean(item.location),
-      deadline: deadlineZoned?.wallTime,
+      deadline: deadlineZoned?.utc,
       endDate: endDate,
       priority: mapPriority(item.priority),
-      startHour: _startHourFor(scheduledTime),
+      startHour: _startHourFor(startWallTime),
       recurrence: mapRecurrence(item.recurrence),
     );
 

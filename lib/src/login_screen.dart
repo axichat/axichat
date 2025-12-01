@@ -46,15 +46,20 @@ class _LoginScreenState extends State<LoginScreen>
   _AuthFlow? _activeFlow;
   bool _operationAcknowledged = false;
   bool _signupButtonLoading = false;
+  bool _handledInitialAuthState = false;
 
   @override
   void initState() {
     super.initState();
     _operationProgressController = OperationProgressController(vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _handleAuthState(context.read<AuthenticationCubit>().state);
-    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_handledInitialAuthState) return;
+    _handledInitialAuthState = true;
+    _handleAuthState(context.read<AuthenticationCubit>().state);
   }
 
   void _handleSubmissionRequested(
@@ -213,6 +218,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final showProgressBar = _activeFlow != null || _signupButtonLoading;
     final size = MediaQuery.sizeOf(context);
     final allowSplitView = size.shortestSide >= compactDeviceBreakpoint &&
@@ -281,16 +287,12 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ),
                                 child: AnimatedSize(
-                                  duration: context
-                                      .read<SettingsCubit>()
-                                      .animationDuration,
+                                  duration: animationDuration,
                                   curve: Curves.easeInOut,
                                   child: Stack(
                                     children: [
                                       AnimatedOpacity(
-                                        duration: context
-                                            .read<SettingsCubit>()
-                                            .animationDuration,
+                                        duration: animationDuration,
                                         curve: Curves.easeInOut,
                                         opacity: (!_signupFlowLocked && _login)
                                             ? 1
@@ -311,9 +313,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         ),
                                       ),
                                       AnimatedOpacity(
-                                        duration: context
-                                            .read<SettingsCubit>()
-                                            .animationDuration,
+                                        duration: animationDuration,
                                         curve: Curves.easeInOut,
                                         opacity: (!_signupFlowLocked && _login)
                                             ? 0
@@ -341,9 +341,7 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               const SizedBox(height: 12),
                               AnimatedSwitcher(
-                                duration: context
-                                    .read<SettingsCubit>()
-                                    .animationDuration,
+                                duration: animationDuration,
                                 child: showProgressBar
                                     ? Center(
                                         key:

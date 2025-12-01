@@ -1437,7 +1437,7 @@ class AccessibilityActionBloc
     }
     var initialIndex = 0;
     if (items.isNotEmpty) {
-      initialIndex = _firstUnreadIndex(messages) ?? items.length - 1;
+      initialIndex = _initialMessageIndex(messages);
     } else {
       items.add(
         const AccessibilityMenuItem(
@@ -1474,12 +1474,12 @@ class AccessibilityActionBloc
     return [
       AccessibilityMenuSection(
         id: 'new-contact',
-        title: _textNewContactTitle,
+        title: _textSubmitNewContactTitle,
         items: [
           AccessibilityMenuItem(
             id: 'new-contact-confirm',
-            label: _textNewContactTitle,
-            description: _textNewContactDescription,
+            label: _textSubmitNewContactTitle,
+            description: _textSubmitNewContactDescription,
             kind: AccessibilityMenuItemKind.command,
             action: const AccessibilityCommandAction(
               command: AccessibilityCommand.confirmNewContact,
@@ -1492,10 +1492,19 @@ class AccessibilityActionBloc
     ];
   }
 
-  int? _firstUnreadIndex(List<Message> messages) {
+  int _initialMessageIndex(List<Message> messages) {
+    if (messages.isEmpty) return 0;
+    final lastUnread = _lastUnreadIndex(messages);
+    if (lastUnread != null) {
+      return lastUnread;
+    }
+    return messages.length - 1;
+  }
+
+  int? _lastUnreadIndex(List<Message> messages) {
     if (messages.isEmpty) return null;
     final myBareJid = _chatsService.myJid?.split('/').first;
-    for (var i = 0; i < messages.length; i++) {
+    for (var i = messages.length - 1; i >= 0; i--) {
       final message = messages[i];
       final senderBare = message.senderJid.split('/').first;
       final fromMe = myBareJid != null && senderBare == myBareJid;
@@ -1627,6 +1636,9 @@ class AccessibilityActionBloc
   String get _textAcceptInvite => 'Accept invite';
   String get _textNewContactTitle => 'Manual address';
   String get _textNewContactDescription => 'Type a new address';
+  String get _textSubmitNewContactTitle => 'Start chat';
+  String get _textSubmitNewContactDescription =>
+      'Use the typed address to start chatting';
   String get _textInvalidAddress => 'Enter a valid address';
   String get _textInviteAccepted => 'Invite accepted';
   String get _textInviteDismissed => 'Invite dismissed';

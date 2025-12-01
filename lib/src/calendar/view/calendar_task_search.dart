@@ -27,20 +27,32 @@ typedef CalendarSearchTileBuilder = Widget Function(
   bool allowContextMenu,
 });
 
-Future<void> showCalendarTaskSearch({
+Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
   required BuildContext context,
-  required BaseCalendarBloc bloc,
+  required B bloc,
   CalendarCriticalPath? targetPath,
   CalendarSearchTileBuilder? taskTileBuilder,
   bool requiresLongPressForDrag = false,
   Set<String> excludedTaskIds = const <String>{},
   FutureOr<void> Function(CalendarTask task)? onTaskSelected,
+  T Function<T>()? locate,
 }) async {
   final CalendarCriticalPath? resolvedTargetPath = targetPath;
+  B resolveBloc() {
+    if (locate != null) {
+      try {
+        return locate<B>();
+      } catch (_) {
+        // Fall back to the provided bloc when locate cannot resolve in this context.
+      }
+    }
+    return bloc;
+  }
+
   FutureOr<void> Function(CalendarTask task) defaultHandler;
   if (resolvedTargetPath != null) {
     defaultHandler = (CalendarTask task) {
-      bloc.add(
+      resolveBloc().add(
         CalendarEvent.criticalPathTaskAdded(
           pathId: resolvedTargetPath.id,
           taskId: task.id,
@@ -63,8 +75,9 @@ Future<void> showCalendarTaskSearch({
     dialogMaxWidth: 760,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
     builder: (sheetContext) {
-      return _CalendarTaskSearchSheet(
-        bloc: bloc,
+      final B resolvedBloc = resolveBloc();
+      return _CalendarTaskSearchSheet<B>(
+        bloc: resolvedBloc,
         taskTileBuilder: taskTileBuilder,
         requiresLongPressForDrag: requiresLongPressForDrag,
         excludedTaskIds: excludedTaskIds,
@@ -75,7 +88,8 @@ Future<void> showCalendarTaskSearch({
   );
 }
 
-class _CalendarTaskSearchSheet extends StatefulWidget {
+class _CalendarTaskSearchSheet<B extends BaseCalendarBloc>
+    extends StatefulWidget {
   const _CalendarTaskSearchSheet({
     required this.bloc,
     required this.taskTileBuilder,
@@ -85,7 +99,7 @@ class _CalendarTaskSearchSheet extends StatefulWidget {
     required this.onTaskSelected,
   });
 
-  final BaseCalendarBloc bloc;
+  final B bloc;
   final CalendarSearchTileBuilder? taskTileBuilder;
   final bool requiresLongPressForDrag;
   final Set<String> excludedTaskIds;
@@ -93,11 +107,12 @@ class _CalendarTaskSearchSheet extends StatefulWidget {
   final FutureOr<void> Function(CalendarTask task) onTaskSelected;
 
   @override
-  State<_CalendarTaskSearchSheet> createState() =>
-      _CalendarTaskSearchSheetState();
+  State<_CalendarTaskSearchSheet<B>> createState() =>
+      _CalendarTaskSearchSheetState<B>();
 }
 
-class _CalendarTaskSearchSheetState extends State<_CalendarTaskSearchSheet> {
+class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
+    extends State<_CalendarTaskSearchSheet<B>> {
   final TextEditingController _queryController = TextEditingController();
   final FocusNode _queryFocusNode = FocusNode();
   final Set<_QuickFilter> _filters = <_QuickFilter>{};
@@ -124,7 +139,7 @@ class _CalendarTaskSearchSheetState extends State<_CalendarTaskSearchSheet> {
     final String subtitle = targetPath != null
         ? 'Tap a task to append it to the critical path order.'
         : 'Search titles, descriptions, locations, priorities, and deadlines.';
-    return BlocBuilder<BaseCalendarBloc, CalendarState>(
+    return BlocBuilder<B, CalendarState>(
       bloc: widget.bloc,
       builder: (context, state) {
         final List<CalendarTask> results = _search(state);
@@ -170,7 +185,8 @@ class _CalendarTaskSearchSheetState extends State<_CalendarTaskSearchSheet> {
                 hintText:
                     'title:, desc:, location:, priority:urgent, status:done',
                 textInputAction: TextInputAction.search,
-                onChanged: (_) => setState(() {}),
+                onChanged: _onQueryChanged,
+                onSubmitted: _handleSubmitted,
                 prefix: const Icon(Icons.search, color: calendarSubtitleColor),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: calendarGutterMd,
@@ -247,6 +263,14 @@ class _CalendarTaskSearchSheetState extends State<_CalendarTaskSearchSheet> {
     Navigator.of(context).maybePop();
     await Future<void>.delayed(Duration.zero);
     await widget.onTaskSelected(task);
+  }
+
+  void _onQueryChanged([String _ = '']) {
+    setState(() {});
+  }
+
+  void _handleSubmitted(String _) {
+    _onQueryChanged();
   }
 
   List<CalendarTask> _search(CalendarState state) {

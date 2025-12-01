@@ -24,8 +24,8 @@ class TimeFormatter {
 
   /// Format time to 12-hour format (e.g., "2:00 PM")
   static String formatTime(DateTime time) {
-    final hour = time.hour;
-    final minute = time.minute;
+    final int hour = time.hour;
+    final int minute = time.minute;
     final amPm = hour >= 12 ? 'PM' : 'AM';
     final displayHour = hour == 0
         ? 12
@@ -90,7 +90,7 @@ class TimeFormatter {
       'Nov',
       'Dec'
     ];
-    final month = months[date.month];
+    final String month = months[date.month];
     return '$month ${date.day}, ${date.year}';
   }
 

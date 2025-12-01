@@ -66,6 +66,16 @@ const MenuSerializableShortcut _lastItemShortcut =
 const MenuSerializableShortcut _activateShortcut =
     SingleActivator(LogicalKeyboardKey.enter);
 
+const double _modalMaxWidth = 720;
+const double _modalMinHeight = 420;
+const double _modalVerticalMargin = 80;
+const double _conversationListMinHeight = 200;
+const double _conversationListMaxHeight = 360;
+const double _conversationListHeightShare = 0.35;
+const double _rootListMinHeight = 240;
+const double _rootListMaxHeight = 520;
+const double _rootListHeightShare = 0.6;
+
 class AccessibilityActionMenu extends StatefulWidget {
   const AccessibilityActionMenu({super.key});
 
@@ -83,10 +93,9 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
     final localeName = context.l10n.localeName;
     if (_localeName != localeName) {
       _localeName = localeName;
-      final bloc = context.read<AccessibilityActionBloc?>();
-      if (bloc != null) {
-        bloc.add(AccessibilityLocaleUpdated(context.l10n));
-      }
+      context.read<AccessibilityActionBloc?>()?.add(
+            AccessibilityLocaleUpdated(context.l10n),
+          );
     }
   }
 
@@ -147,6 +156,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       FocusNode(debugLabel: 'accessibility_new_contact_field');
   final FocusNode _actionsFocusNode =
       FocusNode(debugLabel: 'accessibility_actions_group');
+  final ScrollController _scrollController = ScrollController();
   final Map<Object, VoidCallback> _groupFocusHandlers =
       <Object, VoidCallback>{};
   final List<Object> _groupOrderList = <Object>[];
@@ -193,6 +203,11 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
         widget.state.visible) {
       _scheduleInitialFocus();
     }
+    final addedMessageSection = !_hasMessageSection(oldWidget.state) &&
+        _hasMessageSection(widget.state);
+    if (widget.state.visible && addedMessageSection) {
+      _scheduleInitialFocus();
+    }
     _announceStepChange();
     _wasVisible = widget.state.visible;
   }
@@ -211,6 +226,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     _newContactFocusNode.dispose();
     _actionsFocusNode.dispose();
     _focusScopeNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -224,7 +240,6 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<AccessibilityActionBloc>();
     _resetGroupRegistration();
     final shortcuts = <ShortcutActivator, Intent>{
       _escapeActivator: const _AccessibilityDismissIntent(),
@@ -243,7 +258,9 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       children: [
         Positioned.fill(
           child: GestureDetector(
-            onTap: () => bloc.add(const AccessibilityMenuClosed()),
+            onTap: () => context
+                .read<AccessibilityActionBloc>()
+                .add(const AccessibilityMenuClosed()),
             child: ColoredBox(
               color: Colors.black.withValues(alpha: 0.45),
             ),
@@ -259,13 +276,19 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                   onInvoke: (_) {
                     final shouldWarn = _shouldWarnOnExit(widget.state);
                     if (shouldWarn && !widget.state.discardWarningActive) {
-                      bloc.add(const AccessibilityDiscardWarningRequested());
+                      context.read<AccessibilityActionBloc>().add(
+                            const AccessibilityDiscardWarningRequested(),
+                          );
                       return null;
                     }
                     if (widget.state.stack.length > 1) {
-                      bloc.add(const AccessibilityMenuBack());
+                      context
+                          .read<AccessibilityActionBloc>()
+                          .add(const AccessibilityMenuBack());
                     } else {
-                      bloc.add(const AccessibilityMenuClosed());
+                      context
+                          .read<AccessibilityActionBloc>()
+                          .add(const AccessibilityMenuClosed());
                     }
                     return null;
                   },
@@ -315,47 +338,78 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
               child: FocusScope(
                 node: _focusScopeNode,
                 autofocus: true,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 720,
-                    maxHeight: 640,
-                  ),
-                  child: AxiModalSurface(
-                    padding: const EdgeInsets.all(20),
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: Semantics(
-                        scopesRoute: true,
-                        namesRoute: true,
-                        label: 'Accessibility actions dialog',
-                        hint:
-                            'Press Tab to reach shortcut instructions, use arrow keys inside lists, Shift plus arrows to move between groups, or Escape to exit.',
-                        explicitChildNodes: true,
-                        child: FocusTraversalGroup(
-                          policy: OrderedTraversalPolicy(),
-                          child: _AccessibilityActionContent(
-                            state: widget.state,
-                            sectionsListKey: _sectionsListKey,
-                            actionsListKey: _actionsListKey,
-                            enableActivationShortcut: !_isEditingText,
-                            registerGroup: _registerGroup,
-                            unregisterGroup: _unregisterGroup,
-                            legendFocusNode: _shortcutLegendFocusNode,
-                            messageFocusNode: _messageFocusNode,
-                            composerFocusNode: _composerFocusNode,
-                            newContactFocusNode: _newContactFocusNode,
-                            legendGroupKey: _legendGroupKey,
-                            messageCarouselKey: _messageCarouselKey,
-                            composerGroupKey: _composerGroupKey,
-                            actionsGroupKey: _actionsGroupKey,
-                            actionsFocusNode: _actionsFocusNode,
-                            newContactGroupKey: _newContactGroupKey,
+                child: Builder(builder: (context) {
+                  final viewSize = MediaQuery.sizeOf(context);
+                  final modalMinHeight = viewSize.height < _modalMinHeight
+                      ? viewSize.height
+                      : _modalMinHeight;
+                  final rawTargetHeight =
+                      viewSize.height - _modalVerticalMargin;
+                  final modalHeight = rawTargetHeight
+                      .clamp(modalMinHeight, viewSize.height)
+                      .toDouble();
+                  return ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: _modalMaxWidth,
+                    ),
+                    child: SizedBox(
+                      height: modalHeight,
+                      child: AxiModalSurface(
+                        padding: const EdgeInsets.all(20),
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final viewportHeight = constraints.maxHeight;
+                              return Semantics(
+                                scopesRoute: true,
+                                namesRoute: true,
+                                label: 'Accessibility actions dialog',
+                                hint:
+                                    'Press Tab to reach shortcut instructions, use arrow keys inside lists, Shift plus arrows to move between groups, or Escape to exit.',
+                                explicitChildNodes: true,
+                                child: SingleChildScrollView(
+                                  controller: _scrollController,
+                                  clipBehavior: Clip.none,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minHeight: viewportHeight,
+                                    ),
+                                    child: FocusTraversalGroup(
+                                      policy: OrderedTraversalPolicy(),
+                                      child: _AccessibilityActionContent(
+                                        state: widget.state,
+                                        sectionsListKey: _sectionsListKey,
+                                        actionsListKey: _actionsListKey,
+                                        enableActivationShortcut:
+                                            !_isEditingText,
+                                        registerGroup: _registerGroup,
+                                        unregisterGroup: _unregisterGroup,
+                                        legendFocusNode:
+                                            _shortcutLegendFocusNode,
+                                        messageFocusNode: _messageFocusNode,
+                                        composerFocusNode: _composerFocusNode,
+                                        newContactFocusNode:
+                                            _newContactFocusNode,
+                                        legendGroupKey: _legendGroupKey,
+                                        messageCarouselKey: _messageCarouselKey,
+                                        composerGroupKey: _composerGroupKey,
+                                        actionsGroupKey: _actionsGroupKey,
+                                        actionsFocusNode: _actionsFocusNode,
+                                        newContactGroupKey: _newContactGroupKey,
+                                        viewportHeight: viewportHeight,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               ),
             ),
           ),
@@ -472,6 +526,20 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     if (handler == null) return;
     _focusScopeNode.requestFocus();
     handler();
+    _scrollGroupIntoView(group);
+  }
+
+  void _scrollGroupIntoView(Object group) {
+    final context = _groupContext(group);
+    if (context == null) return;
+    _ensureVisible(context);
+  }
+
+  BuildContext? _groupContext(Object group) {
+    if (group is GlobalKey) {
+      return group.currentContext;
+    }
+    return null;
   }
 
   Object? _currentGroup() {
@@ -480,6 +548,9 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     if (focusContext == null) return null;
     return _AccessibilityGroupMarker.maybeOf(focusContext);
   }
+
+  bool _hasMessageSection(AccessibilityActionState state) =>
+      state.sections.any((section) => section.id == 'chat-messages');
 
   bool _shouldWarnOnExit(AccessibilityActionState state) {
     final entry = state.currentEntry;
@@ -522,6 +593,10 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       });
     }
     final primary = FocusManager.instance.primaryFocus;
+    final primaryContext = primary?.context;
+    if (widget.state.visible && primaryContext != null) {
+      _ensureVisible(primaryContext);
+    }
     if (widget.state.visible &&
         (primary == null || primary.context == null) &&
         _groupOrder().isNotEmpty) {
@@ -560,6 +635,21 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
         view,
         label,
         Directionality.of(context),
+      );
+    });
+  }
+
+  void _ensureVisible(BuildContext context) {
+    final scrollable = Scrollable.maybeOf(context);
+    if (scrollable == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.state.visible) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: baseAnimationDuration,
+        curve: Curves.easeInOutCubic,
+        alignment: 0.1,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
       );
     });
   }
@@ -637,6 +727,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     required this.actionsGroupKey,
     required this.actionsFocusNode,
     required this.newContactGroupKey,
+    required this.viewportHeight,
   });
 
   final AccessibilityActionState state;
@@ -658,10 +749,10 @@ class _AccessibilityActionContent extends StatelessWidget {
   final GlobalKey composerGroupKey;
   final GlobalKey actionsGroupKey;
   final GlobalKey newContactGroupKey;
+  final double viewportHeight;
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<AccessibilityActionBloc>();
     final breadcrumbLabels = _breadcrumbLabels(state, context);
     final headerTitle = breadcrumbLabels.isNotEmpty
         ? breadcrumbLabels.last
@@ -678,11 +769,15 @@ class _AccessibilityActionContent extends StatelessWidget {
         .toList();
     final messageSection =
         messageSections.isNotEmpty ? messageSections.first : null;
-    final actionSections = state.sections
-        .where((section) => section.id != 'chat-messages')
-        .toList();
+    final actionSections = hasNewContact
+        ? <AccessibilityMenuSection>[]
+        : state.sections
+            .where((section) => section.id != 'chat-messages')
+            .toList();
     final hasMessages = messageSections.isNotEmpty;
     final hasSections = actionSections.isNotEmpty;
+    final conversationListHeight = _conversationListHeight(viewportHeight);
+    final rootListHeight = _rootListHeight(viewportHeight);
     const headerOrder = NumericFocusOrder(0);
     const statusOrder = NumericFocusOrder(1);
     const legendOrder = NumericFocusOrder(2);
@@ -743,12 +838,17 @@ class _AccessibilityActionContent extends StatelessWidget {
           child: _AccessibilityMenuHeader(
             breadcrumb: headerTitle,
             breadcrumbs: breadcrumbLabels,
-            onCrumbSelected: (index) =>
-                bloc.add(AccessibilityMenuJumpedTo(index)),
+            onCrumbSelected: (index) => context
+                .read<AccessibilityActionBloc>()
+                .add(AccessibilityMenuJumpedTo(index)),
             onBack: state.stack.length > 1
-                ? () => bloc.add(const AccessibilityMenuBack())
+                ? () => context
+                    .read<AccessibilityActionBloc>()
+                    .add(const AccessibilityMenuBack())
                 : null,
-            onClose: () => bloc.add(const AccessibilityMenuClosed()),
+            onClose: () => context
+                .read<AccessibilityActionBloc>()
+                .add(const AccessibilityMenuClosed()),
           ),
         ),
         const SizedBox(height: 12),
@@ -786,18 +886,15 @@ class _AccessibilityActionContent extends StatelessWidget {
         if (state.statusMessage != null || state.errorMessage != null)
           const SizedBox(height: 12),
         if (hasMessages)
-          Flexible(
-            fit: FlexFit.loose,
-            child: FocusTraversalOrder(
-              order: messagesOrder,
-              child: _AccessibilityGroupMarker(
-                group: messageCarouselKey,
-                child: _MessageCarousel(
-                  key: messageCarouselKey,
-                  section: messageSection!,
-                  focusNode: messageFocusNode,
-                  initialIndex: state.messageInitialIndex ?? 0,
-                ),
+          FocusTraversalOrder(
+            order: messagesOrder,
+            child: _AccessibilityGroupMarker(
+              group: messageCarouselKey,
+              child: _MessageCarousel(
+                key: messageCarouselKey,
+                section: messageSection!,
+                focusNode: messageFocusNode,
+                initialIndex: state.messageInitialIndex ?? 0,
               ),
             ),
           ),
@@ -828,20 +925,20 @@ class _AccessibilityActionContent extends StatelessWidget {
                 sendEnabled: state.composerText.trim().isNotEmpty &&
                     state.recipients.isNotEmpty &&
                     !state.busy,
-                onSave: () => bloc.add(
-                  const AccessibilityMenuActionTriggered(
-                    AccessibilityCommandAction(
-                      command: AccessibilityCommand.saveDraft,
+                onSave: () => context.read<AccessibilityActionBloc>().add(
+                      const AccessibilityMenuActionTriggered(
+                        AccessibilityCommandAction(
+                          command: AccessibilityCommand.saveDraft,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                onSend: () => bloc.add(
-                  const AccessibilityMenuActionTriggered(
-                    AccessibilityCommandAction(
-                      command: AccessibilityCommand.sendMessage,
+                onSend: () => context.read<AccessibilityActionBloc>().add(
+                      const AccessibilityMenuActionTriggered(
+                        AccessibilityCommandAction(
+                          command: AccessibilityCommand.sendMessage,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
               ),
             ),
           ),
@@ -859,8 +956,8 @@ class _AccessibilityActionContent extends StatelessWidget {
           ),
         if (isConversation && hasSections) const SizedBox(height: 10),
         if (isConversation && hasSections)
-          Flexible(
-            fit: FlexFit.loose,
+          SizedBox(
+            height: conversationListHeight,
             child: FocusTraversalOrder(
               order: actionsListOrder,
               child: _AccessibilityGroupMarker(
@@ -881,7 +978,8 @@ class _AccessibilityActionContent extends StatelessWidget {
             ),
           ),
         if (!isConversation && hasSections)
-          Expanded(
+          SizedBox(
+            height: rootListHeight,
             child: FocusTraversalOrder(
               order: sectionsOrder,
               child: _AccessibilityGroupMarker(
@@ -900,9 +998,10 @@ class _AccessibilityActionContent extends StatelessWidget {
               ),
             ),
           )
-        else if (!isConversation && !hasSections)
-          const Expanded(
-            child: FocusTraversalOrder(
+        else if (!isConversation && !hasSections && !hasNewContact)
+          SizedBox(
+            height: rootListHeight,
+            child: const FocusTraversalOrder(
               order: sectionsOrder,
               child: Center(
                 child: Text('No actions available right now'),
@@ -911,6 +1010,24 @@ class _AccessibilityActionContent extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  double _conversationListHeight(double viewportHeight) {
+    final heightFromViewport = viewportHeight * _conversationListHeightShare;
+    final boundedHeight = heightFromViewport.clamp(
+      _conversationListMinHeight,
+      _conversationListMaxHeight,
+    );
+    return boundedHeight.toDouble();
+  }
+
+  double _rootListHeight(double viewportHeight) {
+    final heightFromViewport = viewportHeight * _rootListHeightShare;
+    final boundedHeight = heightFromViewport.clamp(
+      _rootListMinHeight,
+      _rootListMaxHeight,
+    );
+    return boundedHeight.toDouble();
   }
 
   String _entryLabel(
@@ -1353,7 +1470,6 @@ class _ComposerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<AccessibilityActionBloc>();
     return FocusTraversalGroup(
       key: groupKey,
       policy: OrderedTraversalPolicy(),
@@ -1367,8 +1483,9 @@ class _ComposerSection extends StatelessWidget {
               child: _AccessibilityTextField(
                 label: context.l10n.chatComposerMessageHint,
                 text: state.composerText,
-                onChanged: (value) =>
-                    bloc.add(AccessibilityComposerChanged(value)),
+                onChanged: (value) => context
+                    .read<AccessibilityActionBloc>()
+                    .add(AccessibilityComposerChanged(value)),
                 hintText: 'Type a message',
                 minLines: 3,
                 maxLines: 5,
@@ -1393,9 +1510,12 @@ class _ComposerSection extends StatelessWidget {
                           hint: 'Press backspace or delete to remove',
                           child: InputChip(
                             label: Text(recipient.displayName),
-                            onDeleted: () => bloc.add(
-                              AccessibilityRecipientRemoved(recipient.jid),
-                            ),
+                            onDeleted: () =>
+                                context.read<AccessibilityActionBloc>().add(
+                                      AccessibilityRecipientRemoved(
+                                        recipient.jid,
+                                      ),
+                                    ),
                           ),
                         ),
                       )
@@ -1510,21 +1630,75 @@ class _NewContactSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final radius = BorderRadius.circular(14);
+    final canSubmit = state.newContactInput.trim().isValidJid;
     final bloc = context.read<AccessibilityActionBloc>();
     return FocusTraversalGroup(
       key: groupKey,
       policy: WidgetOrderTraversalPolicy(),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: _AccessibilityTextField(
-          label: 'Contact address',
-          text: state.newContactInput,
-          onChanged: (value) => bloc.add(AccessibilityNewContactChanged(value)),
-          hintText: 'someone@example.com',
-          enabled: !state.busy,
-          focusNode: focusNode,
-          autofocus: true,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _AccessibilityTextField(
+              label: 'Contact address',
+              text: state.newContactInput,
+              onChanged: (value) => bloc.add(
+                AccessibilityNewContactChanged(value),
+              ),
+              hintText: 'someone@example.com',
+              enabled: !state.busy,
+              focusNode: focusNode,
+              autofocus: true,
+            ),
+          ),
+          Focus(
+            child: Builder(
+              builder: (context) {
+                final hasFocus = Focus.of(context).hasFocus;
+                final borderColor = hasFocus ? colors.primary : colors.border;
+                final borderWidth = hasFocus ? 3.0 : 1.2;
+                return Semantics(
+                  container: true,
+                  button: true,
+                  enabled: canSubmit,
+                  label: 'Start chat',
+                  hint: 'Submit this address to start a conversation.',
+                  child: AnimatedContainer(
+                    duration: baseAnimationDuration,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: colors.card,
+                      borderRadius: radius,
+                      border: Border.all(
+                        color: borderColor,
+                        width: borderWidth,
+                      ),
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ShadButton(
+                        onPressed: canSubmit
+                            ? () => bloc.add(
+                                  const AccessibilityMenuActionTriggered(
+                                    AccessibilityCommandAction(
+                                      command: AccessibilityCommand
+                                          .confirmNewContact,
+                                    ),
+                                  ),
+                                )
+                            : null,
+                        child: const Text('Start chat'),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1810,6 +1984,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
         : null;
     final borderColor = hasFocus ? scheme.primary : scheme.border;
     final borderWidth = hasFocus ? 3.0 : 1.0;
+    final borderRadius = BorderRadius.circular(16);
     final shadows = hasFocus
         ? [
             BoxShadow(
@@ -1835,77 +2010,71 @@ class _MessageCarouselState extends State<_MessageCarousel> {
           decoration: BoxDecoration(
             color:
                 hasFocus ? scheme.primary.withValues(alpha: 0.06) : scheme.card,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: borderRadius,
             border: Border.all(color: borderColor, width: borderWidth),
             boxShadow: shadows,
           ),
-          child: SizedBox(
-            width: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  positionLabel,
-                  style: (textTheme.bodySmall ?? const TextStyle()).copyWith(
-                    color: scheme.mutedForeground,
-                    fontWeight: FontWeight.w700,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                positionLabel,
+                style: (textTheme.bodySmall ?? const TextStyle()).copyWith(
+                  color: scheme.mutedForeground,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (showMetadata && senderLabel.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    [
+                      'From $senderLabel',
+                      if (timestampLabel.isNotEmpty) timestampLabel,
+                    ].join(' • '),
+                    style: (textTheme.bodySmall ?? const TextStyle()).copyWith(
+                      color: scheme.mutedForeground,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                if (showMetadata && senderLabel.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      [
-                        'From $senderLabel',
-                        if (timestampLabel.isNotEmpty) timestampLabel,
-                      ].join(' • '),
-                      style:
-                          (textTheme.bodySmall ?? const TextStyle()).copyWith(
-                        color: scheme.mutedForeground,
-                      ),
-                    ),
-                  ),
-                if (rawBody.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      rawBody,
-                      style:
-                          (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-                        color: scheme.foreground,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                if (attachment != null)
-                  Semantics(
-                    label: attachmentLabel ?? 'Attachment',
-                    child: ChatAttachmentPreview(
-                      metadataFuture:
-                          Future<FileMetadataData?>.value(attachment),
-                      allowed: true,
-                    ),
-                  )
-                else if (attachmentLabel != null && rawBody.isEmpty)
-                  Text(
-                    attachmentLabel,
+              if (rawBody.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    rawBody,
                     style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
                       color: scheme.foreground,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                if (rawBody.isEmpty &&
-                    attachment == null &&
-                    (attachmentLabel == null || attachmentLabel.isEmpty))
-                  Text(
-                    'No message content',
-                    style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-                      color: scheme.mutedForeground,
-                    ),
+                ),
+              if (attachment != null)
+                Semantics(
+                  label: attachmentLabel ?? 'Attachment',
+                  child: ChatAttachmentPreview(
+                    metadataFuture: Future<FileMetadataData?>.value(attachment),
+                    allowed: true,
                   ),
-              ],
-            ),
+                )
+              else if (attachmentLabel != null && rawBody.isEmpty)
+                Text(
+                  attachmentLabel,
+                  style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                    color: scheme.foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              if (rawBody.isEmpty &&
+                  attachment == null &&
+                  (attachmentLabel == null || attachmentLabel.isEmpty))
+                Text(
+                  'No message content',
+                  style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                    color: scheme.mutedForeground,
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -1986,7 +2155,6 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<AccessibilityActionBloc>();
     final children = <Widget>[];
     var nodeIndex = 0;
     final colors = context.colorScheme;
@@ -2034,12 +2202,12 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
               onFocused: () => _lastFocusedIndex = nodeIndex,
               onFocusChanged: (hasFocus) =>
                   _handleFocusChanged(nodeIndex, hasFocus),
-              onTap: () => bloc.add(
-                AccessibilityMenuActionTriggered(item.action),
-              ),
+              onTap: () => context
+                  .read<AccessibilityActionBloc>()
+                  .add(AccessibilityMenuActionTriggered(item.action)),
               onDismiss: item.dismissId == null
                   ? null
-                  : () => bloc.add(
+                  : () => context.read<AccessibilityActionBloc>().add(
                         AccessibilityMenuActionTriggered(
                           AccessibilityDismissHighlightAction(
                             highlightId: item.dismissId!,
