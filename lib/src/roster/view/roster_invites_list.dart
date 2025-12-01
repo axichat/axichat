@@ -17,13 +17,7 @@ class RosterInvitesList extends StatelessWidget {
     return BlocBuilder<RosterCubit, RosterState>(
       buildWhen: (_, current) => current is RosterInvitesAvailable,
       builder: (context, state) {
-        late final List<Invite>? invites;
-
-        if (state is! RosterInvitesAvailable) {
-          invites = context.read<RosterCubit>()['invites'];
-        } else {
-          invites = state.invites;
-        }
+        final List<Invite>? invites = (state as RosterInvitesAvailable).invites;
 
         if (invites == null) {
           return Center(
@@ -33,92 +27,111 @@ class RosterInvitesList extends StatelessWidget {
           );
         }
 
-        final searchState = context.watch<HomeSearchCubit?>()?.state;
-        final tabState = searchState?.stateFor(HomeTab.invites);
-        final searchActive = searchState?.active ?? false;
-        final query =
-            searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-        final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
-
-        var visibleInvites = List<Invite>.from(invites);
-
-        if (query.isNotEmpty) {
-          visibleInvites = visibleInvites
-              .where((invite) => _inviteMatchesQuery(invite, query))
-              .toList();
-        }
-
-        visibleInvites.sort(
-          (a, b) => sortOrder.isNewestFirst
-              ? a.title.toLowerCase().compareTo(b.title.toLowerCase())
-              : b.title.toLowerCase().compareTo(a.title.toLowerCase()),
-        );
-
-        if (visibleInvites.isEmpty) {
-          return Center(
-            child: Text(
-              'No invites yet',
-              style: context.textTheme.muted,
-            ),
-          );
-        }
-
-        return ColoredBox(
-          color: context.colorScheme.background,
-          child: ListView.builder(
-            itemCount: visibleInvites.length,
-            itemBuilder: (context, index) {
-              final invite = visibleInvites[index];
-              return BlocSelector<RosterCubit, RosterState, bool>(
-                selector: (state) =>
-                    state is RosterLoading && state.jid == invite.jid,
-                builder: (context, disabled) {
-                  return ListItemPadding(
-                    child: AxiListTile(
-                      key: Key(invite.jid),
-                      menuItems: [
-                        AxiDeleteMenuItem(
-                          onPressed: () async {
-                            if (!disabled &&
-                                await confirm(context,
-                                        text:
-                                            'Reject invite from ${invite.jid}?') ==
-                                    true &&
-                                context.mounted) {
-                              context
-                                  .read<RosterCubit>()
-                                  .rejectContact(jid: invite.jid);
-                            }
-                          },
-                        ),
-                        BlockMenuItem(jid: invite.jid),
-                      ],
-                      leading: AxiAvatar(jid: invite.jid),
-                      title: invite.title,
-                      subtitle: invite.jid,
-                      actions: [
-                        AxiIconButton(
-                          tooltip: 'Add contact',
-                          iconData: LucideIcons.userPlus,
-                          color: axiGreen,
-                          onPressed: disabled
-                              ? null
-                              : () {
-                                  context.read<RosterCubit?>()?.addContact(
-                                        jid: invite.jid,
-                                        title: invite.title,
-                                      );
-                                },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
+        return BlocBuilder<HomeSearchCubit, HomeSearchState>(
+          builder: (context, searchState) => _RosterInvitesBody(
+            invites: invites,
+            searchState: searchState,
           ),
         );
       },
+    );
+  }
+}
+
+class _RosterInvitesBody extends StatelessWidget {
+  const _RosterInvitesBody({
+    required this.invites,
+    this.searchState,
+  });
+
+  final List<Invite> invites;
+  final HomeSearchState? searchState;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabState = searchState?.stateFor(HomeTab.invites);
+    final searchActive = searchState?.active ?? false;
+    final query =
+        searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
+    final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
+
+    var visibleInvites = List<Invite>.from(invites);
+
+    if (query.isNotEmpty) {
+      visibleInvites = visibleInvites
+          .where((invite) => _inviteMatchesQuery(invite, query))
+          .toList();
+    }
+
+    visibleInvites.sort(
+      (a, b) => sortOrder.isNewestFirst
+          ? a.title.toLowerCase().compareTo(b.title.toLowerCase())
+          : b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+    );
+
+    if (visibleInvites.isEmpty) {
+      return Center(
+        child: Text(
+          'No invites yet',
+          style: context.textTheme.muted,
+        ),
+      );
+    }
+
+    return ColoredBox(
+      color: context.colorScheme.background,
+      child: ListView.builder(
+        itemCount: visibleInvites.length,
+        itemBuilder: (context, index) {
+          final invite = visibleInvites[index];
+          return BlocSelector<RosterCubit, RosterState, bool>(
+            selector: (state) =>
+                state is RosterLoading && state.jid == invite.jid,
+            builder: (context, disabled) {
+              return ListItemPadding(
+                child: AxiListTile(
+                  key: Key(invite.jid),
+                  menuItems: [
+                    AxiDeleteMenuItem(
+                      onPressed: () async {
+                        if (!disabled &&
+                            await confirm(context,
+                                    text:
+                                        'Reject invite from ${invite.jid}?') ==
+                                true &&
+                            context.mounted) {
+                          context
+                              .read<RosterCubit>()
+                              .rejectContact(jid: invite.jid);
+                        }
+                      },
+                    ),
+                    BlockMenuItem(jid: invite.jid),
+                  ],
+                  leading: AxiAvatar(jid: invite.jid),
+                  title: invite.title,
+                  subtitle: invite.jid,
+                  actions: [
+                    AxiIconButton(
+                      tooltip: 'Add contact',
+                      iconData: LucideIcons.userPlus,
+                      color: axiGreen,
+                      onPressed: disabled
+                          ? null
+                          : () {
+                              context.read<RosterCubit?>()?.addContact(
+                                    jid: invite.jid,
+                                    title: invite.title,
+                                  );
+                            },
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

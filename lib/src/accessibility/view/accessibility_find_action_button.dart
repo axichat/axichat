@@ -15,8 +15,7 @@ class AccessibilityFindActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<AccessibilityActionBloc?>();
-    if (bloc == null) {
+    if (context.read<AccessibilityActionBloc?>() == null) {
       return const SizedBox.shrink();
     }
     final shortcut = findActionShortcut(Theme.of(context).platform);
@@ -26,14 +25,18 @@ class AccessibilityFindActionButton extends StatelessWidget {
       return AxiTooltip(
         builder: (_) => Text(tooltip),
         child: ShadButton.ghost(
-          onPressed: () => bloc.add(const AccessibilityMenuOpened()),
+          onPressed: () => context
+              .read<AccessibilityActionBloc?>()
+              ?.add(const AccessibilityMenuOpened()),
           padding: const EdgeInsets.all(12),
           child: const Icon(LucideIcons.lifeBuoy, size: 18),
         ),
       );
     }
     return ShadButton.outline(
-      onPressed: () => bloc.add(const AccessibilityMenuOpened()),
+      onPressed: () => context
+          .read<AccessibilityActionBloc?>()
+          ?.add(const AccessibilityMenuOpened()),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

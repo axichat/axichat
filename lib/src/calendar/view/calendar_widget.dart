@@ -75,7 +75,7 @@ class _CalendarWidgetState
     _mobileInitialScrollSynced = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      calendarBloc?.add(
+      calendarBloc.add(
         CalendarEvent.dateSelected(
           date: DateTime.now(),
         ),
@@ -181,18 +181,20 @@ class _CalendarWidgetState
     CalendarState state,
     bool usesDesktopLayout,
   ) {
-    final CalendarBloc? bloc = calendarBloc;
-    if (bloc == null) {
-      return null;
-    }
-    return () => _openTaskSearch(bloc);
+    final locate = context.read;
+    return () => _openTaskSearch(locate<CalendarBloc>(), locate: locate);
   }
 
-  Future<void> _openTaskSearch(CalendarBloc bloc) async {
-    final TaskSidebarState? sidebarState = sidebarKey.currentState;
+  Future<void> _openTaskSearch(
+    CalendarBloc bloc, {
+    T Function<T>()? locate,
+  }) async {
+    final TaskSidebarState<CalendarBloc>? sidebarState =
+        sidebarKey.currentState;
     await showCalendarTaskSearch(
       context: context,
       bloc: bloc,
+      locate: locate,
       requiresLongPressForDrag: sidebarState?.requiresLongPressForDrag ?? false,
       taskTileBuilder: sidebarState == null
           ? null
@@ -231,9 +233,8 @@ class _CalendarWidgetState
   }
 
   void _handleCalendarBackPressed() {
-    final chatsCubit = context.read<ChatsCubit?>();
-    if (chatsCubit != null && chatsCubit.state.openCalendar) {
-      chatsCubit.toggleCalendar();
+    if (context.read<ChatsCubit?>()?.state.openCalendar == true) {
+      context.read<ChatsCubit?>()?.toggleCalendar();
       return;
     }
 

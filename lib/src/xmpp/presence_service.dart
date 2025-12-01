@@ -8,24 +8,21 @@ mixin PresenceService on XmppBase, BaseStreamService {
   final presenceStorageKey = XmppStateStore.registerKey('my_presence');
   final statusStorageKey = XmppStateStore.registerKey('my_status');
   final Map<String, Map<String, String>> _presenceStatuses = {};
+  Presence? _cachedPresence;
+  String? _cachedStatus;
+  var _presenceLoaded = false;
 
   Presence get presence {
-    if (_dbOpReturning<XmppStateStore, Presence?>(
-            (db) => db.read(key: presenceStorageKey) as Presence?)
-        case Presence presence) {
-      return presence;
-    }
-
+    final cachedPresence = _cachedPresence;
+    if (cachedPresence != null) return cachedPresence;
+    unawaited(_ensurePresenceLoaded());
     return Presence.chat;
   }
 
   String? get status {
-    if (_dbOpReturning<XmppStateStore, String?>(
-            (db) => db.read(key: statusStorageKey) as String?)
-        case String status) {
-      return status;
-    }
-
+    final cachedStatus = _cachedStatus;
+    if (cachedStatus != null || _presenceLoaded) return cachedStatus;
+    unawaited(_ensurePresenceLoaded());
     return null;
   }
 
@@ -41,6 +38,22 @@ mixin PresenceService on XmppBase, BaseStreamService {
         watchFunction: (ss) async =>
             ss.watch<String?>(key: statusStorageKey) ?? Stream.value(null),
       );
+
+  Future<void> _ensurePresenceLoaded() async {
+    if (_presenceLoaded) return;
+    _presenceLoaded = true;
+    try {
+      _cachedPresence = await _dbOpReturning<XmppStateStore, Presence?>(
+            (db) => db.read(key: presenceStorageKey) as Presence?,
+          ) ??
+          Presence.chat;
+      _cachedStatus = await _dbOpReturning<XmppStateStore, String?>(
+        (db) => db.read(key: statusStorageKey) as String?,
+      );
+    } on XmppAbortedException {
+      _presenceLoaded = false;
+    }
+  }
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
@@ -76,6 +89,9 @@ mixin PresenceService on XmppBase, BaseStreamService {
     }
 
     if (jid == myJid) {
+      _cachedPresence = presence;
+      _cachedStatus = resolvedStatus;
+      _presenceLoaded = true;
       await _dbOp<XmppStateStore>(
         (ss) => ss.writeAll(
           data: {
@@ -222,6 +238,14 @@ mixin PresenceService on XmppBase, BaseStreamService {
       await db.updateRosterAsk(jid: jid, ask: null);
       await db.deleteInvite(jid);
     });
+  }
+
+  @override
+  Future<void> _reset() async {
+    _cachedPresence = null;
+    _cachedStatus = null;
+    _presenceLoaded = false;
+    await super._reset();
   }
 }
 
@@ -388,6 +412,9 @@ class XmppPresenceManager extends mox.PresenceManager {
           owner.statusStorageKey: status,
         });
       });
+      owner._cachedPresence = presence ?? owner._cachedPresence;
+      owner._cachedStatus = status;
+      owner._presenceLoaded = true;
     }
   }
 

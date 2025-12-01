@@ -82,11 +82,10 @@ class _SyncControlsState extends State<SyncControls> {
   }
 
   void _retrySync(BuildContext context) {
-    final bloc = context.read<CalendarBloc>();
     if (state.syncError?.contains('request') == true) {
-      bloc.add(const CalendarEvent.syncRequested());
+      context.read<CalendarBloc>().add(const CalendarEvent.syncRequested());
     } else {
-      bloc.add(const CalendarEvent.syncPushed());
+      context.read<CalendarBloc>().add(const CalendarEvent.syncPushed());
     }
     _awaitingManualSync = true;
   }
@@ -100,8 +99,9 @@ class _SyncControlsState extends State<SyncControls> {
   }
 
   Future<void> _exportAll() async {
-    final tasks = context.read<CalendarBloc>().state.model.tasks.values;
-    await _exportTasks(tasks);
+    await _exportTasks(
+      context.read<CalendarBloc>().state.model.tasks.values,
+    );
   }
 
   Future<void> _exportTasks(Iterable<CalendarTask> tasks) async {

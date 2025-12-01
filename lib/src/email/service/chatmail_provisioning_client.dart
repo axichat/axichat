@@ -54,6 +54,7 @@ class EmailProvisioningClient {
   })  : _baseUrl = _normalizeBase(baseUrl),
         _sharedSecret = _normalizeSharedSecret(sharedSecret),
         _httpClient = httpClient ?? http.Client(),
+        _ownsClient = httpClient == null,
         _log = logger ?? Logger('EmailProvisioningClient');
 
   factory EmailProvisioningClient.fromEnvironment({
@@ -82,6 +83,7 @@ class EmailProvisioningClient {
   final Uri _baseUrl;
   final String _sharedSecret;
   final http.Client _httpClient;
+  final bool _ownsClient;
   final Logger _log;
 
   Future<EmailProvisioningCredentials> createAccount({
@@ -369,6 +371,12 @@ class EmailProvisioningClient {
       );
     }
     return normalized;
+  }
+
+  void close() {
+    if (_ownsClient) {
+      _httpClient.close();
+    }
   }
 
   EmailProvisioningCredentials _parseCredentials(

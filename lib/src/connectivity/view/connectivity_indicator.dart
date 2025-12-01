@@ -9,7 +9,6 @@ class ConnectivityIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var duration = context.watch<SettingsCubit>().animationDuration;
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, state) {
         var color = const Color(0xff00ff00);
@@ -36,7 +35,7 @@ class ConnectivityIndicator extends StatelessWidget {
 
         return ConnectivityIndicatorContainer(
           show: show,
-          duration: duration,
+          duration: context.watch<SettingsCubit>().animationDuration,
           color: color,
           iconData: iconData,
           text: text,

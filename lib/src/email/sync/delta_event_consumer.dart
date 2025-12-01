@@ -13,21 +13,34 @@ import 'package:path/path.dart' as p;
 const _deltaDomain = 'delta.chat';
 const _deltaSelfJid = 'dc-self@$_deltaDomain';
 
-class DeltaEventType {
-  static const info = 100;
-  static const error = 300;
-  static const errorSelfNotInGroup = 410;
-  static const msgsChanged = 2000;
-  static const incomingMsg = 2005;
-  static const incomingMsgBunch = 2006;
-  static const msgDelivered = 2010;
-  static const msgFailed = 2012;
-  static const msgRead = 2015;
-  static const chatModified = 2020;
-  static const configureProgress = 2041;
-  static const accountsBackgroundFetchDone = 2200;
-  static const connectivityChanged = 2100;
-  static const channelOverflow = 2400;
+enum DeltaEventType {
+  info(100),
+  error(300),
+  errorSelfNotInGroup(410),
+  msgsChanged(2000),
+  incomingMsg(2005),
+  incomingMsgBunch(2006),
+  msgDelivered(2010),
+  msgFailed(2012),
+  msgRead(2015),
+  chatModified(2020),
+  configureProgress(2041),
+  accountsBackgroundFetchDone(2200),
+  connectivityChanged(2100),
+  channelOverflow(2400);
+
+  const DeltaEventType(this.code);
+
+  final int code;
+
+  static DeltaEventType? fromCode(int value) {
+    for (final type in DeltaEventType.values) {
+      if (type.code == value) {
+        return type;
+      }
+    }
+    return null;
+  }
 }
 
 class DeltaEventConsumer {
@@ -46,7 +59,12 @@ class DeltaEventConsumer {
   XmppDatabase? _database;
 
   Future<void> handle(DeltaCoreEvent event) async {
-    switch (event.type) {
+    final eventType = DeltaEventType.fromCode(event.type);
+    if (eventType == null) {
+      _log.finer('Ignoring Delta event ${event.type}');
+      return;
+    }
+    switch (eventType) {
       case DeltaEventType.incomingMsg:
         await _handleIncoming(event.data1, event.data2);
         break;

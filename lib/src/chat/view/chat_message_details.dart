@@ -32,246 +32,241 @@ class ChatMessageDetails extends StatelessWidget {
       builder: (context, state) {
         final message = state.focused;
         if (message == null) return const SizedBox.shrink();
-        final profileState = context.read<ProfileCubit>().state;
-        EmailService? emailService;
-        try {
-          emailService = RepositoryProvider.of<EmailService>(
-            context,
-            listen: false,
-          );
-        } catch (_) {
-          emailService = null;
-        }
-        final emailSelfJid = emailService?.selfSenderJid;
-        final bareSender = _bareJid(message.senderJid);
-        final isFromSelf = bareSender == _bareJid(profileState.jid) ||
-            (emailSelfJid != null && bareSender == _bareJid(emailSelfJid));
-        final shareContext = state.shareContexts[message.stanzaID];
-        final shareParticipants = _shareParticipants(
-          shareContext?.participants ?? const <Chat>[],
-          state.chat?.jid,
-          profileState.jid,
-        );
-        final transport = state.chat?.transport;
-        final isEmailMessage = message.deltaMsgId != null;
-        final protocolLabel = isEmailMessage
-            ? MessageTransport.email.label
-            : transport?.label ?? MessageTransport.xmpp.label;
-        final protocolIcon = Icon(
-          isEmailMessage ? LucideIcons.mail : LucideIcons.messageCircle,
-          size: 16,
-          color: isEmailMessage
-              ? context.colorScheme.destructive
-              : context.colorScheme.primary,
-        );
-        final timestamp = message.timestamp?.toLocal();
-        final timestampLabel = timestamp == null
-            ? 'Unknown'
-            : intl.DateFormat.yMMMMEEEEd().add_jms().format(timestamp);
-        final showEmailRecipients = isFromSelf &&
-            (transport?.isEmail ?? false) &&
-            shareParticipants.isNotEmpty;
-        final showReactions = (transport == null || transport.isXmpp) &&
-            message.reactionsPreview.isNotEmpty;
-        return SingleChildScrollView(
-          child: Container(
-            width: double.maxFinite,
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              spacing: 24,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SelectableText(
-                  message.body ?? '',
-                  style: context.textTheme.lead,
-                ),
-                if (shareContext?.subject?.isNotEmpty == true)
-                  Column(
-                    spacing: 8,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Subject',
-                        style: context.textTheme.muted,
-                      ),
-                      Text(
-                        shareContext!.subject!,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                if (showEmailRecipients)
-                  Column(
-                    spacing: 8,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Recipients',
-                        style: context.textTheme.muted,
-                      ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          for (final participant in shareParticipants)
-                            _RecipientChip(
-                              chat: participant,
-                              onPressed: () => _showRecipientActions(
-                                context,
-                                recipient: participant,
-                                emailService: emailService,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  )
-                else if (shareParticipants.isNotEmpty)
-                  Column(
-                    spacing: 8,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Also sent to',
-                        style: context.textTheme.muted,
-                      ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          for (final participant in shareParticipants)
-                            ActionChip(
-                              avatar: const Icon(Icons.mail_outline, size: 16),
-                              label: Text(participant.title),
-                              onPressed: () => context
-                                  .read<ChatsCubit>()
-                                  .toggleChat(jid: participant.jid),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                if (showReactions)
-                  Column(
-                    spacing: 8,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Reactions',
-                        style: context.textTheme.muted,
-                      ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          for (final reaction in message.reactionsPreview)
-                            _ReactionChip(reaction: reaction),
-                        ],
-                      ),
-                    ],
-                  ),
-                if (isFromSelf)
-                  Wrap(
-                    spacing: 12.0,
-                    runSpacing: 12.0,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      ShadBadge.secondary(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          spacing: 6.0,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('Sent'),
-                            Icon(
-                              message.acked.toIcon,
-                              color: message.acked.toColor,
-                            ),
-                          ],
-                        ),
-                      ),
-                      ShadBadge.secondary(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          spacing: 6.0,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('Received'),
-                            Icon(
-                              message.received.toIcon,
-                              color: message.received.toColor,
-                            ),
-                          ],
-                        ),
-                      ),
-                      ShadBadge.secondary(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          spacing: 6.0,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('Displayed'),
-                            Icon(
-                              message.displayed.toIcon,
-                              color: message.displayed.toColor,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                Column(
-                  spacing: 12,
+        return BlocSelector<ProfileCubit, ProfileState, String?>(
+          selector: (profileState) => profileState.jid,
+          builder: (context, profileJid) {
+            EmailService? emailService;
+            try {
+              emailService = RepositoryProvider.of<EmailService>(
+                context,
+                listen: false,
+              );
+            } catch (_) {
+              emailService = null;
+            }
+            final emailSelfJid = emailService?.selfSenderJid;
+            final bareSender = _bareJid(message.senderJid);
+            final isFromSelf = bareSender == _bareJid(profileJid) ||
+                (emailSelfJid != null && bareSender == _bareJid(emailSelfJid));
+            final shareContext = state.shareContexts[message.stanzaID];
+            final shareParticipants = _shareParticipants(
+              shareContext?.participants ?? const <Chat>[],
+              state.chat?.jid,
+              profileJid,
+            );
+            final transport = state.chat?.transport;
+            final isEmailMessage = message.deltaMsgId != null;
+            final protocolLabel = isEmailMessage
+                ? MessageTransport.email.label
+                : transport?.label ?? MessageTransport.xmpp.label;
+            final protocolIcon = Icon(
+              isEmailMessage ? LucideIcons.mail : LucideIcons.messageCircle,
+              size: 16,
+              color: isEmailMessage
+                  ? context.colorScheme.destructive
+                  : context.colorScheme.primary,
+            );
+            final timestamp = message.timestamp?.toLocal();
+            final timestampLabel = timestamp == null
+                ? 'Unknown'
+                : intl.DateFormat.yMMMMEEEEd().add_jms().format(timestamp);
+            final showEmailRecipients = isFromSelf &&
+                (transport?.isEmail ?? false) &&
+                shareParticipants.isNotEmpty;
+            final showReactions = (transport == null || transport.isXmpp) &&
+                message.reactionsPreview.isNotEmpty;
+            return SingleChildScrollView(
+              child: Container(
+                width: double.maxFinite,
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  spacing: 24,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    _MessageDetailsInfo(
-                      label: 'Timestamp',
-                      value: timestampLabel,
+                    SelectableText(
+                      message.body ?? '',
+                      style: context.textTheme.lead,
                     ),
-                    Wrap(
-                      spacing: 24,
-                      runSpacing: 12,
-                      alignment: WrapAlignment.center,
+                    if (shareContext?.subject?.isNotEmpty == true)
+                      Column(
+                        spacing: 8,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Subject',
+                            style: context.textTheme.muted,
+                          ),
+                          Text(
+                            shareContext!.subject!,
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    if (showEmailRecipients)
+                      Column(
+                        spacing: 8,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Recipients',
+                            style: context.textTheme.muted,
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              for (final participant in shareParticipants)
+                                _RecipientChip(
+                                  chat: participant,
+                                  onPressed: () => _showRecipientActions(
+                                    context,
+                                    recipient: participant,
+                                    emailService: emailService,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      )
+                    else if (shareParticipants.isNotEmpty)
+                      Column(
+                        spacing: 8,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Also sent to',
+                            style: context.textTheme.muted,
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              for (final participant in shareParticipants)
+                                _RecipientChip(
+                                  chat: participant,
+                                  onPressed: () => _showRecipientActions(
+                                    context,
+                                    recipient: participant,
+                                    emailService: emailService,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    if (transport?.isXmpp ?? false)
+                      _RecipientsRow(
+                        sender: state.chat?.displayName,
+                        recipients: shareParticipants,
+                      ),
+                    if (showReactions)
+                      _ReactionsRow(
+                        reactions: message.reactionsPreview,
+                      ),
+                    if (isFromSelf)
+                      Wrap(
+                        spacing: 12.0,
+                        runSpacing: 12.0,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          ShadBadge.secondary(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              spacing: 6.0,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Sent'),
+                                Icon(
+                                  message.acked.toIcon,
+                                  color: message.acked.toColor,
+                                ),
+                              ],
+                            ),
+                          ),
+                          ShadBadge.secondary(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              spacing: 6.0,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Received'),
+                                Icon(
+                                  message.received.toIcon,
+                                  color: message.received.toColor,
+                                ),
+                              ],
+                            ),
+                          ),
+                          ShadBadge.secondary(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              spacing: 6.0,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Displayed'),
+                                Icon(
+                                  message.displayed.toIcon,
+                                  color: message.displayed.toColor,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    Column(
+                      spacing: 12,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         _MessageDetailsInfo(
-                          label: 'Protocol',
-                          value: protocolLabel,
-                          leading: protocolIcon,
+                          label: 'Timestamp',
+                          value: timestampLabel,
                         ),
-                        if (message.deviceID != null)
-                          _MessageDetailsInfo(
-                            label: 'Device',
-                            value: '#${message.deviceID}',
-                          ),
+                        Wrap(
+                          spacing: 24,
+                          runSpacing: 12,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            _MessageDetailsInfo(
+                              label: 'Protocol',
+                              value: protocolLabel,
+                              leading: protocolIcon,
+                            ),
+                            if (message.deviceID != null)
+                              _MessageDetailsInfo(
+                                label: 'Device',
+                                value: '#${message.deviceID}',
+                              ),
+                          ],
+                        ),
                       ],
                     ),
+                    if (message.error.isNotNone)
+                      Column(
+                        spacing: 8,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Error',
+                            style: context.textTheme.muted,
+                          ),
+                          Text(
+                            message.error.asString,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                   ],
                 ),
-                if (message.error.isNotNone)
-                  Column(
-                    spacing: 8,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Error',
-                        style: context.textTheme.muted,
-                      ),
-                      Text(
-                        message.error.asString,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -302,8 +297,6 @@ class ChatMessageDetails extends StatelessWidget {
     required Chat recipient,
     required EmailService? emailService,
   }) async {
-    final chatsCubit = context.read<ChatsCubit?>();
-    final chatBloc = context.read<ChatBloc>();
     final messenger = ScaffoldMessenger.of(context);
     await showShadDialog<void>(
       context: context,
@@ -323,9 +316,10 @@ class ChatMessageDetails extends StatelessWidget {
               ShadButton.secondary(
                 size: ShadButtonSize.sm,
                 onPressed: () {
-                  chatBloc.add(
-                    ChatComposerRecipientAdded(FanOutTarget.chat(recipient)),
-                  );
+                  context.read<ChatBloc>().add(
+                        ChatComposerRecipientAdded(
+                            FanOutTarget.chat(recipient)),
+                      );
                   Navigator.of(dialogContext).pop();
                   messenger.showSnackBar(
                     SnackBar(
@@ -341,7 +335,7 @@ class ChatMessageDetails extends StatelessWidget {
                 size: ShadButtonSize.sm,
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
-                  chatsCubit?.toggleChat(jid: recipient.jid);
+                  context.read<ChatsCubit?>()?.toggleChat(jid: recipient.jid);
                 },
                 child: const Text('Open chat'),
               ).withTapBounce(),
@@ -354,7 +348,7 @@ class ChatMessageDetails extends StatelessWidget {
                           await emailService.ensureChatForEmailChat(recipient);
                       if (!context.mounted) return;
                       Navigator.of(dialogContext).pop();
-                      chatsCubit?.toggleChat(jid: ensured.jid);
+                      context.read<ChatsCubit?>()?.toggleChat(jid: ensured.jid);
                     } catch (_) {
                       if (!context.mounted) return;
                       messenger.showSnackBar(
@@ -486,6 +480,78 @@ class _ReactionChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RecipientsRow extends StatelessWidget {
+  const _RecipientsRow({
+    required this.sender,
+    required this.recipients,
+  });
+
+  final String? sender;
+  final List<Chat> recipients;
+
+  @override
+  Widget build(BuildContext context) {
+    if (recipients.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      spacing: 8,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (sender != null)
+          Text(
+            'From $sender',
+            style: context.textTheme.muted,
+          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
+            for (final participant in recipients)
+              _RecipientChip(
+                chat: participant,
+                onPressed: () =>
+                    context.read<ChatsCubit>().toggleChat(jid: participant.jid),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ReactionsRow extends StatelessWidget {
+  const _ReactionsRow({required this.reactions});
+
+  final List<ReactionPreview> reactions;
+
+  @override
+  Widget build(BuildContext context) {
+    if (reactions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      spacing: 8,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          'Reactions',
+          style: context.textTheme.muted,
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
+            for (final reaction in reactions) _ReactionChip(reaction: reaction),
+          ],
+        ),
+      ],
     );
   }
 }

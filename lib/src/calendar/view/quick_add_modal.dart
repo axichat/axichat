@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
@@ -27,19 +26,10 @@ import 'widgets/task_text_field.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'widgets/critical_path_panel.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 
 enum QuickAddModalSurface { dialog, bottomSheet }
-
-BaseCalendarBloc? _maybeCalendarBloc(BuildContext context) {
-  try {
-    return BlocProvider.of<BaseCalendarBloc>(context, listen: false);
-  } catch (_) {
-    return null;
-  }
-}
 
 class QuickAddModal extends StatefulWidget {
   final DateTime? prefilledDateTime;
@@ -49,6 +39,8 @@ class QuickAddModal extends StatefulWidget {
   final QuickAddModalSurface surface;
   final LocationAutocompleteHelper locationHelper;
   final String? initialValidationMessage;
+  final bool hasCalendarBloc;
+  final BaseCalendarBloc? calendarBloc;
 
   const QuickAddModal({
     super.key,
@@ -59,6 +51,8 @@ class QuickAddModal extends StatefulWidget {
     this.surface = QuickAddModalSurface.dialog,
     required this.locationHelper,
     this.initialValidationMessage,
+    this.hasCalendarBloc = false,
+    this.calendarBloc,
   });
 
   @override
@@ -202,6 +196,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             onAddToCriticalPath: () {
               _submitTask(addToCriticalPath: true);
             },
+            hasCalendarBloc: widget.hasCalendarBloc,
           ),
         ),
       );
@@ -247,6 +242,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             onAddToCriticalPath: () {
               _submitTask(addToCriticalPath: true);
             },
+            hasCalendarBloc: widget.hasCalendarBloc,
           ),
         ),
       ),
@@ -526,19 +522,16 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
 
     _formController.setSubmitting(true);
-    BaseCalendarBloc? bloc;
-    Set<String>? previousIds;
-    if (addToCriticalPath) {
-      bloc = _maybeCalendarBloc(context);
-      if (bloc == null) {
-        _formController.setSubmitting(false);
-        FeedbackSystem.showWarning(
-          context,
-          'Critical paths are unavailable in this view.',
-        );
-        return;
-      }
-      previousIds = bloc.state.model.tasks.keys.toSet();
+    final BaseCalendarBloc? calendarBloc = widget.calendarBloc;
+    final Set<String>? previousIds =
+        addToCriticalPath ? calendarBloc?.state.model.tasks.keys.toSet() : null;
+    if (addToCriticalPath && calendarBloc == null) {
+      _formController.setSubmitting(false);
+      FeedbackSystem.showWarning(
+        context,
+        'Critical paths are unavailable in this view.',
+      );
+      return;
     }
 
     final taskName = _taskNameController.text.trim();
@@ -578,18 +571,16 @@ class _QuickAddModalState extends State<QuickAddModal>
     widget.onTaskAdded(task);
     _setTitleValidationMessage(null);
 
-    if (addToCriticalPath && bloc != null && previousIds != null) {
-      final CalendarTask? createdTask = await _waitForNewTask(
-        bloc: bloc,
-        previousIds: previousIds,
-      );
+    if (addToCriticalPath && calendarBloc != null && previousIds != null) {
+      final CalendarTask? createdTask =
+          await _waitForNewTask(calendarBloc, previousIds);
       if (!mounted) {
         return;
       }
       if (createdTask != null) {
         await addTaskToCriticalPath(
           context: context,
-          bloc: bloc,
+          bloc: calendarBloc,
           task: createdTask,
         );
       } else {
@@ -604,23 +595,29 @@ class _QuickAddModalState extends State<QuickAddModal>
     await _dismissModal();
   }
 
-  Future<CalendarTask?> _waitForNewTask({
-    required BaseCalendarBloc bloc,
-    required Set<String> previousIds,
-  }) async {
+  Future<CalendarTask?> _waitForNewTask(
+    BaseCalendarBloc bloc,
+    Set<String> previousIds,
+  ) async {
     try {
-      final CalendarState state = await bloc.stream
-          .firstWhere(
-            (state) => state.model.tasks.length > previousIds.length,
-          )
-          .timeout(const Duration(seconds: 2));
-      final Set<String> nextIds = state.model.tasks.keys.toSet();
-      final Set<String> difference = nextIds.difference(previousIds);
+      final Set<String> difference = (await bloc.stream
+              .firstWhere(
+                (state) => state.model.tasks.length > previousIds.length,
+              )
+              .timeout(const Duration(seconds: 2)))
+          .model
+          .tasks
+          .keys
+          .toSet()
+          .difference(previousIds);
       if (difference.isEmpty) {
         return null;
       }
       final String taskId = difference.first;
-      return state.model.tasks[taskId];
+      if (!mounted) {
+        return null;
+      }
+      return bloc.state.model.tasks[taskId];
     } on TimeoutException {
       return null;
     }
@@ -683,6 +680,7 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.actionInsetBuilder,
     required this.fallbackDate,
     required this.onAddToCriticalPath,
+    required this.hasCalendarBloc,
   });
 
   final bool isSheet;
@@ -710,6 +708,7 @@ class _QuickAddModalContent extends StatelessWidget {
   final double Function(BuildContext context) actionInsetBuilder;
   final DateTime? fallbackDate;
   final VoidCallback onAddToCriticalPath;
+  final bool hasCalendarBloc;
 
   @override
   Widget build(BuildContext context) {
@@ -786,14 +785,21 @@ class _QuickAddModalContent extends StatelessWidget {
                       onClear: onScheduleCleared,
                     ),
                     const SizedBox(height: calendarGutterMd),
+                    AnimatedBuilder(
+                      animation: formController,
+                      builder: (context, _) {
+                        return _QuickAddReminderSection(
+                          reminders: formController.reminders,
+                          onChanged: onRemindersChanged,
+                        );
+                      },
+                    ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
                     _QuickAddDeadlineSection(
                       formController: formController,
                       onChanged: onDeadlineChanged,
-                    ),
-                    const SizedBox(height: calendarGutterMd),
-                    _QuickAddReminderSection(
-                      reminders: reminders,
-                      onChanged: onRemindersChanged,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -809,12 +815,10 @@ class _QuickAddModalContent extends StatelessWidget {
                       builder: (context, value, _) {
                         final bool hasTitle = value.text.trim().isNotEmpty;
                         final bool isBusy = formController.isSubmitting;
-                        final bool hasBloc =
-                            _maybeCalendarBloc(context) != null;
                         return TaskSecondaryButton(
                           label: 'Add to critical path',
                           icon: Icons.route,
-                          onPressed: hasTitle && !isBusy && hasBloc
+                          onPressed: hasTitle && !isBusy && hasCalendarBloc
                               ? onAddToCriticalPath
                               : null,
                         );
@@ -1241,14 +1245,27 @@ class _QuickAddActions extends StatelessWidget {
 }
 
 // Helper function to show the modal
-Future<void> showQuickAddModal({
+Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
   required BuildContext context,
   DateTime? prefilledDateTime,
   String? prefilledText,
   required void Function(CalendarTask task) onTaskAdded,
   required LocationAutocompleteHelper locationHelper,
   String? initialValidationMessage,
+  B? calendarBloc,
+  T Function<T>()? locate,
 }) {
+  B? resolveBloc() {
+    if (locate != null) {
+      try {
+        return locate<B>();
+      } catch (_) {
+        // Fall back to the explicitly provided bloc when locate cannot resolve.
+      }
+    }
+    return calendarBloc;
+  }
+
   final commandSurface = resolveCommandSurface(context);
   final bool isDesktop = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
@@ -1262,19 +1279,26 @@ Future<void> showQuickAddModal({
     return showDialog<void>(
       context: context,
       barrierColor: Colors.black54,
-      builder: (dialogContext) => QuickAddModal(
-        surface: surface,
-        prefilledDateTime: prefilledDateTime,
-        prefilledText: prefilledText,
-        onTaskAdded: onTaskAdded,
-        locationHelper: locationHelper,
-        initialValidationMessage: initialValidationMessage,
-        onDismiss: () {
-          if (Navigator.of(dialogContext).canPop()) {
-            Navigator.of(dialogContext).maybePop();
-          }
-        },
-      ),
+      builder: (dialogContext) {
+        final B? resolvedBloc = resolveBloc();
+        final bool hasBloc = resolvedBloc != null;
+        Widget child = QuickAddModal(
+          surface: surface,
+          prefilledDateTime: prefilledDateTime,
+          prefilledText: prefilledText,
+          onTaskAdded: onTaskAdded,
+          locationHelper: locationHelper,
+          initialValidationMessage: initialValidationMessage,
+          hasCalendarBloc: hasBloc,
+          calendarBloc: resolvedBloc,
+          onDismiss: () {
+            if (Navigator.of(dialogContext).canPop()) {
+              Navigator.of(dialogContext).maybePop();
+            }
+          },
+        );
+        return child;
+      },
     );
   }
 
@@ -1287,20 +1311,27 @@ Future<void> showQuickAddModal({
     backgroundColor: Colors.transparent,
     surfacePadding: EdgeInsets.zero,
     dialogMaxWidth: 760,
-    builder: (sheetContext) => QuickAddModal(
-      surface: surface,
-      prefilledDateTime: prefilledDateTime,
-      prefilledText: prefilledText,
-      onTaskAdded: onTaskAdded,
-      locationHelper: locationHelper,
-      initialValidationMessage: initialValidationMessage,
-      onDismiss: useSheet
-          ? null
-          : () {
-              if (Navigator.of(sheetContext).canPop()) {
-                Navigator.of(sheetContext).maybePop();
-              }
-            },
-    ),
+    builder: (sheetContext) {
+      final B? resolvedBloc = resolveBloc();
+      final bool hasBloc = resolvedBloc != null;
+      Widget child = QuickAddModal(
+        surface: surface,
+        prefilledDateTime: prefilledDateTime,
+        prefilledText: prefilledText,
+        onTaskAdded: onTaskAdded,
+        locationHelper: locationHelper,
+        initialValidationMessage: initialValidationMessage,
+        hasCalendarBloc: hasBloc,
+        calendarBloc: resolvedBloc,
+        onDismiss: useSheet
+            ? null
+            : () {
+                if (Navigator.of(sheetContext).canPop()) {
+                  Navigator.of(sheetContext).maybePop();
+                }
+              },
+      );
+      return child;
+    },
   );
 }

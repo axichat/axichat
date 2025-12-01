@@ -42,15 +42,20 @@ class RosterAddButton extends StatelessWidget {
                         }
                       },
                       builder: (context, state) {
-                        return JidInput(
-                          enabled: state is! RosterLoading,
-                          error: state is! RosterFailure ? null : state.message,
-                          jidOptions: [
-                            '${jid.split('@').first}'
-                                '@${context.read<AuthenticationCubit>().state.server}'
-                          ],
-                          onChanged: (value) {
-                            setState(() => jid = value);
+                        return BlocSelector<AuthenticationCubit,
+                            AuthenticationState, String>(
+                          selector: (authState) => authState.server,
+                          builder: (context, server) {
+                            return JidInput(
+                              enabled: state is! RosterLoading,
+                              error: state is! RosterFailure
+                                  ? null
+                                  : state.message,
+                              jidOptions: ['${jid.split('@').first}@$server'],
+                              onChanged: (value) {
+                                setState(() => jid = value);
+                              },
+                            );
                           },
                         );
                       },

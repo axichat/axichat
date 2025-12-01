@@ -38,7 +38,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     return super.close();
   }
 
-  void block({required String jid}) async {
+  Future<void> block({required String jid}) async {
     if (!jid.isValidJid) {
       emit(const BlocklistFailure('Enter a valid jid'));
       return;
@@ -57,7 +57,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     emit(BlocklistSuccess('Blocked $jid'));
   }
 
-  void unblock({required String jid}) async {
+  Future<void> unblock({required String jid}) async {
     emit(BlocklistLoading(jid: jid));
     try {
       await _blockingService.unblock(jid: jid);
@@ -71,7 +71,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     emit(BlocklistSuccess('Unblocked $jid'));
   }
 
-  void unblockAll() async {
+  Future<void> unblockAll() async {
     emit(const BlocklistLoading(jid: null));
     try {
       await _blockingService.unblockAll();

@@ -14,16 +14,15 @@ class BlocklistList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<BlocklistCubit, BlocklistState>(
-      buildWhen: (_, current) => current is BlocklistAvailable,
-      builder: (context, state) {
-        late final List<BlocklistData>? items;
+    final cachedItems = context.select<BlocklistCubit, List<BlocklistData>?>(
+      (cubit) => cubit['items'] as List<BlocklistData>?,
+    );
 
-        if (state is! BlocklistAvailable) {
-          items = context.read<BlocklistCubit>()['items'];
-        } else {
-          items = state.items;
-        }
+    return BlocBuilder<BlocklistCubit, BlocklistState>(
+      builder: (context, state) {
+        final items = state is BlocklistAvailable
+            ? state.items ?? cachedItems
+            : cachedItems;
 
         if (items == null) {
           return Center(
@@ -33,59 +32,78 @@ class BlocklistList extends StatelessWidget {
           );
         }
 
-        final searchState = context.watch<HomeSearchCubit?>()?.state;
-        final tabState = searchState?.stateFor(HomeTab.blocked);
-        final searchActive = searchState?.active ?? false;
-        final query =
-            searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-        final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
-
-        var visibleItems = List<BlocklistData>.from(items);
-
-        if (query.isNotEmpty) {
-          visibleItems = visibleItems
-              .where((item) => _blockMatchesQuery(item, query))
-              .toList();
-        }
-
-        visibleItems.sort(
-          (a, b) => sortOrder.isNewestFirst
-              ? a.jid.toLowerCase().compareTo(b.jid.toLowerCase())
-              : b.jid.toLowerCase().compareTo(a.jid.toLowerCase()),
-        );
-
-        if (visibleItems.isEmpty) {
-          return Center(
-            child: Text(
-              'Nobody blocked',
-              style: context.textTheme.muted,
-            ),
-          );
-        }
-
-        return ColoredBox(
-          color: context.colorScheme.background,
-          child: ListView.builder(
-            itemCount: (visibleItems.length) + 1,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: BlocklistUnblockAllButton(),
-                  ),
-                );
-              }
-              final item = visibleItems[index - 1];
-              return ListItemPadding(
-                child: BlocklistTile(
-                  jid: item.jid,
-                ),
-              );
-            },
+        return BlocBuilder<HomeSearchCubit, HomeSearchState>(
+          builder: (context, searchState) => _BlocklistListBody(
+            items: items,
+            searchState: searchState,
           ),
         );
       },
+    );
+  }
+}
+
+class _BlocklistListBody extends StatelessWidget {
+  const _BlocklistListBody({
+    required this.items,
+    this.searchState,
+  });
+
+  final List<BlocklistData> items;
+  final HomeSearchState? searchState;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabState = searchState?.stateFor(HomeTab.blocked);
+    final searchActive = searchState?.active ?? false;
+    final query =
+        searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
+    final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
+
+    var visibleItems = List<BlocklistData>.from(items);
+
+    if (query.isNotEmpty) {
+      visibleItems = visibleItems
+          .where((item) => _blockMatchesQuery(item, query))
+          .toList();
+    }
+
+    visibleItems.sort(
+      (a, b) => sortOrder.isNewestFirst
+          ? a.jid.toLowerCase().compareTo(b.jid.toLowerCase())
+          : b.jid.toLowerCase().compareTo(a.jid.toLowerCase()),
+    );
+
+    if (visibleItems.isEmpty) {
+      return Center(
+        child: Text(
+          'Nobody blocked',
+          style: context.textTheme.muted,
+        ),
+      );
+    }
+
+    return ColoredBox(
+      color: context.colorScheme.background,
+      child: ListView.builder(
+        itemCount: (visibleItems.length) + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: BlocklistUnblockAllButton(),
+              ),
+            );
+          }
+          final item = visibleItems[index - 1];
+          return ListItemPadding(
+            child: BlocklistTile(
+              jid: item.jid,
+            ),
+          );
+        },
+      ),
     );
   }
 }

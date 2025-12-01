@@ -53,8 +53,8 @@ void main() {
     when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
 
     await consumer.handle(
-      const DeltaCoreEvent(
-        type: DeltaEventType.incomingMsg,
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsg.code,
         data1: chatId,
         data2: msgId,
       ),
@@ -93,8 +93,8 @@ void main() {
     );
 
     await consumer.handle(
-      const DeltaCoreEvent(
-        type: DeltaEventType.chatModified,
+      DeltaCoreEvent(
+        type: DeltaEventType.chatModified.code,
         data1: chatId,
         data2: 0,
       ),

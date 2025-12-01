@@ -14,7 +14,6 @@ part 'calendar_model.g.dart';
 
 @freezed
 @HiveType(typeId: 33)
-@JsonSerializable(explicitToJson: true)
 class CalendarModel with _$CalendarModel {
   const factory CalendarModel({
     @HiveField(0) @Default({}) Map<String, CalendarTask> tasks,

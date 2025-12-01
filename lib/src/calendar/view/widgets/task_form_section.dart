@@ -1188,9 +1188,40 @@ class TaskFormActionsRow extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: decoration,
-      child: Row(
-        children: gap == null ? children : _withGap(children, gap!),
+      child: _TaskFormActionsLayout(
+        gap: gap,
+        children: children,
       ),
+    );
+  }
+}
+
+class _TaskFormActionsLayout extends StatelessWidget {
+  const _TaskFormActionsLayout({
+    required this.children,
+    required this.gap,
+  });
+
+  final List<Widget> children;
+  final double? gap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool usesFlex = children.any(
+      (widget) => widget is Expanded || widget is Flexible || widget is Spacer,
+    );
+    final double spacing = gap ?? 0;
+    if (usesFlex) {
+      return Row(
+        mainAxisSize: MainAxisSize.max,
+        children: gap == null ? children : _withGap(children, spacing),
+      );
+    }
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing > 0 ? spacing / 2 : 0,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: children,
     );
   }
 

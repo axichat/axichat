@@ -44,24 +44,36 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   late bool _useDns;
   late bool _useSrv;
   late bool _requireDnssec;
+  bool _dependenciesInitialized = false;
 
   @override
   void initState() {
     super.initState();
+    _domainController = TextEditingController();
+    _xmppHostController = TextEditingController();
+    _smtpHostController = TextEditingController();
+    _xmppPortController = TextEditingController();
+    _smtpPortController = TextEditingController();
+    _apiPortController = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_dependenciesInitialized) return;
     final config = context.read<AuthenticationCubit>().endpointConfig;
     _enableXmpp = config.enableXmpp;
     _enableSmtp = config.enableSmtp;
     _useDns = config.useDns;
     _useSrv = config.useSrv;
     _requireDnssec = config.requireDnssec;
-    _domainController = TextEditingController(text: config.domain);
-    _xmppHostController = TextEditingController(text: config.xmppHost ?? '');
-    _smtpHostController = TextEditingController(text: config.smtpHost ?? '');
-    _xmppPortController =
-        TextEditingController(text: config.xmppPort.toString());
-    _smtpPortController =
-        TextEditingController(text: config.smtpPort.toString());
-    _apiPortController = TextEditingController(text: config.apiPort.toString());
+    _domainController.text = config.domain;
+    _xmppHostController.text = config.xmppHost ?? '';
+    _smtpHostController.text = config.smtpHost ?? '';
+    _xmppPortController.text = config.xmppPort.toString();
+    _smtpPortController.text = config.smtpPort.toString();
+    _apiPortController.text = config.apiPort.toString();
+    _dependenciesInitialized = true;
   }
 
   @override
@@ -107,9 +119,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   }
 
   Future<void> _save() async {
-    final cubit = context.read<AuthenticationCubit>();
-    final updated = _buildConfig(cubit.endpointConfig);
-    await cubit.updateEndpointConfig(updated);
+    final updated = _buildConfig(
+      context.read<AuthenticationCubit>().endpointConfig,
+    );
+    await context.read<AuthenticationCubit>().updateEndpointConfig(updated);
     if (!mounted) return;
     Navigator.of(context).pop();
   }

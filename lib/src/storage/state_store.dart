@@ -83,7 +83,10 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   Map<String, Object?> readAll() {
     final result = <String, Object?>{};
     if (!initialized) return result;
-    Hive.box(boxName).toMap().forEach((k, v) => result[k.value] = v);
+    final box = Hive.box(boxName);
+    for (final entry in box.toMap().entries) {
+      result[entry.key.toString()] = entry.value;
+    }
     return result;
   }
 

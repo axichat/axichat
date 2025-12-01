@@ -12,7 +12,6 @@ import 'package:axichat/src/chats/view/calendar_tile.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
-import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -32,9 +31,11 @@ class ChatsList extends StatelessWidget {
   const ChatsList({
     super.key,
     this.showCalendarShortcut = true,
+    this.calendarAvailable = false,
   });
 
   final bool showCalendarShortcut;
+  final bool calendarAvailable;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +46,6 @@ class ChatsList extends StatelessWidget {
         return items.where((chat) => !chat.archived && !chat.spam).toList();
       },
       builder: (context, items) {
-        final duration = context.read<SettingsCubit>().animationDuration;
         Widget child;
         if (items == null) {
           child = KeyedSubtree(
@@ -57,95 +57,103 @@ class ChatsList extends StatelessWidget {
             ),
           );
         } else {
-          final searchState = context.watch<HomeSearchCubit?>()?.state;
-          final tabState = searchState?.stateFor(HomeTab.chats);
-          final searchActive = searchState?.active ?? false;
-          final query =
-              searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-          final filterId = tabState?.filterId;
-          final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
-          final rosterContacts =
-              context.watch<RosterCubit?>()?.contacts ?? const <String>{};
+          child = BlocBuilder<HomeSearchCubit, HomeSearchState>(
+            builder: (context, searchState) {
+              final tabState = searchState.stateFor(HomeTab.chats);
+              final query =
+                  searchState.active ? tabState.query.trim().toLowerCase() : '';
+              final filterId = tabState.filterId;
+              final sortOrder = tabState.sort;
+              return BlocBuilder<RosterCubit, RosterState>(
+                builder: (context, rosterState) {
+                  final rosterContacts = rosterState is RosterAvailable
+                      ? (rosterState.items ?? const <RosterItem>[])
+                          .map((item) => item.jid)
+                          .toSet()
+                      : const <String>{};
+                  final includeCalendarShortcut =
+                      showCalendarShortcut && calendarAvailable;
 
-          var visibleItems = items
-              .where(
-                (chat) => _chatMatchesFilter(
-                  chat,
-                  filterId,
-                  rosterContacts,
-                ),
-              )
-              .toList();
+                  var visibleItems = items
+                      .where(
+                        (chat) => _chatMatchesFilter(
+                          chat,
+                          filterId,
+                          rosterContacts,
+                        ),
+                      )
+                      .toList();
 
-          if (query.isNotEmpty) {
-            visibleItems = visibleItems
-                .where((chat) => _chatMatchesQuery(chat, query))
-                .toList();
-          }
-
-          visibleItems.sort(
-            (a, b) => sortOrder.isNewestFirst
-                ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
-                : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
-          );
-
-          Widget body;
-          if (visibleItems.isEmpty) {
-            body = Center(
-              child: Text(
-                'No chats yet',
-                style: context.textTheme.muted,
-              ),
-            );
-          } else {
-            body = ColoredBox(
-              color: context.colorScheme.background,
-              child: ListView.builder(
-                itemCount: visibleItems.length + (showCalendarShortcut ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (showCalendarShortcut && index == 0) {
-                    final calendarBloc = context.read<CalendarBloc?>();
-                    final tile = calendarBloc == null
-                        ? CalendarTile(
-                            onTap: () =>
-                                context.read<ChatsCubit>().toggleCalendar(),
-                          )
-                        : BlocBuilder<CalendarBloc, CalendarState>(
-                            bloc: calendarBloc,
-                            builder: (context, state) {
-                              final currentTask =
-                                  state.currentTaskAt(DateTime.now());
-                              return CalendarTile(
-                                onTap: () =>
-                                    context.read<ChatsCubit>().toggleCalendar(),
-                                currentTask: currentTask,
-                                nextTask: state.nextTask,
-                                dueReminderCount:
-                                    state.dueReminders?.length ?? 0,
-                              );
-                            },
-                          );
-                    return ListItemPadding(child: tile);
+                  if (query.isNotEmpty) {
+                    visibleItems = visibleItems
+                        .where((chat) => _chatMatchesQuery(chat, query))
+                        .toList();
                   }
 
-                  final offset = showCalendarShortcut ? 1 : 0;
-                  final item = visibleItems[index - offset];
-                  return ListItemPadding(
-                    child: ChatListTile(item: item),
+                  visibleItems.sort(
+                    (a, b) => sortOrder.isNewestFirst
+                        ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
+                        : a.lastChangeTimestamp
+                            .compareTo(b.lastChangeTimestamp),
+                  );
+
+                  Widget body;
+                  if (visibleItems.isEmpty) {
+                    body = Center(
+                      child: Text(
+                        'No chats yet',
+                        style: context.textTheme.muted,
+                      ),
+                    );
+                  } else {
+                    body = ColoredBox(
+                      color: context.colorScheme.background,
+                      child: ListView.builder(
+                        itemCount: visibleItems.length +
+                            (includeCalendarShortcut ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (includeCalendarShortcut && index == 0) {
+                            return ListItemPadding(
+                              child: BlocBuilder<CalendarBloc, CalendarState>(
+                                builder: (context, state) {
+                                  final currentTask =
+                                      state.currentTaskAt(DateTime.now());
+                                  return CalendarTile(
+                                    onTap: () => context
+                                        .read<ChatsCubit>()
+                                        .toggleCalendar(),
+                                    currentTask: currentTask,
+                                    nextTask: state.nextTask,
+                                    dueReminderCount:
+                                        state.dueReminders?.length ?? 0,
+                                  );
+                                },
+                              ),
+                            );
+                          }
+
+                          final offset = includeCalendarShortcut ? 1 : 0;
+                          final item = visibleItems[index - offset];
+                          return ListItemPadding(
+                            child: ChatListTile(item: item),
+                          );
+                        },
+                      ),
+                    );
+                  }
+
+                  return KeyedSubtree(
+                    key: const ValueKey('chats-loaded'),
+                    child: body,
                   );
                 },
-              ),
-            );
-          }
-
-          child = KeyedSubtree(
-            key: const ValueKey('chats-loaded'),
-            child: body,
+              );
+            },
           );
         }
 
         return AnimatedSwitcher(
-          duration: duration,
+          duration: context.watch<SettingsCubit>().animationDuration,
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
           transitionBuilder: (widget, animation) {
@@ -308,8 +316,9 @@ class _ChatListTileState extends State<ChatListTile> {
                 ) +
                 scaled(16.0),
           );
-    final chatsCubit = context.watch<ChatsCubit?>();
-    final selectedJids = chatsCubit?.state.selectedJids ?? const <String>{};
+    final ChatsCubit? chatsCubit = context.watch<ChatsCubit?>();
+    final ChatsState? chatsState = chatsCubit?.state;
+    final selectedJids = chatsState?.selectedJids ?? const <String>{};
     final selectionActive = selectedJids.isNotEmpty;
     final isSelected = selectedJids.contains(item.jid);
     if (selectionActive && _showActions) {
@@ -329,29 +338,18 @@ class _ChatListTileState extends State<ChatListTile> {
         ? Color.alphaBlend(selectionOverlay, colors.card)
         : colors.card;
     late final VoidCallback tileOnTap;
-    if (chatsCubit == null) {
+    if (chatsState == null) {
       tileOnTap = () {
         unawaited(_handleTap(item));
       };
     } else if (selectionActive) {
-      tileOnTap = () => chatsCubit.toggleChatSelection(item.jid);
+      tileOnTap =
+          () => context.read<ChatsCubit>().toggleChatSelection(item.jid);
     } else {
       tileOnTap = () {
         unawaited(_handleTap(item));
       };
     }
-    final tileOnLongPress = chatsCubit == null
-        ? null
-        : () {
-            if (selectionActive) {
-              chatsCubit.toggleChatSelection(item.jid);
-            } else {
-              chatsCubit.ensureChatSelected(item.jid);
-            }
-            if (_showActions) {
-              setState(() => _showActions = false);
-            }
-          };
     final tilePadding = EdgeInsetsDirectional.only(
       start: scaled(16),
       end: scaled(showUnreadBadge ? 40 : 28),
@@ -361,7 +359,18 @@ class _ChatListTileState extends State<ChatListTile> {
     final tile = AxiListTile(
       key: Key(item.jid),
       onTap: tileOnTap,
-      onLongPress: tileOnLongPress,
+      onLongPress: chatsCubit == null
+          ? null
+          : () {
+              if (selectionActive) {
+                chatsCubit.toggleChatSelection(item.jid);
+              } else {
+                chatsCubit.ensureChatSelected(item.jid);
+              }
+              if (_showActions) {
+                setState(() => _showActions = false);
+              }
+            },
       leadingConstraints: BoxConstraints(
         maxWidth: scaled(72),
         maxHeight: scaled(80),
@@ -402,7 +411,8 @@ class _ChatListTileState extends State<ChatListTile> {
             ? _ChatSelectionCutoutButton(
                 backgroundColor: tileBackgroundColor,
                 selected: isSelected,
-                onPressed: () => chatsCubit?.toggleChatSelection(item.jid),
+                onPressed: () =>
+                    context.read<ChatsCubit?>()?.toggleChatSelection(item.jid),
               )
             : _ChatActionsToggle(
                 backgroundColor: tileBackgroundColor,
@@ -479,7 +489,7 @@ class _ChatListTileState extends State<ChatListTile> {
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,
-        items: _chatContextMenuItems(item, chatsCubit),
+        items: _chatContextMenuItems(item, chatsState),
         child: tileContent,
       );
     }
@@ -555,8 +565,7 @@ class _ChatListTileState extends State<ChatListTile> {
   }
 
   Future<void> _handleTap(Chat chat) async {
-    final chatsCubit = context.read<ChatsCubit?>();
-    if (chatsCubit == null) return;
+    if (context.read<ChatsCubit?>() == null) return;
     if (widget.archivedContext && chat.archived) {
       final handler = widget.onArchivedTap;
       if (handler != null) {
@@ -564,12 +573,11 @@ class _ChatListTileState extends State<ChatListTile> {
         return;
       }
     }
-    unawaited(chatsCubit.toggleChat(jid: chat.jid));
+    unawaited(context.read<ChatsCubit>().toggleChat(jid: chat.jid));
   }
 
   Future<void> _confirmDelete(Chat chat) async {
-    final chatsCubit = context.read<ChatsCubit?>();
-    if (chatsCubit == null) return;
+    if (context.read<ChatsCubit?>() == null) return;
     var deleteMessages = false;
     final confirmed = await showShadDialog<bool>(
       context: context,
@@ -646,11 +654,13 @@ class _ChatListTileState extends State<ChatListTile> {
         );
       },
     );
+    if (!mounted) return;
     if (confirmed != true) return;
     if (deleteMessages) {
-      await chatsCubit.deleteChatMessages(jid: chat.jid);
+      await context.read<ChatsCubit>().deleteChatMessages(jid: chat.jid);
+      if (!mounted) return;
     }
-    await chatsCubit.deleteChat(jid: chat.jid);
+    await context.read<ChatsCubit>().deleteChat(jid: chat.jid);
     if (!mounted) return;
     _showMessage('Chat deleted');
     setState(() => _showActions = false);
@@ -663,12 +673,11 @@ class _ChatListTileState extends State<ChatListTile> {
   }
 
   Future<void> _exportChatFromContextMenu(Chat chat) async {
-    final chatsCubit = context.read<ChatsCubit?>();
-    if (chatsCubit == null) return;
+    if (context.read<ChatsCubit?>() == null) return;
     try {
       final result = await ChatHistoryExporter.exportChats(
         chats: [chat],
-        loadHistory: chatsCubit.loadChatHistory,
+        loadHistory: context.read<ChatsCubit>().loadChatHistory,
       );
       if (!mounted) return;
       final file = result.file;
@@ -689,8 +698,8 @@ class _ChatListTileState extends State<ChatListTile> {
     }
   }
 
-  List<Widget> _chatContextMenuItems(Chat chat, ChatsCubit? chatsCubit) {
-    final disabled = chatsCubit == null;
+  List<Widget> _chatContextMenuItems(Chat chat, ChatsState? chatsState) {
+    final disabled = chatsState == null;
     return [
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.messagesSquare),
@@ -699,8 +708,9 @@ class _ChatListTileState extends State<ChatListTile> {
       ),
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.squareCheck),
-        onPressed:
-            disabled ? null : () => chatsCubit.ensureChatSelected(chat.jid),
+        onPressed: disabled
+            ? null
+            : () => context.read<ChatsCubit>().ensureChatSelected(chat.jid),
         child: const Text('Select'),
       ),
       ShadContextMenuItem(
@@ -716,10 +726,10 @@ class _ChatListTileState extends State<ChatListTile> {
         onPressed: disabled
             ? null
             : () async {
-                await chatsCubit.toggleFavorited(
-                  jid: chat.jid,
-                  favorited: !chat.favorited,
-                );
+                await context.read<ChatsCubit>().toggleFavorited(
+                      jid: chat.jid,
+                      favorited: !chat.favorited,
+                    );
               },
         child: Text(chat.favorited ? 'Unfavorite' : 'Favorite'),
       ),
@@ -730,10 +740,10 @@ class _ChatListTileState extends State<ChatListTile> {
         onPressed: disabled
             ? null
             : () async {
-                await chatsCubit.toggleArchived(
-                  jid: chat.jid,
-                  archived: !chat.archived,
-                );
+                await context.read<ChatsCubit>().toggleArchived(
+                      jid: chat.jid,
+                      archived: !chat.archived,
+                    );
               },
         child: Text(chat.archived ? 'Unarchive' : 'Archive'),
       ),
@@ -743,10 +753,10 @@ class _ChatListTileState extends State<ChatListTile> {
           onPressed: disabled
               ? null
               : () async {
-                  await chatsCubit.toggleHidden(
-                    jid: chat.jid,
-                    hidden: !chat.hidden,
-                  );
+                  await context.read<ChatsCubit>().toggleHidden(
+                        jid: chat.jid,
+                        hidden: !chat.hidden,
+                      );
                 },
           child: Text(chat.hidden ? 'Show' : 'Hide'),
         ),
@@ -785,7 +795,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     double scaled(double value) => textScaler.scale(value);
     final iconSize = scaled(16);
     final spacing = scaled(8);
-    final chatsCubit = context.read<ChatsCubit?>();
     final l10n = context.l10n;
     return Wrap(
       spacing: spacing,
@@ -795,10 +804,12 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
         ContextActionButton(
           icon: Icon(LucideIcons.squareCheck, size: iconSize),
           label: 'Select',
-          onPressed: chatsCubit == null
+          onPressed: context.read<ChatsCubit?>() == null
               ? null
               : () {
-                  chatsCubit.ensureChatSelected(widget.chat.jid);
+                  context
+                      .read<ChatsCubit>()
+                      .ensureChatSelected(widget.chat.jid);
                   widget.onClose();
                 },
         ),
@@ -806,8 +817,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           ContextActionButton(
             icon: Icon(LucideIcons.pencilLine, size: iconSize),
             label: l10n.chatContactRenameAction,
-            onPressed:
-                chatsCubit == null ? null : () => _renameContact(chatsCubit),
+            onPressed: context.read<ChatsCubit?>() == null
+                ? null
+                : () => _renameContact(),
           ),
         ContextActionButton(
           icon: Icon(
@@ -815,13 +827,13 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             size: iconSize,
           ),
           label: widget.chat.favorited ? 'Unfavorite' : 'Favorite',
-          onPressed: chatsCubit == null
+          onPressed: context.read<ChatsCubit?>() == null
               ? null
               : () async {
-                  await chatsCubit.toggleFavorited(
-                    jid: widget.chat.jid,
-                    favorited: !widget.chat.favorited,
-                  );
+                  await context.read<ChatsCubit>().toggleFavorited(
+                        jid: widget.chat.jid,
+                        favorited: !widget.chat.favorited,
+                      );
                   if (!mounted) return;
                   widget.onClose();
                 },
@@ -837,13 +849,13 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             size: iconSize,
           ),
           label: widget.chat.archived ? 'Unarchive' : 'Archive',
-          onPressed: chatsCubit == null
+          onPressed: context.read<ChatsCubit?>() == null
               ? null
               : () async {
-                  await chatsCubit.toggleArchived(
-                    jid: widget.chat.jid,
-                    archived: !widget.chat.archived,
-                  );
+                  await context.read<ChatsCubit>().toggleArchived(
+                        jid: widget.chat.jid,
+                        archived: !widget.chat.archived,
+                      );
                   _showSnack(
                     widget.chat.archived
                         ? 'Chat restored'
@@ -860,13 +872,13 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
               size: iconSize,
             ),
             label: widget.chat.hidden ? 'Show' : 'Hide',
-            onPressed: chatsCubit == null
+            onPressed: context.read<ChatsCubit?>() == null
                 ? null
                 : () async {
-                    await chatsCubit.toggleHidden(
-                      jid: widget.chat.jid,
-                      hidden: !widget.chat.hidden,
-                    );
+                    await context.read<ChatsCubit>().toggleHidden(
+                          jid: widget.chat.jid,
+                          hidden: !widget.chat.hidden,
+                        );
                     _showSnack(
                       widget.chat.hidden
                           ? 'Chat is visible again'
@@ -886,18 +898,19 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     );
   }
 
-  Future<void> _renameContact(ChatsCubit chatsCubit) async {
+  Future<void> _renameContact() async {
     final l10n = context.l10n;
     final result = await showContactRenameDialog(
       context: context,
       initialValue: widget.chat.displayName,
     );
+    if (!mounted) return;
     if (result == null) return;
     try {
-      await chatsCubit.renameContact(
-        jid: widget.chat.jid,
-        displayName: result,
-      );
+      await context.read<ChatsCubit>().renameContact(
+            jid: widget.chat.jid,
+            displayName: result,
+          );
       if (!mounted) return;
       _showSnack(l10n.chatContactRenameSuccess);
       widget.onClose();
@@ -908,15 +921,14 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
   }
 
   Future<void> _exportChat() async {
-    final chatsCubit = context.read<ChatsCubit?>();
-    if (chatsCubit == null) return;
+    if (context.read<ChatsCubit?>() == null) return;
     setState(() {
       _exporting = true;
     });
     try {
       final result = await ChatHistoryExporter.exportChats(
         chats: [widget.chat],
-        loadHistory: chatsCubit.loadChatHistory,
+        loadHistory: context.read<ChatsCubit>().loadChatHistory,
       );
       if (!mounted) return;
       final file = result.file;

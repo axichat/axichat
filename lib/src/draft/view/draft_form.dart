@@ -20,6 +20,7 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:file_picker/file_picker.dart';
@@ -71,6 +72,7 @@ class _DraftFormState extends State<DraftForm> {
   late final FocusNode _subjectFocusNode;
   late List<ComposerRecipient> _recipients;
   late List<PendingAttachment> _pendingAttachments;
+  bool _dependenciesInitialized = false;
 
   late var id = widget.id;
   bool _loadingAttachments = false;
@@ -82,18 +84,13 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void initState() {
     super.initState();
-    _messageService = context.read<MessageService>();
     _bodyTextController = TextEditingController(text: widget.body)
       ..addListener(_bodyListener);
     _subjectTextController = TextEditingController(text: widget.subject)
       ..addListener(_subjectListener);
     _bodyFocusNode = FocusNode();
     _subjectFocusNode = FocusNode();
-    _recipients = _initialRecipients();
     _pendingAttachments = const [];
-    if (widget.attachmentMetadataIds.isNotEmpty) {
-      unawaited(_hydrateAttachments());
-    }
   }
 
   @override
@@ -124,6 +121,18 @@ class _DraftFormState extends State<DraftForm> {
     _bodyFocusNode.requestFocus();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_dependenciesInitialized) return;
+    _messageService = context.read<MessageService>();
+    _recipients = _initialRecipients();
+    if (widget.attachmentMetadataIds.isNotEmpty) {
+      unawaited(_hydrateAttachments());
+    }
+    _dependenciesInitialized = true;
+  }
+
   void _handleTaskDrop(CalendarDragPayload payload) {
     _appendTaskShareText(payload.snapshot);
   }
@@ -131,7 +140,18 @@ class _DraftFormState extends State<DraftForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final chats = context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[];
+    return _buildForm(
+      context,
+      l10n,
+      context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[],
+    );
+  }
+
+  Widget _buildForm(
+    BuildContext context,
+    AppLocalizations l10n,
+    List<Chat> chats,
+  ) {
     final autovalidateMode = _showValidationMessages
         ? AutovalidateMode.always
         : AutovalidateMode.disabled;
@@ -577,17 +597,16 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleSaveDraft() async {
-    final draftCubit = context.read<DraftCubit?>();
-    if (draftCubit == null) return;
+    if (context.read<DraftCubit?>() == null) return;
     final attachmentIds =
         _pendingAttachments.map((pending) => pending.id).toList();
-    final DraftSaveResult result = await draftCubit.saveDraft(
-      id: id,
-      jids: _recipientStrings(),
-      body: _bodyTextController.text,
-      subject: _subjectTextController.text,
-      attachments: _currentAttachments(),
-    );
+    final DraftSaveResult result = await context.read<DraftCubit>().saveDraft(
+          id: id,
+          jids: _recipientStrings(),
+          body: _bodyTextController.text,
+          subject: _subjectTextController.text,
+          attachments: _currentAttachments(),
+        );
     if (!mounted) return;
     setState(() => id = result.draftId);
     await _applyAttachmentMetadataIds(
@@ -633,9 +652,8 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _handleDiscard() async {
     final l10n = context.l10n;
-    final draftCubit = context.read<DraftCubit?>();
-    if (draftCubit != null && id != null) {
-      await draftCubit.deleteDraft(id: id!);
+    if (id != null && context.read<DraftCubit?>() != null) {
+      await context.read<DraftCubit>().deleteDraft(id: id!);
     }
     setState(() {
       id = null;
@@ -652,8 +670,7 @@ class _DraftFormState extends State<DraftForm> {
   Future<void> _handleSendDraft() async {
     final l10n = context.l10n;
     setState(() => _showValidationMessages = true);
-    final draftCubit = context.read<DraftCubit?>();
-    if (draftCubit == null) return;
+    if (context.read<DraftCubit?>() == null) return;
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
     final xmppJids =
@@ -699,15 +716,15 @@ class _DraftFormState extends State<DraftForm> {
     }
     var succeeded = false;
     try {
-      succeeded = await draftCubit.sendDraft(
-        id: id,
-        xmppJids: xmppJids,
-        emailTargets: emailTargets,
-        body: _bodyTextController.text,
-        l10n: l10n,
-        subject: _subjectTextController.text,
-        attachments: _currentAttachments(),
-      );
+      succeeded = await context.read<DraftCubit>().sendDraft(
+            id: id,
+            xmppJids: xmppJids,
+            emailTargets: emailTargets,
+            body: _bodyTextController.text,
+            l10n: l10n,
+            subject: _subjectTextController.text,
+            attachments: _currentAttachments(),
+          );
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -717,15 +734,14 @@ class _DraftFormState extends State<DraftForm> {
       _showToast(l10n.draftSendFailed);
       return;
     }
-    if (!mounted) {
-      return;
-    }
-    if (!succeeded) {
-      setState(() {
-        _sendingDraft = false;
-        _sendCompletionHandled = true;
-      });
-      _bodyFocusNode.requestFocus();
+    if (!mounted || !succeeded) {
+      if (mounted && succeeded == false) {
+        setState(() {
+          _sendingDraft = false;
+          _sendCompletionHandled = true;
+        });
+        _bodyFocusNode.requestFocus();
+      }
       return;
     }
     _handleSendComplete();

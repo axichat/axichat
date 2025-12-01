@@ -1,5 +1,18 @@
 # BLoC & Flutter_BLoC Library Guide for Sonnet 4
 
+NEVER DO ANY OF THIS:
+```dart
+final homeSearchCubit = BlocProvider.maybeOf<HomeSearchCubit>(context);
+final searchProvider = context.findAncestorWidgetOfExactType<BlocProvider<HomeSearchCubit>>();
+if (searchProvider == null) {
+  return _BlocklistListBody(items: items);
+}
+final homeSearchCubit = context.read<HomeSearchCubit>();
+```
+- Finding BLoCs with any method other than `BlocBuilder`, `BlocSelector`, `BlocListener`, or `BlocConsumer` is STRICTLY FORBIDDEN.
+- The ONLY EXCEPTION is you MUST use `context.watch()` when listening to the `SettingsCubit` outside of settings related UI, i.e., outside of the app.dart file, or the `ProfileScreen` and its descendants you must use `context.watch()`.
+- NEVER store BloCs in variables. If you use `context.read()` or `context.watch()` you must call them EVERY TIME you want to access their state. Do NOT store BLoC state in variables.
+
 ## Core Concepts
 
 ### What is BLoC?

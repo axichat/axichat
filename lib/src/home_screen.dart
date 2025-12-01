@@ -10,6 +10,7 @@ import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/day_event_repository.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
@@ -78,7 +79,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _railCollapsed = false;
   late final VoidCallback _focusFallbackListener;
   bool Function(KeyEvent event)? _globalShortcutHandler;
-  AccessibilityActionBloc? _accessibilityBloc;
 
   @override
   void initState() {
@@ -104,7 +104,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       HardwareKeyboard.instance.removeHandler(handler);
     }
     WidgetsBinding.instance.removeObserver(this);
-    _accessibilityBloc = null;
     _shortcutFocusNode.dispose();
     super.dispose();
   }
@@ -118,25 +117,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final hardware = HardwareKeyboard.instance;
-    final hasMeta = hardware.isLogicalKeyPressed(LogicalKeyboardKey.metaLeft) ||
-        hardware.isLogicalKeyPressed(LogicalKeyboardKey.metaRight) ||
-        hardware.isLogicalKeyPressed(LogicalKeyboardKey.meta);
-    final hasControl =
-        hardware.isLogicalKeyPressed(LogicalKeyboardKey.controlLeft) ||
-            hardware.isLogicalKeyPressed(LogicalKeyboardKey.controlRight) ||
-            hardware.isLogicalKeyPressed(LogicalKeyboardKey.control);
+    if (!_isFindActionEvent(event)) return KeyEventResult.ignored;
+    context
+        .read<AccessibilityActionBloc?>()
+        ?.add(const AccessibilityMenuOpened());
+    return KeyEventResult.handled;
+  }
+
+  bool _isFindActionEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    final pressedKeys = HardwareKeyboard.instance.logicalKeysPressed;
+    final hasMeta = pressedKeys.contains(LogicalKeyboardKey.metaLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.metaRight) ||
+        pressedKeys.contains(LogicalKeyboardKey.meta);
+    final hasControl = pressedKeys.contains(LogicalKeyboardKey.controlLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.controlRight) ||
+        pressedKeys.contains(LogicalKeyboardKey.control);
     final shouldOpen =
         event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
-    if (shouldOpen) {
-      final bloc = _currentAccessibilityBloc();
-      if (bloc != null) {
-        bloc.add(const AccessibilityMenuOpened());
-        return KeyEventResult.handled;
-      }
-    }
-    return KeyEventResult.ignored;
+    final bloc = context.read<AccessibilityActionBloc?>();
+    return shouldOpen && bloc != null && bloc.isClosed == false;
   }
 
   void _restoreShortcutFocusIfEmpty() {
@@ -150,52 +150,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  AccessibilityActionBloc? _currentAccessibilityBloc() {
-    final bloc = _accessibilityBloc;
-    if (bloc != null && !bloc.isClosed) return bloc;
-    if (!mounted) return null;
-    final resolved = context.read<AccessibilityActionBloc?>();
-    if (resolved != null && !resolved.isClosed) {
-      _accessibilityBloc = resolved;
-      return resolved;
-    }
-    return null;
-  }
-
   bool _handleGlobalShortcut(KeyEvent event) {
-    if (!mounted || event is! KeyDownEvent) return false;
-    final hardware = HardwareKeyboard.instance;
-    final hasMeta = hardware.isLogicalKeyPressed(LogicalKeyboardKey.metaLeft) ||
-        hardware.isLogicalKeyPressed(LogicalKeyboardKey.metaRight) ||
-        hardware.isLogicalKeyPressed(LogicalKeyboardKey.meta);
-    final hasControl =
-        hardware.isLogicalKeyPressed(LogicalKeyboardKey.controlLeft) ||
-            hardware.isLogicalKeyPressed(LogicalKeyboardKey.controlRight) ||
-            hardware.isLogicalKeyPressed(LogicalKeyboardKey.control);
-    if (event.logicalKey == LogicalKeyboardKey.keyK &&
-        (hasMeta || hasControl)) {
-      final bloc = _currentAccessibilityBloc();
-      if (bloc != null) {
-        bloc.add(const AccessibilityMenuOpened());
-        return true;
-      }
-    }
-    return false;
+    if (!mounted || !_isFindActionEvent(event)) return false;
+    context
+        .read<AccessibilityActionBloc?>()
+        ?.add(const AccessibilityMenuOpened());
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
-    final getService = context.read<XmppService>;
     final l10n = context.l10n;
 
-    final isChat = getService() is ChatsService;
-    final isMessage = getService() is MessageService;
-    final isRoster = getService() is RosterService;
-    final isPresence = getService() is PresenceService;
-    final isOmemo = getService() is OmemoService;
-    final isBlocking = getService() is BlockingService;
+    final isChat = context.read<XmppService>() is ChatsService;
+    final isMessage = context.read<XmppService>() is MessageService;
+    final isRoster = context.read<XmppService>() is RosterService;
+    final isPresence = context.read<XmppService>() is PresenceService;
+    final isOmemo = context.read<XmppService>() is OmemoService;
+    final isBlocking = context.read<XmppService>() is BlockingService;
     final navPlacement = EnvScope.of(context).navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
+    final Storage? calendarStorage = context.read<Storage?>();
+    final bool hasCalendarBloc = calendarStorage != null;
     final chatsFilters = chatsSearchFilters(l10n);
     final spamFilters = spamSearchFilters(l10n);
     final draftsFilters = _draftsSearchFilters(l10n);
@@ -209,6 +185,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           body: ChatsList(
             key: const PageStorageKey('Chats'),
             showCalendarShortcut: navPlacement != NavPlacement.rail,
+            calendarAvailable: hasCalendarBloc,
           ),
           fab: const _TabActionGroup(includePrimaryActions: true),
           searchFilters: chatsFilters,
@@ -259,12 +236,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (entry.searchFilters.isNotEmpty)
           entry.id: entry.searchFilters.first.id,
     };
-    final hasCalendarBloc = context.read<Storage?>() != null;
     final Widget mainContent = Builder(
       builder: (context) {
-        final openJid = context.watch<ChatsCubit?>()?.state.openJid;
-        final openCalendar =
-            context.watch<ChatsCubit?>()?.state.openCalendar ?? false;
         Widget constrainSecondary(Widget child) => Align(
               alignment: Alignment.topLeft,
               child: child,
@@ -272,11 +245,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (_, __) {
-            final chatsCubit = context.read<ChatsCubit?>();
-            if (chatsCubit?.state.openCalendar ?? false) {
-              chatsCubit?.toggleCalendar();
-            } else if (openJid case final jid?) {
-              chatsCubit?.toggleChat(jid: jid);
+            if (context.read<ChatsCubit?>()?.state.openCalendar ?? false) {
+              context.read<ChatsCubit?>()?.toggleCalendar();
+            } else if (context.read<ChatsCubit?>()?.state.openJid
+                case final jid?) {
+              context.read<ChatsCubit?>()?.toggleChat(jid: jid);
             }
           },
           child: Column(
@@ -286,6 +259,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               Expanded(
                 child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
                   builder: (context, state) {
+                    final ChatsState? chatsState =
+                        context.watch<ChatsCubit?>()?.state;
+                    final String? openJid = chatsState?.openJid;
+                    final bool openCalendar =
+                        hasCalendarBloc && (chatsState?.openCalendar ?? false);
                     final navRail = navPlacement == NavPlacement.rail
                         ? _HomeNavigationRail(
                             tabs: tabs,
@@ -302,8 +280,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             calendarAvailable: hasCalendarBloc,
                             calendarActive: openCalendar,
                             onCalendarSelected: () {
-                              final chatsCubit = context.read<ChatsCubit?>();
-                              chatsCubit?.toggleCalendar();
+                              context.read<ChatsCubit?>()?.toggleCalendar();
                             },
                           )
                         : null;
@@ -342,7 +319,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         MultiBlocProvider(
                                           providers: [
                                             BlocProvider(
-                                              key: Key(openJid),
+                                              key: Key(
+                                                openJid,
+                                              ),
                                               create: (context) => ChatBloc(
                                                 jid: openJid,
                                                 messageService:
@@ -456,16 +435,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
             // Always provide CalendarBloc for logged-in users
-            if (context.read<Storage?>() != null)
-              BlocProvider(
+            if (calendarStorage != null)
+              BlocProvider<CalendarBloc>(
                 create: (context) {
                   final reminderController =
                       context.read<CalendarReminderController>();
                   final xmppService = context.read<XmppService>();
-                  final storage = context.read<Storage?>()!;
+                  final storage = calendarStorage;
+                  final DayEventRepository dayEventRepository =
+                      DayEventRepository(
+                    database: xmppService.database,
+                  );
 
                   return CalendarBloc(
                     reminderController: reminderController,
+                    dayEventRepository: dayEventRepository,
                     syncManagerBuilder: (bloc) {
                       final manager = CalendarSyncManager(
                         readModel: () => bloc.currentModel,
@@ -533,7 +517,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               isRoster ? context.read<XmppService>() as RosterService : null,
           initialLocalization: l10n,
         );
-        _accessibilityBloc = bloc;
         return bloc;
       },
       child: Builder(
@@ -567,6 +550,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   ToggleCalendarIntent: CallbackAction<ToggleCalendarIntent>(
                     onInvoke: (_) {
+                      if (!hasCalendarBloc) return null;
                       context.read<ChatsCubit?>()?.toggleCalendar();
                       return null;
                     },
@@ -653,38 +637,28 @@ class _NexusState extends State<Nexus> {
   Widget build(BuildContext context) {
     final showToast = ShadToaster.maybeOf(context)?.show;
     final l10n = context.l10n;
-    final searchState = context.watch<HomeSearchCubit?>();
-    final searchActive = searchState?.state.active ?? false;
-    final chatsCubit = context.watch<ChatsCubit?>();
-    final draftState = context.watch<DraftCubit?>()?.state;
-    final drafts = draftState?.items;
+    final HomeSearchState? searchState =
+        context.watch<HomeSearchCubit?>()?.state;
+    final ChatsState? chatsState = context.watch<ChatsCubit?>()?.state;
+    final searchActive = searchState?.active ?? false;
     List<Chat> selectedChats = const <Chat>[];
-    if (chatsCubit != null &&
-        chatsCubit.state.selectedJids.isNotEmpty &&
-        chatsCubit.state.items != null) {
-      selectedChats = chatsCubit.state.items!
+    if (chatsState?.selectedJids.isNotEmpty ?? false) {
+      selectedChats = (chatsState?.items ?? const <Chat>[])
           .where(
-            (chat) => chatsCubit.state.selectedJids.contains(chat.jid),
+            (chat) => chatsState?.selectedJids.contains(chat.jid) ?? false,
           )
           .toList();
     }
-    final selectionActive = selectedChats.isNotEmpty && chatsCubit != null;
-    final inviteCount = context.watch<RosterCubit?>()?.inviteCount ?? 0;
-    final unreadCount = chatsCubit == null || chatsCubit.state.items == null
-        ? 0
-        : chatsCubit.state.items!
-            .where((chat) => !chat.archived && !chat.spam)
-            .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
-    final spamCount = chatsCubit == null || chatsCubit.state.items == null
-        ? 0
-        : chatsCubit.state.items!
-            .where((chat) => chat.spam && !chat.archived)
-            .length;
+    final selectionActive = selectedChats.isNotEmpty;
     final badgeCounts = <HomeTab, int>{
-      HomeTab.invites: inviteCount,
-      HomeTab.chats: unreadCount,
-      HomeTab.drafts: drafts?.length ?? 0,
-      HomeTab.spam: spamCount,
+      HomeTab.invites: context.watch<RosterCubit?>()?.inviteCount ?? 0,
+      HomeTab.chats: (chatsState?.items ?? const <Chat>[])
+          .where((chat) => !chat.archived && !chat.spam)
+          .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
+      HomeTab.drafts: context.watch<DraftCubit?>()?.state.items?.length ?? 0,
+      HomeTab.spam: (chatsState?.items ?? const <Chat>[])
+          .where((chat) => chat.spam && !chat.archived)
+          .length,
     };
     final showFindActionInHeader = widget.navPlacement != NavPlacement.rail;
     final header = Column(
@@ -777,7 +751,6 @@ class _NexusState extends State<Nexus> {
     late final Widget bottomArea;
     if (selectionActive) {
       bottomArea = ChatSelectionActionBar(
-        chatsCubit: chatsCubit,
         selectedChats: selectedChats,
       );
     } else if (widget.navPlacement == NavPlacement.bottom) {
@@ -877,15 +850,18 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<AccessibilityActionBloc?>();
-    if (bloc == null) return const SizedBox.shrink();
+    if (context.read<AccessibilityActionBloc?>() == null) {
+      return const SizedBox.shrink();
+    }
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     if (collapsed) {
       return AxiIconButton(
         iconData: LucideIcons.lifeBuoy,
         tooltip: 'Accessibility actions ($shortcutText)',
-        onPressed: () => bloc.add(const AccessibilityMenuOpened()),
+        onPressed: () => context
+            .read<AccessibilityActionBloc?>()
+            ?.add(const AccessibilityMenuOpened()),
       );
     }
     final colors = context.colorScheme;
@@ -901,7 +877,9 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
         ),
         child: InkWell(
           borderRadius: radius,
-          onTap: () => bloc.add(const AccessibilityMenuOpened()),
+          onTap: () => context
+              .read<AccessibilityActionBloc?>()
+              ?.add(const AccessibilityMenuOpened()),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
@@ -923,8 +901,7 @@ class _FindActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bloc = context.read<AccessibilityActionBloc?>();
-    if (bloc == null) {
+    if (context.read<AccessibilityActionBloc?>() == null) {
       return const SizedBox.shrink();
     }
     final shortcut = findActionShortcut(Theme.of(context).platform);
@@ -932,7 +909,9 @@ class _FindActionIconButton extends StatelessWidget {
     return AxiTooltip(
       builder: (_) => Text('Accessibility actions ($shortcutText)'),
       child: ShadButton.ghost(
-        onPressed: () => bloc.add(const AccessibilityMenuOpened()),
+        onPressed: () => context
+            .read<AccessibilityActionBloc?>()
+            ?.add(const AccessibilityMenuOpened()),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1086,11 +1065,11 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   @override
   Widget build(BuildContext context) {
     final selectedIndex = _tabController?.index ?? _controllerIndex;
-    final inviteCount = context.watch<RosterCubit?>()?.inviteCount ?? 0;
     if (widget.tabs.isEmpty) {
       return const SizedBox.shrink();
     }
-    final badgeCounts = _computeBadgeCounts(inviteCount);
+    final badgeCounts =
+        _computeBadgeCounts(context.watch<RosterCubit?>()?.inviteCount ?? 0);
     final calendarDestinationIndex = _calendarDestinationIndex();
     final destinations = <AxiRailDestination>[];
     for (final tab in widget.tabs) {
@@ -1180,23 +1159,17 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   }
 
   Map<HomeTab, int> _computeBadgeCounts(int inviteCount) {
-    final chats = context.watch<ChatsCubit?>()?.state.items;
-    final draftsState = context.watch<DraftCubit?>()?.state;
-    final drafts = draftsState?.items;
-    final unreadCount = chats == null
-        ? 0
-        : chats
-            .where((chat) => !chat.archived && !chat.spam)
-            .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
-    final spamCount = chats == null
-        ? 0
-        : chats.where((chat) => chat.spam && !chat.archived).length;
-    final draftsCount = drafts?.length ?? 0;
     return <HomeTab, int>{
       HomeTab.invites: inviteCount,
-      HomeTab.chats: unreadCount,
-      HomeTab.drafts: draftsCount,
-      HomeTab.spam: spamCount,
+      HomeTab.chats:
+          (context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[])
+              .where((chat) => !chat.archived && !chat.spam)
+              .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
+      HomeTab.drafts: context.watch<DraftCubit?>()?.state.items?.length ?? 0,
+      HomeTab.spam:
+          (context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[])
+              .where((chat) => chat.spam && !chat.archived)
+              .length,
     };
   }
 }
@@ -1274,7 +1247,6 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     return BlocConsumer<HomeSearchCubit, HomeSearchState>(
       listener: (context, state) {
         final query = state.currentTabState?.query ?? '';
@@ -1312,8 +1284,8 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         return AnimatedCrossFade(
           crossFadeState:
               active ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-          duration: animationDuration,
-          reverseDuration: animationDuration,
+          duration: context.watch<SettingsCubit>().animationDuration,
+          reverseDuration: context.watch<SettingsCubit>().animationDuration,
           sizeCurve: Curves.easeInOutCubic,
           firstChild: const SizedBox.shrink(),
           secondChild: Container(

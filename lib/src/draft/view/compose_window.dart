@@ -220,10 +220,10 @@ class _ComposeWindowBody extends StatelessWidget {
       ...suggestionAddresses.map(_domainFromAddress).whereType<String>(),
     };
 
-    final chatsCubit = context.read<ChatsCubit?>();
     return MultiBlocProvider(
       providers: [
-        if (chatsCubit != null) BlocProvider.value(value: chatsCubit),
+        if (context.read<ChatsCubit?>() != null)
+          BlocProvider.value(value: context.read<ChatsCubit>()),
       ],
       child: SizedBox(
         height: availableHeight,
@@ -402,9 +402,8 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       targetWidth: targetWidth,
       targetHeight: targetHeight,
     );
-    final cubit = context.read<ComposeWindowCubit>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      cubit.initializeOffset(entry.id, clamped);
+      context.read<ComposeWindowCubit>().initializeOffset(entry.id, clamped);
     });
     return clamped;
   }

@@ -1,11 +1,16 @@
+import 'dart:io';
+
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/view/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_render_surface.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -33,8 +38,14 @@ class _GridHarness extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<CalendarBloc>.value(value: bloc),
+        BlocProvider<SettingsCubit>(
+          create: (_) => SettingsCubit(),
+        ),
       ],
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: ShadTheme(
           data: ShadThemeData(
             colorScheme: const ShadSlateColorScheme.light(),
@@ -56,7 +67,13 @@ class _GridHarness extends StatelessWidget {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(registerCalendarFallbackValues);
+  setUpAll(() async {
+    HydratedBloc.storage = await HydratedStorage.build(
+      storageDirectory:
+          Directory.systemTemp.createTempSync('calendar_grid_render_tests'),
+    );
+    registerCalendarFallbackValues();
+  });
 
   testWidgets('CalendarGrid renders time column labels', (tester) async {
     final state = CalendarTestData.weekView();

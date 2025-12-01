@@ -17,6 +17,7 @@ class CalendarBloc extends BaseCalendarBloc {
     required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
     required super.storage,
     super.reminderController,
+    super.dayEventRepository,
     VoidCallback? onDispose,
   })  : _syncManagerBuilder = syncManagerBuilder,
         _onDispose = onDispose,
@@ -181,11 +182,12 @@ class CalendarBloc extends BaseCalendarBloc {
     }
   }
 
-  void _onRemoteModelApplied(
+  Future<void> _onRemoteModelApplied(
     CalendarRemoteModelApplied event,
     Emitter<CalendarState> emit,
-  ) {
+  ) async {
     emitModel(event.model, emit, lastSyncTime: DateTime.now());
+    await syncDayEventsToRepository(event.model.dayEvents.values);
   }
 
   Future<void> _onRemoteTaskApplied(

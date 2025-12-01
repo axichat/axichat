@@ -69,7 +69,7 @@ class AccessibilityActionState extends Equatable {
     Object? activeChatJid = _unset,
     bool? discardWarningActive,
     Object? messageInitialIndex = _unset,
-    Object? attachments = _unset,
+    Map<String, FileMetadataData>? attachments,
   }) =>
       AccessibilityActionState(
         visible: visible ?? this.visible,
@@ -93,9 +93,7 @@ class AccessibilityActionState extends Equatable {
         messageInitialIndex: messageInitialIndex == _unset
             ? this.messageInitialIndex
             : messageInitialIndex as int?,
-        attachments: attachments == _unset
-            ? this.attachments
-            : attachments as Map<String, FileMetadataData>,
+        attachments: attachments ?? this.attachments,
       );
 
   @override

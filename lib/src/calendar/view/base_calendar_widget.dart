@@ -171,10 +171,15 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   }
 
   void _changeDate(int direction) {
-    final bloc = context.read<T>();
-    final currentDate = bloc.state.selectedDate;
-    final newDate = currentDate.add(Duration(days: direction));
-    bloc.add(CalendarEvent.dateSelected(date: newDate));
+    context.read<T>().add(
+          CalendarEvent.dateSelected(
+            date: context
+                .read<T>()
+                .state
+                .selectedDate
+                .add(Duration(days: direction)),
+          ),
+        );
   }
 
   String _formatDate(DateTime date, CalendarView view) {

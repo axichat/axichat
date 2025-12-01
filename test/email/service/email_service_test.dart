@@ -208,8 +208,8 @@ void main() {
     );
 
     listener(
-      const DeltaCoreEvent(
-        type: DeltaEventType.incomingMsg,
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsg.code,
         data1: chatId,
         data2: msgId,
       ),
@@ -227,8 +227,8 @@ void main() {
     );
 
     listener(
-      const DeltaCoreEvent(
-        type: DeltaEventType.incomingMsgBunch,
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsgBunch.code,
         data1: 0,
         data2: 0,
       ),
@@ -283,8 +283,8 @@ void main() {
       );
 
       listener(
-        const DeltaCoreEvent(
-          type: DeltaEventType.incomingMsg,
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
           data1: chatId,
           data2: msgId,
         ),
@@ -329,10 +329,10 @@ void main() {
 
     await service.start();
 
-    await service.setClientState(false);
+    await service.setClientState(active: false);
     verify(() => transport.stop()).called(1);
 
-    await service.setClientState(true);
+    await service.setClientState(active: true);
     verify(() => transport.start()).called(2);
 
     addTearDown(service.shutdown);
