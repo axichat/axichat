@@ -6,6 +6,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
@@ -624,7 +625,6 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
     return BlocConsumer<T, CalendarState>(
       listener: (context, state) {
         if (state.error != null && isSubmitting) {
-          ErrorSnackBar.show(context, state.error!);
           onSubmissionReset();
         } else if (!state.isLoading && isSubmitting) {
           Navigator.of(context).maybePop();
@@ -637,6 +637,10 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
         }
         final bool canAddToCriticalPath =
             resolvedTask != null && !(state.isLoading || isSubmitting);
+        final CalendarTask? activeTask = resolvedTask;
+        final membershipPaths = resolvedTask != null
+            ? state.criticalPathsForTask(resolvedTask)
+            : const <CalendarCriticalPath>[];
         return Container(
           padding: calendarPaddingXl,
           decoration: BoxDecoration(
@@ -685,6 +689,19 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
                     isBusy: state.isLoading || isSubmitting,
                   ),
                 ],
+              ),
+              const SizedBox(height: calendarInsetSm),
+              CriticalPathMembershipList(
+                paths: membershipPaths,
+                onRemovePath: activeTask == null
+                    ? null
+                    : (pathId) => context.read<T>().add(
+                          CalendarEvent.criticalPathTaskRemoved(
+                            pathId: pathId,
+                            taskId: activeTask.id,
+                          ),
+                        ),
+                emptyLabel: 'Not in any critical paths',
               ),
             ],
           ),

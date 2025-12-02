@@ -12,13 +12,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get appTitle => 'axichat';
 
   @override
-  String get homeTabChats => 'Chats';
+  String get homeTabChats => 'Conversaciones';
 
   @override
   String get homeTabDrafts => 'Borradores';
 
   @override
-  String get homeTabSpam => 'Spam';
+  String get homeTabSpam => 'Correo no deseado';
 
   @override
   String get homeTabBlocked => 'Bloqueados';
@@ -1141,6 +1141,34 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get calendarTaskNotFound => 'Tarea no encontrada';
+
+  @override
+  String get calendarDayEventsTitle => 'Eventos del día';
+
+  @override
+  String get calendarDayEventsEmpty => 'Sin eventos diarios para esta fecha';
+
+  @override
+  String get calendarDayEventsAdd => 'Agregar evento del día';
+
+  @override
+  String get accessibilityNewContactLabel => 'Dirección de contacto';
+
+  @override
+  String get accessibilityNewContactHint => 'alguien@ejemplo.com';
+
+  @override
+  String get accessibilityStartChat => 'Iniciar chat';
+
+  @override
+  String get accessibilityStartChatHint =>
+      'Envía esta dirección para iniciar una conversación.';
+
+  @override
+  String get accessibilityMessagesEmpty => 'Aún no hay mensajes';
+
+  @override
+  String get accessibilityMessageNoContent => 'Sin contenido de mensaje';
 
   @override
   String get profileTitle => 'Perfil';

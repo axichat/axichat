@@ -156,13 +156,20 @@ class _AxiAvatarState extends State<AxiAvatar> {
       );
     }
     final sizedChild = SizedBox.square(dimension: widget.size, child: child);
-    return widget.presence == null
-        ? sizedChild
-        : AxiTooltip(
-            builder: (_) => Text(widget.status == null
-                ? '(${widget.presence!.tooltip})'
-                : '${widget.status} (${widget.presence!.tooltip})'),
-            child: sizedChild,
-          );
+    final statusText = widget.status?.trim();
+    final presenceLabel = widget.presence?.tooltip;
+    final tooltipText = () {
+      if (statusText != null && statusText.isNotEmpty) {
+        return presenceLabel == null
+            ? statusText
+            : '$statusText ($presenceLabel)';
+      }
+      return presenceLabel;
+    }();
+    if (tooltipText == null) return sizedChild;
+    return AxiTooltip(
+      builder: (_) => Text(tooltipText),
+      child: sizedChild,
+    );
   }
 }

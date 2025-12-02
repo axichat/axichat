@@ -115,7 +115,15 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Centers the 28px indicator within the 40px cutout.
 const _messageAvatarSize = 36.0;
-const _messageRowAvatarReservation = 44.0;
+const _messageRowAvatarReservation = 32.0;
+const _messageAvatarCutoutDepth = _messageAvatarSize / 2;
+const _messageAvatarCutoutRadius = _messageAvatarSize;
+const _messageAvatarCutoutPadding = EdgeInsets.zero;
+const _messageAvatarCutoutMinThickness = _messageAvatarSize;
+const _messageAvatarCutoutAlignment = -1.0;
+const _messageAvatarCornerClearance = 0.0;
+const _messageAvatarOuterInset = 0.0;
+const _messageAvatarContentInset = _messageAvatarCutoutDepth + 6.0;
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
 const _selectionBubbleOutboundSpacingBoost = 6.0;
@@ -162,6 +170,7 @@ const _reactionQuickChoices = [
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _loadingStateMessageId = '__loading_state__';
+const _chatScrollStoragePrefix = 'chat-scroll-offset-';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
 const _guestDesktopHorizontalPadding = _chatHorizontalPadding + 6.0;
@@ -170,6 +179,10 @@ const _subjectFieldHeight = 24.0;
 const _subjectDividerPadding = 2.0;
 const _subjectDividerThickness = 1.0;
 const _messageListHorizontalPadding = 12.0;
+const _typingIndicatorBottomInset = 8.0;
+const _typingIndicatorRadius = 999.0;
+const _typingIndicatorPadding =
+    EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 
 class _MessageFilterOption {
   const _MessageFilterOption(this.filter, this.label);
@@ -623,6 +636,8 @@ class _ChatState extends State<Chat> {
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   var _chatOpenedAt = DateTime.now();
+  static final Map<String, double> _scrollOffsetCache = {};
+  String? _lastScrollStorageKey;
 
   var _chatRoute = _ChatRoute.main;
   var _settingsPanelExpanded = false;
@@ -719,6 +734,61 @@ class _ChatState extends State<Chat> {
     final pressed = HardwareKeyboard.instance.logicalKeysPressed;
     return pressed.contains(LogicalKeyboardKey.shiftLeft) ||
         pressed.contains(LogicalKeyboardKey.shiftRight);
+  }
+
+  String get _scrollStorageKey {
+    final jid = context.read<ChatBloc>().jid;
+    final suffix = jid == null || jid.isEmpty ? 'unknown' : jid;
+    return '$_chatScrollStoragePrefix$suffix';
+  }
+
+  double _restoreScrollOffset({String? key}) {
+    final storageKey = key ?? _scrollStorageKey;
+    final cached = _scrollOffsetCache[storageKey];
+    if (cached != null) return cached;
+    final bucket = PageStorage.maybeOf(context);
+    if (bucket == null) return 0;
+    final restored = bucket.readState(
+      context,
+      identifier: storageKey,
+    );
+    if (restored is double) return restored;
+    if (restored is num) return restored.toDouble();
+    return 0;
+  }
+
+  void _persistScrollOffset({String? key}) {
+    if (!mounted) return;
+    final bucket = PageStorage.maybeOf(context);
+    final offset = _scrollController.hasClients
+        ? _scrollController.offset
+        : _scrollController.initialScrollOffset;
+    final storageKey = key ?? _lastScrollStorageKey ?? _scrollStorageKey;
+    if (storageKey.isEmpty) return;
+    _scrollOffsetCache[storageKey] = offset;
+    if (bucket != null) {
+      bucket.writeState(
+        context,
+        offset,
+        identifier: storageKey,
+      );
+    }
+  }
+
+  void _handleScrollChanged() => _persistScrollOffset();
+
+  void _restoreScrollOffsetForCurrentChat() {
+    final target = _restoreScrollOffset();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      if (!position.hasPixels) return;
+      final maxExtent = position.maxScrollExtent;
+      final clamped = target.clamp(0.0, math.max(0.0, maxExtent)).toDouble();
+      if (position.pixels != clamped) {
+        _scrollController.jumpTo(clamped);
+      }
+    });
   }
 
   String? _nickFromSender(String senderJid) {
@@ -2038,6 +2108,7 @@ class _ChatState extends State<Chat> {
     _subjectFocusNode = FocusNode();
     _attachmentButtonFocusNode = FocusNode();
     _scrollController = ScrollController();
+    _scrollController.addListener(_handleScrollChanged);
     _subjectFocusNode.onKeyEvent = _handleSubjectKeyEvent;
     _focusNode.onKeyEvent = _handleComposerKeyEvent;
     _textController.addListener(_typingListener);
@@ -2048,7 +2119,24 @@ class _ChatState extends State<Chat> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final currentKey = _scrollStorageKey;
+    if (_lastScrollStorageKey == null) {
+      _lastScrollStorageKey = currentKey;
+      _restoreScrollOffsetForCurrentChat();
+      return;
+    }
+    if (_lastScrollStorageKey != currentKey) {
+      _persistScrollOffset(key: _lastScrollStorageKey);
+      _lastScrollStorageKey = currentKey;
+      _restoreScrollOffsetForCurrentChat();
+    }
+  }
+
+  @override
   void dispose() {
+    _persistScrollOffset(key: _lastScrollStorageKey);
     _scrollController.dispose();
     _focusNode.dispose();
     _textController.removeListener(_typingListener);
@@ -2307,6 +2395,8 @@ class _ChatState extends State<Chat> {
                                     chatEntity != null &&
                                     chatEntity.type == ChatType.chat;
                                 final statusLabel = item?.status?.trim() ?? '';
+                                final presence = item?.presence;
+                                final subscription = item?.subscription;
                                 const double minTitleWidth = 220;
                                 const double maxTitleWidth = 420;
                                 final double titleMaxWidth = MediaQuery.sizeOf(
@@ -2322,6 +2412,9 @@ class _ChatState extends State<Chat> {
                                       chat: chatEntity!,
                                       size: 40,
                                       badgeOffset: const Offset(-6, -4),
+                                      presence: presence,
+                                      status: statusLabel,
+                                      subscription: subscription,
                                     ),
                                     const SizedBox(width: 8),
                                     Flexible(
@@ -3202,6 +3295,15 @@ class _ChatState extends State<Chat> {
                                                             recipientOverlay;
                                                         CutoutStyle?
                                                             recipientStyle;
+                                                        var recipientAnchor =
+                                                            ChatBubbleCutoutAnchor
+                                                                .bottom;
+                                                        Widget? avatarOverlay;
+                                                        CutoutStyle?
+                                                            avatarStyle;
+                                                        var avatarAnchor =
+                                                            ChatBubbleCutoutAnchor
+                                                                .left;
                                                         if (hasInviteBadge &&
                                                             !showCompactReactions) {
                                                           recipientOverlay =
@@ -3541,6 +3643,13 @@ class _ChatState extends State<Chat> {
                                                             _recipientBubbleInset,
                                                           );
                                                         }
+                                                        final isRenderableBubble =
+                                                            !(isSelectionSpacer ||
+                                                                isEmptyState);
+                                                        final hasAvatarSlot =
+                                                            isGroupChat &&
+                                                                isRenderableBubble &&
+                                                                !self;
                                                         EdgeInsetsGeometry
                                                             bubblePadding =
                                                             _bubblePadding;
@@ -3573,6 +3682,16 @@ class _ChatState extends State<Chat> {
                                                                 .symmetric(
                                                               vertical:
                                                                   _selectionBubbleVerticalInset,
+                                                            ),
+                                                          );
+                                                        }
+                                                        if (hasAvatarSlot) {
+                                                          bubblePadding =
+                                                              bubblePadding.add(
+                                                            const EdgeInsets
+                                                                .only(
+                                                              left:
+                                                                  _messageAvatarContentInset,
                                                             ),
                                                           );
                                                         }
@@ -3624,9 +3743,6 @@ class _ChatState extends State<Chat> {
                                                             next?.customProperties?[
                                                                     'selectionSpacer'] ==
                                                                 true;
-                                                        final isRenderableBubble =
-                                                            !(isSelectionSpacer ||
-                                                                isEmptyState);
                                                         final isLatestBubble =
                                                             isRenderableBubble &&
                                                                 (next == null ||
@@ -3655,6 +3771,36 @@ class _ChatState extends State<Chat> {
                                                             0;
                                                         double extraOuterRight =
                                                             0;
+                                                        if (hasAvatarSlot) {
+                                                          avatarOverlay =
+                                                              _MessageAvatar(
+                                                            jid: messageModel
+                                                                .senderJid,
+                                                            size:
+                                                                _messageAvatarSize,
+                                                          );
+                                                          avatarStyle =
+                                                              const CutoutStyle(
+                                                            depth:
+                                                                _messageAvatarCutoutDepth,
+                                                            cornerRadius:
+                                                                _messageAvatarCutoutRadius,
+                                                            padding:
+                                                                _messageAvatarCutoutPadding,
+                                                            offset: Offset.zero,
+                                                            minThickness:
+                                                                _messageAvatarCutoutMinThickness,
+                                                            cornerClearance:
+                                                                _messageAvatarCornerClearance,
+                                                            alignment:
+                                                                _messageAvatarCutoutAlignment,
+                                                          );
+                                                          avatarAnchor =
+                                                              ChatBubbleCutoutAnchor
+                                                                  .left;
+                                                          extraOuterLeft =
+                                                              _messageAvatarOuterInset;
+                                                        }
                                                         final outerPadding =
                                                             EdgeInsets.only(
                                                           top: 2,
@@ -3741,6 +3887,14 @@ class _ChatState extends State<Chat> {
                                                                   recipientOverlay,
                                                               recipientStyle:
                                                                   recipientStyle,
+                                                              recipientAnchor:
+                                                                  recipientAnchor,
+                                                              avatarOverlay:
+                                                                  avatarOverlay,
+                                                              avatarStyle:
+                                                                  avatarStyle,
+                                                              avatarAnchor:
+                                                                  avatarAnchor,
                                                               selectionOverlay:
                                                                   selectionOverlay,
                                                               selectionStyle:
@@ -4216,9 +4370,13 @@ class _ChatState extends State<Chat> {
                                                             children: [
                                                               Padding(
                                                                 padding:
-                                                                    const EdgeInsets
+                                                                    EdgeInsets
                                                                         .only(
                                                                   bottom: 6,
+                                                                  left: (!self &&
+                                                                          hasAvatarSlot)
+                                                                      ? _messageAvatarContentInset
+                                                                      : 0,
                                                                 ),
                                                                 child: Text(
                                                                   displayName,
@@ -4243,73 +4401,16 @@ class _ChatState extends State<Chat> {
                                                             ],
                                                           );
                                                         }
-                                                        final hasAvatarSlot =
-                                                            isGroupChat &&
-                                                                isRenderableBubble &&
-                                                                !self;
-                                                        if (hasAvatarSlot) {
-                                                          bubbleWithSlack =
-                                                              ConstrainedBox(
-                                                            constraints:
-                                                                BoxConstraints(
-                                                              maxWidth:
-                                                                  messageRowConstraintWidth,
-                                                            ),
-                                                            child: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .min,
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .end,
-                                                              children: [
-                                                                if (!self)
-                                                                  SizedBox(
-                                                                    width:
-                                                                        _messageRowAvatarReservation,
-                                                                    child:
-                                                                        Align(
-                                                                      alignment:
-                                                                          Alignment
-                                                                              .bottomLeft,
-                                                                      child:
-                                                                          _MessageAvatar(
-                                                                        jid: messageModel
-                                                                            .senderJid,
-                                                                        size:
-                                                                            _messageAvatarSize,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                Flexible(
-                                                                  fit: FlexFit
-                                                                      .loose,
-                                                                  child:
-                                                                      ConstrainedBox(
-                                                                    constraints:
-                                                                        BoxConstraints(
-                                                                      maxWidth:
-                                                                          bubbleMaxWidth,
-                                                                    ),
-                                                                    child:
-                                                                        bubbleWithSlack,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          );
-                                                        } else {
-                                                          bubbleWithSlack =
-                                                              ConstrainedBox(
-                                                            constraints:
-                                                                BoxConstraints(
-                                                              maxWidth:
-                                                                  bubbleMaxWidth,
-                                                            ),
-                                                            child:
-                                                                bubbleWithSlack,
-                                                          );
-                                                        }
+                                                        bubbleWithSlack =
+                                                            ConstrainedBox(
+                                                          constraints:
+                                                              BoxConstraints(
+                                                            maxWidth:
+                                                                bubbleMaxWidth,
+                                                          ),
+                                                          child:
+                                                              bubbleWithSlack,
+                                                        );
                                                         final messageRowAlignment =
                                                             isSingleSelection
                                                                 ? Alignment
@@ -4381,40 +4482,44 @@ class _ChatState extends State<Chat> {
                                                     readOnly: true,
                                                   ),
                                                 ),
+                                                if (typingVisible)
+                                                  Positioned(
+                                                    left:
+                                                        _messageListHorizontalPadding,
+                                                    right:
+                                                        _messageListHorizontalPadding,
+                                                    bottom:
+                                                        _typingIndicatorBottomInset,
+                                                    child: IgnorePointer(
+                                                      child: DecoratedBox(
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: context
+                                                              .colorScheme.card,
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                            _typingIndicatorRadius,
+                                                          ),
+                                                          border: Border.all(
+                                                            color: context
+                                                                .colorScheme
+                                                                .border,
+                                                          ),
+                                                        ),
+                                                        child: const Padding(
+                                                          padding:
+                                                              _typingIndicatorPadding,
+                                                          child:
+                                                              TypingIndicator(),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
                                               ],
                                             ),
                                           ),
                                         ),
-                                        if (typingVisible)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              left:
-                                                  _messageListHorizontalPadding,
-                                              bottom: 8,
-                                            ),
-                                            child: IgnorePointer(
-                                              child: DecoratedBox(
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      context.colorScheme.card,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          999),
-                                                  border: Border.all(
-                                                    color: context
-                                                        .colorScheme.border,
-                                                  ),
-                                                ),
-                                                child: const Padding(
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                                  child: TypingIndicator(),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
                                         quoteSection,
                                         if (_multiSelectActive &&
                                             selectedMessages.isNotEmpty)
@@ -4678,17 +4783,21 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatCalendarNoText);
       return;
     }
-
     if (context.read<CalendarBloc?>() == null) {
       _showSnackbar(l10n.chatCalendarUnavailable);
       return;
     }
+    final calendarText = await _pickCalendarSeed(seededText);
+    if (!mounted || calendarText == null) {
+      return;
+    }
+
     final locationHelper = LocationAutocompleteHelper.fromState(
         context.read<CalendarBloc>().state);
 
     await showQuickAddModal(
       context: context,
-      prefilledText: seededText,
+      prefilledText: calendarText,
       locationHelper: locationHelper,
       locate: context.read,
       onTaskAdded: (task) {
@@ -4708,6 +4817,22 @@ class _ChatState extends State<Chat> {
             );
       },
     );
+  }
+
+  Future<String?> _pickCalendarSeed(String seededText) async {
+    final trimmed = seededText.trim();
+    if (trimmed.isEmpty) return null;
+    final selection = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => _CalendarTextSelectionDialog(
+        initialText: trimmed,
+      ),
+    );
+    if (!mounted) return null;
+    if (selection == null) return null;
+    final normalized = selection.trim();
+    return normalized.isEmpty ? null : normalized;
   }
 
   String _displayTextForMessage(Message message) {
@@ -4795,11 +4920,15 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatCalendarUnavailable);
       return;
     }
+    final calendarText = await _pickCalendarSeed(joined);
+    if (!mounted || calendarText == null) {
+      return;
+    }
     final locationHelper = LocationAutocompleteHelper.fromState(
         context.read<CalendarBloc>().state);
     await showQuickAddModal(
       context: context,
-      prefilledText: joined,
+      prefilledText: calendarText,
       locationHelper: locationHelper,
       locate: context.read,
       onTaskAdded: (task) {
@@ -6476,6 +6605,165 @@ class _MultiSelectReactionPanel extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _CalendarTextSelectionDialog extends StatefulWidget {
+  const _CalendarTextSelectionDialog({
+    required this.initialText,
+  });
+
+  final String initialText;
+
+  @override
+  State<_CalendarTextSelectionDialog> createState() =>
+      _CalendarTextSelectionDialogState();
+}
+
+class _CalendarTextSelectionDialogState
+    extends State<_CalendarTextSelectionDialog> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  String _selection = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final seeded = widget.initialText.trim();
+    _controller = TextEditingController(text: seeded);
+    _focusNode = FocusNode();
+    _selection = seeded;
+    _controller.addListener(_handleControllerChanged);
+    _controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: seeded.length,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focusNode.requestFocus();
+      _handleControllerChanged();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_handleControllerChanged);
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleControllerChanged() {
+    final text = _controller.text;
+    final selection = _controller.selection;
+    final fallback = text.trim();
+    var next = fallback;
+    if (selection.isValid && !selection.isCollapsed) {
+      final start = math.min(selection.baseOffset, selection.extentOffset);
+      final end = math.max(selection.baseOffset, selection.extentOffset);
+      if (start >= 0 && end <= text.length) {
+        next = text.substring(start, end).trim();
+      }
+    }
+    if (_selection == next) return;
+    setState(() {
+      _selection = next;
+    });
+  }
+
+  String get _effectiveText {
+    final trimmedSelection = _selection.trim();
+    if (trimmedSelection.isNotEmpty) return trimmedSelection;
+    return _controller.text.trim();
+  }
+
+  bool get _canSubmit => _effectiveText.isNotEmpty;
+
+  void _submit() {
+    final text = _effectiveText;
+    if (text.isEmpty) return;
+    Navigator.of(context).pop(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: LayoutBuilder(
+        builder: (_, constraints) {
+          final maxWidth = math.min(constraints.maxWidth, 720.0);
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: AxiModalSurface(
+                padding: const EdgeInsets.all(20),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Choose text to add',
+                              style: textTheme.h4,
+                            ),
+                          ),
+                          AxiIconButton(
+                            iconData: LucideIcons.x,
+                            tooltip: l10n.commonClose,
+                            onPressed: () => Navigator.of(context).maybePop(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Select a portion of the message to send to the calendar or edit it first.',
+                        style: textTheme.muted.copyWith(
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ShadInput(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        minLines: 4,
+                        maxLines: 8,
+                        keyboardType: TextInputType.multiline,
+                        autofocus: true,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          ShadButton.ghost(
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            child: Text(l10n.commonCancel),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ShadButton(
+                              onPressed: _canSubmit ? _submit : null,
+                              child: Text(l10n.chatActionAddToCalendar),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

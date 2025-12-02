@@ -6,6 +6,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +31,7 @@ class ChatMessageDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ChatBloc, ChatState>(
       builder: (context, state) {
+        final l10n = context.l10n;
         final message = state.focused;
         if (message == null) return const SizedBox.shrink();
         return BlocSelector<ProfileCubit, ProfileState, String?>(
@@ -181,7 +183,7 @@ class ChatMessageDetails extends StatelessWidget {
                               spacing: 6.0,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text('Sent'),
+                                Text(l10n.chatMessageStatusSent),
                                 Icon(
                                   message.acked.toIcon,
                                   color: message.acked.toColor,
@@ -195,7 +197,7 @@ class ChatMessageDetails extends StatelessWidget {
                               spacing: 6.0,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text('Received'),
+                                Text(l10n.chatMessageStatusReceived),
                                 Icon(
                                   message.received.toIcon,
                                   color: message.received.toColor,
@@ -209,7 +211,7 @@ class ChatMessageDetails extends StatelessWidget {
                               spacing: 6.0,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text('Displayed'),
+                                Text(l10n.chatMessageStatusDisplayed),
                                 Icon(
                                   message.displayed.toIcon,
                                   color: message.displayed.toColor,
@@ -224,7 +226,7 @@ class ChatMessageDetails extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         _MessageDetailsInfo(
-                          label: 'Timestamp',
+                          label: l10n.chatMessageInfoTimestamp,
                           value: timestampLabel,
                         ),
                         Wrap(
@@ -233,13 +235,13 @@ class ChatMessageDetails extends StatelessWidget {
                           alignment: WrapAlignment.center,
                           children: [
                             _MessageDetailsInfo(
-                              label: 'Protocol',
+                              label: l10n.chatMessageInfoProtocol,
                               value: protocolLabel,
                               leading: protocolIcon,
                             ),
                             if (message.deviceID != null)
                               _MessageDetailsInfo(
-                                label: 'Device',
+                                label: l10n.chatMessageInfoDevice,
                                 value: '#${message.deviceID}',
                               ),
                           ],
@@ -253,7 +255,7 @@ class ChatMessageDetails extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Error',
+                            l10n.chatMessageInfoError,
                             style: context.textTheme.muted,
                           ),
                           Text(
@@ -298,6 +300,7 @@ class ChatMessageDetails extends StatelessWidget {
     required EmailService? emailService,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     await showShadDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -306,7 +309,7 @@ class ChatMessageDetails extends StatelessWidget {
           actions: [
             ShadButton.outline(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
+              child: Text(l10n.commonClose),
             ).withTapBounce(),
           ],
           child: Column(
@@ -316,6 +319,8 @@ class ChatMessageDetails extends StatelessWidget {
               ShadButton.secondary(
                 size: ShadButtonSize.sm,
                 onPressed: () {
+                  final recipientName =
+                      recipient.contactDisplayName ?? recipient.title;
                   context.read<ChatBloc>().add(
                         ChatComposerRecipientAdded(
                             FanOutTarget.chat(recipient)),
@@ -324,12 +329,12 @@ class ChatMessageDetails extends StatelessWidget {
                   messenger.showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Added ${recipient.contactDisplayName ?? recipient.title} to recipients',
+                        l10n.chatMessageAddRecipientSuccess(recipientName),
                       ),
                     ),
                   );
                 },
-                child: const Text('Add to recipients'),
+                child: Text(l10n.chatMessageAddRecipients),
               ).withTapBounce(),
               ShadButton.secondary(
                 size: ShadButtonSize.sm,
@@ -337,12 +342,14 @@ class ChatMessageDetails extends StatelessWidget {
                   Navigator.of(dialogContext).pop();
                   context.read<ChatsCubit?>()?.toggleChat(jid: recipient.jid);
                 },
-                child: const Text('Open chat'),
+                child: Text(l10n.chatMessageOpenChat),
               ).withTapBounce(),
               if (emailService != null && recipient.deltaChatId == null)
                 ShadButton.secondary(
                   size: ShadButtonSize.sm,
                   onPressed: () async {
+                    final recipientName =
+                        recipient.contactDisplayName ?? recipient.title;
                     try {
                       final ensured =
                           await emailService.ensureChatForEmailChat(recipient);
@@ -354,13 +361,13 @@ class ChatMessageDetails extends StatelessWidget {
                       messenger.showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Unable to create chat for ${recipient.contactDisplayName ?? recipient.title}',
+                            l10n.chatMessageCreateChatFailure(recipientName),
                           ),
                         ),
                       );
                     }
                   },
-                  child: const Text('Create chat'),
+                  child: Text(l10n.chatMessageCreateChat),
                 ).withTapBounce(),
             ],
           ),

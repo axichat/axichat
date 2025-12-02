@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 
@@ -143,6 +144,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     minutesPerSlot: 60,
     slotsPerHour: 1,
   );
+  String? _inlineErrorMessage;
+  Timer? _inlineErrorTimer;
 
   int _zoomIndex = _defaultZoomIndex;
   double _resolvedHourHeight = 78;
@@ -703,6 +706,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _gridContextMenuController.dispose();
     _taskInteractionController.dispose();
     _taskPopoverController.dispose();
+    _inlineErrorTimer?.cancel();
     super.dispose();
   }
 
@@ -992,8 +996,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _showSplitError(String message) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.showSnackBar(SnackBar(content: Text(message)));
+    _inlineErrorTimer?.cancel();
+    setState(() {
+      _inlineErrorMessage = message;
+    });
+    _inlineErrorTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() {
+        _inlineErrorMessage = null;
+      });
+    });
   }
 
   void _handleTaskDragUpdate(DragUpdateDetails details) {
@@ -3020,13 +3032,64 @@ class _CalendarWeekView extends StatelessWidget {
                               : null,
                         ),
                       ),
+                      AnimatedSwitcher(
+                        duration: baseAnimationDuration,
+                        child: gridState._inlineErrorMessage == null
+                            ? const SizedBox.shrink()
+                            : Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontalPadding,
+                                  calendarGutterSm,
+                                  horizontalPadding,
+                                  0,
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: calendarGutterMd,
+                                    vertical: calendarInsetLg,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: calendarDangerColor.withValues(
+                                        alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(
+                                      calendarBorderRadius,
+                                    ),
+                                    border: Border.all(
+                                      color: calendarDangerColor.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline,
+                                        size: 16,
+                                        color: calendarDangerColor,
+                                      ),
+                                      const SizedBox(width: calendarInsetLg),
+                                      Expanded(
+                                        child: Text(
+                                          gridState._inlineErrorMessage!,
+                                          style:
+                                              context.textTheme.small.copyWith(
+                                            color: calendarDangerColor,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                      ),
                       if (!isWeekView)
                         Padding(
                           padding: EdgeInsets.fromLTRB(
                             horizontalPadding,
-                            calendarGutterSm,
+                            calendarInsetMd,
                             horizontalPadding,
-                            calendarGutterSm,
+                            calendarInsetMd,
                           ),
                           child: DayEventsStrip(
                             events: selectedDayEvents,
@@ -3156,16 +3219,16 @@ class DayEventsStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final ShadColorScheme colors = context.colorScheme;
+    final ShadTextTheme textTheme = context.textTheme;
     final bool hasEvents = events.isNotEmpty;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(calendarGutterMd),
-      decoration: BoxDecoration(
-        color: calendarSelectedDayColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.outlineVariant),
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterMd,
+        vertical: calendarInsetSm,
       ),
+      color: colors.card,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3173,36 +3236,44 @@ class DayEventsStrip extends StatelessWidget {
             children: [
               Text(
                 'Day events',
-                style: TextStyle(
-                  color: colors.onSurface,
+                style: textTheme.small.copyWith(
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                  color: colors.foreground,
                 ),
               ),
               const Spacer(),
-              TextButton.icon(
+              AxiIconButton(
+                iconData: Icons.add,
+                iconSize: 16,
+                buttonSize: 28,
+                tapTargetSize: 36,
+                borderColor: Colors.transparent,
+                borderWidth: 0,
+                backgroundColor: colors.primary.withValues(alpha: 0.08),
+                color: colors.primary,
+                tooltip: 'Add day event',
                 onPressed: onAdd,
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add'),
-              ),
+              ).withTapBounce(),
             ],
           ),
-          const SizedBox(height: calendarGutterSm),
+          const SizedBox(height: calendarInsetSm),
           if (!hasEvents)
             Text(
               'No day-level events for this date',
-              style: TextStyle(
-                color: colors.secondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+              style: textTheme.small.copyWith(
+                color: colors.mutedForeground,
+                fontSize: 11,
+              ),
+            )
+          else ...[
+            ...events.map(
+              (DayEvent event) => _DayEventBulletRow(
+                event: event,
+                onTap: () => onEdit(event),
               ),
             ),
-          ...events.map(
-            (DayEvent event) => _DayEventBulletRow(
-              event: event,
-              onTap: () => onEdit(event),
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -3220,63 +3291,43 @@ class _DayEventBulletRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final bool isRange = !event.normalizedEnd.isAtSameMomentAs(
-      event.normalizedStart,
-    );
-    final String rangeLabel = isRange
-        ? '${TimeFormatter.formatFriendlyDate(event.normalizedStart)} → ${TimeFormatter.formatFriendlyDate(event.normalizedEnd)}'
-        : 'All day';
+    final ShadColorScheme colors = context.colorScheme;
+    final ShadTextTheme textTheme = context.textTheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: calendarInsetSm),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(top: 6),
-              decoration: BoxDecoration(
-                color: colors.primary,
-                shape: BoxShape.circle,
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: colors.primary,
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: calendarGutterSm),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     event.title,
-                    style: TextStyle(
-                      color: colors.onSurface,
+                    style: textTheme.small.copyWith(
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                      color: colors.foreground,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    rangeLabel,
-                    style: TextStyle(
-                      color: colors.secondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
                 ],
-              ),
-            ),
-            IconButton(
-              onPressed: onTap,
-              icon: Icon(
-                Icons.edit_outlined,
-                color: colors.secondary,
-                size: 16,
               ),
             ),
           ],
@@ -3583,15 +3634,17 @@ class _CalendarDayHeaderRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CustomPaint(
-            painter: _TimeHeaderPainter(
-              borderColor: calendarBorderDarkColor,
-              strokeWidth: calendarBorderStroke,
-              devicePixelRatio: devicePixelRatio,
-            ),
-            child: Container(
-              width: gridState._timeColumnWidth,
-              color: calendarSidebarBackgroundColor,
+          Container(
+            width: gridState._timeColumnWidth,
+            height: double.infinity,
+            decoration: const BoxDecoration(
+              color: calendarBackgroundColor,
+              border: Border(
+                right: BorderSide(
+                  color: calendarBorderDarkColor,
+                  width: calendarBorderStroke,
+                ),
+              ),
             ),
           ),
           if (useScrollableWeekHeader)
@@ -3912,54 +3965,6 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
         ),
       ),
     );
-  }
-}
-
-class _TimeHeaderPainter extends CustomPainter {
-  const _TimeHeaderPainter({
-    required this.borderColor,
-    required this.strokeWidth,
-    required this.devicePixelRatio,
-  });
-
-  final Color borderColor;
-  final double strokeWidth;
-  final double devicePixelRatio;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.fill;
-
-    final double halfStroke = strokeWidth / 2;
-    final double snappedRight =
-        ((size.width - halfStroke) * devicePixelRatio).roundToDouble() /
-            devicePixelRatio;
-    final Rect verticalRect = Rect.fromLTWH(
-      snappedRight,
-      0,
-      strokeWidth,
-      size.height,
-    );
-    canvas.drawRect(verticalRect, paint);
-
-    final double snappedTop =
-        (0.0 * devicePixelRatio).roundToDouble() / devicePixelRatio;
-    final Rect horizontalRect = Rect.fromLTWH(
-      0,
-      snappedTop,
-      size.width,
-      strokeWidth,
-    );
-    canvas.drawRect(horizontalRect, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TimeHeaderPainter oldDelegate) {
-    return oldDelegate.borderColor != borderColor ||
-        oldDelegate.strokeWidth != strokeWidth ||
-        oldDelegate.devicePixelRatio != devicePixelRatio;
   }
 }
 

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
-import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class CalendarMonthView extends StatelessWidget {
   const CalendarMonthView({
@@ -26,18 +28,19 @@ class CalendarMonthView extends StatelessWidget {
     final _MonthGrid grid = _MonthGrid.forMonth(monthAnchor);
     final Map<DateTime, List<DayEvent>> eventsByDate =
         _eventsForGrid(grid, visibleEvents);
-    final ColorScheme colors = Theme.of(context).colorScheme;
+    final ShadColorScheme colors = context.colorScheme;
+    final BorderSide border =
+        BorderSide(color: colors.border.withValues(alpha: 0.35));
 
     return Container(
       decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.outlineVariant),
+        color: colors.card,
+        border: Border.all(color: border.color),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _WeekdayHeaderRow(colors: colors),
-          const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -133,7 +136,7 @@ class _MonthGrid {
 class _WeekdayHeaderRow extends StatelessWidget {
   const _WeekdayHeaderRow({required this.colors});
 
-  final ColorScheme colors;
+  final ShadColorScheme colors;
 
   static const List<String> labels = <String>[
     'MON',
@@ -147,25 +150,39 @@ class _WeekdayHeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    final TextStyle labelStyle = context.textTheme.small.copyWith(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.4,
+      color: colors.mutedForeground,
+    );
+    final Color divider = colors.border.withValues(alpha: 0.35);
+    return SizedBox(
+      height: 40,
       child: Row(
-        children: labels
-            .map(
-              (String label) => Expanded(
-                child: Center(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: colors.secondary,
-                    ),
+        children: labels.asMap().entries.map((entry) {
+          final bool showRightBorder = entry.key != labels.length - 1;
+          return Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.card,
+                border: Border(
+                  right: BorderSide(
+                    color: showRightBorder ? divider : Colors.transparent,
+                    width: 1,
                   ),
+                  bottom: BorderSide(color: divider, width: 1),
                 ),
               ),
-            )
-            .toList(growable: false),
+              child: Center(
+                child: Text(
+                  entry.value,
+                  style: labelStyle,
+                ),
+              ),
+            ),
+          );
+        }).toList(growable: false),
       ),
     );
   }
@@ -241,150 +258,158 @@ class _MonthDayTile extends StatelessWidget {
   final ValueChanged<DateTime> onCreateEvent;
   final ValueChanged<DayEvent> onEditEvent;
 
-  static const int _maxVisibleEvents = 3;
+  static const int _maxVisibleEvents = 5;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final Color borderColor = colors.outlineVariant;
+    final ShadColorScheme colors = context.colorScheme;
+    final ShadTextTheme textTheme = context.textTheme;
+    final Color gridColor = colors.border.withValues(alpha: 0.18);
     final Color background = isSelected
-        ? colors.primaryContainer.withValues(alpha: 0.45)
-        : colors.surface;
-    final Color badgeColor =
-        isToday ? colors.primary : colors.secondaryContainer;
+        ? calendarPrimaryColor.withValues(alpha: 0.16)
+        : (inMonth ? colors.card : colors.muted.withValues(alpha: 0.1));
+    final double contentOpacity = inMonth ? 1 : 0.22;
+    final Color dayColor = isToday
+        ? calendarPrimaryColor
+        : (inMonth
+            ? colors.foreground
+            : colors.mutedForeground.withValues(alpha: 0.55));
+    final bool highlightDay = isToday || isSelected;
+    final Color badgeBackground = highlightDay
+        ? calendarPrimaryColor.withValues(
+            alpha: isToday ? 0.18 : 0.12,
+          )
+        : Colors.transparent;
+    const EdgeInsets dayPadding = EdgeInsets.symmetric(
+      horizontal: 8,
+      vertical: 4,
+    );
 
     final List<DayEvent> visible = events.take(_maxVisibleEvents).toList();
     final int overflow = events.length - visible.length;
 
     return InkWell(
-      onTap: () => onSelected(date),
-      onLongPress: () => onCreateEvent(date),
+      onTap: () {
+        onSelected(date);
+        onCreateEvent(date);
+      },
+      onLongPress: () => onSelected(date),
       child: Container(
         constraints: const BoxConstraints(minHeight: 120),
         decoration: BoxDecoration(
           color: background,
           border: Border(
-            right: BorderSide(color: borderColor),
-            bottom: BorderSide(color: borderColor),
+            right: BorderSide(color: gridColor),
+            bottom: BorderSide(color: gridColor),
           ),
         ),
         padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isToday ? colors.primary : borderColor,
+        child: Opacity(
+          opacity: contentOpacity,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: dayPadding,
+                    decoration: BoxDecoration(
+                      color: badgeBackground,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      date.day.toString(),
+                      style: textTheme.small.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: dayColor,
+                      ),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ...visible.map(
+                (DayEvent event) => _DayEventBullet(
+                  event: event,
+                  onTap: () => onEditEvent(event),
+                  dimmed: !inMonth,
+                ),
+              ),
+              if (overflow > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    date.day.toString(),
-                    style: TextStyle(
-                      fontSize: 12,
+                    '+$overflow more',
+                    style: textTheme.small.copyWith(
+                      color: colors.primary,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: isToday
-                          ? colors.primary
-                          : (inMonth
-                              ? colors.onSurface
-                              : colors.outline.withValues(alpha: 0.8)),
                     ),
                   ),
                 ),
-                const Spacer(),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 16,
-                  padding: EdgeInsets.zero,
-                  tooltip: 'Add day event',
-                  onPressed: () => onCreateEvent(date),
-                  icon: Icon(
-                    Icons.add_circle_outline,
-                    color: colors.secondary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            ...visible.map(
-              (DayEvent event) => _DayEventPill(
-                event: event,
-                onTap: () => onEditEvent(event),
-              ),
-            ),
-            if (overflow > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '+$overflow more',
-                  style: TextStyle(
-                    color: colors.secondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
+    ).withTapBounce();
   }
 }
 
-class _DayEventPill extends StatelessWidget {
-  const _DayEventPill({required this.event, required this.onTap});
+class _DayEventBullet extends StatelessWidget {
+  const _DayEventBullet({
+    required this.event,
+    required this.onTap,
+    this.dimmed = false,
+  });
 
   final DayEvent event;
   final VoidCallback onTap;
+  final bool dimmed;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final String label = event.normalizedStart == event.normalizedEnd
-        ? event.title
-        : '${event.title} (${_rangeLabel(event)})';
+    final ShadColorScheme colors = context.colorScheme;
+    final ShadTextTheme textTheme = context.textTheme;
+    final double opacity = dimmed ? 0.6 : 1;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: colors.secondaryContainer.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(8),
+    return Opacity(
+      opacity: opacity,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: calendarInsetSm),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(calendarBorderRadius),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              const SizedBox(width: calendarGutterSm),
+              Expanded(
+                child: Text(
+                  event.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.small.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: colors.foreground,
+                  ),
+                ),
+              ),
+            ],
           ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: colors.onSecondaryContainer,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+        ).withTapBounce(),
       ),
     );
-  }
-
-  String _rangeLabel(DayEvent event) {
-    final DateTime start = event.normalizedStart;
-    final DateTime end = event.normalizedEnd;
-    if (start.year == end.year && start.month == end.month) {
-      return '${start.day}-${end.day}';
-    }
-    final String startLabel = TimeFormatter.formatFriendlyDate(start);
-    final String endLabel = TimeFormatter.formatFriendlyDate(end);
-    return '$startLabel → $endLabel';
   }
 }

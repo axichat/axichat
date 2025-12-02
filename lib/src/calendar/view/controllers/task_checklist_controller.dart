@@ -11,7 +11,7 @@ class TaskChecklistController extends ChangeNotifier {
     List<TaskChecklistItem> initialItems = const [],
   }) : _items = List<TaskChecklistItem>.from(
           TaskChecklistController.normalize(initialItems),
-          growable: false,
+          growable: true,
         );
 
   static const Uuid _uuid = Uuid();
@@ -29,7 +29,7 @@ class TaskChecklistController extends ChangeNotifier {
   void setItems(List<TaskChecklistItem> next) {
     final normalized = List<TaskChecklistItem>.from(
       normalize(next),
-      growable: false,
+      growable: true,
     );
     if (listEquals(normalized, _items)) {
       return;
@@ -94,7 +94,7 @@ class TaskChecklistController extends ChangeNotifier {
   }
 
   void removeItem(String id) {
-    final next = _items.where((item) => item.id != id).toList(growable: false);
+    final next = _items.where((item) => item.id != id).toList(growable: true);
     if (listEquals(next, _items)) {
       return;
     }
@@ -102,11 +102,33 @@ class TaskChecklistController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void reorder(int oldIndex, int newIndex) {
+    if (oldIndex == newIndex ||
+        oldIndex < 0 ||
+        newIndex < 0 ||
+        oldIndex >= _items.length ||
+        newIndex > _items.length) {
+      return;
+    }
+    final List<TaskChecklistItem> updated = List<TaskChecklistItem>.from(
+      _items,
+      growable: true,
+    );
+    final TaskChecklistItem moved = updated.removeAt(oldIndex);
+    final int targetIndex = newIndex > oldIndex ? newIndex - 1 : newIndex;
+    updated.insert(targetIndex, moved);
+    if (listEquals(updated, _items)) {
+      return;
+    }
+    _items = updated;
+    notifyListeners();
+  }
+
   void clear() {
     if (_items.isEmpty) {
       return;
     }
-    _items = const [];
+    _items = <TaskChecklistItem>[];
     notifyListeners();
   }
 
@@ -116,6 +138,6 @@ class TaskChecklistController extends ChangeNotifier {
           (item) => item.copyWith(label: item.label.trim()),
         )
         .where((item) => item.label.isNotEmpty)
-        .toList(growable: false);
+        .toList(growable: true);
   }
 }

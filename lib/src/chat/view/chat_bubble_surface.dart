@@ -9,6 +9,7 @@ enum _ChatBubbleSlot {
   body,
   reaction,
   recipients,
+  avatar,
   selection,
 }
 
@@ -47,6 +48,7 @@ class CutoutStyle {
     required this.offset,
     required this.minThickness,
     this.cornerClearance,
+    this.alignment,
   });
 
   final double depth;
@@ -55,11 +57,22 @@ class CutoutStyle {
   final Offset offset;
   final double minThickness;
   final double? cornerClearance;
+  final double? alignment;
 }
 
 enum _CutoutAnchor { top, bottom, left, right }
 
-enum _CutoutType { reaction, recipient, selection }
+enum _CutoutType { reaction, recipient, avatar, selection }
+
+enum ChatBubbleCutoutAnchor { top, bottom, left, right }
+
+_CutoutAnchor _toInternalAnchor(ChatBubbleCutoutAnchor anchor) =>
+    switch (anchor) {
+      ChatBubbleCutoutAnchor.top => _CutoutAnchor.top,
+      ChatBubbleCutoutAnchor.bottom => _CutoutAnchor.bottom,
+      ChatBubbleCutoutAnchor.left => _CutoutAnchor.left,
+      ChatBubbleCutoutAnchor.right => _CutoutAnchor.right,
+    };
 
 class ChatBubbleSurface extends MultiChildRenderObjectWidget {
   ChatBubbleSurface({
@@ -80,6 +93,10 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
     this.selectionOverlay,
     this.selectionStyle,
     this.selectionFollowsSelfEdge = true,
+    this.recipientAnchor = ChatBubbleCutoutAnchor.bottom,
+    this.avatarOverlay,
+    this.avatarStyle,
+    this.avatarAnchor = ChatBubbleCutoutAnchor.left,
   }) : super(
           children: [
             _ChatBubbleSlotWidget(
@@ -95,6 +112,11 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
               _ChatBubbleSlotWidget(
                 slot: _ChatBubbleSlot.recipients,
                 child: recipientOverlay,
+              ),
+            if (avatarOverlay != null)
+              _ChatBubbleSlotWidget(
+                slot: _ChatBubbleSlot.avatar,
+                child: avatarOverlay,
               ),
             if (selectionOverlay != null)
               _ChatBubbleSlotWidget(
@@ -119,6 +141,10 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
   final Widget? selectionOverlay;
   final CutoutStyle? selectionStyle;
   final bool selectionFollowsSelfEdge;
+  final ChatBubbleCutoutAnchor recipientAnchor;
+  final Widget? avatarOverlay;
+  final CutoutStyle? avatarStyle;
+  final ChatBubbleCutoutAnchor avatarAnchor;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -135,6 +161,9 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
         recipientStyle: recipientStyle,
         selectionStyle: selectionStyle,
         selectionFollowsSelfEdge: selectionFollowsSelfEdge,
+        recipientAnchor: recipientAnchor,
+        avatarStyle: avatarStyle,
+        avatarAnchor: avatarAnchor,
       );
 
   @override
@@ -154,7 +183,10 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
       ..reactionStyle = reactionStyle
       ..recipientStyle = recipientStyle
       ..selectionStyle = selectionStyle
-      ..selectionFollowsSelfEdge = selectionFollowsSelfEdge;
+      ..selectionFollowsSelfEdge = selectionFollowsSelfEdge
+      ..recipientAnchor = recipientAnchor
+      ..avatarStyle = avatarStyle
+      ..avatarAnchor = avatarAnchor;
   }
 }
 
@@ -175,6 +207,9 @@ class RenderChatBubbleSurface extends RenderBox
     CutoutStyle? recipientStyle,
     CutoutStyle? selectionStyle,
     bool selectionFollowsSelfEdge = true,
+    ChatBubbleCutoutAnchor recipientAnchor = ChatBubbleCutoutAnchor.bottom,
+    CutoutStyle? avatarStyle,
+    ChatBubbleCutoutAnchor avatarAnchor = ChatBubbleCutoutAnchor.left,
   })  : _isSelf = isSelf,
         _backgroundColor = backgroundColor,
         _borderColor = borderColor,
@@ -186,7 +221,10 @@ class RenderChatBubbleSurface extends RenderBox
         _reactionStyle = reactionStyle,
         _recipientStyle = recipientStyle,
         _selectionStyle = selectionStyle,
-        _selectionFollowsSelfEdge = selectionFollowsSelfEdge;
+        _selectionFollowsSelfEdge = selectionFollowsSelfEdge,
+        _recipientAnchor = _toInternalAnchor(recipientAnchor),
+        _avatarStyle = avatarStyle,
+        _avatarAnchor = _toInternalAnchor(avatarAnchor);
 
   bool _isSelf;
   bool get isSelf => _isSelf;
@@ -282,6 +320,15 @@ class RenderChatBubbleSurface extends RenderBox
     markNeedsPaint();
   }
 
+  CutoutStyle? _avatarStyle;
+  CutoutStyle? get avatarStyle => _avatarStyle;
+  set avatarStyle(CutoutStyle? value) {
+    if (_avatarStyle == value) return;
+    _avatarStyle = value;
+    markNeedsLayout();
+    markNeedsPaint();
+  }
+
   bool _selectionFollowsSelfEdge;
   bool get selectionFollowsSelfEdge => _selectionFollowsSelfEdge;
   set selectionFollowsSelfEdge(bool value) {
@@ -290,13 +337,31 @@ class RenderChatBubbleSurface extends RenderBox
     markNeedsLayout();
   }
 
+  _CutoutAnchor _recipientAnchor;
+  set recipientAnchor(ChatBubbleCutoutAnchor value) {
+    final anchor = _toInternalAnchor(value);
+    if (anchor == _recipientAnchor) return;
+    _recipientAnchor = anchor;
+    markNeedsLayout();
+  }
+
+  _CutoutAnchor _avatarAnchor;
+  set avatarAnchor(ChatBubbleCutoutAnchor value) {
+    final anchor = _toInternalAnchor(value);
+    if (anchor == _avatarAnchor) return;
+    _avatarAnchor = anchor;
+    markNeedsLayout();
+  }
+
   RenderBox? get _bodyChild => _childForSlot(_ChatBubbleSlot.body);
   RenderBox? get _reactionChild => _childForSlot(_ChatBubbleSlot.reaction);
   RenderBox? get _recipientChild => _childForSlot(_ChatBubbleSlot.recipients);
+  RenderBox? get _avatarChild => _childForSlot(_ChatBubbleSlot.avatar);
   RenderBox? get _selectionChild => _childForSlot(_ChatBubbleSlot.selection);
 
   Rect? _reactionCutoutRect;
   Rect? _recipientCutoutRect;
+  Rect? _avatarCutoutRect;
   Rect? _selectionCutoutRect;
 
   @override
@@ -332,6 +397,7 @@ class RenderChatBubbleSurface extends RenderBox
 
     _reactionCutoutRect = null;
     _recipientCutoutRect = null;
+    _avatarCutoutRect = null;
     _selectionCutoutRect = null;
 
     _layoutCutoutChild(
@@ -344,7 +410,13 @@ class RenderChatBubbleSurface extends RenderBox
       child: _recipientChild,
       style: recipientStyle,
       type: _CutoutType.recipient,
-      anchor: _CutoutAnchor.bottom,
+      anchor: _recipientAnchor,
+    );
+    _layoutCutoutChild(
+      child: _avatarChild,
+      style: avatarStyle,
+      type: _CutoutType.avatar,
+      anchor: _avatarAnchor,
     );
     final selectionAnchor = selectionFollowsSelfEdge
         ? (isSelf ? _CutoutAnchor.right : _CutoutAnchor.left)
@@ -430,6 +502,7 @@ class RenderChatBubbleSurface extends RenderBox
         requestedThickness: resolvedThickness,
         isSelf: isSelf,
         cornerClearance: styleCornerClearance,
+        alignment: style.alignment,
       );
       rectWidth = resolvedThickness;
       rectHeight = intrude;
@@ -439,6 +512,7 @@ class RenderChatBubbleSurface extends RenderBox
         bubbleHeight: size.height,
         requestedThickness: resolvedThickness,
         cornerClearance: styleCornerClearance,
+        alignment: style.alignment,
       );
       rectHeight = resolvedThickness;
       rectWidth = intrude;
@@ -459,6 +533,9 @@ class RenderChatBubbleSurface extends RenderBox
         break;
       case _CutoutType.recipient:
         _recipientCutoutRect = rect;
+        break;
+      case _CutoutType.avatar:
+        _avatarCutoutRect = rect;
         break;
       case _CutoutType.selection:
         _selectionCutoutRect = rect;
@@ -481,6 +558,11 @@ class RenderChatBubbleSurface extends RenderBox
           _CutoutDescriptor(
             rect: _recipientCutoutRect!,
             cornerRadius: recipientStyle?.cornerRadius ?? 16,
+          ),
+        if (_avatarCutoutRect != null)
+          _CutoutDescriptor(
+            rect: _avatarCutoutRect!,
+            cornerRadius: avatarStyle?.cornerRadius ?? 16,
           ),
         if (_selectionCutoutRect != null)
           _CutoutDescriptor(
@@ -669,6 +751,7 @@ double _horizontalCutoutLeft({
   required double requestedThickness,
   required bool isSelf,
   required double cornerClearance,
+  double? alignment,
 }) {
   if (bubbleWidth == null ||
       !bubbleWidth.isFinite ||
@@ -676,13 +759,15 @@ double _horizontalCutoutLeft({
       bubbleWidth.isNaN) {
     return 0.0;
   }
-  final alignment = _reactionAlignmentForBubble(
-    bubbleWidth: bubbleWidth,
-    thickness: requestedThickness,
-    isSelf: isSelf,
-    cornerClearance: cornerClearance,
-  );
-  final center = ((alignment + 1) / 2) * bubbleWidth;
+  final resolvedAlignment = (alignment ??
+          _reactionAlignmentForBubble(
+            bubbleWidth: bubbleWidth,
+            thickness: requestedThickness,
+            isSelf: isSelf,
+            cornerClearance: cornerClearance,
+          ))
+      .clamp(-1.0, 1.0);
+  final center = ((resolvedAlignment + 1) / 2) * bubbleWidth;
   final maxLeft = math.max(0.0, bubbleWidth - requestedThickness);
   return (center - requestedThickness / 2).clamp(0.0, maxLeft);
 }
@@ -691,6 +776,7 @@ double _verticalCutoutTop({
   required double? bubbleHeight,
   required double requestedThickness,
   required double cornerClearance,
+  double? alignment,
 }) {
   if (bubbleHeight == null ||
       !bubbleHeight.isFinite ||
@@ -707,7 +793,11 @@ double _verticalCutoutTop({
     return centerTop.clamp(
         0.0, math.max(0.0, bubbleHeight - requestedThickness));
   }
-  return centerTop.clamp(minTop, maxTop);
+  final resolvedAlignment = ((alignment ?? 0).clamp(-1.0, 1.0) + 1) / 2;
+  final available = maxTop - minTop;
+  return (minTop + available * resolvedAlignment)
+      .clamp(minTop, maxTop)
+      .clamp(0.0, math.max(0.0, bubbleHeight - requestedThickness));
 }
 
 double _blurSigma(double radius) => radius * 0.57735 + 0.5;

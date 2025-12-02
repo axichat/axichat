@@ -2093,6 +2093,60 @@ abstract class AppLocalizations {
   /// **'Task not found'**
   String get calendarTaskNotFound;
 
+  /// No description provided for @calendarDayEventsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Day events'**
+  String get calendarDayEventsTitle;
+
+  /// No description provided for @calendarDayEventsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No day-level events for this date'**
+  String get calendarDayEventsEmpty;
+
+  /// No description provided for @calendarDayEventsAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add day event'**
+  String get calendarDayEventsAdd;
+
+  /// No description provided for @accessibilityNewContactLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact address'**
+  String get accessibilityNewContactLabel;
+
+  /// No description provided for @accessibilityNewContactHint.
+  ///
+  /// In en, this message translates to:
+  /// **'someone@example.com'**
+  String get accessibilityNewContactHint;
+
+  /// No description provided for @accessibilityStartChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Start chat'**
+  String get accessibilityStartChat;
+
+  /// No description provided for @accessibilityStartChatHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit this address to start a conversation.'**
+  String get accessibilityStartChatHint;
+
+  /// No description provided for @accessibilityMessagesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages yet'**
+  String get accessibilityMessagesEmpty;
+
+  /// No description provided for @accessibilityMessageNoContent.
+  ///
+  /// In en, this message translates to:
+  /// **'No message content'**
+  String get accessibilityMessageNoContent;
+
   /// No description provided for @profileTitle.
   ///
   /// In en, this message translates to:

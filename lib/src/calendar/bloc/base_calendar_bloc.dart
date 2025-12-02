@@ -129,7 +129,6 @@ abstract class BaseCalendarBloc
       final selectedDate = json['selectedDate'] as String?;
       final view = json['viewMode'] as String?;
       final selectedDayIndex = json['selectedDayIndex'] as int?;
-      final focusedCriticalPathId = json['focusedCriticalPathId'] as String?;
 
       if (modelJson == null || selectedDate == null || view == null) {
         return null;
@@ -147,10 +146,6 @@ abstract class BaseCalendarBloc
         selectedDate: parsedDate,
         viewMode: viewMode,
         selectedDayIndex: selectedDayIndex,
-        focusedCriticalPathId: _normalizeFocusedPath(
-          focusedCriticalPathId,
-          model,
-        ),
       );
 
       return _stateWithDerived(restored);
@@ -169,8 +164,6 @@ abstract class BaseCalendarBloc
         'viewMode': state.viewMode.name,
         if (state.selectedDayIndex != null)
           'selectedDayIndex': state.selectedDayIndex,
-        if (state.focusedCriticalPathId != null)
-          'focusedCriticalPathId': state.focusedCriticalPathId,
       };
     } catch (error) {
       logError('Failed to persist calendar state', error);

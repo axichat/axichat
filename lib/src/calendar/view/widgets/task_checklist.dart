@@ -6,6 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_checklist_controller.dart';
 
 import 'calendar_completion_checkbox.dart';
+import 'task_form_section.dart';
 
 class TaskChecklist extends StatefulWidget {
   const TaskChecklist({
@@ -25,6 +26,8 @@ class TaskChecklist extends StatefulWidget {
 
 class _TaskChecklistState extends State<TaskChecklist> {
   final TextEditingController _newItemController = TextEditingController();
+  final FocusNode _newItemFocusNode =
+      FocusNode(debugLabel: 'taskChecklistAddItem');
   final Map<String, TextEditingController> _itemControllers = {};
 
   @override
@@ -48,6 +51,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
   void dispose() {
     widget.controller.removeListener(_syncControllers);
     _newItemController.dispose();
+    _newItemFocusNode.dispose();
     for (final controller in _itemControllers.values) {
       controller.dispose();
     }
@@ -81,9 +85,6 @@ class _TaskChecklistState extends State<TaskChecklist> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final textTheme = context.textTheme;
-
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
@@ -92,59 +93,93 @@ class _TaskChecklistState extends State<TaskChecklist> {
         final int completed = widget.controller.completedCount;
         final double progress = widget.controller.progress;
 
-        return Container(
-          padding: const EdgeInsets.all(calendarGutterMd),
-          decoration: BoxDecoration(
-            color: colors.card,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    widget.label,
-                    style: textTheme.h4.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (total > 0)
-                    Text(
+        final colors = context.colorScheme;
+        final textTheme = context.textTheme;
+        final List<String> membership = List<String>.from(
+          items.map((item) => item.id),
+          growable: false,
+        )..sort();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const TaskSectionDivider(),
+            TaskSectionHeader(
+              title: widget.label,
+              trailing: total > 0
+                  ? Text(
                       '$completed / $total',
                       style: textTheme.muted,
-                    ),
-                ],
-              ),
-              const SizedBox(height: calendarInsetMd),
+                    )
+                  : null,
+            ),
+            if (items.isNotEmpty) ...[
+              const SizedBox(height: calendarInsetSm),
               TaskChecklistProgressBar(
                 progress: progress,
                 activeColor: colors.primary,
-                backgroundColor: colors.muted.withValues(alpha: 0.2),
+                backgroundColor: colors.border.withValues(alpha: 0.55),
               ),
-              if (items.isNotEmpty) const SizedBox(height: calendarInsetMd),
-              ...items.map((item) => _ChecklistItemRow(
-                    item: item,
-                    controller: _itemControllers[item.id]!,
-                    onChanged: (value) =>
-                        widget.controller.toggleItem(item.id, value),
-                    onLabelChanged: (value) =>
-                        widget.controller.updateLabel(item.id, value),
-                    onRemove: () => widget.controller.removeItem(item.id),
-                  )),
-              _ChecklistAddField(
+            ],
+            AnimatedSize(
+              duration: baseAnimationDuration,
+              curve: Curves.easeInOut,
+              child: AnimatedSwitcher(
+                duration: baseAnimationDuration,
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) => SizeTransition(
+                  sizeFactor: animation,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                ),
+                child: items.isEmpty
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: calendarInsetSm),
+                        child: ReorderableListView.builder(
+                          key: ValueKey<String>(membership.join(';')),
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          buildDefaultDragHandles: false,
+                          onReorder: widget.controller.reorder,
+                          itemCount: items.length,
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return _ChecklistItemRow(
+                              key: ValueKey(item.id),
+                              item: item,
+                              controller: _itemControllers[item.id]!,
+                              index: index,
+                              onChanged: (value) =>
+                                  widget.controller.toggleItem(item.id, value),
+                              onLabelChanged: (value) =>
+                                  widget.controller.updateLabel(item.id, value),
+                              onRemove: () =>
+                                  widget.controller.removeItem(item.id),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: calendarInsetSm),
+              child: _ChecklistAddField(
                 controller: _newItemController,
                 placeholder: widget.addPlaceholder,
+                focusNode: _newItemFocusNode,
                 onSubmitted: () {
                   widget.controller.addItem(_newItemController.text);
                   _newItemController.clear();
+                  _newItemFocusNode.requestFocus();
                 },
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -195,16 +230,32 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
         end: _targetProgress,
       ),
       builder: (context, value, _) {
+        final borderRadius = BorderRadius.circular(999);
         return ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: SizedBox(
-            height: 6,
-            child: LinearProgressIndicator(
-              value: value,
-              backgroundColor: widget.backgroundColor,
-              valueColor: AlwaysStoppedAnimation<Color>(widget.activeColor),
-              minHeight: 6,
-            ),
+          borderRadius: borderRadius,
+          child: Stack(
+            children: [
+              Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  color: widget.backgroundColor.withValues(alpha: 0.6),
+                  borderRadius: borderRadius,
+                  border: Border.all(
+                    color: widget.activeColor.withValues(alpha: 0.35),
+                    width: 1,
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: 6,
+                child: LinearProgressIndicator(
+                  value: value,
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(widget.activeColor),
+                  minHeight: 6,
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -214,8 +265,10 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
 
 class _ChecklistItemRow extends StatelessWidget {
   const _ChecklistItemRow({
+    super.key,
     required this.item,
     required this.controller,
+    required this.index,
     required this.onChanged,
     required this.onLabelChanged,
     required this.onRemove,
@@ -223,6 +276,7 @@ class _ChecklistItemRow extends StatelessWidget {
 
   final TaskChecklistItem item;
   final TextEditingController controller;
+  final int index;
   final ValueChanged<bool> onChanged;
   final ValueChanged<String> onLabelChanged;
   final VoidCallback onRemove;
@@ -230,51 +284,65 @@ class _ChecklistItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final textTheme = context.textTheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: calendarInsetSm),
+      key: key,
+      padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           CalendarCompletionCheckbox(
             value: item.isCompleted,
             onChanged: onChanged,
-            size: 18,
+            size: 16,
           ),
-          const SizedBox(width: calendarInsetMd),
+          const SizedBox(width: calendarInsetSm),
           Expanded(
             child: TextField(
               controller: controller,
               onChanged: onLabelChanged,
-              decoration: InputDecoration(
+              style: textTheme.p,
+              decoration: const InputDecoration(
                 isDense: true,
+                isCollapsed: true,
                 hintText: 'Checklist item',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: colors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: colors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: colors.primary, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterSm,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
                   vertical: calendarInsetSm,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: calendarInsetSm),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            padding: const EdgeInsets.all(8),
-            constraints: const BoxConstraints(),
-            splashRadius: 18,
-            color: colors.muted,
+          AxiIconButton(
+            iconData: Icons.close,
+            iconSize: 14,
+            buttonSize: 28,
+            tapTargetSize: 36,
+            backgroundColor: colors.muted.withValues(alpha: 0.08),
+            borderColor: Colors.transparent,
+            borderWidth: 0,
+            color: colors.mutedForeground,
+            cornerRadius: 12,
+            tooltip: 'Remove item',
             onPressed: onRemove,
+          ),
+          const SizedBox(width: calendarInsetSm),
+          MouseRegion(
+            cursor: SystemMouseCursors.grab,
+            child: ReorderableDragStartListener(
+              index: index,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: calendarInsetSm),
+                child: Icon(
+                  Icons.drag_indicator,
+                  size: 18,
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -286,43 +354,55 @@ class _ChecklistAddField extends StatelessWidget {
   const _ChecklistAddField({
     required this.controller,
     required this.placeholder,
+    required this.focusNode,
     required this.onSubmitted,
   });
 
   final TextEditingController controller;
   final String placeholder;
+  final FocusNode focusNode;
   final VoidCallback onSubmitted;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return TextField(
-      controller: controller,
-      onSubmitted: (_) => onSubmitted(),
-      decoration: InputDecoration(
-        hintText: placeholder,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.primary, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: calendarGutterMd,
-          vertical: calendarInsetSm,
-        ),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.add),
+    return Row(
+      children: [
+        AxiIconButton(
+          iconData: Icons.add,
+          iconSize: 16,
+          buttonSize: 32,
+          tapTargetSize: 40,
+          backgroundColor: Colors.transparent,
+          borderColor: Colors.transparent,
+          borderWidth: 0,
           color: colors.primary,
+          cornerRadius: 10,
+          tooltip: 'Add checklist item',
           onPressed: onSubmitted,
         ),
-      ),
+        const SizedBox(width: calendarInsetSm),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            onSubmitted: (_) => onSubmitted(),
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              isCollapsed: true,
+              hintText: placeholder,
+              hintStyle: context.textTheme.muted,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: calendarInsetSm,
+              ),
+            ),
+            style: context.textTheme.p,
+          ),
+        ),
+      ],
     );
   }
 }

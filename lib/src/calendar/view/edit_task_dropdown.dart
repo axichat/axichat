@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -211,58 +212,66 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       setState(() => _isImportant = value),
                   onUrgentChanged: (value) => setState(() => _isUrgent = value),
                 ),
-                const _EditTaskSectionDivider(),
+                const TaskSectionDivider(
+                  verticalPadding: calendarGutterMd,
+                ),
                 _EditTaskDescriptionField(controller: _descriptionController),
                 const SizedBox(height: calendarFormGap),
                 TaskChecklist(controller: _checklistController),
-                const SizedBox(height: calendarFormGap),
+                const TaskSectionDivider(
+                  verticalPadding: calendarGutterMd,
+                ),
                 _EditTaskLocationField(
                   controller: _locationController,
                   locationHelper: widget.locationHelper,
                 ),
-                const _EditTaskSectionDivider(),
+                const TaskSectionDivider(
+                  verticalPadding: calendarGutterMd,
+                ),
                 _EditTaskScheduleSection(
                   start: _startTime,
                   end: _endTime,
                   onStartChanged: _handleStartChanged,
                   onEndChanged: _handleEndChanged,
                 ),
-                const _EditTaskSectionDivider(),
-                _EditTaskReminderSection(
-                  reminders: _reminders,
-                  onChanged: (value) => setState(() {
-                    _reminders = value;
-                  }),
+                const TaskSectionDivider(
+                  verticalPadding: calendarGutterMd,
                 ),
-                const _EditTaskSectionDivider(),
                 _EditTaskDeadlineField(
                   deadline: _deadline,
                   onChanged: (value) => setState(() => _deadline = value),
                 ),
-                const _EditTaskSectionDivider(),
+                const TaskSectionDivider(
+                  verticalPadding: calendarGutterMd,
+                ),
+                _EditTaskReminderSection(
+                  reminders: _reminders,
+                  deadline: _deadline,
+                  onChanged: (value) => setState(() {
+                    _reminders = value;
+                  }),
+                ),
+                const TaskSectionDivider(
+                  verticalPadding: calendarGutterMd,
+                ),
                 _EditTaskRecurrenceSection(
                   value: _recurrence,
                   fallbackWeekday: _recurrenceFallbackWeekday,
                   onChanged: _handleRecurrenceChanged,
                 ),
-                const _EditTaskSectionDivider(),
+                const TaskSectionDivider(
+                  verticalPadding: calendarGutterMd,
+                ),
                 _EditTaskCompletionToggle(
                   value: _isCompleted,
                   onChanged: (value) => setState(() => _isCompleted = value),
                 ),
                 const SizedBox(height: calendarFormGap),
-                if (!widget.isSheet) ...[
-                  TaskSecondaryButton(
-                    label: 'Add to critical path',
-                    icon: Icons.route,
-                    onPressed: () => addTaskToCriticalPath(
-                      context: context,
-                      bloc: widget.inlineActionsBloc ?? context.read<B>(),
-                      task: widget.task,
-                    ),
-                  ),
-                  const SizedBox(height: calendarFormGap),
-                ],
+                _TaskCriticalPathMembership<B>(
+                  task: widget.task,
+                  blocOverride: widget.inlineActionsBloc,
+                ),
+                const SizedBox(height: calendarFormGap),
               ],
             ),
           ),
@@ -275,14 +284,22 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           ),
           child: SafeArea(
             top: false,
-            child: _EditTaskActionsRow(
-              task: widget.task,
-              onDelete: () {
-                widget.onTaskDeleted(widget.task.id);
-                widget.onClose();
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _titleController,
+              builder: (context, value, _) {
+                final bool canSave =
+                    _titleError == null && value.text.trim().isNotEmpty;
+                return _EditTaskActionsRow(
+                  task: widget.task,
+                  onDelete: () {
+                    widget.onTaskDeleted(widget.task.id);
+                    widget.onClose();
+                  },
+                  onCancel: widget.onClose,
+                  onSave: _handleSave,
+                  canSave: canSave,
+                );
               },
-              onCancel: widget.onClose,
-              onSave: _handleSave,
             ),
           ),
         ),
@@ -390,7 +407,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       setState(() {
         _titleError = validationError;
       });
-      _showSnackBar(validationError);
       return;
     }
 
@@ -475,12 +491,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       return 0;
     }
     return keyboardInset - safePadding;
-  }
-
-  void _showSnackBar(String message) {
-    final messenger =
-        widget.scaffoldMessenger ?? ScaffoldMessenger.maybeOf(context);
-    messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -708,24 +718,6 @@ class _EditTaskLocationField extends StatelessWidget {
   }
 }
 
-class _EditTaskSectionDivider extends StatelessWidget {
-  const _EditTaskSectionDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: calendarGutterMd),
-      child: Container(
-        height: 1,
-        decoration: BoxDecoration(
-          color: calendarBorderColor.withValues(alpha: 0.45),
-          borderRadius: BorderRadius.circular(999),
-        ),
-      ),
-    );
-  }
-}
-
 class _EditTaskScheduleSection extends StatelessWidget {
   const _EditTaskScheduleSection({
     required this.start,
@@ -779,10 +771,12 @@ class _EditTaskDeadlineField extends StatelessWidget {
 class _EditTaskReminderSection extends StatelessWidget {
   const _EditTaskReminderSection({
     required this.reminders,
+    required this.deadline,
     required this.onChanged,
   });
 
   final ReminderPreferences reminders;
+  final DateTime? deadline;
   final ValueChanged<ReminderPreferences> onChanged;
 
   @override
@@ -790,6 +784,7 @@ class _EditTaskReminderSection extends StatelessWidget {
     return ReminderPreferencesField(
       value: reminders,
       onChanged: onChanged,
+      anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
     );
   }
 }
@@ -866,18 +861,67 @@ class _EditTaskCompletionToggle extends StatelessWidget {
   }
 }
 
+class _TaskCriticalPathMembership<B extends BaseCalendarBloc>
+    extends StatelessWidget {
+  const _TaskCriticalPathMembership({
+    required this.task,
+    this.blocOverride,
+  });
+
+  final CalendarTask task;
+  final B? blocOverride;
+
+  @override
+  Widget build(BuildContext context) {
+    final B bloc = blocOverride ?? context.read<B>();
+    return BlocBuilder<B, CalendarState>(
+      bloc: bloc,
+      builder: (context, state) {
+        final paths = state.criticalPathsForTask(task);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TaskSecondaryButton(
+              label: 'Add to critical path',
+              icon: Icons.route,
+              onPressed: () => addTaskToCriticalPath(
+                context: context,
+                bloc: bloc,
+                task: task,
+              ),
+            ),
+            const SizedBox(height: calendarInsetSm),
+            CriticalPathMembershipList(
+              paths: paths,
+              onRemovePath: (pathId) => bloc.add(
+                CalendarEvent.criticalPathTaskRemoved(
+                  pathId: pathId,
+                  taskId: task.id,
+                ),
+              ),
+              emptyLabel: 'Not in any critical paths',
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _EditTaskActionsRow extends StatelessWidget {
   const _EditTaskActionsRow({
     required this.task,
     required this.onDelete,
     required this.onCancel,
     required this.onSave,
+    required this.canSave,
   });
 
   final CalendarTask task;
   final VoidCallback onDelete;
   final VoidCallback onCancel;
   final VoidCallback onSave;
+  final bool canSave;
 
   @override
   Widget build(BuildContext context) {
@@ -900,7 +944,7 @@ class _EditTaskActionsRow extends StatelessWidget {
         ),
         TaskPrimaryButton(
           label: 'Save',
-          onPressed: onSave,
+          onPressed: canSave ? onSave : null,
         ),
       ],
     );

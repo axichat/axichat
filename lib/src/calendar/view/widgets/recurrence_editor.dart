@@ -1,13 +1,13 @@
 import 'dart:collection';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
-
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/widgets/deadline_picker_field.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RecurrenceFormValue {
   const RecurrenceFormValue({
@@ -409,7 +409,7 @@ class _RecurrenceFrequencyChip extends StatelessWidget {
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
-    );
+    ).withTapBounce();
   }
 }
 
@@ -439,6 +439,12 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ShadColorScheme colors = context.colorScheme;
+    final Color unselectedBackground =
+        colors.muted.withValues(alpha: enabled ? 0.12 : 0.08);
+    final Color unselectedHover =
+        colors.muted.withValues(alpha: enabled ? 0.18 : 0.1);
+    final Color selectedForeground = colors.primaryForeground;
     return Wrap(
       spacing: 6,
       runSpacing: 6,
@@ -451,13 +457,14 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
               : ShadButtonVariant.outline,
           size: ShadButtonSize.sm,
           padding: padding,
-          backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
-          hoverBackgroundColor: isSelected
-              ? calendarPrimaryHoverColor
-              : calendarPrimaryColor.withValues(alpha: enabled ? 0.08 : 0.04),
-          foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
+          backgroundColor:
+              isSelected ? calendarPrimaryColor : unselectedBackground,
+          hoverBackgroundColor:
+              isSelected ? calendarPrimaryHoverColor : unselectedHover,
+          foregroundColor:
+              isSelected ? selectedForeground : calendarPrimaryColor,
           hoverForegroundColor:
-              isSelected ? Colors.white : calendarPrimaryHoverColor,
+              isSelected ? selectedForeground : calendarPrimaryHoverColor,
           onPressed: enabled ? () => onWeekdayToggled(weekday) : null,
           child: Text(
             _labels[index],
@@ -466,7 +473,7 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
             ),
           ),
-        );
+        ).withTapBounce();
       }),
     );
   }

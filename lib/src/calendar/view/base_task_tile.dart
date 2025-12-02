@@ -2,6 +2,7 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
@@ -140,13 +141,14 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Task'),
-        content:
-            Text('Are you sure you want to delete "${widget.task.title}"?'),
+        title: Text(context.l10n.calendarDeleteTask),
+        content: Text(
+          context.l10n.calendarDeleteTaskConfirm(widget.task.title),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).maybePop(),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () {

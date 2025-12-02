@@ -7,7 +7,9 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
@@ -15,7 +17,6 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'controllers/quick_add_controller.dart';
 import 'controllers/task_checklist_controller.dart';
-import 'feedback_system.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/recurrence_editor.dart';
@@ -70,6 +71,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   final _locationController = TextEditingController();
   late final TaskChecklistController _checklistController;
   final _taskNameFocusNode = FocusNode();
+  final List<String> _queuedCriticalPathIds = <String>[];
 
   late final QuickAddController _formController;
   late final NlScheduleParserService _parserService;
@@ -86,6 +88,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   bool _remindersLocked = false;
   NlAdapterResult? _lastParserResult;
   String? _titleValidationMessage;
+  String? _formError;
 
   @override
   void initState() {
@@ -189,14 +192,14 @@ class _QuickAddModalState extends State<QuickAddModal>
             onRecurrenceChanged: _onUserRecurrenceChanged,
             onImportantChanged: _onUserImportantChanged,
             onUrgentChanged: _onUserUrgentChanged,
-            reminders: _formController.reminders,
             onRemindersChanged: _onRemindersChanged,
             actionInsetBuilder: _quickAddActionInset,
             fallbackDate: widget.prefilledDateTime,
-            onAddToCriticalPath: () {
-              _submitTask(addToCriticalPath: true);
-            },
+            onAddToCriticalPath: _queueCriticalPathForDraft,
+            queuedPaths: _queuedPaths(),
+            onRemoveQueuedPath: _removeQueuedCriticalPath,
             hasCalendarBloc: widget.hasCalendarBloc,
+            formError: _formError,
           ),
         ),
       );
@@ -235,14 +238,14 @@ class _QuickAddModalState extends State<QuickAddModal>
             onRecurrenceChanged: _onUserRecurrenceChanged,
             onImportantChanged: _onUserImportantChanged,
             onUrgentChanged: _onUserUrgentChanged,
-            reminders: _formController.reminders,
             onRemindersChanged: _onRemindersChanged,
             actionInsetBuilder: _quickAddActionInset,
             fallbackDate: widget.prefilledDateTime,
-            onAddToCriticalPath: () {
-              _submitTask(addToCriticalPath: true);
-            },
+            onAddToCriticalPath: _queueCriticalPathForDraft,
+            queuedPaths: _queuedPaths(),
+            onRemoveQueuedPath: _removeQueuedCriticalPath,
             hasCalendarBloc: widget.hasCalendarBloc,
+            formError: _formError,
           ),
         ),
       ),
@@ -290,6 +293,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   void _handleTaskNameChanged(String value) {
+    _setFormError(null);
     final trimmed = value.trim();
     _updateTitleValidationMessage(value);
     _parserDebounce?.cancel();
@@ -315,6 +319,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       _lastParserInput = input;
       _lastParserResult = result;
       _applyParserResult(result);
+      _setFormError(null);
     } catch (error) {
       if (!mounted || requestId != _parserRequestId) {
         return;
@@ -322,13 +327,8 @@ class _QuickAddModalState extends State<QuickAddModal>
       _lastParserInput = '';
       _lastParserResult = null;
       _clearParserDrivenFields();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            context.l10n
-                .calendarParserUnavailable(error.runtimeType.toString()),
-          ),
-        ),
+      _setFormError(
+        context.l10n.calendarParserUnavailable(error.runtimeType.toString()),
       );
     }
   }
@@ -508,29 +508,100 @@ class _QuickAddModalState extends State<QuickAddModal>
     _remindersLocked = false;
   }
 
-  Future<void> _submitTask({bool addToCriticalPath = false}) async {
+  List<CalendarCriticalPath> _queuedPaths() {
+    final BaseCalendarBloc? bloc = widget.calendarBloc;
+    if (bloc == null) {
+      return const [];
+    }
+    final Map<String, CalendarCriticalPath> byId =
+        bloc.state.model.criticalPaths;
+    return _queuedCriticalPathIds
+        .map((id) => byId[id])
+        .whereType<CalendarCriticalPath>()
+        .toList();
+  }
+
+  void _addQueuedCriticalPath(String pathId) {
+    if (_queuedCriticalPathIds.contains(pathId)) {
+      return;
+    }
+    setState(() {
+      _queuedCriticalPathIds.add(pathId);
+    });
+  }
+
+  void _removeQueuedCriticalPath(String pathId) {
+    if (!_queuedCriticalPathIds.contains(pathId)) {
+      return;
+    }
+    setState(() {
+      _queuedCriticalPathIds.removeWhere((id) => id == pathId);
+    });
+  }
+
+  Future<void> _queueCriticalPathForDraft() async {
+    _setFormError(null);
+    final BaseCalendarBloc? bloc = widget.calendarBloc;
+    if (bloc == null) {
+      _setFormError('Critical paths are unavailable in this view.');
+      return;
+    }
+    await showCriticalPathPicker(
+      context: context,
+      paths: bloc.state.model.criticalPaths.values.toList(),
+      stayOpen: true,
+      onPathSelected: (path) async {
+        _addQueuedCriticalPath(path.id);
+        return 'Will add to "${path.name}" on save';
+      },
+      onCreateNewPath: () async {
+        final String? name = await promptCriticalPathName(
+          context: context,
+          title: 'New critical path',
+        );
+        if (!mounted || name == null) {
+          return null;
+        }
+        final Set<String> previousIds =
+            bloc.state.model.criticalPaths.keys.toSet();
+        bloc.add(CalendarEvent.criticalPathCreated(name: name));
+        final String? createdId = await waitForNewPathId(
+          bloc: bloc,
+          previousIds: previousIds,
+        );
+        if (!mounted || createdId == null) {
+          return null;
+        }
+        _addQueuedCriticalPath(createdId);
+        return 'Created "$name" and queued';
+      },
+    );
+  }
+
+  Future<void> _submitTask() async {
     if (_formController.isSubmitting) {
       return;
     }
 
+    _setFormError(null);
     final validationError =
         TaskTitleValidation.validate(_taskNameController.text);
     if (validationError != null) {
       _setTitleValidationMessage(validationError);
-      FeedbackSystem.showWarning(context, validationError);
+      _taskNameFocusNode.requestFocus();
       return;
     }
 
     _formController.setSubmitting(true);
     final BaseCalendarBloc? calendarBloc = widget.calendarBloc;
+    final List<String> queuedPathIds =
+        List<String>.from(_queuedCriticalPathIds);
+    final bool hasQueuedPaths = queuedPathIds.isNotEmpty;
     final Set<String>? previousIds =
-        addToCriticalPath ? calendarBloc?.state.model.tasks.keys.toSet() : null;
-    if (addToCriticalPath && calendarBloc == null) {
+        hasQueuedPaths ? calendarBloc?.state.model.tasks.keys.toSet() : null;
+    if (hasQueuedPaths && calendarBloc == null) {
       _formController.setSubmitting(false);
-      FeedbackSystem.showWarning(
-        context,
-        'Critical paths are unavailable in this view.',
-      );
+      _setFormError('Critical paths are unavailable in this view.');
       return;
     }
 
@@ -571,24 +642,32 @@ class _QuickAddModalState extends State<QuickAddModal>
     widget.onTaskAdded(task);
     _setTitleValidationMessage(null);
 
-    if (addToCriticalPath && calendarBloc != null && previousIds != null) {
+    if (hasQueuedPaths && calendarBloc != null && previousIds != null) {
       final CalendarTask? createdTask =
           await _waitForNewTask(calendarBloc, previousIds);
       if (!mounted) {
         return;
       }
       if (createdTask != null) {
-        await addTaskToCriticalPath(
-          context: context,
-          bloc: calendarBloc,
-          task: createdTask,
-        );
+        for (final String pathId in queuedPathIds) {
+          calendarBloc.add(
+            CalendarEvent.criticalPathTaskAdded(
+              pathId: pathId,
+              taskId: createdTask.id,
+            ),
+          );
+        }
       } else {
-        FeedbackSystem.showWarning(
-          context,
+        _setFormError(
           'Task saved but could not be added to a critical path.',
         );
       }
+    }
+
+    if (hasQueuedPaths) {
+      setState(() {
+        _queuedCriticalPathIds.clear();
+      });
     }
 
     if (!mounted) return;
@@ -651,6 +730,15 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     await popSelfIfPossible();
   }
+
+  void _setFormError(String? message) {
+    if (_formError == message) {
+      return;
+    }
+    setState(() {
+      _formError = message;
+    });
+  }
 }
 
 class _QuickAddModalContent extends StatelessWidget {
@@ -675,12 +763,14 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.onRecurrenceChanged,
     required this.onImportantChanged,
     required this.onUrgentChanged,
-    required this.reminders,
     required this.onRemindersChanged,
     required this.actionInsetBuilder,
     required this.fallbackDate,
     required this.onAddToCriticalPath,
+    required this.queuedPaths,
+    required this.onRemoveQueuedPath,
     required this.hasCalendarBloc,
+    required this.formError,
   });
 
   final bool isSheet;
@@ -703,12 +793,14 @@ class _QuickAddModalContent extends StatelessWidget {
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
-  final ReminderPreferences reminders;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
   final double Function(BuildContext context) actionInsetBuilder;
   final DateTime? fallbackDate;
-  final VoidCallback onAddToCriticalPath;
+  final Future<void> Function() onAddToCriticalPath;
+  final List<CalendarCriticalPath> queuedPaths;
+  final ValueChanged<String> onRemoveQueuedPath;
   final bool hasCalendarBloc;
+  final String? formError;
 
   @override
   Widget build(BuildContext context) {
@@ -749,6 +841,50 @@ class _QuickAddModalContent extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    AnimatedSwitcher(
+                      duration: baseAnimationDuration,
+                      child: formError == null
+                          ? const SizedBox.shrink()
+                          : Container(
+                              key: const ValueKey('quick-add-error'),
+                              margin: const EdgeInsets.only(
+                                  bottom: calendarGutterSm),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: calendarGutterMd,
+                                vertical: calendarInsetMd,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    calendarDangerColor.withValues(alpha: 0.08),
+                                borderRadius:
+                                    BorderRadius.circular(calendarBorderRadius),
+                                border: Border.all(
+                                  color: calendarDangerColor.withValues(
+                                    alpha: 0.35,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: calendarDangerColor,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: calendarInsetSm),
+                                  Expanded(
+                                    child: Text(
+                                      formError!,
+                                      style: const TextStyle(
+                                        color: calendarDangerColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
                     _QuickAddTaskNameField(
                       controller: taskNameController,
                       focusNode: taskNameFocusNode,
@@ -784,16 +920,6 @@ class _QuickAddModalContent extends StatelessWidget {
                       onEndChanged: onEndChanged,
                       onClear: onScheduleCleared,
                     ),
-                    const SizedBox(height: calendarGutterMd),
-                    AnimatedBuilder(
-                      animation: formController,
-                      builder: (context, _) {
-                        return _QuickAddReminderSection(
-                          reminders: formController.reminders,
-                          onChanged: onRemindersChanged,
-                        );
-                      },
-                    ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
                     ),
@@ -804,25 +930,36 @@ class _QuickAddModalContent extends StatelessWidget {
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
                     ),
+                    AnimatedBuilder(
+                      animation: formController,
+                      builder: (context, _) {
+                        return _QuickAddReminderSection(
+                          reminders: formController.reminders,
+                          deadline: formController.deadline,
+                          onChanged: onRemindersChanged,
+                        );
+                      },
+                    ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
                     _QuickAddRecurrenceSection(
                       formController: formController,
                       onChanged: onRecurrenceChanged,
                       fallbackDate: fallbackDate,
                     ),
                     const SizedBox(height: calendarGutterMd),
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: taskNameController,
-                      builder: (context, value, _) {
-                        final bool hasTitle = value.text.trim().isNotEmpty;
-                        final bool isBusy = formController.isSubmitting;
-                        return TaskSecondaryButton(
-                          label: 'Add to critical path',
-                          icon: Icons.route,
-                          onPressed: hasTitle && !isBusy && hasCalendarBloc
-                              ? onAddToCriticalPath
-                              : null,
-                        );
-                      },
+                    TaskSecondaryButton(
+                      label: 'Add to critical path',
+                      icon: Icons.route,
+                      onPressed: formController.isSubmitting || !hasCalendarBloc
+                          ? null
+                          : onAddToCriticalPath,
+                    ),
+                    const SizedBox(height: calendarInsetSm),
+                    CriticalPathMembershipList(
+                      paths: queuedPaths,
+                      onRemovePath: onRemoveQueuedPath,
                     ),
                   ],
                 ),
@@ -841,6 +978,7 @@ class _QuickAddModalContent extends StatelessWidget {
                   taskNameController: taskNameController,
                   onCancel: onClose,
                   onSubmit: onTaskSubmit,
+                  titleValidationMessage: titleValidationMessage,
                 ),
               ),
             ),
@@ -940,7 +1078,9 @@ class _QuickAddTaskNameField extends StatelessWidget {
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter) {
-          if (controller.text.trim().isNotEmpty) {
+          final bool canSubmit =
+              validationMessage == null && controller.text.trim().isNotEmpty;
+          if (canSubmit) {
             onSubmit();
           }
           return KeyEventResult.handled;
@@ -1135,10 +1275,12 @@ class _QuickAddDeadlineSection extends StatelessWidget {
 class _QuickAddReminderSection extends StatelessWidget {
   const _QuickAddReminderSection({
     required this.reminders,
+    required this.deadline,
     required this.onChanged,
   });
 
   final ReminderPreferences reminders;
+  final DateTime? deadline;
   final ValueChanged<ReminderPreferences> onChanged;
 
   @override
@@ -1147,6 +1289,7 @@ class _QuickAddReminderSection extends StatelessWidget {
       value: reminders,
       onChanged: onChanged,
       title: 'Reminders',
+      anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
     );
   }
 }
@@ -1194,12 +1337,14 @@ class _QuickAddActions extends StatelessWidget {
     required this.taskNameController,
     required this.onCancel,
     required this.onSubmit,
+    required this.titleValidationMessage,
   });
 
   final QuickAddController formController;
   final TextEditingController taskNameController;
   final VoidCallback onCancel;
   final VoidCallback onSubmit;
+  final String? titleValidationMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -1210,7 +1355,8 @@ class _QuickAddActions extends StatelessWidget {
         return ValueListenableBuilder<TextEditingValue>(
           valueListenable: taskNameController,
           builder: (context, value, __) {
-            final bool canSubmit = value.text.trim().isNotEmpty;
+            final bool canSubmit =
+                value.text.trim().isNotEmpty && titleValidationMessage == null;
             return TaskFormActionsRow(
               includeTopBorder: true,
               padding: calendarPaddingXl,

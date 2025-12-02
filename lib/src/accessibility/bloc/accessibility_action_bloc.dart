@@ -1494,26 +1494,37 @@ class AccessibilityActionBloc
 
   int _initialMessageIndex(List<Message> messages) {
     if (messages.isEmpty) return 0;
-    final lastUnread = _lastUnreadIndex(messages);
-    if (lastUnread != null) {
-      return lastUnread;
+    final latestUnread = _latestIndexFor(messages, onlyUnread: true);
+    if (latestUnread != null) {
+      return latestUnread;
     }
-    return messages.length - 1;
+    return _latestIndexFor(messages) ?? 0;
   }
 
-  int? _lastUnreadIndex(List<Message> messages) {
+  int? _latestIndexFor(
+    List<Message> messages, {
+    bool onlyUnread = false,
+  }) {
     if (messages.isEmpty) return null;
     final myBareJid = _chatsService.myJid?.split('/').first;
-    for (var i = messages.length - 1; i >= 0; i--) {
+    int? latestIndex;
+    DateTime latestTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
+    for (var i = 0; i < messages.length; i++) {
       final message = messages[i];
-      final senderBare = message.senderJid.split('/').first;
-      final fromMe = myBareJid != null && senderBare == myBareJid;
-      final unread = !fromMe && !message.displayed;
-      if (unread) {
-        return i;
+      if (onlyUnread) {
+        final senderBare = message.senderJid.split('/').first;
+        final fromMe = myBareJid != null && senderBare == myBareJid;
+        final unread = !fromMe && !message.displayed;
+        if (!unread) continue;
+      }
+      final timestamp =
+          message.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      if (latestIndex == null || timestamp.isAfter(latestTimestamp)) {
+        latestIndex = i;
+        latestTimestamp = timestamp;
       }
     }
-    return null;
+    return latestIndex;
   }
 
   String _unreadDescription(AccessibilityContact contact) =>
@@ -1634,8 +1645,9 @@ class AccessibilityActionBloc
   // ignore: unused_element
   String get _textPendingInvites => 'Pending invites';
   String get _textAcceptInvite => 'Accept invite';
-  String get _textNewContactTitle => 'Manual address';
-  String get _textNewContactDescription => 'Type a new address';
+  String get _textNewContactTitle => 'Start chat';
+  String get _textNewContactDescription =>
+      'Use the typed address to start chatting';
   String get _textSubmitNewContactTitle => 'Start chat';
   String get _textSubmitNewContactDescription =>
       'Use the typed address to start chatting';

@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -110,7 +111,7 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
                     ),
                     const SizedBox(height: calendarInsetSm),
                     Text(
-                      'Tap a dotted slot to attach a task. Drag between slots to swap.',
+                      context.l10n.calendarSandboxHint,
                       style: textTheme.muted,
                     ),
                   ],
@@ -119,12 +120,12 @@ class _CriticalPathSandboxState extends State<CriticalPathSandbox> {
               const SizedBox(width: calendarGutterMd),
               ShadButton.secondary(
                 onPressed: widget.onExit,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.grid_view, size: 16),
-                    SizedBox(width: calendarInsetLg),
-                    Text('Back to calendar'),
+                    const Icon(Icons.grid_view, size: 16),
+                    const SizedBox(width: calendarInsetLg),
+                    Text(context.l10n.calendarBackToCalendar),
                   ],
                 ),
               ).withTapBounce(),
