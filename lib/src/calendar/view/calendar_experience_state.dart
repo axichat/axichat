@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -415,7 +416,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
 
   /// Builds the tab label for the schedule pane. Subclasses can override to
   /// customize text/style.
-  Widget buildScheduleTabLabel(BuildContext context) => const Text('Schedule');
+  Widget buildScheduleTabLabel(BuildContext context) =>
+      Text(context.l10n.calendarScheduleLabel);
 
   /// Builds the tasks tab label so guests can tint it differently.
   Widget buildTasksTabLabel(

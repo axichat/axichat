@@ -30,24 +30,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<T, CalendarState>(
-      listener: (context, state) {
-        if (state.error != null) {
-          if (context.mounted) {
-            final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-            if (scaffoldMessenger != null) {
-              ErrorSnackBar.show(
-                context,
-                state.error!,
-                onRetry: () {
-                  if (context.mounted) {
-                    context.read<T>().add(const CalendarEvent.errorCleared());
-                  }
-                },
-              );
-            }
-          }
-        }
-      },
+      listener: (context, state) {},
       builder: (context, state) {
         final tasks = _getTasksForSelectedDate(state);
         final dateLabel = _formatDate(state.selectedDate, state.viewMode);
@@ -740,17 +723,22 @@ class _CalendarSidebar extends StatelessWidget {
               children: [
                 const Padding(
                   padding: calendarPaddingXl,
-                  child: Text('Quick Stats', style: calendarBodyTextStyle),
+                  child: Text(
+                    'Quick stats',
+                    style: calendarBodyTextStyle,
+                  ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.today),
-                  title: const Text('Due Reminders'),
+                  title: const Text('Due reminders'),
                   trailing: Text('${state.dueReminders?.length ?? 0}'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.schedule),
-                  title: const Text('Next Task'),
-                  subtitle: Text(state.nextTask?.title ?? 'None'),
+                  title: const Text('Next task'),
+                  subtitle: Text(
+                    state.nextTask?.title ?? 'None',
+                  ),
                 ),
                 const Divider(),
                 Padding(
@@ -776,10 +764,13 @@ class _CalendarGuestModeInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Guest Mode', style: calendarBodyTextStyle),
+        const Text(
+          'Guest mode',
+          style: calendarBodyTextStyle,
+        ),
         const SizedBox(height: calendarGutterSm),
         Text(
-          'Your tasks are saved locally on this device. Sign up to sync across devices.',
+          'Log in to sync tasks across devices and enable reminders.',
           style: calendarSubtitleTextStyle.copyWith(fontSize: 12),
         ),
       ],
@@ -845,7 +836,7 @@ class _CalendarAddTaskFab<T extends BaseCalendarBloc> extends StatelessWidget {
               ),
             ),
           ),
-        );
+        ).withTapBounce(enabled: !state.isLoading);
       },
     );
   }

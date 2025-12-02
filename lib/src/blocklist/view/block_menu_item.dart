@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -26,7 +27,7 @@ class BlockMenuItem extends StatelessWidget {
             LucideIcons.userX,
             color: context.colorScheme.destructive,
           ),
-          child: const Text('Block'),
+          child: Text(context.l10n.blocklistBlock),
         );
       },
     );

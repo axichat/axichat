@@ -3,6 +3,7 @@ import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -31,7 +32,7 @@ class BlocklistAddButton extends StatelessWidget {
           child: StatefulBuilder(
             builder: (context, setState) {
               return AxiInputDialog(
-                title: const Text('Block user'),
+                title: Text(context.l10n.blocklistBlockUser),
                 content: BlocConsumer<BlocklistCubit, BlocklistState>(
                   listener: (context, state) {
                     if (state is BlocklistSuccess) {
@@ -81,10 +82,10 @@ class BlocklistUnblockAllButton extends StatelessWidget {
           leading: disabled
               ? AxiProgressIndicator(
                   color: context.colorScheme.foreground,
-                  semanticsLabel: 'Waiting for unblock',
+                  semanticsLabel: context.l10n.blocklistWaitingForUnblock,
                 )
               : null,
-          child: const Text('Unblock all'),
+          child: Text(context.l10n.blocklistUnblockAll),
         ).withTapBounce(enabled: !disabled);
       },
     );

@@ -17,12 +17,14 @@ class TaskSectionHeader extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.textStyle,
     this.trailing,
+    this.uppercase = true,
   });
 
   final String title;
   final EdgeInsetsGeometry padding;
   final TextStyle? textStyle;
   final Widget? trailing;
+  final bool uppercase;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +35,7 @@ class TaskSectionHeader extends StatelessWidget {
           color: calendarSubtitleColor,
           letterSpacing: 0.2,
         );
+    final String displayTitle = uppercase ? title.toUpperCase() : title;
 
     return Padding(
       padding: padding,
@@ -41,7 +44,7 @@ class TaskSectionHeader extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              title,
+              displayTitle,
               style: style,
             ),
           ),
@@ -301,9 +304,10 @@ class TaskToolbarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadButton.outline(
+    final bool allowPress = enabled && onPressed != null;
+    final button = ShadButton.outline(
       size: ShadButtonSize.sm,
-      onPressed: enabled ? onPressed : null,
+      onPressed: allowPress ? onPressed : null,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -317,7 +321,8 @@ class TaskToolbarButton extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).withTapBounce(enabled: allowPress);
+    return button;
   }
 }
 
@@ -340,7 +345,7 @@ class TaskGhostIconButton extends StatelessWidget {
       size: ShadButtonSize.sm,
       onPressed: onPressed,
       child: Icon(icon, size: 16),
-    );
+    ).withTapBounce();
     return tooltip == null
         ? button
         : AxiTooltip(
@@ -782,7 +787,7 @@ class TaskPrimaryButton extends StatelessWidget {
                 Text(label),
               ],
             ),
-    );
+    ).withTapBounce(enabled: !disabled);
   }
 }
 
@@ -836,7 +841,7 @@ class TaskSecondaryButton extends StatelessWidget {
                 Text(label),
               ],
             ),
-    );
+    ).withTapBounce(enabled: !disabled);
   }
 }
 
@@ -879,7 +884,7 @@ class TaskDestructiveButton extends StatelessWidget {
                 Text(label),
               ],
             ),
-    );
+    ).withTapBounce(enabled: !disabled);
   }
 }
 

@@ -1,11 +1,13 @@
-import 'package:flutter/material.dart';
-
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/view/widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
+import 'package:axichat/src/calendar/view/widgets/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/material.dart';
 
 class DayEventDraft {
   const DayEventDraft({
@@ -45,7 +47,10 @@ Future<DayEventEditorResult?> showDayEventEditor({
     context: context,
     isScrollControlled: true,
     dialogMaxWidth: 720,
-    surfacePadding: const EdgeInsets.all(calendarGutterLg),
+    surfacePadding: const EdgeInsets.symmetric(
+      horizontal: calendarGutterSm,
+      vertical: calendarInsetSm,
+    ),
     builder: (BuildContext sheetContext) {
       return _DayEventEditorForm(
         initialDate: normalized,
@@ -71,9 +76,11 @@ class _DayEventEditorForm extends StatefulWidget {
 class _DayEventEditorFormState extends State<_DayEventEditorForm> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  final FocusNode _titleFocusNode = FocusNode();
   late DateTime _startDate;
   late DateTime _endDate;
   late ReminderPreferences _reminders;
+  String? _titleError;
 
   @override
   void initState() {
@@ -91,6 +98,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _titleFocusNode.dispose();
     super.dispose();
   }
 
@@ -110,8 +118,8 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterLg,
-            vertical: calendarGutterMd,
+            horizontal: calendarGutterMd,
+            vertical: calendarInsetSm,
           ),
           child: Row(
             children: [
@@ -136,10 +144,10 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
         Flexible(
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(
-              calendarGutterLg,
-              calendarGutterSm,
-              calendarGutterLg,
-              calendarGutterLg + viewInsets.bottom,
+              calendarGutterMd,
+              calendarInsetLg,
+              calendarGutterMd,
+              calendarGutterMd + viewInsets.bottom,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,6 +160,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                   borderRadius: calendarBorderRadius,
                   focusBorderColor: calendarPrimaryColor,
                   textCapitalization: TextCapitalization.sentences,
+                  focusNode: _titleFocusNode,
+                  onChanged: _handleTitleChanged,
+                  errorText: _titleError,
                 ),
                 const SizedBox(height: calendarGutterMd),
                 TaskDescriptionField(
@@ -162,8 +173,11 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                   minLines: 3,
                   maxLines: 3,
                 ),
-                const TaskSectionDivider(),
-                TaskSectionHeader(
+                TaskSectionDivider(
+                  color: colors.border,
+                  verticalPadding: calendarGutterMd,
+                ),
+                const TaskSectionHeader(
                   title: 'Dates',
                 ),
                 const SizedBox(height: calendarInsetLg),
@@ -191,7 +205,10 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     });
                   },
                 ),
-                const TaskSectionDivider(),
+                TaskSectionDivider(
+                  color: colors.border,
+                  verticalPadding: calendarGutterMd,
+                ),
                 ReminderPreferencesField(
                   value: _reminders,
                   onChanged: (ReminderPreferences next) {
@@ -199,50 +216,68 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       _reminders = next;
                     });
                   },
-                  showDeadlineOptions: false,
                   title: 'Reminder',
+                  anchor: ReminderAnchor.start,
                 ),
               ],
             ),
           ),
         ),
-        TaskFormActionsRow(
-          includeTopBorder: true,
-          padding: EdgeInsets.fromLTRB(
-            calendarGutterLg,
-            calendarGutterMd,
-            calendarGutterLg,
-            calendarGutterMd + viewInsets.bottom,
-          ),
-          children: [
-            if (isEditing)
-              TaskDestructiveButton(
-                label: 'Delete',
-                icon: Icons.delete_outline,
-                onPressed: () => Navigator.of(context).pop(
-                  const DayEventEditorResult.deleted(),
-                ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _titleController,
+          builder: (context, value, _) {
+            final bool canSubmit =
+                _titleError == null && value.text.trim().isNotEmpty;
+            return TaskFormActionsRow(
+              includeTopBorder: true,
+              gap: calendarGutterSm,
+              padding: EdgeInsets.fromLTRB(
+                calendarGutterLg,
+                calendarGutterMd,
+                calendarGutterLg,
+                calendarGutterMd + viewInsets.bottom,
               ),
-            TaskSecondaryButton(
-              label: 'Cancel',
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
-            TaskPrimaryButton(
-              label: isEditing ? 'Save' : 'Add',
-              onPressed: _submit,
-            ),
-          ],
+              children: [
+                const Spacer(),
+                if (isEditing)
+                  TaskDestructiveButton(
+                    label: 'Delete',
+                    icon: Icons.delete_outline,
+                    onPressed: () => Navigator.of(context).pop(
+                      const DayEventEditorResult.deleted(),
+                    ),
+                  ),
+                TaskSecondaryButton(
+                  label: context.l10n.commonCancel,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+                TaskPrimaryButton(
+                  label: isEditing ? 'Save' : 'Add',
+                  onPressed: canSubmit ? _submit : null,
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
   }
 
+  void _handleTitleChanged(String value) {
+    if (_titleError != null && value.trim().isNotEmpty) {
+      setState(() {
+        _titleError = null;
+      });
+    }
+  }
+
   void _submit() {
     final String title = _titleController.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title cannot be empty')),
-      );
+      setState(() {
+        _titleError = context.l10n.calendarErrorTitleEmptyFriendly;
+      });
+      _titleFocusNode.requestFocus();
       return;
     }
     final DateTime normalizedStart =

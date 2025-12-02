@@ -9,8 +9,6 @@ const double _kMenuItemHeight = 52;
 const double _kMenuMinWidth = 0;
 const double _kMenuMaxWidth = 360;
 const double _kMenuMaxHeight = 320;
-const double _kMenuCornerRadius = 20;
-const double _kMenuItemCornerRadius = 12;
 
 class AxiMenuAction {
   const AxiMenuAction({
@@ -131,10 +129,10 @@ class _AxiMenuState extends State<AxiMenu> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final BorderRadius borderRadius = BorderRadius.circular(_kMenuCornerRadius);
+    final BorderRadius borderRadius = context.radius;
     final dividerColor = colors.border.withValues(alpha: 0.55);
-    final hoverColor = colors.muted.withValues(alpha: 0.1);
-    final focusColor = colors.primary.withValues(alpha: 0.16);
+    final hoverColor = colors.primary.withValues(alpha: 0.26);
+    final focusColor = colors.primary.withValues(alpha: 0.32);
 
     final height = math.min(
       widget.actions.length * _kMenuItemHeight,
@@ -163,7 +161,7 @@ class _AxiMenuState extends State<AxiMenu> {
       widget.maxWidth,
     );
 
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: borderRadius,
         boxShadow: const [
@@ -179,78 +177,74 @@ class _AxiMenuState extends State<AxiMenu> {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minWidth: menuWidth,
-            maxWidth: widget.maxWidth,
-            maxHeight: widget.maxHeight,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: menuWidth,
+          maxWidth: widget.maxWidth,
+          maxHeight: widget.maxHeight,
+        ),
+        child: Material(
+          color: colors.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: borderRadius,
+            side: BorderSide(color: colors.border.withValues(alpha: 0.9)),
           ),
-          child: Material(
-            color: colors.card,
-            shape: RoundedRectangleBorder(
-              borderRadius: borderRadius,
-              side: BorderSide(color: colors.border.withValues(alpha: 0.9)),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Focus(
-              focusNode: _menuScopeNode,
-              autofocus: true,
-              onKeyEvent: _handleKeyEvent,
-              child: Shortcuts(
-                shortcuts: const {
-                  SingleActivator(LogicalKeyboardKey.arrowDown):
-                      DirectionalFocusIntent(TraversalDirection.down),
-                  SingleActivator(LogicalKeyboardKey.arrowUp):
-                      DirectionalFocusIntent(TraversalDirection.up),
-                  SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-                  SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+          child: Focus(
+            focusNode: _menuScopeNode,
+            autofocus: true,
+            onKeyEvent: _handleKeyEvent,
+            child: Shortcuts(
+              shortcuts: const {
+                SingleActivator(LogicalKeyboardKey.arrowDown):
+                    DirectionalFocusIntent(TraversalDirection.down),
+                SingleActivator(LogicalKeyboardKey.arrowUp):
+                    DirectionalFocusIntent(TraversalDirection.up),
+                SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+                SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+              },
+              child: Actions(
+                actions: {
+                  ActivateIntent: CallbackAction<ActivateIntent>(
+                    onInvoke: (_) {
+                      _activateFocused();
+                      return null;
+                    },
+                  ),
                 },
-                child: Actions(
-                  actions: {
-                    ActivateIntent: CallbackAction<ActivateIntent>(
-                      onInvoke: (_) {
-                        _activateFocused();
-                        return null;
-                      },
-                    ),
-                  },
-                  child: FocusTraversalGroup(
-                    child: SizedBox(
-                      width: menuWidth,
-                      height: height,
-                      child: ListView.separated(
-                        padding: EdgeInsets.zero,
-                        physics: scrollable
-                            ? const ClampingScrollPhysics()
-                            : const NeverScrollableScrollPhysics(),
-                        itemCount: widget.actions.length,
-                        separatorBuilder: (_, __) => Divider(
-                          height: 0,
-                          thickness: 0.7,
-                          color: dividerColor,
-                        ),
-                        itemBuilder: (context, index) {
-                          final action = widget.actions[index];
-                          return SizedBox(
-                            height: _kMenuItemHeight,
-                            child: _AxiMenuItem(
-                              action: action,
-                              focusNode: _focusNodes[index],
-                              textTheme: textTheme,
-                              colors: colors,
-                              hoverColor: hoverColor,
-                              focusColor: focusColor,
-                              onPressed: action.enabled
-                                  ? () {
-                                      action.onPressed?.call();
-                                    }
-                                  : null,
-                            ),
-                          );
-                        },
+                child: FocusTraversalGroup(
+                  child: SizedBox(
+                    width: menuWidth,
+                    height: height,
+                    child: ListView.separated(
+                      padding: EdgeInsets.zero,
+                      physics: scrollable
+                          ? const ClampingScrollPhysics()
+                          : const NeverScrollableScrollPhysics(),
+                      itemCount: widget.actions.length,
+                      separatorBuilder: (_, __) => Divider(
+                        height: 0,
+                        thickness: 0.7,
+                        color: dividerColor,
                       ),
+                      itemBuilder: (context, index) {
+                        final action = widget.actions[index];
+                        return SizedBox(
+                          height: _kMenuItemHeight,
+                          child: _AxiMenuItem(
+                            action: action,
+                            focusNode: _focusNodes[index],
+                            textTheme: textTheme,
+                            colors: colors,
+                            hoverColor: hoverColor,
+                            focusColor: focusColor,
+                            onPressed: action.enabled
+                                ? () {
+                                    action.onPressed?.call();
+                                  }
+                                : null,
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -304,7 +298,7 @@ class _AxiMenuItem extends StatelessWidget {
         : (enabled
             ? colors.foreground
             : colors.mutedForeground.withValues(alpha: 0.65));
-    final BorderRadius radius = BorderRadius.circular(_kMenuItemCornerRadius);
+    final BorderRadius radius = context.radius;
     final WidgetStateProperty<Color?> overlay =
         WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.pressed) ||

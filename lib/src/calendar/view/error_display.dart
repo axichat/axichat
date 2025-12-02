@@ -59,7 +59,7 @@ class ErrorDisplay extends StatelessWidget {
           ),
           const SizedBox(height: calendarGutterSm),
           Text(
-            _getFriendlyErrorMessage(error),
+            _getFriendlyErrorMessage(context, error),
             style: TextStyle(
               color: Colors.red.shade800,
               fontSize: 14,
@@ -69,7 +69,7 @@ class ErrorDisplay extends StatelessWidget {
             const SizedBox(height: calendarGutterMd),
             ShadButton.outline(
               onPressed: onRetry,
-              child: const Text('Try Again'),
+              child: const Text('Try again'),
             ),
           ],
         ],
@@ -77,41 +77,44 @@ class ErrorDisplay extends StatelessWidget {
     );
   }
 
-  static String _getFriendlyErrorMessage(String error) {
+  static String _getFriendlyErrorMessage(
+    BuildContext context,
+    String error,
+  ) {
     // Convert technical errors to user-friendly messages
     if (error.contains('Task not found')) {
-      return 'The task you are trying to access no longer exists.';
+      return 'Task not found';
     }
     if (error.contains('Validation failed')) {
       if (error.contains('Title cannot be empty')) {
-        return 'Please enter a task title.';
+        return 'Title cannot be empty';
       }
       if (error.contains('Title too long')) {
         return calendarTaskTitleFriendlyError;
       }
       if (error.contains('Description too long')) {
-        return 'Task description is too long. Please use fewer than 1000 characters.';
+        return 'Description too long';
       }
-      return 'Please check your input and try again.';
+      return 'Input invalid';
     }
     if (error.contains('Failed to add task')) {
-      return 'Unable to create the task. Please try again.';
+      return 'Failed to add task';
     }
     if (error.contains('Failed to update task')) {
-      return 'Unable to update the task. Please try again.';
+      return 'Failed to update task';
     }
     if (error.contains('Failed to delete task')) {
-      return 'Unable to delete the task. Please try again.';
+      return 'Failed to delete task';
     }
     if (error.contains('network') || error.contains('connection')) {
-      return 'Network connection issue. Please check your internet connection and try again.';
+      return 'Network error';
     }
     if (error.contains('storage') || error.contains('database')) {
-      return 'Unable to save your changes. Please try again.';
+      return 'Storage error';
     }
 
     // Generic fallback
-    return 'Something went wrong. Please try again.';
+    return 'Unknown error';
   }
 }
 
@@ -125,7 +128,9 @@ class ErrorSnackBar {
             const Icon(Icons.error_outline, color: Colors.white, size: 18),
             const SizedBox(width: calendarGutterSm),
             Expanded(
-              child: Text(ErrorDisplay._getFriendlyErrorMessage(error)),
+              child: Text(
+                ErrorDisplay._getFriendlyErrorMessage(context, error),
+              ),
             ),
           ],
         ),

@@ -2,6 +2,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -52,7 +53,7 @@ class BlockButtonInline extends StatelessWidget {
           onPressed: onPressed,
           foregroundColor: context.colorScheme.destructive,
           leading: showIcon ? const Icon(LucideIcons.userX) : null,
-          child: const Text('Block'),
+          child: Text(context.l10n.blocklistBlock),
         ).withTapBounce(enabled: onPressed != null);
       },
     );
@@ -85,7 +86,7 @@ class _EmailBlockButton extends StatelessWidget {
         onPressed: null,
         foregroundColor: context.colorScheme.destructive,
         leading: showIcon ? const Icon(LucideIcons.userX) : null,
-        child: const Text('Block'),
+        child: Text(context.l10n.blocklistBlock),
       ).withTapBounce(enabled: false);
     }
     Future<void> handleBlock() async {
@@ -99,7 +100,7 @@ class _EmailBlockButton extends StatelessWidget {
       onPressed: handleBlock,
       foregroundColor: context.colorScheme.destructive,
       leading: showIcon ? const Icon(LucideIcons.userX) : null,
-      child: const Text('Block'),
+      child: Text(context.l10n.blocklistBlock),
     ).withTapBounce(enabled: true);
   }
 }

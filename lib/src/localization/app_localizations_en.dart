@@ -1126,6 +1126,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calendarTaskNotFound => 'Task not found';
 
   @override
+  String get calendarDayEventsTitle => 'Day events';
+
+  @override
+  String get calendarDayEventsEmpty => 'No day-level events for this date';
+
+  @override
+  String get calendarDayEventsAdd => 'Add day event';
+
+  @override
+  String get accessibilityNewContactLabel => 'Contact address';
+
+  @override
+  String get accessibilityNewContactHint => 'someone@example.com';
+
+  @override
+  String get accessibilityStartChat => 'Start chat';
+
+  @override
+  String get accessibilityStartChatHint =>
+      'Submit this address to start a conversation.';
+
+  @override
+  String get accessibilityMessagesEmpty => 'No messages yet';
+
+  @override
+  String get accessibilityMessageNoContent => 'No message content';
+
+  @override
   String get profileTitle => 'Profile';
 
   @override

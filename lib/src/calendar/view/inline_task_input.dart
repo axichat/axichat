@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
@@ -13,7 +14,6 @@ import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'controllers/inline_task_composer_controller.dart';
-import 'feedback_system.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
@@ -37,6 +37,8 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
   String _lastParserText = '';
   NlAdapterResult? _cachedParserResult;
   String? _titleError;
+  String? _formError;
+  String? _parserNote;
 
   @override
   void initState() {
@@ -57,6 +59,12 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
   void _handleTextChanged(String value) {
     final trimmed = value.trim();
     _updateTitleValidation(value);
+    if (_formError != null || _parserNote != null) {
+      setState(() {
+        _formError = null;
+        _parserNote = null;
+      });
+    }
     if (trimmed.isEmpty) {
       _resetParserState(clearSuggestions: true);
       return;
@@ -96,6 +104,11 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
     _parserRequestId++;
     _cachedParserResult = null;
     _lastParserText = '';
+    if (_parserNote != null && mounted) {
+      setState(() {
+        _parserNote = null;
+      });
+    }
     if (clearSuggestions) {
       _composerController.clearParserSuggestions();
     }
@@ -132,8 +145,8 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
     if (validationError != null) {
       setState(() {
         _titleError = validationError;
+        _formError = null;
       });
-      FeedbackSystem.showWarning(context, validationError);
       return;
     }
 
@@ -202,11 +215,10 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
             ),
           );
 
-      if (result.parseNotes != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.parseNotes!)),
-        );
-      }
+      setState(() {
+        _formError = null;
+        _parserNote = result.parseNotes;
+      });
 
       _controller.clear();
       setState(() {
@@ -217,9 +229,9 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
       _focusNode.requestFocus();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not add task: $error')),
-      );
+      setState(() {
+        _formError = 'Could not add task: $error';
+      });
     } finally {
       if (mounted) {
         setState(() {
@@ -276,6 +288,27 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
                   errorText: _titleError,
                 ),
                 TaskFieldCharacterHint(controller: _controller),
+                if (_formError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: calendarInsetMd),
+                    child: Text(
+                      _formError!,
+                      style: context.textTheme.small.copyWith(
+                        color: calendarDangerColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                if (_parserNote != null && _formError == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: calendarInsetMd),
+                    child: Text(
+                      _parserNote!,
+                      style: context.textTheme.small.copyWith(
+                        color: context.colorScheme.mutedForeground,
+                      ),
+                    ),
+                  ),
               ],
             ),
             if (_composerController.isExpanded) ...[
@@ -297,28 +330,40 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
                 },
               ),
               const SizedBox(height: calendarGutterSm),
-              TaskFormActionsRow(
-                padding: EdgeInsets.zero,
-                gap: calendarGutterSm,
-                children: [
-                  Expanded(
-                    child: TaskPrimaryButton(
-                      label: 'Add task',
-                      onPressed: _isSubmitting ? null : () => _handleSubmit(),
-                    ),
-                  ),
-                  Expanded(
-                    child: TaskToolbarButton(
-                      label: 'Clear',
-                      onPressed: () {
-                        _controller.clear();
-                        _composerController.resetSchedule();
-                        _resetParserState(clearSuggestions: true);
-                        _focusNode.unfocus();
-                      },
-                    ),
-                  ),
-                ],
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) {
+                  final bool canSubmit = !_isSubmitting &&
+                      _titleError == null &&
+                      value.text.trim().isNotEmpty;
+                  return TaskFormActionsRow(
+                    padding: EdgeInsets.zero,
+                    gap: calendarGutterSm,
+                    children: [
+                      Expanded(
+                        child: TaskPrimaryButton(
+                          label: 'Add task',
+                          onPressed: canSubmit ? _handleSubmit : null,
+                        ),
+                      ),
+                      Expanded(
+                        child: TaskToolbarButton(
+                          label: 'Clear',
+                          onPressed: () {
+                            _controller.clear();
+                            _composerController.resetSchedule();
+                            _resetParserState(clearSuggestions: true);
+                            setState(() {
+                              _formError = null;
+                              _titleError = null;
+                            });
+                            _focusNode.unfocus();
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ],

@@ -64,7 +64,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatsFilterContacts => 'Contacts';
 
   @override
-  String get chatsFilterNonContacts => 'Non-contacts';
+  String get chatsFilterNonContacts => 'Hors contacts';
 
   @override
   String get chatsFilterXmppOnly => 'XMPP uniquement';
@@ -1144,6 +1144,34 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get calendarTaskNotFound => 'Tâche introuvable';
+
+  @override
+  String get calendarDayEventsTitle => 'Événements du jour';
+
+  @override
+  String get calendarDayEventsEmpty => 'Aucun événement à cette date';
+
+  @override
+  String get calendarDayEventsAdd => 'Ajouter un événement du jour';
+
+  @override
+  String get accessibilityNewContactLabel => 'Adresse du contact';
+
+  @override
+  String get accessibilityNewContactHint => 'quelquun@exemple.com';
+
+  @override
+  String get accessibilityStartChat => 'Démarrer le chat';
+
+  @override
+  String get accessibilityStartChatHint =>
+      'Envoyez cette adresse pour démarrer une conversation.';
+
+  @override
+  String get accessibilityMessagesEmpty => 'Aucun message pour le moment';
+
+  @override
+  String get accessibilityMessageNoContent => 'Aucun contenu de message';
 
   @override
   String get profileTitle => 'Profil';

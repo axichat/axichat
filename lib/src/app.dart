@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
@@ -553,6 +554,19 @@ class _ShortcutBindings extends StatelessWidget {
       return child;
     }
     final env = EnvScope.of(context);
+    AccessibilityActionBloc? accessibilityBloc() {
+      final focusedContext = FocusManager.instance.primaryFocus?.context;
+      final targetContext = focusedContext ?? context;
+      try {
+        return BlocProvider.of<AccessibilityActionBloc>(
+          targetContext,
+          listen: false,
+        );
+      } on Exception {
+        return null;
+      }
+    }
+
     final routedChild = Actions(
       actions: {
         ComposeIntent: CallbackAction<ComposeIntent>(
@@ -560,6 +574,12 @@ class _ShortcutBindings extends StatelessWidget {
             context.read<ComposeWindowCubit>().openDraft(
               attachmentMetadataIds: const <String>[],
             );
+            return null;
+          },
+        ),
+        OpenFindActionIntent: CallbackAction<OpenFindActionIntent>(
+          onInvoke: (_) {
+            accessibilityBloc()?.add(const AccessibilityMenuOpened());
             return null;
           },
         ),

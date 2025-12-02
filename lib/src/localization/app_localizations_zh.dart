@@ -1093,6 +1093,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarTaskNotFound => '未找到任务';
 
   @override
+  String get calendarDayEventsTitle => '当天事件';
+
+  @override
+  String get calendarDayEventsEmpty => '此日期没有日程事件';
+
+  @override
+  String get calendarDayEventsAdd => '添加日程事件';
+
+  @override
+  String get accessibilityNewContactLabel => '联系地址';
+
+  @override
+  String get accessibilityNewContactHint => 'someone@example.com';
+
+  @override
+  String get accessibilityStartChat => '开始聊天';
+
+  @override
+  String get accessibilityStartChatHint => '提交此地址以开始对话。';
+
+  @override
+  String get accessibilityMessagesEmpty => '暂无消息';
+
+  @override
+  String get accessibilityMessageNoContent => '无消息内容';
+
+  @override
   String get profileTitle => '个人资料';
 
   @override
@@ -2221,6 +2248,33 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarTaskNotFound => '找不到任務';
+
+  @override
+  String get calendarDayEventsTitle => '當日事件';
+
+  @override
+  String get calendarDayEventsEmpty => '此日期沒有日程事件';
+
+  @override
+  String get calendarDayEventsAdd => '新增日程事件';
+
+  @override
+  String get accessibilityNewContactLabel => '聯絡地址';
+
+  @override
+  String get accessibilityNewContactHint => 'someone@example.com';
+
+  @override
+  String get accessibilityStartChat => '開始聊天';
+
+  @override
+  String get accessibilityStartChatHint => '提交此地址以開始對話。';
+
+  @override
+  String get accessibilityMessagesEmpty => '暫時沒有訊息';
+
+  @override
+  String get accessibilityMessageNoContent => '沒有訊息內容';
 
   @override
   String get profileTitle => '個人資料';

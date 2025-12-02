@@ -145,7 +145,7 @@ class _RosterListBody extends StatelessWidget {
                 // Presence is parsed for MUC/identity purposes but not shown
                 // in the contacts UI because it is unreliable across servers.
                 presence: null,
-                status: null,
+                status: item.status,
               ),
               title: item.title,
               subtitle: item.jid,

@@ -277,6 +277,17 @@ extension CalendarStateExtensions on CalendarState {
     return active;
   }
 
+  List<CalendarCriticalPath> criticalPathsForTask(CalendarTask task) {
+    final String baseId = baseTaskIdFrom(task.id);
+    return criticalPaths
+        .where(
+          (path) => path.taskIds.any(
+            (id) => baseTaskIdFrom(id) == baseId,
+          ),
+        )
+        .toList();
+  }
+
   bool _overlapsRange(
     DateTime eventStart,
     DateTime eventEnd,

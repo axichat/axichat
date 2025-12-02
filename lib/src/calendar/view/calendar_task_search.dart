@@ -142,7 +142,8 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
     return BlocBuilder<B, CalendarState>(
       bloc: widget.bloc,
       builder: (context, state) {
-        final List<CalendarTask> results = _search(state);
+        final String query = _queryController.text.trim();
+        final List<CalendarTask> results = _search(state, query);
         return ConstrainedBox(
           constraints: BoxConstraints(
             maxHeight: MediaQuery.sizeOf(context).height * 0.8,
@@ -185,8 +186,8 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                 hintText:
                     'title:, desc:, location:, priority:urgent, status:done',
                 textInputAction: TextInputAction.search,
-                onChanged: _onQueryChanged,
                 onSubmitted: _handleSubmitted,
+                onChanged: (_) => setState(() {}),
                 prefix: const Icon(Icons.search, color: calendarSubtitleColor),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: calendarGutterMd,
@@ -205,7 +206,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                   child: results.isEmpty
                       ? _EmptySearchState(
                           key: const ValueKey('empty-search'),
-                          showHint: _queryController.text.trim().isEmpty,
+                          showHint: query.isEmpty,
                           isCompact: isCompact,
                         )
                       : Scrollbar(
@@ -265,19 +266,15 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
     await widget.onTaskSelected(task);
   }
 
-  void _onQueryChanged([String _ = '']) {
+  void _handleSubmitted(String _) {
     setState(() {});
   }
 
-  void _handleSubmitted(String _) {
-    _onQueryChanged();
-  }
-
-  List<CalendarTask> _search(CalendarState state) {
+  List<CalendarTask> _search(CalendarState state, String queryText) {
     final Map<String, CalendarTask> tasks = state.model.tasks;
     final CalendarCriticalPath? targetPath = widget.targetPath;
     final _ParsedQuery query = _ParsedQuery.parse(
-      _queryController.text,
+      queryText,
       targetPath: targetPath,
     );
     final Set<String> excludedBaseIds =
@@ -364,7 +361,7 @@ class _FilterRow extends StatelessWidget {
               ],
             ),
           ),
-        );
+        ).withTapBounce();
       }).toList(),
     );
   }
@@ -792,19 +789,29 @@ class _QueryMatcher {
     if (!_idMatches(task, query.idTerms)) {
       return false;
     }
-    if (query.generalTerms.isEmpty) {
-      return true;
-    }
-    final String haystack = [
+
+    final bool hasScopedTextTerms = query.titleTerms.isNotEmpty ||
+        query.descriptionTerms.isNotEmpty ||
+        query.locationTerms.isNotEmpty;
+    final Iterable<String?> defaultFields = <String?>[
       task.title,
       task.description,
+    ];
+    final Iterable<String?> extendedFields = <String?>[
+      ...defaultFields,
       task.location,
       task.deadline?.toIso8601String(),
       task.scheduledTime?.toIso8601String(),
       task.priority?.name,
-    ].whereType<String>().join(' ').toLowerCase();
-    return query.generalTerms
-        .every((term) => haystack.contains(term.toLowerCase()));
+    ];
+
+    if (!_matchesAnyField(
+      fields: hasScopedTextTerms ? extendedFields : defaultFields,
+      terms: query.generalTerms,
+    )) {
+      return false;
+    }
+    return true;
   }
 
   static bool _textMatches(String? value, List<String> terms) {
@@ -932,6 +939,24 @@ class _QueryMatcher {
     }
     final String haystack = '${task.id} ${task.baseId}'.toLowerCase();
     return idTerms.every(haystack.contains);
+  }
+
+  static bool _matchesAnyField({
+    required Iterable<String?> fields,
+    required List<String> terms,
+  }) {
+    if (terms.isEmpty) {
+      return true;
+    }
+    final String haystack = fields
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .map((value) => value.toLowerCase())
+        .join(' ');
+    if (haystack.isEmpty) {
+      return false;
+    }
+    return terms.every((term) => haystack.contains(term.toLowerCase()));
   }
 }
 

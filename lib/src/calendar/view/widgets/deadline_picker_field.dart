@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -1379,14 +1380,14 @@ class _DeadlinePickerActions extends StatelessWidget {
           ShadButton.outline(
             size: ShadButtonSize.sm,
             onPressed: onCancel,
-            child: const Text('Cancel'),
+            child: Text(context.l10n.commonCancel),
           ),
           if (hasValue && onClear != null) ...[
             const SizedBox(width: calendarGutterSm),
             ShadButton.outline(
               size: ShadButtonSize.sm,
               onPressed: onClear,
-              child: const Text('Clear'),
+              child: Text(context.l10n.commonClear),
             ),
           ],
           const Spacer(),

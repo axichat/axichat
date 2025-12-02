@@ -32,10 +32,6 @@ enum _ProfileRoute {
   delete,
 }
 
-const _profileActionSpacingWide = 12.0;
-const _profileActionSpacingNarrow = 10.0;
-const _profileActionRunSpacing = 10.0;
-
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key, required this.locate});
 
@@ -293,10 +289,27 @@ class _ProfileCardSection extends StatelessWidget {
               final bool wideCard =
                   isWideLayout && constraints.maxWidth >= 360.0;
               final double statusFieldMaxWidth = wideCard ? 420.0 : 320.0;
-              final double actionSpacing = wideCard
-                  ? _profileActionSpacingWide
-                  : _profileActionSpacingNarrow;
-              const double actionRunSpacing = _profileActionRunSpacing;
+              final actions = <AxiMenuAction>[
+                AxiMenuAction(
+                  label: l10n.profileArchives,
+                  icon: LucideIcons.archive,
+                  onPressed: () => context.push(
+                    const ArchivesRoute().location,
+                    extra: locate,
+                  ),
+                ),
+                AxiMenuAction(
+                  label: l10n.profileChangePassword,
+                  icon: LucideIcons.keyRound,
+                  onPressed: () => onNavigate(_ProfileRoute.changePassword),
+                ),
+                AxiMenuAction(
+                  label: l10n.profileDeleteAccount,
+                  icon: LucideIcons.trash2,
+                  destructive: true,
+                  onPressed: () => onNavigate(_ProfileRoute.delete),
+                ),
+              ];
               return ShadCard(
                 rowMainAxisSize: MainAxisSize.max,
                 columnCrossAxisAlignment: CrossAxisAlignment.center,
@@ -308,7 +321,7 @@ class _ProfileCardSection extends StatelessWidget {
                     // Presence is ingested for MUC features
                     // but we hide presence UI for contacts.
                     presence: null,
-                    status: null,
+                    status: profileState.status,
                     active: false,
                   ),
                 ),
@@ -387,21 +400,18 @@ class _ProfileCardSection extends StatelessWidget {
                     ),
                   ],
                 ),
-                trailing: const LogoutButton(),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const LogoutButton(),
+                    const SizedBox(width: 8),
+                    AxiMore(actions: actions),
+                  ],
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   spacing: 10.0,
                   children: [
-                    BlocBuilder<EmailSyncCubit, EmailSyncState>(
-                      builder: (context, emailSyncState) {
-                        return SessionCapabilityIndicators(
-                          xmppState: connectionState,
-                          emailState: emailSyncState,
-                          emailEnabled: true,
-                          compact: !wideCard,
-                        );
-                      },
-                    ),
                     ConstrainedBox(
                       constraints:
                           BoxConstraints(maxWidth: statusFieldMaxWidth),
@@ -416,31 +426,15 @@ class _ProfileCardSection extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Wrap(
-                      spacing: actionSpacing,
-                      runSpacing: actionRunSpacing,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        ShadButton.outline(
-                          size: ShadButtonSize.sm,
-                          child: Text(l10n.profileArchives),
-                          onPressed: () => context.push(
-                            const ArchivesRoute().location,
-                            extra: locate,
-                          ),
-                        ).withTapBounce(),
-                        ShadButton.outline(
-                          size: ShadButtonSize.sm,
-                          child: Text(l10n.profileChangePassword),
-                          onPressed: () =>
-                              onNavigate(_ProfileRoute.changePassword),
-                        ).withTapBounce(),
-                        ShadButton.destructive(
-                          size: ShadButtonSize.sm,
-                          child: Text(l10n.profileDeleteAccount),
-                          onPressed: () => onNavigate(_ProfileRoute.delete),
-                        ).withTapBounce(),
-                      ],
+                    BlocBuilder<EmailSyncCubit, EmailSyncState>(
+                      builder: (context, emailSyncState) {
+                        return SessionCapabilityIndicators(
+                          xmppState: connectionState,
+                          emailState: emailSyncState,
+                          emailEnabled: true,
+                          compact: !wideCard,
+                        );
+                      },
                     ),
                   ],
                 ),

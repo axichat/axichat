@@ -86,6 +86,7 @@ class AccessibilityActionMenu extends StatefulWidget {
 
 class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
   String? _localeName;
+  bool Function(KeyEvent event)? _globalShortcutHandler;
 
   @override
   void didChangeDependencies() {
@@ -97,6 +98,39 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
             AccessibilityLocaleUpdated(context.l10n),
           );
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _globalShortcutHandler = _handleGlobalShortcut;
+    HardwareKeyboard.instance.addHandler(_globalShortcutHandler!);
+  }
+
+  @override
+  void dispose() {
+    final handler = _globalShortcutHandler;
+    if (handler != null) {
+      HardwareKeyboard.instance.removeHandler(handler);
+    }
+    super.dispose();
+  }
+
+  bool _handleGlobalShortcut(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.keyK) return false;
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final hasMeta = pressed.contains(LogicalKeyboardKey.metaLeft) ||
+        pressed.contains(LogicalKeyboardKey.metaRight) ||
+        pressed.contains(LogicalKeyboardKey.meta);
+    final hasControl = pressed.contains(LogicalKeyboardKey.controlLeft) ||
+        pressed.contains(LogicalKeyboardKey.controlRight) ||
+        pressed.contains(LogicalKeyboardKey.control);
+    if (!hasMeta && !hasControl) return false;
+    final bloc = context.read<AccessibilityActionBloc?>();
+    if (bloc == null || bloc.isClosed) return false;
+    bloc.add(const AccessibilityMenuOpened());
+    return true;
   }
 
   @override
@@ -161,6 +195,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       <Object, VoidCallback>{};
   final List<Object> _groupOrderList = <Object>[];
   FocusNode? _restoreFocusNode;
+  Object? _lastFocusedGroup;
   bool _wasVisible = false;
   bool _isEditingText = false;
   String? _lastAnnouncedStep;
@@ -186,12 +221,14 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     super.didUpdateWidget(oldWidget);
     if (widget.state.visible && !_wasVisible) {
       _restoreFocusNode = FocusManager.instance.primaryFocus;
+      _lastFocusedGroup = null;
       _scheduleInitialFocus();
       _announceStepChange();
     } else if (!widget.state.visible && _wasVisible) {
       _focusScopeNode.unfocus();
       final previous = _restoreFocusNode;
       _restoreFocusNode = null;
+      _lastFocusedGroup = null;
       if (previous != null &&
           previous.context != null &&
           previous.canRequestFocus) {
@@ -368,36 +405,43 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                                 hint:
                                     'Press Tab to reach shortcut instructions, use arrow keys inside lists, Shift plus arrows to move between groups, or Escape to exit.',
                                 explicitChildNodes: true,
-                                child: SingleChildScrollView(
+                                child: Scrollbar(
                                   controller: _scrollController,
-                                  clipBehavior: Clip.none,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      minHeight: viewportHeight,
-                                    ),
-                                    child: FocusTraversalGroup(
-                                      policy: OrderedTraversalPolicy(),
-                                      child: _AccessibilityActionContent(
-                                        state: widget.state,
-                                        sectionsListKey: _sectionsListKey,
-                                        actionsListKey: _actionsListKey,
-                                        enableActivationShortcut:
-                                            !_isEditingText,
-                                        registerGroup: _registerGroup,
-                                        unregisterGroup: _unregisterGroup,
-                                        legendFocusNode:
-                                            _shortcutLegendFocusNode,
-                                        messageFocusNode: _messageFocusNode,
-                                        composerFocusNode: _composerFocusNode,
-                                        newContactFocusNode:
-                                            _newContactFocusNode,
-                                        legendGroupKey: _legendGroupKey,
-                                        messageCarouselKey: _messageCarouselKey,
-                                        composerGroupKey: _composerGroupKey,
-                                        actionsGroupKey: _actionsGroupKey,
-                                        actionsFocusNode: _actionsFocusNode,
-                                        newContactGroupKey: _newContactGroupKey,
-                                        viewportHeight: viewportHeight,
+                                  child: SingleChildScrollView(
+                                    controller: _scrollController,
+                                    physics: const ClampingScrollPhysics(),
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    clipBehavior: Clip.hardEdge,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        minHeight: viewportHeight,
+                                      ),
+                                      child: FocusTraversalGroup(
+                                        policy: OrderedTraversalPolicy(),
+                                        child: _AccessibilityActionContent(
+                                          state: widget.state,
+                                          sectionsListKey: _sectionsListKey,
+                                          actionsListKey: _actionsListKey,
+                                          enableActivationShortcut:
+                                              !_isEditingText,
+                                          registerGroup: _registerGroup,
+                                          unregisterGroup: _unregisterGroup,
+                                          legendFocusNode:
+                                              _shortcutLegendFocusNode,
+                                          messageFocusNode: _messageFocusNode,
+                                          composerFocusNode: _composerFocusNode,
+                                          newContactFocusNode:
+                                              _newContactFocusNode,
+                                          legendGroupKey: _legendGroupKey,
+                                          messageCarouselKey:
+                                              _messageCarouselKey,
+                                          composerGroupKey: _composerGroupKey,
+                                          actionsGroupKey: _actionsGroupKey,
+                                          actionsFocusNode: _actionsFocusNode,
+                                          newContactGroupKey:
+                                              _newContactGroupKey,
+                                          viewportHeight: viewportHeight,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -524,6 +568,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
   void _focusGroup(Object group) {
     final handler = _groupFocusHandlers[group];
     if (handler == null) return;
+    _lastFocusedGroup = group;
     _focusScopeNode.requestFocus();
     handler();
     _scrollGroupIntoView(group);
@@ -570,17 +615,16 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       if (!mounted) return;
       _focusScopeNode.requestFocus();
       final groups = _groupOrder();
-      Object? target;
-      for (final group in groups) {
-        if (group != _legendGroupKey) {
-          target = group;
-          break;
-        }
+      Object? target =
+          _lastFocusedGroup != null && groups.contains(_lastFocusedGroup)
+              ? _lastFocusedGroup
+              : null;
+      target ??= groups.firstWhere((group) => group != _legendGroupKey,
+          orElse: () => _legendGroupKey);
+      if (target == _legendGroupKey && groups.isNotEmpty) {
+        target = groups.first;
       }
-      target ??= groups.isNotEmpty ? groups.first : null;
-      if (target != null) {
-        _focusGroup(target);
-      }
+      _focusGroup(target);
     });
   }
 
@@ -831,7 +875,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.max,
+      mainAxisSize: MainAxisSize.min,
       children: [
         FocusTraversalOrder(
           order: headerOrder,
@@ -2004,77 +2048,92 @@ class _MessageCarouselState extends State<_MessageCarousel> {
         value: metadataValue,
         hint:
             'Use arrow keys to move between messages. Shift plus arrows switches groups. Press Escape to exit.',
-        child: AnimatedContainer(
-          duration: baseAnimationDuration,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color:
-                hasFocus ? scheme.primary.withValues(alpha: 0.06) : scheme.card,
-            borderRadius: borderRadius,
-            border: Border.all(color: borderColor, width: borderWidth),
-            boxShadow: shadows,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                positionLabel,
-                style: (textTheme.bodySmall ?? const TextStyle()).copyWith(
-                  color: scheme.mutedForeground,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (showMetadata && senderLabel.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    [
-                      'From $senderLabel',
-                      if (timestampLabel.isNotEmpty) timestampLabel,
-                    ].join(' • '),
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: AnimatedContainer(
+            duration: baseAnimationDuration,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: hasFocus
+                  ? scheme.primary.withValues(alpha: 0.06)
+                  : scheme.card,
+              borderRadius: borderRadius,
+              border: Border.all(color: borderColor, width: borderWidth),
+              boxShadow: shadows,
+            ),
+            child: AnimatedSize(
+              duration: baseAnimationDuration,
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    positionLabel,
                     style: (textTheme.bodySmall ?? const TextStyle()).copyWith(
                       color: scheme.mutedForeground,
-                    ),
-                  ),
-                ),
-              if (rawBody.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    rawBody,
-                    style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-                      color: scheme.foreground,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-              if (attachment != null)
-                Semantics(
-                  label: attachmentLabel ?? 'Attachment',
-                  child: ChatAttachmentPreview(
-                    metadataFuture: Future<FileMetadataData?>.value(attachment),
-                    allowed: true,
-                  ),
-                )
-              else if (attachmentLabel != null && rawBody.isEmpty)
-                Text(
-                  attachmentLabel,
-                  style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-                    color: scheme.foreground,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              if (rawBody.isEmpty &&
-                  attachment == null &&
-                  (attachmentLabel == null || attachmentLabel.isEmpty))
-                Text(
-                  'No message content',
-                  style: (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-                    color: scheme.mutedForeground,
-                  ),
-                ),
-            ],
+                  const SizedBox(height: 8),
+                  if (showMetadata && senderLabel.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        [
+                          'From $senderLabel',
+                          if (timestampLabel.isNotEmpty) timestampLabel,
+                        ].join(' • '),
+                        style:
+                            (textTheme.bodySmall ?? const TextStyle()).copyWith(
+                          color: scheme.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  if (rawBody.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        rawBody,
+                        style: (textTheme.bodyMedium ?? const TextStyle())
+                            .copyWith(
+                          color: scheme.foreground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  if (attachment != null)
+                    Semantics(
+                      label: attachmentLabel ?? 'Attachment',
+                      child: ChatAttachmentPreview(
+                        metadataFuture:
+                            Future<FileMetadataData?>.value(attachment),
+                        allowed: true,
+                      ),
+                    )
+                  else if (attachmentLabel != null && rawBody.isEmpty)
+                    Text(
+                      attachmentLabel,
+                      style:
+                          (textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                        color: scheme.foreground,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  if (rawBody.isEmpty &&
+                      attachment == null &&
+                      (attachmentLabel == null || attachmentLabel.isEmpty))
+                    Text(
+                      'No message content',
+                      style:
+                          (textTheme.bodyMedium ?? const TextStyle()).copyWith(
+                        color: scheme.mutedForeground,
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

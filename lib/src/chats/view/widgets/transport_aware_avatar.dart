@@ -10,12 +10,18 @@ class TransportAwareAvatar extends StatelessWidget {
     this.size = 46.0,
     this.badgeOffset = const Offset(-6, -4),
     this.showBadge = true,
+    this.presence,
+    this.status,
+    this.subscription,
   });
 
   final Chat chat;
   final double size;
   final Offset badgeOffset;
   final bool showBadge;
+  final Presence? presence;
+  final String? status;
+  final Subscription? subscription;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +33,8 @@ class TransportAwareAvatar extends StatelessWidget {
     final supportsEmail = chat.transport.isEmail;
     final isAxiCompatible = chat.isAxiContact;
     final shouldLabelAll = !supportsEmail && isAxiCompatible;
+    final Subscription effectiveSubscription = subscription ??
+        (isAxiCompatible ? Subscription.both : Subscription.none);
     Widget? badge;
     if (showBadge) {
       if (supportsEmail && isAxiCompatible) {
@@ -55,6 +63,9 @@ class TransportAwareAvatar extends StatelessWidget {
               jid: avatarIdentifier,
               shape: AxiAvatarShape.circle,
               size: size,
+              presence: presence,
+              status: status,
+              subscription: effectiveSubscription,
             ),
           ),
           if (badge != null)

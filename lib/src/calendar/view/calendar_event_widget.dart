@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -464,7 +465,7 @@ class _CalendarEventContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    Color _foregroundFor(Color background) =>
+    Color foregroundFor(Color background) =>
         background.computeLuminance() > 0.65
             ? calendarTitleColor
             : Colors.white;
@@ -474,7 +475,7 @@ class _CalendarEventContainer extends StatelessWidget {
         Color.lerp(colors.card, eventColor, blendAmount)!;
     final Color background =
         isGhost ? blendedBackground.withValues(alpha: 0.75) : blendedBackground;
-    final Color textColor = _foregroundFor(blendedBackground);
+    final Color textColor = foregroundFor(blendedBackground);
     final Color mutedColor = textColor.withValues(alpha: 0.82);
     final Color stripeColor = eventColor;
 

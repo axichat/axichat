@@ -1,5 +1,6 @@
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -19,6 +20,7 @@ class ChatAlert extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ChatBloc, ChatState>(
       builder: (context, state) {
+        final l10n = context.l10n;
         return AnimatedContainer(
           duration: context.watch<SettingsCubit>().animationDuration,
           color: color,
@@ -44,16 +46,16 @@ class ChatAlert extends StatelessWidget {
                       ),
                       const SizedBox.square(dimension: 4.0),
                       ShadButton.secondary(
-                        child: const Text('Hide'),
+                        child: Text(l10n.chatAlertHide),
                         onPressed: () => context
                             .read<ChatBloc>()
                             .add(const ChatAlertHidden()),
                       ).withTapBounce(),
                       const SizedBox.square(dimension: 4.0),
                       ShadButton.ghost(
-                        child: const Text(
-                          'Ignore',
-                          style: TextStyle(color: Colors.white),
+                        child: Text(
+                          l10n.chatAlertIgnore,
+                          style: const TextStyle(color: Colors.white),
                         ),
                         onPressed: () => context
                             .read<ChatBloc>()

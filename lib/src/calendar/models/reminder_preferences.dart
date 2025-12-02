@@ -1,10 +1,17 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 
-import 'package:axichat/src/calendar/constants.dart';
-
 part 'reminder_preferences.freezed.dart';
 part 'reminder_preferences.g.dart';
+
+enum ReminderAnchor {
+  start,
+  deadline;
+
+  bool get isStart => this == start;
+
+  bool get isDeadline => this == deadline;
+}
 
 @freezed
 @HiveType(typeId: 39)
@@ -18,9 +25,24 @@ class ReminderPreferences with _$ReminderPreferences {
   const ReminderPreferences._();
 
   factory ReminderPreferences.defaults() => const ReminderPreferences(
-        startOffsets: calendarDefaultStartReminderOffsets,
-        deadlineOffsets: calendarDefaultDeadlineReminderOffsets,
+        enabled: false,
+        startOffsets: <Duration>[],
+        deadlineOffsets: <Duration>[],
       );
+
+  ReminderPreferences alignedTo(ReminderAnchor anchor) {
+    final List<Duration> activeOffsets = anchor.isDeadline
+        ? (deadlineOffsets.isNotEmpty ? deadlineOffsets : startOffsets)
+        : (startOffsets.isNotEmpty ? startOffsets : deadlineOffsets);
+    final List<Duration> normalizedActive = _normalizeOffsets(activeOffsets);
+
+    return copyWith(
+      enabled: enabled && normalizedActive.isNotEmpty,
+      startOffsets: anchor.isDeadline ? const <Duration>[] : normalizedActive,
+      deadlineOffsets:
+          anchor.isDeadline ? normalizedActive : const <Duration>[],
+    );
+  }
 
   ReminderPreferences normalized({bool? forceEnabled}) {
     final List<Duration> normalizedStart = _normalizeOffsets(startOffsets);

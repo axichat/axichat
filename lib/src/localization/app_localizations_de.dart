@@ -12,13 +12,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get appTitle => 'axichat';
 
   @override
-  String get homeTabChats => 'Chats';
+  String get homeTabChats => 'Unterhaltungen';
 
   @override
   String get homeTabDrafts => 'Entwürfe';
 
   @override
-  String get homeTabSpam => 'Spam';
+  String get homeTabSpam => 'Spamordner';
 
   @override
   String get homeTabBlocked => 'Blockiert';
@@ -369,7 +369,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatActionAddToCalendar => 'Zum Kalender hinzufügen';
 
   @override
-  String get chatActionDetails => 'Details';
+  String get chatActionDetails => 'Einzelheiten';
 
   @override
   String get chatActionSelect => 'Auswählen';
@@ -1142,6 +1142,34 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get calendarTaskNotFound => 'Aufgabe nicht gefunden';
+
+  @override
+  String get calendarDayEventsTitle => 'Tagestermine';
+
+  @override
+  String get calendarDayEventsEmpty => 'Keine Tagesereignisse für dieses Datum';
+
+  @override
+  String get calendarDayEventsAdd => 'Tagestermin hinzufügen';
+
+  @override
+  String get accessibilityNewContactLabel => 'Kontaktadresse';
+
+  @override
+  String get accessibilityNewContactHint => 'jemand@beispiel.de';
+
+  @override
+  String get accessibilityStartChat => 'Chat starten';
+
+  @override
+  String get accessibilityStartChatHint =>
+      'Diese Adresse senden, um eine Unterhaltung zu beginnen.';
+
+  @override
+  String get accessibilityMessagesEmpty => 'Noch keine Nachrichten';
+
+  @override
+  String get accessibilityMessageNoContent => 'Kein Nachrichteninhalt';
 
   @override
   String get profileTitle => 'Profil';
