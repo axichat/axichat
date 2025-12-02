@@ -718,24 +718,26 @@ void showUnifiedTaskInput<T extends BaseCalendarBloc>(
   DateTime? initialDate,
   TimeOfDay? initialTime,
 }) {
-  if (ResponsiveHelper.isCompact(context)) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => UnifiedTaskInput<T>(
+  final locate = context.read;
+  Widget buildTaskInput() => BlocProvider.value(
+        value: locate<T>(),
+        child: UnifiedTaskInput<T>(
           editingTask: editingTask,
           initialDate: initialDate,
           initialTime: initialTime,
         ),
+      );
+
+  if (ResponsiveHelper.isCompact(context)) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => buildTaskInput(),
       ),
     );
   } else {
     showDialog<void>(
       context: context,
-      builder: (context) => UnifiedTaskInput<T>(
-        editingTask: editingTask,
-        initialDate: initialDate,
-        initialTime: initialTime,
-      ),
+      builder: (context) => buildTaskInput(),
     );
   }
 }

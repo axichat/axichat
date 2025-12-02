@@ -138,24 +138,25 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
   }
 
   void _showDeleteConfirmation(BuildContext context) {
+    final locate = context.read;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.l10n.calendarDeleteTask),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(dialogContext.l10n.calendarDeleteTask),
         content: Text(
-          context.l10n.calendarDeleteTaskConfirm(widget.task.title),
+          dialogContext.l10n.calendarDeleteTaskConfirm(widget.task.title),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            child: Text(context.l10n.commonCancel),
+            onPressed: () => Navigator.of(dialogContext).maybePop(),
+            child: Text(dialogContext.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () {
-              context
-                  .read<T>()
-                  .add(CalendarEvent.taskDeleted(taskId: widget.task.id));
-              Navigator.of(context).maybePop();
+              locate<T>().add(
+                CalendarEvent.taskDeleted(taskId: widget.task.id),
+              );
+              Navigator.of(dialogContext).maybePop();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),

@@ -2,9 +2,9 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/axi_avatar.dart';
 import 'package:axichat/src/common/ui/string_to_color.dart';
-import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -23,8 +23,6 @@ const double _suggestionTileHeight = 56;
 const double _suggestionMaxHeight = 320;
 const double _collapsedHeaderPadding = 2;
 const double _expandedHeaderPadding = 4;
-const double _collapsedBodyPadding = 6;
-const double _expandedBodyPadding = 8;
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -167,16 +165,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         .toList();
     final knownDomains = _knownDomains();
     final knownAddresses = _knownAddresses();
-    final headerPadding = EdgeInsets.symmetric(
-      vertical:
-          _barCollapsed ? _collapsedHeaderPadding : _expandedHeaderPadding,
-    );
-    final bodyPadding = EdgeInsets.fromLTRB(
-      widget.horizontalPadding,
-      _barCollapsed ? _collapsedBodyPadding : _expandedBodyPadding,
-      widget.horizontalPadding,
-      _barCollapsed ? _collapsedBodyPadding : 12,
-    );
+    const headerPadding =
+        EdgeInsets.symmetric(vertical: _expandedHeaderPadding);
+    final bodyPadding =
+        EdgeInsets.symmetric(horizontal: widget.horizontalPadding);
     final headerStyle = theme.textTheme.labelSmall?.copyWith(
       fontSize: 12,
       fontWeight: FontWeight.w600,
@@ -290,7 +282,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                 curve: Curves.easeInOutCubic,
                 alignment: Alignment.topLeft,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,

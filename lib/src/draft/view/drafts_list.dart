@@ -10,6 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 
+const EdgeInsets _draftListItemPadding =
+    EdgeInsets.symmetric(horizontal: 16, vertical: 6);
+const double _draftTileHeight = 56.0;
+
 class DraftsList extends StatelessWidget {
   const DraftsList({super.key});
 
@@ -97,6 +101,7 @@ class _DraftsListBody extends StatelessWidget {
           final item = visibleItems[index];
           final recipients = item.jids.length;
           return ListItemPadding(
+            padding: _draftListItemPadding,
             child: AxiListTile(
               key: Key(item.id.toString()),
               onTap: () => context.read<ComposeWindowCubit>().openDraft(
@@ -125,6 +130,7 @@ class _DraftsListBody extends StatelessWidget {
               ),
               title:
                   '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
+              minTileHeight: _draftTileHeight,
               subtitle: item.body?.isNotEmpty == true
                   ? item.body
                   : item.jids.join(', '),

@@ -475,7 +475,7 @@ class _SignupFormState extends State<SignupForm>
                   padding: horizontalPadding,
                   child: Text(
                     l10n.signupTitle,
-                    style: context.textTheme.h3,
+                    style: context.modalHeaderTextStyle,
                   ),
                 ),
                 Padding(

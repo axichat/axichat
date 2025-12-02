@@ -585,7 +585,10 @@ class _ChatListTileState extends State<ChatListTile> {
         return StatefulBuilder(
           builder: (context, setState) {
             return ShadDialog(
-              title: const Text('Confirm'),
+              title: Text(
+                'Confirm',
+                style: context.modalHeaderTextStyle,
+              ),
               actions: [
                 ShadButton.outline(
                   onPressed: () => dialogContext.pop(false),

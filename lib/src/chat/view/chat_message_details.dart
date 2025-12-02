@@ -305,7 +305,10 @@ class ChatMessageDetails extends StatelessWidget {
       context: context,
       builder: (dialogContext) {
         return ShadDialog(
-          title: Text(recipient.contactDisplayName ?? recipient.title),
+          title: Text(
+            recipient.contactDisplayName ?? recipient.title,
+            style: context.modalHeaderTextStyle,
+          ),
           actions: [
             ShadButton.outline(
               onPressed: () => Navigator.of(dialogContext).pop(),

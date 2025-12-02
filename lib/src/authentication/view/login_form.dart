@@ -85,7 +85,7 @@ class _LoginFormState extends State<LoginForm> {
                     padding: errorPadding,
                     child: Text(
                       l10n.authLogin,
-                      style: context.textTheme.h3,
+                      style: context.modalHeaderTextStyle,
                     ),
                   ),
                   Padding(

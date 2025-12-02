@@ -691,6 +691,13 @@ mixin MucService on XmppBase, BaseStreamService {
     final key = _roomKey(roomJid);
     if (_leftRooms.contains(key)) return;
     if (_seededDummyRooms.contains(key)) return;
+    final messageCount = await _dbOpReturning<XmppDatabase, int>(
+      (db) => db.countChatMessages(
+        roomJid,
+        filter: MessageTimelineFilter.allWithContact,
+      ),
+    );
+    if (messageCount > 0) return;
     final rememberedNick = _roomNicknames[key]?.trim();
     var resolvedNick =
         rememberedNick?.isNotEmpty == true ? rememberedNick : null;

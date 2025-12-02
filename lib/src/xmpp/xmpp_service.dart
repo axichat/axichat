@@ -15,6 +15,8 @@ import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/demo/demo_chats.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -475,6 +477,7 @@ class XmppService extends XmppBase
   var _synchronousConnection = Completer<void>();
   var _foregroundServiceNotificationSent = false;
   var _streamResumptionAttempted = false;
+  var _demoSeedAttempted = false;
 
   @override
   Future<String?> connect({
@@ -579,6 +582,7 @@ class XmppService extends XmppBase
     }
     _connectionState = ConnectionState.notConnected;
     _connectivityStream.add(_connectionState);
+    await _seedDemoChatsIfNeeded();
   }
 
   Future<String?> _establishConnection({
@@ -755,6 +759,7 @@ class XmppService extends XmppBase
         }
       },
     );
+    await _seedDemoChatsIfNeeded();
 
     // try {
     //   await _initializeOmemoManagerIfNeeded();
@@ -771,6 +776,61 @@ class XmppService extends XmppBase
     //     stackTrace,
     //   );
     // }
+  }
+
+  Future<void> _seedDemoChatsIfNeeded() async {
+    if (_demoSeedAttempted || !kEnableDemoChats) return;
+    _demoSeedAttempted = true;
+    if (_myJid == null) {
+      try {
+        _myJid = mox.JID.fromString(kDemoSelfJid);
+      } on Exception catch (error, stackTrace) {
+        _xmppLogger.fine('Failed to apply demo JID', error, stackTrace);
+      }
+    }
+    try {
+      await _dbOp<XmppDatabase>((db) async {
+        final existingChats = await db.getChats(start: 0, end: 1);
+        if (existingChats.isNotEmpty) return;
+        final scripts = DemoChats.scripts(
+          openJid: DemoChats.defaultOpenJid,
+        );
+        for (final script in scripts) {
+          final messages = script.messages;
+          final chat = script.chat;
+          await db.createChat(chat);
+          if (messages.isEmpty) continue;
+          for (final message in messages) {
+            await db.saveMessage(message, chatType: chat.type);
+          }
+          final latestMessage = messages.first;
+          await db.updateChat(
+            chat.copyWith(
+              unreadCount: 0,
+              lastChangeTimestamp:
+                  latestMessage.timestamp ?? chat.lastChangeTimestamp,
+              lastMessage: latestMessage.body,
+            ),
+          );
+          final roomState = script.roomState;
+          if (chat.type == ChatType.groupChat && roomState != null) {
+            for (final occupant in roomState.occupants.values) {
+              updateOccupantFromPresence(
+                roomJid: chat.jid,
+                occupantId: occupant.occupantId,
+                nick: occupant.nick,
+                realJid: occupant.realJid,
+                affiliation: occupant.affiliation,
+                role: occupant.role,
+                isPresent: occupant.isPresent,
+              );
+            }
+          }
+        }
+      }, awaitDatabase: true);
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine('Skipping demo chat seed', error, stackTrace);
+    }
   }
 
   Future<void> burn() async {
@@ -813,6 +873,7 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
+    _demoSeedAttempted = false;
     _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
 
     resetEventHandlers();

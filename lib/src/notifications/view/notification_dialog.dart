@@ -10,7 +10,10 @@ Future<bool?> showNotificationDialog(
     showShadDialog<bool>(
       context: context,
       builder: (context) => ShadDialog(
-        title: Text(context.l10n.notificationsDialogTitle),
+        title: Text(
+          context.l10n.notificationsDialogTitle,
+          style: context.modalHeaderTextStyle,
+        ),
         actions: [
           ShadButton.destructive(
             onPressed: () => context.pop(false),

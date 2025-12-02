@@ -19,7 +19,10 @@ class AxiVersion extends StatelessWidget {
           onTap: () => showShadDialog(
             context: context,
             builder: (context) => ShadDialog(
-              title: const Text('Welcome to Axichat'),
+              title: Text(
+                'Welcome to Axichat',
+                style: context.modalHeaderTextStyle,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

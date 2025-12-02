@@ -139,6 +139,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   bool _priorityLocked = false;
   bool _remindersLocked = false;
   String? _quickTaskError;
+  bool _preserveDraftFieldsOnTitleClear = false;
 
   RecurrenceFormValue get _advancedRecurrence => _draftController.recurrence;
 
@@ -258,8 +259,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _updateQuickTaskValidation(value);
     _parserDebounce?.cancel();
     if (trimmed.isEmpty) {
-      _clearParserState(clearFields: true);
+      final bool preserveDraftFields = _preserveDraftFieldsOnTitleClear;
+      _preserveDraftFieldsOnTitleClear = false;
+      _clearParserState(clearFields: !preserveDraftFields);
       return;
+    }
+    if (_preserveDraftFieldsOnTitleClear) {
+      _preserveDraftFieldsOnTitleClear = false;
     }
     if (trimmed == _lastParserInput) {
       return;
@@ -2335,10 +2341,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     }
 
     final String baseId = task.baseId;
+    final locate = context.read;
     final CalendarTask latestTask =
-        context.read<B>().state.model.tasks[baseId] ?? task;
-    final CalendarTask? storedTask =
-        context.read<B>().state.model.tasks[task.id];
+        locate<B>().state.model.tasks[baseId] ?? task;
+    final CalendarTask? storedTask = locate<B>().state.model.tasks[task.id];
     final CalendarTask? occurrenceTask = storedTask == null && task.isOccurrence
         ? latestTask.occurrenceForId(task.id)
         : null;
@@ -2371,36 +2377,40 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
             Navigator.of(sheetContext).maybePop();
           }
 
-          return AnimatedPadding(
-            padding: EdgeInsets.only(
-              top: safeTopInset,
-              bottom: bottomInset,
-              left: hostMediaQuery.padding.left,
-              right: hostMediaQuery.padding.right,
-            ),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            child: EditTaskDropdown<B>(
-              task: displayTask,
-              maxHeight: maxHeight,
-              isSheet: true,
-              inlineActionsBloc: context.read<B>(),
-              inlineActionsBuilder: (_) => _sidebarInlineActions(displayTask),
-              onClose: closeSheet,
-              scaffoldMessenger: scaffoldMessenger,
-              locationHelper: LocationAutocompleteHelper.fromState(
-                context.read<B>().state,
-              ),
-              onTaskUpdated: (updatedTask) {
-                sheetContext.read<B>().add(
+          return BlocProvider.value(
+            value: locate<B>(),
+            child: Builder(
+              builder: (context) => AnimatedPadding(
+                padding: EdgeInsets.only(
+                  top: safeTopInset,
+                  bottom: bottomInset,
+                  left: hostMediaQuery.padding.left,
+                  right: hostMediaQuery.padding.right,
+                ),
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                child: EditTaskDropdown<B>(
+                  task: displayTask,
+                  maxHeight: maxHeight,
+                  isSheet: true,
+                  inlineActionsBloc: locate<B>(),
+                  inlineActionsBuilder: (_) =>
+                      _sidebarInlineActions(displayTask),
+                  onClose: closeSheet,
+                  scaffoldMessenger: scaffoldMessenger,
+                  locationHelper: LocationAutocompleteHelper.fromState(
+                    locate<B>().state,
+                  ),
+                  onTaskUpdated: (updatedTask) {
+                    locate<B>().add(
                       CalendarEvent.taskUpdated(
                         task: updatedTask,
                       ),
                     );
-              },
-              onOccurrenceUpdated: shouldUpdateOccurrence
-                  ? (updatedTask) {
-                      sheetContext.read<B>().add(
+                  },
+                  onOccurrenceUpdated: shouldUpdateOccurrence
+                      ? (updatedTask) {
+                          locate<B>().add(
                             CalendarEvent.taskOccurrenceUpdated(
                               taskId: baseId,
                               occurrenceId: task.id,
@@ -2411,36 +2421,38 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                             ),
                           );
 
-                      final CalendarTask seriesUpdate = latestTask.copyWith(
-                        title: updatedTask.title,
-                        description: updatedTask.description,
-                        location: updatedTask.location,
-                        deadline: updatedTask.deadline,
-                        priority: updatedTask.priority,
-                        isCompleted: updatedTask.isCompleted,
-                        checklist: updatedTask.checklist,
-                        modifiedAt: DateTime.now(),
-                      );
+                          final CalendarTask seriesUpdate = latestTask.copyWith(
+                            title: updatedTask.title,
+                            description: updatedTask.description,
+                            location: updatedTask.location,
+                            deadline: updatedTask.deadline,
+                            priority: updatedTask.priority,
+                            isCompleted: updatedTask.isCompleted,
+                            checklist: updatedTask.checklist,
+                            modifiedAt: DateTime.now(),
+                          );
 
-                      if (seriesUpdate != latestTask) {
-                        sheetContext.read<B>().add(
+                          if (seriesUpdate != latestTask) {
+                            locate<B>().add(
                               CalendarEvent.taskUpdated(
                                 task: seriesUpdate,
                               ),
                             );
-                      }
-                    }
-                  : null,
-              onTaskDeleted: (taskId) {
-                sheetContext.read<B>().add(
+                          }
+                        }
+                      : null,
+                  onTaskDeleted: (taskId) {
+                    locate<B>().add(
                       CalendarEvent.taskDeleted(
                         taskId: taskId,
                       ),
                     );
-                _taskPopoverControllers.remove(task.id)?.dispose();
-                _sidebarController.setActivePopoverTaskId(null);
-                Navigator.of(sheetContext).maybePop();
-              },
+                    _taskPopoverControllers.remove(task.id)?.dispose();
+                    _sidebarController.setActivePopoverTaskId(null);
+                    Navigator.of(sheetContext).maybePop();
+                  },
+                ),
+              ),
             ),
           );
         },
@@ -2584,10 +2596,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<void> _queueCriticalPathForDraft() async {
-    final bloc = context.read<B>();
+    final locate = context.read;
     await showCriticalPathPicker(
       context: context,
-      paths: bloc.state.criticalPaths,
+      paths: locate<B>().state.criticalPaths,
       stayOpen: true,
       onPathSelected: (path) async {
         _addQueuedCriticalPath(path.id);
@@ -2602,10 +2614,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
           return null;
         }
         final Set<String> previousIds =
-            bloc.state.criticalPaths.map((path) => path.id).toSet();
-        bloc.add(CalendarEvent.criticalPathCreated(name: name));
+            locate<B>().state.criticalPaths.map((path) => path.id).toSet();
+        locate<B>().add(CalendarEvent.criticalPathCreated(name: name));
         final String? createdId = await waitForNewPathId(
-          bloc: bloc,
+          bloc: locate<B>(),
           previousIds: previousIds,
         );
         if (!mounted || createdId == null) {
@@ -2629,6 +2641,11 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
     final rawTitle = _titleController.text.trim();
     if (rawTitle.isEmpty) return;
+    if (_quickTaskError != null) {
+      setState(() {
+        _quickTaskError = null;
+      });
+    }
     final title = _effectiveParserTitle(rawTitle);
 
     final priority = _currentPriority();
@@ -2640,12 +2657,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final List<String> queuedPathIds =
         List<String>.from(_queuedCriticalPathIds);
     final bool hasQueuedCriticalPaths = queuedPathIds.isNotEmpty;
-    final B bloc = context.read<B>();
-    final Set<String>? previousIds =
-        hasQueuedCriticalPaths ? bloc.state.model.tasks.keys.toSet() : null;
+    final locate = context.read;
+    final Set<String>? previousIds = hasQueuedCriticalPaths
+        ? locate<B>().state.model.tasks.keys.toSet()
+        : null;
 
     if (!hasLocation && !hasSchedule && !hasRecurrence) {
-      bloc.add(
+      locate<B>().add(
         CalendarEvent.quickTaskAdded(
           text: title,
           description: _descriptionController.text.trim().isNotEmpty
@@ -2669,7 +2687,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         recurrence = _advancedRecurrence.toRule(start: reference);
       }
 
-      bloc.add(
+      locate<B>().add(
         CalendarEvent.taskAdded(
           title: title,
           description: _descriptionController.text.trim().isNotEmpty
@@ -2687,12 +2705,14 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       );
     }
 
+    _clearQuickTaskTitle();
+
     if (hasQueuedCriticalPaths && previousIds != null) {
       final CalendarTask? createdTask = await _waitForNewTask(previousIds);
       if (!mounted) return;
       if (createdTask != null) {
         for (final String pathId in queuedPathIds) {
-          bloc.add(
+          locate<B>().add(
             CalendarEvent.criticalPathTaskAdded(
               pathId: pathId,
               taskId: createdTask.id,
@@ -2706,6 +2726,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         });
       }
     }
+  }
+
+  void _clearQuickTaskTitle() {
+    _preserveDraftFieldsOnTitleClear = true;
+    _titleController.clear();
+    _titleFocusNode.requestFocus();
   }
 
   void _handleClearFieldsPressed() {
