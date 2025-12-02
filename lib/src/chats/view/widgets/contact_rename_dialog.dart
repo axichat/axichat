@@ -1,4 +1,3 @@
-import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -58,19 +57,11 @@ class _ContactRenameDialogState extends State<ContactRenameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final textTheme = context.textTheme;
     final l10n = context.l10n;
     return ShadDialog(
       title: Text(
         l10n.chatContactRenameTitle,
-        style: textTheme.h4.copyWith(
-          fontFamily: gabaritoFontFamily,
-          fontFamilyFallback: gabaritoFontFallback,
-          fontWeight: FontWeight.w700,
-          color: colors.foreground,
-          letterSpacing: -0.2,
-        ),
+        style: context.modalHeaderTextStyle,
       ),
       actions: [
         ShadButton.outline(

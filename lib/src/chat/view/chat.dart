@@ -117,13 +117,13 @@ const _selectionIndicatorInset =
 const _messageAvatarSize = 36.0;
 const _messageRowAvatarReservation = 32.0;
 const _messageAvatarCutoutDepth = _messageAvatarSize / 2;
-const _messageAvatarCutoutRadius = _messageAvatarSize;
+const _messageAvatarCutoutRadius = _messageAvatarCutoutDepth + 2.0;
 const _messageAvatarCutoutPadding = EdgeInsets.zero;
 const _messageAvatarCutoutMinThickness = _messageAvatarSize;
 const _messageAvatarCutoutAlignment = -1.0;
 const _messageAvatarCornerClearance = 0.0;
-const _messageAvatarOuterInset = 0.0;
-const _messageAvatarContentInset = _messageAvatarCutoutDepth + 6.0;
+const _messageAvatarOuterInset = _messageAvatarCutoutDepth;
+const _messageAvatarContentInset = _messageAvatarCutoutDepth - 4.0;
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
 const _selectionBubbleOutboundSpacingBoost = 6.0;
@@ -847,6 +847,7 @@ class _ChatState extends State<Chat> {
 
   void _showMembers() {
     final navigator = Navigator.of(context);
+    final locate = context.read;
     final screenWidth = MediaQuery.of(context).size.width;
     const drawerMaxWidth = 420.0;
     const drawerWidthFraction = 0.9;
@@ -868,25 +869,21 @@ class _ChatState extends State<Chat> {
               color: context.colorScheme.background,
               elevation: 12,
               child: BlocProvider.value(
-                value: context.read<ChatBloc>(),
+                value: locate<ChatBloc>(),
                 child: Builder(
                   builder: (dialogContext) => _RoomMembersDrawerContent(
-                    onInvite: (jid) => dialogContext
-                        .read<ChatBloc>()
-                        .add(ChatInviteRequested(jid)),
-                    onAction: (occupantId, action) =>
-                        dialogContext.read<ChatBloc>().add(
-                              ChatModerationActionRequested(
-                                occupantId: occupantId,
-                                action: action,
-                              ),
-                            ),
-                    onChangeNickname: (nick) => dialogContext
-                        .read<ChatBloc>()
+                    onInvite: (jid) =>
+                        locate<ChatBloc>().add(ChatInviteRequested(jid)),
+                    onAction: (occupantId, action) => locate<ChatBloc>().add(
+                      ChatModerationActionRequested(
+                        occupantId: occupantId,
+                        action: action,
+                      ),
+                    ),
+                    onChangeNickname: (nick) => locate<ChatBloc>()
                         .add(ChatNicknameChangeRequested(nick)),
-                    onLeaveRoom: () => dialogContext
-                        .read<ChatBloc>()
-                        .add(const ChatLeaveRoomRequested()),
+                    onLeaveRoom: () =>
+                        locate<ChatBloc>().add(const ChatLeaveRoomRequested()),
                     onClose: navigator.pop,
                   ),
                 ),
@@ -4375,7 +4372,9 @@ class _ChatState extends State<Chat> {
                                                                   bottom: 6,
                                                                   left: (!self &&
                                                                           hasAvatarSlot)
-                                                                      ? _messageAvatarContentInset
+                                                                      ? _messageAvatarContentInset +
+                                                                          _bubblePadding
+                                                                              .left
                                                                       : 0,
                                                                 ),
                                                                 child: Text(

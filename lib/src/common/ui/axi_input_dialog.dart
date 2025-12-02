@@ -21,8 +21,12 @@ class AxiInputDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget resolvedTitle = DefaultTextStyle.merge(
+      style: context.modalHeaderTextStyle,
+      child: title,
+    );
     return ShadDialog(
-      title: title,
+      title: resolvedTitle,
       actions: [
         ShadButton.outline(
           onPressed: () => context.pop(),

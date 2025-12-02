@@ -39,7 +39,7 @@ const double _unsplitHorizontalMargin = 16.0;
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  var _login = true;
+  var _login = false;
   var _signupFlowLocked = false;
   late OperationProgressController _operationProgressController;
   String _operationLabel = '';

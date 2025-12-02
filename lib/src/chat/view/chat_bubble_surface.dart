@@ -445,6 +445,27 @@ class RenderChatBubbleSurface extends RenderBox
     final styleCornerClearance = style.cornerClearance ?? cornerClearance;
     final horizontalAnchor =
         anchor == _CutoutAnchor.top || anchor == _CutoutAnchor.bottom;
+    if (type == _CutoutType.avatar && anchor == _CutoutAnchor.left) {
+      // Avatar: carve a quarter cutout at the top-left corner and center the
+      // avatar over the bubble origin.
+      final avatarSize = math.max(style.minThickness, style.depth * 2);
+      child.layout(
+        BoxConstraints.tight(Size.square(avatarSize)),
+        parentUsesSize: true,
+      );
+      final cutoutRadius = math.max(style.depth, style.cornerRadius);
+      final rect = Rect.fromCircle(
+        center: Offset.zero,
+        radius: cutoutRadius,
+      );
+      final childParentData = child.parentData as _ChatBubbleParentData;
+      childParentData.offset = Offset(
+        -child.size.width / 2 + style.offset.dx,
+        -child.size.height / 2 + style.offset.dy,
+      );
+      _avatarCutoutRect = rect;
+      return;
+    }
     final bubbleExtent = horizontalAnchor ? size.width : size.height;
     var maxThickness = _resolveCutoutLimit(
       bubbleExtent: bubbleExtent,
@@ -563,6 +584,7 @@ class RenderChatBubbleSurface extends RenderBox
           _CutoutDescriptor(
             rect: _avatarCutoutRect!,
             cornerRadius: avatarStyle?.cornerRadius ?? 16,
+            shape: _CutoutShape.oval,
           ),
         if (_selectionCutoutRect != null)
           _CutoutDescriptor(
@@ -672,11 +694,15 @@ class _CutoutDescriptor {
   const _CutoutDescriptor({
     required this.rect,
     required this.cornerRadius,
+    this.shape = _CutoutShape.squircle,
   });
 
   final Rect rect;
   final double cornerRadius;
+  final _CutoutShape shape;
 }
+
+enum _CutoutShape { squircle, oval }
 
 Path _bubblePath(
   Size size,
@@ -687,11 +713,16 @@ Path _bubblePath(
   final shape = ContinuousRectangleBorder(borderRadius: borderRadius);
   var path = Path()..addPath(shape.getOuterPath(rect), Offset.zero);
   for (final cutout in cutouts) {
-    final cutoutShape = SquircleBorder(cornerRadius: cutout.cornerRadius);
+    final cutoutPath = switch (cutout.shape) {
+      _CutoutShape.squircle => SquircleBorder(
+          cornerRadius: cutout.cornerRadius,
+        ).getOuterPath(cutout.rect),
+      _CutoutShape.oval => Path()..addOval(cutout.rect),
+    };
     path = Path.combine(
       PathOperation.difference,
       path,
-      cutoutShape.getOuterPath(cutout.rect),
+      cutoutPath,
     );
   }
   return path;

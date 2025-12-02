@@ -135,8 +135,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         pressedKeys.contains(LogicalKeyboardKey.control);
     final shouldOpen =
         event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
-    final bloc = context.read<AccessibilityActionBloc?>();
-    return shouldOpen && bloc != null && bloc.isClosed == false;
+    final locate = context.read;
+    return shouldOpen && locate<AccessibilityActionBloc?>()?.isClosed == false;
   }
 
   void _restoreShortcutFocusIfEmpty() {
@@ -215,12 +215,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           id: HomeTab.blocked,
           label: l10n.homeTabBlocked,
           body: const BlocklistList(key: PageStorageKey('Blocked')),
-          fab: showDesktopPrimaryActions
-              ? const _TabActionGroup(
-                  includePrimaryActions: true,
-                  extraActions: [BlocklistAddButton()],
-                )
-              : const BlocklistAddButton(),
+          fab: const _TabActionGroup(
+            extraActions: [BlocklistAddButton()],
+          ),
           searchFilters: blocklistFilters,
         ),
     ];

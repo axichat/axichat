@@ -127,9 +127,10 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
         pressed.contains(LogicalKeyboardKey.controlRight) ||
         pressed.contains(LogicalKeyboardKey.control);
     if (!hasMeta && !hasControl) return false;
-    final bloc = context.read<AccessibilityActionBloc?>();
-    if (bloc == null || bloc.isClosed) return false;
-    bloc.add(const AccessibilityMenuOpened());
+    final locate = context.read;
+    final blocClosed = locate<AccessibilityActionBloc?>()?.isClosed ?? true;
+    if (blocClosed) return false;
+    locate<AccessibilityActionBloc?>()!.add(const AccessibilityMenuOpened());
     return true;
   }
 
@@ -1677,7 +1678,7 @@ class _NewContactSection extends StatelessWidget {
     final colors = context.colorScheme;
     final radius = BorderRadius.circular(14);
     final canSubmit = state.newContactInput.trim().isValidJid;
-    final bloc = context.read<AccessibilityActionBloc>();
+    final locate = context.read;
     return FocusTraversalGroup(
       key: groupKey,
       policy: WidgetOrderTraversalPolicy(),
@@ -1689,7 +1690,7 @@ class _NewContactSection extends StatelessWidget {
             child: _AccessibilityTextField(
               label: 'Contact address',
               text: state.newContactInput,
-              onChanged: (value) => bloc.add(
+              onChanged: (value) => locate<AccessibilityActionBloc>().add(
                 AccessibilityNewContactChanged(value),
               ),
               hintText: 'someone@example.com',
@@ -1725,7 +1726,7 @@ class _NewContactSection extends StatelessWidget {
                       width: double.infinity,
                       child: ShadButton(
                         onPressed: canSubmit
-                            ? () => bloc.add(
+                            ? () => locate<AccessibilityActionBloc>().add(
                                   const AccessibilityMenuActionTriggered(
                                     AccessibilityCommandAction(
                                       command: AccessibilityCommand

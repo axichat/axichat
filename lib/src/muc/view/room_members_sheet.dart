@@ -511,6 +511,18 @@ class _InviteChipsSheet extends StatefulWidget {
 }
 
 class _InviteChipsSheetState extends State<_InviteChipsSheet> {
+  static const double _inviteSheetHorizontalPadding = 16.0;
+  static const double _inviteSheetSectionSpacing = 12.0;
+  static const EdgeInsets _inviteSheetHeaderPadding = EdgeInsets.fromLTRB(
+    _inviteSheetHorizontalPadding,
+    _inviteSheetHorizontalPadding,
+    _inviteSheetHorizontalPadding,
+    _inviteSheetSectionSpacing,
+  );
+  static const EdgeInsets _inviteSheetActionsPadding = EdgeInsets.symmetric(
+    horizontal: _inviteSheetHorizontalPadding,
+  );
+
   late List<ComposerRecipient> _recipients;
 
   @override
@@ -521,26 +533,19 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final titleStyle = context.textTheme.h4.copyWith(
-      fontFamily: gabaritoFontFamily,
-      fontFamilyFallback: gabaritoFontFallback,
-      fontWeight: FontWeight.w700,
-      color: colors.foreground,
-      letterSpacing: -0.2,
-    );
+    final titleStyle = context.modalHeaderTextStyle;
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
-          bottom: 16 + viewInsets,
+          bottom: _inviteSheetHorizontalPadding + viewInsets,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              padding: _inviteSheetHeaderPadding,
               child: Text('Invite users', style: titleStyle),
             ),
             RecipientChipsBar(
@@ -551,11 +556,11 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
               onRecipientRemoved: _removeRecipient,
               onRecipientToggled: _toggleRecipient,
               collapsedByDefault: false,
-              horizontalPadding: 0,
+              horizontalPadding: _inviteSheetHorizontalPadding,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: _inviteSheetSectionSpacing),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: _inviteSheetActionsPadding,
               child: Row(
                 children: [
                   ShadButton.outline(
@@ -649,15 +654,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = context.textTheme;
-    final colors = context.colorScheme;
-    final titleStyle = textTheme.h4.copyWith(
-      fontFamily: gabaritoFontFamily,
-      fontFamilyFallback: gabaritoFontFallback,
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.2,
-      color: colors.foreground,
-    );
+    final titleStyle = context.modalHeaderTextStyle;
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -708,15 +705,7 @@ class _HeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.textTheme;
-    final colors = context.colorScheme;
-    final headerStyle = theme.h4.copyWith(
-      fontFamily: gabaritoFontFamily,
-      fontFamilyFallback: gabaritoFontFallback,
-      fontWeight: FontWeight.w700,
-      color: colors.foreground,
-      letterSpacing: -0.2,
-    );
+    final headerStyle = context.modalHeaderTextStyle;
     return Row(
       children: [
         Text(

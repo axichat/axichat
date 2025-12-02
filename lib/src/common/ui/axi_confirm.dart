@@ -37,7 +37,10 @@ Future<bool?> confirm(
               child: Text(confirmLabel),
             );
       return ShadDialog(
-        title: Text(title),
+        title: Text(
+          title,
+          style: context.modalHeaderTextStyle,
+        ),
         actions: [
           ShadButton.outline(
             onPressed: () => pop(false),
