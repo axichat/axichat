@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'calendar_grid.dart';
 import 'error_display.dart';
 import 'feedback_system.dart';
@@ -33,7 +34,8 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
       listener: (context, state) {},
       builder: (context, state) {
         final tasks = _getTasksForSelectedDate(state);
-        final dateLabel = _formatDate(state.selectedDate, state.viewMode);
+        final dateLabel =
+            _formatDate(context, state.selectedDate, state.viewMode);
         Future<void> handleRefresh() async {
           context.read<T>().add(const CalendarEvent.dataChanged());
           await Future.delayed(const Duration(milliseconds: 500));
@@ -43,7 +45,9 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
           backgroundColor: calendarBackgroundColor,
           appBar: _CalendarAppBar(
             isGuestMode: widget.isGuestMode,
-            title: widget.isGuestMode ? 'Guest Calendar' : 'Calendar',
+            title: widget.isGuestMode
+                ? context.l10n.calendarGuestTitle
+                : context.l10n.homeRailCalendar,
             subtitle: dateLabel,
             canPop: Navigator.canPop(context),
             onBack:
@@ -165,33 +169,21 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
         );
   }
 
-  String _formatDate(DateTime date, CalendarView view) {
+  String _formatDate(
+    BuildContext context,
+    DateTime date,
+    CalendarView view,
+  ) {
+    final locale = Localizations.localeOf(context).toString();
+    final dateFormat = DateFormat.yMd(locale);
     switch (view) {
       case CalendarView.day:
-        return '${date.day}/${date.month}/${date.year}';
+        return dateFormat.format(date);
       case CalendarView.week:
-        return 'Week of ${date.day}/${date.month}';
+        return context.l10n.calendarWeekOf(dateFormat.format(date));
       case CalendarView.month:
-        return '${_getMonthName(date.month)} ${date.year}';
+        return DateFormat.yMMMM(locale).format(date);
     }
-  }
-
-  String _getMonthName(int month) {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December'
-    ];
-    return months[month - 1];
   }
 
   List<CalendarTask> _getTasksForSelectedDate(CalendarState state) {
@@ -229,16 +221,16 @@ class _CalendarGuestBanner extends StatelessWidget {
         ),
       ),
       padding: calendarMarginMedium,
-      child: const Row(
+      child: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.info_outline,
             size: 20,
             color: calendarSubtitleColor,
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Text(
-            'Guest Mode - No Sync',
+            context.l10n.calendarGuestBanner,
             style: calendarSubtitleTextStyle,
           ),
         ],
@@ -274,6 +266,7 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     return Container(
       decoration: BoxDecoration(
         color: colors.background,
@@ -296,7 +289,7 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
               if (canPop)
                 AxiIconButton(
                   iconData: LucideIcons.arrowLeft,
-                  tooltip: 'Back',
+                  tooltip: l10n.commonBack,
                   color: colors.foreground,
                   borderColor: colors.border,
                   onPressed: onBack,
@@ -308,7 +301,7 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      isGuestMode ? 'Guest Calendar' : title,
+                      isGuestMode ? l10n.calendarGuestTitle : title,
                       style: context.textTheme.h3.copyWith(
                         color: colors.foreground,
                       ),
@@ -347,6 +340,18 @@ class _CalendarViewModeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    String labelForView(CalendarView view) {
+      switch (view) {
+        case CalendarView.day:
+          return l10n.calendarViewDay;
+        case CalendarView.week:
+          return l10n.calendarViewWeek;
+        case CalendarView.month:
+          return l10n.calendarViewMonth;
+      }
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: calendarSelectedDayColor,
@@ -355,25 +360,28 @@ class _CalendarViewModeSelector extends StatelessWidget {
       ),
       child: ShadSelect<CalendarView>(
         initialValue: selectedView,
-        placeholder: const Text(
-          'View',
+        placeholder: Text(
+          l10n.calendarViewLabel,
           style: calendarCaptionTextStyle,
         ),
         options: CalendarView.values
             .map(
               (view) => ShadOption(
                 value: view,
-                child: Text(view.name.toUpperCase()),
+                child: Text(labelForView(view).toUpperCase()),
               ),
             )
             .toList(),
-        selectedOptionBuilder: (context, value) => Text(
-          value.name.toUpperCase(),
-          style: calendarCaptionTextStyle.copyWith(
-            color: calendarTitleColor,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        selectedOptionBuilder: (context, value) {
+          final label = labelForView(value);
+          return Text(
+            label.toUpperCase(),
+            style: calendarCaptionTextStyle.copyWith(
+              color: calendarTitleColor,
+              fontWeight: FontWeight.w600,
+            ),
+          );
+        },
         onChanged: (view) {
           if (view != null) {
             onChanged(view);
@@ -578,7 +586,7 @@ class _CalendarDateHeader extends StatelessWidget {
         children: [
           AxiIconButton(
             iconData: Icons.chevron_left,
-            tooltip: 'Previous date',
+            tooltip: context.l10n.calendarPreviousDate,
             onPressed: onPrevious,
             backgroundColor: colors.card,
             borderColor: colors.border,
@@ -589,7 +597,7 @@ class _CalendarDateHeader extends StatelessWidget {
           ),
           AxiIconButton(
             iconData: Icons.chevron_right,
-            tooltip: 'Next date',
+            tooltip: context.l10n.calendarNextDate,
             onPressed: onNext,
             backgroundColor: colors.card,
             borderColor: colors.border,
@@ -661,15 +669,15 @@ class _CalendarTaskList extends StatelessWidget {
             ),
             const SizedBox(height: calendarGutterLg),
             Text(
-              'No tasks for this date',
+              context.l10n.calendarNoTasksForDate,
               style: calendarTitleTextStyle.copyWith(
                 fontSize: 16,
                 color: calendarSubtitleColor,
               ),
             ),
             const SizedBox(height: calendarGutterSm),
-            const Text(
-              'Tap + to create a new task',
+            Text(
+              context.l10n.calendarTapToCreateTask,
               style: calendarSubtitleTextStyle,
             ),
           ],
@@ -721,23 +729,23 @@ class _CalendarSidebar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
+                Padding(
                   padding: calendarPaddingXl,
                   child: Text(
-                    'Quick stats',
+                    context.l10n.calendarQuickStats,
                     style: calendarBodyTextStyle,
                   ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.today),
-                  title: const Text('Due reminders'),
+                  title: Text(context.l10n.calendarDueReminders),
                   trailing: Text('${state.dueReminders?.length ?? 0}'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.schedule),
-                  title: const Text('Next task'),
+                  title: Text(context.l10n.calendarNextTaskLabel),
                   subtitle: Text(
-                    state.nextTask?.title ?? 'None',
+                    state.nextTask?.title ?? context.l10n.calendarNone,
                   ),
                 ),
                 const Divider(),
@@ -764,13 +772,13 @@ class _CalendarGuestModeInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Guest mode',
+        Text(
+          context.l10n.calendarGuestModeLabel,
           style: calendarBodyTextStyle,
         ),
         const SizedBox(height: calendarGutterSm),
         Text(
-          'Log in to sync tasks across devices and enable reminders.',
+          context.l10n.calendarGuestModeDescription,
           style: calendarSubtitleTextStyle.copyWith(fontSize: 12),
         ),
       ],
@@ -794,7 +802,7 @@ class _CalendarAddTaskFab<T extends BaseCalendarBloc> extends StatelessWidget {
           onTap: () {
             onShowInput(context, state.selectedDate);
           },
-          feedbackMessage: 'Opening task creator...',
+          feedbackMessage: context.l10n.calendarOpeningCreator,
           child: AnimatedContainer(
             duration: baseAnimationDuration,
             curve: Curves.easeInOut,

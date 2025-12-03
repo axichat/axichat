@@ -233,8 +233,7 @@ class AccessibilityActionBloc
     emit(
       state.copyWith(
         discardWarningActive: true,
-        statusMessage:
-            'Press Escape again to discard your message and close this step.',
+        statusMessage: _l10n.accessibilityDiscardWarning,
         errorMessage: null,
       ),
     );
@@ -401,7 +400,7 @@ class AccessibilityActionBloc
       state.copyWith(
         busy: false,
         composerText: failures.isEmpty ? '' : state.composerText,
-        statusMessage: failures.isEmpty ? 'Message sent.' : null,
+        statusMessage: failures.isEmpty ? _l10n.accessibilityMessageSent : null,
         errorMessage: failureLabel,
         discardWarningActive: false,
       ),
@@ -765,8 +764,7 @@ class AccessibilityActionBloc
       composerText: draft.body ?? '',
       newContactInput: '',
       activeChatJid: activeJid ?? state.activeChatJid,
-      statusMessage:
-          'Draft loaded. Press Escape to exit or Save to keep edits.',
+      statusMessage: _l10n.accessibilityDraftLoaded,
       errorMessage: null,
       discardWarningActive: false,
     );
@@ -1019,8 +1017,10 @@ class AccessibilityActionBloc
     final latest = newMessages.isNotEmpty ? newMessages.last : null;
     final incomingStatus = latest == null
         ? null
-        : 'New message from ${_senderLabelFor(latest)} at '
-            '${_formatTimestamp(latest.timestamp)}';
+        : _l10n.accessibilityIncomingMessageStatus(
+            _senderLabelFor(latest),
+            _formatTimestamp(latest.timestamp),
+          );
     final nextState = state.copyWith(
       messages: ordered,
       attachments: attachments,
@@ -1168,13 +1168,13 @@ class AccessibilityActionBloc
         id: 'chats',
         title: _l10n.homeTabChats,
         items: chatItems.isEmpty
-            ? const [
+            ? [
                 AccessibilityMenuItem(
                   id: 'chats-empty',
-                  label: 'No conversations yet',
+                  label: _l10n.chatsEmptyList,
                   description: '',
                   kind: AccessibilityMenuItemKind.readOnly,
-                  action: AccessibilityNoopAction(),
+                  action: const AccessibilityNoopAction(),
                 ),
               ]
             : chatItems,
@@ -1185,7 +1185,7 @@ class AccessibilityActionBloc
       sections.add(
         AccessibilityMenuSection(
           id: 'drafts',
-          title: 'Drafts',
+          title: _l10n.homeTabDrafts,
           items: _draftMenuItems(orderedDrafts),
         ),
       );
@@ -1199,8 +1199,8 @@ class AccessibilityActionBloc
       final description = _draftDescription(draft);
       final recipientsLabel = _draftRecipientsLabel(draft.jids);
       final label = recipientsLabel.isEmpty
-          ? 'Draft ${draft.id}'
-          : 'Draft to $recipientsLabel';
+          ? _l10n.accessibilityDraftLabel(draft.id)
+          : _l10n.accessibilityDraftLabelWithRecipients(recipientsLabel);
       return AccessibilityMenuItem(
         id: 'draft-${draft.id}',
         label: label,
@@ -1219,10 +1219,10 @@ class AccessibilityActionBloc
     final recipientsLabel = _draftRecipientsLabel(draft.jids);
     final body = (draft.body ?? '').trim();
     final preview = body.isEmpty
-        ? 'No message body'
+        ? _l10n.accessibilityMessageNoContent
         : (body.length > 80 ? '${body.substring(0, 80)}…' : body);
     if (recipientsLabel.isEmpty) return preview;
-    return '$recipientsLabel — $preview';
+    return _l10n.accessibilityDraftPreview(recipientsLabel, preview);
   }
 
   String _draftRecipientsLabel(List<String> jids) {
@@ -1303,12 +1303,12 @@ class AccessibilityActionBloc
         .toList();
     if (items.isEmpty) {
       items.add(
-        const AccessibilityMenuItem(
+        AccessibilityMenuItem(
           id: 'unread-none',
-          label: 'No unread conversations',
+          label: _l10n.accessibilityUnreadEmpty,
           description: '',
           kind: AccessibilityMenuItemKind.command,
-          action: AccessibilityCommandAction(
+          action: const AccessibilityCommandAction(
             command: AccessibilityCommand.closeMenu,
           ),
           icon: Icons.mark_chat_unread_outlined,
@@ -1356,12 +1356,12 @@ class AccessibilityActionBloc
     }
     if (items.isEmpty) {
       items.add(
-        const AccessibilityMenuItem(
+        AccessibilityMenuItem(
           id: 'invites-none',
-          label: 'No pending invites',
+          label: _l10n.accessibilityInvitesEmpty,
           description: '',
           kind: AccessibilityMenuItemKind.command,
-          action: AccessibilityCommandAction(
+          action: const AccessibilityCommandAction(
             command: AccessibilityCommand.closeMenu,
           ),
           icon: Icons.person_add_disabled_outlined,
@@ -1385,17 +1385,17 @@ class AccessibilityActionBloc
         ? entry.recipients.first.jid
         : state.activeChatJid;
     if (targetJid == null) {
-      return const _SectionWithInitial(
+      return _SectionWithInitial(
         section: AccessibilityMenuSection(
           id: 'chat-messages',
-          title: 'Messages',
+          title: _l10n.accessibilityMessagesTitle,
           items: [
             AccessibilityMenuItem(
               id: 'msg-none',
-              label: 'No conversation selected',
+              label: _l10n.accessibilityNoConversationSelected,
               description: '',
               kind: AccessibilityMenuItemKind.readOnly,
-              action: AccessibilityNoopAction(),
+              action: const AccessibilityNoopAction(),
             ),
           ],
         ),
@@ -1413,11 +1413,17 @@ class AccessibilityActionBloc
       final attachment = attachmentIndex[_messageId(message)];
       final body = (message.body ?? '').trim();
       final attachmentNote = _attachmentLabelFor(message, metadata: attachment);
-      final fullBody =
-          body.isNotEmpty ? body : (attachmentNote ?? 'Empty message');
+      final fullBody = body.isNotEmpty
+          ? body
+          : (attachmentNote ?? _l10n.accessibilityMessageNoContent);
       final showSender = senderLabel != lastSender;
-      final label =
-          showSender ? '$senderLabel at $timestampLabel: $fullBody' : fullBody;
+      final label = showSender
+          ? _l10n.accessibilityMessageLabel(
+              senderLabel,
+              timestampLabel,
+              fullBody,
+            )
+          : fullBody;
       items.add(
         AccessibilityMenuItem(
           id: 'msg-${_messageId(message)}',
@@ -1440,16 +1446,18 @@ class AccessibilityActionBloc
       initialIndex = _initialMessageIndex(messages);
     } else {
       items.add(
-        const AccessibilityMenuItem(
+        AccessibilityMenuItem(
           id: 'msg-empty',
-          label: 'No messages yet',
+          label: _l10n.accessibilityMessagesEmpty,
           description: '',
           kind: AccessibilityMenuItemKind.readOnly,
-          action: AccessibilityNoopAction(),
+          action: const AccessibilityNoopAction(),
         ),
       );
     }
-    final title = 'Messages with ${contact.displayName}';
+    final title = contact.displayName.isEmpty
+        ? _l10n.accessibilityMessagesTitle
+        : _l10n.accessibilityMessagesWithContact(contact.displayName);
     return _SectionWithInitial(
       section: AccessibilityMenuSection(
         id: 'chat-messages',
@@ -1528,9 +1536,7 @@ class AccessibilityActionBloc
   }
 
   String _unreadDescription(AccessibilityContact contact) =>
-      contact.unreadCount == 1
-          ? '1 unread message'
-          : '${contact.unreadCount} unread messages';
+      _l10n.chatsUnreadLabel(contact.unreadCount);
 
   void _syncActiveChatRecipient(Emitter<AccessibilityActionState> emit) {
     final active = state.activeChatJid;
@@ -1561,12 +1567,13 @@ class AccessibilityActionBloc
 
   AccessibilityContact _contactFor(String? jid) {
     final fallbackJid = jid ?? 'unknown';
+    final fallbackName = jid ?? _l10n.accessibilityUnknownContact;
     return _contacts.firstWhere(
       (contact) => contact.jid == fallbackJid,
       orElse: () => AccessibilityContact(
         jid: fallbackJid,
-        displayName: jid ?? 'Unknown contact',
-        subtitle: jid ?? 'Unknown contact',
+        displayName: fallbackName,
+        subtitle: fallbackName,
         source: AccessibilityContactSource.chat,
         encryptionProtocol: EncryptionProtocol.none,
         chatType: ChatType.chat,
@@ -1579,7 +1586,7 @@ class AccessibilityActionBloc
     final senderBare = message.senderJid.split('/').first;
     final me = _chatsService.myJid;
     if (me != null && senderBare == me) {
-      return 'You';
+      return _l10n.chatSenderYou;
     }
     final matching = _contacts.firstWhere(
       (contact) => contact.jid == senderBare,
@@ -1598,7 +1605,7 @@ class AccessibilityActionBloc
 
   String _formatTimestamp(DateTime? timestamp) {
     final safe = timestamp ?? DateTime.now();
-    return DateFormat.yMMMd().add_jm().format(safe);
+    return DateFormat.yMMMd(_l10n.localeName).add_jm().format(safe);
   }
 
   String? _attachmentLabelFor(
@@ -1607,13 +1614,13 @@ class AccessibilityActionBloc
   }) {
     final filename = metadata?.filename.trim();
     if (filename != null && filename.isNotEmpty) {
-      return 'Attachment: $filename';
+      return _l10n.accessibilityAttachmentWithName(filename);
     }
     if (message.fileMetadataID != null) {
-      return 'Attachment';
+      return _l10n.accessibilityAttachmentGeneric;
     }
     if (message.isFileUploadNotification) {
-      return 'Upload available';
+      return _l10n.accessibilityUploadAvailable;
     }
     if (message.pseudoMessageType != null) {
       return message.pseudoMessageType!.name;
@@ -1633,26 +1640,25 @@ class AccessibilityActionBloc
   }
 
   // ignore: unused_element
-  String get _textNeedsAttention => 'Needs attention';
-  String get _textReadNewMessages => 'Read new messages';
+  String get _textNeedsAttention => _l10n.accessibilityNeedsAttention;
+  String get _textReadNewMessages => _l10n.accessibilityReadNewMessages;
   String get _textUnreadSummaryDescription =>
-      'Focus on conversations with unread messages';
-  String get _textRootActionsTitle => 'Actions';
-  String get _textStartNewChat => 'Start a new chat';
+      _l10n.accessibilityUnreadSummaryDescription;
+  String get _textRootActionsTitle => _l10n.accessibilityActionsTitle;
+  String get _textStartNewChat => _l10n.accessibilityStartNewChat;
   String get _textStartNewChatDescription =>
-      'Pick a contact or type an address';
-  String get _textInvitesTitle => 'Invites';
+      _l10n.accessibilityStartNewChatDescription;
+  String get _textInvitesTitle => _l10n.accessibilityInvitesTitle;
   // ignore: unused_element
-  String get _textPendingInvites => 'Pending invites';
-  String get _textAcceptInvite => 'Accept invite';
-  String get _textNewContactTitle => 'Start chat';
-  String get _textNewContactDescription =>
-      'Use the typed address to start chatting';
-  String get _textSubmitNewContactTitle => 'Start chat';
+  String get _textPendingInvites => _l10n.accessibilityPendingInvites;
+  String get _textAcceptInvite => _l10n.accessibilityAcceptInvite;
+  String get _textNewContactTitle => _l10n.accessibilityStartChat;
+  String get _textNewContactDescription => _l10n.accessibilityStartChatHint;
+  String get _textSubmitNewContactTitle => _l10n.accessibilityStartChat;
   String get _textSubmitNewContactDescription =>
-      'Use the typed address to start chatting';
-  String get _textInvalidAddress => 'Enter a valid address';
-  String get _textInviteAccepted => 'Invite accepted';
-  String get _textInviteDismissed => 'Invite dismissed';
-  String get _textInviteUpdateFailed => 'Unable to update invite';
+      _l10n.accessibilityStartChatHint;
+  String get _textInvalidAddress => _l10n.jidInputInvalid;
+  String get _textInviteAccepted => _l10n.accessibilityInviteAccepted;
+  String get _textInviteDismissed => _l10n.accessibilityInviteDismissed;
+  String get _textInviteUpdateFailed => _l10n.accessibilityInviteUpdateFailed;
 }

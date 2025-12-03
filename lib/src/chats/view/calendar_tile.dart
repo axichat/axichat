@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -23,6 +24,7 @@ class CalendarTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final showBadge = dueReminderCount > 0;
     final badgeWidth =
         showBadge ? _measureBadgeWidth(context, dueReminderCount) : 0.0;
@@ -40,10 +42,10 @@ class CalendarTile extends StatelessWidget {
 
     final CalendarTask? displayTask = currentTask ?? nextTask;
     final String subtitleText = currentTask != null
-        ? 'Now: ${currentTask!.title}'
+        ? l10n.calendarTileNow(currentTask!.title)
         : nextTask != null
-            ? 'Next: ${nextTask!.title}'
-            : 'No upcoming tasks';
+            ? l10n.calendarTileNext(nextTask!.title)
+            : l10n.calendarTileNone;
 
     final scheduledTime = displayTask?.scheduledTime;
     final List<Widget>? trailingActions = scheduledTime == null
@@ -62,9 +64,9 @@ class CalendarTile extends StatelessWidget {
       leading: _CalendarAvatar(
         highlight: showBadge,
       ),
-      title: 'Calendar',
+      title: l10n.homeRailCalendar,
       subtitle: subtitleText,
-      subtitlePlaceholder: 'No upcoming tasks',
+      subtitlePlaceholder: l10n.calendarTileNone,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       minTileHeight: 60,
       actions: trailingActions,

@@ -7,6 +7,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/task_form_section.dart';
 
@@ -57,21 +58,22 @@ class CalendarNavigation extends StatelessWidget {
     final bool isCompact = ResponsiveHelper.isCompact(context);
     final CalendarView viewMode = state.viewMode;
     final bool hasUndoRedo = onUndo != null || onRedo != null;
-    final String unitLabel = _currentUnitLabel(viewMode);
+    final l10n = context.l10n;
+    final String unitLabel = _currentUnitLabel(viewMode, l10n);
     final List<Widget> navButtons = [
       _iconNavButton(
         context: context,
         icon: Icons.chevron_left,
-        tooltip: 'Previous $unitLabel',
+        tooltip: l10n.calendarPreviousUnit(unitLabel),
         compact: isCompact,
         onPressed: () => _jumpRelative(-1),
       ),
       _navButton(
         context: context,
-        label: 'Today',
+        label: l10n.calendarToday,
         icon: null,
         highlighted: _isToday(state.selectedDate),
-        tooltip: 'Today',
+        tooltip: l10n.calendarToday,
         compact: isCompact,
         showLabelInCompact: true,
         onPressed: _isToday(state.selectedDate)
@@ -81,7 +83,7 @@ class CalendarNavigation extends StatelessWidget {
       _iconNavButton(
         context: context,
         icon: Icons.chevron_right,
-        tooltip: 'Next $unitLabel',
+        tooltip: l10n.calendarNextUnit(unitLabel),
         compact: isCompact,
         onPressed: () => _jumpRelative(1),
       ),
@@ -206,14 +208,14 @@ class CalendarNavigation extends StatelessWidget {
     }
   }
 
-  String _currentUnitLabel(CalendarView viewMode) {
+  String _currentUnitLabel(CalendarView viewMode, AppLocalizations l10n) {
     switch (viewMode) {
       case CalendarView.day:
-        return 'day';
+        return l10n.calendarViewDay.toLowerCase();
       case CalendarView.week:
-        return 'week';
+        return l10n.calendarViewWeek.toLowerCase();
       case CalendarView.month:
-        return 'month';
+        return l10n.calendarViewMonth.toLowerCase();
     }
   }
 
@@ -404,7 +406,7 @@ class _UndoRedoGroup extends StatelessWidget {
         iconBuilder(
           context: context,
           icon: Icons.undo_rounded,
-          tooltip: 'Undo',
+          tooltip: context.l10n.calendarUndo,
           onPressed: canUndo ? onUndo : null,
           compact: isCompact,
         ),
@@ -418,7 +420,7 @@ class _UndoRedoGroup extends StatelessWidget {
         iconBuilder(
           context: context,
           icon: Icons.redo_rounded,
-          tooltip: 'Redo',
+          tooltip: context.l10n.calendarRedo,
           onPressed: canRedo ? onRedo : null,
           compact: isCompact,
         ),
@@ -539,6 +541,7 @@ class _ViewModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final ShadColorScheme colors = context.colorScheme;
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
@@ -594,8 +597,8 @@ class _ViewModeToggle extends StatelessWidget {
                   child: _ViewModeToggleItem(
                     view: _viewOrder[index],
                     label: useShortLabels
-                        ? _shortLabel(_viewOrder[index])
-                        : _viewLabel(_viewOrder[index]),
+                        ? _shortLabel(_viewOrder[index], l10n)
+                        : _viewLabel(_viewOrder[index], l10n),
                     selected: _viewOrder[index] == selectedView,
                     padding: padding,
                     textStyle: textStyle,
@@ -692,25 +695,25 @@ class _ViewModeToggleItem extends StatelessWidget {
   }
 }
 
-String _viewLabel(CalendarView view) {
+String _viewLabel(CalendarView view, AppLocalizations l10n) {
   switch (view) {
     case CalendarView.day:
-      return 'Day';
+      return l10n.calendarViewDay;
     case CalendarView.week:
-      return 'Week';
+      return l10n.calendarViewWeek;
     case CalendarView.month:
-      return 'Month';
+      return l10n.calendarViewMonth;
   }
 }
 
-String _shortLabel(CalendarView view) {
+String _shortLabel(CalendarView view, AppLocalizations l10n) {
   switch (view) {
     case CalendarView.day:
-      return 'D';
+      return l10n.calendarViewDayShort;
     case CalendarView.week:
-      return 'W';
+      return l10n.calendarViewWeekShort;
     case CalendarView.month:
-      return 'M';
+      return l10n.calendarViewMonthShort;
   }
 }
 
@@ -728,6 +731,7 @@ class _HideCompletedButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final bool hiding = value;
     final Color foreground = hiding ? colors.primary : colors.mutedForeground;
     final Widget icon = Icon(
@@ -739,7 +743,9 @@ class _HideCompletedButton extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: calendarInsetSm),
         child: AxiTooltip(
-          builder: (_) => Text(hiding ? 'Show completed' : 'Hide completed'),
+          builder: (_) => Text(
+            hiding ? l10n.calendarShowCompleted : l10n.calendarHideCompleted,
+          ),
           child: ShadButton.ghost(
             size: ShadButtonSize.sm,
             onPressed: () => onChanged(!value),
@@ -759,7 +765,7 @@ class _HideCompletedButton extends StatelessWidget {
             icon,
             const SizedBox(width: calendarInsetMd),
             Text(
-              'Completed',
+              l10n.calendarStatusCompleted,
               style: context.textTheme.small.copyWith(
                 color: foreground,
                 fontWeight: FontWeight.w700,
@@ -1236,7 +1242,7 @@ class _CalendarDropdown extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: TaskSecondaryButton(
-              label: 'Close',
+              label: context.l10n.commonClose,
               onPressed: onClose,
               foregroundColor: calendarSubtitleColor,
               hoverForegroundColor: calendarPrimaryColor,

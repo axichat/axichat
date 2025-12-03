@@ -3,3 +3,5 @@ const bool kEnableDemoChats =
 
 const String kDemoSelfJid = 'franklin@axi.im';
 const String kDemoSelfDisplayName = 'Franklin';
+const String kDemoDatabasePrefix = 'demo_franklin';
+const String kDemoDatabasePassphrase = 'axi_demo_passphrase_32byte_key__';

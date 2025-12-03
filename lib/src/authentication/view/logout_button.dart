@@ -1,6 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -8,11 +10,12 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class LogoutButton extends StatelessWidget {
   const LogoutButton({super.key});
 
-  static const title = 'Log Out';
+  static String title(AppLocalizations l10n) => l10n.authLogoutTitle;
 
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
+    final l10n = context.l10n;
     return AxiIconButton(
       iconData: LucideIcons.logOut,
       onPressed: () => showDialog(
@@ -24,7 +27,7 @@ class LogoutButton extends StatelessWidget {
             child: StatefulBuilder(
               builder: (context, setState) {
                 return AxiInputDialog(
-                  title: const Text(title),
+                  title: Text(title(l10n)),
                   content: Material(
                     child: ListTileTheme.merge(
                       shape: RoundedRectangleBorder(
@@ -36,8 +39,8 @@ class LogoutButton extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           ListTile(
-                            title: const Text('Normal'),
-                            subtitle: const Text('Clear JID and password.'),
+                            title: Text(l10n.authLogoutNormal),
+                            subtitle: Text(l10n.authLogoutNormalDescription),
                             selected: severity.isNormal,
                             onTap: () => setState(() {
                               severity = LogoutSeverity.normal;
@@ -45,10 +48,8 @@ class LogoutButton extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           ListTile(
-                            title: const Text('Burn'),
-                            subtitle: const Text(
-                                'Permanently delete all data and messages '
-                                'for account on this device.'),
+                            title: Text(l10n.authLogoutBurn),
+                            subtitle: Text(l10n.authLogoutBurnDescription),
                             isThreeLine: true,
                             selected: severity.isBurn,
                             onTap: () => setState(() {

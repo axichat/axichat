@@ -3,6 +3,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chat_selection_bar.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,7 @@ class _ArchivesView extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ChatsCubit, ChatsState>(
       builder: (context, chatsState) {
+        final l10n = context.l10n;
         final selectedJids = chatsState.selectedJids;
         final selectedChats = selectedJids.isEmpty
             ? const <Chat>[]
@@ -45,7 +47,7 @@ class _ArchivesView extends StatelessWidget {
             .toList(growable: false);
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Archive'),
+            title: Text(l10n.chatsArchiveTitle),
             leadingWidth: AxiIconButton.kDefaultSize + 24,
             leading: Padding(
               padding: const EdgeInsets.only(left: 12),
@@ -56,7 +58,7 @@ class _ArchivesView extends StatelessWidget {
                   height: AxiIconButton.kDefaultSize,
                   child: AxiIconButton(
                     iconData: LucideIcons.arrowLeft,
-                    tooltip: 'Back',
+                    tooltip: l10n.commonBack,
                     color: context.colorScheme.foreground,
                     borderColor: context.colorScheme.border,
                     onPressed: () => Navigator.of(context).maybePop(),
@@ -82,7 +84,7 @@ class _ArchivesView extends StatelessWidget {
               : archivedItems.isEmpty
                   ? Center(
                       child: Text(
-                        'No archived chats yet',
+                        l10n.chatsArchiveEmpty,
                         style: context.textTheme.muted,
                       ),
                     )

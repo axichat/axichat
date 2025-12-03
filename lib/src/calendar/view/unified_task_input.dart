@@ -14,6 +14,8 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/controllers/task_checklist_controller.dart';
 import 'package:axichat/src/calendar/view/widgets/task_checklist.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'error_display.dart';
 import 'widgets/critical_path_panel.dart';
@@ -103,6 +105,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   @override
   Widget build(BuildContext context) {
     final bool isEditing = widget.editingTask != null;
+    final l10n = context.l10n;
     final Widget form = _UnifiedTaskForm(
       formKey: _formKey,
       titleController: _titleController,
@@ -116,7 +119,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       onDurationChanged: (duration) {
         setState(() => _selectedDuration = duration);
       },
-      formatDate: _formatDate,
+      formatDate: (date) => _formatDate(l10n, date),
       formatDuration: _formatDuration,
       checklistController: _checklistController,
       reminders: _reminders,
@@ -239,8 +242,8 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     }
   }
 
-  String _formatDate(DateTime? date) {
-    if (date == null) return 'Select date';
+  String _formatDate(AppLocalizations l10n, DateTime? date) {
+    if (date == null) return l10n.calendarSelectDate;
     return '${date.day}/${date.month}/${date.year}';
   }
 
@@ -262,6 +265,7 @@ class _UnifiedTaskMobileLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: context.colorScheme.background,
@@ -281,7 +285,7 @@ class _UnifiedTaskMobileLayout extends StatelessWidget {
                     height: AxiIconButton.kDefaultSize,
                     child: AxiIconButton(
                       iconData: LucideIcons.arrowLeft,
-                      tooltip: 'Back',
+                      tooltip: l10n.commonBack,
                       color: context.colorScheme.foreground,
                       borderColor: context.colorScheme.border,
                       onPressed: () => Navigator.of(context).maybePop(),
@@ -290,7 +294,9 @@ class _UnifiedTaskMobileLayout extends StatelessWidget {
                 ),
               )
             : null,
-        title: Text(isEditing ? 'Edit Task' : 'New Task'),
+        title: Text(
+          isEditing ? l10n.calendarEditTaskTitle : l10n.calendarAddTaskTitle,
+        ),
         actions: [saveButton],
       ),
       body: form,
@@ -337,7 +343,7 @@ class _UnifiedTaskDialogHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final textTheme = context.textTheme;
+    final l10n = context.l10n;
     return Container(
       padding: calendarPaddingXl,
       decoration: BoxDecoration(
@@ -349,13 +355,15 @@ class _UnifiedTaskDialogHeader extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              isEditing ? 'Edit Task' : 'New Task',
-              style: textTheme.h4,
+              isEditing
+                  ? l10n.calendarEditTaskTitle
+                  : l10n.calendarAddTaskTitle,
+              style: calendarTitleTextStyle.copyWith(fontSize: 18),
             ),
           ),
           AxiIconButton(
             iconData: Icons.close,
-            tooltip: 'Close',
+            tooltip: l10n.commonClose,
             onPressed: () => Navigator.of(context).maybePop(),
             backgroundColor: colors.card,
             borderColor: colors.border,
@@ -451,17 +459,16 @@ class _UnifiedTaskTitleField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskTextFormField(
+        TaskTitleField(
           controller: controller,
-          hintText: 'Task title',
-          textCapitalization: TextCapitalization.sentences,
-          focusBorderColor: calendarPrimaryColor,
-          borderRadius: calendarBorderRadius,
+          hintText: l10n.calendarTaskNameHint,
           validator: (value) => TaskTitleValidation.validate(value ?? ''),
           autovalidateMode: AutovalidateMode.onUserInteraction,
+          textInputAction: TextInputAction.next,
         ),
         TaskFieldCharacterHint(controller: controller),
       ],
@@ -476,11 +483,13 @@ class _UnifiedTaskDescriptionField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return TaskDescriptionField(
       controller: controller,
-      hintText: 'Description (optional)',
+      hintText: l10n.calendarDescriptionHint,
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
+      contentPadding: calendarFieldPadding,
       minLines: 3,
       maxLines: 3,
       textCapitalization: TextCapitalization.sentences,
@@ -510,7 +519,7 @@ class _UnifiedTaskDateTimeSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Date & Time',
+          context.l10n.calendarDateTimeLabel,
           style: textTheme.muted,
         ),
         const SizedBox(height: calendarGutterSm),
@@ -520,8 +529,8 @@ class _UnifiedTaskDateTimeSection extends StatelessWidget {
             selectedTime: selectedTime,
             onSelectDate: onSelectDate,
             onSelectTime: onSelectTime,
-            emptyDateLabel: 'Select date',
-            emptyTimeLabel: 'Select time',
+            emptyDateLabel: context.l10n.calendarSelectDate,
+            emptyTimeLabel: context.l10n.calendarSelectTime,
             dateLabelBuilder: (context, date) => formatDate(date),
             timeLabelBuilder: (context, time) =>
                 TimeFormatter.formatTimeOfDay(context, time),
@@ -552,12 +561,12 @@ class _UnifiedTaskDurationField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Duration',
+          context.l10n.calendarDurationLabel,
           style: textTheme.muted,
         ),
         const SizedBox(height: calendarGutterSm),
         ShadSelect<Duration>(
-          placeholder: const Text('Select duration'),
+          placeholder: Text(context.l10n.calendarSelectDuration),
           options: durationOptions
               .map(
                 (duration) => ShadOption(
@@ -593,7 +602,7 @@ class _UnifiedTaskSaveButton<T extends BaseCalendarBloc>
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm),
           child: TaskPrimaryButton(
-            label: 'Save',
+            label: context.l10n.commonSave,
             onPressed: disabled ? null : onSave,
             isBusy: disabled,
           ),
@@ -665,7 +674,7 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
                 gap: calendarGutterMd,
                 children: [
                   TaskSecondaryButton(
-                    label: 'Add to critical path',
+                    label: context.l10n.calendarAddToCriticalPath,
                     icon: Icons.route,
                     onPressed: canAddToCriticalPath
                         ? () => addTaskToCriticalPath(
@@ -677,13 +686,13 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
                   ),
                   const Spacer(),
                   TaskSecondaryButton(
-                    label: 'Cancel',
+                    label: context.l10n.commonCancel,
                     onPressed: (state.isLoading || isSubmitting)
                         ? null
                         : () => Navigator.of(context).maybePop(),
                   ),
                   TaskPrimaryButton(
-                    label: 'Save',
+                    label: context.l10n.commonSave,
                     onPressed:
                         (state.isLoading || isSubmitting) ? null : onSave,
                     isBusy: state.isLoading || isSubmitting,
@@ -701,7 +710,7 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
                             taskId: activeTask.id,
                           ),
                         ),
-                emptyLabel: 'Not in any critical paths',
+                emptyLabel: context.l10n.calendarNoCriticalPathMembership,
               ),
             ],
           ),

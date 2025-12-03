@@ -4,6 +4,8 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -162,16 +164,20 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
     }
 
     final attachment = pending.attachment;
+    final l10n = context.l10n;
     final sizeLabel = formatBytes(attachment.sizeBytes);
-    final statusMessage = _statusLabel(pending.status);
+    final statusMessage = _statusLabel(pending.status, l10n);
     final hasTapHandler = widget.onPressed != null;
     final semanticsOnTap = widget.onPressed ?? (hasMenu ? _showMenu : null);
     final semanticsOnLongPress =
         widget.onLongPress ?? (hasMenu ? _showMenu : null);
+    final hint = hasMenu
+        ? '$statusMessage. ${l10n.chatAttachmentMenuHint}'
+        : statusMessage;
 
     return Semantics(
       label: '${attachment.fileName}, $sizeLabel',
-      hint: hasMenu ? '$statusMessage. Open menu for actions.' : statusMessage,
+      hint: hint,
       button: hasTapHandler || hasMenu,
       onTap: semanticsOnTap,
       onLongPress: semanticsOnLongPress,
@@ -350,13 +356,14 @@ class _PendingAttachmentActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final isFailed = pending.status == PendingAttachmentStatus.failed;
     if (!isFailed) {
       return Align(
         alignment: Alignment.centerRight,
         child: AxiIconButton(
           iconData: LucideIcons.x,
-          tooltip: 'Remove attachment',
+          tooltip: l10n.chatAttachmentRemoveAttachment,
           onPressed: onRemove,
           backgroundColor: context.colorScheme.card,
           borderColor: context.colorScheme.border,
@@ -368,7 +375,7 @@ class _PendingAttachmentActionBar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          pending.errorMessage ?? 'Unable to send attachment.',
+          pending.errorMessage ?? l10n.chatAttachmentSendFailed,
           style: context.textTheme.small.copyWith(
             color: context.colorScheme.destructiveForeground,
           ),
@@ -381,12 +388,12 @@ class _PendingAttachmentActionBar extends StatelessWidget {
           children: [
             _PendingAttachmentActionButton(
               icon: LucideIcons.refreshCcw,
-              label: 'Retry',
+              label: l10n.commonRetry,
               onPressed: onRetry,
             ),
             _PendingAttachmentActionButton(
               icon: LucideIcons.x,
-              label: 'Remove',
+              label: l10n.commonRemove,
               onPressed: onRemove,
             ),
           ],
@@ -414,8 +421,9 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final errorLabel =
-        message?.isNotEmpty == true ? message! : 'Unable to send attachment.';
+        message?.isNotEmpty == true ? message! : l10n.chatAttachmentSendFailed;
     return Positioned.fill(
       child: ClipRRect(
         borderRadius: borderRadius,
@@ -438,7 +446,12 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: AxiTooltip(
-                        builder: (_) => Text('$errorLabel ($fileName)'),
+                        builder: (_) => Text(
+                          l10n.chatAttachmentErrorTooltip(
+                            errorLabel,
+                            fileName,
+                          ),
+                        ),
                         child: Text(
                           errorLabel,
                           maxLines: 1,
@@ -457,12 +470,12 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
                   children: [
                     _PendingAttachmentOverlayAction(
                       icon: LucideIcons.refreshCcw,
-                      tooltip: 'Retry upload',
+                      tooltip: l10n.chatAttachmentRetryUpload,
                       onPressed: onRetry,
                     ),
                     _PendingAttachmentOverlayAction(
                       icon: LucideIcons.x,
-                      tooltip: 'Remove attachment',
+                      tooltip: l10n.chatAttachmentRemoveAttachment,
                       onPressed: onRemove,
                     ),
                   ],
@@ -565,9 +578,10 @@ class PendingAttachmentStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final background = colors.background.withValues(alpha: 0.85);
     return AxiTooltip(
-      builder: (_) => Text(_statusLabel(status)),
+      builder: (_) => Text(_statusLabel(status, l10n)),
       child: Container(
         width: 24,
         height: 24,
@@ -593,8 +607,9 @@ class PendingAttachmentStatusInlineBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AxiTooltip(
-      builder: (_) => Text(_statusLabel(status)),
+      builder: (_) => Text(_statusLabel(status, l10n)),
       child: SizedBox(
         width: 20,
         height: 20,
@@ -634,11 +649,11 @@ class _StatusIndicator extends StatelessWidget {
   }
 }
 
-String _statusLabel(PendingAttachmentStatus status) {
+String _statusLabel(PendingAttachmentStatus status, AppLocalizations l10n) {
   return switch (status) {
-    PendingAttachmentStatus.uploading => 'Uploading attachment…',
-    PendingAttachmentStatus.queued => 'Waiting to send',
-    PendingAttachmentStatus.failed => 'Upload failed',
+    PendingAttachmentStatus.uploading => l10n.chatAttachmentStatusUploading,
+    PendingAttachmentStatus.queued => l10n.chatAttachmentStatusQueued,
+    PendingAttachmentStatus.failed => l10n.chatAttachmentStatusFailed,
   };
 }
 

@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/service/chatmail_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
@@ -117,6 +118,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     unawaited(_flushPendingAccountDeletions());
     unawaited(_purgeLegacySignupDraft());
+    if (kEnableDemoChats) {
+      unawaited(_loginToDemoMode());
+    }
   }
 
   final _log = Logger('AuthenticationCubit');
@@ -162,6 +166,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   late final Future<void> _authRecoveryFuture;
   bool get _stickyAuthActive => state is AuthenticationComplete;
   bool _loginInFlight = false;
+  bool _demoLoginInProgress = false;
+  bool _demoSessionReady = false;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -362,6 +368,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     bool requireEmailProvisioned = false,
     provisioning.EmailProvisioningCredentials? emailCredentials,
   }) async {
+    if (kEnableDemoChats) {
+      await _loginToDemoMode();
+      return;
+    }
     if (_loginInFlight) {
       _log.fine('Ignoring login request while another is in flight.');
       return;
@@ -713,6 +723,47 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<void> _loginToDemoMode() async {
+    if (_demoSessionReady || _demoLoginInProgress) {
+      return;
+    }
+    _demoLoginInProgress = true;
+    _loginInFlight = true;
+    try {
+      await _authRecoveryFuture;
+      final demoDomain = kDemoSelfJid.split('@').last;
+      final demoConfig = EndpointConfig(
+        domain: demoDomain,
+        enableXmpp: false,
+        enableSmtp: false,
+      );
+      if (_endpointConfig != demoConfig) {
+        _endpointConfig = demoConfig;
+        _emailService?.updateEndpointConfig(demoConfig);
+        _emit(state);
+        _updateEmailForegroundKeepalive();
+      }
+      await _xmppService.resumeOfflineSession(
+        jid: kDemoSelfJid,
+        databasePrefix: kDemoDatabasePrefix,
+        databasePassphrase: kDemoDatabasePassphrase,
+      );
+      await _markXmppConnected();
+      _authenticatedJid = kDemoSelfJid;
+      _demoSessionReady = true;
+      _emit(const AuthenticationComplete());
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to start demo session', error, stackTrace);
+      _authenticatedJid = null;
+      _emit(const AuthenticationFailure(
+        'Failed to start demo mode. Please try again.',
+      ));
+    } finally {
+      _demoLoginInProgress = false;
+      _loginInFlight = false;
+    }
+  }
+
   Future<void> _cancelPendingEmailProvisioning(
     Future<void>? provisioningFuture,
     String jid, {
@@ -966,6 +1017,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String captcha,
     required bool rememberMe,
   }) async {
+    if (kEnableDemoChats) {
+      await _loginToDemoMode();
+      return;
+    }
     _emit(const AuthenticationSignUpInProgress());
     final host = _endpointConfig.domain;
     final cleanupComplete = await _ensureAccountDeletionCleanupComplete(
@@ -1175,6 +1230,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     _authenticatedJid = null;
+    _demoSessionReady = false;
     _emit(const AuthenticationNone());
     _updateEmailForegroundKeepalive();
   }

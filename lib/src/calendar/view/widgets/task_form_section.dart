@@ -196,6 +196,8 @@ class TaskTextFormField extends StatelessWidget {
     this.focusBorderColor,
     this.fillColor,
     this.textStyle,
+    this.errorText,
+    this.errorStyle,
   }) : maxLines = maxLines ?? minLines;
 
   final TextEditingController controller;
@@ -221,6 +223,8 @@ class TaskTextFormField extends StatelessWidget {
   final Color? focusBorderColor;
   final Color? fillColor;
   final TextStyle? textStyle;
+  final String? errorText;
+  final TextStyle? errorStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +284,64 @@ class TaskTextFormField extends StatelessWidget {
             ),
         filled: true,
         fillColor: effectiveFill,
+        errorText: errorText,
+        errorStyle: errorStyle,
       ),
+    );
+  }
+}
+
+/// Shared task title field that matches the sidebar styling and supports
+/// validation for modal forms.
+class TaskTitleField extends StatelessWidget {
+  const TaskTitleField({
+    super.key,
+    required this.controller,
+    this.focusNode,
+    this.hintText = 'Task title',
+    this.labelText,
+    this.textInputAction,
+    this.autofocus = false,
+    this.validator,
+    this.autovalidateMode,
+    this.onChanged,
+    this.onSubmitted,
+    this.errorText,
+    this.errorStyle,
+  });
+
+  final TextEditingController controller;
+  final FocusNode? focusNode;
+  final String hintText;
+  final String? labelText;
+  final TextInputAction? textInputAction;
+  final bool autofocus;
+  final FormFieldValidator<String>? validator;
+  final AutovalidateMode? autovalidateMode;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onSubmitted;
+  final String? errorText;
+  final TextStyle? errorStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskTextFormField(
+      controller: controller,
+      focusNode: focusNode,
+      autofocus: autofocus,
+      labelText: labelText,
+      hintText: hintText,
+      textCapitalization: TextCapitalization.sentences,
+      textInputAction: textInputAction,
+      onChanged: onChanged,
+      onFieldSubmitted: onSubmitted == null ? null : (_) => onSubmitted!(),
+      validator: validator,
+      autovalidateMode: autovalidateMode,
+      borderRadius: calendarBorderRadius,
+      focusBorderColor: calendarPrimaryColor,
+      contentPadding: calendarFieldPadding,
+      errorText: errorText,
+      errorStyle: errorStyle,
     );
   }
 }

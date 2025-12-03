@@ -398,6 +398,171 @@
   "accessibilityStartChatHint": "提交此地址以开始对话。",
   "accessibilityMessagesEmpty": "暂无消息",
   "accessibilityMessageNoContent": "无消息内容",
+  "accessibilityActionsTitle": "操作",
+  "accessibilityReadNewMessages": "阅读新消息",
+  "accessibilityUnreadSummaryDescription": "专注于包含未读消息的会话",
+  "accessibilityStartNewChat": "开始新的聊天",
+  "accessibilityStartNewChatDescription": "选择联系人或输入地址",
+  "accessibilityInvitesTitle": "邀请",
+  "accessibilityPendingInvites": "等待中的邀请",
+  "accessibilityAcceptInvite": "接受邀请",
+  "accessibilityInviteAccepted": "已接受邀请",
+  "accessibilityInviteDismissed": "已拒绝邀请",
+  "accessibilityInviteUpdateFailed": "无法更新邀请",
+  "accessibilityUnreadEmpty": "没有未读会话",
+  "accessibilityInvitesEmpty": "没有待处理的邀请",
+  "accessibilityMessagesTitle": "消息",
+  "accessibilityNoConversationSelected": "未选择会话",
+  "accessibilityMessagesWithContact": "{name} 的消息",
+  "@accessibilityMessagesWithContact": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityMessageLabel": "{sender} 于 {timestamp}：{body}",
+  "@accessibilityMessageLabel": {
+    "placeholders": {
+      "sender": {},
+      "timestamp": {},
+      "body": {}
+    }
+  },
+  "accessibilityMessageSent": "消息已发送。",
+  "accessibilityDiscardWarning": "再次按下 Escape 以放弃消息并关闭此步骤。",
+  "accessibilityDraftLoaded": "草稿已加载。按 Escape 退出或保存以保留更改。",
+  "accessibilityDraftLabel": "草稿 {id}",
+  "@accessibilityDraftLabel": {
+    "placeholders": {
+      "id": {}
+    }
+  },
+  "accessibilityDraftLabelWithRecipients": "发给 {recipients} 的草稿",
+  "@accessibilityDraftLabelWithRecipients": {
+    "placeholders": {
+      "recipients": {}
+    }
+  },
+  "accessibilityDraftPreview": "{recipients} — {preview}",
+  "@accessibilityDraftPreview": {
+    "placeholders": {
+      "recipients": {},
+      "preview": {}
+    }
+  },
+  "accessibilityIncomingMessageStatus": "来自 {sender} 的新消息，时间 {time}",
+  "@accessibilityIncomingMessageStatus": {
+    "placeholders": {
+      "sender": {},
+      "time": {}
+    }
+  },
+  "accessibilityAttachmentWithName": "附件：{filename}",
+  "@accessibilityAttachmentWithName": {
+    "placeholders": {
+      "filename": {}
+    }
+  },
+  "accessibilityAttachmentGeneric": "附件",
+  "accessibilityUploadAvailable": "上传可用",
+  "accessibilityUnknownContact": "未知联系人",
+  "accessibilityChooseContact": "选择联系人",
+  "accessibilityUnreadConversations": "未读会话",
+  "accessibilityStartNewAddress": "输入新地址",
+  "accessibilityConversationWith": "与 {name} 的对话",
+  "@accessibilityConversationWith": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityConversationLabel": "对话",
+  "accessibilityDialogLabel": "辅助功能操作对话框",
+  "accessibilityDialogHint": "按 Tab 查看快捷键说明，在列表中使用方向键，按住 Shift 加方向键在组之间移动，或按 Escape 退出。",
+  "accessibilityNoActionsAvailable": "当前没有可用操作",
+  "accessibilityBreadcrumbLabel": "第 {position}/{total} 步：{label}。激活以跳转到此步骤。",
+  "@accessibilityBreadcrumbLabel": {
+    "placeholders": {
+      "position": {},
+      "total": {},
+      "label": {}
+    }
+  },
+  "accessibilityShortcutOpenMenu": "打开菜单",
+  "accessibilityShortcutBack": "后退一步或关闭",
+  "accessibilityShortcutNextFocus": "下一个焦点目标",
+  "accessibilityShortcutPreviousFocus": "上一个焦点目标",
+  "accessibilityShortcutActivateItem": "激活项目",
+  "accessibilityShortcutNextItem": "下一个项目",
+  "accessibilityShortcutPreviousItem": "上一个项目",
+  "accessibilityShortcutNextGroup": "下一个分组",
+  "accessibilityShortcutPreviousGroup": "上一个分组",
+  "accessibilityShortcutFirstItem": "第一个项目",
+  "accessibilityShortcutLastItem": "最后一个项目",
+  "accessibilityKeyboardShortcutsTitle": "键盘快捷键",
+  "accessibilityKeyboardShortcutAnnouncement": "键盘快捷键：{description}",
+  "@accessibilityKeyboardShortcutAnnouncement": {
+    "placeholders": {
+      "description": {}
+    }
+  },
+  "accessibilityTextFieldHint": "输入文本。按 Tab 前进，或按 Escape 返回或关闭菜单。",
+  "accessibilityComposerPlaceholder": "输入消息",
+  "accessibilityRecipientLabel": "收件人 {name}",
+  "@accessibilityRecipientLabel": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityRecipientRemoveHint": "按退格或删除键移除",
+  "accessibilityMessageActionsLabel": "消息操作",
+  "accessibilityMessageActionsHint": "保存为草稿或发送此消息",
+  "accessibilityMessagePosition": "第 {position} 条消息，共 {total} 条",
+  "@accessibilityMessagePosition": {
+    "placeholders": {
+      "position": {},
+      "total": {}
+    }
+  },
+  "accessibilityNoMessages": "没有消息",
+  "accessibilityMessageMetadata": "来自 {sender} 于 {timestamp}",
+  "@accessibilityMessageMetadata": {
+    "placeholders": {
+      "sender": {},
+      "timestamp": {}
+    }
+  },
+  "accessibilityMessageFrom": "来自 {sender}",
+  "@accessibilityMessageFrom": {
+    "placeholders": {
+      "sender": {}
+    }
+  },
+  "accessibilityMessageNavigationHint": "使用方向键在消息间移动。按住 Shift 加方向键切换分组。按 Escape 退出。",
+  "accessibilitySectionSummary": "{section} 分区，包含 {count} 项",
+  "@accessibilitySectionSummary": {
+    "placeholders": {
+      "section": {},
+      "count": {}
+    }
+  },
+  "accessibilityActionListLabel": "操作列表，共 {count} 项",
+  "@accessibilityActionListLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "accessibilityActionListHint": "使用方向键移动，按住 Shift 加方向键切换分组，Home/End 跳转，Enter 激活，Escape 退出。",
+  "accessibilityActionItemPosition": "{section} 中的第 {position} 个项目，共 {total} 个",
+  "@accessibilityActionItemPosition": {
+    "placeholders": {
+      "position": {},
+      "total": {},
+      "section": {}
+    }
+  },
+  "accessibilityActionReadOnlyHint": "使用方向键浏览列表",
+  "accessibilityActionActivateHint": "按 Enter 激活",
+  "accessibilityDismissHighlight": "关闭提示",
+  "accessibilityNeedsAttention": "需要关注",
   "profileTitle": "个人资料",
   "profileJidDescription": "这是你的 Jabber ID，由用户名和域名组成，是你在 XMPP 网络中的唯一地址。",
   "profileResourceDescription": "这是你的 XMPP 资源。每台设备都有自己的资源，因此手机和电脑的在线状态可以不同。",
@@ -410,5 +575,329 @@
   "termsAgreementTerms": "条款",
   "termsAgreementAnd": " 和 ",
   "termsAgreementPrivacy": "隐私政策",
-  "termsAgreementError": "你必须接受条款和条件"
+  "termsAgreementError": "你必须接受条款和条件",
+  "commonContinue": "继续",
+  "commonDelete": "删除",
+  "commonSave": "保存",
+  "commonRetry": "重试",
+  "commonRemove": "移除",
+  "commonSend": "发送",
+  "commonDismiss": "关闭",
+  "settingsSectionImportant": "重要",
+  "settingsSectionAppearance": "外观",
+  "settingsLanguage": "语言",
+  "settingsThemeMode": "主题模式",
+  "settingsThemeModeSystem": "系统",
+  "settingsThemeModeLight": "浅色",
+  "settingsThemeModeDark": "深色",
+  "settingsColorScheme": "配色方案",
+  "settingsColorfulAvatars": "彩色头像",
+  "settingsColorfulAvatarsDescription": "为每个头像生成不同的背景颜色。",
+  "settingsLowMotion": "低动效",
+  "settingsLowMotionDescription": "禁用大部分动画，更适合性能较慢的设备。",
+  "settingsSectionChats": "聊天",
+  "settingsMessageStorageTitle": "消息存储",
+  "settingsMessageStorageSubtitle": "本地保留设备副本；仅服务器模式从存档查询。",
+  "settingsMessageStorageLocal": "本地",
+  "settingsMessageStorageServerOnly": "仅服务器",
+  "settingsMuteNotifications": "静音通知",
+  "settingsMuteNotificationsDescription": "停止接收消息通知。",
+  "settingsReadReceipts": "发送已读回执",
+  "settingsTypingIndicators": "发送正在输入指示",
+  "settingsTypingIndicatorsDescription": "让聊天中的其他人看到你正在输入。",
+  "settingsShareTokenFooter": "包含共享令牌页脚",
+  "settingsShareTokenFooterDescription": "有助于保持多收件人邮件线程和附件关联。关闭可能导致线程断裂。",
+  "authCustomServerTitle": "自定义服务器",
+  "authCustomServerDescription": "覆盖 XMPP/SMTP 端点或启用 DNS 查询。留空以使用默认值。",
+  "authCustomServerDomainOrIp": "域名或 IP",
+  "authCustomServerXmppLabel": "XMPP",
+  "authCustomServerSmtpLabel": "SMTP",
+  "authCustomServerUseDns": "使用 DNS",
+  "authCustomServerUseSrv": "使用 SRV",
+  "authCustomServerRequireDnssec": "需要 DNSSEC",
+  "authCustomServerXmppHostPlaceholder": "XMPP 主机（可选）",
+  "authCustomServerPortPlaceholder": "端口",
+  "authCustomServerSmtpHostPlaceholder": "SMTP 主机（可选）",
+  "authCustomServerApiPortPlaceholder": "API 端口",
+  "authCustomServerReset": "重置为 axi.im",
+  "authCustomServerOpenSettings": "打开自定义服务器设置",
+  "authCustomServerAdvancedHint": "高级服务器选项会保持隐藏，直到你点击用户名后缀。",
+  "authUnregisterTitle": "注销",
+  "authUnregisterProgressLabel": "正在等待删除账户",
+  "authPasswordPlaceholder": "密码",
+  "authPasswordCurrentPlaceholder": "旧密码",
+  "authPasswordNewPlaceholder": "新密码",
+  "authPasswordConfirmNewPlaceholder": "确认新密码",
+  "authChangePasswordProgressLabel": "正在等待修改密码",
+  "authLogoutTitle": "退出登录",
+  "authLogoutNormal": "退出登录",
+  "authLogoutNormalDescription": "退出此账户。",
+  "authLogoutBurn": "销毁账户",
+  "authLogoutBurnDescription": "退出并清除此账户的本地数据。",
+  "chatAttachmentBlockedTitle": "附件已被阻止",
+  "chatAttachmentBlockedDescription": "仅在信任未知联系人时加载附件。你确认后我们才会获取。",
+  "chatAttachmentLoad": "加载附件",
+  "chatAttachmentUnavailable": "附件不可用",
+  "chatAttachmentSendFailed": "无法发送附件。",
+  "chatAttachmentRetryUpload": "重试上传",
+  "chatAttachmentRemoveAttachment": "移除附件",
+  "chatAttachmentStatusUploading": "正在上传附件…",
+  "chatAttachmentStatusQueued": "等待发送",
+  "chatAttachmentStatusFailed": "上传失败",
+  "chatAttachmentLoading": "正在加载附件",
+  "chatAttachmentLoadingProgress": "正在加载 {percent}",
+  "@chatAttachmentLoadingProgress": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "chatAttachmentDownload": "下载附件",
+  "chatAttachmentUnavailableDevice": "此设备上已无法获取该附件",
+  "chatAttachmentInvalidLink": "无效的附件链接",
+  "chatAttachmentOpenFailed": "无法打开 {target}",
+  "@chatAttachmentOpenFailed": {
+    "placeholders": {
+      "target": {}
+    }
+  },
+  "chatAttachmentUnknownSize": "大小未知",
+  "chatAttachmentErrorTooltip": "{message}（{fileName}）",
+  "@chatAttachmentErrorTooltip": {
+    "placeholders": {
+      "message": {},
+      "fileName": {}
+    }
+  },
+  "chatAttachmentMenuHint": "打开菜单以查看更多操作。",
+  "accessibilityActionsLabel": "辅助功能操作",
+  "accessibilityActionsShortcutTooltip": "辅助功能操作（{shortcut}）",
+  "@accessibilityActionsShortcutTooltip": {
+    "placeholders": {
+      "shortcut": {}
+    }
+  },
+  "shorebirdUpdateAvailable": "有可用更新：请注销并重新启动应用。",
+  "calendarEditTaskTitle": "编辑任务",
+  "calendarDateTimeLabel": "日期和时间",
+  "calendarSelectDate": "选择日期",
+  "calendarSelectTime": "选择时间",
+  "calendarDurationLabel": "时长",
+  "calendarSelectDuration": "选择时长",
+  "calendarAddToCriticalPath": "添加到关键路径",
+  "calendarNoCriticalPathMembership": "不在任何关键路径中",
+  "calendarGuestTitle": "访客日历",
+  "calendarGuestBanner": "访客模式 - 不同步",
+  "calendarGuestModeLabel": "访客模式",
+  "calendarGuestModeDescription": "登录以同步任务并启用提醒。",
+  "calendarNoTasksForDate": "此日期没有任务",
+  "calendarTapToCreateTask": "点击 + 创建新任务",
+  "calendarQuickStats": "快速统计",
+  "calendarDueReminders": "到期提醒",
+  "calendarNextTaskLabel": "下一项任务",
+  "calendarNone": "无",
+  "calendarViewLabel": "视图",
+  "calendarViewDay": "日",
+  "calendarViewWeek": "周",
+  "calendarViewMonth": "月",
+  "calendarPreviousDate": "上一日期",
+  "calendarNextDate": "下一日期",
+  "calendarPreviousUnit": "上一{unit}",
+  "@calendarPreviousUnit": {
+    "placeholders": {
+      "unit": {}
+    }
+  },
+  "calendarNextUnit": "下一{unit}",
+  "@calendarNextUnit": {
+    "placeholders": {
+      "unit": {}
+    }
+  },
+  "calendarToday": "今天",
+  "calendarUndo": "撤销",
+  "calendarRedo": "重做",
+  "calendarOpeningCreator": "正在打开任务创建器...",
+  "calendarWeekOf": "本周 {date}",
+  "@calendarWeekOf": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "calendarStatusCompleted": "已完成",
+  "calendarStatusOverdue": "已过期",
+  "calendarStatusDueSoon": "即将到期",
+  "calendarStatusPending": "待处理",
+  "calendarTaskCompletedMessage": "任务已完成！",
+  "calendarTaskUpdatedMessage": "任务已更新！",
+  "calendarErrorTitle": "错误",
+  "calendarErrorTaskNotFound": "未找到任务",
+  "calendarErrorTitleEmpty": "标题不能为空",
+  "calendarErrorTitleTooLong": "标题过长",
+  "calendarErrorDescriptionTooLong": "描述过长",
+  "calendarErrorInputInvalid": "输入无效",
+  "calendarErrorAddFailed": "添加任务失败",
+  "calendarErrorUpdateFailed": "更新任务失败",
+  "calendarErrorDeleteFailed": "删除任务失败",
+  "calendarErrorNetwork": "网络错误",
+  "calendarErrorStorage": "存储错误",
+  "calendarErrorUnknown": "未知错误",
+  "commonConfirm": "确认",
+  "commonOpen": "打开",
+  "commonSelect": "选择",
+  "commonExport": "导出",
+  "commonFavorite": "收藏",
+  "commonUnfavorite": "取消收藏",
+  "commonArchive": "存档",
+  "commonUnarchive": "取消存档",
+  "commonShow": "显示",
+  "commonHide": "隐藏",
+  "blocklistBlockUser": "屏蔽用户",
+  "blocklistWaitingForUnblock": "等待解除屏蔽",
+  "blocklistUnblockAll": "全部解除屏蔽",
+  "blocklistUnblock": "解除屏蔽",
+  "blocklistBlock": "屏蔽",
+  "blocklistAddTooltip": "添加到屏蔽列表",
+  "mucChangeNickname": "更改昵称",
+  "mucChangeNicknameWithCurrent": "更改昵称（当前：{current}）",
+  "@mucChangeNicknameWithCurrent": {
+    "placeholders": {
+      "current": {}
+    }
+  },
+  "mucLeaveRoom": "离开房间",
+  "mucNoMembers": "暂无成员",
+  "mucInviteUsers": "邀请用户",
+  "mucSendInvites": "发送邀请",
+  "mucChangeNicknameTitle": "更改昵称",
+  "mucEnterNicknamePlaceholder": "输入昵称",
+  "mucUpdateNickname": "更新",
+  "mucMembersTitle": "成员",
+  "mucInviteUser": "邀请用户",
+  "mucSectionOwners": "所有者",
+  "mucSectionAdmins": "管理员",
+  "mucSectionModerators": "版主",
+  "mucSectionMembers": "成员",
+  "mucSectionVisitors": "访客",
+  "mucRoleOwner": "所有者",
+  "mucRoleAdmin": "管理员",
+  "mucRoleMember": "成员",
+  "mucRoleVisitor": "访客",
+  "mucRoleModerator": "版主",
+  "mucActionKick": "移出",
+  "mucActionBan": "封禁",
+  "mucActionMakeMember": "设为成员",
+  "mucActionMakeAdmin": "设为管理员",
+  "mucActionMakeOwner": "设为所有者",
+  "mucActionGrantModerator": "授予版主",
+  "mucActionRevokeModerator": "撤销版主",
+  "chatsEmptyList": "暂时没有聊天",
+  "chatsDeleteConfirmMessage": "删除聊天：{chatTitle}",
+  "@chatsDeleteConfirmMessage": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatsDeleteMessagesOption": "永久删除消息",
+  "chatsDeleteSuccess": "聊天已删除",
+  "chatsExportNoContent": "没有可导出的文本内容",
+  "chatsExportShareText": "来自 Axichat 的聊天导出",
+  "chatsExportShareSubject": "与 {chatTitle} 的聊天",
+  "@chatsExportShareSubject": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatsExportSuccess": "聊天已导出",
+  "chatsExportFailure": "无法导出聊天",
+  "chatsArchivedRestored": "聊天已恢复",
+  "chatsArchivedHint": "聊天已存档（个人资料 → 已存档聊天）",
+  "chatsVisibleNotice": "聊天已重新可见",
+  "chatsHiddenNotice": "聊天已隐藏（使用筛选显示）",
+  "chatsUnreadLabel": "{count, plural, =0 {没有未读消息} other {# 条未读消息}}",
+  "@chatsUnreadLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatsSemanticsUnselectHint": "点击取消选择聊天",
+  "chatsSemanticsSelectHint": "点击选择聊天",
+  "chatsSemanticsOpenHint": "点击打开聊天",
+  "chatsHideActions": "隐藏聊天操作",
+  "chatsShowActions": "显示聊天操作",
+  "chatsSelectedLabel": "聊天已选择",
+  "chatsSelectLabel": "选择聊天",
+  "chatsExportFileLabel": "chats",
+  "chatSelectionExportEmptyTitle": "没有可导出的消息",
+  "chatSelectionExportEmptyMessage": "选择包含文本内容的聊天",
+  "chatSelectionExportShareText": "来自 Axichat 的聊天导出",
+  "chatSelectionExportShareSubject": "Axichat 聊天导出",
+  "chatSelectionExportReadyTitle": "导出就绪",
+  "chatSelectionExportReadyMessage": "{count, plural, one {已分享 # 个聊天} other {已分享 # 个聊天}}",
+  "@chatSelectionExportReadyMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatSelectionExportFailedTitle": "导出失败",
+  "chatSelectionExportFailedMessage": "无法导出所选聊天",
+  "chatSelectionDeleteConfirmTitle": "删除聊天？",
+  "chatSelectionDeleteConfirmMessage": "{count, plural, one {将删除 1 个聊天及其全部消息，无法恢复。} other {将删除 # 个聊天及其全部消息，无法恢复。}}",
+  "@chatSelectionDeleteConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatsCreateGroupChatTooltip": "创建群聊",
+  "chatsRoomLabel": "房间",
+  "chatsCreateChatRoomTitle": "创建聊天室",
+  "chatsRoomNamePlaceholder": "名称",
+  "chatsArchiveTitle": "存档",
+  "chatsArchiveEmpty": "暂无已存档聊天",
+  "calendarTileNow": "现在：{title}",
+  "@calendarTileNow": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarTileNext": "接下来：{title}",
+  "@calendarTileNext": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarTileNone": "没有即将进行的任务",
+  "calendarViewDayShort": "日",
+  "calendarViewWeekShort": "周",
+  "calendarViewMonthShort": "月",
+  "calendarShowCompleted": "显示已完成",
+  "calendarHideCompleted": "隐藏已完成",
+  "rosterAddTooltip": "添加到联系人",
+  "rosterAddLabel": "联系人",
+  "rosterAddTitle": "添加联系人",
+  "rosterEmpty": "暂无联系人",
+  "rosterCompose": "撰写",
+  "rosterRemoveConfirm": "将 {jid} 从联系人中移除？",
+  "@rosterRemoveConfirm": {
+    "placeholders": {
+      "jid": {}
+    }
+  },
+  "rosterInvitesEmpty": "暂无邀请",
+  "rosterRejectInviteConfirm": "拒绝来自 {jid} 的邀请？",
+  "@rosterRejectInviteConfirm": {
+    "placeholders": {
+      "jid": {}
+    }
+  },
+  "rosterAddContactTooltip": "添加联系人",
+  "jidInputPlaceholder": "john@axi.im",
+  "jidInputInvalid": "请输入有效的 JID",
+  "sessionCapabilityChat": "聊天",
+  "sessionCapabilityEmail": "邮件",
+  "sessionCapabilityStatusConnected": "已连接",
+  "sessionCapabilityStatusConnecting": "正在连接",
+  "sessionCapabilityStatusError": "错误",
+  "sessionCapabilityStatusOffline": "离线",
+  "sessionCapabilityStatusOff": "关闭",
+  "sessionCapabilityStatusSyncing": "同步中"
 }

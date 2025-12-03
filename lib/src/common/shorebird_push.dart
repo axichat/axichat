@@ -2,6 +2,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 /// F-Droid and other store builds pass `--dart-define=ENABLE_SHOREBIRD=false`
 /// to disable OTA updates entirely.
@@ -48,9 +49,9 @@ class ShorebirdChecker extends StatelessWidget {
           if (!hasUpdate) {
             return const SizedBox.shrink();
           }
-          return const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text('Update available: log out and restart the app'),
+          return Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(context.l10n.shorebirdUpdateAvailable),
           );
         },
       ),

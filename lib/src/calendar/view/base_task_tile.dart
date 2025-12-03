@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'feedback_system.dart';
 import 'widgets/calendar_completion_checkbox.dart';
 import 'widgets/task_checklist.dart';
@@ -39,6 +40,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return BlocListener<T, CalendarState>(
       listener: (context, state) {
         if (!state.isLoading && _isUpdating) {
@@ -46,7 +48,9 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
           if (state.error == null) {
             FeedbackSystem.showSuccess(
               context,
-              widget.task.isCompleted ? 'Task completed!' : 'Task updated!',
+              widget.task.isCompleted
+                  ? l10n.calendarTaskCompletedMessage
+                  : l10n.calendarTaskUpdatedMessage,
             );
           }
         }
@@ -63,7 +67,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
             final CalendarTask task = widget.task;
             final Color taskColor = _getTaskColor(task);
             final Color statusColor = _getStatusColor(context);
-            final String statusText = _getStatusText();
+            final String statusText = _getStatusText(l10n);
             final DateTime? scheduledTime = task.scheduledTime;
             final String? timeLabel = scheduledTime != null
                 ? TimeFormatter.formatDateTime(scheduledTime)
@@ -159,7 +163,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
               Navigator.of(dialogContext).maybePop();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(dialogContext.l10n.commonDelete),
           ),
         ],
       ),
@@ -198,11 +202,11 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
     return widget.task.priorityColor;
   }
 
-  String _getStatusText() {
-    if (widget.task.isCompleted) return 'Completed';
-    if (_isOverdue()) return 'Overdue';
-    if (_isDueSoon()) return 'Due Soon';
-    return 'Pending';
+  String _getStatusText(AppLocalizations l10n) {
+    if (widget.task.isCompleted) return l10n.calendarStatusCompleted;
+    if (_isOverdue()) return l10n.calendarStatusOverdue;
+    if (_isDueSoon()) return l10n.calendarStatusDueSoon;
+    return l10n.calendarStatusPending;
   }
 
   bool _isOverdue() {
@@ -765,6 +769,7 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return ShadPopover(
       controller: _controller,
       closeOnTapOutside: true,
@@ -772,12 +777,12 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
       popover: (context) => AxiMenu(
         actions: [
           AxiMenuAction(
-            label: 'Edit',
+            label: l10n.chatActionEdit,
             icon: widget.showIcons ? Icons.edit : null,
             onPressed: _handleEdit,
           ),
           AxiMenuAction(
-            label: 'Delete',
+            label: l10n.commonDelete,
             icon: widget.showIcons ? Icons.delete : null,
             destructive: true,
             onPressed: _handleDelete,
@@ -786,7 +791,7 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
       ),
       child: IconButton(
         iconSize: widget.iconSize,
-        tooltip: 'Task actions',
+        tooltip: l10n.calendarActions,
         icon: const Icon(Icons.more_vert),
         onPressed: _controller.toggle,
       ),

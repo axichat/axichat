@@ -9,6 +9,7 @@ class ChatState with _$ChatState {
     Message? focused,
     Message? quoting,
     @Default(false) bool typing,
+    @Default(<String>[]) List<String> typingParticipants,
     @Default(true) bool showAlert,
     @Default(MessageTimelineFilter.allWithContact)
     MessageTimelineFilter viewFilter,
@@ -17,6 +18,7 @@ class ChatState with _$ChatState {
     Map<String, FanOutSendReport> fanOutReports,
     @Default(<String, FanOutDraft>{}) Map<String, FanOutDraft> fanOutDrafts,
     @Default(<String, ShareContext>{}) Map<String, ShareContext> shareContexts,
+    @Default(<String, List<Chat>>{}) Map<String, List<Chat>> shareReplies,
     @Default(<PendingAttachment>[]) List<PendingAttachment> pendingAttachments,
     String? composerError,
     @Default(0) int composerHydrationId,

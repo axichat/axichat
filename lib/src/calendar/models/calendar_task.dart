@@ -98,7 +98,6 @@ enum TaskPriority {
 
 @freezed
 @HiveType(typeId: 30)
-@JsonSerializable(explicitToJson: true)
 class CalendarTask with _$CalendarTask {
   const factory CalendarTask({
     @HiveField(0) required String id,

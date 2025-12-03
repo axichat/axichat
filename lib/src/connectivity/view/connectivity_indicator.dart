@@ -1,4 +1,5 @@
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +10,9 @@ class ConnectivityIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (kEnableDemoChats) {
+      return const SizedBox.shrink();
+    }
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, state) {
         var color = const Color(0xff00ff00);

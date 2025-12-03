@@ -2,8 +2,8 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -343,7 +343,7 @@ class ChatMessageDetails extends StatelessWidget {
                 size: ShadButtonSize.sm,
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
-                  context.read<ChatsCubit?>()?.toggleChat(jid: recipient.jid);
+                  context.read<ChatsCubit?>()?.pushChat(jid: recipient.jid);
                 },
                 child: Text(l10n.chatMessageOpenChat),
               ).withTapBounce(),
@@ -358,7 +358,7 @@ class ChatMessageDetails extends StatelessWidget {
                           await emailService.ensureChatForEmailChat(recipient);
                       if (!context.mounted) return;
                       Navigator.of(dialogContext).pop();
-                      context.read<ChatsCubit?>()?.toggleChat(jid: ensured.jid);
+                      context.read<ChatsCubit?>()?.pushChat(jid: ensured.jid);
                     } catch (_) {
                       if (!context.mounted) return;
                       messenger.showSnackBar(
@@ -526,7 +526,7 @@ class _RecipientsRow extends StatelessWidget {
               _RecipientChip(
                 chat: participant,
                 onPressed: () =>
-                    context.read<ChatsCubit>().toggleChat(jid: participant.jid),
+                    context.read<ChatsCubit>().pushChat(jid: participant.jid),
               ),
           ],
         ),

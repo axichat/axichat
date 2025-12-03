@@ -1,6 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
@@ -22,6 +24,7 @@ class SettingsControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     const double compactTileHeight = 52;
     const EdgeInsets compactTilePadding = EdgeInsets.symmetric(
       horizontal: 16,
@@ -42,7 +45,10 @@ class SettingsControls extends StatelessWidget {
                     horizontal: 16.0,
                     vertical: 6.0,
                   ),
-                  child: Text('Important', style: context.textTheme.muted),
+                  child: Text(
+                    l10n.settingsSectionImportant,
+                    style: context.textTheme.muted,
+                  ),
                 ),
               ],
               Padding(
@@ -59,12 +65,15 @@ class SettingsControls extends StatelessWidget {
                 horizontal: 16.0,
                 vertical: 6.0,
               ),
-              child: Text('Appearance', style: context.textTheme.muted),
+              child: Text(
+                l10n.settingsSectionAppearance,
+                style: context.textTheme.muted,
+              ),
             ),
-            const ListItemPadding(
+            ListItemPadding(
               child: AxiListTile(
-                title: 'Language',
-                actions: [
+                title: l10n.settingsLanguage,
+                actions: const [
                   LanguageSelector(),
                 ],
                 minTileHeight: compactTileHeight,
@@ -73,7 +82,7 @@ class SettingsControls extends StatelessWidget {
             ),
             ListItemPadding(
               child: AxiListTile(
-                title: 'Theme Mode',
+                title: l10n.settingsThemeMode,
                 actions: [
                   SizedBox(
                     width: 180,
@@ -86,13 +95,12 @@ class SettingsControls extends StatelessWidget {
                           .map(
                             (themeMode) => ShadOption<ThemeMode>(
                               value: themeMode,
-                              child: Text(themeMode.name),
+                              child: Text(themeMode.label(l10n)),
                             ),
                           )
                           .toList(),
-                      selectedOptionBuilder:
-                          (BuildContext context, ThemeMode value) =>
-                              Text(value.name),
+                      selectedOptionBuilder: (BuildContext context, mode) =>
+                          Text(mode.label(l10n)),
                     ),
                   ),
                 ],
@@ -102,7 +110,7 @@ class SettingsControls extends StatelessWidget {
             ),
             ListItemPadding(
               child: AxiListTile(
-                title: 'Color Scheme',
+                title: l10n.settingsColorScheme,
                 actions: [
                   SizedBox(
                     width: 180,
@@ -132,9 +140,8 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: const Text('Colorful avatars'),
-                sublabel: const Text(
-                    'Generate different background colors for each avatar.'),
+                label: Text(l10n.settingsColorfulAvatars),
+                sublabel: Text(l10n.settingsColorfulAvatarsDescription),
                 value: state.colorfulAvatars,
                 onChanged: (colorfulAvatars) => context
                     .read<SettingsCubit>()
@@ -144,9 +151,8 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: const Text('Low motion'),
-                sublabel: const Text(
-                    'Disables most animations. Better for slow devices.'),
+                label: Text(l10n.settingsLowMotion),
+                sublabel: Text(l10n.settingsLowMotionDescription),
                 value: state.lowMotion,
                 onChanged: (lowMotion) =>
                     context.read<SettingsCubit>().toggleLowMotion(lowMotion),
@@ -158,14 +164,16 @@ class SettingsControls extends StatelessWidget {
                 horizontal: 16.0,
                 vertical: 6.0,
               ),
-              child: Text('Chats', style: context.textTheme.muted),
+              child: Text(
+                l10n.settingsSectionChats,
+                style: context.textTheme.muted,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: AxiListTile(
-                title: 'Message storage',
-                subtitle:
-                    'Local keeps device copies; Server-only queries the archive.',
+                title: l10n.settingsMessageStorageTitle,
+                subtitle: l10n.settingsMessageStorageSubtitle,
                 actions: [
                   SizedBox(
                     width: 220,
@@ -182,13 +190,17 @@ class SettingsControls extends StatelessWidget {
                             (mode) => ShadOption<MessageStorageMode>(
                               value: mode,
                               child: Text(
-                                mode.isLocal ? 'Local' : 'Server-only',
+                                mode.isLocal
+                                    ? l10n.settingsMessageStorageLocal
+                                    : l10n.settingsMessageStorageServerOnly,
                               ),
                             ),
                           )
                           .toList(),
                       selectedOptionBuilder: (context, mode) => Text(
-                        mode.isLocal ? 'Local' : 'Server-only',
+                        mode.isLocal
+                            ? l10n.settingsMessageStorageLocal
+                            : l10n.settingsMessageStorageServerOnly,
                       ),
                     ),
                   ),
@@ -198,8 +210,8 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: const Text('Mute notifications'),
-                sublabel: const Text('Stop receiving message notifications.'),
+                label: Text(l10n.settingsMuteNotifications),
+                sublabel: Text(l10n.settingsMuteNotificationsDescription),
                 value: state.mute,
                 onChanged: (mute) =>
                     context.read<SettingsCubit>().toggleMute(mute),
@@ -208,7 +220,7 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: const Text('Send read receipts'),
+                label: Text(l10n.settingsReadReceipts),
                 value: state.readReceipts,
                 onChanged: (readReceipts) => context
                     .read<SettingsCubit>()
@@ -218,9 +230,8 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: const Text('Send typing indicators'),
-                sublabel: const Text(
-                    'Let other people in a chat see when you are typing.'),
+                label: Text(l10n.settingsTypingIndicators),
+                sublabel: Text(l10n.settingsTypingIndicatorsDescription),
                 value: state.indicateTyping,
                 onChanged: (indicateTyping) => context
                     .read<SettingsCubit>()
@@ -230,10 +241,8 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: const Text('Include share token footer'),
-                sublabel: const Text(
-                  'Helps keep multi-recipient email threads and attachments linked. Turning this off can break threading.',
-                ),
+                label: Text(l10n.settingsShareTokenFooter),
+                sublabel: Text(l10n.settingsShareTokenFooterDescription),
                 value: state.shareTokenSignatureEnabled,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
@@ -245,5 +254,18 @@ class SettingsControls extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+extension ThemeModeLocalization on ThemeMode {
+  String label(AppLocalizations l10n) {
+    switch (this) {
+      case ThemeMode.system:
+        return l10n.settingsThemeModeSystem;
+      case ThemeMode.light:
+        return l10n.settingsThemeModeLight;
+      case ThemeMode.dark:
+        return l10n.settingsThemeModeDark;
+    }
   }
 }

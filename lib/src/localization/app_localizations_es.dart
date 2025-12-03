@@ -1171,6 +1171,264 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accessibilityMessageNoContent => 'Sin contenido de mensaje';
 
   @override
+  String get accessibilityActionsTitle => 'Acciones';
+
+  @override
+  String get accessibilityReadNewMessages => 'Leer mensajes nuevos';
+
+  @override
+  String get accessibilityUnreadSummaryDescription =>
+      'Céntrate en las conversaciones con mensajes sin leer';
+
+  @override
+  String get accessibilityStartNewChat => 'Iniciar un nuevo chat';
+
+  @override
+  String get accessibilityStartNewChatDescription =>
+      'Elige un contacto o escribe una dirección';
+
+  @override
+  String get accessibilityInvitesTitle => 'Invitaciones';
+
+  @override
+  String get accessibilityPendingInvites => 'Invitaciones pendientes';
+
+  @override
+  String get accessibilityAcceptInvite => 'Aceptar invitación';
+
+  @override
+  String get accessibilityInviteAccepted => 'Invitación aceptada';
+
+  @override
+  String get accessibilityInviteDismissed => 'Invitación rechazada';
+
+  @override
+  String get accessibilityInviteUpdateFailed =>
+      'No se pudo actualizar la invitación';
+
+  @override
+  String get accessibilityUnreadEmpty => 'No hay conversaciones sin leer';
+
+  @override
+  String get accessibilityInvitesEmpty => 'No hay invitaciones pendientes';
+
+  @override
+  String get accessibilityMessagesTitle => 'Mensajes';
+
+  @override
+  String get accessibilityNoConversationSelected =>
+      'No hay conversación seleccionada';
+
+  @override
+  String accessibilityMessagesWithContact(Object name) {
+    return 'Mensajes con $name';
+  }
+
+  @override
+  String accessibilityMessageLabel(
+      Object sender, Object timestamp, Object body) {
+    return '$sender a las $timestamp: $body';
+  }
+
+  @override
+  String get accessibilityMessageSent => 'Mensaje enviado.';
+
+  @override
+  String get accessibilityDiscardWarning =>
+      'Presiona Escape otra vez para descartar tu mensaje y cerrar este paso.';
+
+  @override
+  String get accessibilityDraftLoaded =>
+      'Borrador cargado. Presiona Escape para salir o Guardar para mantener los cambios.';
+
+  @override
+  String accessibilityDraftLabel(Object id) {
+    return 'Borrador $id';
+  }
+
+  @override
+  String accessibilityDraftLabelWithRecipients(Object recipients) {
+    return 'Borrador para $recipients';
+  }
+
+  @override
+  String accessibilityDraftPreview(Object recipients, Object preview) {
+    return '$recipients — $preview';
+  }
+
+  @override
+  String accessibilityIncomingMessageStatus(Object sender, Object time) {
+    return 'Nuevo mensaje de $sender a las $time';
+  }
+
+  @override
+  String accessibilityAttachmentWithName(Object filename) {
+    return 'Archivo adjunto: $filename';
+  }
+
+  @override
+  String get accessibilityAttachmentGeneric => 'Adjunto';
+
+  @override
+  String get accessibilityUploadAvailable => 'Carga disponible';
+
+  @override
+  String get accessibilityUnknownContact => 'Contacto desconocido';
+
+  @override
+  String get accessibilityChooseContact => 'Elegir un contacto';
+
+  @override
+  String get accessibilityUnreadConversations => 'Conversaciones sin leer';
+
+  @override
+  String get accessibilityStartNewAddress => 'Ingresar una nueva dirección';
+
+  @override
+  String accessibilityConversationWith(Object name) {
+    return 'Conversación con $name';
+  }
+
+  @override
+  String get accessibilityConversationLabel => 'Conversación';
+
+  @override
+  String get accessibilityDialogLabel => 'Diálogo de accesibilidad';
+
+  @override
+  String get accessibilityDialogHint =>
+      'Presiona Tab para ver los atajos, usa las flechas dentro de las listas, Mayús más flechas para moverte entre grupos o Escape para salir.';
+
+  @override
+  String get accessibilityNoActionsAvailable =>
+      'No hay acciones disponibles ahora';
+
+  @override
+  String accessibilityBreadcrumbLabel(
+      Object position, Object total, Object label) {
+    return 'Paso $position de $total: $label. Activa para saltar a este paso.';
+  }
+
+  @override
+  String get accessibilityShortcutOpenMenu => 'Abrir menú';
+
+  @override
+  String get accessibilityShortcutBack => 'Atrás un paso o cerrar';
+
+  @override
+  String get accessibilityShortcutNextFocus => 'Siguiente objetivo de foco';
+
+  @override
+  String get accessibilityShortcutPreviousFocus => 'Objetivo de foco anterior';
+
+  @override
+  String get accessibilityShortcutActivateItem => 'Activar elemento';
+
+  @override
+  String get accessibilityShortcutNextItem => 'Elemento siguiente';
+
+  @override
+  String get accessibilityShortcutPreviousItem => 'Elemento anterior';
+
+  @override
+  String get accessibilityShortcutNextGroup => 'Siguiente grupo';
+
+  @override
+  String get accessibilityShortcutPreviousGroup => 'Grupo anterior';
+
+  @override
+  String get accessibilityShortcutFirstItem => 'Primer elemento';
+
+  @override
+  String get accessibilityShortcutLastItem => 'Último elemento';
+
+  @override
+  String get accessibilityKeyboardShortcutsTitle => 'Atajos de teclado';
+
+  @override
+  String accessibilityKeyboardShortcutAnnouncement(Object description) {
+    return 'Atajo de teclado: $description';
+  }
+
+  @override
+  String get accessibilityTextFieldHint =>
+      'Ingresa texto. Usa Tab para avanzar o Escape para regresar o cerrar el menú.';
+
+  @override
+  String get accessibilityComposerPlaceholder => 'Escribe un mensaje';
+
+  @override
+  String accessibilityRecipientLabel(Object name) {
+    return 'Destinatario $name';
+  }
+
+  @override
+  String get accessibilityRecipientRemoveHint =>
+      'Presiona retroceso o suprimir para quitar';
+
+  @override
+  String get accessibilityMessageActionsLabel => 'Acciones del mensaje';
+
+  @override
+  String get accessibilityMessageActionsHint =>
+      'Guardar como borrador o enviar este mensaje';
+
+  @override
+  String accessibilityMessagePosition(Object position, Object total) {
+    return 'Mensaje $position de $total';
+  }
+
+  @override
+  String get accessibilityNoMessages => 'No hay mensajes';
+
+  @override
+  String accessibilityMessageMetadata(Object sender, Object timestamp) {
+    return 'De $sender a las $timestamp';
+  }
+
+  @override
+  String accessibilityMessageFrom(Object sender) {
+    return 'De $sender';
+  }
+
+  @override
+  String get accessibilityMessageNavigationHint =>
+      'Usa las flechas para moverte entre mensajes. Mayús más flechas cambia de grupo. Presiona Escape para salir.';
+
+  @override
+  String accessibilitySectionSummary(Object section, Object count) {
+    return 'Sección $section con $count elementos';
+  }
+
+  @override
+  String accessibilityActionListLabel(Object count) {
+    return 'Lista de acciones con $count elementos';
+  }
+
+  @override
+  String get accessibilityActionListHint =>
+      'Usa flechas para moverte, Mayús más flechas para cambiar de grupo, Inicio/Fin para saltar, Enter para activar, Escape para salir.';
+
+  @override
+  String accessibilityActionItemPosition(
+      Object position, Object total, Object section) {
+    return 'Elemento $position de $total en $section';
+  }
+
+  @override
+  String get accessibilityActionReadOnlyHint =>
+      'Usa las flechas para recorrer la lista';
+
+  @override
+  String get accessibilityActionActivateHint => 'Presiona Enter para activar';
+
+  @override
+  String get accessibilityDismissHighlight => 'Descartar destacado';
+
+  @override
+  String get accessibilityNeedsAttention => 'Requiere atención';
+
+  @override
   String get profileTitle => 'Perfil';
 
   @override
@@ -1210,4 +1468,792 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get termsAgreementError => 'Debes aceptar los términos y condiciones';
+
+  @override
+  String get commonContinue => 'Continuar';
+
+  @override
+  String get commonDelete => 'Eliminar';
+
+  @override
+  String get commonSave => 'Guardar';
+
+  @override
+  String get commonRetry => 'Reintentar';
+
+  @override
+  String get commonRemove => 'Quitar';
+
+  @override
+  String get commonSend => 'Enviar';
+
+  @override
+  String get commonDismiss => 'Descartar';
+
+  @override
+  String get settingsSectionImportant => 'Importante';
+
+  @override
+  String get settingsSectionAppearance => 'Apariencia';
+
+  @override
+  String get settingsLanguage => 'Idioma';
+
+  @override
+  String get settingsThemeMode => 'Modo de tema';
+
+  @override
+  String get settingsThemeModeSystem => 'Sistema';
+
+  @override
+  String get settingsThemeModeLight => 'Claro';
+
+  @override
+  String get settingsThemeModeDark => 'Oscuro';
+
+  @override
+  String get settingsColorScheme => 'Esquema de color';
+
+  @override
+  String get settingsColorfulAvatars => 'Avatares coloridos';
+
+  @override
+  String get settingsColorfulAvatarsDescription =>
+      'Genera colores de fondo diferentes para cada avatar.';
+
+  @override
+  String get settingsLowMotion => 'Movimiento reducido';
+
+  @override
+  String get settingsLowMotionDescription =>
+      'Desactiva la mayoría de las animaciones. Mejor para dispositivos lentos.';
+
+  @override
+  String get settingsSectionChats => 'Chats';
+
+  @override
+  String get settingsMessageStorageTitle => 'Almacenamiento de mensajes';
+
+  @override
+  String get settingsMessageStorageSubtitle =>
+      'Local mantiene copias en el dispositivo; Solo servidor consulta el archivo.';
+
+  @override
+  String get settingsMessageStorageLocal => 'Local';
+
+  @override
+  String get settingsMessageStorageServerOnly => 'Solo servidor';
+
+  @override
+  String get settingsMuteNotifications => 'Silenciar notificaciones';
+
+  @override
+  String get settingsMuteNotificationsDescription =>
+      'Deja de recibir notificaciones de mensajes.';
+
+  @override
+  String get settingsReadReceipts => 'Enviar confirmaciones de lectura';
+
+  @override
+  String get settingsTypingIndicators => 'Enviar indicadores de escritura';
+
+  @override
+  String get settingsTypingIndicatorsDescription =>
+      'Permite que otros en el chat vean cuando estás escribiendo.';
+
+  @override
+  String get settingsShareTokenFooter => 'Incluir pie de token de compartir';
+
+  @override
+  String get settingsShareTokenFooterDescription =>
+      'Ayuda a mantener enlazados los hilos de correo con varios destinatarios y sus adjuntos. Desactivarlo puede romper el hilo.';
+
+  @override
+  String get authCustomServerTitle => 'Servidor personalizado';
+
+  @override
+  String get authCustomServerDescription =>
+      'Anula los endpoints XMPP/SMTP o habilita búsquedas DNS. Deja los campos vacíos para mantener los valores predeterminados.';
+
+  @override
+  String get authCustomServerDomainOrIp => 'Dominio o IP';
+
+  @override
+  String get authCustomServerXmppLabel => 'XMPP';
+
+  @override
+  String get authCustomServerSmtpLabel => 'SMTP';
+
+  @override
+  String get authCustomServerUseDns => 'Usar DNS';
+
+  @override
+  String get authCustomServerUseSrv => 'Usar SRV';
+
+  @override
+  String get authCustomServerRequireDnssec => 'Requerir DNSSEC';
+
+  @override
+  String get authCustomServerXmppHostPlaceholder => 'Host XMPP (opcional)';
+
+  @override
+  String get authCustomServerPortPlaceholder => 'Puerto';
+
+  @override
+  String get authCustomServerSmtpHostPlaceholder => 'Host SMTP (opcional)';
+
+  @override
+  String get authCustomServerApiPortPlaceholder => 'Puerto API';
+
+  @override
+  String get authCustomServerReset => 'Restablecer a axi.im';
+
+  @override
+  String get authCustomServerOpenSettings =>
+      'Abrir ajustes de servidor personalizado';
+
+  @override
+  String get authCustomServerAdvancedHint =>
+      'Las opciones avanzadas del servidor se mantienen ocultas hasta que toques el sufijo de usuario.';
+
+  @override
+  String get authUnregisterTitle => 'Dar de baja';
+
+  @override
+  String get authUnregisterProgressLabel =>
+      'Esperando la eliminación de la cuenta';
+
+  @override
+  String get authPasswordPlaceholder => 'Contraseña';
+
+  @override
+  String get authPasswordCurrentPlaceholder => 'Contraseña anterior';
+
+  @override
+  String get authPasswordNewPlaceholder => 'Nueva contraseña';
+
+  @override
+  String get authPasswordConfirmNewPlaceholder => 'Confirmar nueva contraseña';
+
+  @override
+  String get authChangePasswordProgressLabel =>
+      'Esperando el cambio de contraseña';
+
+  @override
+  String get authLogoutTitle => 'Cerrar sesión';
+
+  @override
+  String get authLogoutNormal => 'Cerrar sesión';
+
+  @override
+  String get authLogoutNormalDescription => 'Cerrar sesión de esta cuenta.';
+
+  @override
+  String get authLogoutBurn => 'Borrar cuenta';
+
+  @override
+  String get authLogoutBurnDescription =>
+      'Cerrar sesión y borrar los datos locales de esta cuenta.';
+
+  @override
+  String get chatAttachmentBlockedTitle => 'Adjunto bloqueado';
+
+  @override
+  String get chatAttachmentBlockedDescription =>
+      'Cargar adjuntos de contactos desconocidos solo si confías en ellos. Lo descargaremos cuando lo apruebes.';
+
+  @override
+  String get chatAttachmentLoad => 'Cargar adjunto';
+
+  @override
+  String get chatAttachmentUnavailable => 'Adjunto no disponible';
+
+  @override
+  String get chatAttachmentSendFailed => 'No se pudo enviar el adjunto.';
+
+  @override
+  String get chatAttachmentRetryUpload => 'Reintentar carga';
+
+  @override
+  String get chatAttachmentRemoveAttachment => 'Quitar adjunto';
+
+  @override
+  String get chatAttachmentStatusUploading => 'Subiendo adjunto…';
+
+  @override
+  String get chatAttachmentStatusQueued => 'Esperando para enviar';
+
+  @override
+  String get chatAttachmentStatusFailed => 'Carga fallida';
+
+  @override
+  String get chatAttachmentLoading => 'Cargando adjunto';
+
+  @override
+  String chatAttachmentLoadingProgress(Object percent) {
+    return 'Cargando $percent';
+  }
+
+  @override
+  String get chatAttachmentDownload => 'Descargar adjunto';
+
+  @override
+  String get chatAttachmentUnavailableDevice =>
+      'El adjunto ya no está disponible en este dispositivo';
+
+  @override
+  String get chatAttachmentInvalidLink => 'Enlace de adjunto no válido';
+
+  @override
+  String chatAttachmentOpenFailed(Object target) {
+    return 'No se pudo abrir $target';
+  }
+
+  @override
+  String get chatAttachmentUnknownSize => 'Tamaño desconocido';
+
+  @override
+  String chatAttachmentErrorTooltip(Object message, Object fileName) {
+    return '$message ($fileName)';
+  }
+
+  @override
+  String get chatAttachmentMenuHint => 'Abre el menú para ver acciones.';
+
+  @override
+  String get accessibilityActionsLabel => 'Acciones de accesibilidad';
+
+  @override
+  String accessibilityActionsShortcutTooltip(Object shortcut) {
+    return 'Acciones de accesibilidad ($shortcut)';
+  }
+
+  @override
+  String get shorebirdUpdateAvailable =>
+      'Actualización disponible: cierra sesión y reinicia la app';
+
+  @override
+  String get calendarEditTaskTitle => 'Editar tarea';
+
+  @override
+  String get calendarDateTimeLabel => 'Fecha y hora';
+
+  @override
+  String get calendarSelectDate => 'Seleccionar fecha';
+
+  @override
+  String get calendarSelectTime => 'Seleccionar hora';
+
+  @override
+  String get calendarDurationLabel => 'Duración';
+
+  @override
+  String get calendarSelectDuration => 'Seleccionar duración';
+
+  @override
+  String get calendarAddToCriticalPath => 'Agregar a la ruta crítica';
+
+  @override
+  String get calendarNoCriticalPathMembership =>
+      'No está en ninguna ruta crítica';
+
+  @override
+  String get calendarGuestTitle => 'Calendario de invitado';
+
+  @override
+  String get calendarGuestBanner => 'Modo invitado - Sin sincronización';
+
+  @override
+  String get calendarGuestModeLabel => 'Modo invitado';
+
+  @override
+  String get calendarGuestModeDescription =>
+      'Inicia sesión para sincronizar tareas y activar recordatorios.';
+
+  @override
+  String get calendarNoTasksForDate => 'No hay tareas para esta fecha';
+
+  @override
+  String get calendarTapToCreateTask => 'Toca + para crear una nueva tarea';
+
+  @override
+  String get calendarQuickStats => 'Estadísticas rápidas';
+
+  @override
+  String get calendarDueReminders => 'Recordatorios vencidos';
+
+  @override
+  String get calendarNextTaskLabel => 'Próxima tarea';
+
+  @override
+  String get calendarNone => 'Ninguna';
+
+  @override
+  String get calendarViewLabel => 'Vista';
+
+  @override
+  String get calendarViewDay => 'Día';
+
+  @override
+  String get calendarViewWeek => 'Semana';
+
+  @override
+  String get calendarViewMonth => 'Mes';
+
+  @override
+  String get calendarPreviousDate => 'Fecha anterior';
+
+  @override
+  String get calendarNextDate => 'Fecha siguiente';
+
+  @override
+  String calendarPreviousUnit(Object unit) {
+    return 'Anterior $unit';
+  }
+
+  @override
+  String calendarNextUnit(Object unit) {
+    return 'Siguiente $unit';
+  }
+
+  @override
+  String get calendarToday => 'Hoy';
+
+  @override
+  String get calendarUndo => 'Deshacer';
+
+  @override
+  String get calendarRedo => 'Rehacer';
+
+  @override
+  String get calendarOpeningCreator => 'Abriendo creador de tareas...';
+
+  @override
+  String calendarWeekOf(Object date) {
+    return 'Semana de $date';
+  }
+
+  @override
+  String get calendarStatusCompleted => 'Completada';
+
+  @override
+  String get calendarStatusOverdue => 'Atrasada';
+
+  @override
+  String get calendarStatusDueSoon => 'Próxima a vencer';
+
+  @override
+  String get calendarStatusPending => 'Pendiente';
+
+  @override
+  String get calendarTaskCompletedMessage => '¡Tarea completada!';
+
+  @override
+  String get calendarTaskUpdatedMessage => 'Tarea actualizada';
+
+  @override
+  String get calendarErrorTitle => 'Error';
+
+  @override
+  String get calendarErrorTaskNotFound => 'Tarea no encontrada';
+
+  @override
+  String get calendarErrorTitleEmpty => 'El título no puede estar vacío';
+
+  @override
+  String get calendarErrorTitleTooLong => 'Título demasiado largo';
+
+  @override
+  String get calendarErrorDescriptionTooLong => 'Descripción demasiado larga';
+
+  @override
+  String get calendarErrorInputInvalid => 'Entrada no válida';
+
+  @override
+  String get calendarErrorAddFailed => 'No se pudo agregar la tarea';
+
+  @override
+  String get calendarErrorUpdateFailed => 'No se pudo actualizar la tarea';
+
+  @override
+  String get calendarErrorDeleteFailed => 'No se pudo eliminar la tarea';
+
+  @override
+  String get calendarErrorNetwork => 'Error de red';
+
+  @override
+  String get calendarErrorStorage => 'Error de almacenamiento';
+
+  @override
+  String get calendarErrorUnknown => 'Error desconocido';
+
+  @override
+  String get commonConfirm => 'Confirmar';
+
+  @override
+  String get commonOpen => 'Abrir';
+
+  @override
+  String get commonSelect => 'Seleccionar';
+
+  @override
+  String get commonExport => 'Exportar';
+
+  @override
+  String get commonFavorite => 'Favorito';
+
+  @override
+  String get commonUnfavorite => 'Quitar favorito';
+
+  @override
+  String get commonArchive => 'Archivar';
+
+  @override
+  String get commonUnarchive => 'Desarchivar';
+
+  @override
+  String get commonShow => 'Mostrar';
+
+  @override
+  String get commonHide => 'Ocultar';
+
+  @override
+  String get blocklistBlockUser => 'Bloquear usuario';
+
+  @override
+  String get blocklistWaitingForUnblock => 'Esperando desbloqueo';
+
+  @override
+  String get blocklistUnblockAll => 'Desbloquear todo';
+
+  @override
+  String get blocklistUnblock => 'Desbloquear';
+
+  @override
+  String get blocklistBlock => 'Bloquear';
+
+  @override
+  String get blocklistAddTooltip => 'Agregar a la lista bloqueada';
+
+  @override
+  String get mucChangeNickname => 'Cambiar apodo';
+
+  @override
+  String mucChangeNicknameWithCurrent(Object current) {
+    return 'Cambiar apodo (actual: $current)';
+  }
+
+  @override
+  String get mucLeaveRoom => 'Salir de la sala';
+
+  @override
+  String get mucNoMembers => 'Aún no hay miembros';
+
+  @override
+  String get mucInviteUsers => 'Invitar usuarios';
+
+  @override
+  String get mucSendInvites => 'Enviar invitaciones';
+
+  @override
+  String get mucChangeNicknameTitle => 'Cambiar apodo';
+
+  @override
+  String get mucEnterNicknamePlaceholder => 'Introduce un apodo';
+
+  @override
+  String get mucUpdateNickname => 'Actualizar';
+
+  @override
+  String get mucMembersTitle => 'Miembros';
+
+  @override
+  String get mucInviteUser => 'Invitar usuario';
+
+  @override
+  String get mucSectionOwners => 'Propietarios';
+
+  @override
+  String get mucSectionAdmins => 'Administradores';
+
+  @override
+  String get mucSectionModerators => 'Moderadores';
+
+  @override
+  String get mucSectionMembers => 'Miembros';
+
+  @override
+  String get mucSectionVisitors => 'Visitantes';
+
+  @override
+  String get mucRoleOwner => 'Propietario';
+
+  @override
+  String get mucRoleAdmin => 'Administrador';
+
+  @override
+  String get mucRoleMember => 'Miembro';
+
+  @override
+  String get mucRoleVisitor => 'Visitante';
+
+  @override
+  String get mucRoleModerator => 'Moderador';
+
+  @override
+  String get mucActionKick => 'Expulsar';
+
+  @override
+  String get mucActionBan => 'Bloquear';
+
+  @override
+  String get mucActionMakeMember => 'Convertir en miembro';
+
+  @override
+  String get mucActionMakeAdmin => 'Hacer administrador';
+
+  @override
+  String get mucActionMakeOwner => 'Hacer propietario';
+
+  @override
+  String get mucActionGrantModerator => 'Conceder moderador';
+
+  @override
+  String get mucActionRevokeModerator => 'Revocar moderador';
+
+  @override
+  String get chatsEmptyList => 'Aún no hay chats';
+
+  @override
+  String chatsDeleteConfirmMessage(Object chatTitle) {
+    return 'Eliminar chat: $chatTitle';
+  }
+
+  @override
+  String get chatsDeleteMessagesOption => 'Eliminar mensajes permanentemente';
+
+  @override
+  String get chatsDeleteSuccess => 'Chat eliminado';
+
+  @override
+  String get chatsExportNoContent => 'No hay texto para exportar';
+
+  @override
+  String get chatsExportShareText => 'Exportación de chat desde Axichat';
+
+  @override
+  String chatsExportShareSubject(Object chatTitle) {
+    return 'Chat con $chatTitle';
+  }
+
+  @override
+  String get chatsExportSuccess => 'Chat exportado';
+
+  @override
+  String get chatsExportFailure => 'No se pudo exportar el chat';
+
+  @override
+  String get chatsArchivedRestored => 'Chat restaurado';
+
+  @override
+  String get chatsArchivedHint => 'Chat archivado (Perfil → Chats archivados)';
+
+  @override
+  String get chatsVisibleNotice => 'El chat vuelve a ser visible';
+
+  @override
+  String get chatsHiddenNotice => 'Chat oculto (usa el filtro para mostrarlo)';
+
+  @override
+  String chatsUnreadLabel(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# mensajes sin leer',
+      one: '# mensaje sin leer',
+      zero: 'Sin mensajes sin leer',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatsSemanticsUnselectHint => 'Pulsa para deseleccionar el chat';
+
+  @override
+  String get chatsSemanticsSelectHint => 'Pulsa para seleccionar el chat';
+
+  @override
+  String get chatsSemanticsOpenHint => 'Pulsa para abrir el chat';
+
+  @override
+  String get chatsHideActions => 'Ocultar acciones del chat';
+
+  @override
+  String get chatsShowActions => 'Mostrar acciones del chat';
+
+  @override
+  String get chatsSelectedLabel => 'Chat seleccionado';
+
+  @override
+  String get chatsSelectLabel => 'Seleccionar chat';
+
+  @override
+  String get chatsExportFileLabel => 'chats';
+
+  @override
+  String get chatSelectionExportEmptyTitle => 'No hay mensajes para exportar';
+
+  @override
+  String get chatSelectionExportEmptyMessage =>
+      'Selecciona chats con contenido de texto';
+
+  @override
+  String get chatSelectionExportShareText =>
+      'Exportaciones de chat desde Axichat';
+
+  @override
+  String get chatSelectionExportShareSubject =>
+      'Exportación de chats de Axichat';
+
+  @override
+  String get chatSelectionExportReadyTitle => 'Exportación lista';
+
+  @override
+  String chatSelectionExportReadyMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# chats compartidos',
+      one: '# chat compartido',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatSelectionExportFailedTitle => 'Error de exportación';
+
+  @override
+  String get chatSelectionExportFailedMessage =>
+      'No se pudieron exportar los chats seleccionados';
+
+  @override
+  String get chatSelectionDeleteConfirmTitle => '¿Eliminar chats?';
+
+  @override
+  String chatSelectionDeleteConfirmMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Esto elimina # chats y todos sus mensajes. No se puede deshacer.',
+      one: 'Esto elimina 1 chat y todos sus mensajes. No se puede deshacer.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatsCreateGroupChatTooltip => 'Crear chat grupal';
+
+  @override
+  String get chatsRoomLabel => 'Sala';
+
+  @override
+  String get chatsCreateChatRoomTitle => 'Crear sala de chat';
+
+  @override
+  String get chatsRoomNamePlaceholder => 'Nombre';
+
+  @override
+  String get chatsArchiveTitle => 'Archivo';
+
+  @override
+  String get chatsArchiveEmpty => 'Aún no hay chats archivados';
+
+  @override
+  String calendarTileNow(Object title) {
+    return 'Ahora: $title';
+  }
+
+  @override
+  String calendarTileNext(Object title) {
+    return 'Siguiente: $title';
+  }
+
+  @override
+  String get calendarTileNone => 'No hay tareas próximas';
+
+  @override
+  String get calendarViewDayShort => 'D';
+
+  @override
+  String get calendarViewWeekShort => 'S';
+
+  @override
+  String get calendarViewMonthShort => 'M';
+
+  @override
+  String get calendarShowCompleted => 'Mostrar completadas';
+
+  @override
+  String get calendarHideCompleted => 'Ocultar completadas';
+
+  @override
+  String get rosterAddTooltip => 'Agregar a la lista de contactos';
+
+  @override
+  String get rosterAddLabel => 'Contacto';
+
+  @override
+  String get rosterAddTitle => 'Agregar contacto';
+
+  @override
+  String get rosterEmpty => 'Aún no hay contactos';
+
+  @override
+  String get rosterCompose => 'Redactar';
+
+  @override
+  String rosterRemoveConfirm(Object jid) {
+    return '¿Eliminar $jid de los contactos?';
+  }
+
+  @override
+  String get rosterInvitesEmpty => 'Aún no hay invitaciones';
+
+  @override
+  String rosterRejectInviteConfirm(Object jid) {
+    return '¿Rechazar invitación de $jid?';
+  }
+
+  @override
+  String get rosterAddContactTooltip => 'Agregar contacto';
+
+  @override
+  String get jidInputPlaceholder => 'john@axi.im';
+
+  @override
+  String get jidInputInvalid => 'Introduce un JID válido';
+
+  @override
+  String get sessionCapabilityChat => 'Chat';
+
+  @override
+  String get sessionCapabilityEmail => 'Correo';
+
+  @override
+  String get sessionCapabilityStatusConnected => 'Conectado';
+
+  @override
+  String get sessionCapabilityStatusConnecting => 'Conectando';
+
+  @override
+  String get sessionCapabilityStatusError => 'Error';
+
+  @override
+  String get sessionCapabilityStatusOffline => 'Sin conexión';
+
+  @override
+  String get sessionCapabilityStatusOff => 'Desactivado';
+
+  @override
+  String get sessionCapabilityStatusSyncing => 'Sincronizando';
 }

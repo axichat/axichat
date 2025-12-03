@@ -251,17 +251,19 @@ abstract interface class XmppBase {
   Stream<mox.OmemoActivityEvent> get omemoActivityStream;
 
   void emitOmemoActivity(mox.OmemoActivityEvent event) {}
+
+  bool get demoOfflineMode;
 }
 
 class XmppService extends XmppBase
     with
         BaseStreamService,
         MucService,
+        ChatsService,
         MessageService,
         // OmemoService,
         RosterService,
         PresenceService,
-        ChatsService,
         BlockingService {
   XmppService._(
     this._connectionFactory,
@@ -336,6 +338,9 @@ class XmppService extends XmppBase
   @override
   Stream<mox.OmemoActivityEvent> get omemoActivityStream =>
       _omemoActivityController.stream;
+
+  @override
+  bool get demoOfflineMode => _demoOfflineMode;
 
   @override
   void emitOmemoActivity(mox.OmemoActivityEvent event) {
@@ -478,6 +483,7 @@ class XmppService extends XmppBase
   var _foregroundServiceNotificationSent = false;
   var _streamResumptionAttempted = false;
   var _demoSeedAttempted = false;
+  var _demoOfflineMode = false;
 
   @override
   Future<String?> connect({
@@ -579,6 +585,10 @@ class XmppService extends XmppBase
       _database.complete(
         await _databaseFactory(databasePrefix, databasePassphrase),
       );
+    }
+    _demoOfflineMode = kEnableDemoChats && jid == kDemoSelfJid;
+    if (_demoOfflineMode) {
+      updateMessageStorageMode(MessageStorageMode.local);
     }
     _connectionState = ConnectionState.notConnected;
     _connectivityStream.add(_connectionState);
@@ -874,6 +884,7 @@ class XmppService extends XmppBase
 
     _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
     _demoSeedAttempted = false;
+    _demoOfflineMode = false;
     _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
 
     resetEventHandlers();

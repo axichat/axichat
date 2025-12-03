@@ -1,8 +1,7 @@
-import 'package:axichat/src/common/ui/axi_adaptive_sheet.dart';
-import 'package:flutter/material.dart';
-
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/material.dart';
 
 Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   BuildContext context, {
@@ -20,7 +19,7 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
           child: Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium,
+            style: calendarTitleTextStyle.copyWith(fontSize: 18),
           ),
         ),
         ListTile(

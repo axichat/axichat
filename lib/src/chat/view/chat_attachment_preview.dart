@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -27,6 +29,7 @@ class ChatAttachmentPreview extends StatelessWidget {
     return FutureBuilder<FileMetadataData?>(
       future: metadataFuture,
       builder: (context, snapshot) {
+        final l10n = context.l10n;
         if (snapshot.connectionState != ConnectionState.done) {
           return const _AttachmentSurface(
             child: Center(
@@ -43,8 +46,8 @@ class ChatAttachmentPreview extends StatelessWidget {
         }
         final metadata = snapshot.data;
         if (metadata == null) {
-          return const _AttachmentError(
-            message: 'Attachment unavailable',
+          return _AttachmentError(
+            message: l10n.chatAttachmentUnavailable,
           );
         }
         if (!allowed) {
@@ -73,6 +76,7 @@ class _BlockedAttachment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = context.colorScheme;
     return _AttachmentSurface(
       child: Column(
@@ -80,7 +84,7 @@ class _BlockedAttachment extends StatelessWidget {
         spacing: 8,
         children: [
           Text(
-            'Attachment blocked',
+            l10n.chatAttachmentBlockedTitle,
             style: context.textTheme.small.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -94,8 +98,7 @@ class _BlockedAttachment extends StatelessWidget {
             ),
           ),
           Text(
-            'Load attachments from unknown contacts only if you trust them. '
-            'We will fetch it once you approve.',
+            l10n.chatAttachmentBlockedDescription,
             style: context.textTheme.small.copyWith(
               color: colors.mutedForeground,
             ),
@@ -105,7 +108,7 @@ class _BlockedAttachment extends StatelessWidget {
             child: ShadButton(
               onPressed: onAllowPressed,
               enabled: onAllowPressed != null,
-              child: const Text('Load attachment'),
+              child: Text(l10n.chatAttachmentLoad),
             ).withTapBounce(enabled: onAllowPressed != null),
           ),
         ],
@@ -128,7 +131,7 @@ class _ImageAttachment extends StatelessWidget {
     final localFile = path == null ? null : File(path);
     final hasLocalFile = localFile?.existsSync() ?? false;
     if (!hasLocalFile && url == null) {
-      return const _AttachmentError(message: 'Attachment unavailable');
+      return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
     }
     final radius = BorderRadius.circular(18);
     final image = hasLocalFile
@@ -208,9 +211,12 @@ class _AttachmentLoadingPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final label = progress == null
-        ? 'Loading attachment'
-        : 'Loading ${(progress!.clamp(0, 1) * 100).toStringAsFixed(0)}%';
+        ? l10n.chatAttachmentLoading
+        : l10n.chatAttachmentLoadingProgress(
+            '${(progress!.clamp(0, 1) * 100).toStringAsFixed(0)}%',
+          );
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -263,6 +269,7 @@ class _FileAttachment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = context.colorScheme;
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
@@ -303,7 +310,7 @@ class _FileAttachment extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  _formatSize(metadata.sizeBytes),
+                  _formatSize(metadata.sizeBytes, l10n),
                   style: context.textTheme.small.copyWith(
                     color: colors.mutedForeground,
                   ),
@@ -314,7 +321,7 @@ class _FileAttachment extends StatelessWidget {
           const SizedBox(width: 12),
           AxiIconButton(
             iconData: LucideIcons.download,
-            tooltip: 'Download attachment',
+            tooltip: l10n.chatAttachmentDownload,
             onPressed: url == null && metadata.path == null
                 ? null
                 : () => _openAttachment(
@@ -395,13 +402,15 @@ Future<void> _openAttachment(
   String? url,
   String? path,
 }) async {
+  final l10n = context.l10n;
   final toaster = ShadToaster.maybeOf(context);
   if (path != null) {
     final file = File(path);
     if (!await file.exists()) {
       _showToast(
+        l10n,
         toaster,
-        'Attachment is no longer available on this device',
+        l10n.chatAttachmentUnavailableDevice,
         destructive: true,
       );
       return;
@@ -411,9 +420,11 @@ Future<void> _openAttachment(
       mode: LaunchMode.externalApplication,
     );
     if (!launched) {
+      final target = file.path.split('/').last;
       _showToast(
+        l10n,
         toaster,
-        'Could not open ${file.path.split('/').last}',
+        l10n.chatAttachmentOpenFailed(target),
         destructive: true,
       );
     }
@@ -423,34 +434,38 @@ Future<void> _openAttachment(
   final uri = trimmed == null ? null : Uri.tryParse(trimmed);
   if (uri == null) {
     _showToast(
+      l10n,
       toaster,
-      'Invalid attachment link',
+      l10n.chatAttachmentInvalidLink,
       destructive: true,
     );
     return;
   }
   final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!launched) {
+    final target = uri.host.isEmpty ? uri.toString() : uri.host;
     _showToast(
+      l10n,
       toaster,
-      'Could not open ${uri.host.isEmpty ? uri.toString() : uri.host}',
+      l10n.chatAttachmentOpenFailed(target),
       destructive: true,
     );
   }
 }
 
 void _showToast(
+  AppLocalizations l10n,
   ShadToasterState? toaster,
   String message, {
   bool destructive = false,
 }) {
   final toast = destructive
       ? FeedbackToast.error(
-          title: 'Whoops',
+          title: l10n.toastWhoopsTitle,
           message: message,
         )
       : FeedbackToast.info(
-          title: 'Heads up',
+          title: l10n.toastHeadsUpTitle,
           message: message,
         );
   toaster?.show(toast);
@@ -472,8 +487,8 @@ bool _isImage(FileMetadataData metadata) {
   return extensions.any(name.endsWith);
 }
 
-String _formatSize(int? bytes) {
-  if (bytes == null || bytes <= 0) return 'Unknown size';
+String _formatSize(int? bytes, AppLocalizations l10n) {
+  if (bytes == null || bytes <= 0) return l10n.chatAttachmentUnknownSize;
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   var value = bytes.toDouble();
   var unit = 0;

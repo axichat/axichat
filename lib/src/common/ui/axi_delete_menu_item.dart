@@ -1,4 +1,5 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -15,7 +16,7 @@ class AxiDeleteMenuItem extends StatelessWidget {
         color: context.colorScheme.destructive,
       ),
       onPressed: onPressed,
-      child: const Text('Delete'),
+      child: Text(context.l10n.commonDelete),
     );
   }
 }

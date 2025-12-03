@@ -22,9 +22,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/calendar/constants.dart';
-import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
@@ -83,6 +82,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   late final CalendarSidebarController _sidebarController;
   late final TaskDraftController _draftController;
   late final TaskChecklistController _checklistController;
+  final GlobalKey<FormState> _addTaskFormKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final FocusNode _titleFocusNode = FocusNode(debugLabel: 'sidebarTitleInput');
   final _descriptionController = TextEditingController();
@@ -253,10 +253,17 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     return null;
   }
 
-  void _handleQuickTaskInputChanged(String value) {
+  void _handleQuickTaskInputChanged(String value, {bool validate = true}) {
     _ensureAdvancedOptionsVisible();
+    if (_quickTaskError != null) {
+      setState(() {
+        _quickTaskError = null;
+      });
+    }
+    if (validate) {
+      _addTaskFormKey.currentState?.validate();
+    }
     final trimmed = value.trim();
-    _updateQuickTaskValidation(value);
     _parserDebounce?.cancel();
     if (trimmed.isEmpty) {
       final bool preserveDraftFields = _preserveDraftFieldsOnTitleClear;
@@ -273,36 +280,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _parserDebounce = Timer(const Duration(milliseconds: 350), () {
       _runParser(trimmed);
     });
-  }
-
-  void _updateQuickTaskValidation(String raw) {
-    final bool tooLong = TaskTitleValidation.isTooLong(raw);
-    final bool hasContent = raw.trim().isNotEmpty;
-    String? nextError = _quickTaskError;
-
-    if (tooLong) {
-      nextError = calendarTaskTitleFriendlyError;
-    } else {
-      if (_quickTaskError == calendarTaskTitleFriendlyError) {
-        nextError = null;
-      }
-      if (_quickTaskError == TaskTitleValidation.requiredMessage &&
-          hasContent) {
-        nextError = null;
-      }
-      if (hasContent &&
-          _quickTaskError != null &&
-          _quickTaskError != calendarTaskTitleFriendlyError &&
-          _quickTaskError != TaskTitleValidation.requiredMessage) {
-        nextError = null;
-      }
-    }
-
-    if (nextError != _quickTaskError) {
-      setState(() {
-        _quickTaskError = nextError;
-      });
-    }
   }
 
   void _ensureAdvancedOptionsVisible() {
@@ -336,6 +313,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         _quickTaskError =
             context.l10n.calendarParserUnavailable(error.runtimeType);
       });
+      _addTaskFormKey.currentState?.validate();
     }
   }
 
@@ -890,7 +868,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onClearFieldsPressed: _handleClearFieldsPressed,
                         titleController: _titleController,
                         titleFocusNode: _titleFocusNode,
-                        quickTaskError: _quickTaskError,
+                        addTaskFormKey: _addTaskFormKey,
+                        quickTaskValidator: _validateQuickTaskTitle,
+                        quickTaskAutovalidateMode: _quickTaskAutovalidateMode,
                         onQuickTaskChanged: _handleQuickTaskInputChanged,
                         onQuickTaskSubmitted: () {
                           _addTask();
@@ -2562,6 +2542,16 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     return _draftController.selectedPriority;
   }
 
+  AutovalidateMode get _quickTaskAutovalidateMode =>
+      AutovalidateMode.onUserInteraction;
+
+  String? _validateQuickTaskTitle(String? raw) {
+    if (_quickTaskError != null) {
+      return _quickTaskError;
+    }
+    return TaskTitleValidation.validate(raw ?? '');
+  }
+
   List<CalendarCriticalPath> _queuedPathsForState(CalendarState state) {
     final Map<String, CalendarCriticalPath> byId = state.model.criticalPaths;
     return _queuedCriticalPathIds
@@ -2630,11 +2620,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<void> _addTask() async {
-    final validationError = TaskTitleValidation.validate(_titleController.text);
-    if (validationError != null) {
-      setState(() {
-        _quickTaskError = validationError;
-      });
+    final bool isValid = _addTaskFormKey.currentState?.validate() ?? false;
+    if (!isValid) {
       _titleFocusNode.requestFocus();
       return;
     }
@@ -2645,6 +2632,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       setState(() {
         _quickTaskError = null;
       });
+      _addTaskFormKey.currentState?.validate();
     }
     final title = _effectiveParserTitle(rawTitle);
 
@@ -2724,6 +2712,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
           _quickTaskError =
               'Task saved but could not be added to a critical path.';
         });
+        _addTaskFormKey.currentState?.validate();
       }
     }
   }
@@ -2731,6 +2720,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _clearQuickTaskTitle() {
     _preserveDraftFieldsOnTitleClear = true;
     _titleController.clear();
+    _addTaskFormKey.currentState?.reset();
+    _handleQuickTaskInputChanged('', validate: false);
     _titleFocusNode.requestFocus();
   }
 
@@ -2747,6 +2738,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       });
     }
     _clearQueuedCriticalPaths();
+    _addTaskFormKey.currentState?.reset();
     if (_titleController.text.isNotEmpty) {
       _titleController.clear();
     }
@@ -3918,7 +3910,9 @@ class _AddTaskSection extends StatelessWidget {
     required this.onClearFieldsPressed,
     required this.titleController,
     required this.titleFocusNode,
-    required this.quickTaskError,
+    required this.addTaskFormKey,
+    required this.quickTaskValidator,
+    required this.quickTaskAutovalidateMode,
     required this.onQuickTaskChanged,
     required this.onQuickTaskSubmitted,
     required this.draftController,
@@ -3948,7 +3942,9 @@ class _AddTaskSection extends StatelessWidget {
   final VoidCallback onClearFieldsPressed;
   final TextEditingController titleController;
   final FocusNode titleFocusNode;
-  final String? quickTaskError;
+  final GlobalKey<FormState> addTaskFormKey;
+  final FormFieldValidator<String> quickTaskValidator;
+  final AutovalidateMode quickTaskAutovalidateMode;
   final ValueChanged<String> onQuickTaskChanged;
   final VoidCallback onQuickTaskSubmitted;
   final TaskDraftController draftController;
@@ -3984,106 +3980,109 @@ class _AddTaskSection extends StatelessWidget {
           ),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TaskSectionHeader(
-            title: l10n.calendarAddTaskAction,
-            textStyle: _sidebarSectionHeaderStyle,
-            trailing: AnimatedBuilder(
-              animation: formActivityListenable,
-              builder: (context, _) {
-                final bool enabled = hasSidebarFormValues();
-                final button = ShadButton.outline(
-                  size: ShadButtonSize.sm,
-                  onPressed: enabled ? onClearFieldsPressed : null,
-                  child: Text(l10n.commonClear),
+      child: Form(
+        key: addTaskFormKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TaskSectionHeader(
+              title: l10n.calendarAddTaskAction,
+              textStyle: _sidebarSectionHeaderStyle,
+              trailing: AnimatedBuilder(
+                animation: formActivityListenable,
+                builder: (context, _) {
+                  final bool enabled = hasSidebarFormValues();
+                  final button = ShadButton.outline(
+                    size: ShadButtonSize.sm,
+                    onPressed: enabled ? onClearFieldsPressed : null,
+                    child: Text(l10n.commonClear),
+                  );
+                  final decorated = button.withTapBounce(enabled: enabled);
+                  return AnimatedOpacity(
+                    duration: baseAnimationDuration,
+                    opacity: enabled ? 1 : 0.5,
+                    child: MouseRegion(
+                      cursor: enabled
+                          ? SystemMouseCursors.click
+                          : SystemMouseCursors.basic,
+                      child: decorated,
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: calendarSidebarSectionSpacing),
+            _QuickTaskInput(
+              controller: titleController,
+              focusNode: titleFocusNode,
+              helper: locationHelper,
+              onChanged: onQuickTaskChanged,
+              onSubmitted: onQuickTaskSubmitted,
+              validator: quickTaskValidator,
+              autovalidateMode: quickTaskAutovalidateMode,
+            ),
+            const SizedBox(height: calendarSidebarSectionSpacing),
+            _PriorityToggles(
+              draftController: draftController,
+              onImportantChanged: onImportantChanged,
+              onUrgentChanged: onUrgentChanged,
+            ),
+            const SizedBox(height: calendarSidebarToggleSpacing),
+            _AdvancedToggle(
+              uiState: uiState,
+              onPressed: onAdvancedToggle,
+            ),
+            AnimatedSwitcher(
+              duration: calendarSidebarAdvancedAnimationDuration,
+              transitionBuilder: (child, animation) {
+                final fade = CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOut,
                 );
-                final decorated = button.withTapBounce(enabled: enabled);
-                return AnimatedOpacity(
-                  duration: baseAnimationDuration,
-                  opacity: enabled ? 1 : 0.5,
-                  child: MouseRegion(
-                    cursor: enabled
-                        ? SystemMouseCursors.click
-                        : SystemMouseCursors.basic,
-                    child: decorated,
+                return FadeTransition(
+                  opacity: fade,
+                  child: SizeTransition(
+                    sizeFactor: fade,
+                    axisAlignment: -1,
+                    child: child,
                   ),
                 );
               },
+              child: uiState.showAdvancedOptions
+                  ? _AdvancedOptions(
+                      key: const ValueKey('advanced'),
+                      locationHelper: locationHelper,
+                      descriptionController: descriptionController,
+                      locationController: locationController,
+                      checklistController: checklistController,
+                      draftController: draftController,
+                      onDeadlineChanged: onDeadlineChanged,
+                      onStartChanged: onStartChanged,
+                      onEndChanged: onEndChanged,
+                      onScheduleCleared: onScheduleCleared,
+                      onRecurrenceChanged: onRecurrenceChanged,
+                      titleController: titleController,
+                      onAddToCriticalPath: onAddToCriticalPath,
+                      onRemindersChanged: onRemindersChanged,
+                      queuedPaths: queuedCriticalPaths,
+                      onRemoveQueuedPath: onRemoveQueuedCriticalPath,
+                    )
+                  : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
             ),
-          ),
-          const SizedBox(height: calendarSidebarSectionSpacing),
-          _QuickTaskInput(
-            controller: titleController,
-            focusNode: titleFocusNode,
-            helper: locationHelper,
-            onChanged: onQuickTaskChanged,
-            onSubmitted: onQuickTaskSubmitted,
-            errorText: quickTaskError,
-          ),
-          const SizedBox(height: calendarSidebarSectionSpacing),
-          _PriorityToggles(
-            draftController: draftController,
-            onImportantChanged: onImportantChanged,
-            onUrgentChanged: onUrgentChanged,
-          ),
-          const SizedBox(height: calendarSidebarToggleSpacing),
-          _AdvancedToggle(
-            uiState: uiState,
-            onPressed: onAdvancedToggle,
-          ),
-          AnimatedSwitcher(
-            duration: calendarSidebarAdvancedAnimationDuration,
-            transitionBuilder: (child, animation) {
-              final fade = CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOut,
-              );
-              return FadeTransition(
-                opacity: fade,
-                child: SizeTransition(
-                  sizeFactor: fade,
-                  axisAlignment: -1,
-                  child: child,
+            const SizedBox(height: calendarSidebarSectionSpacing),
+            TaskFormActionsRow(
+              padding: EdgeInsets.zero,
+              gap: calendarGutterSm,
+              children: [
+                Expanded(
+                  child: _AddTaskButton(
+                    onPressed: addTask,
+                  ),
                 ),
-              );
-            },
-            child: uiState.showAdvancedOptions
-                ? _AdvancedOptions(
-                    key: const ValueKey('advanced'),
-                    locationHelper: locationHelper,
-                    descriptionController: descriptionController,
-                    locationController: locationController,
-                    checklistController: checklistController,
-                    draftController: draftController,
-                    onDeadlineChanged: onDeadlineChanged,
-                    onStartChanged: onStartChanged,
-                    onEndChanged: onEndChanged,
-                    onScheduleCleared: onScheduleCleared,
-                    onRecurrenceChanged: onRecurrenceChanged,
-                    titleController: titleController,
-                    onAddToCriticalPath: onAddToCriticalPath,
-                    onRemindersChanged: onRemindersChanged,
-                    queuedPaths: queuedCriticalPaths,
-                    onRemoveQueuedPath: onRemoveQueuedCriticalPath,
-                  )
-                : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
-          ),
-          const SizedBox(height: calendarSidebarSectionSpacing),
-          TaskFormActionsRow(
-            padding: EdgeInsets.zero,
-            gap: calendarGutterSm,
-            children: [
-              Expanded(
-                child: _AddTaskButton(
-                  titleController: titleController,
-                  onPressed: addTask,
-                ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4102,7 +4101,9 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onClearFieldsPressed,
     required this.titleController,
     required this.titleFocusNode,
-    required this.quickTaskError,
+    required this.addTaskFormKey,
+    required this.quickTaskValidator,
+    required this.quickTaskAutovalidateMode,
     required this.onQuickTaskChanged,
     required this.onQuickTaskSubmitted,
     required this.draftController,
@@ -4151,7 +4152,9 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final VoidCallback onClearFieldsPressed;
   final TextEditingController titleController;
   final FocusNode titleFocusNode;
-  final String? quickTaskError;
+  final GlobalKey<FormState> addTaskFormKey;
+  final FormFieldValidator<String> quickTaskValidator;
+  final AutovalidateMode quickTaskAutovalidateMode;
   final ValueChanged<String> onQuickTaskChanged;
   final VoidCallback onQuickTaskSubmitted;
   final TaskDraftController draftController;
@@ -4215,7 +4218,9 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             onClearFieldsPressed: onClearFieldsPressed,
             titleController: titleController,
             titleFocusNode: titleFocusNode,
-            quickTaskError: quickTaskError,
+            addTaskFormKey: addTaskFormKey,
+            quickTaskValidator: quickTaskValidator,
+            quickTaskAutovalidateMode: quickTaskAutovalidateMode,
             onQuickTaskChanged: onQuickTaskChanged,
             onQuickTaskSubmitted: onQuickTaskSubmitted,
             draftController: draftController,
@@ -5423,7 +5428,8 @@ class _QuickTaskInput extends StatelessWidget {
     required this.helper,
     required this.onChanged,
     required this.onSubmitted,
-    required this.errorText,
+    required this.validator,
+    required this.autovalidateMode,
   });
 
   final TextEditingController controller;
@@ -5431,7 +5437,8 @@ class _QuickTaskInput extends StatelessWidget {
   final LocationAutocompleteHelper helper;
   final ValueChanged<String> onChanged;
   final VoidCallback onSubmitted;
-  final String? errorText;
+  final FormFieldValidator<String> validator;
+  final AutovalidateMode autovalidateMode;
 
   @override
   Widget build(BuildContext context) {
@@ -5440,16 +5447,17 @@ class _QuickTaskInput extends StatelessWidget {
       horizontal: calendarGutterLg,
       vertical: 14,
     );
-    final field = TaskTextField(
+    final field = TaskTextFormField(
       controller: controller,
       focusNode: focusNode,
       hintText: l10n.calendarQuickTaskHint,
       textCapitalization: TextCapitalization.sentences,
       textInputAction: TextInputAction.done,
       onChanged: onChanged,
-      onSubmitted: (_) => onSubmitted(),
+      onFieldSubmitted: (_) => onSubmitted(),
       contentPadding: padding,
-      errorText: errorText,
+      validator: validator,
+      autovalidateMode: autovalidateMode,
     );
 
     final suggestionField = LocationInlineSuggestion(
@@ -5732,27 +5740,19 @@ class _AdvancedRecurrenceSection extends StatelessWidget {
 
 class _AddTaskButton extends StatelessWidget {
   const _AddTaskButton({
-    required this.titleController,
     required this.onPressed,
   });
 
-  final TextEditingController titleController;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: titleController,
-      builder: (context, value, _) {
-        final isDisabled = value.text.trim().isEmpty;
-        return SizedBox(
-          width: double.infinity,
-          child: TaskPrimaryButton(
-            label: context.l10n.calendarAddTaskAction,
-            onPressed: isDisabled ? null : onPressed,
-          ),
-        );
-      },
+    return SizedBox(
+      width: double.infinity,
+      child: TaskPrimaryButton(
+        label: context.l10n.calendarAddTaskAction,
+        onPressed: onPressed,
+      ),
     );
   }
 }

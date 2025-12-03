@@ -3,6 +3,8 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -10,7 +12,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class ChangePasswordForm extends StatefulWidget {
   const ChangePasswordForm({super.key});
 
-  static const title = 'Change Password';
+  static String title(AppLocalizations l10n) => l10n.profileChangePassword;
 
   @override
   State<ChangePasswordForm> createState() => _ChangePasswordFormState();
@@ -55,13 +57,14 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
+        final l10n = context.l10n;
         final loading = state is AuthenticationPasswordChangeInProgress;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                ChangePasswordForm.title,
+                ChangePasswordForm.title(l10n),
                 style: context.textTheme.h3,
               ),
               state is AuthenticationPasswordChangeSuccess
@@ -87,7 +90,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: PasswordInput(
-                  placeholder: 'Old password',
+                  placeholder: l10n.authPasswordCurrentPlaceholder,
                   enabled: !loading,
                   controller: _passwordTextController,
                 ),
@@ -95,7 +98,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: PasswordInput(
-                  placeholder: 'New password',
+                  placeholder: l10n.authPasswordNewPlaceholder,
                   enabled: !loading,
                   controller: _newPasswordTextController,
                 ),
@@ -103,7 +106,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: PasswordInput(
-                  placeholder: 'Confirm new password',
+                  placeholder: l10n.authPasswordConfirmNewPlaceholder,
                   enabled: !loading,
                   controller: _newPassword2TextController,
                 ),
@@ -123,11 +126,11 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                       firstChild: const SizedBox(),
                       secondChild: AxiProgressIndicator(
                         color: context.colorScheme.primaryForeground,
-                        semanticsLabel: 'Waiting for password change',
+                        semanticsLabel: l10n.authChangePasswordProgressLabel,
                       ),
                     ),
                     trailing: const SizedBox.shrink(),
-                    child: const Text('Continue'),
+                    child: Text(l10n.commonContinue),
                   ).withTapBounce(enabled: !loading);
                 },
               ),

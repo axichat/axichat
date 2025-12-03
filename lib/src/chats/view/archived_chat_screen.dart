@@ -7,6 +7,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -86,9 +87,10 @@ class _ArchivedChatBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Archive'),
+        title: Text(l10n.chatsArchiveTitle),
         leadingWidth: AxiIconButton.kDefaultSize + 24,
         leading: Padding(
           padding: const EdgeInsets.only(left: 12),
@@ -99,7 +101,7 @@ class _ArchivedChatBody extends StatelessWidget {
               height: AxiIconButton.kDefaultSize,
               child: AxiIconButton(
                 iconData: LucideIcons.arrowLeft,
-                tooltip: 'Back',
+                tooltip: l10n.commonBack,
                 color: colors.foreground,
                 borderColor: colors.border,
                 onPressed: () => Navigator.of(context).maybePop(),

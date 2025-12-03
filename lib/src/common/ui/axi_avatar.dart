@@ -36,6 +36,21 @@ class AxiAvatar extends StatefulWidget {
 class _AxiAvatarState extends State<AxiAvatar> {
   late final ShadPopoverController popoverController;
 
+  String _displayLabelForJid(String jid) {
+    if (jid.isEmpty) return '?';
+    final resourceIndex = jid.indexOf('/');
+    if (resourceIndex != -1 && resourceIndex + 1 < jid.length) {
+      final resource = jid.substring(resourceIndex + 1).trim();
+      if (resource.isNotEmpty) return resource;
+    }
+    final localPartIndex = jid.indexOf('@');
+    if (localPartIndex > 0) {
+      final localPart = jid.substring(0, localPartIndex).trim();
+      if (localPart.isNotEmpty) return localPart;
+    }
+    return jid;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -64,12 +79,14 @@ class _AxiAvatarState extends State<AxiAvatar> {
         children: [
           BlocBuilder<SettingsCubit, SettingsState>(
             builder: (context, state) {
-              final baseJid = widget.jid;
-              final initial = baseJid.isNotEmpty
-                  ? baseJid.substring(0, 1).toUpperCase()
+              final displayLabel = _displayLabelForJid(widget.jid);
+              final initial = displayLabel.isNotEmpty
+                  ? displayLabel.substring(0, 1).toUpperCase()
                   : '?';
+              final colorSeed =
+                  displayLabel.isNotEmpty ? displayLabel : widget.jid;
               final backgroundColor = state.colorfulAvatars
-                  ? stringToColor(widget.jid)
+                  ? stringToColor(colorSeed)
                   : context.colorScheme.secondary;
               final textColor = state.colorfulAvatars
                   ? Colors.white

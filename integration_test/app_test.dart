@@ -171,19 +171,20 @@ void main() {
         await tester.pumpUntilGone(find.byType(ShadToast));
         await tester.tap(findProfileCard);
 
+        final l10n = AppLocalizationsEn();
         final findLogoutButton = find.byType(LogoutButton);
         await tester.pumpUntil(findLogoutButton);
         await tester.tap(findLogoutButton);
 
-        await tester.pumpUntil(find.text(LogoutButton.title));
-        await tester.tap(find.widgetWithText(ListTile, 'Burn'));
+        await tester.pumpUntil(find.text(LogoutButton.title(l10n)));
+        await tester.tap(find.widgetWithText(ListTile, l10n.authLogoutBurn));
 
         await tester.pumpAndSettle();
 
         await tester.tap(findContinueButton);
 
         await tester.pumpUntil(
-          find.text(AppLocalizationsEn().authLogin),
+          find.text(l10n.authLogin),
         );
       },
     );

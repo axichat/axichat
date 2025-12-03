@@ -6,6 +6,7 @@ import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,6 +30,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final count = widget.selectedChats.length;
     final allFavorited = widget.selectedChats.every((chat) => chat.favorited);
     final allArchived = widget.selectedChats.every((chat) => chat.archived);
@@ -58,7 +60,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                   shouldFavorite ? LucideIcons.star : LucideIcons.starOff,
                   size: 16,
                 ),
-                label: shouldFavorite ? 'Favorite' : 'Unfavorite',
+                label: shouldFavorite
+                    ? l10n.commonFavorite
+                    : l10n.commonUnfavorite,
                 onPressed: () => unawaited(
                   context.read<ChatsCubit>().bulkToggleFavorited(
                         favorited: shouldFavorite,
@@ -70,7 +74,8 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                   shouldArchive ? LucideIcons.archive : LucideIcons.undo2,
                   size: 16,
                 ),
-                label: shouldArchive ? 'Archive' : 'Unarchive',
+                label:
+                    shouldArchive ? l10n.commonArchive : l10n.commonUnarchive,
                 onPressed: () => unawaited(
                   context.read<ChatsCubit>().bulkToggleArchived(
                         archived: shouldArchive,
@@ -82,7 +87,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                   shouldHide ? LucideIcons.eyeOff : LucideIcons.eye,
                   size: 16,
                 ),
-                label: shouldHide ? 'Hide' : 'Show',
+                label: shouldHide ? l10n.commonHide : l10n.commonShow,
                 onPressed: () => unawaited(
                   context.read<ChatsCubit>().bulkToggleHidden(
                         hidden: shouldHide,
@@ -95,7 +100,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ),
               ContextActionButton(
                 icon: const Icon(LucideIcons.trash2, size: 16),
-                label: 'Delete',
+                label: l10n.commonDelete,
                 destructive: true,
                 onPressed: _confirmDelete,
               ),
@@ -107,6 +112,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
   }
 
   Future<void> _exportSelectedChats(BuildContext context) async {
+    final l10n = context.l10n;
     if (_exporting) return;
     if (widget.selectedChats.isEmpty) return;
     setState(() {
@@ -117,34 +123,36 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
       final result = await ChatHistoryExporter.exportChats(
         chats: widget.selectedChats,
         loadHistory: context.read<ChatsCubit>().loadChatHistory,
-        fileLabel: widget.selectedChats.length == 1 ? null : 'chats',
+        fileLabel:
+            widget.selectedChats.length == 1 ? null : l10n.chatsExportFileLabel,
       );
       final file = result.file;
       if (file == null) {
         showToast?.call(
           FeedbackToast.info(
-            title: 'No messages to export',
-            message: 'Select chats with text content',
+            title: l10n.chatSelectionExportEmptyTitle,
+            message: l10n.chatSelectionExportEmptyMessage,
           ),
         );
         return;
       }
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Chat exports from Axichat',
-        subject: 'Axichat chats export',
+        text: l10n.chatSelectionExportShareText,
+        subject: l10n.chatSelectionExportShareSubject,
       );
       showToast?.call(
         FeedbackToast.success(
-          title: 'Export ready',
-          message: 'Shared ${widget.selectedChats.length} chat(s)',
+          title: l10n.chatSelectionExportReadyTitle,
+          message:
+              l10n.chatSelectionExportReadyMessage(widget.selectedChats.length),
         ),
       );
     } catch (_) {
       showToast?.call(
         FeedbackToast.error(
-          title: 'Export failed',
-          message: 'Unable to export selected chats',
+          title: l10n.chatSelectionExportFailedTitle,
+          message: l10n.chatSelectionExportFailedMessage,
         ),
       );
     } finally {
@@ -157,12 +165,14 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
   }
 
   Future<void> _confirmDelete() async {
+    final l10n = context.l10n;
     final confirmed = await confirm(
       context,
-      title: 'Delete chats?',
-      message:
-          'This removes ${widget.selectedChats.length} chats and all of their messages. This cannot be undone.',
-      confirmLabel: 'Delete',
+      title: l10n.chatSelectionDeleteConfirmTitle,
+      message: l10n.chatSelectionDeleteConfirmMessage(
+        widget.selectedChats.length,
+      ),
+      confirmLabel: l10n.commonDelete,
       barrierDismissible: false,
     );
     if (!mounted || confirmed != true) return;

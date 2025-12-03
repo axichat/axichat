@@ -3,6 +3,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 class ErrorDisplay extends StatelessWidget {
   const ErrorDisplay({
@@ -18,6 +20,7 @@ class ErrorDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Container(
       margin: calendarPaddingXl,
       padding: calendarPaddingXl,
@@ -39,7 +42,7 @@ class ErrorDisplay extends StatelessWidget {
               ),
               const SizedBox(width: calendarGutterSm),
               Text(
-                'Error',
+                l10n.calendarErrorTitle,
                 style: TextStyle(
                   color: Colors.red.shade700,
                   fontWeight: FontWeight.w600,
@@ -59,7 +62,7 @@ class ErrorDisplay extends StatelessWidget {
           ),
           const SizedBox(height: calendarGutterSm),
           Text(
-            _getFriendlyErrorMessage(context, error),
+            _getFriendlyErrorMessage(l10n, error),
             style: TextStyle(
               color: Colors.red.shade800,
               fontSize: 14,
@@ -69,7 +72,7 @@ class ErrorDisplay extends StatelessWidget {
             const SizedBox(height: calendarGutterMd),
             ShadButton.outline(
               onPressed: onRetry,
-              child: const Text('Try again'),
+              child: Text(l10n.commonRetry),
             ),
           ],
         ],
@@ -78,43 +81,43 @@ class ErrorDisplay extends StatelessWidget {
   }
 
   static String _getFriendlyErrorMessage(
-    BuildContext context,
+    AppLocalizations l10n,
     String error,
   ) {
     // Convert technical errors to user-friendly messages
     if (error.contains('Task not found')) {
-      return 'Task not found';
+      return l10n.calendarErrorTaskNotFound;
     }
     if (error.contains('Validation failed')) {
       if (error.contains('Title cannot be empty')) {
-        return 'Title cannot be empty';
+        return l10n.calendarErrorTitleEmpty;
       }
       if (error.contains('Title too long')) {
         return calendarTaskTitleFriendlyError;
       }
       if (error.contains('Description too long')) {
-        return 'Description too long';
+        return l10n.calendarErrorDescriptionTooLong;
       }
-      return 'Input invalid';
+      return l10n.calendarErrorInputInvalid;
     }
     if (error.contains('Failed to add task')) {
-      return 'Failed to add task';
+      return l10n.calendarErrorAddFailed;
     }
     if (error.contains('Failed to update task')) {
-      return 'Failed to update task';
+      return l10n.calendarErrorUpdateFailed;
     }
     if (error.contains('Failed to delete task')) {
-      return 'Failed to delete task';
+      return l10n.calendarErrorDeleteFailed;
     }
     if (error.contains('network') || error.contains('connection')) {
-      return 'Network error';
+      return l10n.calendarErrorNetwork;
     }
     if (error.contains('storage') || error.contains('database')) {
-      return 'Storage error';
+      return l10n.calendarErrorStorage;
     }
 
     // Generic fallback
-    return 'Unknown error';
+    return l10n.calendarErrorUnknown;
   }
 }
 
@@ -129,7 +132,7 @@ class ErrorSnackBar {
             const SizedBox(width: calendarGutterSm),
             Expanded(
               child: Text(
-                ErrorDisplay._getFriendlyErrorMessage(context, error),
+                ErrorDisplay._getFriendlyErrorMessage(context.l10n, error),
               ),
             ),
           ],
@@ -137,7 +140,7 @@ class ErrorSnackBar {
         backgroundColor: Colors.red.shade700,
         action: onRetry != null
             ? SnackBarAction(
-                label: 'Retry',
+                label: context.l10n.commonRetry,
                 textColor: Colors.white,
                 onPressed: onRetry,
               )
