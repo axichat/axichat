@@ -398,6 +398,171 @@
   "accessibilityStartChatHint": "Envía esta dirección para iniciar una conversación.",
   "accessibilityMessagesEmpty": "Aún no hay mensajes",
   "accessibilityMessageNoContent": "Sin contenido de mensaje",
+  "accessibilityActionsTitle": "Acciones",
+  "accessibilityReadNewMessages": "Leer mensajes nuevos",
+  "accessibilityUnreadSummaryDescription": "Céntrate en las conversaciones con mensajes sin leer",
+  "accessibilityStartNewChat": "Iniciar un nuevo chat",
+  "accessibilityStartNewChatDescription": "Elige un contacto o escribe una dirección",
+  "accessibilityInvitesTitle": "Invitaciones",
+  "accessibilityPendingInvites": "Invitaciones pendientes",
+  "accessibilityAcceptInvite": "Aceptar invitación",
+  "accessibilityInviteAccepted": "Invitación aceptada",
+  "accessibilityInviteDismissed": "Invitación rechazada",
+  "accessibilityInviteUpdateFailed": "No se pudo actualizar la invitación",
+  "accessibilityUnreadEmpty": "No hay conversaciones sin leer",
+  "accessibilityInvitesEmpty": "No hay invitaciones pendientes",
+  "accessibilityMessagesTitle": "Mensajes",
+  "accessibilityNoConversationSelected": "No hay conversación seleccionada",
+  "accessibilityMessagesWithContact": "Mensajes con {name}",
+  "@accessibilityMessagesWithContact": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityMessageLabel": "{sender} a las {timestamp}: {body}",
+  "@accessibilityMessageLabel": {
+    "placeholders": {
+      "sender": {},
+      "timestamp": {},
+      "body": {}
+    }
+  },
+  "accessibilityMessageSent": "Mensaje enviado.",
+  "accessibilityDiscardWarning": "Presiona Escape otra vez para descartar tu mensaje y cerrar este paso.",
+  "accessibilityDraftLoaded": "Borrador cargado. Presiona Escape para salir o Guardar para mantener los cambios.",
+  "accessibilityDraftLabel": "Borrador {id}",
+  "@accessibilityDraftLabel": {
+    "placeholders": {
+      "id": {}
+    }
+  },
+  "accessibilityDraftLabelWithRecipients": "Borrador para {recipients}",
+  "@accessibilityDraftLabelWithRecipients": {
+    "placeholders": {
+      "recipients": {}
+    }
+  },
+  "accessibilityDraftPreview": "{recipients} — {preview}",
+  "@accessibilityDraftPreview": {
+    "placeholders": {
+      "recipients": {},
+      "preview": {}
+    }
+  },
+  "accessibilityIncomingMessageStatus": "Nuevo mensaje de {sender} a las {time}",
+  "@accessibilityIncomingMessageStatus": {
+    "placeholders": {
+      "sender": {},
+      "time": {}
+    }
+  },
+  "accessibilityAttachmentWithName": "Archivo adjunto: {filename}",
+  "@accessibilityAttachmentWithName": {
+    "placeholders": {
+      "filename": {}
+    }
+  },
+  "accessibilityAttachmentGeneric": "Adjunto",
+  "accessibilityUploadAvailable": "Carga disponible",
+  "accessibilityUnknownContact": "Contacto desconocido",
+  "accessibilityChooseContact": "Elegir un contacto",
+  "accessibilityUnreadConversations": "Conversaciones sin leer",
+  "accessibilityStartNewAddress": "Ingresar una nueva dirección",
+  "accessibilityConversationWith": "Conversación con {name}",
+  "@accessibilityConversationWith": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityConversationLabel": "Conversación",
+  "accessibilityDialogLabel": "Diálogo de accesibilidad",
+  "accessibilityDialogHint": "Presiona Tab para ver los atajos, usa las flechas dentro de las listas, Mayús más flechas para moverte entre grupos o Escape para salir.",
+  "accessibilityNoActionsAvailable": "No hay acciones disponibles ahora",
+  "accessibilityBreadcrumbLabel": "Paso {position} de {total}: {label}. Activa para saltar a este paso.",
+  "@accessibilityBreadcrumbLabel": {
+    "placeholders": {
+      "position": {},
+      "total": {},
+      "label": {}
+    }
+  },
+  "accessibilityShortcutOpenMenu": "Abrir menú",
+  "accessibilityShortcutBack": "Atrás un paso o cerrar",
+  "accessibilityShortcutNextFocus": "Siguiente objetivo de foco",
+  "accessibilityShortcutPreviousFocus": "Objetivo de foco anterior",
+  "accessibilityShortcutActivateItem": "Activar elemento",
+  "accessibilityShortcutNextItem": "Elemento siguiente",
+  "accessibilityShortcutPreviousItem": "Elemento anterior",
+  "accessibilityShortcutNextGroup": "Siguiente grupo",
+  "accessibilityShortcutPreviousGroup": "Grupo anterior",
+  "accessibilityShortcutFirstItem": "Primer elemento",
+  "accessibilityShortcutLastItem": "Último elemento",
+  "accessibilityKeyboardShortcutsTitle": "Atajos de teclado",
+  "accessibilityKeyboardShortcutAnnouncement": "Atajo de teclado: {description}",
+  "@accessibilityKeyboardShortcutAnnouncement": {
+    "placeholders": {
+      "description": {}
+    }
+  },
+  "accessibilityTextFieldHint": "Ingresa texto. Usa Tab para avanzar o Escape para regresar o cerrar el menú.",
+  "accessibilityComposerPlaceholder": "Escribe un mensaje",
+  "accessibilityRecipientLabel": "Destinatario {name}",
+  "@accessibilityRecipientLabel": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityRecipientRemoveHint": "Presiona retroceso o suprimir para quitar",
+  "accessibilityMessageActionsLabel": "Acciones del mensaje",
+  "accessibilityMessageActionsHint": "Guardar como borrador o enviar este mensaje",
+  "accessibilityMessagePosition": "Mensaje {position} de {total}",
+  "@accessibilityMessagePosition": {
+    "placeholders": {
+      "position": {},
+      "total": {}
+    }
+  },
+  "accessibilityNoMessages": "No hay mensajes",
+  "accessibilityMessageMetadata": "De {sender} a las {timestamp}",
+  "@accessibilityMessageMetadata": {
+    "placeholders": {
+      "sender": {},
+      "timestamp": {}
+    }
+  },
+  "accessibilityMessageFrom": "De {sender}",
+  "@accessibilityMessageFrom": {
+    "placeholders": {
+      "sender": {}
+    }
+  },
+  "accessibilityMessageNavigationHint": "Usa las flechas para moverte entre mensajes. Mayús más flechas cambia de grupo. Presiona Escape para salir.",
+  "accessibilitySectionSummary": "Sección {section} con {count} elementos",
+  "@accessibilitySectionSummary": {
+    "placeholders": {
+      "section": {},
+      "count": {}
+    }
+  },
+  "accessibilityActionListLabel": "Lista de acciones con {count} elementos",
+  "@accessibilityActionListLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "accessibilityActionListHint": "Usa flechas para moverte, Mayús más flechas para cambiar de grupo, Inicio/Fin para saltar, Enter para activar, Escape para salir.",
+  "accessibilityActionItemPosition": "Elemento {position} de {total} en {section}",
+  "@accessibilityActionItemPosition": {
+    "placeholders": {
+      "position": {},
+      "total": {},
+      "section": {}
+    }
+  },
+  "accessibilityActionReadOnlyHint": "Usa las flechas para recorrer la lista",
+  "accessibilityActionActivateHint": "Presiona Enter para activar",
+  "accessibilityDismissHighlight": "Descartar destacado",
+  "accessibilityNeedsAttention": "Requiere atención",
   "profileTitle": "Perfil",
   "profileJidDescription": "Este es tu Jabber ID. Consta de tu nombre de usuario y dominio; es una dirección única que te representa en la red XMPP.",
   "profileResourceDescription": "Este es tu recurso XMPP. Cada dispositivo que usas tiene uno diferente, por eso tu teléfono puede tener un estado distinto al de tu computadora.",
@@ -410,5 +575,329 @@
   "termsAgreementTerms": "términos",
   "termsAgreementAnd": " y ",
   "termsAgreementPrivacy": "política de privacidad",
-  "termsAgreementError": "Debes aceptar los términos y condiciones"
+  "termsAgreementError": "Debes aceptar los términos y condiciones",
+  "commonContinue": "Continuar",
+  "commonDelete": "Eliminar",
+  "commonSave": "Guardar",
+  "commonRetry": "Reintentar",
+  "commonRemove": "Quitar",
+  "commonSend": "Enviar",
+  "commonDismiss": "Descartar",
+  "settingsSectionImportant": "Importante",
+  "settingsSectionAppearance": "Apariencia",
+  "settingsLanguage": "Idioma",
+  "settingsThemeMode": "Modo de tema",
+  "settingsThemeModeSystem": "Sistema",
+  "settingsThemeModeLight": "Claro",
+  "settingsThemeModeDark": "Oscuro",
+  "settingsColorScheme": "Esquema de color",
+  "settingsColorfulAvatars": "Avatares coloridos",
+  "settingsColorfulAvatarsDescription": "Genera colores de fondo diferentes para cada avatar.",
+  "settingsLowMotion": "Movimiento reducido",
+  "settingsLowMotionDescription": "Desactiva la mayoría de las animaciones. Mejor para dispositivos lentos.",
+  "settingsSectionChats": "Chats",
+  "settingsMessageStorageTitle": "Almacenamiento de mensajes",
+  "settingsMessageStorageSubtitle": "Local mantiene copias en el dispositivo; Solo servidor consulta el archivo.",
+  "settingsMessageStorageLocal": "Local",
+  "settingsMessageStorageServerOnly": "Solo servidor",
+  "settingsMuteNotifications": "Silenciar notificaciones",
+  "settingsMuteNotificationsDescription": "Deja de recibir notificaciones de mensajes.",
+  "settingsReadReceipts": "Enviar confirmaciones de lectura",
+  "settingsTypingIndicators": "Enviar indicadores de escritura",
+  "settingsTypingIndicatorsDescription": "Permite que otros en el chat vean cuando estás escribiendo.",
+  "settingsShareTokenFooter": "Incluir pie de token de compartir",
+  "settingsShareTokenFooterDescription": "Ayuda a mantener enlazados los hilos de correo con varios destinatarios y sus adjuntos. Desactivarlo puede romper el hilo.",
+  "authCustomServerTitle": "Servidor personalizado",
+  "authCustomServerDescription": "Anula los endpoints XMPP/SMTP o habilita búsquedas DNS. Deja los campos vacíos para mantener los valores predeterminados.",
+  "authCustomServerDomainOrIp": "Dominio o IP",
+  "authCustomServerXmppLabel": "XMPP",
+  "authCustomServerSmtpLabel": "SMTP",
+  "authCustomServerUseDns": "Usar DNS",
+  "authCustomServerUseSrv": "Usar SRV",
+  "authCustomServerRequireDnssec": "Requerir DNSSEC",
+  "authCustomServerXmppHostPlaceholder": "Host XMPP (opcional)",
+  "authCustomServerPortPlaceholder": "Puerto",
+  "authCustomServerSmtpHostPlaceholder": "Host SMTP (opcional)",
+  "authCustomServerApiPortPlaceholder": "Puerto API",
+  "authCustomServerReset": "Restablecer a axi.im",
+  "authCustomServerOpenSettings": "Abrir ajustes de servidor personalizado",
+  "authCustomServerAdvancedHint": "Las opciones avanzadas del servidor se mantienen ocultas hasta que toques el sufijo de usuario.",
+  "authUnregisterTitle": "Dar de baja",
+  "authUnregisterProgressLabel": "Esperando la eliminación de la cuenta",
+  "authPasswordPlaceholder": "Contraseña",
+  "authPasswordCurrentPlaceholder": "Contraseña anterior",
+  "authPasswordNewPlaceholder": "Nueva contraseña",
+  "authPasswordConfirmNewPlaceholder": "Confirmar nueva contraseña",
+  "authChangePasswordProgressLabel": "Esperando el cambio de contraseña",
+  "authLogoutTitle": "Cerrar sesión",
+  "authLogoutNormal": "Cerrar sesión",
+  "authLogoutNormalDescription": "Cerrar sesión de esta cuenta.",
+  "authLogoutBurn": "Borrar cuenta",
+  "authLogoutBurnDescription": "Cerrar sesión y borrar los datos locales de esta cuenta.",
+  "chatAttachmentBlockedTitle": "Adjunto bloqueado",
+  "chatAttachmentBlockedDescription": "Cargar adjuntos de contactos desconocidos solo si confías en ellos. Lo descargaremos cuando lo apruebes.",
+  "chatAttachmentLoad": "Cargar adjunto",
+  "chatAttachmentUnavailable": "Adjunto no disponible",
+  "chatAttachmentSendFailed": "No se pudo enviar el adjunto.",
+  "chatAttachmentRetryUpload": "Reintentar carga",
+  "chatAttachmentRemoveAttachment": "Quitar adjunto",
+  "chatAttachmentStatusUploading": "Subiendo adjunto…",
+  "chatAttachmentStatusQueued": "Esperando para enviar",
+  "chatAttachmentStatusFailed": "Carga fallida",
+  "chatAttachmentLoading": "Cargando adjunto",
+  "chatAttachmentLoadingProgress": "Cargando {percent}",
+  "@chatAttachmentLoadingProgress": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "chatAttachmentDownload": "Descargar adjunto",
+  "chatAttachmentUnavailableDevice": "El adjunto ya no está disponible en este dispositivo",
+  "chatAttachmentInvalidLink": "Enlace de adjunto no válido",
+  "chatAttachmentOpenFailed": "No se pudo abrir {target}",
+  "@chatAttachmentOpenFailed": {
+    "placeholders": {
+      "target": {}
+    }
+  },
+  "chatAttachmentUnknownSize": "Tamaño desconocido",
+  "chatAttachmentErrorTooltip": "{message} ({fileName})",
+  "@chatAttachmentErrorTooltip": {
+    "placeholders": {
+      "message": {},
+      "fileName": {}
+    }
+  },
+  "chatAttachmentMenuHint": "Abre el menú para ver acciones.",
+  "accessibilityActionsLabel": "Acciones de accesibilidad",
+  "accessibilityActionsShortcutTooltip": "Acciones de accesibilidad ({shortcut})",
+  "@accessibilityActionsShortcutTooltip": {
+    "placeholders": {
+      "shortcut": {}
+    }
+  },
+  "shorebirdUpdateAvailable": "Actualización disponible: cierra sesión y reinicia la app",
+  "calendarEditTaskTitle": "Editar tarea",
+  "calendarDateTimeLabel": "Fecha y hora",
+  "calendarSelectDate": "Seleccionar fecha",
+  "calendarSelectTime": "Seleccionar hora",
+  "calendarDurationLabel": "Duración",
+  "calendarSelectDuration": "Seleccionar duración",
+  "calendarAddToCriticalPath": "Agregar a la ruta crítica",
+  "calendarNoCriticalPathMembership": "No está en ninguna ruta crítica",
+  "calendarGuestTitle": "Calendario de invitado",
+  "calendarGuestBanner": "Modo invitado - Sin sincronización",
+  "calendarGuestModeLabel": "Modo invitado",
+  "calendarGuestModeDescription": "Inicia sesión para sincronizar tareas y activar recordatorios.",
+  "calendarNoTasksForDate": "No hay tareas para esta fecha",
+  "calendarTapToCreateTask": "Toca + para crear una nueva tarea",
+  "calendarQuickStats": "Estadísticas rápidas",
+  "calendarDueReminders": "Recordatorios vencidos",
+  "calendarNextTaskLabel": "Próxima tarea",
+  "calendarNone": "Ninguna",
+  "calendarViewLabel": "Vista",
+  "calendarViewDay": "Día",
+  "calendarViewWeek": "Semana",
+  "calendarViewMonth": "Mes",
+  "calendarPreviousDate": "Fecha anterior",
+  "calendarNextDate": "Fecha siguiente",
+  "calendarPreviousUnit": "Anterior {unit}",
+  "@calendarPreviousUnit": {
+    "placeholders": {
+      "unit": {}
+    }
+  },
+  "calendarNextUnit": "Siguiente {unit}",
+  "@calendarNextUnit": {
+    "placeholders": {
+      "unit": {}
+    }
+  },
+  "calendarToday": "Hoy",
+  "calendarUndo": "Deshacer",
+  "calendarRedo": "Rehacer",
+  "calendarOpeningCreator": "Abriendo creador de tareas...",
+  "calendarWeekOf": "Semana de {date}",
+  "@calendarWeekOf": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "calendarStatusCompleted": "Completada",
+  "calendarStatusOverdue": "Atrasada",
+  "calendarStatusDueSoon": "Próxima a vencer",
+  "calendarStatusPending": "Pendiente",
+  "calendarTaskCompletedMessage": "¡Tarea completada!",
+  "calendarTaskUpdatedMessage": "Tarea actualizada",
+  "calendarErrorTitle": "Error",
+  "calendarErrorTaskNotFound": "Tarea no encontrada",
+  "calendarErrorTitleEmpty": "El título no puede estar vacío",
+  "calendarErrorTitleTooLong": "Título demasiado largo",
+  "calendarErrorDescriptionTooLong": "Descripción demasiado larga",
+  "calendarErrorInputInvalid": "Entrada no válida",
+  "calendarErrorAddFailed": "No se pudo agregar la tarea",
+  "calendarErrorUpdateFailed": "No se pudo actualizar la tarea",
+  "calendarErrorDeleteFailed": "No se pudo eliminar la tarea",
+  "calendarErrorNetwork": "Error de red",
+  "calendarErrorStorage": "Error de almacenamiento",
+  "calendarErrorUnknown": "Error desconocido",
+  "commonConfirm": "Confirmar",
+  "commonOpen": "Abrir",
+  "commonSelect": "Seleccionar",
+  "commonExport": "Exportar",
+  "commonFavorite": "Favorito",
+  "commonUnfavorite": "Quitar favorito",
+  "commonArchive": "Archivar",
+  "commonUnarchive": "Desarchivar",
+  "commonShow": "Mostrar",
+  "commonHide": "Ocultar",
+  "blocklistBlockUser": "Bloquear usuario",
+  "blocklistWaitingForUnblock": "Esperando desbloqueo",
+  "blocklistUnblockAll": "Desbloquear todo",
+  "blocklistUnblock": "Desbloquear",
+  "blocklistBlock": "Bloquear",
+  "blocklistAddTooltip": "Agregar a la lista bloqueada",
+  "mucChangeNickname": "Cambiar apodo",
+  "mucChangeNicknameWithCurrent": "Cambiar apodo (actual: {current})",
+  "@mucChangeNicknameWithCurrent": {
+    "placeholders": {
+      "current": {}
+    }
+  },
+  "mucLeaveRoom": "Salir de la sala",
+  "mucNoMembers": "Aún no hay miembros",
+  "mucInviteUsers": "Invitar usuarios",
+  "mucSendInvites": "Enviar invitaciones",
+  "mucChangeNicknameTitle": "Cambiar apodo",
+  "mucEnterNicknamePlaceholder": "Introduce un apodo",
+  "mucUpdateNickname": "Actualizar",
+  "mucMembersTitle": "Miembros",
+  "mucInviteUser": "Invitar usuario",
+  "mucSectionOwners": "Propietarios",
+  "mucSectionAdmins": "Administradores",
+  "mucSectionModerators": "Moderadores",
+  "mucSectionMembers": "Miembros",
+  "mucSectionVisitors": "Visitantes",
+  "mucRoleOwner": "Propietario",
+  "mucRoleAdmin": "Administrador",
+  "mucRoleMember": "Miembro",
+  "mucRoleVisitor": "Visitante",
+  "mucRoleModerator": "Moderador",
+  "mucActionKick": "Expulsar",
+  "mucActionBan": "Bloquear",
+  "mucActionMakeMember": "Convertir en miembro",
+  "mucActionMakeAdmin": "Hacer administrador",
+  "mucActionMakeOwner": "Hacer propietario",
+  "mucActionGrantModerator": "Conceder moderador",
+  "mucActionRevokeModerator": "Revocar moderador",
+  "chatsEmptyList": "Aún no hay chats",
+  "chatsDeleteConfirmMessage": "Eliminar chat: {chatTitle}",
+  "@chatsDeleteConfirmMessage": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatsDeleteMessagesOption": "Eliminar mensajes permanentemente",
+  "chatsDeleteSuccess": "Chat eliminado",
+  "chatsExportNoContent": "No hay texto para exportar",
+  "chatsExportShareText": "Exportación de chat desde Axichat",
+  "chatsExportShareSubject": "Chat con {chatTitle}",
+  "@chatsExportShareSubject": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatsExportSuccess": "Chat exportado",
+  "chatsExportFailure": "No se pudo exportar el chat",
+  "chatsArchivedRestored": "Chat restaurado",
+  "chatsArchivedHint": "Chat archivado (Perfil → Chats archivados)",
+  "chatsVisibleNotice": "El chat vuelve a ser visible",
+  "chatsHiddenNotice": "Chat oculto (usa el filtro para mostrarlo)",
+  "chatsUnreadLabel": "{count, plural, =0 {Sin mensajes sin leer} one {# mensaje sin leer} other {# mensajes sin leer}}",
+  "@chatsUnreadLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatsSemanticsUnselectHint": "Pulsa para deseleccionar el chat",
+  "chatsSemanticsSelectHint": "Pulsa para seleccionar el chat",
+  "chatsSemanticsOpenHint": "Pulsa para abrir el chat",
+  "chatsHideActions": "Ocultar acciones del chat",
+  "chatsShowActions": "Mostrar acciones del chat",
+  "chatsSelectedLabel": "Chat seleccionado",
+  "chatsSelectLabel": "Seleccionar chat",
+  "chatsExportFileLabel": "chats",
+  "chatSelectionExportEmptyTitle": "No hay mensajes para exportar",
+  "chatSelectionExportEmptyMessage": "Selecciona chats con contenido de texto",
+  "chatSelectionExportShareText": "Exportaciones de chat desde Axichat",
+  "chatSelectionExportShareSubject": "Exportación de chats de Axichat",
+  "chatSelectionExportReadyTitle": "Exportación lista",
+  "chatSelectionExportReadyMessage": "{count, plural, one {# chat compartido} other {# chats compartidos}}",
+  "@chatSelectionExportReadyMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatSelectionExportFailedTitle": "Error de exportación",
+  "chatSelectionExportFailedMessage": "No se pudieron exportar los chats seleccionados",
+  "chatSelectionDeleteConfirmTitle": "¿Eliminar chats?",
+  "chatSelectionDeleteConfirmMessage": "{count, plural, one {Esto elimina 1 chat y todos sus mensajes. No se puede deshacer.} other {Esto elimina # chats y todos sus mensajes. No se puede deshacer.}}",
+  "@chatSelectionDeleteConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatsCreateGroupChatTooltip": "Crear chat grupal",
+  "chatsRoomLabel": "Sala",
+  "chatsCreateChatRoomTitle": "Crear sala de chat",
+  "chatsRoomNamePlaceholder": "Nombre",
+  "chatsArchiveTitle": "Archivo",
+  "chatsArchiveEmpty": "Aún no hay chats archivados",
+  "calendarTileNow": "Ahora: {title}",
+  "@calendarTileNow": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarTileNext": "Siguiente: {title}",
+  "@calendarTileNext": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarTileNone": "No hay tareas próximas",
+  "calendarViewDayShort": "D",
+  "calendarViewWeekShort": "S",
+  "calendarViewMonthShort": "M",
+  "calendarShowCompleted": "Mostrar completadas",
+  "calendarHideCompleted": "Ocultar completadas",
+  "rosterAddTooltip": "Agregar a la lista de contactos",
+  "rosterAddLabel": "Contacto",
+  "rosterAddTitle": "Agregar contacto",
+  "rosterEmpty": "Aún no hay contactos",
+  "rosterCompose": "Redactar",
+  "rosterRemoveConfirm": "¿Eliminar {jid} de los contactos?",
+  "@rosterRemoveConfirm": {
+    "placeholders": {
+      "jid": {}
+    }
+  },
+  "rosterInvitesEmpty": "Aún no hay invitaciones",
+  "rosterRejectInviteConfirm": "¿Rechazar invitación de {jid}?",
+  "@rosterRejectInviteConfirm": {
+    "placeholders": {
+      "jid": {}
+    }
+  },
+  "rosterAddContactTooltip": "Agregar contacto",
+  "jidInputPlaceholder": "john@axi.im",
+  "jidInputInvalid": "Introduce un JID válido",
+  "sessionCapabilityChat": "Chat",
+  "sessionCapabilityEmail": "Correo",
+  "sessionCapabilityStatusConnected": "Conectado",
+  "sessionCapabilityStatusConnecting": "Conectando",
+  "sessionCapabilityStatusError": "Error",
+  "sessionCapabilityStatusOffline": "Sin conexión",
+  "sessionCapabilityStatusOff": "Desactivado",
+  "sessionCapabilityStatusSyncing": "Sincronizando"
 }

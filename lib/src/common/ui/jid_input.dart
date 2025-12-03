@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -75,7 +76,7 @@ class JidInput extends StatelessWidget {
           autocorrect: false,
           keyboardType: TextInputType.emailAddress,
           enabled: enabled,
-          placeholder: const Text('john@axi.im'),
+          placeholder: Text(context.l10n.jidInputPlaceholder),
           // description: describe
           //     ? const Padding(
           //         padding: EdgeInsets.only(left: 8.0),
@@ -107,7 +108,7 @@ class JidInput extends StatelessWidget {
               Padding(
                 padding: inputSubtextInsets,
                 child: Text(
-                  error ?? 'Enter a valid jid',
+                  error ?? context.l10n.jidInputInvalid,
                   style: TextStyle(
                     color: context.colorScheme.destructive,
                   ),

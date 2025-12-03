@@ -1103,7 +1103,7 @@ Future<String?> promptCriticalPathName({
 }) async {
   final controller = TextEditingController(text: initialValue ?? '');
   final FocusNode focusNode = FocusNode();
-  String? errorText;
+  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
   final result = await showAdaptiveBottomSheet<String>(
     context: context,
     dialogMaxWidth: 420,
@@ -1114,93 +1114,84 @@ Future<String?> promptCriticalPathName({
           final colors = context.colorScheme;
           final textTheme = context.textTheme;
           FocusScope.of(dialogContext).requestFocus(focusNode);
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: textTheme.h3.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+          return Form(
+            key: formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: textTheme.h3.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                  AxiIconButton(
-                    iconData: Icons.close,
-                    iconSize: 16,
-                    buttonSize: 34,
-                    tapTargetSize: 40,
-                    backgroundColor: Colors.transparent,
-                    borderColor: Colors.transparent,
-                    color: colors.mutedForeground,
-                    onPressed: () => Navigator.of(dialogContext).maybePop(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: calendarGutterSm),
-              Text(
-                context.l10n.calendarCriticalPathNamePrompt,
-                style: textTheme.muted,
-              ),
-              const SizedBox(height: calendarGutterSm),
-              AxiTextFormField(
-                controller: controller,
-                focusNode: focusNode,
-                placeholder: Text(
-                  context.l10n.calendarCriticalPathNamePlaceholder,
+                    AxiIconButton(
+                      iconData: Icons.close,
+                      iconSize: 16,
+                      buttonSize: 34,
+                      tapTargetSize: 40,
+                      backgroundColor: Colors.transparent,
+                      borderColor: Colors.transparent,
+                      color: colors.mutedForeground,
+                      onPressed: () => Navigator.of(dialogContext).maybePop(),
+                    ),
+                  ],
                 ),
-                onSubmitted: (value) {
-                  final String trimmed = value.trim();
-                  if (trimmed.isEmpty) {
-                    setState(
-                      () => errorText =
-                          context.l10n.calendarCriticalPathNameEmptyError,
-                    );
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop(trimmed);
-                },
-              ),
-              if (errorText != null) ...[
-                const SizedBox(height: calendarInsetMd),
+                const SizedBox(height: calendarGutterSm),
                 Text(
-                  errorText!,
-                  style: textTheme.small.copyWith(
-                    color: colors.destructive,
-                    fontWeight: FontWeight.w600,
+                  context.l10n.calendarCriticalPathNamePrompt,
+                  style: textTheme.muted,
+                ),
+                const SizedBox(height: calendarGutterSm),
+                AxiTextFormField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  placeholder: Text(
+                    context.l10n.calendarCriticalPathNamePlaceholder,
                   ),
+                  validator: (value) {
+                    final String trimmed = value.trim();
+                    if (trimmed.isEmpty) {
+                      return context.l10n.calendarCriticalPathNameEmptyError;
+                    }
+                    return null;
+                  },
+                  onSubmitted: (value) {
+                    if (formKey.currentState?.validate() ?? false) {
+                      Navigator.of(dialogContext).pop(value.trim());
+                    }
+                  },
+                ),
+                const SizedBox(height: calendarGutterMd),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ShadButton.outline(
+                      onPressed: () => Navigator.of(dialogContext).maybePop(),
+                      child: Text(context.l10n.commonCancel),
+                    ).withTapBounce(),
+                    const SizedBox(width: calendarInsetSm),
+                    ShadButton(
+                      onPressed: () {
+                        if (!(formKey.currentState?.validate() ?? false)) {
+                          focusNode.requestFocus();
+                          return;
+                        }
+                        Navigator.of(dialogContext).pop(controller.text.trim());
+                      },
+                      child: const Text('Save'),
+                    ).withTapBounce(),
+                  ],
                 ),
               ],
-              const SizedBox(height: calendarGutterMd),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  ShadButton.outline(
-                    onPressed: () => Navigator.of(dialogContext).maybePop(),
-                    child: Text(context.l10n.commonCancel),
-                  ).withTapBounce(),
-                  const SizedBox(width: calendarInsetSm),
-                  ShadButton(
-                    onPressed: () {
-                      final String trimmed = controller.text.trim();
-                      if (trimmed.isEmpty) {
-                        setState(
-                          () => errorText =
-                              context.l10n.calendarCriticalPathNameEmptyError,
-                        );
-                        return;
-                      }
-                      Navigator.of(dialogContext).pop(trimmed);
-                    },
-                    child: const Text('Save'),
-                  ).withTapBounce(),
-                ],
-              ),
-            ],
+            ),
           );
         },
       );

@@ -3,6 +3,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -138,6 +139,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final viewInsets = MediaQuery.viewInsetsOf(context);
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final l10n = context.l10n;
     final titleStyle = textTheme.h4.copyWith(color: colors.foreground);
     final placeholderStyle =
         textTheme.muted.copyWith(color: colors.mutedForeground);
@@ -147,13 +149,12 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Custom server',
+          l10n.authCustomServerTitle,
           style: titleStyle,
         ),
         const SizedBox(height: 8),
         Text(
-          'Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields '
-          'blank to keep defaults.',
+          l10n.authCustomServerDescription,
           style: textTheme.muted.copyWith(color: colors.mutedForeground),
         ),
         const SizedBox(height: 16),
@@ -161,7 +162,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           autocorrect: false,
           keyboardType: TextInputType.url,
           controller: _domainController,
-          placeholder: Text('Domain or IP', style: placeholderStyle),
+          placeholder:
+              Text(l10n.authCustomServerDomainOrIp, style: placeholderStyle),
           placeholderStyle: placeholderStyle,
           style: inputStyle,
         ),
@@ -170,7 +172,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           children: [
             Expanded(
               child: _ToggleTile(
-                label: 'XMPP',
+                label: l10n.authCustomServerXmppLabel,
                 value: _enableXmpp,
                 onChanged: (value) =>
                     setState(() => _enableXmpp = value ?? _enableXmpp),
@@ -179,7 +181,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: _ToggleTile(
-                label: 'SMTP',
+                label: l10n.authCustomServerSmtpLabel,
                 value: _enableSmtp,
                 onChanged: (value) =>
                     setState(() => _enableSmtp = value ?? _enableSmtp),
@@ -192,7 +194,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           children: [
             Expanded(
               child: _ToggleTile(
-                label: 'Use DNS',
+                label: l10n.authCustomServerUseDns,
                 value: _useDns,
                 onChanged: (value) => setState(() {
                   _useDns = value ?? _useDns;
@@ -206,7 +208,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: _ToggleTile(
-                label: 'Use SRV',
+                label: l10n.authCustomServerUseSrv,
                 value: _useSrv,
                 enabled: _useDns,
                 onChanged: (value) =>
@@ -217,7 +219,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         ),
         const SizedBox(height: 12),
         _ToggleTile(
-          label: 'Require DNSSEC',
+          label: l10n.authCustomServerRequireDnssec,
           value: _requireDnssec,
           enabled: _useDns,
           onChanged: (value) =>
@@ -235,8 +237,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                     RegExp(r'[A-Za-z0-9._:-]'),
                   ),
                 ],
-                placeholder:
-                    Text('XMPP host (optional)', style: placeholderStyle),
+                placeholder: Text(
+                  l10n.authCustomServerXmppHostPlaceholder,
+                  style: placeholderStyle,
+                ),
                 placeholderStyle: placeholderStyle,
                 controller: _xmppHostController,
                 style: inputStyle,
@@ -251,7 +255,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                 ],
-                placeholder: Text('Port', style: placeholderStyle),
+                placeholder: Text(
+                  l10n.authCustomServerPortPlaceholder,
+                  style: placeholderStyle,
+                ),
                 placeholderStyle: placeholderStyle,
                 controller: _xmppPortController,
                 style: inputStyle,
@@ -266,8 +273,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
               child: AxiTextFormField(
                 autocorrect: false,
                 keyboardType: TextInputType.url,
-                placeholder:
-                    Text('SMTP host (optional)', style: placeholderStyle),
+                placeholder: Text(
+                  l10n.authCustomServerSmtpHostPlaceholder,
+                  style: placeholderStyle,
+                ),
                 placeholderStyle: placeholderStyle,
                 controller: _smtpHostController,
                 style: inputStyle,
@@ -282,7 +291,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                 ],
-                placeholder: Text('Port', style: placeholderStyle),
+                placeholder: Text(
+                  l10n.authCustomServerPortPlaceholder,
+                  style: placeholderStyle,
+                ),
                 placeholderStyle: placeholderStyle,
                 controller: _smtpPortController,
                 style: inputStyle,
@@ -299,7 +311,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             inputFormatters: [
               FilteringTextInputFormatter.digitsOnly,
             ],
-            placeholder: Text('API port', style: placeholderStyle),
+            placeholder: Text(
+              l10n.authCustomServerApiPortPlaceholder,
+              style: placeholderStyle,
+            ),
             placeholderStyle: placeholderStyle,
             controller: _apiPortController,
             style: inputStyle,
@@ -311,22 +326,21 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             Expanded(
               child: ShadButton.secondary(
                 onPressed: _reset,
-                child: const Text('Reset to axi.im'),
+                child: Text(l10n.authCustomServerReset),
               ).withTapBounce(),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: ShadButton(
                 onPressed: _save,
-                child: const Text('Save'),
+                child: Text(l10n.commonSave),
               ).withTapBounce(),
             ),
           ],
         ),
         const SizedBox(height: 8),
         Text(
-          'Advanced server options stay hidden until you tap the username '
-          'suffix.',
+          l10n.authCustomServerAdvancedHint,
           style: textTheme.muted.copyWith(color: colors.mutedForeground),
         ),
       ],
@@ -382,9 +396,10 @@ class EndpointSuffix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Semantics(
       button: true,
-      label: 'Open custom server settings',
+      label: l10n.authCustomServerOpenSettings,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => EndpointConfigSheet.show(context),

@@ -12,6 +12,8 @@ import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+const double _sessionIndicatorMaxWidth = 220.0;
+
 class ProfileTile extends StatelessWidget {
   const ProfileTile({super.key});
 
@@ -27,17 +29,19 @@ class ProfileTile extends StatelessWidget {
           builder: (context, emailSyncState) {
             return BlocBuilder<ProfileCubit, ProfileState>(
               builder: (context, state) {
+                final colors = context.colorScheme;
                 final usernameStyle = context.textTheme.large.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: context.colorScheme.foreground,
+                  color: colors.foreground,
                 );
                 final subtitleStyle = context.textTheme.muted.copyWith(
-                  color: context.colorScheme.mutedForeground,
+                  color: colors.mutedForeground,
                 );
                 return ConstrainedBox(
                   constraints: BoxConstraints(
                       maxWidth: MediaQuery.sizeOf(context).width),
                   child: ListTile(
+                    tileColor: colors.background,
                     leading: Hero(
                       tag: 'avatar',
                       child: AxiAvatar(
@@ -68,6 +72,7 @@ class ProfileTile extends StatelessWidget {
                           state.jid,
                           style: subtitleStyle,
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
                         ),
                       ),
                     ),
@@ -75,11 +80,12 @@ class ProfileTile extends StatelessWidget {
                       const ProfileRoute().location,
                       extra: context.read,
                     ),
-                    trailing: SizedBox(
-                      width: 220,
-                      child: FittedBox(
+                    trailing: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: _sessionIndicatorMaxWidth,
+                      ),
+                      child: Align(
                         alignment: Alignment.centerRight,
-                        fit: BoxFit.scaleDown,
                         child: SessionCapabilityIndicators(
                           xmppState: connectionState,
                           emailState: emailSyncState,

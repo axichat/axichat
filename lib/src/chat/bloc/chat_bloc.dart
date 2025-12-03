@@ -122,6 +122,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageFocused>(_onChatMessageFocused);
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
+    on<_TypingParticipantsUpdated>(_onTypingParticipantsUpdated);
     on<ChatMessageSent>(
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
@@ -165,6 +166,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
       _subscribeToMessages(limit: messageBatchSize, filter: state.viewFilter);
+      _subscribeToTypingParticipants(jid!);
       unawaited(_initializeViewFilter());
     }
     _emailSyncSubscription = _emailService?.syncStateStream.listen(
@@ -227,6 +229,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
   StreamSubscription<RoomState>? _roomSubscription;
+  StreamSubscription<List<String>>? _typingParticipantsSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
@@ -465,11 +468,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
+  void _subscribeToTypingParticipants(String chatJid) {
+    unawaited(_typingParticipantsSubscription?.cancel());
+    _typingParticipantsSubscription = _chatsService
+        .typingParticipantsStream(chatJid)
+        .listen(
+            (participants) => add(_TypingParticipantsUpdated(participants)));
+  }
+
   @override
   Future<void> close() async {
     await _chatSubscription.cancel();
     await _messageSubscription?.cancel();
     await _roomSubscription?.cancel();
+    await _typingParticipantsSubscription?.cancel();
     await _emailSyncSubscription?.cancel();
     await _connectivitySubscription?.cancel();
     await _httpUploadSupportSubscription?.cancel();
@@ -496,10 +508,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
       roomState: resetContext ? null : state.roomState,
+      typingParticipants: resetContext ? const [] : state.typingParticipants,
     ));
     _resetMamCursors(resetContext);
     unawaited(_hydrateLatestFromMam(event.chat));
     unawaited(_roomSubscription?.cancel());
+    if (resetContext) {
+      _subscribeToTypingParticipants(event.chat.jid);
+    }
     if (event.chat.type == ChatType.groupChat) {
       _roomSubscription = _mucService
           .roomStateStream(event.chat.jid)
@@ -561,6 +577,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (state.chat?.supportsEmail == true) {
       await _hydrateShareContexts(event.items, emit);
+      await _hydrateShareReplies(event.items, emit);
     }
 
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
@@ -1023,6 +1040,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   void _onChatTypingStopped(_ChatTypingStopped event, Emitter<ChatState> emit) {
     _stopTyping();
     emit(state.copyWith(typing: false));
+  }
+
+  void _onTypingParticipantsUpdated(
+    _TypingParticipantsUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    emit(state.copyWith(typingParticipants: event.participants));
   }
 
   Future<void> _onChatMessageSent(
@@ -2682,6 +2706,56 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final contexts = Map<String, ShareContext>.from(state.shareContexts)
       ..addAll(pending);
     emit(state.copyWith(shareContexts: contexts));
+  }
+
+  Future<void> _hydrateShareReplies(
+    List<Message> messages,
+    Emitter<ChatState> emit,
+  ) async {
+    final database = await _messageService.database;
+    final contexts = state.shareContexts;
+    if (contexts.isEmpty) return;
+    final shareContextsById = <String, ShareContext>{};
+    final shareBuckets = <String, List<String>>{};
+    for (final entry in contexts.entries) {
+      shareContextsById.putIfAbsent(entry.value.shareId, () => entry.value);
+    }
+    for (final message in messages) {
+      final shareId = contexts[message.stanzaID]?.shareId;
+      if (shareId == null) continue;
+      final bucket = shareBuckets.putIfAbsent(shareId, () => <String>[]);
+      bucket.add(message.stanzaID);
+    }
+    if (shareBuckets.isEmpty) return;
+    final myBare = _bareJid(_chatsService.myJid);
+    final currentChatJid = jid;
+    final replies = Map<String, List<Chat>>.from(state.shareReplies);
+    for (final entry in shareBuckets.entries) {
+      final shareId = entry.key;
+      final shareContext = shareContextsById[shareId];
+      if (shareContext == null) continue;
+      final shareMessages = await database.getMessagesForShare(shareId);
+      final responders = <String>{};
+      for (final shareMessage in shareMessages) {
+        final senderBare = _bareJid(shareMessage.senderJid);
+        if (senderBare != null && senderBare == myBare) continue;
+        if (currentChatJid != null && shareMessage.chatJid == currentChatJid) {
+          continue;
+        }
+        responders.add(shareMessage.chatJid);
+      }
+      final participants = shareContext.participants
+          .where((participant) => responders.contains(participant.jid))
+          .toList(growable: false);
+      for (final stanzaId in entry.value) {
+        if (participants.isEmpty) {
+          replies.remove(stanzaId);
+        } else {
+          replies[stanzaId] = participants;
+        }
+      }
+    }
+    emit(state.copyWith(shareReplies: replies));
   }
 
   Future<void> _resendEmailMessage(

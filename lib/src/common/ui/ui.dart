@@ -68,13 +68,7 @@ extension ModalTypography on BuildContext {
   TextStyle get modalHeaderTextStyle {
     final ShadTextTheme theme = ShadTheme.of(this).textTheme;
     final ShadColorScheme colors = ShadTheme.of(this).colorScheme;
-    return theme.h4.copyWith(
-      fontFamily: gabaritoFontFamily,
-      fontFamilyFallback: gabaritoFontFallback,
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.2,
-      color: colors.foreground,
-    );
+    return theme.h3.copyWith(color: colors.foreground);
   }
 }
 

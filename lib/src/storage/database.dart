@@ -139,6 +139,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<MessageParticipantData>> getParticipantsForShare(String shareId);
 
+  Future<List<MessageCopyData>> getMessageCopiesForShare(String shareId);
+
+  Future<List<Message>> getMessagesForShare(String shareId);
+
   Future<String?> getShareIdForDeltaMessage(int deltaMsgId);
 
   Future<void> removeChatMessages(String jid);
@@ -557,6 +561,9 @@ class MessageCopiesAccessor
 
   Future<String?> selectShareIdForDeltaMsg(int deltaMsgId) async =>
       (await selectByDeltaMsgId(deltaMsgId))?.shareId;
+
+  Future<List<MessageCopyData>> selectByShare(String shareId) =>
+      (select(table)..where((tbl) => tbl.shareId.equals(shareId))).get();
 }
 
 @DriftAccessor(tables: [Reactions, Messages])
@@ -1728,6 +1735,25 @@ WHERE subject_token IS NOT NULL
   Future<List<MessageParticipantData>> getParticipantsForShare(
           String shareId) =>
       messageParticipantsAccessor.selectByShare(shareId);
+
+  @override
+  Future<List<MessageCopyData>> getMessageCopiesForShare(String shareId) =>
+      messageCopiesAccessor.selectByShare(shareId);
+
+  @override
+  Future<List<Message>> getMessagesForShare(String shareId) async {
+    final copies = await messageCopiesAccessor.selectByShare(shareId);
+    if (copies.isEmpty) return const [];
+    final messageIds = copies
+        .map((copy) => copy.dcMsgId)
+        .whereType<int>()
+        .toSet()
+        .toList(growable: false);
+    if (messageIds.isEmpty) return const [];
+    final query = select(messages)
+      ..where((tbl) => tbl.deltaMsgId.isIn(messageIds));
+    return query.get();
+  }
 
   @override
   Future<String?> getShareIdForDeltaMessage(int deltaMsgId) =>

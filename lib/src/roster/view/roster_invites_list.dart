@@ -3,6 +3,7 @@ import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -49,6 +50,7 @@ class _RosterInvitesBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final tabState = searchState?.stateFor(HomeTab.invites);
     final searchActive = searchState?.active ?? false;
     final query =
@@ -72,7 +74,7 @@ class _RosterInvitesBody extends StatelessWidget {
     if (visibleInvites.isEmpty) {
       return Center(
         child: Text(
-          'No invites yet',
+          l10n.rosterInvitesEmpty,
           style: context.textTheme.muted,
         ),
       );
@@ -96,8 +98,9 @@ class _RosterInvitesBody extends StatelessWidget {
                       onPressed: () async {
                         if (!disabled &&
                             await confirm(context,
-                                    text:
-                                        'Reject invite from ${invite.jid}?') ==
+                                    text: l10n.rosterRejectInviteConfirm(
+                                      invite.jid,
+                                    )) ==
                                 true &&
                             context.mounted) {
                           context
@@ -113,7 +116,7 @@ class _RosterInvitesBody extends StatelessWidget {
                   subtitle: invite.jid,
                   actions: [
                     AxiIconButton(
-                      tooltip: 'Add contact',
+                      tooltip: l10n.rosterAddContactTooltip,
                       iconData: LucideIcons.userPlus,
                       color: axiGreen,
                       onPressed: disabled

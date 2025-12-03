@@ -76,6 +76,39 @@ const double _rootListMinHeight = 240;
 const double _rootListMaxHeight = 520;
 const double _rootListHeightShare = 0.6;
 
+String _stepLabelFor(
+  BuildContext context,
+  AccessibilityStepEntry entry,
+) {
+  final l10n = context.l10n;
+  switch (entry.kind) {
+    case AccessibilityStepKind.root:
+      return l10n.accessibilityActionsLabel;
+    case AccessibilityStepKind.contactPicker:
+      return l10n.accessibilityChooseContact;
+    case AccessibilityStepKind.composer:
+      return l10n.chatComposerMessageHint;
+    case AccessibilityStepKind.unread:
+      return l10n.accessibilityUnreadConversations;
+    case AccessibilityStepKind.invites:
+      return l10n.accessibilityPendingInvites;
+    case AccessibilityStepKind.newContact:
+      return l10n.accessibilityStartNewAddress;
+    case AccessibilityStepKind.chatMessages:
+      final name =
+          entry.recipients.isNotEmpty ? entry.recipients.first.displayName : '';
+      return name.isNotEmpty
+          ? l10n.accessibilityMessagesWithContact(name)
+          : l10n.accessibilityMessagesTitle;
+    case AccessibilityStepKind.conversation:
+      final conversationName =
+          entry.recipients.isNotEmpty ? entry.recipients.first.displayName : '';
+      return conversationName.isNotEmpty
+          ? l10n.accessibilityConversationWith(conversationName)
+          : l10n.accessibilityConversationLabel;
+  }
+}
+
 class AccessibilityActionMenu extends StatefulWidget {
   const AccessibilityActionMenu({super.key});
 
@@ -402,9 +435,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                               return Semantics(
                                 scopesRoute: true,
                                 namesRoute: true,
-                                label: 'Accessibility actions dialog',
-                                hint:
-                                    'Press Tab to reach shortcut instructions, use arrow keys inside lists, Shift plus arrows to move between groups, or Escape to exit.',
+                                label: context.l10n.accessibilityDialogLabel,
+                                hint: context.l10n.accessibilityDialogHint,
                                 explicitChildNodes: true,
                                 child: Scrollbar(
                                   controller: _scrollController,
@@ -699,35 +731,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     });
   }
 
-  String? _stepLabel(AccessibilityStepEntry entry) {
-    final l10n = context.l10n;
-    switch (entry.kind) {
-      case AccessibilityStepKind.root:
-        return 'Accessibility actions';
-      case AccessibilityStepKind.contactPicker:
-        return 'Choose a contact';
-      case AccessibilityStepKind.composer:
-        return l10n.chatComposerMessageHint;
-      case AccessibilityStepKind.unread:
-        return 'Unread conversations';
-      case AccessibilityStepKind.invites:
-        return 'Pending invites';
-      case AccessibilityStepKind.newContact:
-        return 'Start a new address';
-      case AccessibilityStepKind.chatMessages:
-        final name = entry.recipients.isNotEmpty
-            ? entry.recipients.first.displayName
-            : '';
-        return name.isNotEmpty ? 'Messages with $name' : 'Messages';
-      case AccessibilityStepKind.conversation:
-        final conversationName = entry.recipients.isNotEmpty
-            ? entry.recipients.first.displayName
-            : '';
-        return conversationName.isNotEmpty
-            ? 'Conversation with $conversationName'
-            : 'Conversation';
-    }
-  }
+  String? _stepLabel(AccessibilityStepEntry entry) =>
+      _stepLabelFor(context, entry);
 }
 
 bool _isTextInputFocused() {
@@ -1046,10 +1051,10 @@ class _AccessibilityActionContent extends StatelessWidget {
         else if (!isConversation && !hasSections && !hasNewContact)
           SizedBox(
             height: rootListHeight,
-            child: const FocusTraversalOrder(
+            child: FocusTraversalOrder(
               order: sectionsOrder,
               child: Center(
-                child: Text('No actions available right now'),
+                child: Text(context.l10n.accessibilityNoActionsAvailable),
               ),
             ),
           ),
@@ -1079,31 +1084,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     AccessibilityStepEntry entry,
     BuildContext context,
   ) {
-    final l10n = context.l10n;
-    switch (entry.kind) {
-      case AccessibilityStepKind.root:
-        return 'Accessibility actions';
-      case AccessibilityStepKind.contactPicker:
-        return 'Choose a contact';
-      case AccessibilityStepKind.composer:
-        return l10n.chatComposerMessageHint;
-      case AccessibilityStepKind.unread:
-        return 'Unread conversations';
-      case AccessibilityStepKind.invites:
-        return 'Pending invites';
-      case AccessibilityStepKind.newContact:
-        return 'Start a new address';
-      case AccessibilityStepKind.chatMessages:
-        final name = entry.recipients.isNotEmpty
-            ? entry.recipients.first.displayName
-            : 'Messages';
-        return 'Messages with $name';
-      case AccessibilityStepKind.conversation:
-        final name = entry.recipients.isNotEmpty
-            ? entry.recipients.first.displayName
-            : 'Conversation';
-        return 'Conversation with $name';
-    }
+    return _stepLabelFor(context, entry);
   }
 
   List<String> _breadcrumbLabels(
@@ -1252,8 +1233,8 @@ class _BreadcrumbChip extends StatelessWidget {
           return Semantics(
             button: true,
             focusable: true,
-            label:
-                'Step ${index + 1} of $total: $label. Activate to jump to this step.',
+            label: context.l10n
+                .accessibilityBreadcrumbLabel(index + 1, total, label),
             child: AnimatedContainer(
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
@@ -1345,51 +1326,52 @@ class _KeyboardShortcutLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final platformShortcut = findActionShortcut(Theme.of(context).platform);
     final entries = [
       _ShortcutLegendEntry(
-        label: 'Open menu',
+        label: l10n.accessibilityShortcutOpenMenu,
         shortcut: platformShortcut,
         focusNode: firstEntryFocusNode,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Back a step or close',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutBack,
         shortcut: escapeShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Next focus target',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutNextFocus,
         shortcut: _nextFocusShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Previous focus target',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutPreviousFocus,
         shortcut: _previousFocusShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Activate item',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutActivateItem,
         shortcut: _activateShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Next item',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutNextItem,
         shortcut: _nextItemShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Previous item',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutPreviousItem,
         shortcut: _previousItemShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Next group',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutNextGroup,
         shortcut: _nextGroupShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Previous group',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutPreviousGroup,
         shortcut: _previousGroupShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'First item',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutFirstItem,
         shortcut: _firstItemShortcut,
       ),
-      const _ShortcutLegendEntry(
-        label: 'Last item',
+      _ShortcutLegendEntry(
+        label: l10n.accessibilityShortcutLastItem,
         shortcut: _lastItemShortcut,
       ),
     ];
@@ -1420,7 +1402,7 @@ class _KeyboardShortcutLegend extends StatelessWidget {
                       Semantics(
                         header: true,
                         child: Text(
-                          'Keyboard shortcuts',
+                          l10n.accessibilityKeyboardShortcutsTitle,
                           style: context.textTheme.small.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -1472,7 +1454,8 @@ class _ShortcutLegendEntry extends StatelessWidget {
           final borderColor = hasFocus ? colors.primary : colors.border;
           final borderWidth = hasFocus ? 2.5 : 1.0;
           return Semantics(
-            label: 'Keyboard shortcut: $description',
+            label: context.l10n
+                .accessibilityKeyboardShortcutAnnouncement(description),
             focusable: true,
             readOnly: true,
             child: AnimatedContainer(
@@ -1531,7 +1514,7 @@ class _ComposerSection extends StatelessWidget {
                 onChanged: (value) => context
                     .read<AccessibilityActionBloc>()
                     .add(AccessibilityComposerChanged(value)),
-                hintText: 'Type a message',
+                hintText: context.l10n.accessibilityComposerPlaceholder,
                 minLines: 3,
                 maxLines: 5,
                 enabled: !state.busy,
@@ -1550,9 +1533,10 @@ class _ComposerSection extends StatelessWidget {
                   children: state.recipients
                       .map(
                         (recipient) => Semantics(
-                          label: 'Recipient ${recipient.displayName}',
+                          label: context.l10n.accessibilityRecipientLabel(
+                              recipient.displayName),
                           button: true,
-                          hint: 'Press backspace or delete to remove',
+                          hint: context.l10n.accessibilityRecipientRemoveHint,
                           child: InputChip(
                             label: Text(recipient.displayName),
                             onDeleted: () =>
@@ -1608,16 +1592,16 @@ class _ActionButtonsGroup extends StatelessWidget {
             final isNarrow = MediaQuery.sizeOf(context).width < 460;
             final saveButton = ShadButton.outline(
               onPressed: saveEnabled ? onSave : null,
-              child: const Text('Save draft'),
+              child: Text(context.l10n.draftSave),
             );
             final sendButton = ShadButton(
               onPressed: sendEnabled ? onSend : null,
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Send'),
-                  SizedBox(width: 8),
-                  ShortcutHint(
+                  Text(context.l10n.commonSend),
+                  const SizedBox(width: 8),
+                  const ShortcutHint(
                     shortcut: _activateShortcut,
                     dense: true,
                   ),
@@ -1642,8 +1626,8 @@ class _ActionButtonsGroup extends StatelessWidget {
                   );
             return Semantics(
               container: true,
-              label: 'Message actions',
-              hint: 'Save as draft or send this message',
+              label: context.l10n.accessibilityMessageActionsLabel,
+              hint: context.l10n.accessibilityMessageActionsHint,
               child: AnimatedContainer(
                 duration: baseAnimationDuration,
                 padding: const EdgeInsets.all(10),
@@ -1688,12 +1672,12 @@ class _NewContactSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _AccessibilityTextField(
-              label: 'Contact address',
+              label: context.l10n.accessibilityNewContactLabel,
               text: state.newContactInput,
               onChanged: (value) => locate<AccessibilityActionBloc>().add(
                 AccessibilityNewContactChanged(value),
               ),
-              hintText: 'someone@example.com',
+              hintText: context.l10n.accessibilityNewContactHint,
               enabled: !state.busy,
               focusNode: focusNode,
               autofocus: true,
@@ -1709,8 +1693,8 @@ class _NewContactSection extends StatelessWidget {
                   container: true,
                   button: true,
                   enabled: canSubmit,
-                  label: 'Start chat',
-                  hint: 'Submit this address to start a conversation.',
+                  label: context.l10n.accessibilityStartChat,
+                  hint: context.l10n.accessibilityStartChatHint,
                   child: AnimatedContainer(
                     duration: baseAnimationDuration,
                     padding: const EdgeInsets.all(8),
@@ -1735,7 +1719,7 @@ class _NewContactSection extends StatelessWidget {
                                   ),
                                 )
                             : null,
-                        child: const Text('Start chat'),
+                        child: Text(context.l10n.accessibilityStartChat),
                       ),
                     ),
                   ),
@@ -1851,8 +1835,7 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
         Semantics(
           textField: true,
           label: widget.label,
-          hint:
-              'Enter text. Use Tab to move forward or Escape to go back or close the menu.',
+          hint: context.l10n.accessibilityTextFieldHint,
           child: AnimatedContainer(
             duration: baseAnimationDuration,
             decoration: BoxDecoration(
@@ -2021,11 +2004,16 @@ class _MessageCarouselState extends State<_MessageCarousel> {
     final attachmentLabel = currentItem?.attachmentLabel;
     final rawBody = (currentMessage?.body ?? '').trim();
     final positionLabel = hasItems
-        ? 'Message ${clampedIndex + 1} of ${items.length}'
-        : 'No messages';
+        ? context.l10n.accessibilityMessagePosition(
+            clampedIndex + 1,
+            items.length,
+          )
+        : context.l10n.accessibilityNoMessages;
     final metadataValue = showMetadata && senderLabel.isNotEmpty
-        ? 'From $senderLabel'
-            '${timestampLabel.isNotEmpty ? ' at $timestampLabel' : ''}'
+        ? (timestampLabel.isNotEmpty
+            ? context.l10n
+                .accessibilityMessageMetadata(senderLabel, timestampLabel)
+            : context.l10n.accessibilityMessageFrom(senderLabel))
         : null;
     final borderColor = hasFocus ? scheme.primary : scheme.border;
     final borderWidth = hasFocus ? 3.0 : 1.0;
@@ -2047,8 +2035,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
         focusable: true,
         label: positionLabel,
         value: metadataValue,
-        hint:
-            'Use arrow keys to move between messages. Shift plus arrows switches groups. Press Escape to exit.',
+        hint: context.l10n.accessibilityMessageNavigationHint,
         child: ClipRRect(
           borderRadius: borderRadius,
           child: AnimatedContainer(
@@ -2082,10 +2069,8 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 6),
                       child: Text(
-                        [
-                          'From $senderLabel',
-                          if (timestampLabel.isNotEmpty) timestampLabel,
-                        ].join(' • '),
+                        metadataValue ??
+                            context.l10n.accessibilityMessageFrom(senderLabel),
                         style:
                             (textTheme.bodySmall ?? const TextStyle()).copyWith(
                           color: scheme.mutedForeground,
@@ -2106,7 +2091,8 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                     ),
                   if (attachment != null)
                     Semantics(
-                      label: attachmentLabel ?? 'Attachment',
+                      label: attachmentLabel ??
+                          context.l10n.accessibilityAttachmentGeneric,
                       child: ChatAttachmentPreview(
                         metadataFuture:
                             Future<FileMetadataData?>.value(attachment),
@@ -2126,7 +2112,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                       attachment == null &&
                       (attachmentLabel == null || attachmentLabel.isEmpty))
                     Text(
-                      'No message content',
+                      context.l10n.accessibilityMessageNoContent,
                       style:
                           (textTheme.bodyMedium ?? const TextStyle()).copyWith(
                         color: scheme.mutedForeground,
@@ -2222,13 +2208,17 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         sectionIndex < widget.sections.length;
         sectionIndex++) {
       final section = widget.sections[sectionIndex];
-      final sectionLabel = section.title ?? 'Actions';
+      final sectionLabel =
+          section.title ?? context.l10n.accessibilityActionsTitle;
       final isDuplicateTitle =
           section.title != null && section.title == widget.headerLabel;
       children.add(
         Semantics(
           container: true,
-          label: '$sectionLabel section with ${section.items.length} items',
+          label: context.l10n.accessibilitySectionSummary(
+            sectionLabel,
+            section.items.length,
+          ),
           child: section.title != null && !isDuplicateTitle
               ? Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -2290,9 +2280,8 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         final borderWidth = _hasFocusedItem ? 3.0 : 1.0;
         return Semantics(
           container: true,
-          label: 'Accessibility action list with ${_itemNodes.length} items',
-          hint:
-              'Use arrow keys to move, Shift plus arrows to switch groups, Home or End to jump, Enter to activate, Escape to exit.',
+          label: context.l10n.accessibilityActionListLabel(_itemNodes.length),
+          hint: context.l10n.accessibilityActionListHint,
           explicitChildNodes: true,
           child: AnimatedContainer(
             duration: baseAnimationDuration,
@@ -2499,7 +2488,11 @@ class _AccessibilityActionTile extends StatelessWidget {
         item.highlight ? scheme.primary.withValues(alpha: 0.08) : scheme.card;
     final foreground =
         item.destructive ? scheme.destructive : scheme.foreground;
-    final positionLabel = 'Item ${index + 1} of $totalCount in $sectionLabel';
+    final positionLabel = context.l10n.accessibilityActionItemPosition(
+      index + 1,
+      totalCount,
+      sectionLabel,
+    );
     final semanticsLabel = [
       item.label,
       if (item.description != null && item.description!.isNotEmpty)
@@ -2529,10 +2522,10 @@ class _AccessibilityActionTile extends StatelessWidget {
             value: positionLabel,
             onTap: isReadOnly || item.disabled ? null : onTap,
             hint: isReadOnly
-                ? 'Use arrow keys to move through the list'
+                ? context.l10n.accessibilityActionReadOnlyHint
                 : item.disabled
                     ? null
-                    : 'Press Enter to activate',
+                    : context.l10n.accessibilityActionActivateHint,
             child: AnimatedContainer(
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
@@ -2615,10 +2608,10 @@ class _AccessibilityActionTile extends StatelessWidget {
                         if (onDismiss != null) ...[
                           const SizedBox(width: 8),
                           AxiTooltip(
-                            builder: (_) => const Text('Dismiss'),
+                            builder: (_) => Text(context.l10n.commonDismiss),
                             child: Semantics(
                               button: true,
-                              label: 'Dismiss highlight',
+                              label: context.l10n.accessibilityDismissHighlight,
                               child: IconButton(
                                 icon: const Icon(
                                   Icons.notifications_off_outlined,

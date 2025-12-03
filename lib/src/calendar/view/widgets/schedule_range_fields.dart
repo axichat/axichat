@@ -45,7 +45,7 @@ class ScheduleRangeFields extends StatelessWidget {
           onChanged: onStartChanged,
           showTimeSelectors: showTimeSelectors,
           minDate: minDate,
-          maxDate: end ?? maxDate,
+          maxDate: maxDate,
         );
         final Widget endField = _ScheduleField(
           label: endLabel,

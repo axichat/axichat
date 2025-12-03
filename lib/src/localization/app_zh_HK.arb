@@ -398,6 +398,171 @@
   "accessibilityStartChatHint": "提交此地址以開始對話。",
   "accessibilityMessagesEmpty": "暫時沒有訊息",
   "accessibilityMessageNoContent": "沒有訊息內容",
+  "accessibilityActionsTitle": "操作",
+  "accessibilityReadNewMessages": "閱讀新訊息",
+  "accessibilityUnreadSummaryDescription": "專注於有未讀訊息的對話",
+  "accessibilityStartNewChat": "開始新的聊天",
+  "accessibilityStartNewChatDescription": "選擇聯絡人或輸入地址",
+  "accessibilityInvitesTitle": "邀請",
+  "accessibilityPendingInvites": "待處理邀請",
+  "accessibilityAcceptInvite": "接受邀請",
+  "accessibilityInviteAccepted": "已接受邀請",
+  "accessibilityInviteDismissed": "已拒絕邀請",
+  "accessibilityInviteUpdateFailed": "無法更新邀請",
+  "accessibilityUnreadEmpty": "沒有未讀對話",
+  "accessibilityInvitesEmpty": "沒有待處理的邀請",
+  "accessibilityMessagesTitle": "訊息",
+  "accessibilityNoConversationSelected": "未選擇對話",
+  "accessibilityMessagesWithContact": "{name} 的訊息",
+  "@accessibilityMessagesWithContact": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityMessageLabel": "{sender} 於 {timestamp}：{body}",
+  "@accessibilityMessageLabel": {
+    "placeholders": {
+      "sender": {},
+      "timestamp": {},
+      "body": {}
+    }
+  },
+  "accessibilityMessageSent": "訊息已傳送。",
+  "accessibilityDiscardWarning": "再次按下 Escape 以捨棄訊息並關閉此步驟。",
+  "accessibilityDraftLoaded": "草稿已載入。按 Escape 離開或儲存以保留變更。",
+  "accessibilityDraftLabel": "草稿 {id}",
+  "@accessibilityDraftLabel": {
+    "placeholders": {
+      "id": {}
+    }
+  },
+  "accessibilityDraftLabelWithRecipients": "給 {recipients} 的草稿",
+  "@accessibilityDraftLabelWithRecipients": {
+    "placeholders": {
+      "recipients": {}
+    }
+  },
+  "accessibilityDraftPreview": "{recipients} — {preview}",
+  "@accessibilityDraftPreview": {
+    "placeholders": {
+      "recipients": {},
+      "preview": {}
+    }
+  },
+  "accessibilityIncomingMessageStatus": "來自 {sender} 的新訊息，時間 {time}",
+  "@accessibilityIncomingMessageStatus": {
+    "placeholders": {
+      "sender": {},
+      "time": {}
+    }
+  },
+  "accessibilityAttachmentWithName": "附件：{filename}",
+  "@accessibilityAttachmentWithName": {
+    "placeholders": {
+      "filename": {}
+    }
+  },
+  "accessibilityAttachmentGeneric": "附件",
+  "accessibilityUploadAvailable": "可用的上傳",
+  "accessibilityUnknownContact": "未知聯絡人",
+  "accessibilityChooseContact": "選擇聯絡人",
+  "accessibilityUnreadConversations": "未讀對話",
+  "accessibilityStartNewAddress": "輸入新地址",
+  "accessibilityConversationWith": "與 {name} 的對話",
+  "@accessibilityConversationWith": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityConversationLabel": "對話",
+  "accessibilityDialogLabel": "無障礙操作對話框",
+  "accessibilityDialogHint": "按 Tab 查看捷徑說明，在清單中使用方向鍵，按住 Shift 加方向鍵切換群組，或按 Escape 離開。",
+  "accessibilityNoActionsAvailable": "目前沒有可用的操作",
+  "accessibilityBreadcrumbLabel": "第 {position}/{total} 步：{label}。啟用以跳至此步驟。",
+  "@accessibilityBreadcrumbLabel": {
+    "placeholders": {
+      "position": {},
+      "total": {},
+      "label": {}
+    }
+  },
+  "accessibilityShortcutOpenMenu": "開啟選單",
+  "accessibilityShortcutBack": "後退一步或關閉",
+  "accessibilityShortcutNextFocus": "下一個焦點目標",
+  "accessibilityShortcutPreviousFocus": "上一個焦點目標",
+  "accessibilityShortcutActivateItem": "啟用項目",
+  "accessibilityShortcutNextItem": "下一個項目",
+  "accessibilityShortcutPreviousItem": "上一個項目",
+  "accessibilityShortcutNextGroup": "下一個群組",
+  "accessibilityShortcutPreviousGroup": "上一個群組",
+  "accessibilityShortcutFirstItem": "第一個項目",
+  "accessibilityShortcutLastItem": "最後一個項目",
+  "accessibilityKeyboardShortcutsTitle": "鍵盤捷徑",
+  "accessibilityKeyboardShortcutAnnouncement": "鍵盤捷徑：{description}",
+  "@accessibilityKeyboardShortcutAnnouncement": {
+    "placeholders": {
+      "description": {}
+    }
+  },
+  "accessibilityTextFieldHint": "輸入文字。按 Tab 前進，或按 Escape 返回或關閉選單。",
+  "accessibilityComposerPlaceholder": "輸入訊息",
+  "accessibilityRecipientLabel": "收件人 {name}",
+  "@accessibilityRecipientLabel": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accessibilityRecipientRemoveHint": "按退格或刪除鍵移除",
+  "accessibilityMessageActionsLabel": "訊息操作",
+  "accessibilityMessageActionsHint": "儲存為草稿或傳送此訊息",
+  "accessibilityMessagePosition": "第 {position} 則訊息，共 {total} 則",
+  "@accessibilityMessagePosition": {
+    "placeholders": {
+      "position": {},
+      "total": {}
+    }
+  },
+  "accessibilityNoMessages": "沒有訊息",
+  "accessibilityMessageMetadata": "來自 {sender} 於 {timestamp}",
+  "@accessibilityMessageMetadata": {
+    "placeholders": {
+      "sender": {},
+      "timestamp": {}
+    }
+  },
+  "accessibilityMessageFrom": "來自 {sender}",
+  "@accessibilityMessageFrom": {
+    "placeholders": {
+      "sender": {}
+    }
+  },
+  "accessibilityMessageNavigationHint": "使用方向鍵在訊息間移動。按住 Shift 加方向鍵切換群組。按 Escape 離開。",
+  "accessibilitySectionSummary": "{section} 區塊，包含 {count} 項",
+  "@accessibilitySectionSummary": {
+    "placeholders": {
+      "section": {},
+      "count": {}
+    }
+  },
+  "accessibilityActionListLabel": "操作清單，共 {count} 項",
+  "@accessibilityActionListLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "accessibilityActionListHint": "使用方向鍵移動，按住 Shift 加方向鍵切換群組，Home/End 跳轉，Enter 啟用，Escape 離開。",
+  "accessibilityActionItemPosition": "{section} 中的第 {position} 個項目，共 {total} 個",
+  "@accessibilityActionItemPosition": {
+    "placeholders": {
+      "position": {},
+      "total": {},
+      "section": {}
+    }
+  },
+  "accessibilityActionReadOnlyHint": "使用方向鍵瀏覽清單",
+  "accessibilityActionActivateHint": "按 Enter 啟用",
+  "accessibilityDismissHighlight": "關閉提示",
+  "accessibilityNeedsAttention": "需要注意",
   "profileTitle": "個人資料",
   "profileJidDescription": "這是你的 Jabber ID，由使用者名稱與網域組成，是你在 XMPP 網路上的唯一地址。",
   "profileResourceDescription": "這是你的 XMPP 資源。每台裝置都有自己的資源，因此手機與桌機的在線狀態可能不同。",
@@ -410,5 +575,331 @@
   "termsAgreementTerms": "條款",
   "termsAgreementAnd": " 和 ",
   "termsAgreementPrivacy": "隱私權政策",
-  "termsAgreementError": "你必須接受條款與條件"
+  "termsAgreementError": "你必須接受條款與條件",
+  "commonContinue": "繼續",
+  "commonDelete": "刪除",
+  "commonSave": "儲存",
+  "commonRetry": "重試",
+  "commonRemove": "移除",
+  "commonSend": "傳送",
+  "commonDismiss": "關閉",
+  "commonSend": "傳送",
+  "commonDismiss": "關閉",
+  "settingsSectionImportant": "重要",
+  "settingsSectionAppearance": "外觀",
+  "settingsLanguage": "語言",
+  "settingsThemeMode": "主題模式",
+  "settingsThemeModeSystem": "系統",
+  "settingsThemeModeLight": "淺色",
+  "settingsThemeModeDark": "深色",
+  "settingsColorScheme": "配色方案",
+  "settingsColorfulAvatars": "彩色頭像",
+  "settingsColorfulAvatarsDescription": "為每個頭像產生不同的背景顏色。",
+  "settingsLowMotion": "低動效",
+  "settingsLowMotionDescription": "停用大部分動畫，更適合較慢的裝置。",
+  "settingsSectionChats": "聊天",
+  "settingsMessageStorageTitle": "訊息儲存",
+  "settingsMessageStorageSubtitle": "本地會保留裝置副本；僅伺服器模式會查詢封存。",
+  "settingsMessageStorageLocal": "本地",
+  "settingsMessageStorageServerOnly": "僅伺服器",
+  "settingsMuteNotifications": "靜音通知",
+  "settingsMuteNotificationsDescription": "停止接收訊息通知。",
+  "settingsReadReceipts": "傳送已讀回條",
+  "settingsTypingIndicators": "傳送輸入指示",
+  "settingsTypingIndicatorsDescription": "讓聊天中的其他人看到你正在輸入。",
+  "settingsShareTokenFooter": "包含分享代幣頁腳",
+  "settingsShareTokenFooterDescription": "有助於保持多收件人郵件執行緒與附件關聯。關閉後可能造成執行緒中斷。",
+  "authCustomServerTitle": "自訂伺服器",
+  "authCustomServerDescription": "覆寫 XMPP/SMTP 端點或啟用 DNS 查詢。欄位留空以保留預設值。",
+  "authCustomServerDomainOrIp": "網域或 IP",
+  "authCustomServerXmppLabel": "XMPP",
+  "authCustomServerSmtpLabel": "SMTP",
+  "authCustomServerUseDns": "使用 DNS",
+  "authCustomServerUseSrv": "使用 SRV",
+  "authCustomServerRequireDnssec": "需要 DNSSEC",
+  "authCustomServerXmppHostPlaceholder": "XMPP 主機（可選）",
+  "authCustomServerPortPlaceholder": "連接埠",
+  "authCustomServerSmtpHostPlaceholder": "SMTP 主機（可選）",
+  "authCustomServerApiPortPlaceholder": "API 連接埠",
+  "authCustomServerReset": "重設為 axi.im",
+  "authCustomServerOpenSettings": "開啟自訂伺服器設定",
+  "authCustomServerAdvancedHint": "進階伺服器選項會保持隱藏，直到你點擊使用者名稱的後綴。",
+  "authUnregisterTitle": "註銷",
+  "authUnregisterProgressLabel": "正在等待刪除帳戶",
+  "authPasswordPlaceholder": "密碼",
+  "authPasswordCurrentPlaceholder": "舊密碼",
+  "authPasswordNewPlaceholder": "新密碼",
+  "authPasswordConfirmNewPlaceholder": "確認新密碼",
+  "authChangePasswordProgressLabel": "正在等待變更密碼",
+  "authLogoutTitle": "登出",
+  "authLogoutNormal": "登出",
+  "authLogoutNormalDescription": "登出此帳戶。",
+  "authLogoutBurn": "銷毀帳戶",
+  "authLogoutBurnDescription": "登出並清除此帳戶的本機資料。",
+  "chatAttachmentBlockedTitle": "附件已被阻擋",
+  "chatAttachmentBlockedDescription": "僅在你信任未知聯絡人時才載入附件。你同意後我們才會擷取。",
+  "chatAttachmentLoad": "載入附件",
+  "chatAttachmentUnavailable": "附件無法使用",
+  "chatAttachmentSendFailed": "無法傳送附件。",
+  "chatAttachmentRetryUpload": "重試上傳",
+  "chatAttachmentRemoveAttachment": "移除附件",
+  "chatAttachmentStatusUploading": "正在上傳附件…",
+  "chatAttachmentStatusQueued": "等待傳送",
+  "chatAttachmentStatusFailed": "上傳失敗",
+  "chatAttachmentLoading": "正在載入附件",
+  "chatAttachmentLoadingProgress": "正在載入 {percent}",
+  "@chatAttachmentLoadingProgress": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "chatAttachmentDownload": "下載附件",
+  "chatAttachmentUnavailableDevice": "此裝置上已無法取得該附件",
+  "chatAttachmentInvalidLink": "無效的附件連結",
+  "chatAttachmentOpenFailed": "無法開啟 {target}",
+  "@chatAttachmentOpenFailed": {
+    "placeholders": {
+      "target": {}
+    }
+  },
+  "chatAttachmentUnknownSize": "大小未知",
+  "chatAttachmentErrorTooltip": "{message}（{fileName}）",
+  "@chatAttachmentErrorTooltip": {
+    "placeholders": {
+      "message": {},
+      "fileName": {}
+    }
+  },
+  "chatAttachmentMenuHint": "開啟選單以取得更多動作。",
+  "accessibilityActionsLabel": "無障礙操作",
+  "accessibilityActionsShortcutTooltip": "無障礙操作（{shortcut}）",
+  "@accessibilityActionsShortcutTooltip": {
+    "placeholders": {
+      "shortcut": {}
+    }
+  },
+  "shorebirdUpdateAvailable": "有可用更新：請登出並重新啟動應用程式。",
+  "calendarEditTaskTitle": "編輯任務",
+  "calendarDateTimeLabel": "日期與時間",
+  "calendarSelectDate": "選擇日期",
+  "calendarSelectTime": "選擇時間",
+  "calendarDurationLabel": "時長",
+  "calendarSelectDuration": "選擇時長",
+  "calendarAddToCriticalPath": "新增到關鍵路徑",
+  "calendarNoCriticalPathMembership": "不在任何關鍵路徑中",
+  "calendarGuestTitle": "訪客行事曆",
+  "calendarGuestBanner": "訪客模式 - 不同步",
+  "calendarGuestModeLabel": "訪客模式",
+  "calendarGuestModeDescription": "登入以同步任務並啟用提醒。",
+  "calendarNoTasksForDate": "此日期沒有任務",
+  "calendarTapToCreateTask": "點擊 + 建立新任務",
+  "calendarQuickStats": "快速統計",
+  "calendarDueReminders": "到期提醒",
+  "calendarNextTaskLabel": "下一個任務",
+  "calendarNone": "無",
+  "calendarViewLabel": "檢視",
+  "calendarViewDay": "日",
+  "calendarViewWeek": "週",
+  "calendarViewMonth": "月",
+  "calendarPreviousDate": "前一日期",
+  "calendarNextDate": "下一日期",
+  "calendarPreviousUnit": "上一個{unit}",
+  "@calendarPreviousUnit": {
+    "placeholders": {
+      "unit": {}
+    }
+  },
+  "calendarNextUnit": "下一個{unit}",
+  "@calendarNextUnit": {
+    "placeholders": {
+      "unit": {}
+    }
+  },
+  "calendarToday": "今天",
+  "calendarUndo": "復原",
+  "calendarRedo": "重做",
+  "calendarOpeningCreator": "正在開啟任務建立器...",
+  "calendarWeekOf": "本週 {date}",
+  "@calendarWeekOf": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "calendarStatusCompleted": "已完成",
+  "calendarStatusOverdue": "已過期",
+  "calendarStatusDueSoon": "即將到期",
+  "calendarStatusPending": "待處理",
+  "calendarTaskCompletedMessage": "任務已完成！",
+  "calendarTaskUpdatedMessage": "任務已更新！",
+  "calendarErrorTitle": "錯誤",
+  "calendarErrorTaskNotFound": "找不到任務",
+  "calendarErrorTitleEmpty": "標題不能為空",
+  "calendarErrorTitleTooLong": "標題過長",
+  "calendarErrorDescriptionTooLong": "描述過長",
+  "calendarErrorInputInvalid": "輸入無效",
+  "calendarErrorAddFailed": "新增任務失敗",
+  "calendarErrorUpdateFailed": "更新任務失敗",
+  "calendarErrorDeleteFailed": "刪除任務失敗",
+  "calendarErrorNetwork": "網路錯誤",
+  "calendarErrorStorage": "儲存錯誤",
+  "calendarErrorUnknown": "未知錯誤",
+  "commonConfirm": "確認",
+  "commonOpen": "開啟",
+  "commonSelect": "選擇",
+  "commonExport": "匯出",
+  "commonFavorite": "收藏",
+  "commonUnfavorite": "取消收藏",
+  "commonArchive": "封存",
+  "commonUnarchive": "取消封存",
+  "commonShow": "顯示",
+  "commonHide": "隱藏",
+  "blocklistBlockUser": "封鎖用戶",
+  "blocklistWaitingForUnblock": "等待解除封鎖",
+  "blocklistUnblockAll": "全部解除封鎖",
+  "blocklistUnblock": "解除封鎖",
+  "blocklistBlock": "封鎖",
+  "blocklistAddTooltip": "加入封鎖清單",
+  "mucChangeNickname": "更改暱稱",
+  "mucChangeNicknameWithCurrent": "更改暱稱（目前：{current}）",
+  "@mucChangeNicknameWithCurrent": {
+    "placeholders": {
+      "current": {}
+    }
+  },
+  "mucLeaveRoom": "離開聊天室",
+  "mucNoMembers": "暫無成員",
+  "mucInviteUsers": "邀請用戶",
+  "mucSendInvites": "發送邀請",
+  "mucChangeNicknameTitle": "更改暱稱",
+  "mucEnterNicknamePlaceholder": "輸入暱稱",
+  "mucUpdateNickname": "更新",
+  "mucMembersTitle": "成員",
+  "mucInviteUser": "邀請用戶",
+  "mucSectionOwners": "擁有者",
+  "mucSectionAdmins": "管理員",
+  "mucSectionModerators": "版主",
+  "mucSectionMembers": "成員",
+  "mucSectionVisitors": "訪客",
+  "mucRoleOwner": "擁有者",
+  "mucRoleAdmin": "管理員",
+  "mucRoleMember": "成員",
+  "mucRoleVisitor": "訪客",
+  "mucRoleModerator": "版主",
+  "mucActionKick": "移出",
+  "mucActionBan": "封禁",
+  "mucActionMakeMember": "設為成員",
+  "mucActionMakeAdmin": "設為管理員",
+  "mucActionMakeOwner": "設為擁有者",
+  "mucActionGrantModerator": "授予版主",
+  "mucActionRevokeModerator": "取消版主",
+  "chatsEmptyList": "暫時沒有聊天",
+  "chatsDeleteConfirmMessage": "刪除聊天：{chatTitle}",
+  "@chatsDeleteConfirmMessage": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatsDeleteMessagesOption": "永久刪除訊息",
+  "chatsDeleteSuccess": "聊天已刪除",
+  "chatsExportNoContent": "沒有可匯出的文字內容",
+  "chatsExportShareText": "來自 Axichat 的聊天匯出",
+  "chatsExportShareSubject": "與 {chatTitle} 的聊天",
+  "@chatsExportShareSubject": {
+    "placeholders": {
+      "chatTitle": {}
+    }
+  },
+  "chatsExportSuccess": "聊天已匯出",
+  "chatsExportFailure": "無法匯出聊天",
+  "chatsArchivedRestored": "聊天已還原",
+  "chatsArchivedHint": "聊天已封存（個人檔案 → 已封存聊天）",
+  "chatsVisibleNotice": "聊天已重新可見",
+  "chatsHiddenNotice": "聊天已隱藏（使用篩選顯示）",
+  "chatsUnreadLabel": "{count, plural, =0 {沒有未讀訊息} other {# 則未讀訊息}}",
+  "@chatsUnreadLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatsSemanticsUnselectHint": "點擊取消選取聊天",
+  "chatsSemanticsSelectHint": "點擊選取聊天",
+  "chatsSemanticsOpenHint": "點擊開啟聊天",
+  "chatsHideActions": "隱藏聊天操作",
+  "chatsShowActions": "顯示聊天操作",
+  "chatsSelectedLabel": "聊天已選取",
+  "chatsSelectLabel": "選取聊天",
+  "chatsExportFileLabel": "chats",
+  "chatSelectionExportEmptyTitle": "沒有可匯出的訊息",
+  "chatSelectionExportEmptyMessage": "選擇包含文字內容的聊天",
+  "chatSelectionExportShareText": "來自 Axichat 的聊天匯出",
+  "chatSelectionExportShareSubject": "Axichat 聊天匯出",
+  "chatSelectionExportReadyTitle": "匯出完成",
+  "chatSelectionExportReadyMessage": "{count, plural, one {已分享 # 個聊天} other {已分享 # 個聊天}}",
+  "@chatSelectionExportReadyMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatSelectionExportFailedTitle": "匯出失敗",
+  "chatSelectionExportFailedMessage": "無法匯出所選聊天",
+  "chatSelectionDeleteConfirmTitle": "刪除聊天？",
+  "chatSelectionDeleteConfirmMessage": "{count, plural, one {將刪除 1 個聊天及其所有訊息，無法復原。} other {將刪除 # 個聊天及其所有訊息，無法復原。}}",
+  "@chatSelectionDeleteConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "chatsCreateGroupChatTooltip": "建立群組聊天",
+  "chatsRoomLabel": "聊天室",
+  "chatsCreateChatRoomTitle": "建立聊天室",
+  "chatsRoomNamePlaceholder": "名稱",
+  "chatsArchiveTitle": "封存",
+  "chatsArchiveEmpty": "暫無已封存的聊天",
+  "calendarTileNow": "現在：{title}",
+  "@calendarTileNow": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarTileNext": "下一個：{title}",
+  "@calendarTileNext": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarTileNone": "沒有即將進行的任務",
+  "calendarViewDayShort": "日",
+  "calendarViewWeekShort": "週",
+  "calendarViewMonthShort": "月",
+  "calendarShowCompleted": "顯示已完成",
+  "calendarHideCompleted": "隱藏已完成",
+  "rosterAddTooltip": "加入聯絡人",
+  "rosterAddLabel": "聯絡人",
+  "rosterAddTitle": "新增聯絡人",
+  "rosterEmpty": "暫無聯絡人",
+  "rosterCompose": "撰寫",
+  "rosterRemoveConfirm": "將 {jid} 從聯絡人移除？",
+  "@rosterRemoveConfirm": {
+    "placeholders": {
+      "jid": {}
+    }
+  },
+  "rosterInvitesEmpty": "暫無邀請",
+  "rosterRejectInviteConfirm": "拒絕來自 {jid} 的邀請？",
+  "@rosterRejectInviteConfirm": {
+    "placeholders": {
+      "jid": {}
+    }
+  },
+  "rosterAddContactTooltip": "新增聯絡人",
+  "jidInputPlaceholder": "john@axi.im",
+  "jidInputInvalid": "請輸入有效的 JID",
+  "sessionCapabilityChat": "聊天",
+  "sessionCapabilityEmail": "電郵",
+  "sessionCapabilityStatusConnected": "已連線",
+  "sessionCapabilityStatusConnecting": "連線中",
+  "sessionCapabilityStatusError": "錯誤",
+  "sessionCapabilityStatusOffline": "離線",
+  "sessionCapabilityStatusOff": "關閉",
+  "sessionCapabilityStatusSyncing": "同步中"
 }

@@ -81,6 +81,15 @@ final class ChatTypingStarted extends ChatEvent {
   List<Object?> get props => [];
 }
 
+final class _TypingParticipantsUpdated extends ChatEvent {
+  const _TypingParticipantsUpdated(this.participants);
+
+  final List<String> participants;
+
+  @override
+  List<Object?> get props => [participants];
+}
+
 final class ChatMessageSent extends ChatEvent {
   const ChatMessageSent({required this.text});
 

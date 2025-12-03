@@ -15,9 +15,9 @@ class BlocklistAddButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final locate = context.read;
     return AxiDialogFab(
-      tooltip: 'Add to blocklist',
+      tooltip: context.l10n.blocklistAddTooltip,
       iconData: LucideIcons.userX,
-      label: 'Block',
+      label: context.l10n.blocklistBlock,
       dialogBuilder: (context) {
         String jid = '';
         return MultiBlocProvider(

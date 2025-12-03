@@ -1120,6 +1120,253 @@ class AppLocalizationsZh extends AppLocalizations {
   String get accessibilityMessageNoContent => '无消息内容';
 
   @override
+  String get accessibilityActionsTitle => '操作';
+
+  @override
+  String get accessibilityReadNewMessages => '阅读新消息';
+
+  @override
+  String get accessibilityUnreadSummaryDescription => '专注于包含未读消息的会话';
+
+  @override
+  String get accessibilityStartNewChat => '开始新的聊天';
+
+  @override
+  String get accessibilityStartNewChatDescription => '选择联系人或输入地址';
+
+  @override
+  String get accessibilityInvitesTitle => '邀请';
+
+  @override
+  String get accessibilityPendingInvites => '等待中的邀请';
+
+  @override
+  String get accessibilityAcceptInvite => '接受邀请';
+
+  @override
+  String get accessibilityInviteAccepted => '已接受邀请';
+
+  @override
+  String get accessibilityInviteDismissed => '已拒绝邀请';
+
+  @override
+  String get accessibilityInviteUpdateFailed => '无法更新邀请';
+
+  @override
+  String get accessibilityUnreadEmpty => '没有未读会话';
+
+  @override
+  String get accessibilityInvitesEmpty => '没有待处理的邀请';
+
+  @override
+  String get accessibilityMessagesTitle => '消息';
+
+  @override
+  String get accessibilityNoConversationSelected => '未选择会话';
+
+  @override
+  String accessibilityMessagesWithContact(Object name) {
+    return '$name 的消息';
+  }
+
+  @override
+  String accessibilityMessageLabel(
+      Object sender, Object timestamp, Object body) {
+    return '$sender 于 $timestamp：$body';
+  }
+
+  @override
+  String get accessibilityMessageSent => '消息已发送。';
+
+  @override
+  String get accessibilityDiscardWarning => '再次按下 Escape 以放弃消息并关闭此步骤。';
+
+  @override
+  String get accessibilityDraftLoaded => '草稿已加载。按 Escape 退出或保存以保留更改。';
+
+  @override
+  String accessibilityDraftLabel(Object id) {
+    return '草稿 $id';
+  }
+
+  @override
+  String accessibilityDraftLabelWithRecipients(Object recipients) {
+    return '发给 $recipients 的草稿';
+  }
+
+  @override
+  String accessibilityDraftPreview(Object recipients, Object preview) {
+    return '$recipients — $preview';
+  }
+
+  @override
+  String accessibilityIncomingMessageStatus(Object sender, Object time) {
+    return '来自 $sender 的新消息，时间 $time';
+  }
+
+  @override
+  String accessibilityAttachmentWithName(Object filename) {
+    return '附件：$filename';
+  }
+
+  @override
+  String get accessibilityAttachmentGeneric => '附件';
+
+  @override
+  String get accessibilityUploadAvailable => '上传可用';
+
+  @override
+  String get accessibilityUnknownContact => '未知联系人';
+
+  @override
+  String get accessibilityChooseContact => '选择联系人';
+
+  @override
+  String get accessibilityUnreadConversations => '未读会话';
+
+  @override
+  String get accessibilityStartNewAddress => '输入新地址';
+
+  @override
+  String accessibilityConversationWith(Object name) {
+    return '与 $name 的对话';
+  }
+
+  @override
+  String get accessibilityConversationLabel => '对话';
+
+  @override
+  String get accessibilityDialogLabel => '辅助功能操作对话框';
+
+  @override
+  String get accessibilityDialogHint =>
+      '按 Tab 查看快捷键说明，在列表中使用方向键，按住 Shift 加方向键在组之间移动，或按 Escape 退出。';
+
+  @override
+  String get accessibilityNoActionsAvailable => '当前没有可用操作';
+
+  @override
+  String accessibilityBreadcrumbLabel(
+      Object position, Object total, Object label) {
+    return '第 $position/$total 步：$label。激活以跳转到此步骤。';
+  }
+
+  @override
+  String get accessibilityShortcutOpenMenu => '打开菜单';
+
+  @override
+  String get accessibilityShortcutBack => '后退一步或关闭';
+
+  @override
+  String get accessibilityShortcutNextFocus => '下一个焦点目标';
+
+  @override
+  String get accessibilityShortcutPreviousFocus => '上一个焦点目标';
+
+  @override
+  String get accessibilityShortcutActivateItem => '激活项目';
+
+  @override
+  String get accessibilityShortcutNextItem => '下一个项目';
+
+  @override
+  String get accessibilityShortcutPreviousItem => '上一个项目';
+
+  @override
+  String get accessibilityShortcutNextGroup => '下一个分组';
+
+  @override
+  String get accessibilityShortcutPreviousGroup => '上一个分组';
+
+  @override
+  String get accessibilityShortcutFirstItem => '第一个项目';
+
+  @override
+  String get accessibilityShortcutLastItem => '最后一个项目';
+
+  @override
+  String get accessibilityKeyboardShortcutsTitle => '键盘快捷键';
+
+  @override
+  String accessibilityKeyboardShortcutAnnouncement(Object description) {
+    return '键盘快捷键：$description';
+  }
+
+  @override
+  String get accessibilityTextFieldHint => '输入文本。按 Tab 前进，或按 Escape 返回或关闭菜单。';
+
+  @override
+  String get accessibilityComposerPlaceholder => '输入消息';
+
+  @override
+  String accessibilityRecipientLabel(Object name) {
+    return '收件人 $name';
+  }
+
+  @override
+  String get accessibilityRecipientRemoveHint => '按退格或删除键移除';
+
+  @override
+  String get accessibilityMessageActionsLabel => '消息操作';
+
+  @override
+  String get accessibilityMessageActionsHint => '保存为草稿或发送此消息';
+
+  @override
+  String accessibilityMessagePosition(Object position, Object total) {
+    return '第 $position 条消息，共 $total 条';
+  }
+
+  @override
+  String get accessibilityNoMessages => '没有消息';
+
+  @override
+  String accessibilityMessageMetadata(Object sender, Object timestamp) {
+    return '来自 $sender 于 $timestamp';
+  }
+
+  @override
+  String accessibilityMessageFrom(Object sender) {
+    return '来自 $sender';
+  }
+
+  @override
+  String get accessibilityMessageNavigationHint =>
+      '使用方向键在消息间移动。按住 Shift 加方向键切换分组。按 Escape 退出。';
+
+  @override
+  String accessibilitySectionSummary(Object section, Object count) {
+    return '$section 分区，包含 $count 项';
+  }
+
+  @override
+  String accessibilityActionListLabel(Object count) {
+    return '操作列表，共 $count 项';
+  }
+
+  @override
+  String get accessibilityActionListHint =>
+      '使用方向键移动，按住 Shift 加方向键切换分组，Home/End 跳转，Enter 激活，Escape 退出。';
+
+  @override
+  String accessibilityActionItemPosition(
+      Object position, Object total, Object section) {
+    return '$section 中的第 $position 个项目，共 $total 个';
+  }
+
+  @override
+  String get accessibilityActionReadOnlyHint => '使用方向键浏览列表';
+
+  @override
+  String get accessibilityActionActivateHint => '按 Enter 激活';
+
+  @override
+  String get accessibilityDismissHighlight => '关闭提示';
+
+  @override
+  String get accessibilityNeedsAttention => '需要关注';
+
+  @override
   String get profileTitle => '个人资料';
 
   @override
@@ -1159,6 +1406,774 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get termsAgreementError => '你必须接受条款和条件';
+
+  @override
+  String get commonContinue => '继续';
+
+  @override
+  String get commonDelete => '删除';
+
+  @override
+  String get commonSave => '保存';
+
+  @override
+  String get commonRetry => '重试';
+
+  @override
+  String get commonRemove => '移除';
+
+  @override
+  String get commonSend => '发送';
+
+  @override
+  String get commonDismiss => '关闭';
+
+  @override
+  String get settingsSectionImportant => '重要';
+
+  @override
+  String get settingsSectionAppearance => '外观';
+
+  @override
+  String get settingsLanguage => '语言';
+
+  @override
+  String get settingsThemeMode => '主题模式';
+
+  @override
+  String get settingsThemeModeSystem => '系统';
+
+  @override
+  String get settingsThemeModeLight => '浅色';
+
+  @override
+  String get settingsThemeModeDark => '深色';
+
+  @override
+  String get settingsColorScheme => '配色方案';
+
+  @override
+  String get settingsColorfulAvatars => '彩色头像';
+
+  @override
+  String get settingsColorfulAvatarsDescription => '为每个头像生成不同的背景颜色。';
+
+  @override
+  String get settingsLowMotion => '低动效';
+
+  @override
+  String get settingsLowMotionDescription => '禁用大部分动画，更适合性能较慢的设备。';
+
+  @override
+  String get settingsSectionChats => '聊天';
+
+  @override
+  String get settingsMessageStorageTitle => '消息存储';
+
+  @override
+  String get settingsMessageStorageSubtitle => '本地保留设备副本；仅服务器模式从存档查询。';
+
+  @override
+  String get settingsMessageStorageLocal => '本地';
+
+  @override
+  String get settingsMessageStorageServerOnly => '仅服务器';
+
+  @override
+  String get settingsMuteNotifications => '静音通知';
+
+  @override
+  String get settingsMuteNotificationsDescription => '停止接收消息通知。';
+
+  @override
+  String get settingsReadReceipts => '发送已读回执';
+
+  @override
+  String get settingsTypingIndicators => '发送正在输入指示';
+
+  @override
+  String get settingsTypingIndicatorsDescription => '让聊天中的其他人看到你正在输入。';
+
+  @override
+  String get settingsShareTokenFooter => '包含共享令牌页脚';
+
+  @override
+  String get settingsShareTokenFooterDescription =>
+      '有助于保持多收件人邮件线程和附件关联。关闭可能导致线程断裂。';
+
+  @override
+  String get authCustomServerTitle => '自定义服务器';
+
+  @override
+  String get authCustomServerDescription =>
+      '覆盖 XMPP/SMTP 端点或启用 DNS 查询。留空以使用默认值。';
+
+  @override
+  String get authCustomServerDomainOrIp => '域名或 IP';
+
+  @override
+  String get authCustomServerXmppLabel => 'XMPP';
+
+  @override
+  String get authCustomServerSmtpLabel => 'SMTP';
+
+  @override
+  String get authCustomServerUseDns => '使用 DNS';
+
+  @override
+  String get authCustomServerUseSrv => '使用 SRV';
+
+  @override
+  String get authCustomServerRequireDnssec => '需要 DNSSEC';
+
+  @override
+  String get authCustomServerXmppHostPlaceholder => 'XMPP 主机（可选）';
+
+  @override
+  String get authCustomServerPortPlaceholder => '端口';
+
+  @override
+  String get authCustomServerSmtpHostPlaceholder => 'SMTP 主机（可选）';
+
+  @override
+  String get authCustomServerApiPortPlaceholder => 'API 端口';
+
+  @override
+  String get authCustomServerReset => '重置为 axi.im';
+
+  @override
+  String get authCustomServerOpenSettings => '打开自定义服务器设置';
+
+  @override
+  String get authCustomServerAdvancedHint => '高级服务器选项会保持隐藏，直到你点击用户名后缀。';
+
+  @override
+  String get authUnregisterTitle => '注销';
+
+  @override
+  String get authUnregisterProgressLabel => '正在等待删除账户';
+
+  @override
+  String get authPasswordPlaceholder => '密码';
+
+  @override
+  String get authPasswordCurrentPlaceholder => '旧密码';
+
+  @override
+  String get authPasswordNewPlaceholder => '新密码';
+
+  @override
+  String get authPasswordConfirmNewPlaceholder => '确认新密码';
+
+  @override
+  String get authChangePasswordProgressLabel => '正在等待修改密码';
+
+  @override
+  String get authLogoutTitle => '退出登录';
+
+  @override
+  String get authLogoutNormal => '退出登录';
+
+  @override
+  String get authLogoutNormalDescription => '退出此账户。';
+
+  @override
+  String get authLogoutBurn => '销毁账户';
+
+  @override
+  String get authLogoutBurnDescription => '退出并清除此账户的本地数据。';
+
+  @override
+  String get chatAttachmentBlockedTitle => '附件已被阻止';
+
+  @override
+  String get chatAttachmentBlockedDescription => '仅在信任未知联系人时加载附件。你确认后我们才会获取。';
+
+  @override
+  String get chatAttachmentLoad => '加载附件';
+
+  @override
+  String get chatAttachmentUnavailable => '附件不可用';
+
+  @override
+  String get chatAttachmentSendFailed => '无法发送附件。';
+
+  @override
+  String get chatAttachmentRetryUpload => '重试上传';
+
+  @override
+  String get chatAttachmentRemoveAttachment => '移除附件';
+
+  @override
+  String get chatAttachmentStatusUploading => '正在上传附件…';
+
+  @override
+  String get chatAttachmentStatusQueued => '等待发送';
+
+  @override
+  String get chatAttachmentStatusFailed => '上传失败';
+
+  @override
+  String get chatAttachmentLoading => '正在加载附件';
+
+  @override
+  String chatAttachmentLoadingProgress(Object percent) {
+    return '正在加载 $percent';
+  }
+
+  @override
+  String get chatAttachmentDownload => '下载附件';
+
+  @override
+  String get chatAttachmentUnavailableDevice => '此设备上已无法获取该附件';
+
+  @override
+  String get chatAttachmentInvalidLink => '无效的附件链接';
+
+  @override
+  String chatAttachmentOpenFailed(Object target) {
+    return '无法打开 $target';
+  }
+
+  @override
+  String get chatAttachmentUnknownSize => '大小未知';
+
+  @override
+  String chatAttachmentErrorTooltip(Object message, Object fileName) {
+    return '$message（$fileName）';
+  }
+
+  @override
+  String get chatAttachmentMenuHint => '打开菜单以查看更多操作。';
+
+  @override
+  String get accessibilityActionsLabel => '辅助功能操作';
+
+  @override
+  String accessibilityActionsShortcutTooltip(Object shortcut) {
+    return '辅助功能操作（$shortcut）';
+  }
+
+  @override
+  String get shorebirdUpdateAvailable => '有可用更新：请注销并重新启动应用。';
+
+  @override
+  String get calendarEditTaskTitle => '编辑任务';
+
+  @override
+  String get calendarDateTimeLabel => '日期和时间';
+
+  @override
+  String get calendarSelectDate => '选择日期';
+
+  @override
+  String get calendarSelectTime => '选择时间';
+
+  @override
+  String get calendarDurationLabel => '时长';
+
+  @override
+  String get calendarSelectDuration => '选择时长';
+
+  @override
+  String get calendarAddToCriticalPath => '添加到关键路径';
+
+  @override
+  String get calendarNoCriticalPathMembership => '不在任何关键路径中';
+
+  @override
+  String get calendarGuestTitle => '访客日历';
+
+  @override
+  String get calendarGuestBanner => '访客模式 - 不同步';
+
+  @override
+  String get calendarGuestModeLabel => '访客模式';
+
+  @override
+  String get calendarGuestModeDescription => '登录以同步任务并启用提醒。';
+
+  @override
+  String get calendarNoTasksForDate => '此日期没有任务';
+
+  @override
+  String get calendarTapToCreateTask => '点击 + 创建新任务';
+
+  @override
+  String get calendarQuickStats => '快速统计';
+
+  @override
+  String get calendarDueReminders => '到期提醒';
+
+  @override
+  String get calendarNextTaskLabel => '下一项任务';
+
+  @override
+  String get calendarNone => '无';
+
+  @override
+  String get calendarViewLabel => '视图';
+
+  @override
+  String get calendarViewDay => '日';
+
+  @override
+  String get calendarViewWeek => '周';
+
+  @override
+  String get calendarViewMonth => '月';
+
+  @override
+  String get calendarPreviousDate => '上一日期';
+
+  @override
+  String get calendarNextDate => '下一日期';
+
+  @override
+  String calendarPreviousUnit(Object unit) {
+    return '上一$unit';
+  }
+
+  @override
+  String calendarNextUnit(Object unit) {
+    return '下一$unit';
+  }
+
+  @override
+  String get calendarToday => '今天';
+
+  @override
+  String get calendarUndo => '撤销';
+
+  @override
+  String get calendarRedo => '重做';
+
+  @override
+  String get calendarOpeningCreator => '正在打开任务创建器...';
+
+  @override
+  String calendarWeekOf(Object date) {
+    return '本周 $date';
+  }
+
+  @override
+  String get calendarStatusCompleted => '已完成';
+
+  @override
+  String get calendarStatusOverdue => '已过期';
+
+  @override
+  String get calendarStatusDueSoon => '即将到期';
+
+  @override
+  String get calendarStatusPending => '待处理';
+
+  @override
+  String get calendarTaskCompletedMessage => '任务已完成！';
+
+  @override
+  String get calendarTaskUpdatedMessage => '任务已更新！';
+
+  @override
+  String get calendarErrorTitle => '错误';
+
+  @override
+  String get calendarErrorTaskNotFound => '未找到任务';
+
+  @override
+  String get calendarErrorTitleEmpty => '标题不能为空';
+
+  @override
+  String get calendarErrorTitleTooLong => '标题过长';
+
+  @override
+  String get calendarErrorDescriptionTooLong => '描述过长';
+
+  @override
+  String get calendarErrorInputInvalid => '输入无效';
+
+  @override
+  String get calendarErrorAddFailed => '添加任务失败';
+
+  @override
+  String get calendarErrorUpdateFailed => '更新任务失败';
+
+  @override
+  String get calendarErrorDeleteFailed => '删除任务失败';
+
+  @override
+  String get calendarErrorNetwork => '网络错误';
+
+  @override
+  String get calendarErrorStorage => '存储错误';
+
+  @override
+  String get calendarErrorUnknown => '未知错误';
+
+  @override
+  String get commonConfirm => '确认';
+
+  @override
+  String get commonOpen => '打开';
+
+  @override
+  String get commonSelect => '选择';
+
+  @override
+  String get commonExport => '导出';
+
+  @override
+  String get commonFavorite => '收藏';
+
+  @override
+  String get commonUnfavorite => '取消收藏';
+
+  @override
+  String get commonArchive => '存档';
+
+  @override
+  String get commonUnarchive => '取消存档';
+
+  @override
+  String get commonShow => '显示';
+
+  @override
+  String get commonHide => '隐藏';
+
+  @override
+  String get blocklistBlockUser => '屏蔽用户';
+
+  @override
+  String get blocklistWaitingForUnblock => '等待解除屏蔽';
+
+  @override
+  String get blocklistUnblockAll => '全部解除屏蔽';
+
+  @override
+  String get blocklistUnblock => '解除屏蔽';
+
+  @override
+  String get blocklistBlock => '屏蔽';
+
+  @override
+  String get blocklistAddTooltip => '添加到屏蔽列表';
+
+  @override
+  String get mucChangeNickname => '更改昵称';
+
+  @override
+  String mucChangeNicknameWithCurrent(Object current) {
+    return '更改昵称（当前：$current）';
+  }
+
+  @override
+  String get mucLeaveRoom => '离开房间';
+
+  @override
+  String get mucNoMembers => '暂无成员';
+
+  @override
+  String get mucInviteUsers => '邀请用户';
+
+  @override
+  String get mucSendInvites => '发送邀请';
+
+  @override
+  String get mucChangeNicknameTitle => '更改昵称';
+
+  @override
+  String get mucEnterNicknamePlaceholder => '输入昵称';
+
+  @override
+  String get mucUpdateNickname => '更新';
+
+  @override
+  String get mucMembersTitle => '成员';
+
+  @override
+  String get mucInviteUser => '邀请用户';
+
+  @override
+  String get mucSectionOwners => '所有者';
+
+  @override
+  String get mucSectionAdmins => '管理员';
+
+  @override
+  String get mucSectionModerators => '版主';
+
+  @override
+  String get mucSectionMembers => '成员';
+
+  @override
+  String get mucSectionVisitors => '访客';
+
+  @override
+  String get mucRoleOwner => '所有者';
+
+  @override
+  String get mucRoleAdmin => '管理员';
+
+  @override
+  String get mucRoleMember => '成员';
+
+  @override
+  String get mucRoleVisitor => '访客';
+
+  @override
+  String get mucRoleModerator => '版主';
+
+  @override
+  String get mucActionKick => '移出';
+
+  @override
+  String get mucActionBan => '封禁';
+
+  @override
+  String get mucActionMakeMember => '设为成员';
+
+  @override
+  String get mucActionMakeAdmin => '设为管理员';
+
+  @override
+  String get mucActionMakeOwner => '设为所有者';
+
+  @override
+  String get mucActionGrantModerator => '授予版主';
+
+  @override
+  String get mucActionRevokeModerator => '撤销版主';
+
+  @override
+  String get chatsEmptyList => '暂时没有聊天';
+
+  @override
+  String chatsDeleteConfirmMessage(Object chatTitle) {
+    return '删除聊天：$chatTitle';
+  }
+
+  @override
+  String get chatsDeleteMessagesOption => '永久删除消息';
+
+  @override
+  String get chatsDeleteSuccess => '聊天已删除';
+
+  @override
+  String get chatsExportNoContent => '没有可导出的文本内容';
+
+  @override
+  String get chatsExportShareText => '来自 Axichat 的聊天导出';
+
+  @override
+  String chatsExportShareSubject(Object chatTitle) {
+    return '与 $chatTitle 的聊天';
+  }
+
+  @override
+  String get chatsExportSuccess => '聊天已导出';
+
+  @override
+  String get chatsExportFailure => '无法导出聊天';
+
+  @override
+  String get chatsArchivedRestored => '聊天已恢复';
+
+  @override
+  String get chatsArchivedHint => '聊天已存档（个人资料 → 已存档聊天）';
+
+  @override
+  String get chatsVisibleNotice => '聊天已重新可见';
+
+  @override
+  String get chatsHiddenNotice => '聊天已隐藏（使用筛选显示）';
+
+  @override
+  String chatsUnreadLabel(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 条未读消息',
+      zero: '没有未读消息',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatsSemanticsUnselectHint => '点击取消选择聊天';
+
+  @override
+  String get chatsSemanticsSelectHint => '点击选择聊天';
+
+  @override
+  String get chatsSemanticsOpenHint => '点击打开聊天';
+
+  @override
+  String get chatsHideActions => '隐藏聊天操作';
+
+  @override
+  String get chatsShowActions => '显示聊天操作';
+
+  @override
+  String get chatsSelectedLabel => '聊天已选择';
+
+  @override
+  String get chatsSelectLabel => '选择聊天';
+
+  @override
+  String get chatsExportFileLabel => 'chats';
+
+  @override
+  String get chatSelectionExportEmptyTitle => '没有可导出的消息';
+
+  @override
+  String get chatSelectionExportEmptyMessage => '选择包含文本内容的聊天';
+
+  @override
+  String get chatSelectionExportShareText => '来自 Axichat 的聊天导出';
+
+  @override
+  String get chatSelectionExportShareSubject => 'Axichat 聊天导出';
+
+  @override
+  String get chatSelectionExportReadyTitle => '导出就绪';
+
+  @override
+  String chatSelectionExportReadyMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已分享 # 个聊天',
+      one: '已分享 # 个聊天',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatSelectionExportFailedTitle => '导出失败';
+
+  @override
+  String get chatSelectionExportFailedMessage => '无法导出所选聊天';
+
+  @override
+  String get chatSelectionDeleteConfirmTitle => '删除聊天？';
+
+  @override
+  String chatSelectionDeleteConfirmMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '将删除 # 个聊天及其全部消息，无法恢复。',
+      one: '将删除 1 个聊天及其全部消息，无法恢复。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatsCreateGroupChatTooltip => '创建群聊';
+
+  @override
+  String get chatsRoomLabel => '房间';
+
+  @override
+  String get chatsCreateChatRoomTitle => '创建聊天室';
+
+  @override
+  String get chatsRoomNamePlaceholder => '名称';
+
+  @override
+  String get chatsArchiveTitle => '存档';
+
+  @override
+  String get chatsArchiveEmpty => '暂无已存档聊天';
+
+  @override
+  String calendarTileNow(Object title) {
+    return '现在：$title';
+  }
+
+  @override
+  String calendarTileNext(Object title) {
+    return '接下来：$title';
+  }
+
+  @override
+  String get calendarTileNone => '没有即将进行的任务';
+
+  @override
+  String get calendarViewDayShort => '日';
+
+  @override
+  String get calendarViewWeekShort => '周';
+
+  @override
+  String get calendarViewMonthShort => '月';
+
+  @override
+  String get calendarShowCompleted => '显示已完成';
+
+  @override
+  String get calendarHideCompleted => '隐藏已完成';
+
+  @override
+  String get rosterAddTooltip => '添加到联系人';
+
+  @override
+  String get rosterAddLabel => '联系人';
+
+  @override
+  String get rosterAddTitle => '添加联系人';
+
+  @override
+  String get rosterEmpty => '暂无联系人';
+
+  @override
+  String get rosterCompose => '撰写';
+
+  @override
+  String rosterRemoveConfirm(Object jid) {
+    return '将 $jid 从联系人中移除？';
+  }
+
+  @override
+  String get rosterInvitesEmpty => '暂无邀请';
+
+  @override
+  String rosterRejectInviteConfirm(Object jid) {
+    return '拒绝来自 $jid 的邀请？';
+  }
+
+  @override
+  String get rosterAddContactTooltip => '添加联系人';
+
+  @override
+  String get jidInputPlaceholder => 'john@axi.im';
+
+  @override
+  String get jidInputInvalid => '请输入有效的 JID';
+
+  @override
+  String get sessionCapabilityChat => '聊天';
+
+  @override
+  String get sessionCapabilityEmail => '邮件';
+
+  @override
+  String get sessionCapabilityStatusConnected => '已连接';
+
+  @override
+  String get sessionCapabilityStatusConnecting => '正在连接';
+
+  @override
+  String get sessionCapabilityStatusError => '错误';
+
+  @override
+  String get sessionCapabilityStatusOffline => '离线';
+
+  @override
+  String get sessionCapabilityStatusOff => '关闭';
+
+  @override
+  String get sessionCapabilityStatusSyncing => '同步中';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -2277,6 +3292,253 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get accessibilityMessageNoContent => '沒有訊息內容';
 
   @override
+  String get accessibilityActionsTitle => '操作';
+
+  @override
+  String get accessibilityReadNewMessages => '閱讀新訊息';
+
+  @override
+  String get accessibilityUnreadSummaryDescription => '專注於有未讀訊息的對話';
+
+  @override
+  String get accessibilityStartNewChat => '開始新的聊天';
+
+  @override
+  String get accessibilityStartNewChatDescription => '選擇聯絡人或輸入地址';
+
+  @override
+  String get accessibilityInvitesTitle => '邀請';
+
+  @override
+  String get accessibilityPendingInvites => '待處理邀請';
+
+  @override
+  String get accessibilityAcceptInvite => '接受邀請';
+
+  @override
+  String get accessibilityInviteAccepted => '已接受邀請';
+
+  @override
+  String get accessibilityInviteDismissed => '已拒絕邀請';
+
+  @override
+  String get accessibilityInviteUpdateFailed => '無法更新邀請';
+
+  @override
+  String get accessibilityUnreadEmpty => '沒有未讀對話';
+
+  @override
+  String get accessibilityInvitesEmpty => '沒有待處理的邀請';
+
+  @override
+  String get accessibilityMessagesTitle => '訊息';
+
+  @override
+  String get accessibilityNoConversationSelected => '未選擇對話';
+
+  @override
+  String accessibilityMessagesWithContact(Object name) {
+    return '$name 的訊息';
+  }
+
+  @override
+  String accessibilityMessageLabel(
+      Object sender, Object timestamp, Object body) {
+    return '$sender 於 $timestamp：$body';
+  }
+
+  @override
+  String get accessibilityMessageSent => '訊息已傳送。';
+
+  @override
+  String get accessibilityDiscardWarning => '再次按下 Escape 以捨棄訊息並關閉此步驟。';
+
+  @override
+  String get accessibilityDraftLoaded => '草稿已載入。按 Escape 離開或儲存以保留變更。';
+
+  @override
+  String accessibilityDraftLabel(Object id) {
+    return '草稿 $id';
+  }
+
+  @override
+  String accessibilityDraftLabelWithRecipients(Object recipients) {
+    return '給 $recipients 的草稿';
+  }
+
+  @override
+  String accessibilityDraftPreview(Object recipients, Object preview) {
+    return '$recipients — $preview';
+  }
+
+  @override
+  String accessibilityIncomingMessageStatus(Object sender, Object time) {
+    return '來自 $sender 的新訊息，時間 $time';
+  }
+
+  @override
+  String accessibilityAttachmentWithName(Object filename) {
+    return '附件：$filename';
+  }
+
+  @override
+  String get accessibilityAttachmentGeneric => '附件';
+
+  @override
+  String get accessibilityUploadAvailable => '可用的上傳';
+
+  @override
+  String get accessibilityUnknownContact => '未知聯絡人';
+
+  @override
+  String get accessibilityChooseContact => '選擇聯絡人';
+
+  @override
+  String get accessibilityUnreadConversations => '未讀對話';
+
+  @override
+  String get accessibilityStartNewAddress => '輸入新地址';
+
+  @override
+  String accessibilityConversationWith(Object name) {
+    return '與 $name 的對話';
+  }
+
+  @override
+  String get accessibilityConversationLabel => '對話';
+
+  @override
+  String get accessibilityDialogLabel => '無障礙操作對話框';
+
+  @override
+  String get accessibilityDialogHint =>
+      '按 Tab 查看捷徑說明，在清單中使用方向鍵，按住 Shift 加方向鍵切換群組，或按 Escape 離開。';
+
+  @override
+  String get accessibilityNoActionsAvailable => '目前沒有可用的操作';
+
+  @override
+  String accessibilityBreadcrumbLabel(
+      Object position, Object total, Object label) {
+    return '第 $position/$total 步：$label。啟用以跳至此步驟。';
+  }
+
+  @override
+  String get accessibilityShortcutOpenMenu => '開啟選單';
+
+  @override
+  String get accessibilityShortcutBack => '後退一步或關閉';
+
+  @override
+  String get accessibilityShortcutNextFocus => '下一個焦點目標';
+
+  @override
+  String get accessibilityShortcutPreviousFocus => '上一個焦點目標';
+
+  @override
+  String get accessibilityShortcutActivateItem => '啟用項目';
+
+  @override
+  String get accessibilityShortcutNextItem => '下一個項目';
+
+  @override
+  String get accessibilityShortcutPreviousItem => '上一個項目';
+
+  @override
+  String get accessibilityShortcutNextGroup => '下一個群組';
+
+  @override
+  String get accessibilityShortcutPreviousGroup => '上一個群組';
+
+  @override
+  String get accessibilityShortcutFirstItem => '第一個項目';
+
+  @override
+  String get accessibilityShortcutLastItem => '最後一個項目';
+
+  @override
+  String get accessibilityKeyboardShortcutsTitle => '鍵盤捷徑';
+
+  @override
+  String accessibilityKeyboardShortcutAnnouncement(Object description) {
+    return '鍵盤捷徑：$description';
+  }
+
+  @override
+  String get accessibilityTextFieldHint => '輸入文字。按 Tab 前進，或按 Escape 返回或關閉選單。';
+
+  @override
+  String get accessibilityComposerPlaceholder => '輸入訊息';
+
+  @override
+  String accessibilityRecipientLabel(Object name) {
+    return '收件人 $name';
+  }
+
+  @override
+  String get accessibilityRecipientRemoveHint => '按退格或刪除鍵移除';
+
+  @override
+  String get accessibilityMessageActionsLabel => '訊息操作';
+
+  @override
+  String get accessibilityMessageActionsHint => '儲存為草稿或傳送此訊息';
+
+  @override
+  String accessibilityMessagePosition(Object position, Object total) {
+    return '第 $position 則訊息，共 $total 則';
+  }
+
+  @override
+  String get accessibilityNoMessages => '沒有訊息';
+
+  @override
+  String accessibilityMessageMetadata(Object sender, Object timestamp) {
+    return '來自 $sender 於 $timestamp';
+  }
+
+  @override
+  String accessibilityMessageFrom(Object sender) {
+    return '來自 $sender';
+  }
+
+  @override
+  String get accessibilityMessageNavigationHint =>
+      '使用方向鍵在訊息間移動。按住 Shift 加方向鍵切換群組。按 Escape 離開。';
+
+  @override
+  String accessibilitySectionSummary(Object section, Object count) {
+    return '$section 區塊，包含 $count 項';
+  }
+
+  @override
+  String accessibilityActionListLabel(Object count) {
+    return '操作清單，共 $count 項';
+  }
+
+  @override
+  String get accessibilityActionListHint =>
+      '使用方向鍵移動，按住 Shift 加方向鍵切換群組，Home/End 跳轉，Enter 啟用，Escape 離開。';
+
+  @override
+  String accessibilityActionItemPosition(
+      Object position, Object total, Object section) {
+    return '$section 中的第 $position 個項目，共 $total 個';
+  }
+
+  @override
+  String get accessibilityActionReadOnlyHint => '使用方向鍵瀏覽清單';
+
+  @override
+  String get accessibilityActionActivateHint => '按 Enter 啟用';
+
+  @override
+  String get accessibilityDismissHighlight => '關閉提示';
+
+  @override
+  String get accessibilityNeedsAttention => '需要注意';
+
+  @override
   String get profileTitle => '個人資料';
 
   @override
@@ -2316,4 +3578,772 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get termsAgreementError => '你必須接受條款與條件';
+
+  @override
+  String get commonContinue => '繼續';
+
+  @override
+  String get commonDelete => '刪除';
+
+  @override
+  String get commonSave => '儲存';
+
+  @override
+  String get commonRetry => '重試';
+
+  @override
+  String get commonRemove => '移除';
+
+  @override
+  String get commonSend => '傳送';
+
+  @override
+  String get commonDismiss => '關閉';
+
+  @override
+  String get settingsSectionImportant => '重要';
+
+  @override
+  String get settingsSectionAppearance => '外觀';
+
+  @override
+  String get settingsLanguage => '語言';
+
+  @override
+  String get settingsThemeMode => '主題模式';
+
+  @override
+  String get settingsThemeModeSystem => '系統';
+
+  @override
+  String get settingsThemeModeLight => '淺色';
+
+  @override
+  String get settingsThemeModeDark => '深色';
+
+  @override
+  String get settingsColorScheme => '配色方案';
+
+  @override
+  String get settingsColorfulAvatars => '彩色頭像';
+
+  @override
+  String get settingsColorfulAvatarsDescription => '為每個頭像產生不同的背景顏色。';
+
+  @override
+  String get settingsLowMotion => '低動效';
+
+  @override
+  String get settingsLowMotionDescription => '停用大部分動畫，更適合較慢的裝置。';
+
+  @override
+  String get settingsSectionChats => '聊天';
+
+  @override
+  String get settingsMessageStorageTitle => '訊息儲存';
+
+  @override
+  String get settingsMessageStorageSubtitle => '本地會保留裝置副本；僅伺服器模式會查詢封存。';
+
+  @override
+  String get settingsMessageStorageLocal => '本地';
+
+  @override
+  String get settingsMessageStorageServerOnly => '僅伺服器';
+
+  @override
+  String get settingsMuteNotifications => '靜音通知';
+
+  @override
+  String get settingsMuteNotificationsDescription => '停止接收訊息通知。';
+
+  @override
+  String get settingsReadReceipts => '傳送已讀回條';
+
+  @override
+  String get settingsTypingIndicators => '傳送輸入指示';
+
+  @override
+  String get settingsTypingIndicatorsDescription => '讓聊天中的其他人看到你正在輸入。';
+
+  @override
+  String get settingsShareTokenFooter => '包含分享代幣頁腳';
+
+  @override
+  String get settingsShareTokenFooterDescription =>
+      '有助於保持多收件人郵件執行緒與附件關聯。關閉後可能造成執行緒中斷。';
+
+  @override
+  String get authCustomServerTitle => '自訂伺服器';
+
+  @override
+  String get authCustomServerDescription =>
+      '覆寫 XMPP/SMTP 端點或啟用 DNS 查詢。欄位留空以保留預設值。';
+
+  @override
+  String get authCustomServerDomainOrIp => '網域或 IP';
+
+  @override
+  String get authCustomServerXmppLabel => 'XMPP';
+
+  @override
+  String get authCustomServerSmtpLabel => 'SMTP';
+
+  @override
+  String get authCustomServerUseDns => '使用 DNS';
+
+  @override
+  String get authCustomServerUseSrv => '使用 SRV';
+
+  @override
+  String get authCustomServerRequireDnssec => '需要 DNSSEC';
+
+  @override
+  String get authCustomServerXmppHostPlaceholder => 'XMPP 主機（可選）';
+
+  @override
+  String get authCustomServerPortPlaceholder => '連接埠';
+
+  @override
+  String get authCustomServerSmtpHostPlaceholder => 'SMTP 主機（可選）';
+
+  @override
+  String get authCustomServerApiPortPlaceholder => 'API 連接埠';
+
+  @override
+  String get authCustomServerReset => '重設為 axi.im';
+
+  @override
+  String get authCustomServerOpenSettings => '開啟自訂伺服器設定';
+
+  @override
+  String get authCustomServerAdvancedHint => '進階伺服器選項會保持隱藏，直到你點擊使用者名稱的後綴。';
+
+  @override
+  String get authUnregisterTitle => '註銷';
+
+  @override
+  String get authUnregisterProgressLabel => '正在等待刪除帳戶';
+
+  @override
+  String get authPasswordPlaceholder => '密碼';
+
+  @override
+  String get authPasswordCurrentPlaceholder => '舊密碼';
+
+  @override
+  String get authPasswordNewPlaceholder => '新密碼';
+
+  @override
+  String get authPasswordConfirmNewPlaceholder => '確認新密碼';
+
+  @override
+  String get authChangePasswordProgressLabel => '正在等待變更密碼';
+
+  @override
+  String get authLogoutTitle => '登出';
+
+  @override
+  String get authLogoutNormal => '登出';
+
+  @override
+  String get authLogoutNormalDescription => '登出此帳戶。';
+
+  @override
+  String get authLogoutBurn => '銷毀帳戶';
+
+  @override
+  String get authLogoutBurnDescription => '登出並清除此帳戶的本機資料。';
+
+  @override
+  String get chatAttachmentBlockedTitle => '附件已被阻擋';
+
+  @override
+  String get chatAttachmentBlockedDescription => '僅在你信任未知聯絡人時才載入附件。你同意後我們才會擷取。';
+
+  @override
+  String get chatAttachmentLoad => '載入附件';
+
+  @override
+  String get chatAttachmentUnavailable => '附件無法使用';
+
+  @override
+  String get chatAttachmentSendFailed => '無法傳送附件。';
+
+  @override
+  String get chatAttachmentRetryUpload => '重試上傳';
+
+  @override
+  String get chatAttachmentRemoveAttachment => '移除附件';
+
+  @override
+  String get chatAttachmentStatusUploading => '正在上傳附件…';
+
+  @override
+  String get chatAttachmentStatusQueued => '等待傳送';
+
+  @override
+  String get chatAttachmentStatusFailed => '上傳失敗';
+
+  @override
+  String get chatAttachmentLoading => '正在載入附件';
+
+  @override
+  String chatAttachmentLoadingProgress(Object percent) {
+    return '正在載入 $percent';
+  }
+
+  @override
+  String get chatAttachmentDownload => '下載附件';
+
+  @override
+  String get chatAttachmentUnavailableDevice => '此裝置上已無法取得該附件';
+
+  @override
+  String get chatAttachmentInvalidLink => '無效的附件連結';
+
+  @override
+  String chatAttachmentOpenFailed(Object target) {
+    return '無法開啟 $target';
+  }
+
+  @override
+  String get chatAttachmentUnknownSize => '大小未知';
+
+  @override
+  String chatAttachmentErrorTooltip(Object message, Object fileName) {
+    return '$message（$fileName）';
+  }
+
+  @override
+  String get chatAttachmentMenuHint => '開啟選單以取得更多動作。';
+
+  @override
+  String get accessibilityActionsLabel => '無障礙操作';
+
+  @override
+  String accessibilityActionsShortcutTooltip(Object shortcut) {
+    return '無障礙操作（$shortcut）';
+  }
+
+  @override
+  String get shorebirdUpdateAvailable => '有可用更新：請登出並重新啟動應用程式。';
+
+  @override
+  String get calendarEditTaskTitle => '編輯任務';
+
+  @override
+  String get calendarDateTimeLabel => '日期與時間';
+
+  @override
+  String get calendarSelectDate => '選擇日期';
+
+  @override
+  String get calendarSelectTime => '選擇時間';
+
+  @override
+  String get calendarDurationLabel => '時長';
+
+  @override
+  String get calendarSelectDuration => '選擇時長';
+
+  @override
+  String get calendarAddToCriticalPath => '新增到關鍵路徑';
+
+  @override
+  String get calendarNoCriticalPathMembership => '不在任何關鍵路徑中';
+
+  @override
+  String get calendarGuestTitle => '訪客行事曆';
+
+  @override
+  String get calendarGuestBanner => '訪客模式 - 不同步';
+
+  @override
+  String get calendarGuestModeLabel => '訪客模式';
+
+  @override
+  String get calendarGuestModeDescription => '登入以同步任務並啟用提醒。';
+
+  @override
+  String get calendarNoTasksForDate => '此日期沒有任務';
+
+  @override
+  String get calendarTapToCreateTask => '點擊 + 建立新任務';
+
+  @override
+  String get calendarQuickStats => '快速統計';
+
+  @override
+  String get calendarDueReminders => '到期提醒';
+
+  @override
+  String get calendarNextTaskLabel => '下一個任務';
+
+  @override
+  String get calendarNone => '無';
+
+  @override
+  String get calendarViewLabel => '檢視';
+
+  @override
+  String get calendarViewDay => '日';
+
+  @override
+  String get calendarViewWeek => '週';
+
+  @override
+  String get calendarViewMonth => '月';
+
+  @override
+  String get calendarPreviousDate => '前一日期';
+
+  @override
+  String get calendarNextDate => '下一日期';
+
+  @override
+  String calendarPreviousUnit(Object unit) {
+    return '上一個$unit';
+  }
+
+  @override
+  String calendarNextUnit(Object unit) {
+    return '下一個$unit';
+  }
+
+  @override
+  String get calendarToday => '今天';
+
+  @override
+  String get calendarUndo => '復原';
+
+  @override
+  String get calendarRedo => '重做';
+
+  @override
+  String get calendarOpeningCreator => '正在開啟任務建立器...';
+
+  @override
+  String calendarWeekOf(Object date) {
+    return '本週 $date';
+  }
+
+  @override
+  String get calendarStatusCompleted => '已完成';
+
+  @override
+  String get calendarStatusOverdue => '已過期';
+
+  @override
+  String get calendarStatusDueSoon => '即將到期';
+
+  @override
+  String get calendarStatusPending => '待處理';
+
+  @override
+  String get calendarTaskCompletedMessage => '任務已完成！';
+
+  @override
+  String get calendarTaskUpdatedMessage => '任務已更新！';
+
+  @override
+  String get calendarErrorTitle => '錯誤';
+
+  @override
+  String get calendarErrorTaskNotFound => '找不到任務';
+
+  @override
+  String get calendarErrorTitleEmpty => '標題不能為空';
+
+  @override
+  String get calendarErrorTitleTooLong => '標題過長';
+
+  @override
+  String get calendarErrorDescriptionTooLong => '描述過長';
+
+  @override
+  String get calendarErrorInputInvalid => '輸入無效';
+
+  @override
+  String get calendarErrorAddFailed => '新增任務失敗';
+
+  @override
+  String get calendarErrorUpdateFailed => '更新任務失敗';
+
+  @override
+  String get calendarErrorDeleteFailed => '刪除任務失敗';
+
+  @override
+  String get calendarErrorNetwork => '網路錯誤';
+
+  @override
+  String get calendarErrorStorage => '儲存錯誤';
+
+  @override
+  String get calendarErrorUnknown => '未知錯誤';
+
+  @override
+  String get commonConfirm => '確認';
+
+  @override
+  String get commonOpen => '開啟';
+
+  @override
+  String get commonSelect => '選擇';
+
+  @override
+  String get commonExport => '匯出';
+
+  @override
+  String get commonFavorite => '收藏';
+
+  @override
+  String get commonUnfavorite => '取消收藏';
+
+  @override
+  String get commonArchive => '封存';
+
+  @override
+  String get commonUnarchive => '取消封存';
+
+  @override
+  String get commonShow => '顯示';
+
+  @override
+  String get commonHide => '隱藏';
+
+  @override
+  String get blocklistBlockUser => '封鎖用戶';
+
+  @override
+  String get blocklistWaitingForUnblock => '等待解除封鎖';
+
+  @override
+  String get blocklistUnblockAll => '全部解除封鎖';
+
+  @override
+  String get blocklistUnblock => '解除封鎖';
+
+  @override
+  String get blocklistBlock => '封鎖';
+
+  @override
+  String get blocklistAddTooltip => '加入封鎖清單';
+
+  @override
+  String get mucChangeNickname => '更改暱稱';
+
+  @override
+  String mucChangeNicknameWithCurrent(Object current) {
+    return '更改暱稱（目前：$current）';
+  }
+
+  @override
+  String get mucLeaveRoom => '離開聊天室';
+
+  @override
+  String get mucNoMembers => '暫無成員';
+
+  @override
+  String get mucInviteUsers => '邀請用戶';
+
+  @override
+  String get mucSendInvites => '發送邀請';
+
+  @override
+  String get mucChangeNicknameTitle => '更改暱稱';
+
+  @override
+  String get mucEnterNicknamePlaceholder => '輸入暱稱';
+
+  @override
+  String get mucUpdateNickname => '更新';
+
+  @override
+  String get mucMembersTitle => '成員';
+
+  @override
+  String get mucInviteUser => '邀請用戶';
+
+  @override
+  String get mucSectionOwners => '擁有者';
+
+  @override
+  String get mucSectionAdmins => '管理員';
+
+  @override
+  String get mucSectionModerators => '版主';
+
+  @override
+  String get mucSectionMembers => '成員';
+
+  @override
+  String get mucSectionVisitors => '訪客';
+
+  @override
+  String get mucRoleOwner => '擁有者';
+
+  @override
+  String get mucRoleAdmin => '管理員';
+
+  @override
+  String get mucRoleMember => '成員';
+
+  @override
+  String get mucRoleVisitor => '訪客';
+
+  @override
+  String get mucRoleModerator => '版主';
+
+  @override
+  String get mucActionKick => '移出';
+
+  @override
+  String get mucActionBan => '封禁';
+
+  @override
+  String get mucActionMakeMember => '設為成員';
+
+  @override
+  String get mucActionMakeAdmin => '設為管理員';
+
+  @override
+  String get mucActionMakeOwner => '設為擁有者';
+
+  @override
+  String get mucActionGrantModerator => '授予版主';
+
+  @override
+  String get mucActionRevokeModerator => '取消版主';
+
+  @override
+  String get chatsEmptyList => '暫時沒有聊天';
+
+  @override
+  String chatsDeleteConfirmMessage(Object chatTitle) {
+    return '刪除聊天：$chatTitle';
+  }
+
+  @override
+  String get chatsDeleteMessagesOption => '永久刪除訊息';
+
+  @override
+  String get chatsDeleteSuccess => '聊天已刪除';
+
+  @override
+  String get chatsExportNoContent => '沒有可匯出的文字內容';
+
+  @override
+  String get chatsExportShareText => '來自 Axichat 的聊天匯出';
+
+  @override
+  String chatsExportShareSubject(Object chatTitle) {
+    return '與 $chatTitle 的聊天';
+  }
+
+  @override
+  String get chatsExportSuccess => '聊天已匯出';
+
+  @override
+  String get chatsExportFailure => '無法匯出聊天';
+
+  @override
+  String get chatsArchivedRestored => '聊天已還原';
+
+  @override
+  String get chatsArchivedHint => '聊天已封存（個人檔案 → 已封存聊天）';
+
+  @override
+  String get chatsVisibleNotice => '聊天已重新可見';
+
+  @override
+  String get chatsHiddenNotice => '聊天已隱藏（使用篩選顯示）';
+
+  @override
+  String chatsUnreadLabel(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '# 則未讀訊息',
+      zero: '沒有未讀訊息',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatsSemanticsUnselectHint => '點擊取消選取聊天';
+
+  @override
+  String get chatsSemanticsSelectHint => '點擊選取聊天';
+
+  @override
+  String get chatsSemanticsOpenHint => '點擊開啟聊天';
+
+  @override
+  String get chatsHideActions => '隱藏聊天操作';
+
+  @override
+  String get chatsShowActions => '顯示聊天操作';
+
+  @override
+  String get chatsSelectedLabel => '聊天已選取';
+
+  @override
+  String get chatsSelectLabel => '選取聊天';
+
+  @override
+  String get chatsExportFileLabel => 'chats';
+
+  @override
+  String get chatSelectionExportEmptyTitle => '沒有可匯出的訊息';
+
+  @override
+  String get chatSelectionExportEmptyMessage => '選擇包含文字內容的聊天';
+
+  @override
+  String get chatSelectionExportShareText => '來自 Axichat 的聊天匯出';
+
+  @override
+  String get chatSelectionExportShareSubject => 'Axichat 聊天匯出';
+
+  @override
+  String get chatSelectionExportReadyTitle => '匯出完成';
+
+  @override
+  String chatSelectionExportReadyMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已分享 # 個聊天',
+      one: '已分享 # 個聊天',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatSelectionExportFailedTitle => '匯出失敗';
+
+  @override
+  String get chatSelectionExportFailedMessage => '無法匯出所選聊天';
+
+  @override
+  String get chatSelectionDeleteConfirmTitle => '刪除聊天？';
+
+  @override
+  String chatSelectionDeleteConfirmMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '將刪除 # 個聊天及其所有訊息，無法復原。',
+      one: '將刪除 1 個聊天及其所有訊息，無法復原。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatsCreateGroupChatTooltip => '建立群組聊天';
+
+  @override
+  String get chatsRoomLabel => '聊天室';
+
+  @override
+  String get chatsCreateChatRoomTitle => '建立聊天室';
+
+  @override
+  String get chatsRoomNamePlaceholder => '名稱';
+
+  @override
+  String get chatsArchiveTitle => '封存';
+
+  @override
+  String get chatsArchiveEmpty => '暫無已封存的聊天';
+
+  @override
+  String calendarTileNow(Object title) {
+    return '現在：$title';
+  }
+
+  @override
+  String calendarTileNext(Object title) {
+    return '下一個：$title';
+  }
+
+  @override
+  String get calendarTileNone => '沒有即將進行的任務';
+
+  @override
+  String get calendarViewDayShort => '日';
+
+  @override
+  String get calendarViewWeekShort => '週';
+
+  @override
+  String get calendarViewMonthShort => '月';
+
+  @override
+  String get calendarShowCompleted => '顯示已完成';
+
+  @override
+  String get calendarHideCompleted => '隱藏已完成';
+
+  @override
+  String get rosterAddTooltip => '加入聯絡人';
+
+  @override
+  String get rosterAddLabel => '聯絡人';
+
+  @override
+  String get rosterAddTitle => '新增聯絡人';
+
+  @override
+  String get rosterEmpty => '暫無聯絡人';
+
+  @override
+  String get rosterCompose => '撰寫';
+
+  @override
+  String rosterRemoveConfirm(Object jid) {
+    return '將 $jid 從聯絡人移除？';
+  }
+
+  @override
+  String get rosterInvitesEmpty => '暫無邀請';
+
+  @override
+  String rosterRejectInviteConfirm(Object jid) {
+    return '拒絕來自 $jid 的邀請？';
+  }
+
+  @override
+  String get rosterAddContactTooltip => '新增聯絡人';
+
+  @override
+  String get jidInputPlaceholder => 'john@axi.im';
+
+  @override
+  String get jidInputInvalid => '請輸入有效的 JID';
+
+  @override
+  String get sessionCapabilityChat => '聊天';
+
+  @override
+  String get sessionCapabilityEmail => '電郵';
+
+  @override
+  String get sessionCapabilityStatusConnected => '已連線';
+
+  @override
+  String get sessionCapabilityStatusConnecting => '連線中';
+
+  @override
+  String get sessionCapabilityStatusError => '錯誤';
+
+  @override
+  String get sessionCapabilityStatusOffline => '離線';
+
+  @override
+  String get sessionCapabilityStatusOff => '關閉';
+
+  @override
+  String get sessionCapabilityStatusSyncing => '同步中';
 }

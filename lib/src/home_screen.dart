@@ -1,4 +1,5 @@
 // ignore_for_file: unnecessary_type_check
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
@@ -242,11 +243,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (_, __) {
-            if (context.read<ChatsCubit?>()?.state.openCalendar ?? false) {
-              context.read<ChatsCubit?>()?.toggleCalendar();
-            } else if (context.read<ChatsCubit?>()?.state.openJid
-                case final jid?) {
-              context.read<ChatsCubit?>()?.toggleChat(jid: jid);
+            final chatsCubit = context.read<ChatsCubit?>();
+            final chatsState = chatsCubit?.state;
+            if (chatsState == null) return;
+            if (chatsState.openCalendar) {
+              chatsCubit?.toggleCalendar();
+            } else if (chatsState.openStack.isNotEmpty) {
+              if (chatsState.openStack.length > 1) {
+                unawaited(chatsCubit?.popChat());
+              } else {
+                unawaited(chatsCubit?.closeAllChats());
+              }
             }
           },
           child: Column(
@@ -852,10 +859,11 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
     }
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
+    final l10n = context.l10n;
     if (collapsed) {
       return AxiIconButton(
         iconData: LucideIcons.lifeBuoy,
-        tooltip: 'Accessibility actions ($shortcutText)',
+        tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
         onPressed: () => context
             .read<AccessibilityActionBloc?>()
             ?.add(const AccessibilityMenuOpened()),
@@ -864,7 +872,7 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
     final colors = context.colorScheme;
     final radius = context.radius;
     return Semantics(
-      label: 'Accessibility actions',
+      label: l10n.accessibilityActionsLabel,
       button: true,
       child: Material(
         color: colors.background,
@@ -903,8 +911,11 @@ class _FindActionIconButton extends StatelessWidget {
     }
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
+    final l10n = context.l10n;
     return AxiTooltip(
-      builder: (_) => Text('Accessibility actions ($shortcutText)'),
+      builder: (_) => Text(
+        l10n.accessibilityActionsShortcutTooltip(shortcutText),
+      ),
       child: ShadButton.ghost(
         onPressed: () => context
             .read<AccessibilityActionBloc?>()

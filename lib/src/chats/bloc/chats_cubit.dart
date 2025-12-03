@@ -15,6 +15,8 @@ class ChatsCubit extends Cubit<ChatsState> {
         super(
           const ChatsState(
             openJid: null,
+            openStack: <String>[],
+            forwardStack: <String>[],
             openCalendar: false,
             items: null,
             creationStatus: RequestStatus.none,
@@ -38,23 +40,109 @@ class ChatsCubit extends Cubit<ChatsState> {
     final availableJids = items.map((chat) => chat.jid).toSet();
     final retainedSelection =
         state.selectedJids.where((jid) => availableJids.contains(jid)).toSet();
-    emit(state.copyWith(
-      openJid: items.where((e) => e.open).firstOrNull?.jid,
-      items: items,
-      selectedJids: retainedSelection,
-    ));
+    final retainedStack = state.openStack
+        .where((jid) => availableJids.contains(jid))
+        .toList(growable: false);
+    final retainedForward = state.forwardStack
+        .where((jid) => availableJids.contains(jid))
+        .toList(growable: false);
+    final fallbackOpen =
+        items.where((chat) => chat.open).firstOrNull?.jid ?? state.openJid;
+    final seededStack = retainedStack.isNotEmpty
+        ? retainedStack
+        : [
+            if (fallbackOpen != null && availableJids.contains(fallbackOpen))
+              fallbackOpen,
+          ];
+    emit(
+      state.copyWith(
+        openStack: seededStack,
+        forwardStack: retainedForward,
+        openJid: seededStack.isEmpty ? null : seededStack.last,
+        items: items,
+        selectedJids: retainedSelection,
+      ),
+    );
   }
 
   Future<void> toggleChat({required String jid}) async {
-    if (jid == state.openJid) {
-      await _chatsService.closeChat();
+    final currentTop = state.openStack.isEmpty ? null : state.openStack.last;
+    if (jid == currentTop) {
+      if (state.openStack.length > 1) {
+        await popChat();
+      } else {
+        await closeAllChats();
+      }
       return;
     }
     // Close calendar when opening chat
     if (state.openCalendar) {
       emit(state.copyWith(openCalendar: false));
     }
+    await pushChat(jid: jid);
+  }
+
+  Future<void> pushChat({required String jid}) async {
+    final filtered =
+        state.openStack.where((entry) => entry != jid).toList(growable: false);
+    final nextStack = [...filtered, jid];
+    emit(
+      state.copyWith(
+        openStack: nextStack,
+        forwardStack: const <String>[],
+        openJid: jid,
+      ),
+    );
     await _chatsService.openChat(jid);
+  }
+
+  Future<void> popChat() async {
+    if (state.openStack.isEmpty) return;
+    final popped = state.openStack.last;
+    final nextStack = List<String>.of(state.openStack)..removeLast();
+    final nextForward = List<String>.of(state.forwardStack)..add(popped);
+    final nextOpen = nextStack.isEmpty ? null : nextStack.last;
+    emit(
+      state.copyWith(
+        openStack: nextStack,
+        forwardStack: nextForward,
+        openJid: nextOpen,
+      ),
+    );
+    if (nextOpen == null) {
+      await _chatsService.closeChat();
+    } else {
+      await _chatsService.openChat(nextOpen);
+    }
+  }
+
+  Future<void> restoreChat() async {
+    if (state.forwardStack.isEmpty) return;
+    final restored = state.forwardStack.last;
+    final nextForward = List<String>.of(state.forwardStack)..removeLast();
+    final filteredStack =
+        state.openStack.where((entry) => entry != restored).toList();
+    filteredStack.add(restored);
+    emit(
+      state.copyWith(
+        forwardStack: nextForward,
+        openStack: filteredStack,
+        openJid: restored,
+      ),
+    );
+    await _chatsService.openChat(restored);
+  }
+
+  Future<void> closeAllChats() async {
+    if (state.openStack.isEmpty && state.forwardStack.isEmpty) return;
+    emit(
+      state.copyWith(
+        openStack: const <String>[],
+        forwardStack: const <String>[],
+        openJid: null,
+      ),
+    );
+    await _chatsService.closeChat();
   }
 
   void toggleCalendar() {

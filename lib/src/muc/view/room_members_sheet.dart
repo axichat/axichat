@@ -3,6 +3,8 @@ import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:flutter/material.dart';
@@ -32,7 +34,8 @@ class RoomMembersSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final groups = _sections();
+    final l10n = context.l10n;
+    final groups = _sections(l10n);
     final theme = context.textTheme;
     final colors = context.colorScheme;
     return SafeArea(
@@ -50,6 +53,7 @@ class RoomMembersSheet extends StatelessWidget {
                 canInvite: canInvite,
                 onInviteTap: () => _handleInvite(context),
                 onClose: onClose,
+                l10n: l10n,
               ),
             ),
             const SizedBox(height: 12),
@@ -70,14 +74,18 @@ class RoomMembersSheet extends StatelessWidget {
                           }
                         },
                         child: Text(
-                          'Change nick${currentNickname == null ? '' : ' (${currentNickname!})'}',
+                          currentNickname == null
+                              ? l10n.mucChangeNickname
+                              : l10n.mucChangeNicknameWithCurrent(
+                                  currentNickname!,
+                                ),
                         ),
                       ),
                     if (onLeaveRoom != null)
                       ShadButton.destructive(
                         size: ShadButtonSize.sm,
                         onPressed: onLeaveRoom,
-                        child: const Text('Leave room'),
+                        child: Text(l10n.mucLeaveRoom),
                       ),
                   ],
                 ),
@@ -89,7 +97,7 @@ class RoomMembersSheet extends StatelessWidget {
                 child: groups.isEmpty
                     ? Center(
                         child: Text(
-                          'No members yet',
+                          l10n.mucNoMembers,
                           style: theme.muted
                               .copyWith(color: colors.mutedForeground),
                         ),
@@ -104,6 +112,7 @@ class RoomMembersSheet extends StatelessWidget {
                             buildActions: _actionsFor,
                             onAction: onAction,
                             myOccupantId: roomState.myOccupantId,
+                            l10n: l10n,
                           );
                         },
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -161,20 +170,20 @@ class RoomMembersSheet extends StatelessWidget {
     return result;
   }
 
-  List<_MemberGroup> _sections() {
+  List<_MemberGroup> _sections(AppLocalizations l10n) {
     final seen = <String>{};
     final groups = <_MemberGroup>[
-      _MemberGroup('Owners', roomState.owners),
-      _MemberGroup('Admins', roomState.admins),
+      _MemberGroup(l10n.mucSectionOwners, roomState.owners),
+      _MemberGroup(l10n.mucSectionAdmins, roomState.admins),
       _MemberGroup(
-        'Moderators',
+        l10n.mucSectionModerators,
         roomState.moderators
             .where((o) => !o.affiliation.isOwner && !o.affiliation.isAdmin)
             .toList(),
       ),
-      _MemberGroup('Members', roomState.members),
+      _MemberGroup(l10n.mucSectionMembers, roomState.members),
       _MemberGroup(
-        'Visitors',
+        l10n.mucSectionVisitors,
         roomState.visitors.where((o) => !o.affiliation.isMember).toList(),
       ),
     ];
@@ -248,6 +257,7 @@ class _MemberSection extends StatelessWidget {
     required this.buildActions,
     required this.onAction,
     required this.myOccupantId,
+    required this.l10n,
   });
 
   final String title;
@@ -255,6 +265,7 @@ class _MemberSection extends StatelessWidget {
   final List<MucModerationAction> Function(Occupant occupant) buildActions;
   final void Function(String occupantId, MucModerationAction action) onAction;
   final String? myOccupantId;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -280,6 +291,7 @@ class _MemberSection extends StatelessWidget {
                 actions: actions,
                 onAction: onAction,
                 isSelf: isSelf,
+                l10n: l10n,
               ),
             );
           },
@@ -291,15 +303,15 @@ class _MemberSection extends StatelessWidget {
   String _roleSubtitle(Occupant occupant) {
     final labels = <String>[];
     if (occupant.affiliation.isOwner) {
-      labels.add('Owner');
+      labels.add(l10n.mucRoleOwner);
     } else if (occupant.affiliation.isAdmin) {
-      labels.add('Admin');
+      labels.add(l10n.mucRoleAdmin);
     } else if (occupant.affiliation.isMember) {
-      labels.add('Member');
+      labels.add(l10n.mucRoleMember);
     } else {
-      labels.add('Visitor');
+      labels.add(l10n.mucRoleVisitor);
     }
-    if (occupant.role.isModerator) labels.add('Moderator');
+    if (occupant.role.isModerator) labels.add(l10n.mucRoleModerator);
     return labels.join(' • ');
   }
 }
@@ -311,6 +323,7 @@ class _MemberTile extends StatefulWidget {
     required this.actions,
     required this.onAction,
     required this.isSelf,
+    required this.l10n,
     super.key,
   });
 
@@ -319,6 +332,7 @@ class _MemberTile extends StatefulWidget {
   final List<MucModerationAction> actions;
   final void Function(String occupantId, MucModerationAction action) onAction;
   final bool isSelf;
+  final AppLocalizations l10n;
 
   @override
   State<_MemberTile> createState() => _MemberTileState();
@@ -373,6 +387,7 @@ class _MemberTileState extends State<_MemberTile> {
                 actions: widget.actions,
                 onAction: widget.onAction,
                 onClose: _closeActions,
+                l10n: widget.l10n,
               ),
             ),
           );
@@ -392,12 +407,14 @@ class _MemberActionPanel extends StatelessWidget {
     required this.actions,
     required this.onAction,
     required this.onClose,
+    required this.l10n,
   });
 
   final String occupantId;
   final List<MucModerationAction> actions;
   final void Function(String occupantId, MucModerationAction action) onAction;
   final VoidCallback onClose;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -410,7 +427,7 @@ class _MemberActionPanel extends StatelessWidget {
       runSpacing: spacing,
       alignment: WrapAlignment.start,
       children: actions.map((action) {
-        final descriptor = _MemberActionDescriptor.forAction(action);
+        final descriptor = _MemberActionDescriptor.forAction(action, l10n);
         final builder = descriptor.destructive
             ? ShadButton.destructive
             : ShadButton.outline;
@@ -444,43 +461,46 @@ class _MemberActionDescriptor {
   final IconData icon;
   final bool destructive;
 
-  static _MemberActionDescriptor forAction(MucModerationAction action) {
+  static _MemberActionDescriptor forAction(
+    MucModerationAction action,
+    AppLocalizations l10n,
+  ) {
     switch (action) {
       case MucModerationAction.kick:
-        return const _MemberActionDescriptor(
-          label: 'Kick',
+        return _MemberActionDescriptor(
+          label: l10n.mucActionKick,
           icon: LucideIcons.logOut,
           destructive: true,
         );
       case MucModerationAction.ban:
-        return const _MemberActionDescriptor(
-          label: 'Ban',
+        return _MemberActionDescriptor(
+          label: l10n.mucActionBan,
           icon: LucideIcons.shieldOff,
           destructive: true,
         );
       case MucModerationAction.member:
-        return const _MemberActionDescriptor(
-          label: 'Make member',
+        return _MemberActionDescriptor(
+          label: l10n.mucActionMakeMember,
           icon: LucideIcons.userRound,
         );
       case MucModerationAction.admin:
-        return const _MemberActionDescriptor(
-          label: 'Make admin',
+        return _MemberActionDescriptor(
+          label: l10n.mucActionMakeAdmin,
           icon: LucideIcons.shield,
         );
       case MucModerationAction.owner:
-        return const _MemberActionDescriptor(
-          label: 'Make owner',
+        return _MemberActionDescriptor(
+          label: l10n.mucActionMakeOwner,
           icon: LucideIcons.crown,
         );
       case MucModerationAction.moderator:
-        return const _MemberActionDescriptor(
-          label: 'Grant moderator',
+        return _MemberActionDescriptor(
+          label: l10n.mucActionGrantModerator,
           icon: LucideIcons.gavel,
         );
       case MucModerationAction.participant:
-        return const _MemberActionDescriptor(
-          label: 'Revoke moderator',
+        return _MemberActionDescriptor(
+          label: l10n.mucActionRevokeModerator,
           icon: LucideIcons.userMinus,
         );
     }
@@ -535,6 +555,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   Widget build(BuildContext context) {
     final titleStyle = context.modalHeaderTextStyle;
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
+    final l10n = context.l10n;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -546,7 +567,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
           children: [
             Padding(
               padding: _inviteSheetHeaderPadding,
-              child: Text('Invite users', style: titleStyle),
+              child: Text(l10n.mucInviteUsers, style: titleStyle),
             ),
             RecipientChipsBar(
               recipients: _recipients,
@@ -565,7 +586,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                 children: [
                   ShadButton.outline(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
+                    child: Text(l10n.commonCancel),
                   ).withTapBounce(),
                   const SizedBox(width: 8),
                   ShadButton(
@@ -583,7 +604,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                                 .toList();
                             Navigator.of(context).pop(invitees);
                           },
-                    child: const Text('Send invites'),
+                    child: Text(l10n.mucSendInvites),
                   ).withTapBounce(),
                 ],
               ),
@@ -655,20 +676,21 @@ class _NicknameSheetState extends State<_NicknameSheet> {
   @override
   Widget build(BuildContext context) {
     final titleStyle = context.modalHeaderTextStyle;
+    final l10n = context.l10n;
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Change nickname',
+            l10n.mucChangeNicknameTitle,
             style: titleStyle,
           ),
           const SizedBox(height: 12),
           AxiTextFormField(
             controller: widget.controller,
             focusNode: widget.focusNode,
-            placeholder: const Text('Enter a nickname'),
+            placeholder: Text(l10n.mucEnterNicknamePlaceholder),
             onSubmitted: widget.onSubmit,
           ),
           const SizedBox(height: 12),
@@ -677,12 +699,12 @@ class _NicknameSheetState extends State<_NicknameSheet> {
             children: [
               ShadButton.outline(
                 onPressed: widget.onCancel,
-                child: const Text('Cancel'),
+                child: Text(l10n.commonCancel),
               ).withTapBounce(),
               const SizedBox(width: 8),
               ShadButton(
                 onPressed: () => widget.onSubmit(widget.controller.text.trim()),
-                child: const Text('Update'),
+                child: Text(l10n.mucUpdateNickname),
               ).withTapBounce(),
             ],
           ),
@@ -697,11 +719,13 @@ class _HeaderRow extends StatelessWidget {
     required this.canInvite,
     required this.onInviteTap,
     required this.onClose,
+    required this.l10n,
   });
 
   final bool canInvite;
   final Future<void> Function()? onInviteTap;
   final VoidCallback? onClose;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -709,7 +733,7 @@ class _HeaderRow extends StatelessWidget {
     return Row(
       children: [
         Text(
-          'Members',
+          l10n.mucMembersTitle,
           style: headerStyle,
         ),
         const Spacer(),
@@ -717,12 +741,12 @@ class _HeaderRow extends StatelessWidget {
           ShadButton.outline(
             size: ShadButtonSize.sm,
             onPressed: onInviteTap,
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(LucideIcons.userPlus, size: 16),
-                SizedBox(width: 6),
-                Text('Invite user'),
+                const Icon(LucideIcons.userPlus, size: 16),
+                const SizedBox(width: 6),
+                Text(l10n.mucInviteUser),
               ],
             ),
           ),
@@ -730,7 +754,7 @@ class _HeaderRow extends StatelessWidget {
           const SizedBox(width: 8),
           AxiIconButton(
             iconData: LucideIcons.x,
-            tooltip: 'Close',
+            tooltip: l10n.commonClose,
             onPressed: onClose,
           ),
         ],

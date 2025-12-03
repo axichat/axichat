@@ -5,6 +5,7 @@ import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -61,6 +62,7 @@ class _RosterListBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     var visibleItems = List<RosterItem>.from(items);
     final tabState = searchState?.stateFor(HomeTab.contacts);
     final searchActive = searchState?.active ?? false;
@@ -90,7 +92,7 @@ class _RosterListBody extends StatelessWidget {
     if (visibleItems.isEmpty) {
       return Center(
         child: Text(
-          'No contacts yet',
+          l10n.rosterEmpty,
           style: context.textTheme.muted,
         ),
       );
@@ -108,12 +110,11 @@ class _RosterListBody extends StatelessWidget {
           return ListItemPadding(
             child: AxiListTile(
               key: Key(item.jid),
-              onTap: () =>
-                  context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
+              onTap: () => context.read<ChatsCubit?>()?.pushChat(jid: item.jid),
               menuItems: [
                 ShadContextMenuItem(
                   leading: const Icon(LucideIcons.pencilLine),
-                  child: const Text('Compose'),
+                  child: Text(l10n.rosterCompose),
                   onPressed: () => context.read<ComposeWindowCubit>().openDraft(
                     jids: [item.jid],
                     attachmentMetadataIds: const <String>[],
@@ -128,7 +129,7 @@ class _RosterListBody extends StatelessWidget {
                     };
                     if (!isLoading &&
                         await confirm(context,
-                                text: 'Remove ${item.jid} from contacts?') ==
+                                text: l10n.rosterRemoveConfirm(item.jid)) ==
                             true &&
                         context.mounted) {
                       context

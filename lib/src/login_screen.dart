@@ -114,21 +114,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _completeOperation() async {
-    await _operationProgressController.complete();
-    if (!mounted) return;
-    setState(() {
-      final wasSignupFlow = _activeFlow == _AuthFlow.signup;
-      _activeFlow = null;
-      _operationAcknowledged = false;
-      if (wasSignupFlow && _signupFlowLocked) {
-        _signupFlowLocked = false;
-        _login = false;
-      }
-    });
-    _operationProgressController.reset();
-  }
-
   Future<void> _failOperation() async {
     await _operationProgressController.fail();
     if (!mounted) return;
@@ -169,6 +154,18 @@ class _LoginScreenState extends State<LoginScreen>
       } else if (state is AuthenticationLogInInProgress && state.fromSignup) {
         _restoreSignupFlow(context.l10n.authSecuringLogin);
         flow = _AuthFlow.signup;
+      } else if (state is AuthenticationLogInInProgress) {
+        if (!mounted) return;
+        setState(() {
+          _activeFlow = _AuthFlow.login;
+          _operationAcknowledged = true;
+          _operationLabel = context.l10n.authLoggingIn;
+          _login = true;
+        });
+        flow = _AuthFlow.login;
+        if (!_operationProgressController.isActive) {
+          _operationProgressController.start();
+        }
       } else {
         return;
       }
@@ -196,10 +193,6 @@ class _LoginScreenState extends State<LoginScreen>
       }
     }
     if (!_operationAcknowledged) {
-      return;
-    }
-    if (state is AuthenticationComplete) {
-      unawaited(_completeOperation());
       return;
     }
     if (state is AuthenticationFailure ||

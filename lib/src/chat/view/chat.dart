@@ -38,6 +38,7 @@ import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -117,7 +118,7 @@ const _selectionIndicatorInset =
 const _messageAvatarSize = 36.0;
 const _messageRowAvatarReservation = 32.0;
 const _messageAvatarCutoutDepth = _messageAvatarSize / 2;
-const _messageAvatarCutoutRadius = _messageAvatarCutoutDepth + 2.0;
+const _messageAvatarCutoutRadius = _messageAvatarCutoutDepth + 4.0;
 const _messageAvatarCutoutPadding = EdgeInsets.zero;
 const _messageAvatarCutoutMinThickness = _messageAvatarSize;
 const _messageAvatarCutoutAlignment = -1.0;
@@ -183,6 +184,9 @@ const _typingIndicatorBottomInset = 8.0;
 const _typingIndicatorRadius = 999.0;
 const _typingIndicatorPadding =
     EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+const _typingIndicatorMaxAvatars = 7;
+const _typingAvatarBorderWidth = 1.6;
+const _typingAvatarSpacing = 4.0;
 
 class _MessageFilterOption {
   const _MessageFilterOption(this.filter, this.label);
@@ -682,6 +686,20 @@ class _ChatState extends State<Chat> {
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
+  }
+
+  List<String> _demoTypingParticipants(ChatState state) {
+    if (!kEnableDemoChats) return const [];
+    final chat = state.chat;
+    if (chat?.type != ChatType.groupChat) return const [];
+    final room = state.roomState;
+    if (room == null) return const [];
+    final participants = room.occupants.values
+        .map((occupant) => occupant.realJid ?? occupant.occupantId)
+        .whereType<String>()
+        .where((jid) => jid.isNotEmpty)
+        .toList(growable: false);
+    return participants;
   }
 
   void _appendTaskShareText(CalendarTask task) {
@@ -2269,6 +2287,7 @@ class _ChatState extends State<Chat> {
                     ? null
                     : state.roomState?.occupants[myOccupantId];
                 final shareContexts = state.shareContexts;
+                final shareReplies = state.shareReplies;
                 final recipients = state.recipients;
                 final pendingAttachments = state.pendingAttachments;
                 final latestStatuses = _latestRecipientStatuses(state);
@@ -2278,6 +2297,7 @@ class _ChatState extends State<Chat> {
                     : fanOutReports.entries.last;
                 final showAttachmentWarning =
                     warningEntry?.value.attachmentWarning ?? false;
+                final chatsState = context.watch<ChatsCubit?>()?.state;
                 final retryEntry = _lastReportEntryWhere(
                   fanOutReports.entries,
                   (entry) => entry.value.hasFailures,
@@ -2285,10 +2305,40 @@ class _ChatState extends State<Chat> {
                 final retryReport = retryEntry?.value;
                 final retryShareId = retryEntry?.key;
                 final availableChats =
-                    (context.watch<ChatsCubit?>()?.state.items ??
-                            const <chat_models.Chat>[])
+                    (chatsState?.items ?? const <chat_models.Chat>[])
                         .where((chat) => chat.jid != chatEntity?.jid)
                         .toList();
+                final openStack = chatsState?.openStack ?? const <String>[];
+                final forwardStack =
+                    chatsState?.forwardStack ?? const <String>[];
+                bool prepareChatExit() {
+                  if (_chatRoute != _ChatRoute.main) {
+                    context
+                        .read<ChatBloc>()
+                        .add(const ChatMessageFocused(null));
+                    setState(() {
+                      _chatRoute = _ChatRoute.main;
+                      _settingsPanelExpanded = false;
+                    });
+                    return false;
+                  }
+                  final targetJid = state.chat?.jid;
+                  final hasDraftText = _textController.text.isNotEmpty;
+                  if (hasDraftText && !isDefaultEmail && targetJid != null) {
+                    context.read<DraftCubit?>()?.saveDraft(
+                          id: null,
+                          jids: [targetJid],
+                          body: _textController.text,
+                        );
+                  }
+                  if (_settingsPanelExpanded) {
+                    setState(() {
+                      _settingsPanelExpanded = false;
+                    });
+                  }
+                  return true;
+                }
+
                 final isGroupChat = chatEntity?.type == ChatType.groupChat;
                 final selfUserId = isGroupChat && myOccupantId != null
                     ? myOccupantId
@@ -2324,52 +2374,89 @@ class _ChatState extends State<Chat> {
                               BorderSide(color: context.colorScheme.border)),
                       actionsPadding:
                           const EdgeInsets.symmetric(horizontal: 8.0),
-                      leadingWidth:
-                          readOnly ? 0 : (AxiIconButton.kDefaultSize + 24),
+                      leadingWidth: readOnly
+                          ? 0
+                          : ((AxiIconButton.kDefaultSize + 8) *
+                                  ((openStack.length > 1 ? 1 : 0) +
+                                      (forwardStack.isNotEmpty ? 1 : 0) +
+                                      1)) +
+                              12,
                       leading: readOnly
                           ? null
                           : Padding(
                               padding: const EdgeInsets.only(left: 12),
                               child: Align(
                                 alignment: Alignment.centerLeft,
-                                child: SizedBox(
-                                  width: AxiIconButton.kDefaultSize,
-                                  height: AxiIconButton.kDefaultSize,
-                                  child: AxiIconButton(
-                                    iconData: LucideIcons.arrowLeft,
-                                    tooltip: context.l10n.chatBack,
-                                    color: context.colorScheme.foreground,
-                                    borderColor: context.colorScheme.border,
-                                    onPressed: () {
-                                      if (_chatRoute != _ChatRoute.main) {
-                                        context.read<ChatBloc>().add(
-                                            const ChatMessageFocused(null));
-                                        return setState(() {
-                                          _chatRoute = _ChatRoute.main;
-                                          _settingsPanelExpanded = false;
-                                        });
-                                      }
-                                      if (_textController.text.isNotEmpty) {
-                                        if (!isDefaultEmail) {
-                                          context
-                                              .read<DraftCubit?>()
-                                              ?.saveDraft(
-                                                id: null,
-                                                jids: [state.chat!.jid],
-                                                body: _textController.text,
-                                              );
-                                        }
-                                      }
-                                      if (_settingsPanelExpanded) {
-                                        setState(() {
-                                          _settingsPanelExpanded = false;
-                                        });
-                                      }
-                                      context
-                                          .read<ChatsCubit>()
-                                          .toggleChat(jid: state.chat!.jid);
-                                    },
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (openStack.length > 1)
+                                      SizedBox(
+                                        width: AxiIconButton.kDefaultSize,
+                                        height: AxiIconButton.kDefaultSize,
+                                        child: AxiIconButton(
+                                          iconData: LucideIcons.arrowLeft,
+                                          tooltip: context.l10n.chatBack,
+                                          color: context.colorScheme.foreground,
+                                          borderColor:
+                                              context.colorScheme.border,
+                                          onPressed: () {
+                                            if (!prepareChatExit()) return;
+                                            unawaited(
+                                              context
+                                                  .read<ChatsCubit>()
+                                                  .popChat(),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    if (openStack.length > 1 &&
+                                        forwardStack.isNotEmpty)
+                                      const SizedBox(width: 8),
+                                    if (forwardStack.isNotEmpty)
+                                      SizedBox(
+                                        width: AxiIconButton.kDefaultSize,
+                                        height: AxiIconButton.kDefaultSize,
+                                        child: AxiIconButton(
+                                          iconData: LucideIcons.arrowRight,
+                                          tooltip:
+                                              context.l10n.chatMessageOpenChat,
+                                          color: context.colorScheme.foreground,
+                                          borderColor:
+                                              context.colorScheme.border,
+                                          onPressed: () {
+                                            if (!prepareChatExit()) return;
+                                            unawaited(
+                                              context
+                                                  .read<ChatsCubit>()
+                                                  .restoreChat(),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    if ((openStack.length > 1 ||
+                                            forwardStack.isNotEmpty) &&
+                                        !readOnly)
+                                      const SizedBox(width: 8),
+                                    SizedBox(
+                                      width: AxiIconButton.kDefaultSize,
+                                      height: AxiIconButton.kDefaultSize,
+                                      child: AxiIconButton(
+                                        iconData: LucideIcons.x,
+                                        tooltip: context.l10n.commonClose,
+                                        color: context.colorScheme.foreground,
+                                        borderColor: context.colorScheme.border,
+                                        onPressed: () {
+                                          if (!prepareChatExit()) return;
+                                          unawaited(
+                                            context
+                                                .read<ChatsCubit>()
+                                                .closeAllChats(),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -2777,6 +2864,8 @@ class _ChatState extends State<Chat> {
                                             'shareContext': shareContext,
                                             'shareParticipants':
                                                 bannerParticipants,
+                                            'replyParticipants':
+                                                shareReplies[e.stanzaID],
                                             'showSubject': showSubjectHeader,
                                             'subjectLabel': subjectLabel,
                                             'isEmailMessage': isEmailMessage,
@@ -2912,15 +3001,27 @@ class _ChatState extends State<Chat> {
                                     );
                                     final remoteTyping =
                                         state.chat?.chatState?.name ==
-                                                'composing'
-                                            ? ChatUser(
-                                                id: state.chat!.jid,
-                                                firstName: state.chat!.title,
-                                              )
-                                            : null;
+                                            'composing';
+                                    final demoTypingAvatars =
+                                        _demoTypingParticipants(state);
+                                    final fallbackTypingJid =
+                                        state.chat?.contactJid ??
+                                            state.chat?.jid;
+                                    final typingAvatars = demoTypingAvatars
+                                            .isNotEmpty
+                                        ? demoTypingAvatars
+                                        : state.typingParticipants.isNotEmpty
+                                            ? state.typingParticipants
+                                            : remoteTyping &&
+                                                    fallbackTypingJid != null &&
+                                                    fallbackTypingJid.isNotEmpty
+                                                ? [fallbackTypingJid]
+                                                : const <String>[];
                                     final typingVisible =
                                         state.typing == true ||
-                                            remoteTyping != null;
+                                            remoteTyping ||
+                                            typingAvatars.isNotEmpty ||
+                                            demoTypingAvatars.isNotEmpty;
                                     return Column(
                                       children: [
                                         Expanded(
@@ -3235,6 +3336,18 @@ class _ChatState extends State<Chat> {
                                                                 as List<
                                                                     ReactionPreview>?) ??
                                                             const <ReactionPreview>[];
+                                                        final replyParticipants =
+                                                            (message.customProperties?[
+                                                                        'replyParticipants']
+                                                                    as List<
+                                                                        chat_models
+                                                                        .Chat>?) ??
+                                                                const <chat_models
+                                                                    .Chat>[];
+                                                        final showReplyStrip =
+                                                            isEmailMessage &&
+                                                                replyParticipants
+                                                                    .isNotEmpty;
                                                         final canReact =
                                                             !isEmailChat;
                                                         final isSingleSelection =
@@ -3255,7 +3368,8 @@ class _ChatState extends State<Chat> {
                                                             canReact &&
                                                                 isSingleSelection;
                                                         final showCompactReactions =
-                                                            reactions
+                                                            !showReplyStrip &&
+                                                                reactions
                                                                     .isNotEmpty &&
                                                                 !showReactionManager;
                                                         final isInviteMessage = (message
@@ -3633,6 +3747,13 @@ class _ChatState extends State<Chat> {
                                                           bubbleBottomInset =
                                                               _reactionBubbleInset;
                                                         }
+                                                        if (showReplyStrip) {
+                                                          bubbleBottomInset =
+                                                              math.max(
+                                                            bubbleBottomInset,
+                                                            _recipientBubbleInset,
+                                                          );
+                                                        }
                                                         if (showRecipientCutout) {
                                                           bubbleBottomInset =
                                                               math.max(
@@ -3643,10 +3764,13 @@ class _ChatState extends State<Chat> {
                                                         final isRenderableBubble =
                                                             !(isSelectionSpacer ||
                                                                 isEmptyState);
-                                                        final hasAvatarSlot =
+                                                        final requiresAvatarHeadroom =
                                                             isGroupChat &&
                                                                 isRenderableBubble &&
                                                                 !self;
+                                                        final hasAvatarSlot =
+                                                            requiresAvatarHeadroom &&
+                                                                !chainedPrev;
                                                         EdgeInsetsGeometry
                                                             bubblePadding =
                                                             _bubblePadding;
@@ -3757,6 +3881,13 @@ class _ChatState extends State<Chat> {
                                                             _reactionCutoutDepth,
                                                           );
                                                         }
+                                                        if (showReplyStrip) {
+                                                          extraOuterBottom =
+                                                              math.max(
+                                                            extraOuterBottom,
+                                                            _recipientCutoutDepth,
+                                                          );
+                                                        }
                                                         if (showRecipientCutout) {
                                                           extraOuterBottom =
                                                               math.max(
@@ -3795,9 +3926,11 @@ class _ChatState extends State<Chat> {
                                                           avatarAnchor =
                                                               ChatBubbleCutoutAnchor
                                                                   .left;
-                                                          extraOuterLeft =
-                                                              _messageAvatarOuterInset;
                                                         }
+                                                        extraOuterLeft =
+                                                            requiresAvatarHeadroom
+                                                                ? _messageAvatarOuterInset
+                                                                : 0;
                                                         final outerPadding =
                                                             EdgeInsets.only(
                                                           top: 2,
@@ -3852,8 +3985,23 @@ class _ChatState extends State<Chat> {
                                                                   _bubbleRadius +
                                                                       _reactionCornerClearance,
                                                               body: child!,
-                                                              reactionOverlay:
-                                                                  showCompactReactions
+                                                              reactionOverlay: showReplyStrip
+                                                                  ? _ReplyStrip(
+                                                                      participants:
+                                                                          replyParticipants,
+                                                                      onRecipientTap:
+                                                                          (chat) {
+                                                                        final chatsCubit =
+                                                                            context.read<ChatsCubit?>();
+                                                                        if (chatsCubit !=
+                                                                            null) {
+                                                                          unawaited(
+                                                                            chatsCubit.pushChat(jid: chat.jid),
+                                                                          );
+                                                                        }
+                                                                      },
+                                                                    )
+                                                                  : showCompactReactions
                                                                       ? _ReactionStrip(
                                                                           reactions:
                                                                               reactions,
@@ -3865,8 +4013,20 @@ class _ChatState extends State<Chat> {
                                                                               : null,
                                                                         )
                                                                       : null,
-                                                              reactionStyle:
-                                                                  showCompactReactions
+                                                              reactionStyle: showReplyStrip
+                                                                  ? const CutoutStyle(
+                                                                      depth:
+                                                                          _recipientCutoutDepth,
+                                                                      cornerRadius:
+                                                                          _recipientCutoutRadius,
+                                                                      padding:
+                                                                          _recipientCutoutPadding,
+                                                                      offset:
+                                                                          _recipientCutoutOffset,
+                                                                      minThickness:
+                                                                          _recipientCutoutMinThickness,
+                                                                    )
+                                                                  : showCompactReactions
                                                                       ? const CutoutStyle(
                                                                           depth:
                                                                               _reactionCutoutDepth,
@@ -4483,34 +4643,49 @@ class _ChatState extends State<Chat> {
                                                 ),
                                                 if (typingVisible)
                                                   Positioned(
-                                                    left:
-                                                        _messageListHorizontalPadding,
-                                                    right:
-                                                        _messageListHorizontalPadding,
+                                                    left: 0,
+                                                    right: 0,
                                                     bottom:
                                                         _typingIndicatorBottomInset,
                                                     child: IgnorePointer(
-                                                      child: DecoratedBox(
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: context
-                                                              .colorScheme.card,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                            _typingIndicatorRadius,
-                                                          ),
-                                                          border: Border.all(
-                                                            color: context
-                                                                .colorScheme
-                                                                .border,
-                                                          ),
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                          horizontal:
+                                                              _messageListHorizontalPadding,
                                                         ),
-                                                        child: const Padding(
-                                                          padding:
-                                                              _typingIndicatorPadding,
-                                                          child:
-                                                              TypingIndicator(),
+                                                        child: Align(
+                                                          alignment: Alignment
+                                                              .bottomCenter,
+                                                          child: DecoratedBox(
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: context
+                                                                  .colorScheme
+                                                                  .card,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                _typingIndicatorRadius,
+                                                              ),
+                                                              border:
+                                                                  Border.all(
+                                                                color: context
+                                                                    .colorScheme
+                                                                    .border,
+                                                              ),
+                                                            ),
+                                                            child: Padding(
+                                                              padding:
+                                                                  _typingIndicatorPadding,
+                                                              child:
+                                                                  _TypingIndicatorPill(
+                                                                participants:
+                                                                    typingAvatars,
+                                                              ),
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
@@ -4735,7 +4910,7 @@ class _ChatState extends State<Chat> {
     }
     context.read<ChatBloc>().add(ChatInviteJoinRequested(message));
     if (context.read<ChatsCubit?>() != null) {
-      await context.read<ChatsCubit>().toggleChat(jid: roomJid);
+      await context.read<ChatsCubit>().pushChat(jid: roomJid);
     }
   }
 
@@ -5266,8 +5441,66 @@ _CutoutLayoutResult<chat_models.Chat> _layoutRecipientStrip(
   );
 }
 
+_CutoutLayoutResult<String> _layoutTypingStrip(
+  List<String> participants,
+  double maxContentWidth,
+) {
+  if (participants.isEmpty || maxContentWidth <= 0) {
+    return const _CutoutLayoutResult(
+      items: <String>[],
+      overflowed: false,
+      totalWidth: 0,
+    );
+  }
+  final capped =
+      participants.take(_typingIndicatorMaxAvatars + 1).toList(growable: false);
+  final visible = <String>[];
+  final additions = <double>[];
+  double used = 0;
+
+  for (final participant in capped) {
+    if (visible.length >= _typingIndicatorMaxAvatars) break;
+    final addition = visible.isEmpty
+        ? _recipientAvatarSize
+        : _recipientAvatarSize - _recipientAvatarOverlap;
+    if (used + addition > maxContentWidth) {
+      break;
+    }
+    visible.add(participant);
+    additions.add(addition);
+    used += addition;
+  }
+
+  final truncated = visible.length < participants.length;
+  double totalWidth = used;
+
+  if (truncated) {
+    var ellipsisWidth = visible.isEmpty
+        ? _recipientAvatarSize
+        : _recipientAvatarSize - _recipientAvatarOverlap;
+    while (visible.isNotEmpty && totalWidth + ellipsisWidth > maxContentWidth) {
+      totalWidth -= additions.removeLast();
+      visible.removeLast();
+      ellipsisWidth = visible.isEmpty
+          ? _recipientAvatarSize
+          : _recipientAvatarSize - _recipientAvatarOverlap;
+    }
+    if (visible.isEmpty) {
+      totalWidth = math.min(ellipsisWidth, maxContentWidth);
+    } else {
+      totalWidth = math.min(maxContentWidth, totalWidth + ellipsisWidth);
+    }
+  }
+
+  return _CutoutLayoutResult(
+    items: visible,
+    overflowed: truncated,
+    totalWidth: totalWidth,
+  );
+}
+
 class _MessageAvatar extends StatelessWidget {
-  const _MessageAvatar({required this.jid, this.size = _messageAvatarSize});
+  const _MessageAvatar({required this.jid, required this.size});
 
   final String jid;
   final double size;
@@ -5355,6 +5588,73 @@ class _ReactionOverflowGlyph extends StatelessWidget {
               .apply(leadingDistribution: TextLeadingDistribution.even),
         ),
       ),
+    );
+  }
+}
+
+class _ReplyStrip extends StatelessWidget {
+  const _ReplyStrip({
+    required this.participants,
+    this.onRecipientTap,
+  });
+
+  final List<chat_models.Chat> participants;
+  final ValueChanged<chat_models.Chat>? onRecipientTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.hasBoundedWidth &&
+                constraints.maxWidth.isFinite &&
+                constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : double.infinity;
+        final layout = _layoutRecipientStrip(participants, maxWidth);
+        final visible = layout.items;
+        final overflowed = layout.overflowed;
+        final children = <Widget>[];
+        for (var i = 0; i < visible.length; i++) {
+          final chat = visible[i];
+          final offset = i * (_recipientAvatarSize - _recipientAvatarOverlap);
+          children.add(
+            Positioned(
+              left: offset,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap:
+                    onRecipientTap == null ? null : () => onRecipientTap!(chat),
+                child: _RecipientAvatarBadge(chat: chat),
+              ),
+            ),
+          );
+        }
+        if (overflowed) {
+          final offset = visible.isEmpty
+              ? 0.0
+              : visible.length *
+                      (_recipientAvatarSize - _recipientAvatarOverlap) +
+                  _recipientOverflowGap;
+          children.add(
+            Positioned(
+              left: offset,
+              child: const _RecipientOverflowAvatar(),
+            ),
+          );
+        }
+        final baseWidth = layout.totalWidth;
+        final totalWidth = overflowed
+            ? baseWidth + _recipientOverflowGap + _recipientAvatarSize
+            : math.max(baseWidth, _recipientAvatarSize);
+        return SizedBox(
+          width: totalWidth,
+          height: _recipientAvatarSize,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: children,
+          ),
+        );
+      },
     );
   }
 }
@@ -5476,6 +5776,127 @@ class _RecipientOverflowAvatar extends StatelessWidget {
                 height: 1,
               )
               .apply(leadingDistribution: TextLeadingDistribution.even),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypingIndicatorPill extends StatelessWidget {
+  const _TypingIndicatorPill({required this.participants});
+
+  final List<String> participants;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final avatarStrip =
+            participants.isEmpty ? null : _TypingAvatarStrip(participants);
+        final hasBoundedWidth =
+            constraints.hasBoundedWidth && constraints.maxWidth.isFinite;
+        final maxWidth = hasBoundedWidth ? constraints.maxWidth : null;
+        return ConstrainedBox(
+          constraints: maxWidth == null
+              ? const BoxConstraints()
+              : BoxConstraints(maxWidth: maxWidth),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (avatarStrip != null)
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: avatarStrip,
+                ),
+              if (avatarStrip != null)
+                const SizedBox(width: _typingAvatarSpacing),
+              const TypingIndicator(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TypingAvatarStrip extends StatelessWidget {
+  const _TypingAvatarStrip(this.participants);
+
+  final List<String> participants;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.hasBoundedWidth &&
+                constraints.maxWidth.isFinite &&
+                constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : double.infinity;
+        final layout = _layoutTypingStrip(participants, maxWidth);
+        final visible = layout.items;
+        final overflowed = layout.overflowed;
+        final children = <Widget>[];
+        for (var i = 0; i < visible.length; i++) {
+          final offset = i * (_recipientAvatarSize - _recipientAvatarOverlap);
+          children.add(
+            Positioned(
+              left: offset,
+              child: _TypingAvatar(jid: visible[i]),
+            ),
+          );
+        }
+        if (overflowed) {
+          final offset = visible.isEmpty
+              ? 0.0
+              : visible.length *
+                      (_recipientAvatarSize - _recipientAvatarOverlap) +
+                  _recipientOverflowGap;
+          children.add(
+            Positioned(
+              left: offset,
+              child: const _RecipientOverflowAvatar(),
+            ),
+          );
+        }
+        final baseWidth = layout.totalWidth;
+        final totalWidth = overflowed
+            ? baseWidth + _recipientOverflowGap + _recipientAvatarSize
+            : math.max(baseWidth, _recipientAvatarSize);
+        return SizedBox(
+          width: totalWidth,
+          height: _recipientAvatarSize,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: children,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TypingAvatar extends StatelessWidget {
+  const _TypingAvatar({required this.jid});
+
+  final String jid;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = context.colorScheme.card;
+    return Container(
+      width: _recipientAvatarSize,
+      height: _recipientAvatarSize,
+      padding: const EdgeInsets.all(_typingAvatarBorderWidth),
+      decoration: BoxDecoration(
+        color: borderColor,
+        shape: BoxShape.circle,
+      ),
+      child: ClipOval(
+        child: AxiAvatar(
+          jid: jid,
+          size: _recipientAvatarSize - (_typingAvatarBorderWidth * 2),
         ),
       ),
     );
@@ -6394,10 +6815,10 @@ class _MessageActionBar extends StatelessWidget {
 
 class _MessageArrivalAnimator extends StatefulWidget {
   const _MessageArrivalAnimator({
+    super.key,
     required this.child,
     required this.animate,
     required this.isSelf,
-    super.key,
   });
 
   final Widget child;
@@ -7226,7 +7647,6 @@ class _QuoteBanner extends StatelessWidget {
     required this.isSelf,
     required this.onClear,
   });
-
   final Message message;
   final bool isSelf;
   final VoidCallback onClear;

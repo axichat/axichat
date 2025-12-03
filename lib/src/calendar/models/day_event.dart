@@ -9,7 +9,6 @@ part 'day_event.g.dart';
 
 @freezed
 @HiveType(typeId: 40)
-@JsonSerializable(explicitToJson: true)
 class DayEvent with _$DayEvent {
   const factory DayEvent({
     @HiveField(0) required String id,

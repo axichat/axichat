@@ -1,6 +1,7 @@
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -12,10 +13,11 @@ class RosterAddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
+    final l10n = context.l10n;
     return AxiDialogFab(
-      tooltip: 'Add to roster',
+      tooltip: l10n.rosterAddTooltip,
       iconData: LucideIcons.userPlus,
-      label: 'Contact',
+      label: l10n.rosterAddLabel,
       dialogBuilder: (context) {
         String jid = '';
         String? title;
@@ -31,7 +33,7 @@ class RosterAddButton extends StatelessWidget {
           child: StatefulBuilder(
             builder: (context, setState) {
               return AxiInputDialog(
-                title: const Text('Add contact'),
+                title: Text(l10n.rosterAddTitle),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

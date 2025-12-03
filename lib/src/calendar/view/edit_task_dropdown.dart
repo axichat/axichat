@@ -6,7 +6,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
@@ -20,7 +19,6 @@ import 'widgets/recurrence_editor.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_checklist.dart';
-import 'widgets/task_text_field.dart';
 import 'widgets/reminder_preferences_field.dart';
 
 class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
@@ -58,11 +56,12 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
 
 class _EditTaskDropdownState<B extends BaseCalendarBloc>
     extends State<EditTaskDropdown<B>> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
   late final TaskChecklistController _checklistController;
-  String? _titleError;
+  final FocusNode _titleFocusNode = FocusNode();
 
   bool _isImportant = false;
   bool _isUrgent = false;
@@ -94,6 +93,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     _checklistController
       ..removeListener(_refresh)
       ..dispose();
+    _titleFocusNode.dispose();
     super.dispose();
   }
 
@@ -155,7 +155,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _recurrence = RecurrenceFormValue.fromRule(task.recurrence)
           .resolveLinkedLimits(_startTime ?? task.scheduledTime);
       _reminders = task.effectiveReminders;
-      _titleError = null;
     }
 
     if (rebuild && mounted) {
@@ -182,128 +181,133 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               offset: Offset(0, 8),
             ),
           ];
-    final Widget body = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _EditTaskHeader(onClose: widget.onClose),
-        const Divider(height: 1),
-        Flexible(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterLg, vertical: calendarGutterMd),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _EditTaskInlineActionsSection<B>(
-                  inlineActionsBloc: widget.inlineActionsBloc,
-                  inlineActionsBuilder: widget.inlineActionsBuilder,
-                ),
-                _EditTaskTitleField(
-                  controller: _titleController,
-                  errorText: _titleError,
-                  onChanged: _handleTitleChanged,
-                ),
-                const SizedBox(height: calendarFormGap),
-                _EditTaskPriorityRow(
-                  isImportant: _isImportant,
-                  isUrgent: _isUrgent,
-                  onImportantChanged: (value) =>
-                      setState(() => _isImportant = value),
-                  onUrgentChanged: (value) => setState(() => _isUrgent = value),
-                ),
-                const TaskSectionDivider(
-                  verticalPadding: calendarGutterMd,
-                ),
-                _EditTaskDescriptionField(controller: _descriptionController),
-                const SizedBox(height: calendarFormGap),
-                TaskChecklist(controller: _checklistController),
-                const TaskSectionDivider(
-                  verticalPadding: calendarGutterMd,
-                ),
-                _EditTaskLocationField(
-                  controller: _locationController,
-                  locationHelper: widget.locationHelper,
-                ),
-                const TaskSectionDivider(
-                  verticalPadding: calendarGutterMd,
-                ),
-                _EditTaskScheduleSection(
-                  start: _startTime,
-                  end: _endTime,
-                  onStartChanged: _handleStartChanged,
-                  onEndChanged: _handleEndChanged,
-                ),
-                const TaskSectionDivider(
-                  verticalPadding: calendarGutterMd,
-                ),
-                _EditTaskDeadlineField(
-                  deadline: _deadline,
-                  onChanged: (value) => setState(() => _deadline = value),
-                ),
-                const TaskSectionDivider(
-                  verticalPadding: calendarGutterMd,
-                ),
-                _EditTaskReminderSection(
-                  reminders: _reminders,
-                  deadline: _deadline,
-                  onChanged: (value) => setState(() {
-                    _reminders = value;
-                  }),
-                ),
-                const TaskSectionDivider(
-                  verticalPadding: calendarGutterMd,
-                ),
-                _EditTaskRecurrenceSection(
-                  value: _recurrence,
-                  fallbackWeekday: _recurrenceFallbackWeekday,
-                  onChanged: _handleRecurrenceChanged,
-                ),
-                const TaskSectionDivider(
-                  verticalPadding: calendarGutterMd,
-                ),
-                _EditTaskCompletionToggle(
-                  value: _isCompleted,
-                  onChanged: (value) => setState(() => _isCompleted = value),
-                ),
-                const SizedBox(height: calendarFormGap),
-                _TaskCriticalPathMembership<B>(
-                  task: widget.task,
-                  blocOverride: widget.inlineActionsBloc,
-                ),
-                const SizedBox(height: calendarFormGap),
-              ],
+    final Widget body = Form(
+      key: _formKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _EditTaskHeader(onClose: widget.onClose),
+          const Divider(height: 1),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: calendarGutterLg, vertical: calendarGutterMd),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _EditTaskInlineActionsSection<B>(
+                    inlineActionsBloc: widget.inlineActionsBloc,
+                    inlineActionsBuilder: widget.inlineActionsBuilder,
+                  ),
+                  _EditTaskTitleField(
+                    controller: _titleController,
+                    validator: (value) =>
+                        TaskTitleValidation.validate(value ?? ''),
+                    onChanged: _handleTitleChanged,
+                    focusNode: _titleFocusNode,
+                  ),
+                  const SizedBox(height: calendarFormGap),
+                  _EditTaskDescriptionField(
+                    controller: _descriptionController,
+                  ),
+                  const SizedBox(height: calendarFormGap),
+                  _EditTaskLocationField(
+                    controller: _locationController,
+                    locationHelper: widget.locationHelper,
+                  ),
+                  const SizedBox(height: calendarFormGap),
+                  _EditTaskPriorityRow(
+                    isImportant: _isImportant,
+                    isUrgent: _isUrgent,
+                    onImportantChanged: (value) =>
+                        setState(() => _isImportant = value),
+                    onUrgentChanged: (value) =>
+                        setState(() => _isUrgent = value),
+                  ),
+                  const SizedBox(height: calendarFormGap),
+                  TaskChecklist(controller: _checklistController),
+                  const TaskSectionDivider(
+                    verticalPadding: calendarGutterMd,
+                  ),
+                  _EditTaskScheduleSection(
+                    start: _startTime,
+                    end: _endTime,
+                    onStartChanged: _handleStartChanged,
+                    onEndChanged: _handleEndChanged,
+                  ),
+                  const TaskSectionDivider(
+                    verticalPadding: calendarGutterMd,
+                  ),
+                  _EditTaskDeadlineField(
+                    deadline: _deadline,
+                    onChanged: (value) => setState(() => _deadline = value),
+                  ),
+                  const TaskSectionDivider(
+                    verticalPadding: calendarGutterMd,
+                  ),
+                  _EditTaskReminderSection(
+                    reminders: _reminders,
+                    deadline: _deadline,
+                    onChanged: (value) => setState(() {
+                      _reminders = value;
+                    }),
+                  ),
+                  const TaskSectionDivider(
+                    verticalPadding: calendarGutterMd,
+                  ),
+                  _EditTaskRecurrenceSection(
+                    value: _recurrence,
+                    fallbackWeekday: _recurrenceFallbackWeekday,
+                    onChanged: _handleRecurrenceChanged,
+                  ),
+                  const TaskSectionDivider(
+                    verticalPadding: calendarGutterMd,
+                  ),
+                  _EditTaskCompletionToggle(
+                    value: _isCompleted,
+                    onChanged: (value) => setState(() => _isCompleted = value),
+                  ),
+                  const SizedBox(height: calendarFormGap),
+                  _TaskCriticalPathMembership<B>(
+                    task: widget.task,
+                    blocOverride: widget.inlineActionsBloc,
+                  ),
+                  const SizedBox(height: calendarFormGap),
+                ],
+              ),
             ),
           ),
-        ),
-        AnimatedPadding(
-          duration: baseAnimationDuration,
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.only(
-            bottom: _actionBarBottomInset(context),
-          ),
-          child: SafeArea(
-            top: false,
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _titleController,
-              builder: (context, value, _) {
-                final bool canSave =
-                    _titleError == null && value.text.trim().isNotEmpty;
-                return _EditTaskActionsRow(
-                  task: widget.task,
-                  onDelete: () {
-                    widget.onTaskDeleted(widget.task.id);
-                    widget.onClose();
-                  },
-                  onCancel: widget.onClose,
-                  onSave: _handleSave,
-                  canSave: canSave,
-                );
-              },
+          AnimatedPadding(
+            duration: baseAnimationDuration,
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(
+              bottom: _actionBarBottomInset(context),
+            ),
+            child: SafeArea(
+              top: false,
+              child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _titleController,
+                builder: (context, value, _) {
+                  final bool canSave =
+                      _formKey.currentState?.validate() ?? false;
+                  return _EditTaskActionsRow(
+                    task: widget.task,
+                    onDelete: () {
+                      widget.onTaskDeleted(widget.task.id);
+                      widget.onClose();
+                    },
+                    onCancel: widget.onClose,
+                    onSave: _handleSave,
+                    canSave: canSave,
+                  );
+                },
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
     Widget content = Material(
       color: Colors.transparent,
@@ -336,26 +340,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   }
 
   void _handleTitleChanged(String value) {
-    final bool tooLong = TaskTitleValidation.isTooLong(value);
-    final bool hasContent = value.trim().isNotEmpty;
-    String? nextError = _titleError;
-
-    if (tooLong) {
-      nextError = calendarTaskTitleFriendlyError;
-    } else {
-      if (_titleError == calendarTaskTitleFriendlyError) {
-        nextError = null;
-      }
-      if (_titleError == TaskTitleValidation.requiredMessage && hasContent) {
-        nextError = null;
-      }
-    }
-
-    if (nextError != _titleError) {
-      setState(() {
-        _titleError = nextError;
-      });
-    }
+    _formKey.currentState?.validate();
   }
 
   int get _recurrenceFallbackWeekday =>
@@ -402,11 +387,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   }
 
   void _handleSave() {
-    final validationError = TaskTitleValidation.validate(_titleController.text);
-    if (validationError != null) {
-      setState(() {
-        _titleError = validationError;
-      });
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _titleFocusNode.requestFocus();
       return;
     }
 
@@ -511,13 +493,9 @@ class _EditTaskHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Text(
+          Text(
             'Edit Task',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: calendarTitleColor,
-            ),
+            style: calendarTitleTextStyle.copyWith(fontSize: 18),
           ),
           const Spacer(),
           AxiIconButton(
@@ -648,27 +626,30 @@ class _EditTaskInlineActionChip extends StatelessWidget {
 class _EditTaskTitleField extends StatelessWidget {
   const _EditTaskTitleField({
     required this.controller,
-    required this.errorText,
+    required this.validator,
     required this.onChanged,
+    this.focusNode,
   });
 
   final TextEditingController controller;
-  final String? errorText;
+  final FormFieldValidator<String> validator;
   final ValueChanged<String> onChanged;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskTextField(
+        TaskTitleField(
           controller: controller,
+          focusNode: focusNode,
           autofocus: true,
           hintText: 'Task title',
-          textCapitalization: TextCapitalization.sentences,
-          contentPadding: calendarMenuItemPadding,
           onChanged: onChanged,
-          errorText: errorText,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          textInputAction: TextInputAction.done,
         ),
         TaskFieldCharacterHint(controller: controller),
       ],
@@ -685,14 +666,15 @@ class _EditTaskDescriptionField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TaskTextField(
+    return TaskDescriptionField(
       controller: controller,
       hintText: 'Description (optional)',
       minLines: 2,
       maxLines: 4,
-      textInputAction: TextInputAction.newline,
       textCapitalization: TextCapitalization.sentences,
-      contentPadding: calendarMenuItemPadding,
+      borderRadius: calendarBorderRadius,
+      focusBorderColor: calendarPrimaryColor,
+      contentPadding: calendarFieldPadding,
     );
   }
 }
@@ -712,7 +694,9 @@ class _EditTaskLocationField extends StatelessWidget {
       controller: controller,
       hintText: 'Location (optional)',
       textCapitalization: TextCapitalization.words,
-      contentPadding: calendarMenuItemPadding,
+      contentPadding: calendarFieldPadding,
+      borderRadius: calendarBorderRadius,
+      focusBorderColor: calendarPrimaryColor,
       autocomplete: locationHelper,
     );
   }

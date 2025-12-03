@@ -16,6 +16,12 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
   final Logger _chatLog = Logger('ChatsService');
+  static const _typingParticipantLinger = Duration(seconds: 6);
+  static const _typingParticipantMaxCount = 7;
+  final Map<String, Set<String>> _typingParticipants = {};
+  final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
+  final Map<String, StreamController<List<String>>> _typingParticipantStreams =
+      {};
 
   bool _isMucChatJid(String jid) {
     try {
@@ -181,6 +187,116 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       createSingleItemStream<Chat?, XmppDatabase>(
         watchFunction: (db) async => db.watchChat(jid),
       );
+
+  Stream<List<String>> typingParticipantsStream(String jid) {
+    final controller = _typingParticipantStreams.putIfAbsent(
+      jid,
+      () => StreamController<List<String>>.broadcast(
+        onListen: () => _emitTypingParticipants(jid),
+        onCancel: () => _disposeTypingParticipantsIfIdle(jid),
+      ),
+    );
+    _typingParticipants.putIfAbsent(jid, () => <String>{});
+    _typingParticipantExpiry.putIfAbsent(jid, () => <String, Timer>{});
+    return controller.stream;
+  }
+
+  void clearTypingParticipants(String jid) {
+    final participants = _typingParticipants[jid];
+    if (participants != null) {
+      participants.clear();
+    }
+    final timers = _typingParticipantExpiry.remove(jid);
+    timers?.values.forEach((timer) => timer.cancel());
+    _emitTypingParticipants(jid);
+  }
+
+  void _trackTypingParticipant({
+    required String chatJid,
+    required String senderJid,
+    required mox.ChatState state,
+  }) {
+    final myBare = _myJid?.toBare().toString();
+    final senderBare = _safeBareJid(senderJid);
+    if (senderBare != null && senderBare == myBare) {
+      return;
+    }
+    final participants = _typingParticipants.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    final timers = _typingParticipantExpiry.putIfAbsent(
+      chatJid,
+      () => <String, Timer>{},
+    );
+    final normalizedSender = _safeParticipantId(senderJid);
+    if (normalizedSender == null) return;
+    switch (state) {
+      case mox.ChatState.composing:
+        participants.add(normalizedSender);
+        timers.remove(normalizedSender)?.cancel();
+        timers[normalizedSender] = Timer(
+          _typingParticipantLinger,
+          () => _expireTypingParticipant(chatJid, normalizedSender),
+        );
+      default:
+        final removed = participants.remove(normalizedSender);
+        timers.remove(normalizedSender)?.cancel();
+        if (!removed) return;
+    }
+    _emitTypingParticipants(chatJid);
+  }
+
+  void _expireTypingParticipant(String chatJid, String senderJid) {
+    final participants = _typingParticipants[chatJid];
+    if (participants == null) return;
+    final removed = participants.remove(senderJid);
+    _typingParticipantExpiry[chatJid]?.remove(senderJid)?.cancel();
+    if (!removed) return;
+    _emitTypingParticipants(chatJid);
+  }
+
+  void _emitTypingParticipants(String jid) {
+    final controller = _typingParticipantStreams[jid];
+    if (controller == null || controller.isClosed) return;
+    final participants = _typingParticipants[jid] ?? const <String>{};
+    final ordered = participants.take(_typingParticipantMaxCount + 1).toList();
+    controller.add(List<String>.unmodifiable(ordered));
+  }
+
+  void _disposeTypingParticipantsIfIdle(String jid) {
+    final controller = _typingParticipantStreams[jid];
+    if (controller == null) return;
+    if (controller.hasListener) return;
+    _typingParticipantStreams.remove(jid);
+    controller.close();
+    _typingParticipants.remove(jid);
+    final timers = _typingParticipantExpiry.remove(jid);
+    timers?.values.forEach((timer) => timer.cancel());
+  }
+
+  String? _safeBareJid(String? jid) {
+    if (jid == null || jid.isEmpty) return null;
+    try {
+      return mox.JID.fromString(jid).toBare().toString();
+    } on Exception {
+      return null;
+    }
+  }
+
+  String? _safeParticipantId(String? jid) {
+    if (jid == null || jid.isEmpty) return null;
+    try {
+      final parsed = mox.JID.fromString(jid);
+      if (_isMucChatJid(parsed.toBare().toString()) &&
+          parsed.resource.isNotEmpty) {
+        return parsed.toString();
+      }
+      return parsed.toBare().toString();
+    } on Exception {
+      return null;
+    }
+  }
 
   static List<Chat> sortChats(List<Chat> chats) => chats.toList()
     ..sort((a, b) {

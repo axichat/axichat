@@ -80,25 +80,7 @@ class _PeerCapabilities {
   );
 }
 
-mixin MessageService on XmppBase, BaseStreamService, MucService {
-  bool _isMucChatJid(String jid) {
-    try {
-      return mox.JID.fromString(jid).domain == mucServiceHost;
-    } on Exception {
-      return false;
-    }
-  }
-
-  String _chatStateMessageType(String jid) {
-    if (!_isMucChatJid(jid)) return 'chat';
-    try {
-      final parsed = mox.JID.fromString(jid);
-      return parsed.resource.isEmpty ? 'groupchat' : 'chat';
-    } on Exception {
-      return 'chat';
-    }
-  }
-
+mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   Stream<List<Message>> messageStreamForChat(
     String jid, {
     int start = 0,
@@ -655,7 +637,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       _log.warning('Blocked XMPP send to foreign domain: $jid');
       throw XmppForeignDomainException();
     }
-    final shouldStore = _messageStorageMode.isLocal && (storeLocally ?? true);
+    final offlineDemo = demoOfflineMode;
+    final storePreference = storeLocally ?? true;
+    final shouldStore =
+        (offlineDemo || _messageStorageMode.isLocal) && storePreference;
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -666,6 +651,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       noStore: noStore,
       quoting: quotedMessage?.stanzaID,
       timestamp: DateTime.timestamp(),
+      acked: offlineDemo,
+      received: offlineDemo,
+      displayed: offlineDemo,
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${text.length} chars)',
@@ -683,6 +671,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
           : 'mid:${message.stanzaID}-${_myJid?.toBare() ?? senderJid}';
       _rememberStableKey(jid, stableKey);
       _addServerOnlyMessage(jid, message);
+    }
+
+    if (offlineDemo) {
+      await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
+      return;
     }
 
     try {
@@ -1789,6 +1782,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
 
   Future<void> _handleChatState(mox.MessageEvent event, String jid) async {
     if (event.extensions.get<mox.ChatState>() case final state?) {
+      _trackTypingParticipant(
+        chatJid: jid,
+        senderJid: event.from.toString(),
+        state: state,
+      );
       await _dbOp<XmppDatabase>(
         (db) => db.updateChatState(chatJid: jid, state: state),
       );

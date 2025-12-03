@@ -2147,6 +2147,423 @@ abstract class AppLocalizations {
   /// **'No message content'**
   String get accessibilityMessageNoContent;
 
+  /// No description provided for @accessibilityActionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get accessibilityActionsTitle;
+
+  /// No description provided for @accessibilityReadNewMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Read new messages'**
+  String get accessibilityReadNewMessages;
+
+  /// No description provided for @accessibilityUnreadSummaryDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus on conversations with unread messages'**
+  String get accessibilityUnreadSummaryDescription;
+
+  /// No description provided for @accessibilityStartNewChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a new chat'**
+  String get accessibilityStartNewChat;
+
+  /// No description provided for @accessibilityStartNewChatDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a contact or type an address'**
+  String get accessibilityStartNewChatDescription;
+
+  /// No description provided for @accessibilityInvitesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invites'**
+  String get accessibilityInvitesTitle;
+
+  /// No description provided for @accessibilityPendingInvites.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending invites'**
+  String get accessibilityPendingInvites;
+
+  /// No description provided for @accessibilityAcceptInvite.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept invite'**
+  String get accessibilityAcceptInvite;
+
+  /// No description provided for @accessibilityInviteAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite accepted'**
+  String get accessibilityInviteAccepted;
+
+  /// No description provided for @accessibilityInviteDismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite dismissed'**
+  String get accessibilityInviteDismissed;
+
+  /// No description provided for @accessibilityInviteUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to update invite'**
+  String get accessibilityInviteUpdateFailed;
+
+  /// No description provided for @accessibilityUnreadEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No unread conversations'**
+  String get accessibilityUnreadEmpty;
+
+  /// No description provided for @accessibilityInvitesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pending invites'**
+  String get accessibilityInvitesEmpty;
+
+  /// No description provided for @accessibilityMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get accessibilityMessagesTitle;
+
+  /// No description provided for @accessibilityNoConversationSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversation selected'**
+  String get accessibilityNoConversationSelected;
+
+  /// No description provided for @accessibilityMessagesWithContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages with {name}'**
+  String accessibilityMessagesWithContact(Object name);
+
+  /// No description provided for @accessibilityMessageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{sender} at {timestamp}: {body}'**
+  String accessibilityMessageLabel(
+      Object sender, Object timestamp, Object body);
+
+  /// No description provided for @accessibilityMessageSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Message sent.'**
+  String get accessibilityMessageSent;
+
+  /// No description provided for @accessibilityDiscardWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Escape again to discard your message and close this step.'**
+  String get accessibilityDiscardWarning;
+
+  /// No description provided for @accessibilityDraftLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft loaded. Press Escape to exit or Save to keep edits.'**
+  String get accessibilityDraftLoaded;
+
+  /// No description provided for @accessibilityDraftLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft {id}'**
+  String accessibilityDraftLabel(Object id);
+
+  /// No description provided for @accessibilityDraftLabelWithRecipients.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft to {recipients}'**
+  String accessibilityDraftLabelWithRecipients(Object recipients);
+
+  /// No description provided for @accessibilityDraftPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'{recipients} — {preview}'**
+  String accessibilityDraftPreview(Object recipients, Object preview);
+
+  /// No description provided for @accessibilityIncomingMessageStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'New message from {sender} at {time}'**
+  String accessibilityIncomingMessageStatus(Object sender, Object time);
+
+  /// No description provided for @accessibilityAttachmentWithName.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment: {filename}'**
+  String accessibilityAttachmentWithName(Object filename);
+
+  /// No description provided for @accessibilityAttachmentGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment'**
+  String get accessibilityAttachmentGeneric;
+
+  /// No description provided for @accessibilityUploadAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload available'**
+  String get accessibilityUploadAvailable;
+
+  /// No description provided for @accessibilityUnknownContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown contact'**
+  String get accessibilityUnknownContact;
+
+  /// No description provided for @accessibilityChooseContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a contact'**
+  String get accessibilityChooseContact;
+
+  /// No description provided for @accessibilityUnreadConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread conversations'**
+  String get accessibilityUnreadConversations;
+
+  /// No description provided for @accessibilityStartNewAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a new address'**
+  String get accessibilityStartNewAddress;
+
+  /// No description provided for @accessibilityConversationWith.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation with {name}'**
+  String accessibilityConversationWith(Object name);
+
+  /// No description provided for @accessibilityConversationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation'**
+  String get accessibilityConversationLabel;
+
+  /// No description provided for @accessibilityDialogLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Accessibility actions dialog'**
+  String get accessibilityDialogLabel;
+
+  /// No description provided for @accessibilityDialogHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Tab to reach shortcut instructions, use arrow keys inside lists, Shift plus arrows to move between groups, or Escape to exit.'**
+  String get accessibilityDialogHint;
+
+  /// No description provided for @accessibilityNoActionsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No actions available right now'**
+  String get accessibilityNoActionsAvailable;
+
+  /// No description provided for @accessibilityBreadcrumbLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {position} of {total}: {label}. Activate to jump to this step.'**
+  String accessibilityBreadcrumbLabel(
+      Object position, Object total, Object label);
+
+  /// No description provided for @accessibilityShortcutOpenMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Open menu'**
+  String get accessibilityShortcutOpenMenu;
+
+  /// No description provided for @accessibilityShortcutBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back a step or close'**
+  String get accessibilityShortcutBack;
+
+  /// No description provided for @accessibilityShortcutNextFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Next focus target'**
+  String get accessibilityShortcutNextFocus;
+
+  /// No description provided for @accessibilityShortcutPreviousFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous focus target'**
+  String get accessibilityShortcutPreviousFocus;
+
+  /// No description provided for @accessibilityShortcutActivateItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate item'**
+  String get accessibilityShortcutActivateItem;
+
+  /// No description provided for @accessibilityShortcutNextItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Next item'**
+  String get accessibilityShortcutNextItem;
+
+  /// No description provided for @accessibilityShortcutPreviousItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous item'**
+  String get accessibilityShortcutPreviousItem;
+
+  /// No description provided for @accessibilityShortcutNextGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Next group'**
+  String get accessibilityShortcutNextGroup;
+
+  /// No description provided for @accessibilityShortcutPreviousGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous group'**
+  String get accessibilityShortcutPreviousGroup;
+
+  /// No description provided for @accessibilityShortcutFirstItem.
+  ///
+  /// In en, this message translates to:
+  /// **'First item'**
+  String get accessibilityShortcutFirstItem;
+
+  /// No description provided for @accessibilityShortcutLastItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Last item'**
+  String get accessibilityShortcutLastItem;
+
+  /// No description provided for @accessibilityKeyboardShortcutsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard shortcuts'**
+  String get accessibilityKeyboardShortcutsTitle;
+
+  /// No description provided for @accessibilityKeyboardShortcutAnnouncement.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard shortcut: {description}'**
+  String accessibilityKeyboardShortcutAnnouncement(Object description);
+
+  /// No description provided for @accessibilityTextFieldHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter text. Use Tab to move forward or Escape to go back or close the menu.'**
+  String get accessibilityTextFieldHint;
+
+  /// No description provided for @accessibilityComposerPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a message'**
+  String get accessibilityComposerPlaceholder;
+
+  /// No description provided for @accessibilityRecipientLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipient {name}'**
+  String accessibilityRecipientLabel(Object name);
+
+  /// No description provided for @accessibilityRecipientRemoveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Press backspace or delete to remove'**
+  String get accessibilityRecipientRemoveHint;
+
+  /// No description provided for @accessibilityMessageActionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Message actions'**
+  String get accessibilityMessageActionsLabel;
+
+  /// No description provided for @accessibilityMessageActionsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as draft or send this message'**
+  String get accessibilityMessageActionsHint;
+
+  /// No description provided for @accessibilityMessagePosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Message {position} of {total}'**
+  String accessibilityMessagePosition(Object position, Object total);
+
+  /// No description provided for @accessibilityNoMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages'**
+  String get accessibilityNoMessages;
+
+  /// No description provided for @accessibilityMessageMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'From {sender} at {timestamp}'**
+  String accessibilityMessageMetadata(Object sender, Object timestamp);
+
+  /// No description provided for @accessibilityMessageFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From {sender}'**
+  String accessibilityMessageFrom(Object sender);
+
+  /// No description provided for @accessibilityMessageNavigationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use arrow keys to move between messages. Shift plus arrows switches groups. Press Escape to exit.'**
+  String get accessibilityMessageNavigationHint;
+
+  /// No description provided for @accessibilitySectionSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{section} section with {count} items'**
+  String accessibilitySectionSummary(Object section, Object count);
+
+  /// No description provided for @accessibilityActionListLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Accessibility action list with {count} items'**
+  String accessibilityActionListLabel(Object count);
+
+  /// No description provided for @accessibilityActionListHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use arrow keys to move, Shift plus arrows to switch groups, Home or End to jump, Enter to activate, Escape to exit.'**
+  String get accessibilityActionListHint;
+
+  /// No description provided for @accessibilityActionItemPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Item {position} of {total} in {section}'**
+  String accessibilityActionItemPosition(
+      Object position, Object total, Object section);
+
+  /// No description provided for @accessibilityActionReadOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use arrow keys to move through the list'**
+  String get accessibilityActionReadOnlyHint;
+
+  /// No description provided for @accessibilityActionActivateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Enter to activate'**
+  String get accessibilityActionActivateHint;
+
+  /// No description provided for @accessibilityDismissHighlight.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss highlight'**
+  String get accessibilityDismissHighlight;
+
+  /// No description provided for @accessibilityNeedsAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get accessibilityNeedsAttention;
+
   /// No description provided for @profileTitle.
   ///
   /// In en, this message translates to:
@@ -2224,6 +2641,1434 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You must accept the terms and conditions'**
   String get termsAgreementError;
+
+  /// No description provided for @commonContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get commonContinue;
+
+  /// No description provided for @commonDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get commonDelete;
+
+  /// No description provided for @commonSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get commonSave;
+
+  /// No description provided for @commonRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get commonRetry;
+
+  /// No description provided for @commonRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get commonRemove;
+
+  /// No description provided for @commonSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get commonSend;
+
+  /// No description provided for @commonDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get commonDismiss;
+
+  /// No description provided for @settingsSectionImportant.
+  ///
+  /// In en, this message translates to:
+  /// **'Important'**
+  String get settingsSectionImportant;
+
+  /// No description provided for @settingsSectionAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsSectionAppearance;
+
+  /// No description provided for @settingsLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get settingsLanguage;
+
+  /// No description provided for @settingsThemeMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme mode'**
+  String get settingsThemeMode;
+
+  /// No description provided for @settingsThemeModeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get settingsThemeModeSystem;
+
+  /// No description provided for @settingsThemeModeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsThemeModeLight;
+
+  /// No description provided for @settingsThemeModeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsThemeModeDark;
+
+  /// No description provided for @settingsColorScheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Color scheme'**
+  String get settingsColorScheme;
+
+  /// No description provided for @settingsColorfulAvatars.
+  ///
+  /// In en, this message translates to:
+  /// **'Colorful avatars'**
+  String get settingsColorfulAvatars;
+
+  /// No description provided for @settingsColorfulAvatarsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate different background colors for each avatar.'**
+  String get settingsColorfulAvatarsDescription;
+
+  /// No description provided for @settingsLowMotion.
+  ///
+  /// In en, this message translates to:
+  /// **'Low motion'**
+  String get settingsLowMotion;
+
+  /// No description provided for @settingsLowMotionDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Disables most animations. Better for slow devices.'**
+  String get settingsLowMotionDescription;
+
+  /// No description provided for @settingsSectionChats.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats'**
+  String get settingsSectionChats;
+
+  /// No description provided for @settingsMessageStorageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Message storage'**
+  String get settingsMessageStorageTitle;
+
+  /// No description provided for @settingsMessageStorageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Local keeps device copies; Server-only queries the archive.'**
+  String get settingsMessageStorageSubtitle;
+
+  /// No description provided for @settingsMessageStorageLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Local'**
+  String get settingsMessageStorageLocal;
+
+  /// No description provided for @settingsMessageStorageServerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Server-only'**
+  String get settingsMessageStorageServerOnly;
+
+  /// No description provided for @settingsMuteNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute notifications'**
+  String get settingsMuteNotifications;
+
+  /// No description provided for @settingsMuteNotificationsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop receiving message notifications.'**
+  String get settingsMuteNotificationsDescription;
+
+  /// No description provided for @settingsReadReceipts.
+  ///
+  /// In en, this message translates to:
+  /// **'Send read receipts'**
+  String get settingsReadReceipts;
+
+  /// No description provided for @settingsTypingIndicators.
+  ///
+  /// In en, this message translates to:
+  /// **'Send typing indicators'**
+  String get settingsTypingIndicators;
+
+  /// No description provided for @settingsTypingIndicatorsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Let other people in a chat see when you are typing.'**
+  String get settingsTypingIndicatorsDescription;
+
+  /// No description provided for @settingsShareTokenFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Include share token footer'**
+  String get settingsShareTokenFooter;
+
+  /// No description provided for @settingsShareTokenFooterDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Helps keep multi-recipient email threads and attachments linked. Turning this off can break threading.'**
+  String get settingsShareTokenFooterDescription;
+
+  /// No description provided for @authCustomServerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom server'**
+  String get authCustomServerTitle;
+
+  /// No description provided for @authCustomServerDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields blank to keep defaults.'**
+  String get authCustomServerDescription;
+
+  /// No description provided for @authCustomServerDomainOrIp.
+  ///
+  /// In en, this message translates to:
+  /// **'Domain or IP'**
+  String get authCustomServerDomainOrIp;
+
+  /// No description provided for @authCustomServerXmppLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'XMPP'**
+  String get authCustomServerXmppLabel;
+
+  /// No description provided for @authCustomServerSmtpLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'SMTP'**
+  String get authCustomServerSmtpLabel;
+
+  /// No description provided for @authCustomServerUseDns.
+  ///
+  /// In en, this message translates to:
+  /// **'Use DNS'**
+  String get authCustomServerUseDns;
+
+  /// No description provided for @authCustomServerUseSrv.
+  ///
+  /// In en, this message translates to:
+  /// **'Use SRV'**
+  String get authCustomServerUseSrv;
+
+  /// No description provided for @authCustomServerRequireDnssec.
+  ///
+  /// In en, this message translates to:
+  /// **'Require DNSSEC'**
+  String get authCustomServerRequireDnssec;
+
+  /// No description provided for @authCustomServerXmppHostPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'XMPP host (optional)'**
+  String get authCustomServerXmppHostPlaceholder;
+
+  /// No description provided for @authCustomServerPortPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get authCustomServerPortPlaceholder;
+
+  /// No description provided for @authCustomServerSmtpHostPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'SMTP host (optional)'**
+  String get authCustomServerSmtpHostPlaceholder;
+
+  /// No description provided for @authCustomServerApiPortPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'API port'**
+  String get authCustomServerApiPortPlaceholder;
+
+  /// No description provided for @authCustomServerReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to axi.im'**
+  String get authCustomServerReset;
+
+  /// No description provided for @authCustomServerOpenSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open custom server settings'**
+  String get authCustomServerOpenSettings;
+
+  /// No description provided for @authCustomServerAdvancedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced server options stay hidden until you tap the username suffix.'**
+  String get authCustomServerAdvancedHint;
+
+  /// No description provided for @authUnregisterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unregister'**
+  String get authUnregisterTitle;
+
+  /// No description provided for @authUnregisterProgressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for account deletion'**
+  String get authUnregisterProgressLabel;
+
+  /// No description provided for @authPasswordPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get authPasswordPlaceholder;
+
+  /// No description provided for @authPasswordCurrentPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Old password'**
+  String get authPasswordCurrentPlaceholder;
+
+  /// No description provided for @authPasswordNewPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get authPasswordNewPlaceholder;
+
+  /// No description provided for @authPasswordConfirmNewPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm new password'**
+  String get authPasswordConfirmNewPlaceholder;
+
+  /// No description provided for @authChangePasswordProgressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for password change'**
+  String get authChangePasswordProgressLabel;
+
+  /// No description provided for @authLogoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Log out'**
+  String get authLogoutTitle;
+
+  /// No description provided for @authLogoutNormal.
+  ///
+  /// In en, this message translates to:
+  /// **'Log out'**
+  String get authLogoutNormal;
+
+  /// No description provided for @authLogoutNormalDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out of this account.'**
+  String get authLogoutNormalDescription;
+
+  /// No description provided for @authLogoutBurn.
+  ///
+  /// In en, this message translates to:
+  /// **'Burn account'**
+  String get authLogoutBurn;
+
+  /// No description provided for @authLogoutBurnDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out and clear local data for this account.'**
+  String get authLogoutBurnDescription;
+
+  /// No description provided for @chatAttachmentBlockedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment blocked'**
+  String get chatAttachmentBlockedTitle;
+
+  /// No description provided for @chatAttachmentBlockedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Load attachments from unknown contacts only if you trust them. We will fetch it once you approve.'**
+  String get chatAttachmentBlockedDescription;
+
+  /// No description provided for @chatAttachmentLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Load attachment'**
+  String get chatAttachmentLoad;
+
+  /// No description provided for @chatAttachmentUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment unavailable'**
+  String get chatAttachmentUnavailable;
+
+  /// No description provided for @chatAttachmentSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to send attachment.'**
+  String get chatAttachmentSendFailed;
+
+  /// No description provided for @chatAttachmentRetryUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry upload'**
+  String get chatAttachmentRetryUpload;
+
+  /// No description provided for @chatAttachmentRemoveAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attachment'**
+  String get chatAttachmentRemoveAttachment;
+
+  /// No description provided for @chatAttachmentStatusUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading attachment…'**
+  String get chatAttachmentStatusUploading;
+
+  /// No description provided for @chatAttachmentStatusQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to send'**
+  String get chatAttachmentStatusQueued;
+
+  /// No description provided for @chatAttachmentStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed'**
+  String get chatAttachmentStatusFailed;
+
+  /// No description provided for @chatAttachmentLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading attachment'**
+  String get chatAttachmentLoading;
+
+  /// No description provided for @chatAttachmentLoadingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading {percent}'**
+  String chatAttachmentLoadingProgress(Object percent);
+
+  /// No description provided for @chatAttachmentDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download attachment'**
+  String get chatAttachmentDownload;
+
+  /// No description provided for @chatAttachmentUnavailableDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment is no longer available on this device'**
+  String get chatAttachmentUnavailableDevice;
+
+  /// No description provided for @chatAttachmentInvalidLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid attachment link'**
+  String get chatAttachmentInvalidLink;
+
+  /// No description provided for @chatAttachmentOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {target}'**
+  String chatAttachmentOpenFailed(Object target);
+
+  /// No description provided for @chatAttachmentUnknownSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown size'**
+  String get chatAttachmentUnknownSize;
+
+  /// No description provided for @chatAttachmentErrorTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'{message} ({fileName})'**
+  String chatAttachmentErrorTooltip(Object message, Object fileName);
+
+  /// No description provided for @chatAttachmentMenuHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Open menu for actions.'**
+  String get chatAttachmentMenuHint;
+
+  /// No description provided for @accessibilityActionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Accessibility actions'**
+  String get accessibilityActionsLabel;
+
+  /// No description provided for @accessibilityActionsShortcutTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Accessibility actions ({shortcut})'**
+  String accessibilityActionsShortcutTooltip(Object shortcut);
+
+  /// No description provided for @shorebirdUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available: log out and restart the app'**
+  String get shorebirdUpdateAvailable;
+
+  /// No description provided for @calendarEditTaskTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit task'**
+  String get calendarEditTaskTitle;
+
+  /// No description provided for @calendarDateTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Date & time'**
+  String get calendarDateTimeLabel;
+
+  /// No description provided for @calendarSelectDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Select date'**
+  String get calendarSelectDate;
+
+  /// No description provided for @calendarSelectTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Select time'**
+  String get calendarSelectTime;
+
+  /// No description provided for @calendarDurationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get calendarDurationLabel;
+
+  /// No description provided for @calendarSelectDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Select duration'**
+  String get calendarSelectDuration;
+
+  /// No description provided for @calendarAddToCriticalPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to critical path'**
+  String get calendarAddToCriticalPath;
+
+  /// No description provided for @calendarNoCriticalPathMembership.
+  ///
+  /// In en, this message translates to:
+  /// **'Not in any critical paths'**
+  String get calendarNoCriticalPathMembership;
+
+  /// No description provided for @calendarGuestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest calendar'**
+  String get calendarGuestTitle;
+
+  /// No description provided for @calendarGuestBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest Mode - No Sync'**
+  String get calendarGuestBanner;
+
+  /// No description provided for @calendarGuestModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest mode'**
+  String get calendarGuestModeLabel;
+
+  /// No description provided for @calendarGuestModeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to sync tasks across devices and enable reminders.'**
+  String get calendarGuestModeDescription;
+
+  /// No description provided for @calendarNoTasksForDate.
+  ///
+  /// In en, this message translates to:
+  /// **'No tasks for this date'**
+  String get calendarNoTasksForDate;
+
+  /// No description provided for @calendarTapToCreateTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap + to create a new task'**
+  String get calendarTapToCreateTask;
+
+  /// No description provided for @calendarQuickStats.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick stats'**
+  String get calendarQuickStats;
+
+  /// No description provided for @calendarDueReminders.
+  ///
+  /// In en, this message translates to:
+  /// **'Due reminders'**
+  String get calendarDueReminders;
+
+  /// No description provided for @calendarNextTaskLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Next task'**
+  String get calendarNextTaskLabel;
+
+  /// No description provided for @calendarNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get calendarNone;
+
+  /// No description provided for @calendarViewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get calendarViewLabel;
+
+  /// No description provided for @calendarViewDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day'**
+  String get calendarViewDay;
+
+  /// No description provided for @calendarViewWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get calendarViewWeek;
+
+  /// No description provided for @calendarViewMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get calendarViewMonth;
+
+  /// No description provided for @calendarPreviousDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous date'**
+  String get calendarPreviousDate;
+
+  /// No description provided for @calendarNextDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Next date'**
+  String get calendarNextDate;
+
+  /// No description provided for @calendarPreviousUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous {unit}'**
+  String calendarPreviousUnit(Object unit);
+
+  /// No description provided for @calendarNextUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Next {unit}'**
+  String calendarNextUnit(Object unit);
+
+  /// No description provided for @calendarToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get calendarToday;
+
+  /// No description provided for @calendarUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get calendarUndo;
+
+  /// No description provided for @calendarRedo.
+  ///
+  /// In en, this message translates to:
+  /// **'Redo'**
+  String get calendarRedo;
+
+  /// No description provided for @calendarOpeningCreator.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening task creator...'**
+  String get calendarOpeningCreator;
+
+  /// No description provided for @calendarWeekOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Week of {date}'**
+  String calendarWeekOf(Object date);
+
+  /// No description provided for @calendarStatusCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get calendarStatusCompleted;
+
+  /// No description provided for @calendarStatusOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get calendarStatusOverdue;
+
+  /// No description provided for @calendarStatusDueSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Due soon'**
+  String get calendarStatusDueSoon;
+
+  /// No description provided for @calendarStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get calendarStatusPending;
+
+  /// No description provided for @calendarTaskCompletedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task completed!'**
+  String get calendarTaskCompletedMessage;
+
+  /// No description provided for @calendarTaskUpdatedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task updated!'**
+  String get calendarTaskUpdatedMessage;
+
+  /// No description provided for @calendarErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get calendarErrorTitle;
+
+  /// No description provided for @calendarErrorTaskNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Task not found'**
+  String get calendarErrorTaskNotFound;
+
+  /// No description provided for @calendarErrorTitleEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Title cannot be empty'**
+  String get calendarErrorTitleEmpty;
+
+  /// No description provided for @calendarErrorTitleTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Title too long'**
+  String get calendarErrorTitleTooLong;
+
+  /// No description provided for @calendarErrorDescriptionTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Description too long'**
+  String get calendarErrorDescriptionTooLong;
+
+  /// No description provided for @calendarErrorInputInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Input invalid'**
+  String get calendarErrorInputInvalid;
+
+  /// No description provided for @calendarErrorAddFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to add task'**
+  String get calendarErrorAddFailed;
+
+  /// No description provided for @calendarErrorUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update task'**
+  String get calendarErrorUpdateFailed;
+
+  /// No description provided for @calendarErrorDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to delete task'**
+  String get calendarErrorDeleteFailed;
+
+  /// No description provided for @calendarErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Network error'**
+  String get calendarErrorNetwork;
+
+  /// No description provided for @calendarErrorStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage error'**
+  String get calendarErrorStorage;
+
+  /// No description provided for @calendarErrorUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown error'**
+  String get calendarErrorUnknown;
+
+  /// No description provided for @commonConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get commonConfirm;
+
+  /// No description provided for @commonOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get commonOpen;
+
+  /// No description provided for @commonSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get commonSelect;
+
+  /// No description provided for @commonExport.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get commonExport;
+
+  /// No description provided for @commonFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite'**
+  String get commonFavorite;
+
+  /// No description provided for @commonUnfavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfavorite'**
+  String get commonUnfavorite;
+
+  /// No description provided for @commonArchive.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get commonArchive;
+
+  /// No description provided for @commonUnarchive.
+  ///
+  /// In en, this message translates to:
+  /// **'Unarchive'**
+  String get commonUnarchive;
+
+  /// No description provided for @commonShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get commonShow;
+
+  /// No description provided for @commonHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get commonHide;
+
+  /// No description provided for @blocklistBlockUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Block user'**
+  String get blocklistBlockUser;
+
+  /// No description provided for @blocklistWaitingForUnblock.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting unblock'**
+  String get blocklistWaitingForUnblock;
+
+  /// No description provided for @blocklistUnblockAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock all'**
+  String get blocklistUnblockAll;
+
+  /// No description provided for @blocklistUnblock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock'**
+  String get blocklistUnblock;
+
+  /// No description provided for @blocklistBlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get blocklistBlock;
+
+  /// No description provided for @blocklistAddTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to blocklist'**
+  String get blocklistAddTooltip;
+
+  /// No description provided for @mucChangeNickname.
+  ///
+  /// In en, this message translates to:
+  /// **'Change nickname'**
+  String get mucChangeNickname;
+
+  /// No description provided for @mucChangeNicknameWithCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Change nickname (current: {current})'**
+  String mucChangeNicknameWithCurrent(Object current);
+
+  /// No description provided for @mucLeaveRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave room'**
+  String get mucLeaveRoom;
+
+  /// No description provided for @mucNoMembers.
+  ///
+  /// In en, this message translates to:
+  /// **'No members yet'**
+  String get mucNoMembers;
+
+  /// No description provided for @mucInviteUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite users'**
+  String get mucInviteUsers;
+
+  /// No description provided for @mucSendInvites.
+  ///
+  /// In en, this message translates to:
+  /// **'Send invites'**
+  String get mucSendInvites;
+
+  /// No description provided for @mucChangeNicknameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change nickname'**
+  String get mucChangeNicknameTitle;
+
+  /// No description provided for @mucEnterNicknamePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a nickname'**
+  String get mucEnterNicknamePlaceholder;
+
+  /// No description provided for @mucUpdateNickname.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get mucUpdateNickname;
+
+  /// No description provided for @mucMembersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get mucMembersTitle;
+
+  /// No description provided for @mucInviteUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite user'**
+  String get mucInviteUser;
+
+  /// No description provided for @mucSectionOwners.
+  ///
+  /// In en, this message translates to:
+  /// **'Owners'**
+  String get mucSectionOwners;
+
+  /// No description provided for @mucSectionAdmins.
+  ///
+  /// In en, this message translates to:
+  /// **'Admins'**
+  String get mucSectionAdmins;
+
+  /// No description provided for @mucSectionModerators.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderators'**
+  String get mucSectionModerators;
+
+  /// No description provided for @mucSectionMembers.
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get mucSectionMembers;
+
+  /// No description provided for @mucSectionVisitors.
+  ///
+  /// In en, this message translates to:
+  /// **'Visitors'**
+  String get mucSectionVisitors;
+
+  /// No description provided for @mucRoleOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get mucRoleOwner;
+
+  /// No description provided for @mucRoleAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin'**
+  String get mucRoleAdmin;
+
+  /// No description provided for @mucRoleMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Member'**
+  String get mucRoleMember;
+
+  /// No description provided for @mucRoleVisitor.
+  ///
+  /// In en, this message translates to:
+  /// **'Visitor'**
+  String get mucRoleVisitor;
+
+  /// No description provided for @mucRoleModerator.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderator'**
+  String get mucRoleModerator;
+
+  /// No description provided for @mucActionKick.
+  ///
+  /// In en, this message translates to:
+  /// **'Kick'**
+  String get mucActionKick;
+
+  /// No description provided for @mucActionBan.
+  ///
+  /// In en, this message translates to:
+  /// **'Ban'**
+  String get mucActionBan;
+
+  /// No description provided for @mucActionMakeMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Make member'**
+  String get mucActionMakeMember;
+
+  /// No description provided for @mucActionMakeAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Make admin'**
+  String get mucActionMakeAdmin;
+
+  /// No description provided for @mucActionMakeOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Make owner'**
+  String get mucActionMakeOwner;
+
+  /// No description provided for @mucActionGrantModerator.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant moderator'**
+  String get mucActionGrantModerator;
+
+  /// No description provided for @mucActionRevokeModerator.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke moderator'**
+  String get mucActionRevokeModerator;
+
+  /// No description provided for @chatsEmptyList.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats yet'**
+  String get chatsEmptyList;
+
+  /// No description provided for @chatsDeleteConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete chat: {chatTitle}'**
+  String chatsDeleteConfirmMessage(Object chatTitle);
+
+  /// No description provided for @chatsDeleteMessagesOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently delete messages'**
+  String get chatsDeleteMessagesOption;
+
+  /// No description provided for @chatsDeleteSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat deleted'**
+  String get chatsDeleteSuccess;
+
+  /// No description provided for @chatsExportNoContent.
+  ///
+  /// In en, this message translates to:
+  /// **'No text content to export'**
+  String get chatsExportNoContent;
+
+  /// No description provided for @chatsExportShareText.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat export from Axichat'**
+  String get chatsExportShareText;
+
+  /// No description provided for @chatsExportShareSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat with {chatTitle}'**
+  String chatsExportShareSubject(Object chatTitle);
+
+  /// No description provided for @chatsExportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat exported'**
+  String get chatsExportSuccess;
+
+  /// No description provided for @chatsExportFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to export chat'**
+  String get chatsExportFailure;
+
+  /// No description provided for @chatsArchivedRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat restored'**
+  String get chatsArchivedRestored;
+
+  /// No description provided for @chatsArchivedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat archived (Profile → Archived chats)'**
+  String get chatsArchivedHint;
+
+  /// No description provided for @chatsVisibleNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat is visible again'**
+  String get chatsVisibleNotice;
+
+  /// No description provided for @chatsHiddenNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat hidden (use filter to reveal)'**
+  String get chatsHiddenNotice;
+
+  /// No description provided for @chatsUnreadLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0 {No unread messages} one {# unread message} other {# unread messages}}'**
+  String chatsUnreadLabel(num count);
+
+  /// No description provided for @chatsSemanticsUnselectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Press to unselect chat'**
+  String get chatsSemanticsUnselectHint;
+
+  /// No description provided for @chatsSemanticsSelectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Press to select chat'**
+  String get chatsSemanticsSelectHint;
+
+  /// No description provided for @chatsSemanticsOpenHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Press to open chat'**
+  String get chatsSemanticsOpenHint;
+
+  /// No description provided for @chatsHideActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide chat actions'**
+  String get chatsHideActions;
+
+  /// No description provided for @chatsShowActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Show chat actions'**
+  String get chatsShowActions;
+
+  /// No description provided for @chatsSelectedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat selected'**
+  String get chatsSelectedLabel;
+
+  /// No description provided for @chatsSelectLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Select chat'**
+  String get chatsSelectLabel;
+
+  /// No description provided for @chatsExportFileLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'chats'**
+  String get chatsExportFileLabel;
+
+  /// No description provided for @chatSelectionExportEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages to export'**
+  String get chatSelectionExportEmptyTitle;
+
+  /// No description provided for @chatSelectionExportEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Select chats with text content'**
+  String get chatSelectionExportEmptyMessage;
+
+  /// No description provided for @chatSelectionExportShareText.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat exports from Axichat'**
+  String get chatSelectionExportShareText;
+
+  /// No description provided for @chatSelectionExportShareSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat chats export'**
+  String get chatSelectionExportShareSubject;
+
+  /// No description provided for @chatSelectionExportReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export ready'**
+  String get chatSelectionExportReadyTitle;
+
+  /// No description provided for @chatSelectionExportReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {Shared # chat} other {Shared # chats}}'**
+  String chatSelectionExportReadyMessage(num count);
+
+  /// No description provided for @chatSelectionExportFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export failed'**
+  String get chatSelectionExportFailedTitle;
+
+  /// No description provided for @chatSelectionExportFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to export selected chats'**
+  String get chatSelectionExportFailedMessage;
+
+  /// No description provided for @chatSelectionDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete chats?'**
+  String get chatSelectionDeleteConfirmTitle;
+
+  /// No description provided for @chatSelectionDeleteConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {This removes 1 chat and all of its messages. This cannot be undone.} other {This removes # chats and all of their messages. This cannot be undone.}}'**
+  String chatSelectionDeleteConfirmMessage(num count);
+
+  /// No description provided for @chatsCreateGroupChatTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Create group chat'**
+  String get chatsCreateGroupChatTooltip;
+
+  /// No description provided for @chatsRoomLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Room'**
+  String get chatsRoomLabel;
+
+  /// No description provided for @chatsCreateChatRoomTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create chat room'**
+  String get chatsCreateChatRoomTitle;
+
+  /// No description provided for @chatsRoomNamePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get chatsRoomNamePlaceholder;
+
+  /// No description provided for @chatsArchiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get chatsArchiveTitle;
+
+  /// No description provided for @chatsArchiveEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No archived chats yet'**
+  String get chatsArchiveEmpty;
+
+  /// No description provided for @calendarTileNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Now: {title}'**
+  String calendarTileNow(Object title);
+
+  /// No description provided for @calendarTileNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next: {title}'**
+  String calendarTileNext(Object title);
+
+  /// No description provided for @calendarTileNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming tasks'**
+  String get calendarTileNone;
+
+  /// No description provided for @calendarViewDayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'D'**
+  String get calendarViewDayShort;
+
+  /// No description provided for @calendarViewWeekShort.
+  ///
+  /// In en, this message translates to:
+  /// **'W'**
+  String get calendarViewWeekShort;
+
+  /// No description provided for @calendarViewMonthShort.
+  ///
+  /// In en, this message translates to:
+  /// **'M'**
+  String get calendarViewMonthShort;
+
+  /// No description provided for @calendarShowCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Show completed'**
+  String get calendarShowCompleted;
+
+  /// No description provided for @calendarHideCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide completed'**
+  String get calendarHideCompleted;
+
+  /// No description provided for @rosterAddTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to roster'**
+  String get rosterAddTooltip;
+
+  /// No description provided for @rosterAddLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact'**
+  String get rosterAddLabel;
+
+  /// No description provided for @rosterAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add contact'**
+  String get rosterAddTitle;
+
+  /// No description provided for @rosterEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts yet'**
+  String get rosterEmpty;
+
+  /// No description provided for @rosterCompose.
+  ///
+  /// In en, this message translates to:
+  /// **'Compose'**
+  String get rosterCompose;
+
+  /// No description provided for @rosterRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {jid} from contacts?'**
+  String rosterRemoveConfirm(Object jid);
+
+  /// No description provided for @rosterInvitesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No invites yet'**
+  String get rosterInvitesEmpty;
+
+  /// No description provided for @rosterRejectInviteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reject invite from {jid}?'**
+  String rosterRejectInviteConfirm(Object jid);
+
+  /// No description provided for @rosterAddContactTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Add contact'**
+  String get rosterAddContactTooltip;
+
+  /// No description provided for @jidInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'john@axi.im'**
+  String get jidInputPlaceholder;
+
+  /// No description provided for @jidInputInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid JID'**
+  String get jidInputInvalid;
+
+  /// No description provided for @sessionCapabilityChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get sessionCapabilityChat;
+
+  /// No description provided for @sessionCapabilityEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get sessionCapabilityEmail;
+
+  /// No description provided for @sessionCapabilityStatusConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get sessionCapabilityStatusConnected;
+
+  /// No description provided for @sessionCapabilityStatusConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get sessionCapabilityStatusConnecting;
+
+  /// No description provided for @sessionCapabilityStatusError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get sessionCapabilityStatusError;
+
+  /// No description provided for @sessionCapabilityStatusOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get sessionCapabilityStatusOffline;
+
+  /// No description provided for @sessionCapabilityStatusOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get sessionCapabilityStatusOff;
+
+  /// No description provided for @sessionCapabilityStatusSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing'**
+  String get sessionCapabilityStatusSyncing;
 }
 
 class _AppLocalizationsDelegate

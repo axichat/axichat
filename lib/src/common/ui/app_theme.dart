@@ -1,5 +1,10 @@
 import 'package:axichat/src/common/ui/ui.dart'
-    show inputSubtextInsets, interFontFallback, interFontFamily;
+    show
+        gabaritoFontFallback,
+        gabaritoFontFamily,
+        inputSubtextInsets,
+        interFontFallback,
+        interFontFamily;
 import 'package:axichat/src/settings/bloc/settings_cubit.dart' show ShadColor;
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -137,12 +142,21 @@ class AppTheme {
       );
     }
 
+    TextStyle gabarito(TextStyle style, {FontWeight? weight}) {
+      return style.copyWith(
+        fontFamily: gabaritoFontFamily,
+        fontFamilyFallback: gabaritoFontFallback,
+        fontWeight: weight ?? style.fontWeight ?? FontWeight.w700,
+        letterSpacing: -0.2,
+      );
+    }
+
     final textTheme = baseTextTheme.copyWith(
       h1Large: inter(baseTextTheme.h1Large, weight: FontWeight.w700),
       h1: inter(baseTextTheme.h1, weight: FontWeight.w700),
       h2: inter(baseTextTheme.h2, weight: FontWeight.w600),
-      h3: inter(baseTextTheme.h3, weight: FontWeight.w600),
-      h4: inter(baseTextTheme.h4, weight: FontWeight.w600),
+      h3: gabarito(baseTextTheme.h3),
+      h4: gabarito(baseTextTheme.h4),
       lead: inter(baseTextTheme.lead, weight: FontWeight.w600),
       large: inter(baseTextTheme.large, weight: FontWeight.w600),
       small: inter(baseTextTheme.small, weight: FontWeight.w500),

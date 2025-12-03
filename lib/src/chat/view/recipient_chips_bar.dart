@@ -21,7 +21,6 @@ const Duration _barAnimationDuration = Duration(milliseconds: 360);
 const int _maxAutocompleteSuggestions = 8;
 const double _suggestionTileHeight = 56;
 const double _suggestionMaxHeight = 320;
-const double _collapsedHeaderPadding = 2;
 const double _expandedHeaderPadding = 4;
 
 class RecipientChipsBar extends StatefulWidget {
@@ -165,8 +164,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         .toList();
     final knownDomains = _knownDomains();
     final knownAddresses = _knownAddresses();
-    const headerPadding =
-        EdgeInsets.symmetric(vertical: _expandedHeaderPadding);
+    final headerPadding = EdgeInsets.symmetric(
+      horizontal: widget.horizontalPadding,
+      vertical: _expandedHeaderPadding,
+    );
     final bodyPadding =
         EdgeInsets.symmetric(horizontal: widget.horizontalPadding);
     final headerStyle = theme.textTheme.labelSmall?.copyWith(

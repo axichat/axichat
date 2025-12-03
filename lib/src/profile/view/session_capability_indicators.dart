@@ -1,6 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -25,8 +27,9 @@ class SessionCapabilityIndicators extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final chatChip = _chatChipData(colors);
-    final emailChip = _emailChipData(colors);
+    final l10n = context.l10n;
+    final chatChip = _chatChipData(colors, l10n);
+    final emailChip = _emailChipData(colors, l10n);
     if (compact) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -53,7 +56,10 @@ class SessionCapabilityIndicators extends StatelessWidget {
     );
   }
 
-  _CapabilityChipData _chatChipData(ShadColorScheme colors) {
+  _CapabilityChipData _chatChipData(
+    ShadColorScheme colors,
+    AppLocalizations l10n,
+  ) {
     final level = switch (xmppState) {
       ConnectionState.connected => _CapabilityLevel.ready,
       ConnectionState.connecting => _CapabilityLevel.syncing,
@@ -63,20 +69,23 @@ class SessionCapabilityIndicators extends StatelessWidget {
     final palette = _paletteForLevel(level, colors);
     return _CapabilityChipData(
       icon: LucideIcons.messageCircle,
-      label: 'Chat',
-      status: _chatStatusLabel(),
+      label: l10n.sessionCapabilityChat,
+      status: _chatStatusLabel(l10n),
       background: colors.card,
       foreground: palette.foreground,
     );
   }
 
-  _CapabilityChipData _emailChipData(ShadColorScheme colors) {
+  _CapabilityChipData _emailChipData(
+    ShadColorScheme colors,
+    AppLocalizations l10n,
+  ) {
     final level = _emailLevel();
     final palette = _paletteForLevel(level, colors);
     return _CapabilityChipData(
       icon: LucideIcons.mail,
-      label: 'Email',
-      status: _emailStatusLabel(),
+      label: l10n.sessionCapabilityEmail,
+      status: _emailStatusLabel(l10n),
       background: colors.card,
       foreground: palette.foreground,
     );
@@ -92,30 +101,30 @@ class SessionCapabilityIndicators extends StatelessWidget {
     };
   }
 
-  String _chatStatusLabel() {
+  String _chatStatusLabel(AppLocalizations l10n) {
     switch (xmppState) {
       case ConnectionState.connected:
-        return 'Connected';
+        return l10n.sessionCapabilityStatusConnected;
       case ConnectionState.connecting:
-        return 'Connecting';
+        return l10n.sessionCapabilityStatusConnecting;
       case ConnectionState.error:
-        return 'Error';
+        return l10n.sessionCapabilityStatusError;
       default:
-        return 'Offline';
+        return l10n.sessionCapabilityStatusOffline;
     }
   }
 
-  String _emailStatusLabel() {
-    if (!emailEnabled) return 'Off';
+  String _emailStatusLabel(AppLocalizations l10n) {
+    if (!emailEnabled) return l10n.sessionCapabilityStatusOff;
     switch (emailState.status) {
       case EmailSyncStatus.ready:
-        return 'Connected';
+        return l10n.sessionCapabilityStatusConnected;
       case EmailSyncStatus.recovering:
-        return 'Syncing';
+        return l10n.sessionCapabilityStatusSyncing;
       case EmailSyncStatus.offline:
-        return 'Offline';
+        return l10n.sessionCapabilityStatusOffline;
       case EmailSyncStatus.error:
-        return 'Error';
+        return l10n.sessionCapabilityStatusError;
     }
   }
 }

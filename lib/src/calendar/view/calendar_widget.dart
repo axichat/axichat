@@ -268,26 +268,31 @@ class _CalendarAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final Color background = CalendarNavSurface.backgroundColor(context);
+    final EdgeInsets toolbarPadding =
+        calendarMarginLarge.copyWith(top: 0, bottom: 0);
     return Material(
       color: background,
       child: SafeArea(
         bottom: false,
-        child: Padding(
-          padding: calendarMarginLarge,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              AxiIconButton(
-                iconData: LucideIcons.arrowLeft,
-                tooltip: 'Back to chats',
-                color: colors.foreground,
-                borderColor: colors.border,
-                onPressed: onBackPressed,
-              ),
-              const Spacer(),
-              SyncControls(state: state),
-            ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: kToolbarHeight),
+          child: Padding(
+            padding: toolbarPadding,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                AxiIconButton(
+                  iconData: LucideIcons.arrowLeft,
+                  tooltip: 'Back to chats',
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  onPressed: onBackPressed,
+                ),
+                const Spacer(),
+                SyncControls(state: state),
+              ],
+            ),
           ),
         ),
       ),

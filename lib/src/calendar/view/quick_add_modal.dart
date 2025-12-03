@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
@@ -23,7 +22,6 @@ import 'widgets/recurrence_editor.dart';
 import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
-import 'widgets/task_text_field.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -72,6 +70,8 @@ class _QuickAddModalState extends State<QuickAddModal>
   late final TaskChecklistController _checklistController;
   final _taskNameFocusNode = FocusNode();
   final List<String> _queuedCriticalPathIds = <String>[];
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  String? _initialTitleValidationMessage;
 
   late final QuickAddController _formController;
   late final NlScheduleParserService _parserService;
@@ -87,13 +87,12 @@ class _QuickAddModalState extends State<QuickAddModal>
   bool _priorityLocked = false;
   bool _remindersLocked = false;
   NlAdapterResult? _lastParserResult;
-  String? _titleValidationMessage;
   String? _formError;
 
   @override
   void initState() {
     super.initState();
-    _titleValidationMessage = widget.initialValidationMessage;
+    _initialTitleValidationMessage = widget.initialValidationMessage;
     _checklistController = TaskChecklistController();
 
     _animationController = AnimationController(
@@ -169,37 +168,41 @@ class _QuickAddModalState extends State<QuickAddModal>
         top: false,
         child: Padding(
           padding: EdgeInsets.only(bottom: bottomInset),
-          child: _QuickAddModalContent(
-            isSheet: true,
-            formController: _formController,
-            taskNameController: _taskNameController,
-            descriptionController: _descriptionController,
-            locationController: _locationController,
-            checklistController: _checklistController,
-            taskNameFocusNode: _taskNameFocusNode,
-            titleValidationMessage: _titleValidationMessage,
-            locationHelper: widget.locationHelper,
-            onTaskNameChanged: _handleTaskNameChanged,
-            onTaskSubmit: () {
-              _submitTask();
-            },
-            onClose: _dismissModal,
-            onLocationChanged: _handleLocationEdited,
-            onStartChanged: _onUserStartChanged,
-            onEndChanged: _onUserEndChanged,
-            onScheduleCleared: _onUserScheduleCleared,
-            onDeadlineChanged: _onUserDeadlineChanged,
-            onRecurrenceChanged: _onUserRecurrenceChanged,
-            onImportantChanged: _onUserImportantChanged,
-            onUrgentChanged: _onUserUrgentChanged,
-            onRemindersChanged: _onRemindersChanged,
-            actionInsetBuilder: _quickAddActionInset,
-            fallbackDate: widget.prefilledDateTime,
-            onAddToCriticalPath: _queueCriticalPathForDraft,
-            queuedPaths: _queuedPaths(),
-            onRemoveQueuedPath: _removeQueuedCriticalPath,
-            hasCalendarBloc: widget.hasCalendarBloc,
-            formError: _formError,
+          child: Form(
+            key: _formKey,
+            child: _QuickAddModalContent(
+              isSheet: true,
+              formController: _formController,
+              taskNameController: _taskNameController,
+              descriptionController: _descriptionController,
+              locationController: _locationController,
+              checklistController: _checklistController,
+              taskNameFocusNode: _taskNameFocusNode,
+              locationHelper: widget.locationHelper,
+              onTaskNameChanged: _handleTaskNameChanged,
+              onTaskSubmit: () {
+                _submitTask();
+              },
+              onClose: _dismissModal,
+              onLocationChanged: _handleLocationEdited,
+              onStartChanged: _onUserStartChanged,
+              onEndChanged: _onUserEndChanged,
+              onScheduleCleared: _onUserScheduleCleared,
+              onDeadlineChanged: _onUserDeadlineChanged,
+              onRecurrenceChanged: _onUserRecurrenceChanged,
+              onImportantChanged: _onUserImportantChanged,
+              onUrgentChanged: _onUserUrgentChanged,
+              onRemindersChanged: _onRemindersChanged,
+              actionInsetBuilder: _quickAddActionInset,
+              fallbackDate: widget.prefilledDateTime,
+              onAddToCriticalPath: _queueCriticalPathForDraft,
+              queuedPaths: _queuedPaths(),
+              onRemoveQueuedPath: _removeQueuedCriticalPath,
+              hasCalendarBloc: widget.hasCalendarBloc,
+              formError: _formError,
+              titleValidator: _validateTaskTitle,
+              titleAutovalidateMode: _titleAutovalidateMode,
+            ),
           ),
         ),
       );
@@ -215,37 +218,41 @@ class _QuickAddModalState extends State<QuickAddModal>
               child: child,
             );
           },
-          child: _QuickAddModalContent(
-            isSheet: false,
-            formController: _formController,
-            taskNameController: _taskNameController,
-            descriptionController: _descriptionController,
-            locationController: _locationController,
-            checklistController: _checklistController,
-            taskNameFocusNode: _taskNameFocusNode,
-            titleValidationMessage: _titleValidationMessage,
-            locationHelper: widget.locationHelper,
-            onTaskNameChanged: _handleTaskNameChanged,
-            onTaskSubmit: () {
-              _submitTask();
-            },
-            onClose: _dismissModal,
-            onLocationChanged: _handleLocationEdited,
-            onStartChanged: _onUserStartChanged,
-            onEndChanged: _onUserEndChanged,
-            onScheduleCleared: _onUserScheduleCleared,
-            onDeadlineChanged: _onUserDeadlineChanged,
-            onRecurrenceChanged: _onUserRecurrenceChanged,
-            onImportantChanged: _onUserImportantChanged,
-            onUrgentChanged: _onUserUrgentChanged,
-            onRemindersChanged: _onRemindersChanged,
-            actionInsetBuilder: _quickAddActionInset,
-            fallbackDate: widget.prefilledDateTime,
-            onAddToCriticalPath: _queueCriticalPathForDraft,
-            queuedPaths: _queuedPaths(),
-            onRemoveQueuedPath: _removeQueuedCriticalPath,
-            hasCalendarBloc: widget.hasCalendarBloc,
-            formError: _formError,
+          child: Form(
+            key: _formKey,
+            child: _QuickAddModalContent(
+              isSheet: false,
+              formController: _formController,
+              taskNameController: _taskNameController,
+              descriptionController: _descriptionController,
+              locationController: _locationController,
+              checklistController: _checklistController,
+              taskNameFocusNode: _taskNameFocusNode,
+              locationHelper: widget.locationHelper,
+              onTaskNameChanged: _handleTaskNameChanged,
+              onTaskSubmit: () {
+                _submitTask();
+              },
+              onClose: _dismissModal,
+              onLocationChanged: _handleLocationEdited,
+              onStartChanged: _onUserStartChanged,
+              onEndChanged: _onUserEndChanged,
+              onScheduleCleared: _onUserScheduleCleared,
+              onDeadlineChanged: _onUserDeadlineChanged,
+              onRecurrenceChanged: _onUserRecurrenceChanged,
+              onImportantChanged: _onUserImportantChanged,
+              onUrgentChanged: _onUserUrgentChanged,
+              onRemindersChanged: _onRemindersChanged,
+              actionInsetBuilder: _quickAddActionInset,
+              fallbackDate: widget.prefilledDateTime,
+              onAddToCriticalPath: _queueCriticalPathForDraft,
+              queuedPaths: _queuedPaths(),
+              onRemoveQueuedPath: _removeQueuedCriticalPath,
+              hasCalendarBloc: widget.hasCalendarBloc,
+              formError: _formError,
+              titleValidator: _validateTaskTitle,
+              titleAutovalidateMode: _titleAutovalidateMode,
+            ),
           ),
         ),
       ),
@@ -263,39 +270,30 @@ class _QuickAddModalState extends State<QuickAddModal>
     return keyboardInset + calendarGutterSm;
   }
 
-  void _setTitleValidationMessage(String? message) {
-    if (_titleValidationMessage == message) {
+  AutovalidateMode get _titleAutovalidateMode =>
+      _initialTitleValidationMessage == null
+          ? AutovalidateMode.onUserInteraction
+          : AutovalidateMode.always;
+
+  String? _validateTaskTitle(String? raw) {
+    return _initialTitleValidationMessage ??
+        TaskTitleValidation.validate(raw ?? '');
+  }
+
+  void _clearInitialValidationMessage() {
+    if (_initialTitleValidationMessage == null) {
       return;
     }
     setState(() {
-      _titleValidationMessage = message;
+      _initialTitleValidationMessage = null;
     });
-  }
-
-  void _updateTitleValidationMessage(String raw) {
-    final bool exceeds = TaskTitleValidation.isTooLong(raw);
-    final bool hasContent = raw.trim().isNotEmpty;
-
-    if (exceeds) {
-      _setTitleValidationMessage(calendarTaskTitleFriendlyError);
-      return;
-    }
-
-    if (!exceeds && _titleValidationMessage == calendarTaskTitleFriendlyError) {
-      _setTitleValidationMessage(null);
-      return;
-    }
-
-    if (hasContent &&
-        _titleValidationMessage == TaskTitleValidation.requiredMessage) {
-      _setTitleValidationMessage(null);
-    }
+    _formKey.currentState?.validate();
   }
 
   void _handleTaskNameChanged(String value) {
     _setFormError(null);
+    _clearInitialValidationMessage();
     final trimmed = value.trim();
-    _updateTitleValidationMessage(value);
     _parserDebounce?.cancel();
     if (trimmed.isEmpty) {
       _clearParserState(clearFields: true);
@@ -584,10 +582,8 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
 
     _setFormError(null);
-    final validationError =
-        TaskTitleValidation.validate(_taskNameController.text);
-    if (validationError != null) {
-      _setTitleValidationMessage(validationError);
+    final bool isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) {
       _taskNameFocusNode.requestFocus();
       return;
     }
@@ -640,7 +636,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
 
     widget.onTaskAdded(task);
-    _setTitleValidationMessage(null);
 
     if (hasQueuedPaths && calendarBloc != null && previousIds != null) {
       final CalendarTask? createdTask =
@@ -750,7 +745,6 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.locationController,
     required this.checklistController,
     required this.taskNameFocusNode,
-    required this.titleValidationMessage,
     required this.locationHelper,
     required this.onTaskNameChanged,
     required this.onTaskSubmit,
@@ -771,6 +765,8 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.onRemoveQueuedPath,
     required this.hasCalendarBloc,
     required this.formError,
+    required this.titleValidator,
+    required this.titleAutovalidateMode,
   });
 
   final bool isSheet;
@@ -780,7 +776,6 @@ class _QuickAddModalContent extends StatelessWidget {
   final TextEditingController locationController;
   final TaskChecklistController checklistController;
   final FocusNode taskNameFocusNode;
-  final String? titleValidationMessage;
   final LocationAutocompleteHelper locationHelper;
   final ValueChanged<String> onTaskNameChanged;
   final VoidCallback onTaskSubmit;
@@ -801,6 +796,8 @@ class _QuickAddModalContent extends StatelessWidget {
   final ValueChanged<String> onRemoveQueuedPath;
   final bool hasCalendarBloc;
   final String? formError;
+  final FormFieldValidator<String> titleValidator;
+  final AutovalidateMode titleAutovalidateMode;
 
   @override
   Widget build(BuildContext context) {
@@ -889,7 +886,8 @@ class _QuickAddModalContent extends StatelessWidget {
                       controller: taskNameController,
                       focusNode: taskNameFocusNode,
                       helper: locationHelper,
-                      validationMessage: titleValidationMessage,
+                      validator: titleValidator,
+                      autovalidateMode: titleAutovalidateMode,
                       onChanged: onTaskNameChanged,
                       onSubmit: onTaskSubmit,
                     ),
@@ -897,8 +895,6 @@ class _QuickAddModalContent extends StatelessWidget {
                     _QuickAddDescriptionField(
                       controller: descriptionController,
                     ),
-                    const SizedBox(height: calendarGutterMd),
-                    TaskChecklist(controller: checklistController),
                     const SizedBox(height: calendarGutterMd),
                     _QuickAddLocationField(
                       controller: locationController,
@@ -911,6 +907,8 @@ class _QuickAddModalContent extends StatelessWidget {
                       onImportantChanged: onImportantChanged,
                       onUrgentChanged: onUrgentChanged,
                     ),
+                    const SizedBox(height: calendarGutterMd),
+                    TaskChecklist(controller: checklistController),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
                     ),
@@ -975,10 +973,8 @@ class _QuickAddModalContent extends StatelessWidget {
                 top: false,
                 child: _QuickAddActions(
                   formController: formController,
-                  taskNameController: taskNameController,
                   onCancel: onClose,
                   onSubmit: onTaskSubmit,
-                  titleValidationMessage: titleValidationMessage,
                 ),
               ),
             ),
@@ -1055,7 +1051,8 @@ class _QuickAddTaskNameField extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.helper,
-    required this.validationMessage,
+    required this.validator,
+    required this.autovalidateMode,
     required this.onChanged,
     required this.onSubmit,
   });
@@ -1063,42 +1060,35 @@ class _QuickAddTaskNameField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final LocationAutocompleteHelper helper;
-  final String? validationMessage;
+  final FormFieldValidator<String> validator;
+  final AutovalidateMode autovalidateMode;
   final ValueChanged<String> onChanged;
   final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    const padding = EdgeInsets.symmetric(
-      horizontal: calendarGutterMd,
-      vertical: calendarGutterMd,
-    );
+    const padding = calendarFieldPadding;
     final field = Focus(
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter) {
-          final bool canSubmit =
-              validationMessage == null && controller.text.trim().isNotEmpty;
-          if (canSubmit) {
-            onSubmit();
-          }
+          onSubmit();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
-      child: TaskTextField(
+      child: TaskTitleField(
         controller: controller,
         focusNode: focusNode,
         autofocus: true,
+        onChanged: onChanged,
+        validator: validator,
+        autovalidateMode: autovalidateMode,
+        onSubmitted: onSubmit,
         labelText: l10n.calendarTaskNameRequired,
         hintText: l10n.calendarTaskNameHint,
-        borderRadius: calendarBorderRadius,
-        focusBorderColor: calendarPrimaryColor,
-        textCapitalization: TextCapitalization.sentences,
-        contentPadding: padding,
-        onChanged: onChanged,
-        errorText: validationMessage,
+        textInputAction: TextInputAction.done,
       ),
     );
 
@@ -1139,6 +1129,7 @@ class _QuickAddDescriptionField extends StatelessWidget {
       hintText: l10n.calendarDescriptionHint,
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
+      contentPadding: calendarFieldPadding,
       textCapitalization: TextCapitalization.sentences,
     );
   }
@@ -1164,6 +1155,7 @@ class _QuickAddLocationField extends StatelessWidget {
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.words,
+      contentPadding: calendarFieldPadding,
       onChanged: onChanged,
       autocomplete: helper,
     );
@@ -1334,17 +1326,13 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
 class _QuickAddActions extends StatelessWidget {
   const _QuickAddActions({
     required this.formController,
-    required this.taskNameController,
     required this.onCancel,
     required this.onSubmit,
-    required this.titleValidationMessage,
   });
 
   final QuickAddController formController;
-  final TextEditingController taskNameController;
   final VoidCallback onCancel;
   final VoidCallback onSubmit;
-  final String? titleValidationMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -1352,38 +1340,30 @@ class _QuickAddActions extends StatelessWidget {
     return AnimatedBuilder(
       animation: formController,
       builder: (context, _) {
-        return ValueListenableBuilder<TextEditingValue>(
-          valueListenable: taskNameController,
-          builder: (context, value, __) {
-            final bool canSubmit =
-                value.text.trim().isNotEmpty && titleValidationMessage == null;
-            return TaskFormActionsRow(
-              includeTopBorder: true,
-              padding: calendarPaddingXl,
-              gap: calendarGutterMd,
-              children: [
-                Expanded(
-                  child: TaskSecondaryButton(
-                    label: l10n.calendarCancel,
-                    onPressed: formController.isSubmitting ? null : onCancel,
-                    foregroundColor: calendarSubtitleColor,
-                    hoverForegroundColor: calendarPrimaryColor,
-                    hoverBackgroundColor:
-                        calendarPrimaryColor.withValues(alpha: 0.06),
-                  ),
-                ),
-                Expanded(
-                  child: TaskPrimaryButton(
-                    label: l10n.calendarAddTaskAction,
-                    onPressed: canSubmit && !formController.isSubmitting
-                        ? onSubmit
-                        : null,
-                    isBusy: formController.isSubmitting,
-                  ),
-                ),
-              ],
-            );
-          },
+        final bool isSubmitting = formController.isSubmitting;
+        return TaskFormActionsRow(
+          includeTopBorder: true,
+          padding: calendarPaddingXl,
+          gap: calendarGutterMd,
+          children: [
+            Expanded(
+              child: TaskSecondaryButton(
+                label: l10n.calendarCancel,
+                onPressed: isSubmitting ? null : onCancel,
+                foregroundColor: calendarSubtitleColor,
+                hoverForegroundColor: calendarPrimaryColor,
+                hoverBackgroundColor:
+                    calendarPrimaryColor.withValues(alpha: 0.06),
+              ),
+            ),
+            Expanded(
+              child: TaskPrimaryButton(
+                label: l10n.calendarAddTaskAction,
+                onPressed: isSubmitting ? null : onSubmit,
+                isBusy: isSubmitting,
+              ),
+            ),
+          ],
         );
       },
     );

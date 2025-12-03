@@ -39,6 +39,7 @@ class ChatsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
       selector: (state) {
         final items = state.items;
@@ -101,7 +102,7 @@ class ChatsList extends StatelessWidget {
                   if (visibleItems.isEmpty) {
                     body = Center(
                       child: Text(
-                        'No chats yet',
+                        l10n.chatsEmptyList,
                         style: context.textTheme.muted,
                       ),
                     );
@@ -260,6 +261,7 @@ class _ChatListTileState extends State<ChatListTile> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final item = widget.item;
     final colors = context.colorScheme;
     final textScaler = MediaQuery.of(context).textScaler;
@@ -382,7 +384,7 @@ class _ChatListTileState extends State<ChatListTile> {
       leading: TransportAwareAvatar(chat: item),
       title: displayName,
       subtitle: subtitleText,
-      subtitlePlaceholder: 'No messages',
+      subtitlePlaceholder: l10n.chatEmptyMessages,
     );
 
     final cutouts = <CutoutSpec>[
@@ -480,11 +482,12 @@ class _ChatListTileState extends State<ChatListTile> {
       ),
     );
 
-    final semanticsValue =
-        showUnreadBadge ? '$unreadCount unread messages' : 'No unread messages';
+    final semanticsValue = l10n.chatsUnreadLabel(unreadCount);
     final semanticsHint = selectionActive
-        ? (isSelected ? 'Press to unselect chat' : 'Press to select chat')
-        : 'Press to open chat';
+        ? (isSelected
+            ? l10n.chatsSemanticsUnselectHint
+            : l10n.chatsSemanticsSelectHint)
+        : l10n.chatsSemanticsOpenHint;
     Widget tileContent = tileSurface.withTapBounce();
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
@@ -573,10 +576,11 @@ class _ChatListTileState extends State<ChatListTile> {
         return;
       }
     }
-    unawaited(context.read<ChatsCubit>().toggleChat(jid: chat.jid));
+    unawaited(context.read<ChatsCubit>().pushChat(jid: chat.jid));
   }
 
   Future<void> _confirmDelete(Chat chat) async {
+    final l10n = context.l10n;
     if (context.read<ChatsCubit?>() == null) return;
     var deleteMessages = false;
     final confirmed = await showShadDialog<bool>(
@@ -586,17 +590,17 @@ class _ChatListTileState extends State<ChatListTile> {
           builder: (context, setState) {
             return ShadDialog(
               title: Text(
-                'Confirm',
+                l10n.commonConfirm,
                 style: context.modalHeaderTextStyle,
               ),
               actions: [
                 ShadButton.outline(
                   onPressed: () => dialogContext.pop(false),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.commonCancel),
                 ).withTapBounce(),
                 ShadButton.destructive(
                   onPressed: () => dialogContext.pop(true),
-                  child: const Text('Continue'),
+                  child: Text(l10n.commonContinue),
                 ).withTapBounce(),
               ],
               child: Material(
@@ -605,7 +609,7 @@ class _ChatListTileState extends State<ChatListTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Delete chat: ${chat.displayName}',
+                      l10n.chatsDeleteConfirmMessage(chat.displayName),
                       style: context.textTheme.small,
                     ),
                     const SizedBox.square(dimension: 10.0),
@@ -642,7 +646,7 @@ class _ChatListTileState extends State<ChatListTile> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Permanently delete messages',
+                              l10n.chatsDeleteMessagesOption,
                               style: context.textTheme.muted,
                             ),
                           ),
@@ -665,7 +669,7 @@ class _ChatListTileState extends State<ChatListTile> {
     }
     await context.read<ChatsCubit>().deleteChat(jid: chat.jid);
     if (!mounted) return;
-    _showMessage('Chat deleted');
+    _showMessage(l10n.chatsDeleteSuccess);
     setState(() => _showActions = false);
   }
 
@@ -676,6 +680,7 @@ class _ChatListTileState extends State<ChatListTile> {
   }
 
   Future<void> _exportChatFromContextMenu(Chat chat) async {
+    final l10n = context.l10n;
     if (context.read<ChatsCubit?>() == null) return;
     try {
       final result = await ChatHistoryExporter.exportChats(
@@ -685,42 +690,43 @@ class _ChatListTileState extends State<ChatListTile> {
       if (!mounted) return;
       final file = result.file;
       if (file == null) {
-        _showMessage('No text content to export');
+        _showMessage(l10n.chatsExportNoContent);
         return;
       }
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Chat export from Axichat',
-        subject: 'Chat with ${chat.displayName}',
+        text: l10n.chatsExportShareText,
+        subject: l10n.chatsExportShareSubject(chat.displayName),
       );
       if (!mounted) return;
-      _showMessage('Chat exported');
+      _showMessage(l10n.chatsExportSuccess);
     } catch (_) {
       if (!mounted) return;
-      _showMessage('Unable to export chat');
+      _showMessage(l10n.chatsExportFailure);
     }
   }
 
   List<Widget> _chatContextMenuItems(Chat chat, ChatsState? chatsState) {
+    final l10n = context.l10n;
     final disabled = chatsState == null;
     return [
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.messagesSquare),
         onPressed: disabled ? null : () => unawaited(_handleTap(chat)),
-        child: const Text('Open'),
+        child: Text(l10n.commonOpen),
       ),
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.squareCheck),
         onPressed: disabled
             ? null
             : () => context.read<ChatsCubit>().ensureChatSelected(chat.jid),
-        child: const Text('Select'),
+        child: Text(l10n.commonSelect),
       ),
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.share2),
         onPressed:
             disabled ? null : () => unawaited(_exportChatFromContextMenu(chat)),
-        child: const Text('Export'),
+        child: Text(l10n.commonExport),
       ),
       ShadContextMenuItem(
         leading: Icon(
@@ -734,7 +740,9 @@ class _ChatListTileState extends State<ChatListTile> {
                       favorited: !chat.favorited,
                     );
               },
-        child: Text(chat.favorited ? 'Unfavorite' : 'Favorite'),
+        child: Text(
+          chat.favorited ? l10n.commonUnfavorite : l10n.commonFavorite,
+        ),
       ),
       ShadContextMenuItem(
         leading: Icon(
@@ -748,7 +756,9 @@ class _ChatListTileState extends State<ChatListTile> {
                       archived: !chat.archived,
                     );
               },
-        child: Text(chat.archived ? 'Unarchive' : 'Archive'),
+        child: Text(
+          chat.archived ? l10n.commonUnarchive : l10n.commonArchive,
+        ),
       ),
       if (!widget.archivedContext)
         ShadContextMenuItem(
@@ -761,12 +771,12 @@ class _ChatListTileState extends State<ChatListTile> {
                         hidden: !chat.hidden,
                       );
                 },
-          child: Text(chat.hidden ? 'Show' : 'Hide'),
+          child: Text(chat.hidden ? l10n.commonShow : l10n.commonHide),
         ),
       ShadContextMenuItem(
         leading: const Icon(LucideIcons.trash2),
         onPressed: disabled ? null : () => _confirmDelete(chat),
-        child: const Text('Delete'),
+        child: Text(l10n.commonDelete),
       ),
     ];
   }
@@ -806,7 +816,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
       children: [
         ContextActionButton(
           icon: Icon(LucideIcons.squareCheck, size: iconSize),
-          label: 'Select',
+          label: l10n.commonSelect,
           onPressed: context.read<ChatsCubit?>() == null
               ? null
               : () {
@@ -829,7 +839,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             widget.chat.favorited ? LucideIcons.starOff : LucideIcons.star,
             size: iconSize,
           ),
-          label: widget.chat.favorited ? 'Unfavorite' : 'Favorite',
+          label: widget.chat.favorited
+              ? l10n.commonUnfavorite
+              : l10n.commonFavorite,
           onPressed: context.read<ChatsCubit?>() == null
               ? null
               : () async {
@@ -851,7 +863,8 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             widget.chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
             size: iconSize,
           ),
-          label: widget.chat.archived ? 'Unarchive' : 'Archive',
+          label:
+              widget.chat.archived ? l10n.commonUnarchive : l10n.commonArchive,
           onPressed: context.read<ChatsCubit?>() == null
               ? null
               : () async {
@@ -861,8 +874,8 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
                       );
                   _showSnack(
                     widget.chat.archived
-                        ? 'Chat restored'
-                        : 'Chat archived (Profile → Archived chats)',
+                        ? l10n.chatsArchivedRestored
+                        : l10n.chatsArchivedHint,
                   );
                   if (!mounted) return;
                   widget.onClose();
@@ -874,7 +887,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
               widget.chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
               size: iconSize,
             ),
-            label: widget.chat.hidden ? 'Show' : 'Hide',
+            label: widget.chat.hidden ? l10n.commonShow : l10n.commonHide,
             onPressed: context.read<ChatsCubit?>() == null
                 ? null
                 : () async {
@@ -884,8 +897,8 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
                         );
                     _showSnack(
                       widget.chat.hidden
-                          ? 'Chat is visible again'
-                          : 'Chat hidden (use filter to reveal)',
+                          ? l10n.chatsVisibleNotice
+                          : l10n.chatsHiddenNotice,
                     );
                     if (!mounted) return;
                     widget.onClose();
@@ -893,7 +906,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           ),
         ContextActionButton(
           icon: Icon(LucideIcons.trash2, size: iconSize),
-          label: 'Delete',
+          label: l10n.commonDelete,
           destructive: true,
           onPressed: widget.onDelete,
         ),
@@ -924,6 +937,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
   }
 
   Future<void> _exportChat() async {
+    final l10n = context.l10n;
     if (context.read<ChatsCubit?>() == null) return;
     setState(() {
       _exporting = true;
@@ -936,20 +950,20 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
       if (!mounted) return;
       final file = result.file;
       if (file == null) {
-        _showSnack('No text content to export');
+        _showSnack(l10n.chatsExportNoContent);
         return;
       }
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Chat export from Axichat',
-        subject: 'Chat with ${widget.chat.displayName}',
+        text: l10n.chatsExportShareText,
+        subject: l10n.chatsExportShareSubject(widget.chat.displayName),
       );
       if (!mounted) return;
-      _showSnack('Chat exported');
+      _showSnack(l10n.chatsExportSuccess);
       widget.onClose();
     } catch (_) {
       if (!mounted) return;
-      _showSnack('Unable to export chat');
+      _showSnack(l10n.chatsExportFailure);
     } finally {
       if (mounted) {
         setState(() {
@@ -1057,7 +1071,7 @@ class _UnreadBadge extends StatelessWidget {
     final verticalPadding = scaled(_unreadBadgeVerticalPadding);
     return Semantics(
       container: true,
-      label: '$count unread messages',
+      label: context.l10n.chatsUnreadLabel(count),
       child: DecoratedBox(
         decoration: ShapeDecoration(
           color: background,
@@ -1109,7 +1123,9 @@ class _ChatActionsToggle extends StatelessWidget {
     final minButtonSize = scaled(36);
     final borderWidth = scaled(1.4);
     final icon = expanded ? LucideIcons.x : LucideIcons.ellipsisVertical;
-    final tooltip = expanded ? 'Hide chat actions' : 'Show chat actions';
+    final tooltip = expanded
+        ? context.l10n.chatsHideActions
+        : context.l10n.chatsShowActions;
     final button = AxiIconButton(
       iconData: icon,
       tooltip: tooltip,
@@ -1156,7 +1172,9 @@ class _ChatSelectionCutoutButton extends StatelessWidget {
       container: true,
       button: true,
       toggled: selected,
-      label: selected ? 'Chat selected' : 'Select chat',
+      label: selected
+          ? context.l10n.chatsSelectedLabel
+          : context.l10n.chatsSelectLabel,
       onTap: onPressed,
       child: DecoratedBox(
         decoration: ShapeDecoration(
