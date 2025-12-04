@@ -166,7 +166,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
       _subscribeToMessages(limit: messageBatchSize, filter: state.viewFilter);
-      _subscribeToTypingParticipants(jid!);
       unawaited(_initializeViewFilter());
     }
     _emailSyncSubscription = _emailService?.syncStateStream.listen(
@@ -515,6 +514,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       roomState: resetContext ? null : state.roomState,
       typingParticipants: resetContext ? const [] : state.typingParticipants,
     ));
+    _subscribeToTypingParticipants(event.chat);
     _resetMamCursors(resetContext);
     unawaited(_hydrateLatestFromMam(event.chat));
     unawaited(_roomSubscription?.cancel());
