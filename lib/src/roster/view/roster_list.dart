@@ -110,7 +110,7 @@ class _RosterListBody extends StatelessWidget {
           return ListItemPadding(
             child: AxiListTile(
               key: Key(item.jid),
-              onTap: () => context.read<ChatsCubit?>()?.pushChat(jid: item.jid),
+              onTap: () => context.read<ChatsCubit?>()?.openChat(jid: item.jid),
               menuItems: [
                 ShadContextMenuItem(
                   leading: const Icon(LucideIcons.pencilLine),

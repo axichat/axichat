@@ -307,7 +307,7 @@ class _InlineSyncControls extends StatelessWidget {
           icon: LucideIcons.cloudUpload,
           onPressed: disabled ? null : onPushSync,
         ),
-        _TransferMenuButton(
+        CalendarTransferMenuButton(
           hasTasks: hasTasks,
           onExport: onExportCalendar,
           onImport: onImportCalendar,
@@ -337,31 +337,37 @@ Color _statusColorFor(BuildContext context, CalendarState state) {
   return Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
 }
 
-class _TransferMenuButton extends StatelessWidget {
-  const _TransferMenuButton({
+class CalendarTransferMenuButton extends StatelessWidget {
+  const CalendarTransferMenuButton({
+    super.key,
     required this.hasTasks,
     required this.onExport,
     required this.onImport,
+    this.busy = false,
   });
 
   final bool hasTasks;
   final VoidCallback onExport;
   final VoidCallback onImport;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
+    final bool canExport = hasTasks && !busy;
+    final bool canImport = !busy;
     return AxiMore(
       actions: [
         AxiMenuAction(
           icon: LucideIcons.upload,
           label: 'Export calendar',
-          enabled: hasTasks,
-          onPressed: hasTasks ? onExport : null,
+          enabled: canExport,
+          onPressed: canExport ? onExport : null,
         ),
         AxiMenuAction(
           icon: LucideIcons.download,
           label: 'Import calendar',
-          onPressed: onImport,
+          enabled: canImport,
+          onPressed: canImport ? onImport : null,
         ),
       ],
     );

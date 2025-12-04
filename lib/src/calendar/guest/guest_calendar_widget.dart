@@ -1,19 +1,28 @@
+import 'dart:io';
+
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
+import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/calendar/view/calendar_transfer_sheet.dart';
+import 'package:axichat/src/calendar/view/sync_controls.dart';
 import 'package:axichat/src/calendar/view/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/task_sidebar.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_loading_overlay.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
+import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'guest_calendar_bloc.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
@@ -33,7 +42,7 @@ class _GuestCalendarWidgetState
     CalendarResponsiveSpec spec,
     bool usesDesktopLayout,
   ) =>
-      spec.contentPadding;
+      null;
 
   @override
   EdgeInsets? errorBannerMargin(
@@ -72,17 +81,13 @@ class _GuestCalendarWidgetState
   }
 
   @override
-  Widget? buildDesktopTopHeader(Widget navigation, Widget? errorBanner) => null;
+  Widget? buildDesktopTopHeader(Widget navigation, Widget? errorBanner) {
+    return CalendarNavSurface(child: navigation);
+  }
 
   @override
   Widget? buildDesktopBodyHeader(Widget navigation, Widget? errorBanner) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        navigation,
-        if (errorBanner != null) errorBanner,
-      ],
-    );
+    return errorBanner;
   }
 
   @override
@@ -94,9 +99,18 @@ class _GuestCalendarWidgetState
   ) {
     final children = <Widget>[];
     if (showingPrimary) {
-      children.add(navigation);
-    }
-    if (errorBanner != null) {
+      final Widget navContent = CalendarNavSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            navigation,
+            if (errorBanner != null) errorBanner,
+          ],
+        ),
+      );
+      children.add(navContent);
+    } else if (errorBanner != null) {
       children.add(errorBanner);
     }
     if (children.isEmpty) {
@@ -124,6 +138,7 @@ class _GuestCalendarWidgetState
           _GuestBanner(
             onNavigateBack: _handleBannerBackNavigation,
             onSignUp: () => context.go('/login'),
+            transferMenu: _GuestTransferMenu(state: state),
           ),
           Expanded(child: layout),
         ],
@@ -228,10 +243,12 @@ class _GuestBanner extends StatelessWidget {
   const _GuestBanner({
     required this.onNavigateBack,
     required this.onSignUp,
+    required this.transferMenu,
   });
 
   final Future<void> Function() onNavigateBack;
   final VoidCallback onSignUp;
+  final Widget transferMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -274,9 +291,14 @@ class _GuestBanner extends StatelessWidget {
               style: calendarBodyTextStyle.copyWith(
                 color: calendarSubtitleColor,
                 fontSize: 14,
+                overflow: TextOverflow.ellipsis,
               ),
+              maxLines: 2,
             ),
           ),
+          const SizedBox(width: calendarGutterMd),
+          transferMenu,
+          const SizedBox(width: calendarGutterMd),
           TaskPrimaryButton(
             label: 'Sign Up to Sync',
             onPressed: onSignUp,
@@ -285,5 +307,119 @@ class _GuestBanner extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _GuestTransferMenu extends StatefulWidget {
+  const _GuestTransferMenu({required this.state});
+
+  final CalendarState state;
+
+  @override
+  State<_GuestTransferMenu> createState() => _GuestTransferMenuState();
+}
+
+class _GuestTransferMenuState extends State<_GuestTransferMenu> {
+  final CalendarTransferService _transferService =
+      const CalendarTransferService();
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasTasks = widget.state.model.tasks.isNotEmpty;
+    return CalendarTransferMenuButton(
+      hasTasks: hasTasks,
+      onExport: _handleExportAll,
+      onImport: _handleImportCalendar,
+      busy: _busy,
+    );
+  }
+
+  Future<void> _handleExportAll() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final Iterable<CalendarTask> tasks =
+          context.read<GuestCalendarBloc>().state.model.tasks.values;
+      if (tasks.isEmpty) {
+        FeedbackSystem.showInfo(context, 'No tasks available to export.');
+        return;
+      }
+      final format = await showCalendarExportFormatSheet(
+        context,
+        title: 'Export guest calendar',
+      );
+      if (!mounted || format == null) return;
+      final file = await _transferService.exportTasks(
+        tasks: tasks,
+        format: format,
+        fileNamePrefix: 'axichat_guest_calendar',
+      );
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Axichat guest calendar export',
+        text: 'Axichat guest calendar export (${format.label})',
+      );
+      if (!mounted) return;
+      FeedbackSystem.showSuccess(context, 'Export ready to share.');
+    } catch (error) {
+      if (!mounted) return;
+      FeedbackSystem.showError(
+        context,
+        'Failed to export calendar: $error',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _handleImportCalendar() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        type: FileType.custom,
+        allowedExtensions: const ['ics', 'json'],
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      final path = result.files.single.path;
+      if (path == null) {
+        if (!mounted) return;
+        FeedbackSystem.showError(
+          context,
+          'Unable to access the selected file.',
+        );
+        return;
+      }
+      final file = File(path);
+      final tasks = await _transferService.importFromFile(file);
+      if (tasks.isEmpty) {
+        if (!mounted) return;
+        FeedbackSystem.showInfo(
+          context,
+          'No tasks detected in the selected file.',
+        );
+        return;
+      }
+      if (!mounted) return;
+      context
+          .read<GuestCalendarBloc>()
+          .add(CalendarEvent.tasksImported(tasks: tasks));
+      FeedbackSystem.showSuccess(
+        context,
+        'Imported ${tasks.length} task${tasks.length == 1 ? '' : 's'}.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      FeedbackSystem.showError(
+        context,
+        'Import failed: $error',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }

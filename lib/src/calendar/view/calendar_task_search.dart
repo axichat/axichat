@@ -223,20 +223,23 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                             itemBuilder: (context, index) {
                               final CalendarTask task = results[index];
                               final Widget trailing = _ResultMetadata(task);
-                              final Widget tile = widget.taskTileBuilder?.call(
-                                    task,
-                                    trailing: trailing,
-                                    requiresLongPress:
-                                        widget.requiresLongPressForDrag,
-                                    onTap: () => _handleTaskSelected(task),
-                                    onDragStart: () =>
-                                        Navigator.of(context).maybePop(),
-                                    allowContextMenu: false,
-                                  ) ??
-                                  _SearchResultTile(
-                                    task: task,
-                                    onTap: () => _handleTaskSelected(task),
-                                  );
+                              final bool useCustomTile =
+                                  widget.taskTileBuilder != null;
+                              final Widget tile = useCustomTile
+                                  ? widget.taskTileBuilder!.call(
+                                      task,
+                                      trailing: trailing,
+                                      requiresLongPress:
+                                          widget.requiresLongPressForDrag,
+                                      onTap: () => _handleTaskSelected(task),
+                                      onDragStart: () =>
+                                          Navigator.of(context).maybePop(),
+                                      allowContextMenu: false,
+                                    )
+                                  : _SearchResultTile(
+                                      task: task,
+                                      onTap: () => _handleTaskSelected(task),
+                                    );
                               return tile;
                             },
                           ),
@@ -261,8 +264,6 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
   }
 
   Future<void> _handleTaskSelected(CalendarTask task) async {
-    Navigator.of(context).maybePop();
-    await Future<void>.delayed(Duration.zero);
     await widget.onTaskSelected(task);
   }
 
@@ -667,7 +668,7 @@ class _ParsedQuery {
     _DeadlineFilter? deadlineFilter;
     _RecurrenceFilter? recurrenceFilter;
 
-    final RegExp tokenExp = RegExp(r'("[^"]+"|\\S+)');
+    final RegExp tokenExp = RegExp(r'("[^"]+"|\S+)');
     final Iterable<RegExpMatch> matches = tokenExp.allMatches(normalized);
 
     for (final RegExpMatch match in matches) {

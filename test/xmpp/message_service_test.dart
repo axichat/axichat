@@ -1,9 +1,11 @@
 // ignore_for_file: depend_on_referenced_packages
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -168,6 +170,68 @@ main() {
         messagesByTimestamp[2] =
             messagesByTimestamp[2].copyWith(displayed: true);
         await database.markMessageDisplayed(messagesByTimestamp[2].stanzaID);
+      },
+    );
+
+    test(
+      'Self chat stream hides calendar sync envelopes',
+      () async {
+        await connectSuccessfully(xmppService);
+        final selfJid = xmppService.myJid!;
+        final syncEnvelope = jsonEncode({
+          'calendar_sync': CalendarSyncMessage.request().toJson(),
+        });
+        final syncEvent = mox.MessageEvent(
+          mox.JID.fromString(selfJid),
+          mox.JID.fromString(selfJid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            mox.MessageBodyData(syncEnvelope),
+            mox.MessageIdData(uuid.v4()),
+          ]),
+          id: uuid.v4(),
+        );
+        final normalEvent = mox.MessageEvent(
+          mox.JID.fromString(selfJid),
+          mox.JID.fromString(selfJid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('hello'),
+            mox.MessageIdData(uuid.v4()),
+          ]),
+          id: uuid.v4(),
+        );
+
+        final calendarMessage = Message.fromMox(syncEvent).copyWith(
+          timestamp: DateTime.timestamp().toLocal(),
+        );
+        final normalMessage = Message.fromMox(normalEvent).copyWith(
+          timestamp:
+              DateTime.timestamp().toLocal().add(const Duration(seconds: 1)),
+        );
+
+        final emissions = <List<Message>>[];
+        final subscription =
+            xmppService.messageStreamForChat(selfJid).listen(emissions.add);
+
+        await database.saveMessage(calendarMessage);
+        await database.saveMessage(normalMessage);
+        await pumpEventQueue();
+        await subscription.cancel();
+
+        final latest = emissions.isEmpty ? <Message>[] : emissions.last;
+        expect(
+          latest,
+          isA<List<Message>>()
+              .having((items) => items.length, 'length', 1)
+              .having((items) => items.first.body, 'body', normalMessage.body),
+        );
+        expect(
+          emissions.expand((items) => items).any(
+                (message) => message.body == syncEnvelope,
+              ),
+          isFalse,
+        );
       },
     );
   });
@@ -352,6 +416,49 @@ main() {
         await pumpEventQueue();
 
         verifyNever(() => mockConnection.discoInfoQuery(any()));
+
+        await controller.close();
+      },
+    );
+  });
+
+  group('calendar sync handling', () {
+    test(
+      'Calendar sync envelopes are handled without storing chat messages',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(() => mockConnection.asBroadcastStream())
+            .thenAnswer((_) => controller.stream);
+        when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+          (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+            mox.ServiceUnavailableError(),
+          ),
+        );
+
+        await connectSuccessfully(xmppService);
+
+        final selfJid = xmppService.myJid!;
+        final syncEnvelope = jsonEncode({
+          'calendar_sync': CalendarSyncMessage.request().toJson(),
+        });
+        final stanzaId = uuid.v4();
+        final syncEvent = mox.MessageEvent(
+          mox.JID.fromString(selfJid),
+          mox.JID.fromString(selfJid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            mox.MessageBodyData(syncEnvelope),
+            mox.MessageIdData(stanzaId),
+          ]),
+          id: stanzaId,
+        );
+
+        controller.add(syncEvent);
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored, isNull);
 
         await controller.close();
       },

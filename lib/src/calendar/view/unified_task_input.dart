@@ -49,6 +49,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   TimeOfDay? _selectedTime;
   Duration? _selectedDuration;
   bool _isSubmitting = false;
+  bool _hasAttemptedSave = false;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -72,6 +73,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     _checklistController = TaskChecklistController(
       initialItems: widget.editingTask?.checklist ?? const [],
     );
+    _titleController.addListener(_handleTitleChanged);
     _reminders = widget.editingTask?.effectiveReminders ??
         ReminderPreferences.defaults();
 
@@ -96,11 +98,22 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
 
   @override
   void dispose() {
+    _titleController.removeListener(_handleTitleChanged);
     _titleController.dispose();
     _descriptionController.dispose();
     _checklistController.dispose();
     super.dispose();
   }
+
+  void _handleTitleChanged() {
+    setState(() {});
+  }
+
+  AutovalidateMode get _titleAutovalidateMode =>
+      _hasAttemptedSave ? AutovalidateMode.always : AutovalidateMode.disabled;
+
+  bool get _canSubmit =>
+      TaskTitleValidation.validate(_titleController.text) == null;
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +122,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     final Widget form = _UnifiedTaskForm(
       formKey: _formKey,
       titleController: _titleController,
+      titleAutovalidateMode: _titleAutovalidateMode,
       descriptionController: _descriptionController,
       selectedDate: _selectedDate,
       selectedTime: _selectedTime,
@@ -131,11 +145,13 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     );
     final Widget saveButton = _UnifiedTaskSaveButton<T>(
       isSubmitting: _isSubmitting,
+      canSubmit: _canSubmit,
       onSave: _saveTask,
     );
     final Widget dialogActions = _UnifiedTaskDialogActions<T>(
       editingTask: widget.editingTask,
       isSubmitting: _isSubmitting,
+      canSubmit: _canSubmit,
       onSave: _saveTask,
       onSubmissionReset: () => setState(() => _isSubmitting = false),
       onClearError: () => context.read<T>().add(
@@ -188,7 +204,17 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     }
   }
 
+  void _activateTitleValidation() {
+    if (_hasAttemptedSave) {
+      return;
+    }
+    setState(() {
+      _hasAttemptedSave = true;
+    });
+  }
+
   void _saveTask() {
+    _activateTitleValidation();
     if (!_formKey.currentState!.validate() || _isSubmitting) return;
 
     setState(() => _isSubmitting = true);
@@ -378,6 +404,7 @@ class _UnifiedTaskForm extends StatelessWidget {
   const _UnifiedTaskForm({
     required this.formKey,
     required this.titleController,
+    required this.titleAutovalidateMode,
     required this.descriptionController,
     required this.selectedDate,
     required this.selectedTime,
@@ -395,6 +422,7 @@ class _UnifiedTaskForm extends StatelessWidget {
 
   final GlobalKey<FormState> formKey;
   final TextEditingController titleController;
+  final AutovalidateMode titleAutovalidateMode;
   final TextEditingController descriptionController;
   final TaskChecklistController checklistController;
   final DateTime? selectedDate;
@@ -418,7 +446,10 @@ class _UnifiedTaskForm extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _UnifiedTaskTitleField(controller: titleController),
+            _UnifiedTaskTitleField(
+              controller: titleController,
+              autovalidateMode: titleAutovalidateMode,
+            ),
             const SizedBox(height: calendarGutterLg),
             _UnifiedTaskDescriptionField(
               controller: descriptionController,
@@ -453,9 +484,13 @@ class _UnifiedTaskForm extends StatelessWidget {
 }
 
 class _UnifiedTaskTitleField extends StatelessWidget {
-  const _UnifiedTaskTitleField({required this.controller});
+  const _UnifiedTaskTitleField({
+    required this.controller,
+    required this.autovalidateMode,
+  });
 
   final TextEditingController controller;
+  final AutovalidateMode autovalidateMode;
 
   @override
   Widget build(BuildContext context) {
@@ -467,7 +502,7 @@ class _UnifiedTaskTitleField extends StatelessWidget {
           controller: controller,
           hintText: l10n.calendarTaskNameHint,
           validator: (value) => TaskTitleValidation.validate(value ?? ''),
-          autovalidateMode: AutovalidateMode.onUserInteraction,
+          autovalidateMode: autovalidateMode,
           textInputAction: TextInputAction.next,
         ),
         TaskFieldCharacterHint(controller: controller),
@@ -588,23 +623,26 @@ class _UnifiedTaskSaveButton<T extends BaseCalendarBloc>
     extends StatelessWidget {
   const _UnifiedTaskSaveButton({
     required this.isSubmitting,
+    required this.canSubmit,
     required this.onSave,
   });
 
   final bool isSubmitting;
+  final bool canSubmit;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<T, CalendarState>(
       builder: (context, state) {
-        final bool disabled = state.isLoading || isSubmitting;
+        final bool disabled = state.isLoading || isSubmitting || !canSubmit;
+        final bool busy = state.isLoading || isSubmitting;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm),
           child: TaskPrimaryButton(
             label: context.l10n.commonSave,
             onPressed: disabled ? null : onSave,
-            isBusy: disabled,
+            isBusy: busy,
           ),
         );
       },
@@ -617,6 +655,7 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
   const _UnifiedTaskDialogActions({
     required this.editingTask,
     required this.isSubmitting,
+    required this.canSubmit,
     required this.onSave,
     required this.onSubmissionReset,
     required this.onClearError,
@@ -624,6 +663,7 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
 
   final CalendarTask? editingTask;
   final bool isSubmitting;
+  final bool canSubmit;
   final VoidCallback onSave;
   final VoidCallback onSubmissionReset;
   final VoidCallback onClearError;
@@ -693,8 +733,9 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
                   ),
                   TaskPrimaryButton(
                     label: context.l10n.commonSave,
-                    onPressed:
-                        (state.isLoading || isSubmitting) ? null : onSave,
+                    onPressed: (state.isLoading || isSubmitting || !canSubmit)
+                        ? null
+                        : onSave,
                     isBusy: state.isLoading || isSubmitting,
                   ),
                 ],

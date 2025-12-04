@@ -491,9 +491,19 @@ String _stripSubjectHeader(String body, String subject) {
 bool _matchesDeltaWelcomeText(String? text) {
   if (text == null) return false;
   final normalized = text.toLowerCase();
+  final mentionsDelta =
+      normalized.contains('delta chat') || normalized.contains('deltachat');
+  final generatedLocally = normalized.contains('generated locally') ||
+      normalized.contains('created locally') ||
+      normalized.contains('generated automatically');
+  if (mentionsDelta && generatedLocally) {
+    return true;
+  }
   return normalized.contains('welcome to delta chat') ||
       normalized.contains('welcome to deltachat') ||
-      normalized.contains('generated locally by your delta chat app');
+      normalized.contains('generated locally by your delta chat app') ||
+      (mentionsDelta && normalized.contains('device message')) ||
+      (mentionsDelta && normalized.contains('setup message'));
 }
 
 bool _matchesDeltaWelcomeAttachment(String? value) {

@@ -576,7 +576,7 @@ class _ChatListTileState extends State<ChatListTile> {
         return;
       }
     }
-    unawaited(context.read<ChatsCubit>().pushChat(jid: chat.jid));
+    unawaited(context.read<ChatsCubit>().openChat(jid: chat.jid));
   }
 
   Future<void> _confirmDelete(Chat chat) async {

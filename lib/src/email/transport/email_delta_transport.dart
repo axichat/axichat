@@ -176,6 +176,14 @@ class EmailDeltaTransport implements ChatTransport {
     _eventListeners.clear();
   }
 
+  Future<void> purgeStockMessages() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    await _eventConsumer?.purgeDeltaStockMessages();
+  }
+
   Future<void> notifyNetworkAvailable() async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;

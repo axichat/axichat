@@ -273,6 +273,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<void> _clearLoginSecrets() async {
+    await _credentialStore.delete(key: jidStorageKey);
+    await _credentialStore.delete(key: passwordStorageKey);
+    await _credentialStore.delete(key: passwordPreHashedStorageKey);
+  }
+
   Future<void> _startAuthTransaction({
     required String jid,
     required bool clearEmailCredentialsOnFailure,
@@ -378,6 +384,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     _loginInFlight = true;
     try {
+      _log.info(
+        'Login requested '
+        '(usingStoredCredentials: ${username == null && password == null}, '
+        'xmppEnabled: ${_endpointConfig.enableXmpp}, '
+        'smtpEnabled: ${_endpointConfig.enableSmtp})',
+      );
       _lastEmailProvisioningError = null;
       await _authRecoveryFuture;
       if (state is AuthenticationComplete && _xmppService.connected) {
@@ -412,10 +424,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             'Username and password have different nullness.'));
         return;
       }
-      if (!rememberMe) {
-        _log.fine('rememberMe flag ignored; credentials are always persisted.');
-      }
-
       late final String? jid;
       var emailPassword = emailCredentials?.password ?? password;
       if (username == null || password == null) {
@@ -426,6 +434,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
 
       if (jid == null || password == null) {
+        _log.info('Login aborted due to missing credentials.');
         _authenticatedJid = null;
         await _xmppService.disconnect();
         _emit(const AuthenticationNone());
@@ -470,7 +479,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           ? null
           : savedPasswordPreHashedValue == true.toString();
       final bool shouldClearEmailCredentialsOnFailure = !usingStoredCredentials;
-      const bool shouldPersistCredentials = true;
+      final bool shouldPersistCredentials = rememberMe;
       bool passwordPreHashed =
           usingStoredCredentials ? (savedPasswordPreHashed ?? false) : false;
       if (usingStoredCredentials &&
@@ -681,16 +690,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           emailCredentials: emailCredentials,
         );
         if (!emailReady) {
+          _log.warning('Email provisioning failed; aborting authentication.');
           await _xmppService.disconnect();
-          if (wasAuthenticated) {
-            await _clearAuthTransaction();
-            authenticationCommitted = true;
-            if (previousState is! AuthenticationComplete) {
-              _emit(const AuthenticationComplete());
-            }
-            return;
-          }
+          await _clearAuthTransaction();
+          authenticationCommitted = true;
           _authenticatedJid = null;
+          await _clearLoginSecrets();
           if (state is! AuthenticationFailure &&
               state is! AuthenticationSignupFailure) {
             _emit(const AuthenticationFailure(
@@ -983,17 +988,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       key: databasePrefixStorageKey,
       value: databasePrefix,
     );
-    if (!rememberMe) {
-      _log.fine('Persisting credentials despite rememberMe=false request.');
+    if (rememberMe) {
+      await _credentialStore.write(key: jidStorageKey, value: jid);
+      if (password != null) {
+        await _credentialStore.write(key: passwordStorageKey, value: password);
+        await _credentialStore.write(
+          key: passwordPreHashedStorageKey,
+          value: passwordPreHashed.toString(),
+        );
+      }
+      return;
     }
-    await _credentialStore.write(key: jidStorageKey, value: jid);
-    if (password != null) {
-      await _credentialStore.write(key: passwordStorageKey, value: password);
-      await _credentialStore.write(
-        key: passwordPreHashedStorageKey,
-        value: passwordPreHashed.toString(),
-      );
-    }
+    await _clearLoginSecrets();
   }
 
   bool _looksLikeConnectivityError(Object error) {
@@ -1021,6 +1027,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _loginToDemoMode();
       return;
     }
+    _log.info(
+      'Signup requested '
+      '(xmppEnabled: ${_endpointConfig.enableXmpp}, '
+      'smtpEnabled: ${_endpointConfig.enableSmtp})',
+    );
     _emit(const AuthenticationSignUpInProgress());
     final host = _endpointConfig.domain;
     final cleanupComplete = await _ensureAccountDeletionCleanupComplete(

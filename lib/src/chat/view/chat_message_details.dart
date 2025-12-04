@@ -343,7 +343,7 @@ class ChatMessageDetails extends StatelessWidget {
                 size: ShadButtonSize.sm,
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
-                  context.read<ChatsCubit?>()?.pushChat(jid: recipient.jid);
+                  context.read<ChatsCubit?>()?.openChat(jid: recipient.jid);
                 },
                 child: Text(l10n.chatMessageOpenChat),
               ).withTapBounce(),
@@ -358,7 +358,7 @@ class ChatMessageDetails extends StatelessWidget {
                           await emailService.ensureChatForEmailChat(recipient);
                       if (!context.mounted) return;
                       Navigator.of(dialogContext).pop();
-                      context.read<ChatsCubit?>()?.pushChat(jid: ensured.jid);
+                      context.read<ChatsCubit?>()?.openChat(jid: ensured.jid);
                     } catch (_) {
                       if (!context.mounted) return;
                       messenger.showSnackBar(
@@ -526,7 +526,7 @@ class _RecipientsRow extends StatelessWidget {
               _RecipientChip(
                 chat: participant,
                 onPressed: () =>
-                    context.read<ChatsCubit>().pushChat(jid: participant.jid),
+                    context.read<ChatsCubit>().openChat(jid: participant.jid),
               ),
           ],
         ),

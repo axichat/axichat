@@ -13,6 +13,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 const double _sessionIndicatorMaxWidth = 220.0;
+const double _sessionIndicatorWidthFraction = 0.38;
 
 class ProfileTile extends StatelessWidget {
   const ProfileTile({super.key});
@@ -24,9 +25,14 @@ class ProfileTile extends StatelessWidget {
     }
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, connectivityState) {
-        final connectionState = _xmppStateFor(connectivityState);
+        final demoOffline =
+            context.read<XmppService?>()?.demoOfflineMode ?? false;
+        final connectionState =
+            _xmppStateFor(connectivityState, demoOffline: demoOffline);
         return BlocBuilder<EmailSyncCubit, EmailSyncState>(
           builder: (context, emailSyncState) {
+            final sessionEmailState =
+                demoOffline ? const EmailSyncState.ready() : emailSyncState;
             return BlocBuilder<ProfileCubit, ProfileState>(
               builder: (context, state) {
                 final colors = context.colorScheme;
@@ -37,64 +43,67 @@ class ProfileTile extends StatelessWidget {
                 final subtitleStyle = context.textTheme.muted.copyWith(
                   color: colors.mutedForeground,
                 );
-                return ConstrainedBox(
-                  constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width),
-                  child: ListTile(
-                    tileColor: colors.background,
-                    leading: Hero(
-                      tag: 'avatar',
-                      child: AxiAvatar(
-                        jid: state.jid,
-                        subscription: Subscription.both,
-                        // Presence is parsed for backend features but hidden in UI.
-                        presence: null,
-                        status: null,
-                        active: false,
-                      ),
-                    ),
-                    title: Hero(
-                      tag: 'title',
-                      child: Material(
-                        color: Colors.transparent,
-                        child: Text(
-                          state.username,
-                          style: usernameStyle,
-                          overflow: TextOverflow.ellipsis,
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final indicatorMaxWidth = _sessionIndicatorWidthFor(
+                      constraints.maxWidth,
+                    );
+                    return ListTile(
+                      tileColor: colors.background,
+                      leading: Hero(
+                        tag: 'avatar',
+                        child: AxiAvatar(
+                          jid: state.jid,
+                          subscription: Subscription.both,
+                          // Presence is parsed for backend features but hidden in UI.
+                          presence: null,
+                          status: null,
+                          active: false,
                         ),
                       ),
-                    ),
-                    subtitle: Hero(
-                      tag: 'subtitle',
-                      child: Material(
-                        color: Colors.transparent,
-                        child: Text(
-                          state.jid,
-                          style: subtitleStyle,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
+                      title: Hero(
+                        tag: 'title',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Text(
+                            state.username,
+                            style: usernameStyle,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
-                    ),
-                    onTap: () => context.push(
-                      const ProfileRoute().location,
-                      extra: context.read,
-                    ),
-                    trailing: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: _sessionIndicatorMaxWidth,
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: SessionCapabilityIndicators(
-                          xmppState: connectionState,
-                          emailState: emailSyncState,
-                          emailEnabled: true,
-                          compact: true,
+                      subtitle: Hero(
+                        tag: 'subtitle',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Text(
+                            state.jid,
+                            style: subtitleStyle,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                      onTap: () => context.push(
+                        const ProfileRoute().location,
+                        extra: context.read,
+                      ),
+                      trailing: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: indicatorMaxWidth,
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: SessionCapabilityIndicators(
+                            xmppState: connectionState,
+                            emailState: sessionEmailState,
+                            emailEnabled: true,
+                            compact: true,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             );
@@ -105,9 +114,23 @@ class ProfileTile extends StatelessWidget {
   }
 }
 
-ConnectionState _xmppStateFor(ConnectivityState state) => switch (state) {
-      ConnectivityConnected() => ConnectionState.connected,
-      ConnectivityConnecting() => ConnectionState.connecting,
-      ConnectivityError() => ConnectionState.error,
-      ConnectivityNotConnected() => ConnectionState.notConnected,
-    };
+ConnectionState _xmppStateFor(
+  ConnectivityState state, {
+  required bool demoOffline,
+}) {
+  if (demoOffline) return ConnectionState.connected;
+  return switch (state) {
+    ConnectivityConnected() => ConnectionState.connected,
+    ConnectivityConnecting() => ConnectionState.connecting,
+    ConnectivityError() => ConnectionState.error,
+    ConnectivityNotConnected() => ConnectionState.notConnected,
+  };
+}
+
+double _sessionIndicatorWidthFor(double availableWidth) {
+  final scaledWidth = availableWidth * _sessionIndicatorWidthFraction;
+  if (scaledWidth < _sessionIndicatorMaxWidth) {
+    return scaledWidth;
+  }
+  return _sessionIndicatorMaxWidth;
+}

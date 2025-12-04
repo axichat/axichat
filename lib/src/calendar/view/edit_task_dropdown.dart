@@ -183,7 +183,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           ];
     final Widget body = Form(
       key: _formKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+      autovalidateMode: AutovalidateMode.disabled,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -207,6 +207,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                         TaskTitleValidation.validate(value ?? ''),
                     onChanged: _handleTitleChanged,
                     focusNode: _titleFocusNode,
+                    autovalidateMode: AutovalidateMode.disabled,
                   ),
                   const SizedBox(height: calendarFormGap),
                   _EditTaskDescriptionField(
@@ -291,7 +292,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                 valueListenable: _titleController,
                 builder: (context, value, _) {
                   final bool canSave =
-                      _formKey.currentState?.validate() ?? false;
+                      TaskTitleValidation.validate(value.text) == null;
                   return _EditTaskActionsRow(
                     task: widget.task,
                     onDelete: () {
@@ -339,9 +340,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     return content;
   }
 
-  void _handleTitleChanged(String value) {
-    _formKey.currentState?.validate();
-  }
+  void _handleTitleChanged(String value) {}
 
   int get _recurrenceFallbackWeekday =>
       _startTime?.weekday ??
@@ -629,12 +628,14 @@ class _EditTaskTitleField extends StatelessWidget {
     required this.validator,
     required this.onChanged,
     this.focusNode,
+    required this.autovalidateMode,
   });
 
   final TextEditingController controller;
   final FormFieldValidator<String> validator;
   final ValueChanged<String> onChanged;
   final FocusNode? focusNode;
+  final AutovalidateMode autovalidateMode;
 
   @override
   Widget build(BuildContext context) {
@@ -648,7 +649,7 @@ class _EditTaskTitleField extends StatelessWidget {
           hintText: 'Task title',
           onChanged: onChanged,
           validator: validator,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
+          autovalidateMode: autovalidateMode,
           textInputAction: TextInputAction.done,
         ),
         TaskFieldCharacterHint(controller: controller),

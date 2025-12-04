@@ -231,6 +231,12 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
       ),
       builder: (context, value, _) {
         final borderRadius = BorderRadius.circular(999);
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final Color trackColor = Color.lerp(
+          widget.backgroundColor,
+          isDark ? Colors.white : Colors.black,
+          0.08,
+        )!;
         return ClipRRect(
           borderRadius: borderRadius,
           child: Stack(
@@ -238,12 +244,8 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
               Container(
                 height: 6,
                 decoration: BoxDecoration(
-                  color: widget.backgroundColor.withValues(alpha: 0.6),
+                  color: trackColor,
                   borderRadius: borderRadius,
-                  border: Border.all(
-                    color: widget.activeColor.withValues(alpha: 0.35),
-                    width: 1,
-                  ),
                 ),
               ),
               SizedBox(
