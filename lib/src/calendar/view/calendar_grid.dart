@@ -13,6 +13,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -48,8 +49,11 @@ import 'widgets/deadline_picker_field.dart';
 import 'widgets/task_form_section.dart';
 import 'feedback_system.dart';
 import 'widgets/critical_path_panel.dart';
+import 'calendar_navigation.dart' show calendarUnitLabel, shiftedCalendarDate;
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
+
+const double _headerNavButtonExtent = 44.0;
 
 class _CalendarScrollController extends ScrollController {
   _CalendarScrollController({required this.onAttached});
@@ -1341,6 +1345,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         widget.onViewChanged(CalendarView.week);
       }
     }
+  }
+
+  void _handleHeaderNavigate(int steps) {
+    final DateTime nextDate = shiftedCalendarDate(widget.state, steps);
+    widget.onDateSelected(nextDate);
   }
 
   @override
@@ -2956,19 +2965,23 @@ class _CalendarWeekView extends StatelessWidget {
             final bool isWeekView =
                 gridState.widget.state.viewMode == CalendarView.week &&
                     (!compact || allowWeekViewInCompact);
+            final responsive = ResponsiveHelper.spec(context);
+            final bool showHeaderNavigation =
+                responsive.sizeClass != CalendarSizeClass.expanded;
             final headerDates =
                 isWeekView ? weekDates : [gridState.widget.state.selectedDate];
             final List<DayEvent> selectedDayEvents = isWeekView
                 ? const <DayEvent>[]
                 : gridState.widget.state
                     .dayEventsForDate(gridState.widget.state.selectedDate);
-            final responsive = ResponsiveHelper.spec(context);
             final double horizontalPadding =
                 compact ? 0 : responsive.gridHorizontalPadding;
 
             final gridBody = LayoutBuilder(
               builder: (context, outerConstraints) {
                 final double viewportWidth = outerConstraints.maxWidth;
+                final double navControlsWidth =
+                    showHeaderNavigation ? _headerNavButtonExtent * 2 : 0;
                 double? compactWeekDayWidth = (compact && isWeekView)
                     ? ResponsiveHelper.dayColumnWidth(
                         context,
@@ -2982,7 +2995,8 @@ class _CalendarWeekView extends StatelessWidget {
                     0.0,
                     viewportWidth -
                         (horizontalPadding * 2) -
-                        gridState._timeColumnWidth,
+                        gridState._timeColumnWidth -
+                        navControlsWidth,
                   );
                   if (availableForColumns <= 0) {
                     enableHorizontalScroll = true;
@@ -3032,6 +3046,7 @@ class _CalendarWeekView extends StatelessWidget {
                           weekDates: headerDates,
                           compact: compact,
                           isWeekView: isWeekView,
+                          showNavigationControls: showHeaderNavigation,
                           compactWeekDayWidth: compactWeekDayWidth,
                           enableHorizontalScroll: enableHorizontalScroll,
                           horizontalScrollController: enableHorizontalScroll
@@ -3608,6 +3623,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
     required this.weekDates,
     required this.compact,
     required this.isWeekView,
+    required this.showNavigationControls,
     this.compactWeekDayWidth,
     this.horizontalScrollController,
     this.enableHorizontalScroll = false,
@@ -3617,6 +3633,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
   final List<DateTime> weekDates;
   final bool compact;
   final bool isWeekView;
+  final bool showNavigationControls;
   final double? compactWeekDayWidth;
   final ScrollController? horizontalScrollController;
   final bool enableHorizontalScroll;
@@ -3626,6 +3643,23 @@ class _CalendarDayHeaderRow extends StatelessWidget {
     final bool useScrollableWeekHeader =
         enableHorizontalScroll && compactWeekDayWidth != null;
     final double devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final l10n = context.l10n;
+    final String unitLabel =
+        calendarUnitLabel(gridState.widget.state.viewMode, l10n);
+    final Widget? leadingNav = showNavigationControls
+        ? _HeaderNavButton(
+            icon: Icons.chevron_left,
+            tooltip: l10n.calendarPreviousUnit(unitLabel),
+            onPressed: () => gridState._handleHeaderNavigate(-1),
+          )
+        : null;
+    final Widget? trailingNav = showNavigationControls
+        ? _HeaderNavButton(
+            icon: Icons.chevron_right,
+            tooltip: l10n.calendarNextUnit(unitLabel),
+            onPressed: () => gridState._handleHeaderNavigate(1),
+          )
+        : null;
 
     return Container(
       height: calendarWeekHeaderHeight,
@@ -3654,6 +3688,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
               ),
             ),
           ),
+          if (leadingNav != null) leadingNav,
           if (useScrollableWeekHeader)
             Expanded(
               child: SingleChildScrollView(
@@ -3693,7 +3728,44 @@ class _CalendarDayHeaderRow extends StatelessWidget {
                 }).toList(),
               ),
             ),
+          if (trailingNav != null) trailingNav,
         ],
+      ),
+    );
+  }
+}
+
+class _HeaderNavButton extends StatelessWidget {
+  const _HeaderNavButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final ShadColorScheme colors = context.colorScheme;
+    final Widget button = ShadButton.ghost(
+      size: ShadButtonSize.sm,
+      onPressed: onPressed,
+      foregroundColor: colors.primary,
+      hoverForegroundColor: colors.primary,
+      hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
+      child: Icon(icon, size: 16),
+    ).withTapBounce();
+
+    return SizedBox(
+      width: _headerNavButtonExtent,
+      height: calendarWeekHeaderHeight,
+      child: Center(
+        child: AxiTooltip(
+          builder: (_) => Text(tooltip),
+          child: button,
+        ),
       ),
     );
   }

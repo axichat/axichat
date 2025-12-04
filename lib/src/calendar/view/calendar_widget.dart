@@ -103,11 +103,7 @@ class _CalendarWidgetState
 
   @override
   Widget? buildDesktopTopHeader(Widget navigation, Widget? errorBanner) {
-    return _CalendarSurfaceTint(
-      child: CalendarNavSurface(
-        child: navigation,
-      ),
-    );
+    return CalendarNavSurface(child: navigation);
   }
 
   @override
@@ -135,7 +131,7 @@ class _CalendarWidgetState
         ),
       );
       headerChildren.add(
-        _CalendarSurfaceTint(child: navContent),
+        navContent,
       );
     } else if (errorBanner != null) {
       headerChildren.add(errorBanner);
@@ -158,7 +154,7 @@ class _CalendarWidgetState
     Widget layout,
   ) {
     final colors = context.colorScheme;
-    final Widget tintedLayout = _CalendarSurfaceTint(child: layout);
+    final Widget tintedLayout = CalendarNavSurface(child: layout);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -296,21 +292,6 @@ class _CalendarAppBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _CalendarSurfaceTint extends StatelessWidget {
-  const _CalendarSurfaceTint({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = CalendarNavSurface.backgroundColor(context);
-    return ColoredBox(
-      color: color,
-      child: SizedBox(width: double.infinity, child: child),
     );
   }
 }

@@ -92,12 +92,18 @@ class _ProfileBodyState extends State<_ProfileBody> {
     });
   }
 
-  ConnectionState _xmppStateFor(ConnectivityState state) => switch (state) {
-        ConnectivityConnected() => ConnectionState.connected,
-        ConnectivityConnecting() => ConnectionState.connecting,
-        ConnectivityError() => ConnectionState.error,
-        ConnectivityNotConnected() => ConnectionState.notConnected,
-      };
+  ConnectionState _xmppStateFor(
+    ConnectivityState state, {
+    required bool demoOffline,
+  }) {
+    if (demoOffline) return ConnectionState.connected;
+    return switch (state) {
+      ConnectivityConnected() => ConnectionState.connected,
+      ConnectivityConnecting() => ConnectionState.connecting,
+      ConnectivityError() => ConnectionState.error,
+      ConnectivityNotConnected() => ConnectionState.notConnected,
+    };
+  }
 
   void _setRoute(_ProfileRoute route) {
     setState(() {
@@ -110,7 +116,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, state) {
         final l10n = context.l10n;
-        final ConnectionState connectionState = _xmppStateFor(state);
+        final demoOffline =
+            context.read<XmppService?>()?.demoOfflineMode ?? false;
+        final ConnectionState connectionState =
+            _xmppStateFor(state, demoOffline: demoOffline);
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.profileTitle),
@@ -157,6 +166,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                     _ProfileMainView(
                       isWideLayout: isWideLayout,
                       connectionState: connectionState,
+                      demoOffline: demoOffline,
                       applicationVersion: _applicationVersion,
                       locate: widget.locate,
                       onNavigate: _setRoute,
@@ -178,6 +188,7 @@ class _ProfileMainView extends StatelessWidget {
   const _ProfileMainView({
     required this.isWideLayout,
     required this.connectionState,
+    required this.demoOffline,
     required this.applicationVersion,
     required this.locate,
     required this.onNavigate,
@@ -185,6 +196,7 @@ class _ProfileMainView extends StatelessWidget {
 
   final bool isWideLayout;
   final ConnectionState connectionState;
+  final bool demoOffline;
   final String? applicationVersion;
   final T Function<T>() locate;
   final ValueChanged<_ProfileRoute> onNavigate;
@@ -193,6 +205,7 @@ class _ProfileMainView extends StatelessWidget {
   Widget build(BuildContext context) {
     final card = _ProfileCardSection(
       connectionState: connectionState,
+      demoOffline: demoOffline,
       isWideLayout: isWideLayout,
       locate: locate,
       onNavigate: onNavigate,
@@ -260,12 +273,14 @@ class _ProfileMainView extends StatelessWidget {
 class _ProfileCardSection extends StatelessWidget {
   const _ProfileCardSection({
     required this.connectionState,
+    required this.demoOffline,
     required this.isWideLayout,
     required this.locate,
     required this.onNavigate,
   });
 
   final ConnectionState connectionState;
+  final bool demoOffline;
   final bool isWideLayout;
   final T Function<T>() locate;
   final ValueChanged<_ProfileRoute> onNavigate;
@@ -428,9 +443,12 @@ class _ProfileCardSection extends StatelessWidget {
                     ),
                     BlocBuilder<EmailSyncCubit, EmailSyncState>(
                       builder: (context, emailSyncState) {
+                        final displayedEmailState = demoOffline
+                            ? const EmailSyncState.ready()
+                            : emailSyncState;
                         return SessionCapabilityIndicators(
                           xmppState: connectionState,
-                          emailState: emailSyncState,
+                          emailState: displayedEmailState,
                           emailEnabled: true,
                           compact: !wideCard,
                         );

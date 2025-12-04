@@ -139,6 +139,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   bool _priorityLocked = false;
   bool _remindersLocked = false;
   String? _quickTaskError;
+  bool _hasAttemptedQuickTaskSubmit = false;
   bool _preserveDraftFieldsOnTitleClear = false;
 
   RecurrenceFormValue get _advancedRecurrence => _draftController.recurrence;
@@ -254,13 +255,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleQuickTaskInputChanged(String value, {bool validate = true}) {
-    _ensureAdvancedOptionsVisible();
     if (_quickTaskError != null) {
       setState(() {
         _quickTaskError = null;
       });
     }
-    if (validate) {
+    if (validate && _shouldValidateQuickTask) {
       _addTaskFormKey.currentState?.validate();
     }
     final trimmed = value.trim();
@@ -280,12 +280,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _parserDebounce = Timer(const Duration(milliseconds: 350), () {
       _runParser(trimmed);
     });
-  }
-
-  void _ensureAdvancedOptionsVisible() {
-    if (!_sidebarController.state.showAdvancedOptions) {
-      _sidebarController.toggleAdvancedOptions();
-    }
   }
 
   void _handleAdvancedToggle() {
@@ -2542,8 +2536,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     return _draftController.selectedPriority;
   }
 
-  AutovalidateMode get _quickTaskAutovalidateMode =>
-      AutovalidateMode.onUserInteraction;
+  bool get _shouldValidateQuickTask =>
+      _hasAttemptedQuickTaskSubmit || _quickTaskError != null;
+
+  AutovalidateMode get _quickTaskAutovalidateMode => _shouldValidateQuickTask
+      ? AutovalidateMode.always
+      : AutovalidateMode.disabled;
 
   String? _validateQuickTaskTitle(String? raw) {
     if (_quickTaskError != null) {
@@ -2558,6 +2556,25 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         .map((id) => byId[id])
         .whereType<CalendarCriticalPath>()
         .toList();
+  }
+
+  void _activateQuickTaskValidation() {
+    if (_hasAttemptedQuickTaskSubmit) {
+      return;
+    }
+    setState(() {
+      _hasAttemptedQuickTaskSubmit = true;
+    });
+  }
+
+  void _clearQuickTaskValidationState() {
+    if (!_hasAttemptedQuickTaskSubmit && _quickTaskError == null) {
+      return;
+    }
+    setState(() {
+      _hasAttemptedQuickTaskSubmit = false;
+      _quickTaskError = null;
+    });
   }
 
   void _addQueuedCriticalPath(String pathId) {
@@ -2620,6 +2637,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<void> _addTask() async {
+    _activateQuickTaskValidation();
     final bool isValid = _addTaskFormKey.currentState?.validate() ?? false;
     if (!isValid) {
       _titleFocusNode.requestFocus();
@@ -2719,6 +2737,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   void _clearQuickTaskTitle() {
     _preserveDraftFieldsOnTitleClear = true;
+    _clearQuickTaskValidationState();
     _titleController.clear();
     _addTaskFormKey.currentState?.reset();
     _handleQuickTaskInputChanged('', validate: false);
@@ -2732,11 +2751,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _resetForm() {
     _clearParserState(clearFields: true);
     _resetParserLocks();
-    if (_quickTaskError != null) {
-      setState(() {
-        _quickTaskError = null;
-      });
-    }
+    _clearQuickTaskValidationState();
     _clearQueuedCriticalPaths();
     _addTaskFormKey.currentState?.reset();
     if (_titleController.text.isNotEmpty) {
@@ -4070,16 +4085,23 @@ class _AddTaskSection extends StatelessWidget {
                   : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
             ),
             const SizedBox(height: calendarSidebarSectionSpacing),
-            TaskFormActionsRow(
-              padding: EdgeInsets.zero,
-              gap: calendarGutterSm,
-              children: [
-                Expanded(
-                  child: _AddTaskButton(
-                    onPressed: addTask,
-                  ),
-                ),
-              ],
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: titleController,
+              builder: (context, value, _) {
+                final bool canSubmit = quickTaskValidator(value.text) == null;
+                return TaskFormActionsRow(
+                  padding: EdgeInsets.zero,
+                  gap: calendarGutterSm,
+                  children: [
+                    Expanded(
+                      child: _AddTaskButton(
+                        onPressed: addTask,
+                        enabled: canSubmit,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -5741,9 +5763,11 @@ class _AdvancedRecurrenceSection extends StatelessWidget {
 class _AddTaskButton extends StatelessWidget {
   const _AddTaskButton({
     required this.onPressed,
+    required this.enabled,
   });
 
   final VoidCallback onPressed;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -5751,7 +5775,7 @@ class _AddTaskButton extends StatelessWidget {
       width: double.infinity,
       child: TaskPrimaryButton(
         label: context.l10n.calendarAddTaskAction,
-        onPressed: onPressed,
+        onPressed: enabled ? onPressed : null,
       ),
     );
   }

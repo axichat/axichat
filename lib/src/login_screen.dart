@@ -114,6 +114,25 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  void _resetAuthUiState() {
+    if (_activeFlow == null &&
+        !_signupButtonLoading &&
+        !_signupFlowLocked &&
+        _operationLabel.isEmpty &&
+        !_operationProgressController.isActive &&
+        !_operationAcknowledged) {
+      return;
+    }
+    setState(() {
+      _activeFlow = null;
+      _operationLabel = '';
+      _operationAcknowledged = false;
+      _signupFlowLocked = false;
+      _signupButtonLoading = false;
+    });
+    _operationProgressController.reset();
+  }
+
   Future<void> _failOperation() async {
     await _operationProgressController.fail();
     if (!mounted) return;
@@ -144,6 +163,11 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _handleAuthState(AuthenticationState state) {
+    if (state is AuthenticationNone) {
+      _resetAuthUiState();
+      return;
+    }
+
     var flow = _activeFlow;
     final signupState = state is AuthenticationSignUpInProgress ? state : null;
     final isSubmissionSignup = signupState?.fromSubmission ?? false;

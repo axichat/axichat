@@ -28,6 +28,7 @@ class NotificationService {
   bool _schedulingUnsupported = false;
   final Map<int, Timer> _inAppTimers = {};
   Completer<void>? _initializationCompleter;
+  bool _foregroundCheckUnavailable = false;
 
   bool mute = false;
 
@@ -196,7 +197,8 @@ class NotificationService {
   }) async {
     if (mute) return;
     if (!await hasAllNotificationPermissions()) return;
-    if (!allowForeground && await FlutterForegroundTask.isAppOnForeground) {
+    final bool appInForeground = await _isAppOnForeground();
+    if (!allowForeground && appInForeground) {
       return;
     }
     for (final condition in extraConditions) {
@@ -218,6 +220,24 @@ class NotificationService {
   Future<void> dismissNotifications() async {
     await _ensureInitialized();
     await _plugin.cancelAll();
+  }
+
+  Future<bool> _isAppOnForeground() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+    try {
+      return await FlutterForegroundTask.isAppOnForeground;
+    } on MissingPluginException catch (error, stackTrace) {
+      if (!_foregroundCheckUnavailable) {
+        debugPrint(
+          'Foreground task plugin unavailable; assuming app is backgrounded: $error',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+        _foregroundCheckUnavailable = true;
+      }
+      return false;
+    }
   }
 
   Future<void> scheduleNotification({

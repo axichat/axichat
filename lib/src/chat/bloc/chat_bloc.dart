@@ -468,10 +468,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
-  void _subscribeToTypingParticipants(String chatJid) {
+  void _subscribeToTypingParticipants(Chat chat) {
+    if (chat.defaultTransport.isEmail) {
+      unawaited(_typingParticipantsSubscription?.cancel());
+      _typingParticipantsSubscription = null;
+      return;
+    }
     unawaited(_typingParticipantsSubscription?.cancel());
     _typingParticipantsSubscription = _chatsService
-        .typingParticipantsStream(chatJid)
+        .typingParticipantsStream(chat.jid)
         .listen(
             (participants) => add(_TypingParticipantsUpdated(participants)));
   }
@@ -514,7 +519,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     unawaited(_hydrateLatestFromMam(event.chat));
     unawaited(_roomSubscription?.cancel());
     if (resetContext) {
-      _subscribeToTypingParticipants(event.chat.jid);
+      _subscribeToTypingParticipants(event.chat);
     }
     if (event.chat.type == ChatType.groupChat) {
       _roomSubscription = _mucService
@@ -1754,6 +1759,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await service.sendAttachment(
         chat: chat,
         attachment: current.attachment,
+        subject: state.emailSubject,
       );
       _handlePendingAttachmentSuccess(
         current,

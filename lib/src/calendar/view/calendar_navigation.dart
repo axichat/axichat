@@ -11,6 +11,33 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/task_form_section.dart';
 
+DateTime shiftedCalendarDate(CalendarState state, int steps) {
+  final DateTime base = state.selectedDate;
+  switch (state.viewMode) {
+    case CalendarView.day:
+      return base.add(Duration(days: steps));
+    case CalendarView.week:
+      return base.add(Duration(days: 7 * steps));
+    case CalendarView.month:
+      final DateTime targetMonth = DateTime(base.year, base.month + steps, 1);
+      final int maxDay =
+          DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
+      final int clampedDay = base.day.clamp(1, maxDay).toInt();
+      return DateTime(targetMonth.year, targetMonth.month, clampedDay);
+  }
+}
+
+String calendarUnitLabel(CalendarView viewMode, AppLocalizations l10n) {
+  switch (viewMode) {
+    case CalendarView.day:
+      return l10n.calendarViewDay.toLowerCase();
+    case CalendarView.week:
+      return l10n.calendarViewWeek.toLowerCase();
+    case CalendarView.month:
+      return l10n.calendarViewMonth.toLowerCase();
+  }
+}
+
 const double _compactDateLabelCollapseWidth = smallScreen;
 const double _compactDateLabelMaxWidth = 170;
 const double _defaultDateLabelMaxWidth = 320;
@@ -59,15 +86,18 @@ class CalendarNavigation extends StatelessWidget {
     final CalendarView viewMode = state.viewMode;
     final bool hasUndoRedo = onUndo != null || onRedo != null;
     final l10n = context.l10n;
-    final String unitLabel = _currentUnitLabel(viewMode, l10n);
+    final String unitLabel = calendarUnitLabel(viewMode, l10n);
+    final bool placeChevronsInHeader =
+        spec.sizeClass != CalendarSizeClass.expanded;
     final List<Widget> navButtons = [
-      _iconNavButton(
-        context: context,
-        icon: Icons.chevron_left,
-        tooltip: l10n.calendarPreviousUnit(unitLabel),
-        compact: isCompact,
-        onPressed: () => _jumpRelative(-1),
-      ),
+      if (!placeChevronsInHeader)
+        _iconNavButton(
+          context: context,
+          icon: Icons.chevron_left,
+          tooltip: l10n.calendarPreviousUnit(unitLabel),
+          compact: isCompact,
+          onPressed: () => _jumpRelative(-1),
+        ),
       _navButton(
         context: context,
         label: l10n.calendarToday,
@@ -80,13 +110,14 @@ class CalendarNavigation extends StatelessWidget {
             ? null
             : () => onDateSelected(DateTime.now()),
       ),
-      _iconNavButton(
-        context: context,
-        icon: Icons.chevron_right,
-        tooltip: l10n.calendarNextUnit(unitLabel),
-        compact: isCompact,
-        onPressed: () => _jumpRelative(1),
-      ),
+      if (!placeChevronsInHeader)
+        _iconNavButton(
+          context: context,
+          icon: Icons.chevron_right,
+          tooltip: l10n.calendarNextUnit(unitLabel),
+          compact: isCompact,
+          onPressed: () => _jumpRelative(1),
+        ),
     ];
     const double verticalPadding = calendarInsetMd;
     final Widget undoRedoGroup = _UndoRedoGroup(
@@ -181,42 +212,7 @@ class CalendarNavigation extends StatelessWidget {
   }
 
   void _jumpRelative(int steps) {
-    onDateSelected(_shiftedDate(steps));
-  }
-
-  DateTime _shiftedDate(int steps) {
-    final DateTime base = state.selectedDate;
-    switch (state.viewMode) {
-      case CalendarView.day:
-        return base.add(Duration(days: steps));
-      case CalendarView.week:
-        return base.add(Duration(days: 7 * steps));
-      case CalendarView.month:
-        final DateTime candidateMonth =
-            DateTime(base.year, base.month + steps, 1);
-        final int maxDay = DateTime(
-          candidateMonth.year,
-          candidateMonth.month + 1,
-          0,
-        ).day;
-        final int clampedDay = base.day.clamp(1, maxDay).toInt();
-        return DateTime(
-          candidateMonth.year,
-          candidateMonth.month,
-          clampedDay,
-        );
-    }
-  }
-
-  String _currentUnitLabel(CalendarView viewMode, AppLocalizations l10n) {
-    switch (viewMode) {
-      case CalendarView.day:
-        return l10n.calendarViewDay.toLowerCase();
-      case CalendarView.week:
-        return l10n.calendarViewWeek.toLowerCase();
-      case CalendarView.month:
-        return l10n.calendarViewMonth.toLowerCase();
-    }
+    onDateSelected(shiftedCalendarDate(state, steps));
   }
 
   bool _isToday(DateTime date) {
@@ -494,6 +490,7 @@ class _TrailingControls extends StatelessWidget {
             onChanged: onToggleHideCompletedScheduled!,
             compact: isCompact,
           );
+    final bool showViewToggle = !isCompact;
 
     final trailingChildren = <Widget>[
       ConstrainedBox(
@@ -504,11 +501,12 @@ class _TrailingControls extends StatelessWidget {
           collapseText: collapseDateText,
         ),
       ),
-      _ViewModeToggle(
-        selectedView: state.viewMode,
-        onChanged: onViewChanged,
-        compact: isCompact,
-      ),
+      if (showViewToggle)
+        _ViewModeToggle(
+          selectedView: state.viewMode,
+          onChanged: onViewChanged,
+          compact: isCompact,
+        ),
       if (onSearchRequested != null)
         _SearchButton(
           onPressed: onSearchRequested!,

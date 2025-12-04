@@ -278,6 +278,7 @@ class EmailService {
           displayName: displayName,
           additional: _buildConnectionConfig(normalizedAddress),
         );
+        await _transport.purgeStockMessages();
         await _credentialStore.write(key: provisionedKey, value: 'true');
         await _credentialStore.write(key: legacyProvisionedKey, value: 'true');
       } on DeltaSafeException catch (error, stackTrace) {
@@ -517,17 +518,55 @@ class EmailService {
   Future<int> sendAttachment({
     required Chat chat,
     required EmailAttachment attachment,
+    String? subject,
   }) async {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     await _ensureReady();
-    return _guardDeltaOperation(
+    final normalizedSubject = _normalizeSubject(subject);
+    String? shareId;
+    if (normalizedSubject != null) {
+      shareId = ShareTokenCodec.generateShareId();
+      final db = await _databaseBuilder();
+      final participants = await _shareParticipants(
+        shareId: shareId,
+        chats: [deltaChat],
+      );
+      final shareRecord = MessageShareData(
+        shareId: shareId,
+        originatorDcMsgId: null,
+        subjectToken: null,
+        subject: normalizedSubject,
+        createdAt: DateTime.timestamp(),
+        participantCount: participants.length,
+      );
+      await db.createMessageShare(
+        share: shareRecord,
+        participants: participants,
+      );
+    }
+    final captionEnvelope = _composeSubjectEnvelope(
+      subject: normalizedSubject,
+      body: attachment.caption,
+    );
+    final sanitizedCaption = attachment.caption?.trim() ?? '';
+    final msgId = await _guardDeltaOperation(
       operation: 'send email attachment',
       body: () => _transport.sendAttachment(
         chatId: chatId,
-        attachment: attachment,
+        attachment: attachment.copyWith(caption: captionEnvelope),
+        shareId: shareId,
+        captionOverride: sanitizedCaption,
       ),
     );
+    if (shareId != null) {
+      final db = await _databaseBuilder();
+      await db.assignShareOriginator(
+        shareId: shareId,
+        originatorDcMsgId: msgId,
+      );
+    }
+    return msgId;
   }
 
   Future<FanOutSendReport> fanOutSend({

@@ -87,6 +87,23 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     int end = 50,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) {
+    List<Message> filteredMessagesForChat(
+      List<Message> messages,
+    ) {
+      final selfJid = myJid;
+      if (selfJid == null || jid != selfJid) {
+        return messages;
+      }
+
+      final filtered = messages.where((message) {
+        final body = message.body;
+        if (body == null || body.isEmpty) return true;
+        return !CalendarSyncMessage.isCalendarSyncEnvelope(body);
+      }).toList(growable: false);
+
+      return List<Message>.unmodifiable(filtered);
+    }
+
     StreamSubscription<List<Message>>? backendSubscription;
     StreamSubscription<MessageStorageMode>? modeSubscription;
     final controller = StreamController<List<Message>>.broadcast();
@@ -98,9 +115,17 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           jid,
           desiredWindow: end,
         );
-        controller.add(List<Message>.unmodifiable(conversation.messages));
+        controller.add(
+          List<Message>.unmodifiable(
+            filteredMessagesForChat(conversation.messages),
+          ),
+        );
         backendSubscription = conversation.controller.stream.listen(
-          controller.add,
+          (messages) => controller.add(
+            List<Message>.unmodifiable(
+              filteredMessagesForChat(messages),
+            ),
+          ),
           onError: controller.addError,
         );
         return;
@@ -111,7 +136,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         end: end,
         filter: filter,
       ).listen(
-        controller.add,
+        (messages) => controller.add(filteredMessagesForChat(messages)),
         onError: controller.addError,
       );
     }
@@ -1857,46 +1882,41 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     final messageText = event.text;
     if (messageText.isEmpty) return false;
 
-    try {
-      final messageData = jsonDecode(messageText);
-      if (messageData is! Map<String, dynamic> ||
-          !messageData.containsKey('calendar_sync')) {
-        return false;
+    final senderJid = event.from.toBare().toString();
+    final selfJid = myJid;
+
+    final syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
+    if (syncMessage == null) {
+      if (selfJid != null &&
+          senderJid == selfJid &&
+          messageText.contains('"calendar_sync"')) {
+        _log.info('Dropped malformed calendar sync envelope from self');
+        return true;
       }
-
-      // SECURITY: Only accept calendar sync messages from our own JID
-      final senderJid = event.from.toBare().toString();
-      if (senderJid != myJid) {
-        _log.warning(
-            'Rejected calendar sync message from unauthorized JID: $senderJid');
-        return true; // Handled - don't process as regular chat message
-      }
-
-      // This is a calendar sync message - parse and process it
-      final syncData = messageData['calendar_sync'] as Map<String, dynamic>;
-      final syncMessage = CalendarSyncMessage.fromJson(syncData);
-
-      _log.info(
-          'Received calendar sync message type: ${syncMessage.type} from ${event.from}');
-
-      // Route to CalendarSyncManager for processing
-      if (owner is XmppService &&
-          (owner as XmppService)._calendarSyncCallback != null) {
-        try {
-          await (owner as XmppService)._calendarSyncCallback!(syncMessage);
-          unawaited(_acknowledgeMessage(event));
-        } catch (e) {
-          _log.warning('Calendar sync callback failed: $e');
-        }
-      } else {
-        _log.info('No calendar sync callback registered - message ignored');
-      }
-
-      return true; // Handled - don't process as regular chat message
-    } catch (e) {
-      // Not a valid calendar sync message, let it be processed normally
       return false;
     }
+
+    if (selfJid != null && senderJid != selfJid) {
+      _log.warning('Rejected calendar sync message from unauthorized sender');
+      return true; // Handled - don't process as regular chat message
+    }
+
+    _log.info('Received calendar sync message type: ${syncMessage.type}');
+
+    // Route to CalendarSyncManager for processing
+    if (owner is XmppService &&
+        (owner as XmppService)._calendarSyncCallback != null) {
+      try {
+        await (owner as XmppService)._calendarSyncCallback!(syncMessage);
+        unawaited(_acknowledgeMessage(event));
+      } catch (e) {
+        _log.warning('Calendar sync callback failed: $e');
+      }
+    } else {
+      _log.info('No calendar sync callback registered - message ignored');
+    }
+
+    return true; // Handled - don't process as regular chat message
   }
 
   Future<void> _handleFile(mox.MessageEvent event, String jid) async {}

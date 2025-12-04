@@ -270,10 +270,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     return keyboardInset + calendarGutterSm;
   }
 
-  AutovalidateMode get _titleAutovalidateMode =>
-      _initialTitleValidationMessage == null
-          ? AutovalidateMode.onUserInteraction
-          : AutovalidateMode.always;
+  AutovalidateMode get _titleAutovalidateMode => AutovalidateMode.disabled;
 
   String? _validateTaskTitle(String? raw) {
     return _initialTitleValidationMessage ??
@@ -287,7 +284,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     setState(() {
       _initialTitleValidationMessage = null;
     });
-    _formKey.currentState?.validate();
   }
 
   void _handleTaskNameChanged(String value) {
@@ -971,10 +967,17 @@ class _QuickAddModalContent extends StatelessWidget {
               ),
               child: SafeArea(
                 top: false,
-                child: _QuickAddActions(
-                  formController: formController,
-                  onCancel: onClose,
-                  onSubmit: onTaskSubmit,
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: taskNameController,
+                  builder: (context, value, _) {
+                    final bool canSubmit = titleValidator(value.text) == null;
+                    return _QuickAddActions(
+                      formController: formController,
+                      onCancel: onClose,
+                      onSubmit: onTaskSubmit,
+                      canSubmit: canSubmit,
+                    );
+                  },
                 ),
               ),
             ),
@@ -1328,11 +1331,13 @@ class _QuickAddActions extends StatelessWidget {
     required this.formController,
     required this.onCancel,
     required this.onSubmit,
+    required this.canSubmit,
   });
 
   final QuickAddController formController;
   final VoidCallback onCancel;
   final VoidCallback onSubmit;
+  final bool canSubmit;
 
   @override
   Widget build(BuildContext context) {
@@ -1341,6 +1346,7 @@ class _QuickAddActions extends StatelessWidget {
       animation: formController,
       builder: (context, _) {
         final bool isSubmitting = formController.isSubmitting;
+        final bool disabled = isSubmitting || !canSubmit;
         return TaskFormActionsRow(
           includeTopBorder: true,
           padding: calendarPaddingXl,
@@ -1359,7 +1365,7 @@ class _QuickAddActions extends StatelessWidget {
             Expanded(
               child: TaskPrimaryButton(
                 label: l10n.calendarAddTaskAction,
-                onPressed: isSubmitting ? null : onSubmit,
+                onPressed: disabled ? null : onSubmit,
                 isBusy: isSubmitting,
               ),
             ),

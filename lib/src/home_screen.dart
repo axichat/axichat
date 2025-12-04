@@ -77,7 +77,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
-  bool _railCollapsed = false;
+  bool _railCollapsed = true;
   late final VoidCallback _focusFallbackListener;
   bool Function(KeyEvent event)? _globalShortcutHandler;
 
@@ -665,6 +665,7 @@ class _NexusState extends State<Nexus> {
           .length,
     };
     final showFindActionInHeader = widget.navPlacement != NavPlacement.rail;
+    final showShortcutHints = widget.navPlacement != NavPlacement.bottom;
     final header = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -684,7 +685,9 @@ class _NexusState extends State<Nexus> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (showFindActionInHeader) ...[
-                const _FindActionIconButton(),
+                _FindActionIconButton(
+                  showShortcutHint: showShortcutHints,
+                ),
                 const SizedBox(width: 4),
               ],
               _SearchToggleButton(
@@ -758,17 +761,25 @@ class _NexusState extends State<Nexus> {
         selectedChats: selectedChats,
       );
     } else if (widget.navPlacement == NavPlacement.bottom) {
+      final Widget tabBar = Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: context.colorScheme.border),
+          ),
+        ),
+        child: AxiTabBar(
+          backgroundColor: context.colorScheme.background,
+          badges: widget.tabs.map((tab) => badgeCounts[tab.id] ?? 0).toList(),
+          badgeOffset: const Offset(0, -12),
+          tabs: widget.tabs.map((tab) {
+            return Tab(child: Text(tab.label));
+          }).toList(),
+        ),
+      );
       bottomArea = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AxiTabBar(
-            backgroundColor: context.colorScheme.background,
-            badges: widget.tabs.map((tab) => badgeCounts[tab.id] ?? 0).toList(),
-            badgeOffset: const Offset(0, -12),
-            tabs: widget.tabs.map((tab) {
-              return Tab(child: Text(tab.label));
-            }).toList(),
-          ),
+          tabBar,
           const ProfileTile(),
         ],
       );
@@ -902,7 +913,9 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
 }
 
 class _FindActionIconButton extends StatelessWidget {
-  const _FindActionIconButton();
+  const _FindActionIconButton({required this.showShortcutHint});
+
+  final bool showShortcutHint;
 
   @override
   Widget build(BuildContext context) {
@@ -912,6 +925,19 @@ class _FindActionIconButton extends StatelessWidget {
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
+    final Widget content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(LucideIcons.lifeBuoy, size: 18),
+        if (showShortcutHint) ...[
+          const SizedBox(width: 10),
+          ShortcutHint(
+            shortcut: shortcut,
+            dense: true,
+          ),
+        ],
+      ],
+    );
     return AxiTooltip(
       builder: (_) => Text(
         l10n.accessibilityActionsShortcutTooltip(shortcutText),
@@ -921,17 +947,7 @@ class _FindActionIconButton extends StatelessWidget {
             .read<AccessibilityActionBloc?>()
             ?.add(const AccessibilityMenuOpened()),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(LucideIcons.lifeBuoy, size: 18),
-            const SizedBox(width: 10),
-            ShortcutHint(
-              shortcut: shortcut,
-              dense: true,
-            ),
-          ],
-        ),
+        child: content,
       ),
     );
   }

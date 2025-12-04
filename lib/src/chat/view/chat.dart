@@ -2390,6 +2390,28 @@ class _ChatState extends State<Chat> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    SizedBox(
+                                      width: AxiIconButton.kDefaultSize,
+                                      height: AxiIconButton.kDefaultSize,
+                                      child: AxiIconButton(
+                                        iconData: LucideIcons.x,
+                                        tooltip: context.l10n.commonClose,
+                                        color: context.colorScheme.foreground,
+                                        borderColor: context.colorScheme.border,
+                                        onPressed: () {
+                                          if (!prepareChatExit()) return;
+                                          unawaited(
+                                            context
+                                                .read<ChatsCubit>()
+                                                .closeAllChats(),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    if ((openStack.length > 1 ||
+                                            forwardStack.isNotEmpty) &&
+                                        !readOnly)
+                                      const SizedBox(width: 8),
                                     if (openStack.length > 1)
                                       SizedBox(
                                         width: AxiIconButton.kDefaultSize,
@@ -2434,28 +2456,6 @@ class _ChatState extends State<Chat> {
                                           },
                                         ),
                                       ),
-                                    if ((openStack.length > 1 ||
-                                            forwardStack.isNotEmpty) &&
-                                        !readOnly)
-                                      const SizedBox(width: 8),
-                                    SizedBox(
-                                      width: AxiIconButton.kDefaultSize,
-                                      height: AxiIconButton.kDefaultSize,
-                                      child: AxiIconButton(
-                                        iconData: LucideIcons.x,
-                                        tooltip: context.l10n.commonClose,
-                                        color: context.colorScheme.foreground,
-                                        borderColor: context.colorScheme.border,
-                                        onPressed: () {
-                                          if (!prepareChatExit()) return;
-                                          unawaited(
-                                            context
-                                                .read<ChatsCubit>()
-                                                .closeAllChats(),
-                                          );
-                                        },
-                                      ),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -2489,6 +2489,13 @@ class _ChatState extends State<Chat> {
                                     0.45;
                                 final double clampedTitleWidth = titleMaxWidth
                                     .clamp(minTitleWidth, maxTitleWidth);
+                                final baseTitleStyle = Theme.of(context)
+                                        .appBarTheme
+                                        .titleTextStyle ??
+                                    context.textTheme.h4;
+                                final titleStyle = baseTitleStyle.copyWith(
+                                  fontSize: context.textTheme.large.fontSize,
+                                );
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -2523,10 +2530,7 @@ class _ChatState extends State<Chat> {
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
-                                                    style: Theme.of(context)
-                                                            .appBarTheme
-                                                            .titleTextStyle ??
-                                                        context.textTheme.h4,
+                                                    style: titleStyle,
                                                   ),
                                                 ),
                                                 if (canRenameContact)
@@ -4910,7 +4914,7 @@ class _ChatState extends State<Chat> {
     }
     context.read<ChatBloc>().add(ChatInviteJoinRequested(message));
     if (context.read<ChatsCubit?>() != null) {
-      await context.read<ChatsCubit>().pushChat(jid: roomJid);
+      await context.read<ChatsCubit>().openChat(jid: roomJid);
     }
   }
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -65,24 +66,42 @@ class ChatsCubit extends Cubit<ChatsState> {
     );
   }
 
+  Chat? _chatFor(String jid) {
+    for (final chat in state.items ?? const <Chat>[]) {
+      if (chat.jid == jid) return chat;
+    }
+    return null;
+  }
+
+  Future<void> openChat({required String jid}) async {
+    emit(
+      state.copyWith(
+        openStack: <String>[jid],
+        forwardStack: const <String>[],
+        openJid: jid,
+      ),
+    );
+    await _chatsService.openChat(jid);
+  }
+
   Future<void> toggleChat({required String jid}) async {
-    final currentTop = state.openStack.isEmpty ? null : state.openStack.last;
-    if (jid == currentTop) {
-      if (state.openStack.length > 1) {
-        await popChat();
-      } else {
-        await closeAllChats();
-      }
+    if (jid == state.openJid) {
+      await closeAllChats();
       return;
     }
     // Close calendar when opening chat
     if (state.openCalendar) {
       emit(state.copyWith(openCalendar: false));
     }
-    await pushChat(jid: jid);
+    await openChat(jid: jid);
   }
 
   Future<void> pushChat({required String jid}) async {
+    final chat = _chatFor(jid);
+    if (chat == null || !chat.defaultTransport.isEmail) {
+      await openChat(jid: jid);
+      return;
+    }
     final filtered =
         state.openStack.where((entry) => entry != jid).toList(growable: false);
     final nextStack = [...filtered, jid];

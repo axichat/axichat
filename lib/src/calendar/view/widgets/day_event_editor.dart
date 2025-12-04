@@ -110,6 +110,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
 
     return Form(
       key: _formKey,
+      autovalidateMode: AutovalidateMode.disabled,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -160,7 +161,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     validator: (value) => (value?.trim().isEmpty ?? true)
                         ? context.l10n.calendarErrorTitleEmptyFriendly
                         : null,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    autovalidateMode: AutovalidateMode.disabled,
                   ),
                   const SizedBox(height: calendarGutterMd),
                   TaskDescriptionField(
@@ -226,7 +227,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: _titleController,
             builder: (context, value, _) {
-              final bool canSubmit = _formKey.currentState?.validate() ?? false;
+              final bool canSubmit = value.text.trim().isNotEmpty;
               return TaskFormActionsRow(
                 includeTopBorder: true,
                 gap: calendarGutterSm,
@@ -263,9 +264,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     );
   }
 
-  void _handleTitleChanged(String value) {
-    _formKey.currentState?.validate();
-  }
+  void _handleTitleChanged(String value) {}
 
   void _submit() {
     if (!(_formKey.currentState?.validate() ?? false)) {

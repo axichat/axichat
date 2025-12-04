@@ -238,17 +238,9 @@ class CriticalPathPanel extends StatelessWidget {
   }
 
   CriticalPathProgress _progressFor(CalendarCriticalPath path) {
-    final int total = path.taskIds.length;
-    int completed = 0;
-    for (final String id in path.taskIds) {
-      final CalendarTask? task = _taskForId(id);
-      if (task != null && task.isCompleted) {
-        completed += 1;
-      }
-    }
-    return CriticalPathProgress(
-      total: total,
-      completed: completed,
+    return computeCriticalPathProgress(
+      path: path,
+      tasks: tasks,
     );
   }
 
@@ -763,6 +755,26 @@ class CriticalPathProgress {
   final int completed;
 }
 
+CriticalPathProgress computeCriticalPathProgress({
+  required CalendarCriticalPath path,
+  required Map<String, CalendarTask> tasks,
+}) {
+  final int total = path.taskIds.length;
+  int completed = 0;
+  for (final String id in path.taskIds) {
+    final String baseId = baseTaskIdFrom(id);
+    final CalendarTask? task = tasks[baseId] ?? tasks[id];
+    if (task == null || !task.isCompleted) {
+      break;
+    }
+    completed += 1;
+  }
+  return CriticalPathProgress(
+    total: total,
+    completed: completed,
+  );
+}
+
 class CriticalPathMembershipList extends StatelessWidget {
   const CriticalPathMembershipList({
     super.key,
@@ -1116,7 +1128,7 @@ Future<String?> promptCriticalPathName({
           FocusScope.of(dialogContext).requestFocus(focusNode);
           return Form(
             key: formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
+            autovalidateMode: AutovalidateMode.disabled,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
