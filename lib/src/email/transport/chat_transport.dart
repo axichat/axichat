@@ -31,6 +31,7 @@ abstract class ChatTransport {
   Future<int> sendText({
     required int chatId,
     required String body,
+    String? subject,
     String? shareId,
     String? localBodyOverride,
   });
@@ -39,6 +40,7 @@ abstract class ChatTransport {
   Future<int> sendAttachment({
     required int chatId,
     required EmailAttachment attachment,
+    String? subject,
     String? shareId,
     String? captionOverride,
   });

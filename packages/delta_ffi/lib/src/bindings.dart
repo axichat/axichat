@@ -965,6 +965,21 @@ class DeltaChatBindings {
   late final _dc_msg_get_text = _dc_msg_get_textPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_msg_t>)>();
 
+  ffi.Pointer<ffi.Char> dc_msg_get_subject(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_subject(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_subjectPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_msg_t>)>>('dc_msg_get_subject');
+  late final _dc_msg_get_subject = _dc_msg_get_subjectPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_msg_t>)>();
+
   int dc_msg_get_chat_id(
     ffi.Pointer<dc_msg_t> msg,
   ) {
@@ -1081,6 +1096,23 @@ class DeltaChatBindings {
           ffi.Void Function(ffi.Pointer<dc_msg_t>,
               ffi.Pointer<ffi.Char>)>>('dc_msg_set_text');
   late final _dc_msg_set_text = _dc_msg_set_textPtr.asFunction<
+      void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>)>();
+
+  void dc_msg_set_subject(
+    ffi.Pointer<dc_msg_t> msg,
+    ffi.Pointer<ffi.Char> subject,
+  ) {
+    return _dc_msg_set_subject(
+      msg,
+      subject,
+    );
+  }
+
+  late final _dc_msg_set_subjectPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_msg_t>,
+              ffi.Pointer<ffi.Char>)>>('dc_msg_set_subject');
+  late final _dc_msg_set_subject = _dc_msg_set_subjectPtr.asFunction<
       void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>)>();
 
   void dc_msg_set_file_and_deduplicate(

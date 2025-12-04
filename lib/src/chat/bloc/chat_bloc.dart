@@ -496,7 +496,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _onChatUpdated(_ChatUpdated event, Emitter<ChatState> emit) {
-    final resetContext = state.chat?.jid != event.chat.jid;
+    final previousChat = state.chat;
+    final resetContext = previousChat?.jid != event.chat.jid;
+    final typingContextChanged = resetContext ||
+        previousChat?.defaultTransport != event.chat.defaultTransport;
+    final typingShouldClear =
+        typingContextChanged || event.chat.defaultTransport.isEmail;
     emit(state.copyWith(
       chat: event.chat,
       showAlert: event.chat.alert != null && state.chat?.alert == null,
@@ -512,15 +517,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
       roomState: resetContext ? null : state.roomState,
-      typingParticipants: resetContext ? const [] : state.typingParticipants,
+      typingParticipants:
+          typingShouldClear ? const [] : state.typingParticipants,
+      typing: event.chat.defaultTransport.isEmail ? false : state.typing,
     ));
-    _subscribeToTypingParticipants(event.chat);
+    if (typingContextChanged) {
+      _subscribeToTypingParticipants(event.chat);
+    }
     _resetMamCursors(resetContext);
     unawaited(_hydrateLatestFromMam(event.chat));
     unawaited(_roomSubscription?.cancel());
-    if (resetContext) {
-      _subscribeToTypingParticipants(event.chat);
-    }
     if (event.chat.type == ChatType.groupChat) {
       _roomSubscription = _mucService
           .roomStateStream(event.chat.jid)
@@ -1025,6 +1031,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _onChatTypingStarted(
       ChatTypingStarted event, Emitter<ChatState> emit) async {
+    if (_isEmailChat) {
+      return;
+    }
     if (_typingTimer case final timer?) {
       if (timer.isActive) {
         timer.reset();
@@ -1036,9 +1045,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         () => add(const _ChatTypingStopped()),
       );
     }
-    if (!_isEmailChat) {
-      await _chatsService.sendTyping(jid: state.chat!.jid, typing: true);
-    }
+    await _chatsService.sendTyping(jid: state.chat!.jid, typing: true);
     emit(state.copyWith(typing: true));
   }
 
@@ -1051,6 +1058,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _TypingParticipantsUpdated event,
     Emitter<ChatState> emit,
   ) {
+    if (_isEmailChat) {
+      return;
+    }
     emit(state.copyWith(typingParticipants: event.participants));
   }
 

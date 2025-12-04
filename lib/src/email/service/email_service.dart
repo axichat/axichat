@@ -501,6 +501,7 @@ class EmailService {
       body: () => _transport.sendText(
         chatId: chatId,
         body: transmitBody,
+        subject: normalizedSubject,
         shareId: shareId,
         localBodyOverride: trimmedBody,
       ),
@@ -555,6 +556,7 @@ class EmailService {
       body: () => _transport.sendAttachment(
         chatId: chatId,
         attachment: attachment.copyWith(caption: captionEnvelope),
+        subject: normalizedSubject,
         shareId: shareId,
         captionOverride: sanitizedCaption,
       ),
@@ -682,6 +684,7 @@ class EmailService {
             body: () => _transport.sendAttachment(
               chatId: chatId,
               attachment: updatedAttachment,
+              subject: resolvedSubject,
               shareId: resolvedShareId,
               captionOverride: sanitizedCaption,
             ),
@@ -692,6 +695,7 @@ class EmailService {
             body: () => _transport.sendText(
               chatId: chatId,
               body: transmitBody,
+              subject: resolvedSubject,
               shareId: resolvedShareId,
               localBodyOverride: sanitizedBody,
             ),

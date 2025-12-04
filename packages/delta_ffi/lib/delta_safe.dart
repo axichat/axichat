@@ -203,12 +203,29 @@ class DeltaContextHandle {
   Future<int> sendText({
     required int chatId,
     required String message,
+    String? subject,
   }) async {
-    final msgId = _withCString(message, (msgPtr) {
-      return _bindings.dc_send_text_msg(_context, chatId, msgPtr);
-    });
-    _ensurePositive(msgId, 'send text message', _lastError);
-    return msgId;
+    _ensureState(_opened, 'send text message');
+    final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
+    if (deltaMessage == ffi.nullptr) {
+      throw const DeltaSafeException('Failed to allocate Delta message');
+    }
+    try {
+      _withCString(message, (msgPtr) {
+        _bindings.dc_msg_set_text(deltaMessage, msgPtr);
+      });
+      final normalizedSubject = subject?.trim();
+      if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
+        _withCString(normalizedSubject, (subjectPtr) {
+          _bindings.dc_msg_set_subject(deltaMessage, subjectPtr);
+        });
+      }
+      final msgId = _bindings.dc_send_msg(_context, chatId, deltaMessage);
+      _ensurePositive(msgId, 'send text message', _lastError);
+      return msgId;
+    } finally {
+      _bindings.dc_msg_unref(deltaMessage);
+    }
   }
 
   Future<int> sendFileMessage({
@@ -218,6 +235,7 @@ class DeltaContextHandle {
     String? fileName,
     String? mimeType,
     String? text,
+    String? subject,
   }) async {
     _ensureState(_opened, 'send attachment');
     final message = _bindings.dc_msg_new(_context, viewType);
@@ -228,6 +246,12 @@ class DeltaContextHandle {
       if (text != null && text.isNotEmpty) {
         _withCString(text, (textPtr) {
           _bindings.dc_msg_set_text(message, textPtr);
+        });
+      }
+      final normalizedSubject = subject?.trim();
+      if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
+        _withCString(normalizedSubject, (subjectPtr) {
+          _bindings.dc_msg_set_subject(message, subjectPtr);
         });
       }
       _setFileForMessage(

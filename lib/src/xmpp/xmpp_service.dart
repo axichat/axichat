@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:async/async.dart';
 import 'package:axichat/main.dart';
@@ -676,6 +675,9 @@ class XmppService extends XmppBase
 
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
+    if (_messageStorageMode.isServerOnly) {
+      await purgeMessageHistory();
+    }
     unawaited(_verifyMamSupportOnLogin());
 
     return _connection.saltedPassword;
@@ -860,6 +862,9 @@ class XmppService extends XmppBase
   @override
   Future<void> disconnect() async {
     _xmppLogger.info('Logging out...');
+    if (_messageStorageMode.isServerOnly) {
+      await purgeMessageHistory(awaitDatabase: false);
+    }
     await _reset();
     _xmppLogger.info('Logged out.');
   }
@@ -885,6 +890,7 @@ class XmppService extends XmppBase
     _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
     _demoSeedAttempted = false;
     _demoOfflineMode = false;
+    _resetStableKeyCache();
     _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
 
     resetEventHandlers();
