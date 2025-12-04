@@ -112,6 +112,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> deleteMessage(String stanzaID);
 
+  Future<void> clearMessageHistory();
+
   Future<void> createMessageShare({
     required MessageShareData share,
     required List<MessageParticipantData> participants,
@@ -1679,6 +1681,33 @@ WHERE subject_token IS NOT NULL
         unreadCount: nextUnreadCount,
       ));
     });
+  }
+
+  @override
+  Future<void> clearMessageHistory() async {
+    _log.info('Clearing message history...');
+    await customStatement('PRAGMA foreign_keys = OFF');
+    try {
+      await transaction(() async {
+        await delete(reactions).go();
+        await delete(messageParticipants).go();
+        await delete(messageCopies).go();
+        await delete(messageShares).go();
+        await delete(messages).go();
+        await delete(drafts).go();
+        await delete(fileMetadata).go();
+        await delete(notifications).go();
+        await (update(chats)).write(
+          ChatsCompanion(
+            lastMessage: const Value(null),
+            unreadCount: const Value(0),
+            lastChangeTimestamp: Value(DateTime.fromMillisecondsSinceEpoch(0)),
+          ),
+        );
+      });
+    } finally {
+      await customStatement('PRAGMA foreign_keys = ON');
+    }
   }
 
   @override

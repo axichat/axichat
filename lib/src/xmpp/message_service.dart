@@ -33,17 +33,6 @@ class MamPageResult {
   final int? count;
 }
 
-class _ServerOnlyConversation {
-  _ServerOnlyConversation(this.controller, this.window);
-
-  final StreamController<List<Message>> controller;
-  final List<Message> messages = <Message>[];
-  String? before;
-  int? totalCount;
-  bool complete = false;
-  int window;
-}
-
 final _capabilityCacheKey =
     XmppStateStore.registerKey('message_peer_capabilities');
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
@@ -104,57 +93,12 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       return List<Message>.unmodifiable(filtered);
     }
 
-    StreamSubscription<List<Message>>? backendSubscription;
-    StreamSubscription<MessageStorageMode>? modeSubscription;
-    final controller = StreamController<List<Message>>.broadcast();
-
-    Future<void> bindToMode(MessageStorageMode mode) async {
-      await backendSubscription?.cancel();
-      if (mode.isServerOnly) {
-        final conversation = _serverOnlyConversationFor(
-          jid,
-          desiredWindow: end,
-        );
-        controller.add(
-          List<Message>.unmodifiable(
-            filteredMessagesForChat(conversation.messages),
-          ),
-        );
-        backendSubscription = conversation.controller.stream.listen(
-          (messages) => controller.add(
-            List<Message>.unmodifiable(
-              filteredMessagesForChat(messages),
-            ),
-          ),
-          onError: controller.addError,
-        );
-        return;
-      }
-      backendSubscription = _localMessageStreamForChat(
-        jid: jid,
-        start: start,
-        end: end,
-        filter: filter,
-      ).listen(
-        (messages) => controller.add(filteredMessagesForChat(messages)),
-        onError: controller.addError,
-      );
-    }
-
-    controller.onListen = () {
-      modeSubscription ??= _messageStorageModeChanges.stream.listen(bindToMode);
-      unawaited(bindToMode(_messageStorageMode));
-    };
-
-    controller.onCancel = () async {
-      await backendSubscription?.cancel();
-      if (!controller.hasListener) {
-        await modeSubscription?.cancel();
-        modeSubscription = null;
-      }
-    };
-
-    return controller.stream;
+    return _localMessageStreamForChat(
+      jid: jid,
+      start: start,
+      end: end,
+      filter: filter,
+    ).map(filteredMessagesForChat);
   }
 
   Stream<List<Message>> _localMessageStreamForChat({
@@ -209,93 +153,21 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     if (_messageStorageMode == mode) return;
     _messageStorageMode = mode;
     if (mode.isServerOnly) {
-      _resetServerOnlyConversations();
+      unawaited(purgeMessageHistory());
     }
-    _messageStorageModeChanges.add(mode);
   }
 
-  _ServerOnlyConversation _serverOnlyConversationFor(
-    String jid, {
-    int? desiredWindow,
-  }) {
-    final targetWindow = math.max(_serverOnlyWindow, desiredWindow ?? 0);
-    if (_serverOnlyConversations[jid]
-        case final _ServerOnlyConversation existing) {
-      existing.window = math.max(existing.window, targetWindow);
-      return existing;
-    }
-    final controller = StreamController<List<Message>>.broadcast();
-    final conversation = _ServerOnlyConversation(
-      controller,
-      targetWindow,
-    );
-    controller.onListen = () {
-      controller.add(List<Message>.unmodifiable(conversation.messages));
-    };
-    _serverOnlyConversations[jid] = conversation;
-    return conversation;
-  }
-
-  void _emitServerOnlyConversation(String jid) {
-    final conversation = _serverOnlyConversations[jid];
-    if (conversation == null) return;
-    if (!conversation.controller.hasListener) return;
-    conversation.controller.add(
-      List<Message>.unmodifiable(conversation.messages),
+  Future<void> purgeMessageHistory({bool awaitDatabase = true}) async {
+    _resetStableKeyCache();
+    await _dbOp<XmppDatabase>(
+      (db) => db.clearMessageHistory(),
+      awaitDatabase: awaitDatabase,
     );
   }
 
-  void _addServerOnlyMessage(
-    String jid,
-    Message message, {
-    int? desiredWindow,
-  }) {
-    final conversation = _serverOnlyConversationFor(
-      jid,
-      desiredWindow: desiredWindow,
-    );
-    conversation.messages.removeWhere(
-      (existing) =>
-          existing.stanzaID == message.stanzaID ||
-          (message.originID != null && message.originID == existing.originID),
-    );
-    conversation.messages.add(message);
-    conversation.messages.sort(
-      (a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
-          .compareTo(a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0)),
-    );
-    final window = desiredWindow == null
-        ? conversation.window
-        : (conversation.window = math.max(conversation.window, desiredWindow));
-    if (conversation.messages.length > window) {
-      conversation.messages.removeRange(
-        window,
-        conversation.messages.length,
-      );
-    }
-    _emitServerOnlyConversation(jid);
-  }
-
-  void _ackServerOnlyMessage(String jid, String stanzaID) {
-    final conversation = _serverOnlyConversations[jid];
-    if (conversation == null) {
-      return;
-    }
-    final index = conversation.messages
-        .indexWhere((existing) => existing.stanzaID == stanzaID);
-    if (index == -1) {
-      return;
-    }
-    conversation.messages[index] =
-        conversation.messages[index].copyWith(acked: true);
-    _emitServerOnlyConversation(jid);
-  }
-
-  void _resetServerOnlyConversations() {
-    for (final conversation in _serverOnlyConversations.values) {
-      conversation.controller.close();
-    }
-    _serverOnlyConversations.clear();
+  void _resetStableKeyCache() {
+    _seenStableKeys.clear();
+    _stableKeyOrder.clear();
   }
 
   String? _stableKeyForEvent(mox.MessageEvent event) {
@@ -337,16 +209,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     final chatJid = message.chatJid;
     if (stableKey != null && _stableKeySeen(chatJid, stableKey)) {
       return true;
-    }
-    if (_messageStorageMode.isServerOnly) {
-      final existing = _serverOnlyConversations[chatJid]?.messages.any(
-                (candidate) =>
-                    candidate.stanzaID == message.stanzaID ||
-                    (message.originID != null &&
-                        message.originID == candidate.originID),
-              ) ??
-          false;
-      return existing;
     }
     if (message.originID != null) {
       final existing = await _dbOpReturning<XmppDatabase, Message?>(
@@ -430,16 +292,12 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   final _log = Logger('MessageService');
 
   final _messageStream = StreamController<Message>.broadcast();
-  final _messageStorageModeChanges =
-      StreamController<MessageStorageMode>.broadcast();
 
   static const _stableKeyLimit = 500;
-  static const _serverOnlyWindow = 200;
   static const _mamDiscoChatLimit = 500;
 
   final Map<String, Set<String>> _seenStableKeys = {};
   final Map<String, Queue<String>> _stableKeyOrder = {};
-  final Map<String, _ServerOnlyConversation> _serverOnlyConversations = {};
   final Map<String, RegisteredStateKey> _lastSeenKeys = {};
   MessageStorageMode _messageStorageMode = MessageStorageMode.local;
 
@@ -550,15 +408,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           handleMucIdentifiersFromMessage(event, message);
         }
 
-        if (!message.noStore && _messageStorageMode.isLocal) {
+        if (!message.noStore) {
           await _dbOp<XmppDatabase>(
             (db) => db.saveMessage(
               message,
               chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
             ),
           );
-        } else if (_messageStorageMode.isServerOnly) {
-          _addServerOnlyMessage(message.chatJid, message);
         }
 
         await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
@@ -664,8 +520,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
     final offlineDemo = demoOfflineMode;
     final storePreference = storeLocally ?? true;
-    final shouldStore =
-        (offlineDemo || _messageStorageMode.isLocal) && storePreference;
+    final shouldStore = storePreference && !noStore;
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -690,12 +545,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           chatType: chatType,
         ),
       );
-    } else if (_messageStorageMode.isServerOnly) {
-      final stableKey = message.originID != null
-          ? 'oid:${message.originID}'
-          : 'mid:${message.stanzaID}-${_myJid?.toBare() ?? senderJid}';
-      _rememberStableKey(jid, stableKey);
-      _addServerOnlyMessage(jid, message);
     }
 
     if (offlineDemo) {
@@ -723,8 +572,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         await _dbOp<XmppDatabase>(
           (db) => db.markMessageAcked(message.stanzaID),
         );
-      } else if (_messageStorageMode.isServerOnly) {
-        _ackServerOnlyMessage(jid, message.stanzaID);
       }
     } catch (error, stackTrace) {
       _log.warning(
@@ -826,21 +673,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       fileMetadataID: metadata.id,
       quoting: quotedMessage?.stanzaID,
     );
-    final shouldStore = _messageStorageMode.isLocal;
-    if (shouldStore) {
-      await _dbOp<XmppDatabase>(
-        (db) => db.saveMessage(
-          message,
-          chatType: chatType,
-        ),
-      );
-    } else if (_messageStorageMode.isServerOnly) {
-      final stableKey = message.originID != null
-          ? 'oid:${message.originID}'
-          : 'mid:${message.stanzaID}-${_myJid?.toBare() ?? senderJid}';
-      _rememberStableKey(jid, stableKey);
-      _addServerOnlyMessage(jid, message);
-    }
+    const shouldStore = true;
+    await _dbOp<XmppDatabase>(
+      (db) => db.saveMessage(
+        message,
+        chatType: chatType,
+      ),
+    );
     _log.fine(
       'Uploading attachment $filename ($size bytes) to HTTP upload slot.',
     );
@@ -897,13 +736,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         }
         throw XmppMessageException();
       }
-      if (shouldStore) {
-        await _dbOp<XmppDatabase>(
-          (db) => db.markMessageAcked(message.stanzaID),
-        );
-      } else if (_messageStorageMode.isServerOnly) {
-        _ackServerOnlyMessage(jid, message.stanzaID);
-      }
+      await _dbOp<XmppDatabase>(
+        (db) => db.markMessageAcked(message.stanzaID),
+      );
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to send attachment message ${message.stanzaID}',
@@ -1710,9 +1545,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   Future<void> _reset() async {
     await super._reset();
 
-    _resetServerOnlyConversations();
-    _seenStableKeys.clear();
-    _stableKeyOrder.clear();
+    _resetStableKeyCache();
     _lastSeenKeys.clear();
     _capabilityCache.clear();
     _capabilityCacheLoaded = false;

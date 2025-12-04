@@ -452,13 +452,15 @@ class EmailDeltaTransport implements ChatTransport {
   Future<int> sendText({
     required int chatId,
     required String body,
+    String? subject,
     String? shareId,
     String? localBodyOverride,
   }) async {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
-    final msgId = await _context!.sendText(chatId: chatId, message: body);
+    final msgId = await _context!
+        .sendText(chatId: chatId, message: body, subject: subject);
     final deltaMessage = await _context!.getMessage(msgId);
     await _recordOutgoing(
       chatId: chatId,
@@ -475,6 +477,7 @@ class EmailDeltaTransport implements ChatTransport {
   Future<int> sendAttachment({
     required int chatId,
     required EmailAttachment attachment,
+    String? subject,
     String? shareId,
     String? captionOverride,
   }) async {
@@ -488,6 +491,7 @@ class EmailDeltaTransport implements ChatTransport {
       fileName: attachment.fileName,
       mimeType: attachment.mimeType,
       text: attachment.caption,
+      subject: subject,
     );
     final deltaMessage = await _context!.getMessage(msgId);
     var metadata = _metadataForAttachment(attachment, msgId);

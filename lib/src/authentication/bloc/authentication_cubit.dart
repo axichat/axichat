@@ -235,7 +235,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     _authTransaction = txn;
     await _rollbackAuthTransaction(
-      clearEmailCredentials: txn.clearEmailCredentialsOnFailure,
+      clearCredentials: txn.clearCredentialsOnFailure,
     );
   }
 
@@ -281,11 +281,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> _startAuthTransaction({
     required String jid,
-    required bool clearEmailCredentialsOnFailure,
+    required bool clearCredentialsOnFailure,
   }) async {
     final txn = _AuthTransaction(
       jid: jid,
-      clearEmailCredentialsOnFailure: clearEmailCredentialsOnFailure,
+      clearCredentialsOnFailure: clearCredentialsOnFailure,
     );
     _authTransaction = txn;
     await _persistAuthTransaction(txn);
@@ -323,20 +323,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _rollbackAuthTransaction({
-    required bool clearEmailCredentials,
+    required bool clearCredentials,
   }) async {
     final txn = _authTransaction ?? await _readAuthTransaction();
     if (txn == null) {
       return;
     }
     _authTransaction = txn;
-    final shouldClearEmailCredentials =
-        clearEmailCredentials || txn.clearEmailCredentialsOnFailure;
+    final shouldClearCredentials =
+        clearCredentials || txn.clearCredentialsOnFailure;
     if (txn.smtpProvisioned) {
       await _cancelPendingEmailProvisioning(
         null,
         txn.jid,
-        clearCredentials: shouldClearEmailCredentials,
+        clearCredentials: shouldClearCredentials,
       );
     }
     if (txn.xmppConnected || _xmppService.connected) {
@@ -478,8 +478,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final bool? savedPasswordPreHashed = savedPasswordPreHashedValue == null
           ? null
           : savedPasswordPreHashedValue == true.toString();
-      final bool shouldClearEmailCredentialsOnFailure = !usingStoredCredentials;
-      final bool shouldPersistCredentials = rememberMe;
+      final bool allowStoredCredentialRetention =
+          usingStoredCredentials && hasCompletedAuthentication && rememberMe;
+      final bool clearStoredCredentialsOnFailure =
+          !allowStoredCredentialRetention;
       bool passwordPreHashed =
           usingStoredCredentials ? (savedPasswordPreHashed ?? false) : false;
       if (usingStoredCredentials &&
@@ -506,7 +508,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
       await _startAuthTransaction(
         jid: resolvedJid,
-        clearEmailCredentialsOnFailure: shouldClearEmailCredentialsOnFailure,
+        clearCredentialsOnFailure: clearStoredCredentialsOnFailure,
       );
 
       var authenticationCommitted = false;
@@ -579,8 +581,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             _emit(
                 const AuthenticationFailure('Incorrect username or password'));
             await _xmppService.disconnect();
-            await _credentialStore.delete(key: passwordStorageKey);
-            await _credentialStore.delete(key: passwordPreHashedStorageKey);
+            await _clearLoginSecrets();
             _authenticatedJid = null;
             return;
           } on XmppNetworkException catch (error) {
@@ -593,13 +594,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
                 displayName: displayName,
                 databasePrefix: ensuredDatabasePrefix,
                 databasePassphrase: ensuredDatabasePassphrase,
-                rememberMe: shouldPersistCredentials,
+                rememberMe: rememberMe,
                 password: password,
                 passwordPreHashed: passwordPreHashed,
                 emailPassword: emailPassword,
                 emailCredentials: emailCredentials,
                 enforceEmailProvisioning: enforceEmailProvisioning,
-                clearEmailCredentials: shouldClearEmailCredentialsOnFailure,
+                clearCredentialsOnFailure: clearStoredCredentialsOnFailure,
                 databasePrefixStorageKey: databasePrefixStorageKey,
                 databasePassphraseStorageKey: databasePassphraseStorageKey,
               );
@@ -610,17 +611,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             }
             _log.warning('Network/XMPP error during login', error);
             await _xmppService.disconnect();
-            if (!canPreserveSession) {
-              _authenticatedJid = null;
-              _emit(const AuthenticationFailure(
-                  'Error. Please try again later.'));
-            } else {
-              await _clearAuthTransaction();
-              authenticationCommitted = true;
-              if (state is! AuthenticationComplete) {
-                _emit(const AuthenticationComplete());
-              }
+            _authenticatedJid = null;
+            if (clearStoredCredentialsOnFailure && !canPreserveSession) {
+              await _clearLoginSecrets();
             }
+            _emit(const AuthenticationFailure(
+                'Error. Please try again later.'));
             return;
           } on XmppAlreadyConnectedException catch (_) {
             _log.fine('Re-auth attempted while already connected, ignoring.');
@@ -639,13 +635,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
                 displayName: displayName,
                 databasePrefix: ensuredDatabasePrefix,
                 databasePassphrase: ensuredDatabasePassphrase,
-                rememberMe: shouldPersistCredentials,
+                rememberMe: rememberMe,
                 password: password,
                 passwordPreHashed: passwordPreHashed,
                 emailPassword: emailPassword,
                 emailCredentials: emailCredentials,
                 enforceEmailProvisioning: enforceEmailProvisioning,
-                clearEmailCredentials: shouldClearEmailCredentialsOnFailure,
+                clearCredentialsOnFailure: clearStoredCredentialsOnFailure,
                 databasePrefixStorageKey: databasePrefixStorageKey,
                 databasePassphraseStorageKey: databasePassphraseStorageKey,
               );
@@ -656,17 +652,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             }
             _log.severe(error);
             await _xmppService.disconnect();
-            if (!canPreserveSession) {
-              _authenticatedJid = null;
-              _emit(const AuthenticationFailure(
-                  'Error. Please try again later.'));
-            } else {
-              await _clearAuthTransaction();
-              authenticationCommitted = true;
-              if (state is! AuthenticationComplete) {
-                _emit(const AuthenticationComplete());
-              }
+            _authenticatedJid = null;
+            if (clearStoredCredentialsOnFailure || allowStoredCredentialRetention) {
+              await _clearLoginSecrets();
             }
+            _emit(const AuthenticationFailure(
+                'Error. Please try again later.'));
             return;
           }
         } else {
@@ -685,7 +676,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           databasePassphrase: ensuredDatabasePassphrase,
           jid: resolvedJid,
           enforceProvisioning: enforceEmailProvisioning,
-          clearCredentialsOnFailure: shouldClearEmailCredentialsOnFailure,
+          clearCredentialsOnFailure: clearStoredCredentialsOnFailure,
           emailPassword: emailPassword,
           emailCredentials: emailCredentials,
         );
@@ -695,7 +686,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           await _clearAuthTransaction();
           authenticationCommitted = true;
           _authenticatedJid = null;
-          await _clearLoginSecrets();
+          final shouldClearForProvisioningFailure =
+              clearStoredCredentialsOnFailure || allowStoredCredentialRetention;
+          if (shouldClearForProvisioningFailure) {
+            await _clearLoginSecrets();
+          }
           if (state is! AuthenticationFailure &&
               state is! AuthenticationSignupFailure) {
             _emit(const AuthenticationFailure(
@@ -707,7 +702,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
         await _finalizeAuthentication(
           jid: resolvedJid,
-          rememberMe: shouldPersistCredentials,
+          rememberMe: rememberMe,
           password: password,
           passwordPreHashed: passwordPreHashed,
           databasePrefixStorageKey: databasePrefixStorageKey,
@@ -719,7 +714,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       } finally {
         if (!authenticationCommitted) {
           await _rollbackAuthTransaction(
-            clearEmailCredentials: shouldClearEmailCredentialsOnFailure,
+            clearCredentials: clearStoredCredentialsOnFailure,
           );
         }
       }
@@ -812,7 +807,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String databasePassphrase,
     required bool rememberMe,
     required bool enforceEmailProvisioning,
-    required bool clearEmailCredentials,
+    required bool clearCredentialsOnFailure,
     required RegisteredCredentialKey databasePrefixStorageKey,
     required RegisteredCredentialKey databasePassphraseStorageKey,
     required bool passwordPreHashed,
@@ -838,7 +833,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       databasePassphrase: databasePassphrase,
       jid: jid,
       enforceProvisioning: enforceEmailProvisioning,
-      clearCredentialsOnFailure: clearEmailCredentials,
+      clearCredentialsOnFailure: clearCredentialsOnFailure,
       emailPassword: emailPassword,
       emailCredentials: emailCredentials,
     );
@@ -1946,7 +1941,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 class _AuthTransaction {
   const _AuthTransaction({
     required this.jid,
-    required this.clearEmailCredentialsOnFailure,
+    required this.clearCredentialsOnFailure,
     this.xmppConnected = false,
     this.smtpProvisioned = false,
     this.committed = false,
@@ -1968,8 +1963,10 @@ class _AuthTransaction {
 
     return _AuthTransaction(
       jid: (json['jid'] as String? ?? '').trim(),
-      clearEmailCredentialsOnFailure:
-          asBool(json['clearEmailCredentialsOnFailure']),
+      clearCredentialsOnFailure: asBool(
+        json['clearCredentialsOnFailure'] ??
+            json['clearEmailCredentialsOnFailure'],
+      ),
       xmppConnected: asBool(json['xmppConnected']),
       smtpProvisioned: asBool(json['smtpProvisioned']),
       committed: asBool(json['committed']),
@@ -1980,14 +1977,14 @@ class _AuthTransaction {
   final bool xmppConnected;
   final bool smtpProvisioned;
   final bool committed;
-  final bool clearEmailCredentialsOnFailure;
+  final bool clearCredentialsOnFailure;
 
   Map<String, dynamic> toJson() => {
         'jid': jid,
         'xmppConnected': xmppConnected,
         'smtpProvisioned': smtpProvisioned,
         'committed': committed,
-        'clearEmailCredentialsOnFailure': clearEmailCredentialsOnFailure,
+        'clearCredentialsOnFailure': clearCredentialsOnFailure,
       };
 
   _AuthTransaction copyWith({
@@ -2000,7 +1997,7 @@ class _AuthTransaction {
       xmppConnected: xmppConnected ?? this.xmppConnected,
       smtpProvisioned: smtpProvisioned ?? this.smtpProvisioned,
       committed: committed ?? this.committed,
-      clearEmailCredentialsOnFailure: clearEmailCredentialsOnFailure,
+      clearCredentialsOnFailure: clearCredentialsOnFailure,
     );
   }
 }
