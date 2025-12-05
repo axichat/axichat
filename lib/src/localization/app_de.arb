@@ -306,6 +306,7 @@
   "authToggleLogin": "Schon registriert? Anmelden",
   "authGuestCalendarCta": "Kalender testen (Gastmodus)",
   "authLogin": "Anmelden",
+  "authRememberMeLabel": "Auf diesem Gerät angemeldet bleiben",
   "authSignUp": "Registrieren",
   "authToggleSelected": "Aktuelle Auswahl",
   "authToggleSelectHint": "Aktivieren, um {label} auszuwählen",

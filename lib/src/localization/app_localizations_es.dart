@@ -881,6 +881,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authLogin => 'Iniciar sesión';
 
   @override
+  String get authRememberMeLabel => 'Recordarme en este dispositivo';
+
+  @override
   String get authSignUp => 'Registrarse';
 
   @override

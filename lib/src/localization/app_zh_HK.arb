@@ -306,6 +306,7 @@
   "authToggleLogin": "已有帳戶？登入",
   "authGuestCalendarCta": "試用行事曆（訪客模式）",
   "authLogin": "登入",
+  "authRememberMeLabel": "在此裝置上記住我",
   "authSignUp": "註冊",
   "authToggleSelected": "目前選擇",
   "authToggleSelectHint": "點擊以選擇 {label}",

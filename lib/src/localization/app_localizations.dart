@@ -1624,6 +1624,12 @@ abstract class AppLocalizations {
   /// **'Log in'**
   String get authLogin;
 
+  /// No description provided for @authRememberMeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remember me on this device'**
+  String get authRememberMeLabel;
+
   /// No description provided for @authSignUp.
   ///
   /// In en, this message translates to:

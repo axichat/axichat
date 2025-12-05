@@ -306,6 +306,7 @@
   "authToggleLogin": "Déjà inscrit ? Connectez-vous",
   "authGuestCalendarCta": "Essayer le calendrier (mode invité)",
   "authLogin": "Se connecter",
+  "authRememberMeLabel": "Se souvenir de moi sur cet appareil",
   "authSignUp": "S’inscrire",
   "authToggleSelected": "Sélection actuelle",
   "authToggleSelectHint": "Activer pour sélectionner {label}",

@@ -848,6 +848,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authLogin => '登录';
 
   @override
+  String get authRememberMeLabel => '在此设备上记住我';
+
+  @override
   String get authSignUp => '注册';
 
   @override
@@ -3018,6 +3021,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authLogin => '登入';
+
+  @override
+  String get authRememberMeLabel => '在此裝置上記住我';
 
   @override
   String get authSignUp => '註冊';
