@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
@@ -33,6 +35,16 @@ class _LoginFormState extends State<LoginForm> {
     super.initState();
     _jidTextController = TextEditingController();
     _passwordTextController = TextEditingController();
+    _restoreRememberMePreference();
+  }
+
+  Future<void> _restoreRememberMePreference() async {
+    final preference =
+        await context.read<AuthenticationCubit>().loadRememberMeChoice();
+    if (!mounted) return;
+    setState(() {
+      rememberMe = preference;
+    });
   }
 
   @override
@@ -146,6 +158,38 @@ class _LoginFormState extends State<LoginForm> {
                       key: loginPasswordKey,
                       enabled: !loading,
                       controller: _passwordTextController,
+                    ),
+                  ),
+                  Padding(
+                    padding: horizontalPadding.add(
+                      const EdgeInsets.only(top: 12, bottom: 4),
+                    ),
+                    child: Row(
+                      children: [
+                        ShadSwitch(
+                          value: rememberMe,
+                          onChanged: loading
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    rememberMe = value;
+                                  });
+                                  unawaited(
+                                    context
+                                        .read<AuthenticationCubit>()
+                                        .persistRememberMeChoice(value),
+                                  );
+                                },
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            l10n.authRememberMeLabel,
+                            style: Theme.of(context).textTheme.bodyMedium ??
+                                context.textTheme.small,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox.square(dimension: 20.0),

@@ -880,6 +880,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authLogin => 'Anmelden';
 
   @override
+  String get authRememberMeLabel => 'Auf diesem Gerät angemeldet bleiben';
+
+  @override
   String get authSignUp => 'Registrieren';
 
   @override

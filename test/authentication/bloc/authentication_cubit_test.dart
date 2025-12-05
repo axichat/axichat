@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:axichat/main.dart';
@@ -6,6 +7,7 @@ import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/chatmail_provisioning_client.dart'
     as provisioning;
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
@@ -40,8 +42,7 @@ void main() {
   late Client mockHttpClient;
   late MockChatmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
-  String? pendingSignupRollbacksPayload;
-  String? completedSignupAccountsPayload;
+  late Map<String, String?> credentialStorage;
 
   setUp(() {
     mockXmppService = MockXmppService();
@@ -53,6 +54,41 @@ void main() {
     mockHttpClient = MockHttpClient();
     mockProvisioningClient = MockChatmailProvisioningClient();
 
+    when(
+      () => mockEmailService.clearStoredCredentials(
+        jid: any(named: 'jid'),
+        preserveActiveSession: any(named: 'preserveActiveSession'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.persistActiveCredentials(
+        jid: any(named: 'jid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => mockEmailService.authFailureStream)
+        .thenAnswer((_) => const Stream.empty());
+    when(() => mockEmailService.currentAccount(any()))
+        .thenAnswer((_) async => const EmailAccount(
+              address: validJid,
+              password: validPassword,
+            ));
+    when(
+      () => mockEmailService.ensureProvisioned(
+        displayName: any(named: 'displayName'),
+        databasePrefix: any(named: 'databasePrefix'),
+        databasePassphrase: any(named: 'databasePassphrase'),
+        jid: any(named: 'jid'),
+        passwordOverride: any(named: 'passwordOverride'),
+        addressOverride: any(named: 'addressOverride'),
+        persistCredentials: any(named: 'persistCredentials'),
+      ),
+    ).thenAnswer(
+      (_) async => const EmailAccount(
+        address: validJid,
+        password: validPassword,
+      ),
+    );
+
     when(() => mockXmppService.omemoActivityStream)
         .thenAnswer((_) => const Stream.empty());
     when(() => mockXmppService.connectivityStream)
@@ -62,22 +98,14 @@ void main() {
     when(() => mockXmppService.myJid).thenReturn(null);
     when(() => mockXmppService.setClientState(any())).thenAnswer((_) async {});
 
-    pendingSignupRollbacksPayload = null;
-    completedSignupAccountsPayload = null;
+    credentialStorage = <String, String?>{
+      'password_prehashed_v1': true.toString(),
+    };
 
     when(() => mockCredentialStore.read(key: any(named: 'key')))
         .thenAnswer((invocation) async {
       final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
-      if (key.value == 'pending_signup_rollbacks') {
-        return pendingSignupRollbacksPayload;
-      }
-      if (key.value == 'completed_signup_accounts_v1') {
-        return completedSignupAccountsPayload;
-      }
-      if (key.value == 'password_prehashed_v1') {
-        return true.toString();
-      }
-      return null;
+      return credentialStorage[key.value];
     });
 
     when(() => mockCredentialStore.write(
@@ -86,24 +114,21 @@ void main() {
         )).thenAnswer((invocation) async {
       final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
       final value = invocation.namedArguments[#value] as String?;
-      if (key.value == 'pending_signup_rollbacks') {
-        pendingSignupRollbacksPayload = value;
-      }
-      if (key.value == 'completed_signup_accounts_v1') {
-        completedSignupAccountsPayload = value;
-      }
+      credentialStorage[key.value] = value;
       return true;
     });
 
     when(() => mockCredentialStore.delete(key: any(named: 'key')))
         .thenAnswer((invocation) async {
       final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
-      if (key.value == 'pending_signup_rollbacks') {
-        pendingSignupRollbacksPayload = null;
-      }
-      if (key.value == 'completed_signup_accounts_v1') {
-        completedSignupAccountsPayload = null;
-      }
+      credentialStorage.remove(key.value);
+      return true;
+    });
+
+    when(
+      () => mockCredentialStore.deleteAll(burn: any(named: 'burn')),
+    ).thenAnswer((_) async {
+      credentialStorage.clear();
       return true;
     });
 
@@ -143,6 +168,19 @@ void main() {
         password: any(named: 'password'),
       ),
     ).thenAnswer((_) async {});
+  });
+
+  test('Remember me choice defaults to true and persists updates', () async {
+    final localBloc = AuthenticationCubit(
+      credentialStore: mockCredentialStore,
+      xmppService: mockXmppService,
+      httpClient: mockHttpClient,
+      emailProvisioningClient: mockProvisioningClient,
+    );
+    final initial = await localBloc.loadRememberMeChoice();
+    expect(initial, isTrue);
+    await localBloc.persistRememberMeChoice(false);
+    expect(await localBloc.loadRememberMeChoice(), isFalse);
   });
 
   group('login', () {
@@ -204,29 +242,30 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given valid credentials with rememberMe false, still saves them and emits [AuthenticationComplete].',
+      'Given valid credentials with rememberMe false, stores only database secrets and emits [AuthenticationComplete].',
       build: () => bloc,
       act: (bloc) => bloc.login(
         username: validUsername,
         password: validPassword,
+        rememberMe: false,
       ),
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationComplete(),
       ],
       verify: (bloc) {
-        verify(() => mockCredentialStore.write(
+        verifyNever(() => mockCredentialStore.write(
               key: bloc.jidStorageKey,
               value: validJid,
-            )).called(1);
-        verify(() => mockCredentialStore.write(
+            ));
+        verifyNever(() => mockCredentialStore.write(
               key: bloc.passwordStorageKey,
               value: saltedPassword,
-            )).called(1);
-        verify(() => mockCredentialStore.write(
-              key: bloc.passwordPreHashedStorageKey,
-              value: true.toString(),
-            )).called(1);
+            ));
+        final prefix = credentialStorage['${validJid}_database_prefix'];
+        expect(prefix, isNotNull);
+        final passphraseKey = '${prefix}_database_passphrase';
+        expect(credentialStorage[passphraseKey], isNotNull);
       },
     );
 
@@ -311,10 +350,10 @@ void main() {
         const AuthenticationComplete(),
       ],
       verify: (_) {
-        final payload = completedSignupAccountsPayload;
-        expect(payload, isNotNull);
-        final decoded = jsonDecode(payload!) as List<dynamic>;
-        expect(decoded, contains(validJid.toLowerCase()));
+        final prefix = credentialStorage['${validJid}_database_prefix'];
+        expect(prefix, isNotNull);
+        final passphraseKey = '${prefix}_database_passphrase';
+        expect(credentialStorage[passphraseKey], isNotNull);
       },
     );
 
@@ -371,6 +410,8 @@ void main() {
             .thenAnswer((_) async => validJid);
         when(() => mockCredentialStore.read(key: bloc.passwordStorageKey))
             .thenAnswer((_) async => validPassword);
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
       },
       build: () => bloc,
       act: (bloc) => bloc.login(),
@@ -381,12 +422,174 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
+      'Stored login without database secrets clears transport credentials and emits [AuthenticationNone].',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.login(),
+      expect: () => const [
+        AuthenticationLogInInProgress(),
+        AuthenticationNone(),
+      ],
+      verify: (bloc) {
+        expect(credentialStorage[bloc.jidStorageKey.value], isNull);
+        expect(credentialStorage[bloc.passwordStorageKey.value], isNull);
+        expect(
+          credentialStorage[bloc.passwordPreHashedStorageKey.value],
+          isNull,
+        );
+        verify(
+          () => mockEmailService.clearStoredCredentials(
+            jid: validJid,
+            preserveActiveSession: false,
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Database secrets without stored login skip auto-login but keep secrets intact.',
+      setUp: () {
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+      },
+      build: () => bloc,
+      act: (bloc) => bloc.login(),
+      expect: () => const [
+        AuthenticationLogInInProgress(),
+        AuthenticationNone(),
+      ],
+      verify: (_) {
+        expect(
+          credentialStorage['${validJid}_database_prefix'],
+          equals('prefix'),
+        );
+        expect(
+          credentialStorage['prefix_database_passphrase'],
+          equals('passphrase'),
+        );
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Auth failure does not persist database secrets.',
+      build: () => bloc,
+      act: (bloc) => bloc.login(
+        username: invalidUsername,
+        password: invalidPassword,
+      ),
+      expect: () => const [
+        AuthenticationLogInInProgress(),
+        AuthenticationFailure('Incorrect username or password'),
+      ],
+      verify: (_) {
+        expect(
+          credentialStorage.keys
+              .where((key) => key.contains('database_prefix')),
+          isEmpty,
+        );
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Persisting with rememberMe true writes SMTP credentials atomically after success.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.login(
+        username: validUsername,
+        password: validPassword,
+        rememberMe: true,
+      ),
+      expect: () => const [
+        AuthenticationLogInInProgress(),
+        AuthenticationComplete(),
+      ],
+      verify: (bloc) {
+        verify(
+          () => mockEmailService.persistActiveCredentials(
+            jid: validJid,
+          ),
+        ).called(1);
+        verifyNever(
+          () => mockEmailService.clearStoredCredentials(
+            jid: any(named: 'jid'),
+            preserveActiveSession: any(named: 'preserveActiveSession'),
+          ),
+        );
+        expect(credentialStorage[bloc.jidStorageKey.value], equals(validJid));
+        expect(
+          credentialStorage[bloc.passwordStorageKey.value],
+          equals(saltedPassword),
+        );
+        final prefix = credentialStorage['${validJid}_database_prefix'];
+        expect(prefix, isNotNull);
+        final passphraseKey = '${prefix}_database_passphrase';
+        expect(credentialStorage[passphraseKey], isNotNull);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Persisting with rememberMe false keeps SMTP session only in memory and stores only DB secrets.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.login(
+        username: validUsername,
+        password: validPassword,
+        rememberMe: false,
+      ),
+      expect: () => const [
+        AuthenticationLogInInProgress(),
+        AuthenticationComplete(),
+      ],
+      verify: (bloc) {
+        verifyNever(
+          () => mockEmailService.persistActiveCredentials(
+            jid: any(named: 'jid'),
+          ),
+        );
+        verify(
+          () => mockEmailService.clearStoredCredentials(
+            jid: validJid,
+            preserveActiveSession: true,
+          ),
+        ).called(1);
+        expect(credentialStorage[bloc.jidStorageKey.value], isNull);
+        expect(credentialStorage[bloc.passwordStorageKey.value], isNull);
+        final prefix = credentialStorage['${validJid}_database_prefix'];
+        expect(prefix, isNotNull);
+        final passphraseKey = '${prefix}_database_passphrase';
+        expect(credentialStorage[passphraseKey], isNotNull);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
       'Given saved invalid credentials, automatic login emits [AuthenticationFailure].',
       setUp: () {
         when(() => mockCredentialStore.read(key: bloc.jidStorageKey))
             .thenAnswer((_) async => validJid);
         when(() => mockCredentialStore.read(key: bloc.passwordStorageKey))
             .thenAnswer((_) async => invalidPassword);
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
       },
       build: () => bloc,
       act: (bloc) => bloc.login(),
@@ -419,17 +622,11 @@ void main() {
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Preserves authenticated session on network failures.',
       setUp: () {
-        when(() => mockCredentialStore.read(key: any(named: 'key')))
-            .thenAnswer((invocation) async {
-          final key =
-              invocation.namedArguments[#key] as RegisteredCredentialKey;
-          return switch (key.value) {
-            'jid' => validJid,
-            'password' => validPassword,
-            'password_prehashed_v1' => true.toString(),
-            _ => null,
-          };
-        });
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
         when(() => mockXmppService.connect(
               jid: any(named: 'jid'),
               password: any(named: 'password'),
@@ -453,10 +650,67 @@ void main() {
         initialState: const AuthenticationComplete(),
       ),
       act: (bloc) => bloc.login(),
-      expect: () => [],
+      expect: () => [const AuthenticationComplete()],
       verify: (bloc) {
-        verify(() => mockXmppService.disconnect()).called(1);
+        verify(
+          () => mockXmppService.resumeOfflineSession(
+            jid: validJid,
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+          ),
+        ).called(1);
         expect(bloc.state, isA<AuthenticationComplete>());
+      },
+    );
+
+    late StreamController<DeltaChatException> authFailureController;
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'SMTP runtime auth failure triggers credential wipe and failure state.',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        authFailureController =
+            StreamController<DeltaChatException>.broadcast(sync: true);
+        when(() => mockEmailService.authFailureStream)
+            .thenAnswer((_) => authFailureController.stream);
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) async {
+        authFailureController.add(
+          const DeltaAuthException(
+            operation: 'email transport',
+            message: 'bad password',
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      },
+      expect: () => [
+        const AuthenticationNone(),
+        const AuthenticationFailure(
+          'Email authentication failed. Please log in again.',
+        ),
+      ],
+      verify: (bloc) {
+        expect(credentialStorage[bloc.jidStorageKey.value], isNull);
+        expect(credentialStorage[bloc.passwordStorageKey.value], isNull);
+        verify(
+          () => mockEmailService.shutdown(
+            jid: any(named: 'jid'),
+            clearCredentials: true,
+          ),
+        ).called(1);
+      },
+      tearDown: () async {
+        await authFailureController.close();
       },
     );
   });
@@ -505,7 +759,8 @@ void main() {
       verify: (bloc) {
         verify(
           () => mockProvisioningClient.deleteAccount(
-            email: '$validUsername@${AuthenticationCubit.domain}',
+            email:
+                '${validUsername.toLowerCase()}@${AuthenticationCubit.domain}',
             password: validPassword,
           ),
         ).called(1);
@@ -552,7 +807,9 @@ void main() {
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Never sends rollback for accounts that completed authentication.',
       setUp: () {
-        completedSignupAccountsPayload = jsonEncode([validJid.toLowerCase()]);
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
         when(() => mockHttpClient.post(
               _registrationMatcher(),
               body: any(named: 'body'),
@@ -593,14 +850,14 @@ void main() {
             password: any(named: 'password'),
           ),
         );
-        expect(pendingSignupRollbacksPayload, isNull);
+        expect(credentialStorage['pending_signup_rollbacks'], isNull);
       },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Prevents signup until pending cleanup for username completes.',
       setUp: () {
-        pendingSignupRollbacksPayload = jsonEncode([
+        credentialStorage['pending_signup_rollbacks'] = jsonEncode([
           {
             'username': validUsername,
             'host': AuthenticationCubit.domain,
@@ -647,7 +904,7 @@ void main() {
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Flushes pending cleanup before retrying signup with the same username.',
       setUp: () {
-        pendingSignupRollbacksPayload = jsonEncode([
+        credentialStorage['pending_signup_rollbacks'] = jsonEncode([
           {
             'username': validUsername,
             'host': AuthenticationCubit.domain,
@@ -676,7 +933,7 @@ void main() {
         AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
-        final payload = pendingSignupRollbacksPayload;
+        final payload = credentialStorage['pending_signup_rollbacks'];
         expect(payload, isNotNull);
         final decoded = jsonDecode(payload!) as List<dynamic>;
         expect(decoded, hasLength(1));
@@ -692,6 +949,8 @@ void main() {
       when(() => mockCredentialStore.deleteAll(burn: any(named: 'burn')))
           .thenAnswer((_) async => true);
       when(() => mockXmppService.burn()).thenAnswer((_) async {});
+      when(() => mockHttpClient.post(any(), body: any(named: 'body')))
+          .thenAnswer((_) async => Response('', 200));
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(

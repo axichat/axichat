@@ -51,10 +51,12 @@ class EmailProvisioningException implements Exception {
   const EmailProvisioningException(
     this.message, {
     this.isRecoverable = false,
+    this.shouldWipeCredentials = false,
   });
 
   final String message;
   final bool isRecoverable;
+  final bool shouldWipeCredentials;
 
   @override
   String toString() => 'EmailProvisioningException: $message';
@@ -123,6 +125,9 @@ class EmailService {
   final Map<String, RegisteredCredentialKey> _legacyAddressKeys = {};
   final Map<String, RegisteredCredentialKey> _legacyPasswordKeys = {};
   final Map<String, RegisteredCredentialKey> _legacyProvisionedKeys = {};
+  final Set<String> _ephemeralProvisionedScopes = {};
+  final _authFailureController =
+      StreamController<DeltaChatException>.broadcast(sync: true);
   bool _foregroundKeepaliveEnabled = false;
   bool _foregroundKeepaliveListenerAttached = false;
   bool _foregroundKeepaliveServiceAcquired = false;
@@ -153,6 +158,9 @@ class EmailService {
 
   Stream<EmailSyncState> get syncStateStream => _syncStateController.stream;
 
+  Stream<DeltaChatException> get authFailureStream =>
+      _authFailureController.stream;
+
   Future<EmailAccount?> currentAccount(String jid) async {
     final scope = _scopeForJid(jid);
     final address = await _readCredentialWithLegacy(
@@ -179,6 +187,7 @@ class EmailService {
     required String jid,
     String? passwordOverride,
     String? addressOverride,
+    bool persistCredentials = true,
   }) async {
     final scope = _scopeForJid(jid);
     final needsInit = _databasePrefix != databasePrefix ||
@@ -221,6 +230,7 @@ class EmailService {
     final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
     final preferredAddress = _preferredAddressFromJid(jid);
     var credentialsMutated = false;
+    final shouldPersistCredentials = persistCredentials;
 
     final resolvedAddress = (normalizedOverrideAddress != null &&
             normalizedOverrideAddress.isNotEmpty)
@@ -234,7 +244,9 @@ class EmailService {
     if (address == null || address != resolvedAddress) {
       address = resolvedAddress;
       credentialsMutated = true;
-      await _credentialStore.write(key: addressKey, value: address);
+      if (shouldPersistCredentials) {
+        await _credentialStore.write(key: addressKey, value: address);
+      }
     }
 
     final resolvedPasswordOverride = passwordOverride;
@@ -243,7 +255,9 @@ class EmailService {
       if (password == null || password != resolvedPasswordOverride) {
         password = resolvedPasswordOverride;
         credentialsMutated = true;
-        await _credentialStore.write(key: passwordKey, value: password);
+        if (shouldPersistCredentials) {
+          await _credentialStore.write(key: passwordKey, value: password);
+        }
       }
     } else if (password == null) {
       throw StateError('Failed to resolve email password for $jid');
@@ -254,10 +268,17 @@ class EmailService {
           legacy: legacyProvisionedKey,
         )) ==
         'true';
+    if (!shouldPersistCredentials &&
+        _ephemeralProvisionedScopes.contains(scope)) {
+      alreadyProvisioned = true;
+    }
     if (credentialsMutated) {
       alreadyProvisioned = false;
-      await _credentialStore.write(key: provisionedKey, value: 'false');
-      await _credentialStore.write(key: legacyProvisionedKey, value: 'false');
+      _ephemeralProvisionedScopes.remove(scope);
+      if (shouldPersistCredentials) {
+        await _credentialStore.write(key: provisionedKey, value: 'false');
+        await _credentialStore.write(key: legacyProvisionedKey, value: 'false');
+      }
     }
 
     final needsProvisioning = !alreadyProvisioned;
@@ -279,14 +300,25 @@ class EmailService {
           additional: _buildConnectionConfig(normalizedAddress),
         );
         await _transport.purgeStockMessages();
-        await _credentialStore.write(key: provisionedKey, value: 'true');
-        await _credentialStore.write(key: legacyProvisionedKey, value: 'true');
+        if (shouldPersistCredentials) {
+          await _credentialStore.write(key: provisionedKey, value: 'true');
+          await _credentialStore.write(
+            key: legacyProvisionedKey,
+            value: 'true',
+          );
+        } else {
+          _ephemeralProvisionedScopes.add(scope);
+        }
       } on DeltaSafeException catch (error, stackTrace) {
-        await _credentialStore.write(key: provisionedKey, value: 'false');
-        await _credentialStore.write(
-          key: legacyProvisionedKey,
-          value: 'false',
-        );
+        if (shouldPersistCredentials) {
+          await _credentialStore.write(key: provisionedKey, value: 'false');
+          await _credentialStore.write(
+            key: legacyProvisionedKey,
+            value: 'false',
+          );
+        } else {
+          _ephemeralProvisionedScopes.remove(scope);
+        }
         final isTimeout = error.message.toLowerCase().contains('timed out');
         final mapped = DeltaChatExceptionMapper.fromDeltaSafe(
           error,
@@ -297,9 +329,8 @@ class EmailService {
           error,
           stackTrace,
         );
-        final shouldClearCredentials = credentialsMutated &&
-            mapped.code != DeltaChatErrorCode.network &&
-            !isTimeout;
+        final shouldClearCredentials =
+            credentialsMutated && mapped.code == DeltaChatErrorCode.auth;
         if (shouldClearCredentials) {
           await _clearCredentials(scope);
         }
@@ -313,7 +344,8 @@ class EmailService {
             isRecoverable: true,
           );
         }
-        if (mapped.code == DeltaChatErrorCode.network) {
+        if (mapped.code == DeltaChatErrorCode.network ||
+            mapped.code == DeltaChatErrorCode.server) {
           throw const EmailProvisioningException(
             'Unable to reach the email service. Please try again.',
             isRecoverable: true,
@@ -321,6 +353,8 @@ class EmailService {
         }
         throw EmailProvisioningException(
           'Unable to configure email for $address. Please check your credentials.',
+          shouldWipeCredentials: mapped.code == DeltaChatErrorCode.permission ||
+              mapped.code == DeltaChatErrorCode.auth,
         );
       }
     } else {
@@ -338,6 +372,7 @@ class EmailService {
       password: normalizedPassword,
     );
     _activeAccount = account;
+    _ephemeralProvisionedScopes.add(scope);
     return account;
   }
 
@@ -759,17 +794,17 @@ class EmailService {
     required String? subject,
     required String? body,
   }) {
-    final normalizedSubject = _normalizeSubject(subject);
     final trimmedBody = body?.trim();
-    final hasSubject = normalizedSubject != null;
-    final hasBody = trimmedBody?.isNotEmpty == true;
-    if (!hasSubject) {
-      return trimmedBody ?? '';
+    if (trimmedBody?.isNotEmpty == true) {
+      return trimmedBody!;
     }
-    if (!hasBody) {
-      return normalizedSubject;
+
+    final trimmedSubject = subject?.trim();
+    if (trimmedSubject?.isNotEmpty == true) {
+      return trimmedSubject!;
     }
-    return '$normalizedSubject\n\n$trimmedBody';
+
+    return '';
   }
 
   String _shareTokenForShare(String shareId) {
@@ -1113,6 +1148,10 @@ class EmailService {
       operation: 'email transport',
       message: message,
     );
+    if (exception.code == DeltaChatErrorCode.auth ||
+        exception.code == DeltaChatErrorCode.permission) {
+      _authFailureController.add(exception);
+    }
     if (exception.code == DeltaChatErrorCode.network) {
       _updateSyncState(
         EmailSyncState.offline(
@@ -1594,6 +1633,7 @@ class EmailService {
       _activeCredentialScope = null;
       _activeAccount = null;
     }
+    _ephemeralProvisionedScopes.remove(scope);
   }
 
   Future<T> _guardDeltaOperation<T>({
@@ -1607,6 +1647,50 @@ class EmailService {
         error,
         operation: operation,
       );
+    }
+  }
+
+  Future<void> persistActiveCredentials({required String jid}) async {
+    final scope = _scopeForJid(jid);
+    if (_activeAccount == null || _activeCredentialScope != scope) {
+      return;
+    }
+    final addressKey = _addressKeyForScope(scope);
+    final passwordKey = _passwordKeyForScope(scope);
+    final provisionedKey = _provisionedKeyForScope(scope);
+    final legacyProvisionedKey = _legacyProvisionedKeyForScope(scope);
+    await _credentialStore.write(
+        key: addressKey, value: _activeAccount!.address);
+    await _credentialStore.write(
+        key: passwordKey, value: _activeAccount!.password);
+    await _credentialStore.write(key: provisionedKey, value: 'true');
+    await _credentialStore.write(key: legacyProvisionedKey, value: 'true');
+    _ephemeralProvisionedScopes.add(scope);
+  }
+
+  Future<void> clearStoredCredentials({
+    required String jid,
+    bool preserveActiveSession = false,
+  }) async {
+    final scope = _scopeForJid(jid);
+    await _deleteCredentialPair(
+      primary: _addressKeyForScope(scope),
+      legacy: _legacyAddressKeyForScope(scope),
+    );
+    await _deleteCredentialPair(
+      primary: _passwordKeyForScope(scope),
+      legacy: _legacyPasswordKeyForScope(scope),
+    );
+    await _deleteCredentialPair(
+      primary: _provisionedKeyForScope(scope),
+      legacy: _legacyProvisionedKeyForScope(scope),
+    );
+    if (!preserveActiveSession && _activeCredentialScope == scope) {
+      _activeCredentialScope = null;
+      _activeAccount = null;
+    }
+    if (!preserveActiveSession) {
+      _ephemeralProvisionedScopes.remove(scope);
     }
   }
 }

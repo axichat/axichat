@@ -377,6 +377,7 @@
   "authToggleLogin": "Already registered? Log in",
   "authGuestCalendarCta": "Try Calendar (Guest Mode)",
   "authLogin": "Log in",
+  "authRememberMeLabel": "Remember me on this device",
   "authSignUp": "Sign up",
   "authToggleSelected": "Current selection",
   "authToggleSelectHint": "Activate to select {label}",

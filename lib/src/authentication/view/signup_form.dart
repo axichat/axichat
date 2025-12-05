@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -15,7 +15,6 @@ import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -93,6 +92,16 @@ class _SignupFormState extends State<SignupForm>
       ..addListener(_handleFieldProgressChanged);
     _captchaTextController = TextEditingController()
       ..addListener(_handleFieldProgressChanged);
+    _restoreRememberMePreference();
+  }
+
+  Future<void> _restoreRememberMePreference() async {
+    final preference =
+        await context.read<AuthenticationCubit>().loadRememberMeChoice();
+    if (!mounted) return;
+    setState(() {
+      rememberMe = preference;
+    });
   }
 
   @override
@@ -734,6 +743,40 @@ class _SignupFormState extends State<SignupForm>
                                 padding: fieldSpacing,
                                 child: TermsCheckbox(
                                   enabled: !loading,
+                                ),
+                              ),
+                              Padding(
+                                padding: fieldSpacing,
+                                child: Row(
+                                  children: [
+                                    ShadSwitch(
+                                      value: rememberMe,
+                                      onChanged: loading
+                                          ? null
+                                          : (value) {
+                                              setState(() {
+                                                rememberMe = value;
+                                              });
+                                              unawaited(
+                                                context
+                                                    .read<AuthenticationCubit>()
+                                                    .persistRememberMeChoice(
+                                                      value,
+                                                    ),
+                                              );
+                                            },
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        l10n.authRememberMeLabel,
+                                        style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium ??
+                                            context.textTheme.small,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
