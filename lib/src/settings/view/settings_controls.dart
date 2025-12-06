@@ -8,6 +8,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -175,34 +176,48 @@ class SettingsControls extends StatelessWidget {
                 title: l10n.settingsMessageStorageTitle,
                 subtitle: l10n.settingsMessageStorageSubtitle,
                 actions: [
-                  SizedBox(
-                    width: 220,
-                    child: ShadSelect<MessageStorageMode>(
-                      initialValue: state.messageStorageMode,
-                      onChanged: (mode) {
-                        if (mode == null) return;
-                        context
-                            .read<SettingsCubit>()
-                            .updateMessageStorageMode(mode);
-                      },
-                      options: MessageStorageMode.values
-                          .map(
-                            (mode) => ShadOption<MessageStorageMode>(
-                              value: mode,
-                              child: Text(
-                                mode.isLocal
-                                    ? l10n.settingsMessageStorageLocal
-                                    : l10n.settingsMessageStorageServerOnly,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      selectedOptionBuilder: (context, mode) => Text(
-                        mode.isLocal
-                            ? l10n.settingsMessageStorageLocal
-                            : l10n.settingsMessageStorageServerOnly,
-                      ),
-                    ),
+                  StreamBuilder<bool>(
+                    stream: context.read<XmppService>().mamSupportStream,
+                    initialData: context.read<XmppService>().mamSupported,
+                    builder: (context, snapshot) {
+                      final mamSupported = snapshot.data ?? false;
+                      final options = mamSupported
+                          ? MessageStorageMode.values
+                          : const [MessageStorageMode.local];
+                      final effectiveMode = mamSupported
+                          ? state.messageStorageMode
+                          : MessageStorageMode.local;
+                      return SizedBox(
+                        width: 220,
+                        child: ShadSelect<MessageStorageMode>(
+                          initialValue: effectiveMode,
+                          onChanged: (mode) {
+                            if (mode == null) return;
+                            if (mode.isServerOnly && !mamSupported) return;
+                            context
+                                .read<SettingsCubit>()
+                                .updateMessageStorageMode(mode);
+                          },
+                          options: options
+                              .map(
+                                (mode) => ShadOption<MessageStorageMode>(
+                                  value: mode,
+                                  child: Text(
+                                    mode.isLocal
+                                        ? l10n.settingsMessageStorageLocal
+                                        : l10n.settingsMessageStorageServerOnly,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          selectedOptionBuilder: (context, mode) => Text(
+                            mode.isLocal
+                                ? l10n.settingsMessageStorageLocal
+                                : l10n.settingsMessageStorageServerOnly,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

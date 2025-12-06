@@ -37,6 +37,7 @@ final _capabilityCacheKey =
     XmppStateStore.registerKey('message_peer_capabilities');
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
+const int serverOnlyChatMessageCap = 500;
 
 class _PeerCapabilities {
   const _PeerCapabilities({
@@ -133,6 +134,24 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     );
   }
 
+  Future<void> _storeMessage(
+    Message message, {
+    required ChatType chatType,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.saveMessage(
+        message,
+        chatType: chatType,
+      );
+      if (messageStorageMode.isServerOnly) {
+        await db.trimChatMessages(
+          jid: message.chatJid,
+          maxMessages: serverOnlyChatMessageCap,
+        );
+      }
+    });
+  }
+
   Future<int> countLocalMessages({
     required String jid,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
@@ -147,13 +166,39 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     );
   }
 
-  MessageStorageMode get messageStorageMode => _messageStorageMode;
+  MessageStorageMode get messageStorageMode =>
+      _messageStorageMode.isServerOnly && !_mamSupported
+          ? MessageStorageMode.local
+          : _messageStorageMode;
 
   void updateMessageStorageMode(MessageStorageMode mode) {
-    if (_messageStorageMode == mode) return;
+    final previous = messageStorageMode;
     _messageStorageMode = mode;
-    if (mode.isServerOnly) {
+    final next = messageStorageMode;
+    if (mode.isServerOnly && !_mamSupported) {
+      _log.warning(
+        'Server-only storage requires MAM; using local persistence instead.',
+      );
+    }
+    if (previous == next) return;
+    if (next.isServerOnly) {
       unawaited(purgeMessageHistory());
+    }
+  }
+
+  void _updateMamSupport(bool supported) {
+    if (_mamSupported == supported) return;
+    _mamSupported = supported;
+    if (!_mamSupportController.isClosed) {
+      _mamSupportController.add(supported);
+    }
+  }
+
+  @visibleForTesting
+  void setMamSupportOverride(bool? supported) {
+    _mamSupportOverride = supported;
+    if (supported != null) {
+      _updateMamSupport(supported);
     }
   }
 
@@ -300,6 +345,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   final Map<String, Queue<String>> _stableKeyOrder = {};
   final Map<String, RegisteredStateKey> _lastSeenKeys = {};
   MessageStorageMode _messageStorageMode = MessageStorageMode.local;
+  bool _mamSupported = false;
+  bool? _mamSupportOverride;
+  final StreamController<bool> _mamSupportController =
+      StreamController<bool>.broadcast();
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
   var _capabilityCacheLoaded = false;
@@ -374,32 +423,28 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           };
 
           if (newCount > 0) {
-            await _dbOp<XmppDatabase>(
-              (db) => db.saveMessage(
-                Message(
-                  stanzaID: _connection.generateId(),
-                  senderJid: myJid!.toString(),
-                  chatJid: message.chatJid,
-                  pseudoMessageType: PseudoMessageType.newDevice,
-                  pseudoMessageData: pseudoMessageData,
-                ),
-                chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+            await _storeMessage(
+              Message(
+                stanzaID: _connection.generateId(),
+                senderJid: myJid!.toString(),
+                chatJid: message.chatJid,
+                pseudoMessageType: PseudoMessageType.newDevice,
+                pseudoMessageData: pseudoMessageData,
               ),
+              chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
             );
           }
 
           if (replacedCount > 0) {
-            await _dbOp<XmppDatabase>(
-              (db) => db.saveMessage(
-                Message(
-                  stanzaID: _connection.generateId(),
-                  senderJid: myJid!.toString(),
-                  chatJid: message.chatJid,
-                  pseudoMessageType: PseudoMessageType.changedDevice,
-                  pseudoMessageData: pseudoMessageData,
-                ),
-                chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+            await _storeMessage(
+              Message(
+                stanzaID: _connection.generateId(),
+                senderJid: myJid!.toString(),
+                chatJid: message.chatJid,
+                pseudoMessageType: PseudoMessageType.changedDevice,
+                pseudoMessageData: pseudoMessageData,
               ),
+              chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
             );
           }
         }
@@ -409,11 +454,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         }
 
         if (!message.noStore) {
-          await _dbOp<XmppDatabase>(
-            (db) => db.saveMessage(
-              message,
-              chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
-            ),
+          await _storeMessage(
+            message,
+            chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
           );
         }
 
@@ -539,12 +582,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       'Sending message ${message.stanzaID} (length=${text.length} chars)',
     );
     if (shouldStore) {
-      await _dbOp<XmppDatabase>(
-        (db) => db.saveMessage(
-          message,
-          chatType: chatType,
-        ),
-      );
+      await _storeMessage(message, chatType: chatType);
     }
 
     if (offlineDemo) {
@@ -674,12 +712,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       quoting: quotedMessage?.stanzaID,
     );
     const shouldStore = true;
-    await _dbOp<XmppDatabase>(
-      (db) => db.saveMessage(
-        message,
-        chatType: chatType,
-      ),
-    );
+    await _storeMessage(message, chatType: chatType);
     _log.fine(
       'Uploading attachment $filename ($size bytes) to HTTP upload slot.',
     );
@@ -1438,6 +1471,25 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     return info.features.contains(mox.mamXmlns);
   }
 
+  Future<void> _resolveMamSupportForAccount() async {
+    if (_mamSupportOverride != null) {
+      _updateMamSupport(_mamSupportOverride!);
+      return;
+    }
+    final accountJid = myJid;
+    if (accountJid == null) {
+      _updateMamSupport(false);
+      return;
+    }
+    try {
+      final supported = await _supportsMam(accountJid);
+      _updateMamSupport(supported);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to resolve MAM support.', error, stackTrace);
+      _updateMamSupport(false);
+    }
+  }
+
   Future<void> _verifyMamSupportOnLogin() async {
     if (connectionState != ConnectionState.connected) return;
     final accountJid = myJid;
@@ -1448,6 +1500,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           'Archive queries may be limited: server did not advertise MAM v2.',
         );
       }
+      _updateMamSupport(supportsMam);
     }
 
     List<Chat> chats;
@@ -1479,6 +1532,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         'Archive backfill may be incomplete: one or more group chats did not advertise MAM v2.',
       );
     }
+    _updateMamSupport(_mamSupported && !missingMam);
   }
 
   Future<void> _acknowledgeMessage(mox.MessageEvent event) async {

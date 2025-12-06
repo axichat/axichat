@@ -76,6 +76,10 @@ mixin RosterService on XmppBase, BaseStreamService {
     await _dbOp<XmppDatabase>(
       (db) => db.saveRosterItems(items),
     );
+    if (this is AvatarService) {
+      (this as AvatarService)
+          .scheduleAvatarRefresh(items.map((item) => item.jid));
+    }
 
     final version = rosterResult.ver;
     if (version != null && version.isNotEmpty) {
@@ -100,6 +104,9 @@ mixin RosterService on XmppBase, BaseStreamService {
       if (await _connection.requestSubscription(jid)) return;
       _log.severe('Failed to request roster subscription.');
       throw XmppRosterException();
+    }
+    if (this is AvatarService) {
+      (this as AvatarService).scheduleAvatarRefresh([jid]);
     }
   }
 
@@ -205,6 +212,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     List<mox.XmppRosterItem> modified,
     List<mox.XmppRosterItem> added,
   ) async {
+    final updatedJids = <String>{};
     await owner._dbOp<XmppDatabase>(
       (db) async {
         for (final jid in removed) {
@@ -213,13 +221,18 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
 
         for (final item in added) {
           await db.saveRosterItem(RosterItem.fromMox(item));
+          updatedJids.add(item.jid);
         }
 
         for (final item in modified) {
           await db.updateRosterItem(RosterItem.fromMox(item));
+          updatedJids.add(item.jid);
         }
       },
     );
+    if (owner is AvatarService && updatedJids.isNotEmpty) {
+      (owner as AvatarService).scheduleAvatarRefresh(updatedJids);
+    }
 
     if (version != null) {
       _log.info('Saving roster version: $version...');

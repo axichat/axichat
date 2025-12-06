@@ -13,7 +13,8 @@ class ProfileCubit extends Cubit<ProfileState> {
     required XmppService xmppService,
     PresenceService? presenceService,
     OmemoService? omemoService,
-  })  : _presenceService = presenceService,
+  })  : _xmppService = xmppService,
+        _presenceService = presenceService,
         _omemoService = omemoService,
         super(
           ProfileState(
@@ -31,11 +32,13 @@ class ProfileCubit extends Cubit<ProfileState> {
     _statusSubscription = _presenceService?.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
     );
+    unawaited(_loadAvatar());
     if (_omemoService != null) {
       loadFingerprints();
     }
   }
 
+  final XmppService _xmppService;
   final PresenceService? _presenceService;
   final OmemoService? _omemoService;
 
@@ -70,5 +73,28 @@ class ProfileCubit extends Cubit<ProfileState> {
     await _omemoService.regenerateDevice();
     await loadFingerprints();
     emit(state.copyWith(regenerating: false));
+  }
+
+  Future<void> _loadAvatar() async {
+    final stored = await _xmppService.getOwnAvatar();
+    if (stored == null || stored.isEmpty) return;
+    emit(
+      state.copyWith(
+        avatarPath: stored.path ?? state.avatarPath,
+        avatarHash: stored.hash ?? state.avatarHash,
+      ),
+    );
+  }
+
+  void updateAvatar({
+    String? path,
+    String? hash,
+  }) {
+    emit(
+      state.copyWith(
+        avatarPath: path ?? state.avatarPath,
+        avatarHash: hash ?? state.avatarHash,
+      ),
+    );
   }
 }

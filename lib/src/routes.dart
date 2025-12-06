@@ -6,6 +6,7 @@ import 'package:axichat/src/chats/view/archives_screen.dart';
 import 'package:axichat/src/email/demo/email_demo_screen.dart';
 import 'package:axichat/src/home_screen.dart';
 import 'package:axichat/src/login_screen.dart';
+import 'package:axichat/src/profile/view/avatar_editor_screen.dart';
 import 'package:axichat/src/profile_screen.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,7 @@ mixin AuthenticationRouteData on GoRouteData {
 final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const HomeRoute().location: const HomeRoute(),
   const ProfileRoute().location: const ProfileRoute(),
+  const AvatarEditorRoute().location: const AvatarEditorRoute(),
   const ArchivesRoute().location: const ArchivesRoute(),
   const GuestCalendarRoute().location: const GuestCalendarRoute(),
   const LoginRoute().location: const LoginRoute(),
@@ -47,6 +49,9 @@ class TransitionGoRouteData extends GoRouteData {
     TypedGoRoute<ProfileRoute>(
       path: ProfileRoute.path,
       routes: [
+        TypedGoRoute<AvatarEditorRoute>(
+          path: AvatarEditorRoute.path,
+        ),
         TypedGoRoute<ArchivesRoute>(
           path: ArchivesRoute.path,
           routes: [
@@ -80,6 +85,20 @@ class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       ProfileScreen(locate: state.extra! as T Function<T>());
+}
+
+class AvatarEditorRoute extends TransitionGoRouteData
+    with AuthenticationRouteData {
+  const AvatarEditorRoute();
+
+  static const path = 'avatar';
+
+  @override
+  bool get authenticationRequired => true;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      AvatarEditorScreen(locate: state.extra! as T Function<T>());
 }
 
 class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {

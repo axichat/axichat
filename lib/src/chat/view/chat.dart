@@ -2832,10 +2832,19 @@ class _ChatState extends State<Chat> {
                                           subjectLabel?.isNotEmpty == true) {
                                         showSubjectHeader = true;
                                       }
+                                      final subjectText =
+                                          subjectLabel?.trim() ?? '';
+                                      final bodyTextTrimmed = bodyText.trim();
+                                      final isSubjectOnlyBody =
+                                          showSubjectHeader &&
+                                              subjectText.isNotEmpty &&
+                                              bodyTextTrimmed == subjectText;
+                                      final displayedBody =
+                                          isSubjectOnlyBody ? '' : bodyText;
                                       final errorLabel = e.error.asString;
                                       final renderedText = e.error.isNotNone
-                                          ? '$errorLabel${bodyText.isNotEmpty ? ': "${bodyText.trim()}"' : ''}'
-                                          : bodyText;
+                                          ? '$errorLabel${bodyText.isNotEmpty ? ': "$bodyTextTrimmed"' : ''}'
+                                          : displayedBody;
                                       dashMessages.add(
                                         ChatMessage(
                                           user: author,

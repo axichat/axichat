@@ -306,6 +306,14 @@ class _ProfileCardSection extends StatelessWidget {
               final double statusFieldMaxWidth = wideCard ? 420.0 : 320.0;
               final actions = <AxiMenuAction>[
                 AxiMenuAction(
+                  label: 'Edit avatar',
+                  icon: LucideIcons.image,
+                  onPressed: () => context.push(
+                    const AvatarEditorRoute().location,
+                    extra: locate,
+                  ),
+                ),
+                AxiMenuAction(
                   label: l10n.profileArchives,
                   icon: LucideIcons.archive,
                   onPressed: () => context.push(
@@ -338,6 +346,7 @@ class _ProfileCardSection extends StatelessWidget {
                     presence: null,
                     status: profileState.status,
                     active: false,
+                    avatarPath: profileState.avatarPath,
                   ),
                 ),
                 title: Row(

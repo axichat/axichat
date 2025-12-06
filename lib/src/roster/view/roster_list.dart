@@ -147,6 +147,7 @@ class _RosterListBody extends StatelessWidget {
                 // in the contacts UI because it is unreliable across servers.
                 presence: null,
                 status: item.status,
+                avatarPath: item.avatarPath,
               ),
               title: item.title,
               subtitle: item.jid,
