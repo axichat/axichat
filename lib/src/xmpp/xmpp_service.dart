@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:async/async.dart';
 import 'package:axichat/main.dart';
@@ -27,6 +28,7 @@ import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:logging/logging.dart';
@@ -37,6 +39,7 @@ import 'package:omemo_dart/omemo_dart.dart'
     show RatchetMapKey, OmemoDataPackage; // For persistence types only
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
 import 'package:uuid/uuid.dart';
@@ -44,6 +47,7 @@ import 'package:uuid/uuid.dart';
 part 'base_stream_service.dart';
 part 'blocking_service.dart';
 part 'chats_service.dart';
+part 'avatar_service.dart';
 part 'muc_service.dart';
 part 'message_service.dart';
 part 'message_sanitizer.dart';
@@ -99,6 +103,10 @@ final class ForegroundServiceUnavailableException extends XmppException {
   ForegroundServiceUnavailableException([super.wrapped]);
 }
 
+final class XmppAvatarException extends XmppException {
+  XmppAvatarException([super.wrapped]);
+}
+
 final class XmppFileTooBigException extends XmppMessageException {
   XmppFileTooBigException(this.maxBytes);
 
@@ -136,6 +144,18 @@ class HttpUploadSupport {
 
   @override
   int get hashCode => Object.hash(supported, entityJid, maxFileSizeBytes);
+}
+
+class StoredAvatar {
+  const StoredAvatar({
+    required this.path,
+    required this.hash,
+  });
+
+  final String? path;
+  final String? hash;
+
+  bool get isEmpty => path == null && hash == null;
 }
 
 // Hardcode the socket endpoints so we never block on DNS when dialing the XMPP
@@ -186,6 +206,10 @@ abstract interface class XmppBase {
   mox.JID? get _myJid;
 
   HttpUploadSupport get httpUploadSupport;
+  RegisteredStateKey get selfAvatarPathKey;
+  RegisteredStateKey get selfAvatarHashKey;
+  SecretKey? get avatarEncryptionKey;
+  List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
 
@@ -260,6 +284,7 @@ class XmppService extends XmppBase
         MucService,
         ChatsService,
         MessageService,
+        AvatarService,
         // OmemoService,
         RosterService,
         PresenceService,
@@ -306,6 +331,8 @@ class XmppService extends XmppBase
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
   var _httpUploadSupport = const HttpUploadSupport(supported: false);
+  bool get mamSupported => _mamSupported;
+  Stream<bool> get mamSupportStream => _mamSupportController.stream;
 
   @override
   HttpUploadSupport get httpUploadSupport => _httpUploadSupport;
@@ -313,9 +340,18 @@ class XmppService extends XmppBase
   Stream<HttpUploadSupport> get httpUploadSupportStream =>
       _httpUploadSupportController.stream;
 
+  @override
+  SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
+
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
   final resourceStorageKey = XmppStateStore.registerKey('resource');
+  @override
+  final selfAvatarPathKey = XmppStateStore.registerKey('self_avatar_path');
+  @override
+  final selfAvatarHashKey = XmppStateStore.registerKey('self_avatar_hash');
+  final avatarEncryptionSaltKey =
+      XmppStateStore.registerKey('avatar_encryption_salt');
 
   final StreamController<mox.OmemoActivityEvent> _omemoActivityController =
       StreamController<mox.OmemoActivityEvent>.broadcast();
@@ -457,6 +493,22 @@ class XmppService extends XmppBase
   bool get databasesInitialized =>
       _stateStore.isCompleted && _database.isCompleted;
 
+  Future<StoredAvatar?> getOwnAvatar() async {
+    if (!_stateStore.isCompleted) return null;
+    try {
+      final path = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) => ss.read(key: selfAvatarPathKey) as String?,
+      );
+      final hash = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) => ss.read(key: selfAvatarHashKey) as String?,
+      );
+      if (path == null && hash == null) return null;
+      return StoredAvatar(path: path, hash: hash);
+    } on XmppAbortedException {
+      return null;
+    }
+  }
+
   @override
   bool get needsReset =>
       super.needsReset ||
@@ -483,6 +535,8 @@ class XmppService extends XmppBase
   var _streamResumptionAttempted = false;
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
+  SecretKey? _avatarEncryptionKey;
+  List<int>? _avatarEncryptionSalt;
 
   @override
   Future<String?> connect({
@@ -582,9 +636,10 @@ class XmppService extends XmppBase
     }
     if (!_database.isCompleted) {
       _database.complete(
-        await _databaseFactory(databasePrefix, databasePassphrase),
+        await _buildDatabase(databasePrefix, databasePassphrase),
       );
     }
+    await _initializeAvatarEncryption(databasePassphrase);
     _demoOfflineMode = kEnableDemoChats && jid == kDemoSelfJid;
     if (_demoOfflineMode) {
       updateMessageStorageMode(MessageStorageMode.local);
@@ -673,9 +728,10 @@ class XmppService extends XmppBase
       },
     );
 
+    await _resolveMamSupportForAccount();
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
-    if (_messageStorageMode.isServerOnly) {
+    if (messageStorageMode.isServerOnly) {
       await purgeMessageHistory();
     }
     unawaited(_verifyMamSupportOnLogin());
@@ -753,6 +809,73 @@ class XmppService extends XmppBase
     });
   }
 
+  Future<XmppDatabase> _buildDatabase(
+    String prefix,
+    String passphrase,
+  ) async {
+    final effectiveMode = messageStorageMode;
+    if (effectiveMode.isServerOnly) {
+      return XmppDrift.inMemory();
+    }
+    if (_messageStorageMode.isServerOnly && !_mamSupported) {
+      _xmppLogger.warning(
+        'Server-only storage requested without MAM support; falling back to local storage.',
+      );
+    }
+    return _databaseFactory(prefix, passphrase);
+  }
+
+  Future<void> _initializeAvatarEncryption(String passphrase) async {
+    try {
+      final salt = await _loadOrCreateAvatarSalt();
+      final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
+      _avatarEncryptionKey = await hkdf.deriveKey(
+        secretKey: SecretKey(utf8.encode(passphrase)),
+        nonce: salt,
+        info: utf8.encode('axichat-avatar-v1'),
+      );
+    } catch (error, stackTrace) {
+      _xmppLogger.severe(
+        'Failed to initialize avatar encryption key.',
+        error,
+        stackTrace,
+      );
+      _avatarEncryptionKey = null;
+    }
+  }
+
+  Future<List<int>> _loadOrCreateAvatarSalt() async {
+    if (_avatarEncryptionSalt case final cached?) {
+      return cached;
+    }
+    try {
+      final stored = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) => ss.read(key: avatarEncryptionSaltKey) as String?,
+      );
+      if (stored != null) {
+        final decoded = base64Decode(stored);
+        _avatarEncryptionSalt = decoded;
+        return decoded;
+      }
+    } on XmppAbortedException {
+      rethrow;
+    } on FormatException catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Stored avatar salt could not be decoded, regenerating.',
+        error,
+        stackTrace,
+      );
+    }
+    final fresh = secureBytes(32);
+    final encoded = base64Encode(fresh);
+    await _dbOp<XmppStateStore>(
+      (ss) async => ss.write(key: avatarEncryptionSaltKey, value: encoded),
+      awaitDatabase: true,
+    );
+    _avatarEncryptionSalt = fresh;
+    return fresh;
+  }
+
   Future<void> _initDatabases(String prefix, String passphrase) async {
     await deferToError(
       defer: _reset,
@@ -763,8 +886,9 @@ class XmppService extends XmppBase
             _stateStore.complete(await _stateStoreFactory(prefix, passphrase));
           }
           if (!_database.isCompleted) {
-            _database.complete(await _databaseFactory(prefix, passphrase));
+            _database.complete(await _buildDatabase(prefix, passphrase));
           }
+          await _initializeAvatarEncryption(passphrase);
         } on Exception catch (e) {
           _xmppLogger.severe('Failed to create databases:', e);
           throw XmppDatabaseCreationException(e);
@@ -862,7 +986,7 @@ class XmppService extends XmppBase
   @override
   Future<void> disconnect() async {
     _xmppLogger.info('Logging out...');
-    if (_messageStorageMode.isServerOnly) {
+    if (messageStorageMode.isServerOnly) {
       await purgeMessageHistory(awaitDatabase: false);
     }
     await _reset();
@@ -892,6 +1016,8 @@ class XmppService extends XmppBase
     _demoOfflineMode = false;
     _resetStableKeyCache();
     _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+    _updateMamSupport(false);
+    _mamSupportOverride = null;
 
     resetEventHandlers();
 
@@ -950,6 +1076,8 @@ class XmppService extends XmppBase
     _myJid = null;
     _synchronousConnection = Completer<void>();
     _streamResumptionAttempted = false;
+    _avatarEncryptionKey = null;
+    _avatarEncryptionSalt = null;
 
     await super._reset();
 
@@ -981,6 +1109,9 @@ class XmppService extends XmppBase
     await _reset();
     if (!_httpUploadSupportController.isClosed) {
       await _httpUploadSupportController.close();
+    }
+    if (!_mamSupportController.isClosed) {
+      await _mamSupportController.close();
     }
     _instance = null;
   }
@@ -1036,6 +1167,12 @@ class XmppService extends XmppBase
       _xmppLogger.severe('Unexpected exception during operation on $T.', e, s);
       throw XmppUnknownException(e);
     }
+  }
+
+  @override
+  List<int> secureBytes(int length) {
+    final random = Random.secure();
+    return List<int>.generate(length, (_) => random.nextInt(256));
   }
 
   bool _hasHttpUploadIdentity(mox.DiscoInfo info) {

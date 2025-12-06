@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -19,6 +22,8 @@ class AxiAvatar extends StatefulWidget {
     this.active = false,
     this.shape = AxiAvatarShape.circle,
     this.size = 50.0,
+    this.avatarPath,
+    this.avatarBytes,
   });
 
   final String jid;
@@ -28,6 +33,8 @@ class AxiAvatar extends StatefulWidget {
   final bool active;
   final AxiAvatarShape shape;
   final double size;
+  final String? avatarPath;
+  final Uint8List? avatarBytes;
 
   @override
   State<AxiAvatar> createState() => _AxiAvatarState();
@@ -35,6 +42,8 @@ class AxiAvatar extends StatefulWidget {
 
 class _AxiAvatarState extends State<AxiAvatar> {
   late final ShadPopoverController popoverController;
+  Uint8List? _resolvedAvatarBytes;
+  String? _loadingPath;
 
   String _displayLabelForJid(String jid) {
     if (jid.isEmpty) return '?';
@@ -55,12 +64,67 @@ class _AxiAvatarState extends State<AxiAvatar> {
   void initState() {
     super.initState();
     popoverController = ShadPopoverController();
+    _refreshAvatarBytes();
   }
 
   @override
   void dispose() {
     popoverController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AxiAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.avatarBytes != widget.avatarBytes ||
+        oldWidget.avatarPath != widget.avatarPath ||
+        oldWidget.jid != widget.jid) {
+      _refreshAvatarBytes();
+    }
+  }
+
+  Future<void> _refreshAvatarBytes() async {
+    final providedBytes =
+        widget.avatarBytes != null && widget.avatarBytes!.isNotEmpty
+            ? widget.avatarBytes
+            : null;
+    if (providedBytes != null) {
+      setState(() {
+        _resolvedAvatarBytes = providedBytes;
+        _loadingPath = widget.avatarPath?.trim();
+      });
+      return;
+    }
+
+    final path = widget.avatarPath?.trim();
+    if (path == null || path.isEmpty) {
+      setState(() {
+        _resolvedAvatarBytes = null;
+        _loadingPath = null;
+      });
+      return;
+    }
+
+    if (_loadingPath == path && _resolvedAvatarBytes != null) {
+      return;
+    }
+
+    _loadingPath = path;
+    try {
+      final xmpp = context.read<XmppService>();
+      final bytes = await xmpp.loadAvatarBytes(path);
+      if (!mounted || _loadingPath != path) {
+        return;
+      }
+      setState(() {
+        _resolvedAvatarBytes = bytes;
+      });
+    } catch (_) {
+      if (!mounted || _loadingPath != path) return;
+      setState(() {
+        _resolvedAvatarBytes = null;
+      });
+    }
   }
 
   @override
@@ -71,6 +135,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
         : ContinuousRectangleBorder(
             borderRadius: BorderRadius.circular(radius),
           );
+    final Uint8List? avatarBytes = _resolvedAvatarBytes;
 
     Widget child = SizedBox.square(
       dimension: widget.size,
@@ -99,15 +164,29 @@ class _AxiAvatarState extends State<AxiAvatar> {
               );
               return ClipPath(
                 clipper: ShapeBorderClipper(shape: avatarShape),
-                child: ColoredBox(
-                  color: backgroundColor,
-                  child: Center(
-                    child: Text(
-                      initial,
-                      style: textStyle,
-                    ),
-                  ),
-                ),
+                child: avatarBytes != null
+                    ? Image.memory(
+                        avatarBytes,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => ColoredBox(
+                          color: backgroundColor,
+                          child: Center(
+                            child: Text(
+                              initial,
+                              style: textStyle,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ColoredBox(
+                        color: backgroundColor,
+                        child: Center(
+                          child: Text(
+                            initial,
+                            style: textStyle,
+                          ),
+                        ),
+                      ),
               );
             },
           ),

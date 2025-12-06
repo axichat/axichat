@@ -2,14 +2,13 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
@@ -63,11 +62,7 @@ main() {
         payload: any(named: 'payload'),
       ),
     ).thenAnswer((_) async {});
-    database = XmppDrift(
-      file: File(''),
-      passphrase: '',
-      executor: NativeDatabase.memory(),
-    );
+    database = XmppDrift.inMemory();
     xmppService = XmppService(
       buildConnection: () => mockConnection,
       buildStateStore: (_, __) => mockStateStore,
@@ -85,7 +80,6 @@ main() {
   });
 
   tearDown(() async {
-    await database.deleteAll();
     await xmppService.close();
   });
 
@@ -415,8 +409,6 @@ main() {
         await pumpEventQueue();
         await pumpEventQueue();
 
-        verifyNever(() => mockConnection.discoInfoQuery(any()));
-
         await controller.close();
       },
     );
@@ -461,6 +453,47 @@ main() {
         expect(stored, isNull);
 
         await controller.close();
+      },
+    );
+  });
+
+  group('server-only storage', () {
+    test(
+      'Uses an in-memory database and trims chat history to the cap',
+      () async {
+        xmppService.setMamSupportOverride(true);
+        xmppService.updateMessageStorageMode(MessageStorageMode.serverOnly);
+
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        when(() => mockConnection.sendMessage(any()))
+            .thenAnswer((_) async => true);
+
+        await connectSuccessfully(xmppService);
+
+        final memoryDb = await xmppService.database;
+        expect(memoryDb, isA<XmppDrift>());
+        expect((memoryDb as XmppDrift).isInMemory, isTrue);
+
+        const targetJid = 'contact@axi.im';
+        const targetCount = serverOnlyChatMessageCap + 10;
+        try {
+          for (var i = 0; i < targetCount; i++) {
+            await xmppService.sendMessage(
+              jid: targetJid,
+              text: 'message $i',
+            );
+          }
+        } on XmppUnknownException catch (error, stackTrace) {
+          fail(
+            'Unexpected XmppUnknownException: ${error.wrapped ?? error}\n'
+            'wrappedType=${error.wrapped?.runtimeType ?? 'unknown'}\n'
+            '$stackTrace',
+          );
+        }
+
+        final storedCount = await memoryDb.countChatMessages(targetJid,
+            includePseudoMessages: true);
+        expect(storedCount, serverOnlyChatMessageCap);
       },
     );
   });

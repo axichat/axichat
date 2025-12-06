@@ -66,6 +66,7 @@ class TransportAwareAvatar extends StatelessWidget {
               presence: presence,
               status: status,
               subscription: effectiveSubscription,
+              avatarPath: chat.avatarPath ?? chat.contactAvatarPath,
             ),
           ),
           if (badge != null)

@@ -17,6 +17,7 @@ import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:http/http.dart';
+import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -162,6 +163,19 @@ void prepareMockConnection() {
 
   when(() => mockConnection.asBroadcastStream())
       .thenAnswer((_) => const Stream<mox.XmppEvent>.empty());
+
+  when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+    (_) async {
+      final discoInfo = mox.DiscoInfo(
+        const [mox.mamXmlns],
+        const [],
+        const [],
+        null,
+        mox.JID.fromString(jid),
+      );
+      return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(discoInfo);
+    },
+  );
 
   when(() => mockConnection.saltedPassword).thenReturn('');
   when(() => mockConnection.omemoActivityStream)

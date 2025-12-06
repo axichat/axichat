@@ -114,6 +114,11 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> clearMessageHistory();
 
+  Future<void> trimChatMessages({
+    required String jid,
+    required int maxMessages,
+  });
+
   Future<void> createMessageShare({
     required MessageShareData share,
     required List<MessageParticipantData> participants,
@@ -274,6 +279,12 @@ abstract interface class XmppDatabase implements Database {
     required bool responsive,
   });
 
+  Future<void> updateChatAvatar({
+    required String jid,
+    required String? avatarPath,
+    required String? avatarHash,
+  });
+
   Future<void> markChatsMarkerResponsive({required bool responsive});
 
   Future<void> updateChatState({
@@ -325,6 +336,12 @@ abstract interface class XmppDatabase implements Database {
   Future<void> updateRosterAsk({
     required String jid,
     Ask? ask,
+  });
+
+  Future<void> updateRosterAvatar({
+    required String jid,
+    required String? avatarPath,
+    required String? avatarHash,
   });
 
   Future<void> markSubscriptionBoth(String jid);
@@ -1045,8 +1062,18 @@ class DayEventsAccessor extends BaseAccessor<DayEventEntry, $DayEventsTable>
   DayEventsAccessor,
 ])
 class XmppDrift extends _$XmppDrift implements XmppDatabase {
-  XmppDrift._(this._file, super.e) : super();
+  XmppDrift._(this._file, super.e, {bool inMemory = false})
+      : _inMemory = inMemory,
+        super();
 
+  factory XmppDrift.inMemory({QueryExecutor? executor}) =>
+      _inMemoryInstance ??= XmppDrift._(
+        File(''),
+        executor ?? _openInMemoryDatabase(),
+        inMemory: true,
+      );
+
+  static XmppDrift? _inMemoryInstance;
   static XmppDrift? _instance;
 
   factory XmppDrift({
@@ -1059,6 +1086,9 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   final _log = Logger('XmppDrift');
   final File _file;
+  final bool _inMemory;
+
+  bool get isInMemory => _inMemory;
   String _normalizeEmail(String address) => address.trim().toLowerCase();
 
   DateTime _normalizeDate(DateTime date) =>
@@ -1711,6 +1741,36 @@ WHERE subject_token IS NOT NULL
   }
 
   @override
+  Future<void> trimChatMessages({
+    required String jid,
+    required int maxMessages,
+  }) async {
+    if (maxMessages <= 0) {
+      await removeChatMessages(jid);
+      return;
+    }
+    await customUpdate(
+      '''
+DELETE FROM messages
+WHERE chat_jid = ?
+  AND stanza_i_d NOT IN (
+    SELECT stanza_i_d FROM messages
+    WHERE chat_jid = ?
+    ORDER BY timestamp DESC
+    LIMIT ?
+  )
+''',
+      variables: [
+        Variable<String>(jid),
+        Variable<String>(jid),
+        Variable<int>(maxMessages),
+      ],
+      updates: {messages, reactions},
+      updateKind: UpdateKind.delete,
+    );
+  }
+
+  @override
   Future<void> createMessageShare({
     required MessageShareData share,
     required List<MessageParticipantData> participants,
@@ -2192,6 +2252,22 @@ WHERE subject_token IS NOT NULL
   }
 
   @override
+  Future<void> updateChatAvatar({
+    required String jid,
+    required String? avatarPath,
+    required String? avatarHash,
+  }) async {
+    await (update(chats)
+          ..where((tbl) => tbl.jid.equals(jid) | tbl.contactJid.equals(jid)))
+        .write(
+      ChatsCompanion(
+        avatarPath: Value(avatarPath),
+        avatarHash: Value(avatarHash),
+      ),
+    );
+  }
+
+  @override
   Future<void> markChatMarkerResponsive({
     required String jid,
     required bool responsive,
@@ -2366,6 +2442,21 @@ WHERE subject_token IS NOT NULL
       RosterCompanion(
         jid: Value(jid),
         ask: Value(ask),
+      ),
+    );
+  }
+
+  @override
+  Future<void> updateRosterAvatar({
+    required String jid,
+    required String? avatarPath,
+    required String? avatarHash,
+  }) async {
+    await rosterAccessor.updateOne(
+      RosterCompanion(
+        jid: Value(jid),
+        avatarPath: Value(avatarPath),
+        avatarHash: Value(avatarHash),
       ),
     );
   }
@@ -2758,11 +2849,12 @@ ON CONFLICT(address) DO UPDATE SET
   @override
   Future<void> close() async {
     await super.close();
-    _instance = null;
+    _inMemory ? _inMemoryInstance = null : _instance = null;
   }
 
   @override
-  Future<void> deleteFile() => _file.delete();
+  Future<void> deleteFile() =>
+      _inMemory || _file.path.isEmpty ? Future.value() : _file.delete();
 }
 
 QueryExecutor _openDatabase(File file, String passphrase) {
@@ -2793,6 +2885,12 @@ QueryExecutor _openDatabase(File file, String passphrase) {
         rawDb.execute("PRAGMA key = '$escapedKey'");
       },
     );
+  });
+}
+
+QueryExecutor _openInMemoryDatabase() {
+  return LazyDatabase(() async {
+    return NativeDatabase.memory();
   });
 }
 
