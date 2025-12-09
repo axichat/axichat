@@ -527,25 +527,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         ));
         return;
       }
-      final loginState = _activeSignupCredentialKey != null
-          ? AuthenticationLogInInProgress(fromSignup: true, config: config)
-          : AuthenticationLogInInProgress(config: config);
-
       final bool wasAuthenticated = state is AuthenticationComplete;
       final bool usingStoredCredentials = username == null && password == null;
-      if (!wasAuthenticated || !usingStoredCredentials) {
-        _emit(loginState);
-      }
-
+      final storedLogin =
+          usingStoredCredentials ? await _readStoredLoginCredentials() : null;
       if ((username == null) != (password == null)) {
         _emit(const AuthenticationFailure(
             'Username and password have different nullness.'));
         return;
       }
-      final storedLogin = await _readStoredLoginCredentials();
       var credentialDisposition = _CredentialDisposition.keep;
 
-      if (usingStoredCredentials && !storedLogin.hasUsableCredentials) {
+      if (usingStoredCredentials &&
+          !(storedLogin?.hasUsableCredentials ?? false)) {
         _log.info('Login aborted due to missing stored credentials.');
         _authenticatedJid = null;
         await _xmppService.disconnect();
@@ -553,13 +547,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
 
+      final loginState = _activeSignupCredentialKey != null
+          ? AuthenticationLogInInProgress(fromSignup: true, config: config)
+          : AuthenticationLogInInProgress(config: config);
+
+      if (!wasAuthenticated || !usingStoredCredentials) {
+        _emit(loginState);
+      }
+
       late final String resolvedJid;
       late final String resolvedPassword;
       bool passwordPreHashed = false;
       if (usingStoredCredentials) {
-        resolvedJid = storedLogin.jid!;
-        resolvedPassword = storedLogin.password!;
-        if (!storedLogin.hasPreHashedFlag) {
+        final loginFromStore = storedLogin!;
+        resolvedJid = loginFromStore.jid!;
+        resolvedPassword = loginFromStore.password!;
+        if (!loginFromStore.hasPreHashedFlag) {
           if (!wasAuthenticated) {
             _emit(const AuthenticationFailure(
               'Stored credentials are outdated. Please log in manually.',
@@ -573,7 +576,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           }
           return;
         }
-        passwordPreHashed = storedLogin.passwordPreHashed ?? false;
+        passwordPreHashed = loginFromStore.passwordPreHashed ?? false;
       } else {
         resolvedJid = '$username@${config.domain}';
         resolvedPassword = password!;
@@ -582,7 +585,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final storedSecrets = await _readDatabaseSecrets(resolvedJid);
       final bool hasStoredDatabaseSecrets = storedSecrets.hasSecrets;
       final bool hasStoredLoginForJid =
-          storedLogin.matches(resolvedJid) && storedLogin.hasUsableCredentials;
+          (storedLogin?.matches(resolvedJid) ?? false) &&
+              (storedLogin?.hasUsableCredentials ?? false);
       if (hasStoredLoginForJid && !hasStoredDatabaseSecrets) {
         _log.warning(
           'Stored login credentials found without database secrets; clearing.',
