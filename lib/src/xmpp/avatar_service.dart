@@ -38,7 +38,7 @@ mixin AvatarService on XmppBase {
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
       mox.UserAvatarManager(),
-      mox.VCardManager(),
+      SafeVCardManager(),
     ]);
 
   @override
@@ -52,10 +52,12 @@ mixin AvatarService on XmppBase {
         );
       })
       ..registerHandler<mox.VCardAvatarUpdatedEvent>((event) async {
-        await _refreshAvatarFromVCard(
-          event.jid.toBare().toString(),
-          event.hash,
-        );
+        final bareJid = event.jid.toBare().toString();
+        if (event.hash.isEmpty) {
+          await _clearAvatarForJid(bareJid);
+          return;
+        }
+        await _refreshAvatarFromVCard(bareJid, event.hash);
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
@@ -138,6 +140,10 @@ mixin AvatarService on XmppBase {
   Future<void> _refreshAvatarFromVCard(String jid, String hash) async {
     final bareJid = _avatarSafeBareJid(jid);
     if (bareJid == null) return;
+    if (hash.isEmpty) {
+      await _clearAvatarForJid(bareJid);
+      return;
+    }
     final added = _avatarRefreshInProgress.add(bareJid);
     if (!added) return;
     try {
@@ -220,6 +226,79 @@ mixin AvatarService on XmppBase {
       return null;
     } on XmppAbortedException {
       return null;
+    }
+  }
+
+  Future<String?> _storedAvatarPath(String jid) async {
+    try {
+      final path = await _dbOpReturning<XmppDatabase, String?>(
+        (db) async {
+          final roster = await db.getRosterItem(jid);
+          if (roster?.avatarPath != null) return roster!.avatarPath;
+          final chat = await db.getChat(jid);
+          return chat?.avatarPath ?? chat?.contactAvatarPath;
+        },
+      );
+      if (path != null) return path;
+      final myBareJid = _myJid?.toBare().toString();
+      if (myBareJid != null && myBareJid == jid && isStateStoreReady) {
+        return await _dbOpReturning<XmppStateStore, String?>(
+          (ss) => ss.read(key: selfAvatarPathKey) as String?,
+        );
+      }
+      return null;
+    } on XmppAbortedException {
+      return null;
+    }
+  }
+
+  Future<void> _clearAvatarForJid(String jid) async {
+    final bareJid = _avatarSafeBareJid(jid);
+    if (bareJid == null) return;
+    final existingPath = await _storedAvatarPath(bareJid);
+
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        final rosterItem = await db.getRosterItem(bareJid);
+        final chat = await db.getChat(bareJid);
+        if (rosterItem != null) {
+          await db.updateRosterAvatar(
+            jid: bareJid,
+            avatarPath: null,
+            avatarHash: null,
+          );
+        }
+        if (chat != null) {
+          await db.updateChatAvatar(
+            jid: bareJid,
+            avatarPath: null,
+            avatarHash: null,
+          );
+        }
+      },
+      awaitDatabase: true,
+    );
+
+    final myBareJid = _myJid?.toBare().toString();
+    if (myBareJid != null && myBareJid == bareJid && isStateStoreReady) {
+      await _dbOp<XmppStateStore>(
+        (ss) async {
+          await ss.write(key: selfAvatarPathKey, value: null);
+          await ss.write(key: selfAvatarHashKey, value: null);
+        },
+        awaitDatabase: true,
+      );
+    }
+
+    if (existingPath != null && existingPath.isNotEmpty) {
+      final file = File(existingPath);
+      if (await file.exists()) {
+        try {
+          await file.delete();
+        } on Exception catch (error, stackTrace) {
+          _avatarLog.fine('Failed to delete avatar file', error, stackTrace);
+        }
+      }
     }
   }
 

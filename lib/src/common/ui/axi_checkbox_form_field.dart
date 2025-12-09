@@ -81,6 +81,20 @@ class AxiCheckboxFormField extends FormField<bool> {
                                         ? (checked) =>
                                             handleChanged(checked ?? !value)
                                         : null,
+                                    fillColor: WidgetStateProperty.resolveWith(
+                                      (states) {
+                                        if (states
+                                            .contains(WidgetState.disabled)) {
+                                          return colors.mutedForeground
+                                              .withValues(alpha: 0.2);
+                                        }
+                                        if (states
+                                            .contains(WidgetState.selected)) {
+                                          return colors.primary;
+                                        }
+                                        return Colors.transparent;
+                                      },
+                                    ),
                                     materialTapTargetSize:
                                         MaterialTapTargetSize.padded,
                                     visualDensity: VisualDensity.compact,

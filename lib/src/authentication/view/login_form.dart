@@ -29,6 +29,7 @@ class _LoginFormState extends State<LoginForm> {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   var _loginTriggered = false;
+  final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
 
   bool rememberMe = true;
 
@@ -47,6 +48,7 @@ class _LoginFormState extends State<LoginForm> {
     setState(() {
       rememberMe = preference;
     });
+    _rememberMeFieldKey.currentState?.didChange(preference);
   }
 
   @override
@@ -179,7 +181,7 @@ class _LoginFormState extends State<LoginForm> {
                       const EdgeInsets.only(top: 12, bottom: 4),
                     ),
                     child: AxiCheckboxFormField(
-                      key: const ValueKey('login-remember'),
+                      key: _rememberMeFieldKey,
                       enabled: !loading,
                       initialValue: rememberMe,
                       inputLabel: Text(l10n.authRememberMeLabel),
