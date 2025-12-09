@@ -726,6 +726,7 @@ class _SignupFormState extends State<SignupForm>
       width: image.width,
       height: image.height,
       numChannels: 4,
+      format: img.Format.uint8,
     );
     img.fill(background, color: _imgColor(_avatarBackground));
     img.compositeImage(background, image);
@@ -756,14 +757,17 @@ class _SignupFormState extends State<SignupForm>
     throw const _AvatarSizeException();
   }
 
-  img.Color _imgColor(Color color) => img.ColorInt32.rgba(
+  img.Color _imgColor(Color color) => img.ColorUint8.rgba(
         _channelToByte(color.r),
         _channelToByte(color.g),
         _channelToByte(color.b),
         _channelToByte(color.a),
       );
 
-  int _channelToByte(double channel) => (channel * 255.0).round().clamp(0, 255);
+  int _channelToByte(num channel) {
+    final scaled = channel <= 1.0 ? channel * 255.0 : channel;
+    return scaled.round().clamp(0, 255);
+  }
 
   Future<void> _openAvatarMenu() async {
     if (_avatarProcessing) return;
@@ -1347,36 +1351,21 @@ class _SignupFormState extends State<SignupForm>
                               ),
                               Padding(
                                 padding: fieldSpacing,
-                                child: Row(
-                                  children: [
-                                    ShadSwitch(
-                                      value: rememberMe,
-                                      onChanged: loading
-                                          ? null
-                                          : (value) {
-                                              setState(() {
-                                                rememberMe = value;
-                                              });
-                                              unawaited(
-                                                context
-                                                    .read<AuthenticationCubit>()
-                                                    .persistRememberMeChoice(
-                                                      value,
-                                                    ),
-                                              );
-                                            },
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        l10n.authRememberMeLabel,
-                                        style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium ??
-                                            context.textTheme.small,
-                                      ),
-                                    ),
-                                  ],
+                                child: AxiCheckboxFormField(
+                                  key: const ValueKey('signup-remember'),
+                                  enabled: !loading,
+                                  initialValue: rememberMe,
+                                  inputLabel: Text(l10n.authRememberMeLabel),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      rememberMe = value;
+                                    });
+                                    unawaited(
+                                      context
+                                          .read<AuthenticationCubit>()
+                                          .persistRememberMeChoice(value),
+                                    );
+                                  },
                                 ),
                               ),
                             ],
@@ -1544,6 +1533,8 @@ class _AvatarMenuDialog extends StatefulWidget {
 
 class _AvatarMenuDialogState extends State<_AvatarMenuDialog> {
   bool _shuffling = false;
+  int _previewVersion = 0;
+  Uint8List? _lastPreviewBytes;
 
   Future<void> _handleShuffle() async {
     if (_shuffling) return;
@@ -1579,16 +1570,17 @@ class _AvatarMenuDialogState extends State<_AvatarMenuDialog> {
             spacing: 8.0,
             children: [
               if (busy)
-                SizedBox(
-                  width: 16,
-                  height: 16,
+                SizedBox.square(
+                  dimension: 20,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colors.foreground,
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      colors.primaryForeground,
+                    ),
                   ),
                 )
               else
-                const Icon(LucideIcons.sparkles),
+                const Icon(LucideIcons.refreshCw, size: 20),
               Text(l10n.signupAvatarShuffle),
             ],
           ),
@@ -1602,13 +1594,30 @@ class _AvatarMenuDialogState extends State<_AvatarMenuDialog> {
           Center(
             child: ValueListenableBuilder<Uint8List?>(
               valueListenable: widget.avatarBytesListenable,
-              builder: (_, bytes, __) => AxiAvatar(
-                jid: 'avatar@axichat',
-                size: 96,
-                subscription: Subscription.none,
-                presence: null,
-                avatarBytes: bytes,
-              ),
+              builder: (_, bytes, __) {
+                if (!identical(bytes, _lastPreviewBytes)) {
+                  _lastPreviewBytes = bytes;
+                  _previewVersion++;
+                }
+                final previewKey = ValueKey(_previewVersion);
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeIn,
+                  switchOutCurve: Curves.easeOut,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                  child: AxiAvatar(
+                    key: previewKey,
+                    jid: 'avatar@axichat',
+                    size: 96,
+                    subscription: Subscription.none,
+                    presence: null,
+                    avatarBytes: bytes,
+                  ),
+                );
+              },
             ),
           ),
           Text(
@@ -1658,6 +1667,15 @@ class _SignupAvatarSelector extends StatefulWidget {
 class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
   static const _size = 56.0;
   bool _hovered = false;
+  int _previewVersion = 0;
+
+  @override
+  void didUpdateWidget(covariant _SignupAvatarSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.bytes, widget.bytes)) {
+      _previewVersion++;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1680,12 +1698,22 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
           children: [
             SizedBox.square(
               dimension: _size,
-              child: AxiAvatar(
-                jid: displayJid,
-                size: _size,
-                subscription: Subscription.none,
-                presence: null,
-                avatarBytes: widget.bytes,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeIn,
+                switchOutCurve: Curves.easeOut,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: child,
+                ),
+                child: AxiAvatar(
+                  key: ValueKey(_previewVersion),
+                  jid: displayJid,
+                  size: _size,
+                  subscription: Subscription.none,
+                  presence: null,
+                  avatarBytes: widget.bytes,
+                ),
               ),
             ),
             AnimatedOpacity(

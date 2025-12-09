@@ -313,6 +313,12 @@ mixin AvatarService on XmppBase {
       vCardManager?.setLastHash(targetJid, payload.hash);
 
       return AvatarUploadResult(path: path, hash: payload.hash);
+    } on XmppAvatarException catch (error, stackTrace) {
+      final cause = error.wrapped;
+      final isAvatarError = cause is mox.AvatarError;
+      final log = isAvatarError ? _avatarLog.warning : _avatarLog.severe;
+      log('Failed to publish avatar', error, isAvatarError ? null : stackTrace);
+      rethrow;
     } catch (error, stackTrace) {
       _avatarLog.severe('Failed to publish avatar', error, stackTrace);
       throw XmppAvatarException(error);

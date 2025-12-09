@@ -105,20 +105,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  void _ensureOperationVisible(String label) {
-    if (_activeFlow == null) {
-      return;
-    }
-    if (!_operationProgressController.isActive) {
-      _operationProgressController.start();
-    }
-    if (_operationLabel != label) {
-      setState(() {
-        _operationLabel = label;
-      });
-    }
-  }
-
   void _resetAuthUiState() {
     if (_activeFlow == null &&
         !_signupButtonLoading &&
@@ -155,21 +141,10 @@ class _LoginScreenState extends State<LoginScreen>
     _operationProgressController.reset();
   }
 
-  void _restoreSignupFlow(String label) {
-    if (!mounted) return;
-    setState(() {
-      _activeFlow = _AuthFlow.signup;
-      _operationLabel = label;
-      _operationAcknowledged = true;
-      _signupFlowLocked = true;
-      _login = false;
-    });
-    if (!_operationProgressController.isActive) {
-      _operationProgressController.start();
-    }
-  }
-
   void _handleAutologinRequested() {
+    if (_activeFlow == _AuthFlow.signup || _signupFlowLocked) {
+      return;
+    }
     _handleSubmissionRequested(
       _AuthFlow.login,
       label: context.l10n.authLoggingIn,
@@ -191,57 +166,50 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    var flow = _activeFlow;
-    final signupState = state is AuthenticationSignUpInProgress ? state : null;
-    final isSubmissionSignup = signupState?.fromSubmission ?? false;
-    if (flow == null) {
-      if (isSubmissionSignup) {
-        _restoreSignupFlow(context.l10n.authCreatingAccount);
-        flow = _AuthFlow.signup;
-      } else if (state is AuthenticationLogInInProgress && state.fromSignup) {
-        _restoreSignupFlow(context.l10n.authSecuringLogin);
-        flow = _AuthFlow.signup;
-      } else if (state is AuthenticationLogInInProgress) {
-        if (!mounted) return;
-        setState(() {
-          _activeFlow = _AuthFlow.login;
-          _operationAcknowledged = true;
-          _operationLabel = context.l10n.authLoggingIn;
-          _login = true;
-        });
-        flow = _AuthFlow.login;
-        if (!_operationProgressController.isActive) {
-          _operationProgressController.start();
-        }
-      } else {
-        return;
-      }
-    }
-    if (isSubmissionSignup && flow == _AuthFlow.signup) {
-      _operationAcknowledged = true;
-      _ensureOperationVisible(context.l10n.authCreatingAccount);
-      return;
-    }
-    if (state is AuthenticationLogInInProgress) {
-      if (flow == _AuthFlow.signup) {
+    final signupInProgress = state is AuthenticationSignUpInProgress;
+    final loginFromSignup =
+        state is AuthenticationLogInInProgress && state.fromSignup;
+
+    if (signupInProgress || loginFromSignup) {
+      if (!mounted) return;
+      setState(() {
+        _activeFlow = _AuthFlow.signup;
         _operationAcknowledged = true;
-        _ensureOperationVisible(context.l10n.authSecuringLogin);
+        _operationLabel = signupInProgress
+            ? context.l10n.authCreatingAccount
+            : context.l10n.authSecuringLogin;
+        _signupFlowLocked = true;
+        _login = false;
+      });
+      if (!_operationProgressController.isActive) {
+        _operationProgressController.start();
+      }
+      if (loginFromSignup) {
         unawaited(_operationProgressController.reach(0.75));
-        return;
       }
-      if (flow == _AuthFlow.login) {
-        _operationAcknowledged = true;
-        _ensureOperationVisible(context.l10n.authLoggingIn);
-        unawaited(_operationProgressController.reach(
-          0.75,
-          duration: const Duration(milliseconds: 500),
-        ));
-        return;
-      }
-    }
-    if (!_operationAcknowledged) {
       return;
     }
+
+    if (state is AuthenticationLogInInProgress) {
+      if (!mounted) return;
+      setState(() {
+        _activeFlow = _AuthFlow.login;
+        _operationAcknowledged = true;
+        _operationLabel = context.l10n.authLoggingIn;
+        _login = true;
+      });
+      if (!_operationProgressController.isActive) {
+        _operationProgressController.start();
+      }
+      unawaited(_operationProgressController.reach(
+        0.75,
+        duration: const Duration(milliseconds: 500),
+      ));
+      return;
+    }
+
+    if (!_operationAcknowledged) return;
+
     if (state is AuthenticationFailure ||
         state is AuthenticationSignupFailure) {
       unawaited(_failOperation());

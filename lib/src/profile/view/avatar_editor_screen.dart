@@ -183,12 +183,19 @@ class _AvatarSummaryCard extends StatelessWidget {
                     onPressed: state.processing
                         ? null
                         : () => cubit.shuffleTemplate(colors),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8.0,
                       children: [
-                        Icon(LucideIcons.shuffle),
-                        Text('Shuffle'),
+                        if (state.processing)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          const Icon(LucideIcons.refreshCw),
+                        const Text('Shuffle'),
                       ],
                     ),
                   ),
