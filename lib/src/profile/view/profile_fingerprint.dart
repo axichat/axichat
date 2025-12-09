@@ -1,5 +1,5 @@
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/display_fingerprint.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -49,7 +49,7 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
               )
             ],
           ),
-          child: AnimatedSize(
+          child: AxiAnimatedSize(
             duration: context.watch<SettingsCubit>().animationDuration,
             child: _showFingerprint
                 ? Padding(

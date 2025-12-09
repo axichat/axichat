@@ -116,13 +116,18 @@ class AxiIconButton extends StatelessWidget {
       );
     }
 
+    final withCursor = MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: tappable,
+    );
+
     return Semantics(
       button: true,
       enabled: enabled,
       label: semanticLabel ?? tooltip,
       onTap: onPressed,
       onLongPress: onLongPress,
-      child: tappable,
+      child: withCursor,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   BuildContext context, {
@@ -11,32 +12,78 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
     context: context,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (sheetContext) => Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-          child: Text(
+    builder: (sheetContext) {
+      final colors = ShadTheme.of(sheetContext).colorScheme;
+      final textTheme = ShadTheme.of(sheetContext).textTheme;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
             title,
-            style: calendarTitleTextStyle.copyWith(fontSize: 18),
+            style: textTheme.lead.copyWith(color: colors.foreground),
+          ),
+          const SizedBox(height: 12),
+          _CalendarTransferOption(
+            icon: LucideIcons.calendarCheck2,
+            label: sheetContext.l10n.calendarExportFormatIcsTitle,
+            description: sheetContext.l10n.calendarExportFormatIcsSubtitle,
+            onTap: () =>
+                Navigator.of(sheetContext).pop(CalendarExportFormat.ics),
+          ),
+          const SizedBox(height: 8),
+          _CalendarTransferOption(
+            icon: LucideIcons.braces,
+            label: sheetContext.l10n.calendarExportFormatJsonTitle,
+            description: sheetContext.l10n.calendarExportFormatJsonSubtitle,
+            onTap: () =>
+                Navigator.of(sheetContext).pop(CalendarExportFormat.json),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _CalendarTransferOption extends StatelessWidget {
+  const _CalendarTransferOption({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = ShadTheme.of(context).colorScheme;
+    final iconBackground = colors.muted.withValues(alpha: 0.12);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: AxiListTile(
+        leading: DecoratedBox(
+          decoration: BoxDecoration(
+            color: iconBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colors.border),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(
+              icon,
+              size: 18,
+              color: colors.primary,
+            ),
           ),
         ),
-        ListTile(
-          leading: const Icon(Icons.event_available_outlined),
-          title: Text(context.l10n.calendarExportFormatIcsTitle),
-          subtitle: Text(context.l10n.calendarExportFormatIcsSubtitle),
-          onTap: () => Navigator.of(sheetContext).pop(CalendarExportFormat.ics),
-        ),
-        ListTile(
-          leading: const Icon(Icons.code),
-          title: Text(context.l10n.calendarExportFormatJsonTitle),
-          subtitle: Text(context.l10n.calendarExportFormatJsonSubtitle),
-          onTap: () =>
-              Navigator.of(sheetContext).pop(CalendarExportFormat.json),
-        ),
-        const SizedBox(height: 16),
-      ],
-    ),
-  );
+        title: label,
+        subtitle: description,
+        onTap: onTap,
+      ),
+    );
+  }
 }

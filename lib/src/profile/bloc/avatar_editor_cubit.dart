@@ -21,9 +21,10 @@ enum AvatarSource {
 
 class AvatarEditorState extends Equatable {
   const AvatarEditorState({
-    required this.zoom,
-    required this.focus,
     required this.backgroundColor,
+    this.cropRect,
+    this.imageWidth,
+    this.imageHeight,
     this.source = AvatarSource.template,
     this.sourceBytes,
     this.previewBytes,
@@ -44,8 +45,9 @@ class AvatarEditorState extends Equatable {
   final bool processing;
   final bool publishing;
   final String? error;
-  final double zoom;
-  final Offset focus;
+  final Rect? cropRect;
+  final int? imageWidth;
+  final int? imageHeight;
   final Color backgroundColor;
   final String? lastSavedPath;
   final int? estimatedBytes;
@@ -59,8 +61,9 @@ class AvatarEditorState extends Equatable {
     bool? processing,
     bool? publishing,
     String? error,
-    double? zoom,
-    Offset? focus,
+    Rect? cropRect,
+    int? imageWidth,
+    int? imageHeight,
     Color? backgroundColor,
     String? lastSavedPath,
     int? estimatedBytes,
@@ -75,8 +78,9 @@ class AvatarEditorState extends Equatable {
       processing: processing ?? this.processing,
       publishing: publishing ?? this.publishing,
       error: clearError ? null : error ?? this.error,
-      zoom: zoom ?? this.zoom,
-      focus: focus ?? this.focus,
+      cropRect: cropRect ?? this.cropRect,
+      imageWidth: imageWidth ?? this.imageWidth,
+      imageHeight: imageHeight ?? this.imageHeight,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       lastSavedPath: lastSavedPath ?? this.lastSavedPath,
       estimatedBytes: estimatedBytes ?? this.estimatedBytes,
@@ -93,8 +97,9 @@ class AvatarEditorState extends Equatable {
         processing,
         publishing,
         error,
-        zoom,
-        focus,
+        cropRect,
+        imageWidth,
+        imageHeight,
         backgroundColor,
         lastSavedPath,
         estimatedBytes,
@@ -111,8 +116,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         _profileCubit = profileCubit,
         super(
           const AvatarEditorState(
-            zoom: 1.0,
-            focus: Offset.zero,
             backgroundColor: Colors.transparent,
           ),
         );
@@ -120,7 +123,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _targetSize = 256;
   static const _maxBytes = 64 * 1024;
   static const _minQuality = 55;
-  static const _maxZoom = 3.5;
+  static const _minCropSide = 48.0;
 
   final XmppService _xmppService;
   final ProfileCubit? _profileCubit;
@@ -203,6 +206,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       emit(
         state.copyWith(
           sourceBytes: generated.bytes,
+          imageWidth: decoded.width,
+          imageHeight: decoded.height,
+          cropRect: _initialCropRect(decoded),
           clearError: true,
         ),
       );
@@ -231,19 +237,13 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
-  void setZoom(double zoom) {
-    final clamped = zoom.clamp(1.0, _maxZoom);
-    if (clamped == state.zoom) return;
-    emit(state.copyWith(zoom: clamped));
-    _scheduleRebuild();
-  }
-
-  void setFocus(Offset focus) {
-    final clamped = Offset(
-      focus.dx.clamp(-1.0, 1.0),
-      focus.dy.clamp(-1.0, 1.0),
-    );
-    emit(state.copyWith(focus: clamped));
+  void updateCropRect(Rect rect) {
+    final image = _decodedImage;
+    if (image == null) return;
+    final clamped =
+        _constrainRect(rect, image.width.toDouble(), image.height.toDouble());
+    if (state.cropRect == clamped) return;
+    emit(state.copyWith(cropRect: clamped));
     _scheduleRebuild();
   }
 
@@ -296,6 +296,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         source: AvatarSource.upload,
         sourceBytes: bytes,
         template: null,
+        imageWidth: decoded.width,
+        imageHeight: decoded.height,
+        cropRect: _initialCropRect(decoded),
         clearError: true,
       ),
     );
@@ -337,19 +340,15 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   AvatarUploadPayload _processImage(img.Image image) {
-    final zoom = state.zoom.clamp(1.0, _maxZoom);
-    final minSide = min(image.width, image.height);
-    final cropSize = (minSide / zoom).clamp(32.0, minSide.toDouble());
-    final halfCrop = cropSize / 2;
-    final xRange = (image.width - cropSize) / 2;
-    final yRange = (image.height - cropSize) / 2;
-    final centerX = image.width / 2 + state.focus.dx * xRange;
-    final centerY = image.height / 2 + state.focus.dy * yRange;
-    final left = max(0, (centerX - halfCrop).round());
-    final top = max(0, (centerY - halfCrop).round());
-    final width = min(cropSize.round(), image.width - left);
-    final height = min(cropSize.round(), image.height - top);
-
+    final safeCrop = _constrainRect(
+      state.cropRect ?? _initialCropRect(image),
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
+    final left = safeCrop.left.round();
+    final top = safeCrop.top.round();
+    final width = min(safeCrop.width.round(), image.width - left);
+    final height = min(safeCrop.height.round(), image.height - top);
     final cropped = img.copyCrop(
       image,
       x: left,
@@ -373,6 +372,29 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       height: resized.height,
       hash: hash,
     );
+  }
+
+  Rect _initialCropRect(img.Image image) {
+    final minSide = min(image.width, image.height).toDouble();
+    final side = max(_minCropSide, minSide * 0.8);
+    final left = (image.width - side) / 2;
+    final top = (image.height - side) / 2;
+    return _constrainRect(
+      Rect.fromLTWH(left, top, side, side),
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
+  }
+
+  Rect _constrainRect(Rect rect, double width, double height) {
+    final availableSide = min(width, height);
+    final desiredSide =
+        min(rect.width, rect.height).clamp(_minCropSide, availableSide);
+    final maxLeft = width - desiredSide;
+    final maxTop = height - desiredSide;
+    final left = rect.left.clamp(0.0, maxLeft);
+    final top = rect.top.clamp(0.0, maxTop);
+    return Rect.fromLTWH(left, top, desiredSide, desiredSide);
   }
 
   img.Image _flattenIfNeeded(img.Image image) {

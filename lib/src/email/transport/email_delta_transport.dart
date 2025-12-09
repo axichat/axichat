@@ -4,8 +4,11 @@ import 'dart:io';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart'
+    show serverOnlyChatMessageCap;
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
@@ -40,6 +43,7 @@ class EmailDeltaTransport implements ChatTransport {
   String? _databasePrefix;
   String? _databasePassphrase;
   String? _accountAddress;
+  MessageStorageMode _messageStorageMode = MessageStorageMode.local;
 
   @override
   Stream<DeltaCoreEvent> get events =>
@@ -52,6 +56,11 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     _accountAddress = address;
+  }
+
+  void updateMessageStorageMode(MessageStorageMode mode) {
+    _messageStorageMode = mode;
+    _eventConsumer?.updateMessageStorageMode(mode);
   }
 
   @override
@@ -382,6 +391,7 @@ class EmailDeltaTransport implements ChatTransport {
       _eventConsumer ??= DeltaEventConsumer(
         databaseBuilder: _databaseBuilder,
         context: _context!,
+        messageStorageMode: _messageStorageMode,
         logger: _log,
       );
       return true;
@@ -403,6 +413,7 @@ class EmailDeltaTransport implements ChatTransport {
         _eventConsumer = DeltaEventConsumer(
           databaseBuilder: _databaseBuilder,
           context: _context!,
+          messageStorageMode: _messageStorageMode,
           logger: _log,
         );
       }
@@ -566,6 +577,12 @@ class EmailDeltaTransport implements ChatTransport {
       fileMetadataID: metadata?.id,
     );
     await db.saveMessage(message);
+    if (_messageStorageMode.isServerOnly) {
+      await db.trimChatMessages(
+        jid: chat.jid,
+        maxMessages: serverOnlyChatMessageCap,
+      );
+    }
     await db.updateChat(
       chat.copyWith(lastChangeTimestamp: resolvedTimestamp),
     );

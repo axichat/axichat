@@ -1901,6 +1901,114 @@ abstract class AppLocalizations {
   /// **'Unable to load captcha.\nTap refresh to try again.'**
   String get signupCaptchaErrorMessage;
 
+  /// No description provided for @signupAvatarRenderError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not render that avatar.'**
+  String get signupAvatarRenderError;
+
+  /// No description provided for @signupAvatarLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to load that avatar.'**
+  String get signupAvatarLoadError;
+
+  /// No description provided for @signupAvatarReadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read that image.'**
+  String get signupAvatarReadError;
+
+  /// No description provided for @signupAvatarOpenError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open that file.'**
+  String get signupAvatarOpenError;
+
+  /// No description provided for @signupAvatarInvalidImage.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not a valid image.'**
+  String get signupAvatarInvalidImage;
+
+  /// No description provided for @signupAvatarSizeError.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar must be under {kilobytes} KB.'**
+  String signupAvatarSizeError(Object kilobytes);
+
+  /// No description provided for @signupAvatarProcessError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to process that image.'**
+  String get signupAvatarProcessError;
+
+  /// No description provided for @signupAvatarEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit avatar'**
+  String get signupAvatarEdit;
+
+  /// No description provided for @signupAvatarUploadImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload image'**
+  String get signupAvatarUploadImage;
+
+  /// No description provided for @signupAvatarUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload'**
+  String get signupAvatarUpload;
+
+  /// No description provided for @signupAvatarShuffle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shuffle default'**
+  String get signupAvatarShuffle;
+
+  /// No description provided for @signupAvatarMenuDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Defaults are listed below. We publish the avatar when your XMPP account is created.'**
+  String get signupAvatarMenuDescription;
+
+  /// No description provided for @signupAvatarBackgroundColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Background color'**
+  String get signupAvatarBackgroundColor;
+
+  /// No description provided for @signupAvatarDefaultsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Default avatars'**
+  String get signupAvatarDefaultsTitle;
+
+  /// No description provided for @signupAvatarCategoryAbstract.
+  ///
+  /// In en, this message translates to:
+  /// **'Abstract'**
+  String get signupAvatarCategoryAbstract;
+
+  /// No description provided for @signupAvatarCategoryScience.
+  ///
+  /// In en, this message translates to:
+  /// **'Science'**
+  String get signupAvatarCategoryScience;
+
+  /// No description provided for @signupAvatarCategorySports.
+  ///
+  /// In en, this message translates to:
+  /// **'Sports'**
+  String get signupAvatarCategorySports;
+
+  /// No description provided for @signupAvatarCategoryMusic.
+  ///
+  /// In en, this message translates to:
+  /// **'Music'**
+  String get signupAvatarCategoryMusic;
+
   /// No description provided for @notificationsRestartTitle.
   ///
   /// In en, this message translates to:
@@ -2599,6 +2707,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View archives'**
   String get profileArchives;
+
+  /// No description provided for @profileEditAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit avatar'**
+  String get profileEditAvatar;
 
   /// No description provided for @profileChangePassword.
   ///

@@ -186,7 +186,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
                         usesDesktopLayout,
                         layout,
                       ),
-                      if (state.isLoading) buildLoadingOverlay(context),
+                      if (shouldShowLoadingOverlay(state))
+                        buildLoadingOverlay(context),
                     ],
                   ),
                 ),
@@ -463,6 +464,12 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   /// Allows subclasses to provide loading overlays with custom tinting.
   Widget buildLoadingOverlay(BuildContext context) =>
       const CalendarLoadingOverlay();
+
+  /// Only show the blocking overlay when the calendar is empty and bootstrapping.
+  bool shouldShowLoadingOverlay(CalendarState state) =>
+      state.isLoading &&
+      state.model.tasks.isEmpty &&
+      state.model.dayEvents.isEmpty;
 
   /// Wraps the Scaffold with additional chrome (like task feedback observers).
   Widget wrapWithTaskFeedback(BuildContext context, Widget child) => child;

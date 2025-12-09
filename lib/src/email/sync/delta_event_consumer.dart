@@ -4,8 +4,11 @@ import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart'
+    show serverOnlyChatMessageCap;
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
@@ -47,16 +50,23 @@ class DeltaEventConsumer {
   DeltaEventConsumer({
     required Future<XmppDatabase> Function() databaseBuilder,
     required DeltaContextHandle context,
+    MessageStorageMode messageStorageMode = MessageStorageMode.local,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
+        _messageStorageMode = messageStorageMode,
         _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
+  MessageStorageMode _messageStorageMode;
   final Logger _log;
 
   XmppDatabase? _database;
+
+  void updateMessageStorageMode(MessageStorageMode mode) {
+    _messageStorageMode = mode;
+  }
 
   Future<void> handle(DeltaCoreEvent event) async {
     final eventType = DeltaEventType.fromCode(event.type);
@@ -147,7 +157,11 @@ class DeltaEventConsumer {
       msgId: msg.id,
     );
     message = await _attachFileMetadata(db: db, message: message, delta: msg);
-    await db.saveMessage(message);
+    await _storeMessage(
+      db: db,
+      message: message,
+      chatJid: chat.jid,
+    );
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }
 
@@ -185,7 +199,11 @@ class DeltaEventConsumer {
       msgId: msg.id,
     );
     message = await _attachFileMetadata(db: db, message: message, delta: msg);
-    await db.saveMessage(message);
+    await _storeMessage(
+      db: db,
+      message: message,
+      chatJid: chat.jid,
+    );
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }
 
@@ -302,6 +320,20 @@ class DeltaEventConsumer {
 
   Future<XmppDatabase> _db() async {
     return _database ??= await _databaseBuilder();
+  }
+
+  Future<void> _storeMessage({
+    required XmppDatabase db,
+    required Message message,
+    required String chatJid,
+  }) async {
+    await db.saveMessage(message);
+    if (_messageStorageMode.isServerOnly) {
+      await db.trimChatMessages(
+        jid: chatJid,
+        maxMessages: serverOnlyChatMessageCap,
+      );
+    }
   }
 
   Future<Message> _attachFileMetadata({

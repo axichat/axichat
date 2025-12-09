@@ -233,6 +233,9 @@ class MaterialAxichat extends StatelessWidget {
         context.read<NotificationService>().mute = state.mute;
         final xmppService = context.read<XmppService>();
         xmppService.updateMessageStorageMode(state.messageStorageMode);
+        context
+            .read<EmailService>()
+            .updateMessageStorageMode(xmppService.messageStorageMode);
         xmppService.toggleAllChatsMarkerResponsive(
           responsive: state.readReceipts,
         );

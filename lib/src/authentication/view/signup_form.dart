@@ -1,6 +1,6 @@
-import 'dart:io';
-import 'dart:math' as math;
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -10,13 +10,19 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/profile/avatar/avatar_templates.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:xml/xml.dart';
 
@@ -55,6 +61,10 @@ class _SignupFormState extends State<SignupForm>
   static const double _maxEntropyBits = 120;
   static const double _weakEntropyThreshold = 50;
   static const double _strongEntropyThreshold = 80;
+  static const int _avatarTargetSize = 256;
+  static const int _avatarMaxBytes = 64 * 1024;
+  static const int _avatarMinJpegQuality = 35;
+  static const int _avatarQualityStep = 5;
 
   final _formKeys = [
     GlobalKey<FormState>(),
@@ -74,6 +84,17 @@ class _SignupFormState extends State<SignupForm>
   bool _captchaHasLoadedOnce = false;
   Timer? _captchaRetryTimer;
   String? _lastCaptchaServer;
+  AvatarUploadPayload? _signupAvatar;
+  Uint8List? _signupAvatarPreview;
+  AvatarTemplate? _selectedTemplate;
+  late final List<AvatarTemplate> _avatarTemplates =
+      buildDefaultAvatarTemplates();
+  bool _avatarInitialized = false;
+  bool _avatarProcessing = false;
+  String? _avatarError;
+  Color _avatarBackground = Colors.transparent;
+  img.Image? _signupSourceImage;
+  bool _lastSelectionHadAlpha = false;
 
   var _currentIndex = 0;
   String? _errorText;
@@ -133,6 +154,13 @@ class _SignupFormState extends State<SignupForm>
     _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
     _captchaSrc = _loadCaptchaSrc();
     _captchaSrcInitialized = true;
+    if (!_avatarInitialized) {
+      _avatarInitialized = true;
+      unawaited(_selectTemplate(
+        _avatarTemplates.first,
+        background: context.colorScheme.background,
+      ));
+    }
   }
 
   void _handleFieldProgressChanged() {
@@ -172,6 +200,7 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _onPressed(BuildContext context) async {
+    if (_avatarProcessing) return;
     FocusManager.instance.primaryFocus?.unfocus();
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
@@ -185,6 +214,7 @@ class _SignupFormState extends State<SignupForm>
           captchaID: splitSrc[splitSrc.indexOf('captcha') + 1],
           captcha: _captchaTextController.value.text,
           rememberMe: rememberMe,
+          avatar: _signupAvatar,
         );
   }
 
@@ -197,15 +227,13 @@ class _SignupFormState extends State<SignupForm>
       final response = await http.get(registrationUrl);
       if (response.statusCode != 200) return '';
       document = XmlDocument.parse(response.body);
-    } on HttpException catch (_) {
-      return '';
-    } on SocketException catch (_) {
-      return '';
     } on http.ClientException catch (_) {
       return '';
     } on XmlParserException catch (_) {
       return '';
     } on XmlTagException catch (_) {
+      return '';
+    } on Exception catch (_) {
       return '';
     }
     return document.findAllElements('img').firstOrNull?.getAttribute('src') ??
@@ -238,6 +266,297 @@ class _SignupFormState extends State<SignupForm>
       _captchaRetryTimer = null;
       _reloadCaptcha(resetFirstLoad: true);
     });
+  }
+
+  bool get _needsBackgroundPicker =>
+      (_selectedTemplate?.hasAlphaBackground ?? false) ||
+      _lastSelectionHadAlpha;
+
+  Future<void> _selectTemplate(
+    AvatarTemplate template, {
+    Color? background,
+  }) async {
+    if (_avatarProcessing) return;
+    if (!mounted) return;
+    final l10n = context.l10n;
+    setState(() {
+      _avatarProcessing = true;
+      _avatarError = null;
+    });
+    final effectiveBackground = background ?? _avatarBackground;
+    try {
+      final generated =
+          await template.generator(effectiveBackground, context.colorScheme);
+      final decoded = img.decodeImage(generated.bytes);
+      if (decoded == null) {
+        if (!mounted) return;
+        setState(() {
+          _avatarProcessing = false;
+          _avatarError = l10n.signupAvatarRenderError;
+        });
+        return;
+      }
+      _avatarBackground = effectiveBackground;
+      _signupSourceImage = decoded;
+      _selectedTemplate = template;
+      _lastSelectionHadAlpha =
+          template.hasAlphaBackground || generated.hasAlpha;
+      await _rebuildSignupAvatar();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _avatarProcessing = false;
+        _avatarError = l10n.signupAvatarLoadError;
+      });
+    }
+  }
+
+  Future<void> _pickAvatarFromFiles() async {
+    if (!mounted) return;
+    final l10n = context.l10n;
+    setState(() {
+      _avatarProcessing = true;
+      _avatarError = null;
+    });
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: true,
+        withReadStream: true,
+      );
+      if (result == null || result.files.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _avatarProcessing = false;
+        });
+        return;
+      }
+      final file = result.files.first;
+      final bytes = await _loadPickedFileBytes(file);
+      if (bytes == null || bytes.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _avatarProcessing = false;
+          _avatarError = l10n.signupAvatarReadError;
+        });
+        return;
+      }
+      await _applyAvatarFromBytes(bytes);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _avatarProcessing = false;
+        _avatarError = l10n.signupAvatarOpenError;
+      });
+    }
+  }
+
+  Future<Uint8List?> _loadPickedFileBytes(PlatformFile file) async {
+    if (file.bytes?.isNotEmpty == true) {
+      return file.bytes!;
+    }
+    final stream = file.readStream;
+    if (stream == null) {
+      return null;
+    }
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in stream) {
+      builder.add(chunk);
+    }
+    final data = builder.takeBytes();
+    return data.isEmpty ? null : data;
+  }
+
+  Future<void> _applyAvatarFromBytes(Uint8List bytes) async {
+    final l10n = context.l10n;
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      if (!mounted) return;
+      setState(() {
+        _avatarProcessing = false;
+        _avatarError = l10n.signupAvatarInvalidImage;
+      });
+      return;
+    }
+    _signupSourceImage = decoded;
+    _selectedTemplate = null;
+    _lastSelectionHadAlpha = decoded.numChannels == 4;
+    await _rebuildSignupAvatar();
+  }
+
+  Future<void> _rebuildSignupAvatar() async {
+    final source = _signupSourceImage;
+    if (source == null) {
+      if (!mounted) return;
+      setState(() {
+        _avatarProcessing = false;
+      });
+      return;
+    }
+    await Future<void>.delayed(Duration.zero);
+    try {
+      final payload = _processSignupImage(source);
+      if (!mounted) return;
+      setState(() {
+        _signupAvatar = payload;
+        _signupAvatarPreview = payload.bytes;
+        _avatarProcessing = false;
+        _avatarError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is _AvatarSizeException
+          ? context.l10n.signupAvatarSizeError(
+              (_avatarMaxBytes / 1024).round(),
+            )
+          : context.l10n.signupAvatarProcessError;
+      setState(() {
+        _avatarProcessing = false;
+        _avatarError = message;
+      });
+    }
+  }
+
+  AvatarUploadPayload _processSignupImage(img.Image image) {
+    final minSide = math.min(image.width, image.height);
+    final left = ((image.width - minSide) / 2).round();
+    final top = ((image.height - minSide) / 2).round();
+    final cropped = img.copyCrop(
+      image,
+      x: left,
+      y: top,
+      width: minSide,
+      height: minSide,
+    );
+    final flattened = _flattenIfNeeded(cropped);
+    final resized = img.copyResize(
+      flattened,
+      width: _avatarTargetSize,
+      height: _avatarTargetSize,
+      interpolation: img.Interpolation.cubic,
+    );
+    final encoded = _encodeAvatar(resized, maxBytes: _avatarMaxBytes);
+    final hash = sha1.convert(encoded.bytes).toString();
+    return AvatarUploadPayload(
+      bytes: encoded.bytes,
+      mimeType: encoded.mimeType,
+      width: resized.width,
+      height: resized.height,
+      hash: hash,
+    );
+  }
+
+  img.Image _flattenIfNeeded(img.Image image) {
+    final backgroundAlpha = _channelToByte(_avatarBackground.a);
+    final shouldFlatten = _needsBackgroundPicker ||
+        (backgroundAlpha > 0 && image.numChannels == 4);
+    if (!shouldFlatten) return image;
+    final background = img.Image(
+      width: image.width,
+      height: image.height,
+      numChannels: 4,
+    );
+    img.fill(background, color: _imgColor(_avatarBackground));
+    img.compositeImage(background, image);
+    return background;
+  }
+
+  _EncodedAvatar _encodeAvatar(
+    img.Image image, {
+    required int maxBytes,
+  }) {
+    if (image.numChannels == 4) {
+      final png = Uint8List.fromList(img.encodePng(image, level: 4));
+      if (png.length <= maxBytes) {
+        return _EncodedAvatar(bytes: png, mimeType: 'image/png');
+      }
+    }
+    var quality = 90;
+    while (quality >= _avatarMinJpegQuality) {
+      final jpg = Uint8List.fromList(img.encodeJpg(image, quality: quality));
+      if (jpg.length <= maxBytes) {
+        return _EncodedAvatar(bytes: jpg, mimeType: 'image/jpeg');
+      }
+      if (quality == _avatarMinJpegQuality) {
+        break;
+      }
+      quality = math.max(_avatarMinJpegQuality, quality - _avatarQualityStep);
+    }
+    throw const _AvatarSizeException();
+  }
+
+  img.Color _imgColor(Color color) => img.ColorInt32.rgba(
+        _channelToByte(color.r),
+        _channelToByte(color.g),
+        _channelToByte(color.b),
+        _channelToByte(color.a),
+      );
+
+  int _channelToByte(double channel) => (channel * 255.0).round().clamp(0, 255);
+
+  Future<void> _openAvatarMenu() async {
+    if (_avatarProcessing) return;
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colors.card,
+      shape: RoundedRectangleBorder(borderRadius: context.radius),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 12.0,
+            children: [
+              Text(
+                l10n.signupAvatarEdit,
+                style: context.textTheme.h4.copyWith(color: colors.foreground),
+              ),
+              ShadButton.outline(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  unawaited(_pickAvatarFromFiles());
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: 8.0,
+                  children: [
+                    const Icon(LucideIcons.upload),
+                    Text(l10n.signupAvatarUploadImage),
+                  ],
+                ),
+              ),
+              ShadButton.secondary(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  final random = math.Random();
+                  unawaited(_selectTemplate(
+                    _avatarTemplates[random.nextInt(_avatarTemplates.length)],
+                    background: _avatarBackground,
+                  ));
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: 8.0,
+                  children: [
+                    const Icon(LucideIcons.sparkles),
+                    Text(l10n.signupAvatarShuffle),
+                  ],
+                ),
+              ),
+              Text(
+                l10n.signupAvatarMenuDescription,
+                style: context.textTheme.small
+                    .copyWith(color: colors.mutedForeground),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _markCaptchaLoaded() {
@@ -354,6 +673,7 @@ class _SignupFormState extends State<SignupForm>
   double get _progressValue => _completedStepCount / _progressSegmentCount;
 
   Future<void> _handleContinuePressed(BuildContext context) async {
+    if (_avatarProcessing) return;
     final formState = _formKeys[_currentIndex].currentState;
     if (formState?.validate() == false) {
       return;
@@ -519,7 +839,7 @@ class _SignupFormState extends State<SignupForm>
                 const SizedBox.square(dimension: 16.0),
                 Padding(
                   padding: horizontalPadding,
-                  child: AnimatedSize(
+                  child: AxiAnimatedSize(
                     duration: context.watch<SettingsCubit>().animationDuration,
                     curve: Curves.easeIn,
                     child: AnimatedSwitcher(
@@ -534,32 +854,64 @@ class _SignupFormState extends State<SignupForm>
                           key: _formKeys[0],
                           child: Padding(
                             padding: fieldSpacing,
-                            child: AxiTextFormField(
-                              autocorrect: false,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                  RegExp(r'[a-z0-9._-]'),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              spacing: 10.0,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _SignupAvatarSelector(
+                                      bytes: _signupAvatarPreview,
+                                      username: _jidTextController.text,
+                                      processing: _avatarProcessing,
+                                      onTap: _openAvatarMenu,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: AxiTextFormField(
+                                        autocorrect: false,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.allow(
+                                            RegExp(r'[a-z0-9._-]'),
+                                          ),
+                                        ],
+                                        keyboardType: TextInputType.name,
+                                        description: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6.0,
+                                          ),
+                                          child: Text(
+                                              l10n.authUsernameCaseInsensitive),
+                                        ),
+                                        placeholder: Text(l10n.authUsername),
+                                        enabled: !loading,
+                                        controller: _jidTextController,
+                                        trailing: EndpointSuffix(
+                                            server: state.server),
+                                        validator: (text) {
+                                          if (text.isEmpty) {
+                                            return l10n.authUsernameRequired;
+                                          }
+                                          if (!_usernamePattern
+                                              .hasMatch(text)) {
+                                            return l10n.authUsernameRules;
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                                if (_avatarError != null)
+                                  Text(
+                                    _avatarError!,
+                                    style: TextStyle(
+                                      color: context.colorScheme.destructive,
+                                      fontSize: 12,
+                                    ),
+                                  ),
                               ],
-                              keyboardType: TextInputType.name,
-                              description: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 6.0),
-                                child: Text(l10n.authUsernameCaseInsensitive),
-                              ),
-                              placeholder: Text(l10n.authUsername),
-                              enabled: !loading,
-                              controller: _jidTextController,
-                              trailing: EndpointSuffix(server: state.server),
-                              validator: (text) {
-                                if (text.isEmpty) {
-                                  return l10n.authUsernameRequired;
-                                }
-                                if (!_usernamePattern.hasMatch(text)) {
-                                  return l10n.authUsernameRules;
-                                }
-                                return null;
-                              },
                             ),
                           ),
                         ),
@@ -799,7 +1151,7 @@ class _SignupFormState extends State<SignupForm>
                           _currentIndex < _formKeys.length - 1;
                       final showSubmitButton = !showNextButton;
 
-                      final backButton = AnimatedSize(
+                      final backButton = AxiAnimatedSize(
                         duration: animationDuration,
                         curve: Curves.easeInOut,
                         alignment: Alignment.centerLeft,
@@ -827,7 +1179,9 @@ class _SignupFormState extends State<SignupForm>
                                 right: showSubmitButton ? 8 : 0,
                               ),
                               child: ShadButton(
-                                enabled: !loading && !isCheckingPwned,
+                                enabled: !loading &&
+                                    !isCheckingPwned &&
+                                    !_avatarProcessing,
                                 onPressed: () async {
                                   await _handleContinuePressed(context);
                                 },
@@ -853,7 +1207,9 @@ class _SignupFormState extends State<SignupForm>
 
                       final submitButton = showSubmitButton
                           ? ShadButton(
-                              enabled: !loading && !cleanupBlocked,
+                              enabled: !loading &&
+                                  !cleanupBlocked &&
+                                  !_avatarProcessing,
                               onPressed: cleanupBlocked
                                   ? null
                                   : () => _onPressed(context),
@@ -897,6 +1253,105 @@ class _SignupFormState extends State<SignupForm>
 
   @override
   bool get wantKeepAlive => true;
+}
+
+class _EncodedAvatar {
+  const _EncodedAvatar({
+    required this.bytes,
+    required this.mimeType,
+  });
+
+  final Uint8List bytes;
+  final String mimeType;
+}
+
+class _AvatarSizeException implements Exception {
+  const _AvatarSizeException();
+}
+
+class _SignupAvatarSelector extends StatefulWidget {
+  const _SignupAvatarSelector({
+    required this.bytes,
+    required this.username,
+    required this.processing,
+    required this.onTap,
+  });
+
+  final Uint8List? bytes;
+  final String username;
+  final bool processing;
+  final VoidCallback onTap;
+
+  @override
+  State<_SignupAvatarSelector> createState() => _SignupAvatarSelectorState();
+}
+
+class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
+  static const _size = 72.0;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final displayJid =
+        widget.username.isEmpty ? 'you@axichat' : '${widget.username}@preview';
+    final overlayVisible = _hovered || widget.processing;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _hovered = true),
+        onTapUp: (_) => setState(() => _hovered = false),
+        onTapCancel: () => setState(() => _hovered = false),
+        onTap: widget.onTap,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox.square(
+              dimension: _size,
+              child: AxiAvatar(
+                jid: displayJid,
+                size: _size,
+                subscription: Subscription.none,
+                presence: null,
+                avatarBytes: widget.bytes,
+              ),
+            ),
+            AnimatedOpacity(
+              opacity: overlayVisible ? 0.8 : 0.0,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                width: _size,
+                height: _size,
+                decoration: BoxDecoration(
+                  color: colors.background.withAlpha((0.45 * 255).round()),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colors.border),
+                ),
+                child: widget.processing
+                    ? Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colors.foreground,
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        LucideIcons.pencil,
+                        color: colors.foreground,
+                        size: 22,
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _SignupProgressMeter extends StatelessWidget {

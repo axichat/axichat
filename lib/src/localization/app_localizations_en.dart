@@ -1022,6 +1022,63 @@ class AppLocalizationsEn extends AppLocalizations {
       'Unable to load captcha.\nTap refresh to try again.';
 
   @override
+  String get signupAvatarRenderError => 'Could not render that avatar.';
+
+  @override
+  String get signupAvatarLoadError => 'Unable to load that avatar.';
+
+  @override
+  String get signupAvatarReadError => 'Could not read that image.';
+
+  @override
+  String get signupAvatarOpenError => 'Unable to open that file.';
+
+  @override
+  String get signupAvatarInvalidImage => 'That file is not a valid image.';
+
+  @override
+  String signupAvatarSizeError(Object kilobytes) {
+    return 'Avatar must be under $kilobytes KB.';
+  }
+
+  @override
+  String get signupAvatarProcessError => 'Unable to process that image.';
+
+  @override
+  String get signupAvatarEdit => 'Edit avatar';
+
+  @override
+  String get signupAvatarUploadImage => 'Upload image';
+
+  @override
+  String get signupAvatarUpload => 'Upload';
+
+  @override
+  String get signupAvatarShuffle => 'Shuffle default';
+
+  @override
+  String get signupAvatarMenuDescription =>
+      'Defaults are listed below. We publish the avatar when your XMPP account is created.';
+
+  @override
+  String get signupAvatarBackgroundColor => 'Background color';
+
+  @override
+  String get signupAvatarDefaultsTitle => 'Default avatars';
+
+  @override
+  String get signupAvatarCategoryAbstract => 'Abstract';
+
+  @override
+  String get signupAvatarCategoryScience => 'Science';
+
+  @override
+  String get signupAvatarCategorySports => 'Sports';
+
+  @override
+  String get signupAvatarCategoryMusic => 'Music';
+
+  @override
   String get notificationsRestartTitle => 'Restart app to enable notifications';
 
   @override
@@ -1428,6 +1485,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileArchives => 'View archives';
+
+  @override
+  String get profileEditAvatar => 'Edit avatar';
 
   @override
   String get profileChangePassword => 'Change password';

@@ -1035,6 +1035,68 @@ class AppLocalizationsDe extends AppLocalizations {
       'Captcha kann nicht geladen werden.\nZum Wiederholen auf Aktualisieren tippen.';
 
   @override
+  String get signupAvatarRenderError =>
+      'Dieses Avatar konnte nicht gerendert werden.';
+
+  @override
+  String get signupAvatarLoadError =>
+      'Dieses Avatar konnte nicht geladen werden.';
+
+  @override
+  String get signupAvatarReadError =>
+      'Dieses Bild konnte nicht gelesen werden.';
+
+  @override
+  String get signupAvatarOpenError =>
+      'Diese Datei konnte nicht geöffnet werden.';
+
+  @override
+  String get signupAvatarInvalidImage => 'Diese Datei ist kein gültiges Bild.';
+
+  @override
+  String signupAvatarSizeError(Object kilobytes) {
+    return 'Avatar muss unter $kilobytes KB bleiben.';
+  }
+
+  @override
+  String get signupAvatarProcessError =>
+      'Dieses Bild kann nicht verarbeitet werden.';
+
+  @override
+  String get signupAvatarEdit => 'Avatar bearbeiten';
+
+  @override
+  String get signupAvatarUploadImage => 'Bild hochladen';
+
+  @override
+  String get signupAvatarUpload => 'Hochladen';
+
+  @override
+  String get signupAvatarShuffle => 'Standard zufällig wählen';
+
+  @override
+  String get signupAvatarMenuDescription =>
+      'Standard-Avatare stehen unten. Wir veröffentlichen den Avatar, sobald dein XMPP-Konto erstellt ist.';
+
+  @override
+  String get signupAvatarBackgroundColor => 'Hintergrundfarbe';
+
+  @override
+  String get signupAvatarDefaultsTitle => 'Standard-Avatare';
+
+  @override
+  String get signupAvatarCategoryAbstract => 'Abstrakt';
+
+  @override
+  String get signupAvatarCategoryScience => 'Wissenschaft';
+
+  @override
+  String get signupAvatarCategorySports => 'Sport';
+
+  @override
+  String get signupAvatarCategoryMusic => 'Musik';
+
+  @override
   String get notificationsRestartTitle =>
       'App neu starten, um Benachrichtigungen zu aktivieren';
 
@@ -1448,6 +1510,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get profileArchives => 'Archive anzeigen';
+
+  @override
+  String get profileEditAvatar => 'Avatar bearbeiten';
 
   @override
   String get profileChangePassword => 'Passwort ändern';

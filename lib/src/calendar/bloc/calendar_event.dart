@@ -144,6 +144,9 @@ class CalendarEvent with _$CalendarEvent {
     String? taskId,
   }) = CalendarSelectionModeEntered;
 
+  const factory CalendarEvent.selectionAllRequested() =
+      CalendarSelectionAllRequested;
+
   const factory CalendarEvent.selectionToggled({
     required String taskId,
   }) = CalendarSelectionToggled;

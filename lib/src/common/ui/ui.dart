@@ -25,6 +25,7 @@ export 'axi_text_form_field.dart';
 export 'axi_tooltip.dart';
 export 'axi_transport_chip.dart';
 export 'axi_tap_bounce.dart';
+export 'axi_animated_size.dart';
 export 'axi_version.dart';
 export 'cutout.dart';
 export 'selection_indicator.dart';

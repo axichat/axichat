@@ -74,6 +74,7 @@ abstract class BaseCalendarBloc
     on<CalendarDateSelected>(_onDateSelected);
     on<CalendarErrorCleared>(_onErrorCleared);
     on<CalendarSelectionModeEntered>(_onSelectionModeEntered);
+    on<CalendarSelectionAllRequested>(_onSelectionAllRequested);
     on<CalendarSelectionToggled>(_onSelectionToggled);
     on<CalendarSelectionCleared>(_onSelectionCleared);
     on<CalendarSelectionPriorityChanged>(_onSelectionPriorityChanged);
@@ -1195,6 +1196,20 @@ abstract class BaseCalendarBloc
       emit: emit,
       isSelectionMode: true,
       selectedTaskIds: updatedSelection,
+    );
+  }
+
+  void _onSelectionAllRequested(
+    CalendarSelectionAllRequested event,
+    Emitter<CalendarState> emit,
+  ) {
+    if (state.model.tasks.isEmpty) {
+      return;
+    }
+    _emitSelectionState(
+      emit: emit,
+      isSelectionMode: true,
+      selectedTaskIds: state.model.tasks.keys.toSet(),
     );
   }
 

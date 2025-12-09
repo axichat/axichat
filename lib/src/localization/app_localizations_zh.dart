@@ -995,6 +995,62 @@ class AppLocalizationsZh extends AppLocalizations {
   String get signupCaptchaErrorMessage => '无法加载验证码。\n请点击刷新重试。';
 
   @override
+  String get signupAvatarRenderError => '无法渲染该头像。';
+
+  @override
+  String get signupAvatarLoadError => '无法加载该头像。';
+
+  @override
+  String get signupAvatarReadError => '无法读取该图像。';
+
+  @override
+  String get signupAvatarOpenError => '无法打开该文件。';
+
+  @override
+  String get signupAvatarInvalidImage => '该文件不是有效的图像。';
+
+  @override
+  String signupAvatarSizeError(Object kilobytes) {
+    return '头像大小必须小于 $kilobytes KB。';
+  }
+
+  @override
+  String get signupAvatarProcessError => '无法处理该图像。';
+
+  @override
+  String get signupAvatarEdit => '编辑头像';
+
+  @override
+  String get signupAvatarUploadImage => '上传图片';
+
+  @override
+  String get signupAvatarUpload => '上传';
+
+  @override
+  String get signupAvatarShuffle => '随机默认头像';
+
+  @override
+  String get signupAvatarMenuDescription => '下面列出了默认头像。创建 XMPP 账号后才会发布头像。';
+
+  @override
+  String get signupAvatarBackgroundColor => '背景颜色';
+
+  @override
+  String get signupAvatarDefaultsTitle => '默认头像';
+
+  @override
+  String get signupAvatarCategoryAbstract => '抽象';
+
+  @override
+  String get signupAvatarCategoryScience => '科学';
+
+  @override
+  String get signupAvatarCategorySports => '体育';
+
+  @override
+  String get signupAvatarCategoryMusic => '音乐';
+
+  @override
   String get notificationsRestartTitle => '重启应用以启用通知';
 
   @override
@@ -1385,6 +1441,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get profileArchives => '查看存档';
+
+  @override
+  String get profileEditAvatar => '编辑头像';
 
   @override
   String get profileChangePassword => '更改密码';
@@ -3170,6 +3229,62 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get signupCaptchaErrorMessage => '無法載入驗證碼。\n請點擊重新整理再試一次。';
 
   @override
+  String get signupAvatarRenderError => '無法渲染該頭像。';
+
+  @override
+  String get signupAvatarLoadError => '無法載入該頭像。';
+
+  @override
+  String get signupAvatarReadError => '無法讀取該圖片。';
+
+  @override
+  String get signupAvatarOpenError => '無法開啟該檔案。';
+
+  @override
+  String get signupAvatarInvalidImage => '該檔案不是有效的圖片。';
+
+  @override
+  String signupAvatarSizeError(Object kilobytes) {
+    return '頭像必須小於 $kilobytes KB。';
+  }
+
+  @override
+  String get signupAvatarProcessError => '無法處理該圖片。';
+
+  @override
+  String get signupAvatarEdit => '編輯頭像';
+
+  @override
+  String get signupAvatarUploadImage => '上載圖片';
+
+  @override
+  String get signupAvatarUpload => '上載';
+
+  @override
+  String get signupAvatarShuffle => '隨機預設頭像';
+
+  @override
+  String get signupAvatarMenuDescription => '以下列出預設頭像。我們會在建立 XMPP 帳戶後發布你的頭像。';
+
+  @override
+  String get signupAvatarBackgroundColor => '背景顏色';
+
+  @override
+  String get signupAvatarDefaultsTitle => '預設頭像';
+
+  @override
+  String get signupAvatarCategoryAbstract => '抽象';
+
+  @override
+  String get signupAvatarCategoryScience => '科學';
+
+  @override
+  String get signupAvatarCategorySports => '運動';
+
+  @override
+  String get signupAvatarCategoryMusic => '音樂';
+
+  @override
   String get notificationsRestartTitle => '重新啟動應用程式以啟用通知';
 
   @override
@@ -3560,6 +3675,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get profileArchives => '查看封存';
+
+  @override
+  String get profileEditAvatar => '編輯頭像';
 
   @override
   String get profileChangePassword => '更改密碼';

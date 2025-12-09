@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
@@ -12,6 +11,7 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'calendar_transfer_sheet.dart';
@@ -116,13 +116,20 @@ class _SyncControlsState extends State<SyncControls> {
         tasks: tasks,
         format: format,
       );
-      await Share.shareXFiles(
-        [XFile(file.path)],
+      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        file: file,
         subject: 'Axichat calendar export',
         text: 'Axichat calendar export (${format.label})',
       );
       if (!mounted) return;
-      FeedbackSystem.showSuccess(context, 'Export ready to share.');
+      FeedbackSystem.showSuccess(
+        context,
+        calendarShareSuccessMessage(
+          outcome: shareOutcome,
+          filePath: file.path,
+          sharedText: 'Export ready to share.',
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(

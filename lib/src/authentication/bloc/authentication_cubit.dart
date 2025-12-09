@@ -104,9 +104,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _xmppService.setClientState(
             lifeCycleState == AppLifecycleState.resumed ||
                 lifeCycleState == AppLifecycleState.inactive);
-        await _emailService?.setClientState(
-          active: lifeCycleState != AppLifecycleState.detached,
-        );
       },
     );
     _connectivitySubscription =
@@ -172,6 +169,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void>? _pendingAccountDeletionFlush;
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
+  AvatarUploadPayload? _signupAvatarDraft;
   _AuthTransaction? _authTransaction;
   late final Future<void> _authRecoveryFuture;
   bool get _stickyAuthActive => state is AuthenticationComplete;
@@ -326,6 +324,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       password: storedPassword,
       passwordPreHashed: storedPasswordPreHashed,
     );
+  }
+
+  Future<bool> hasStoredLoginCredentials() async {
+    final storedLogin = await _readStoredLoginCredentials();
+    return storedLogin.hasUsableCredentials;
   }
 
   Future<_DatabaseSecrets> _readDatabaseSecrets(String jid) async {
@@ -1145,6 +1148,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
     _updateEmailForegroundKeepalive();
+    await _publishPendingAvatar();
   }
 
   Future<void> _persistLoginSecrets({
@@ -1216,6 +1220,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<void> _publishPendingAvatar() async {
+    final payload = _signupAvatarDraft;
+    if (payload == null) return;
+    _signupAvatarDraft = null;
+    try {
+      await _xmppService.publishAvatar(payload);
+    } on XmppAvatarException catch (error, stackTrace) {
+      _log.warning('Failed to publish signup avatar', error, stackTrace);
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Unexpected error publishing signup avatar',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
   bool _looksLikeConnectivityError(Object error) {
     if (error is SocketException ||
         error is TimeoutException ||
@@ -1252,6 +1273,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String captchaID,
     required String captcha,
     required bool rememberMe,
+    AvatarUploadPayload? avatar,
   }) async {
     if (kEnableDemoChats) {
       await _loginToDemoMode();
@@ -1264,6 +1286,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
     _emit(const AuthenticationSignUpInProgress());
     final host = _endpointConfig.domain;
+    _signupAvatarDraft = avatar;
     final cleanupComplete = await _ensureAccountDeletionCleanupComplete(
       username: username,
       host: host,
@@ -1334,6 +1357,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     } finally {
       _activeSignupCredentialKey = null;
+      if (!signupComplete) {
+        _signupAvatarDraft = null;
+      }
       if (signupComplete) {
         await _removePendingAccountDeletion(
           username: username,

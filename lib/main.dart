@@ -6,6 +6,7 @@ import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:bloc/bloc.dart';
@@ -25,7 +26,8 @@ bool withForeground = false;
 final ValueNotifier<bool> foregroundServiceActive = ValueNotifier(false);
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  firstFrameGate.defer(binding);
   _installKeyboardGuard();
 
   _configureLogging();
@@ -71,6 +73,8 @@ Future<void> main() async {
             storageManager: storageManager,
           ),
   );
+
+  firstFrameGate.scheduleFallback();
 }
 
 var _loggerConfigured = false;

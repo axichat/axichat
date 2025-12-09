@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
@@ -103,18 +104,18 @@ const _recipientCutoutOffset = Offset.zero;
 const _recipientAvatarSize = 28.0;
 const _recipientAvatarOverlap = 10.0;
 const _recipientCutoutMinThickness = 48.0;
-const _selectionCutoutDepth = 20.0;
+const _selectionCutoutDepth = 17.0;
 const _selectionCutoutRadius = 16.0;
-const _selectionCutoutPadding = EdgeInsets.fromLTRB(4, 6, 4, 6);
-const _selectionCutoutOffset = Offset.zero;
-const _selectionCutoutThickness = SelectionIndicator.size + 12.0;
+const _selectionCutoutPadding = EdgeInsets.fromLTRB(4, 4.5, 4, 4.5);
+const _selectionCutoutOffset = Offset(-3, 0);
+const _selectionCutoutThickness = SelectionIndicator.size + 9.0;
 const _selectionCutoutCornerClearance = 0.0;
 const _selectionBubbleInteriorInset = _selectionCutoutDepth + 6.0;
 const _selectionBubbleVerticalInset = 4.0;
 const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
 const _selectionIndicatorInset =
-    2.0; // Centers the 28px indicator within the 40px cutout.
+    2.0; // Keeps the 28px indicator centered within the selection cutout.
 const _messageAvatarSize = 36.0;
 const _messageRowAvatarReservation = 32.0;
 const _messageAvatarCutoutDepth = _messageAvatarSize / 2;
@@ -170,12 +171,13 @@ const _reactionQuickChoices = [
 ];
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
-const _loadingStateMessageId = '__loading_state__';
 const _chatScrollStoragePrefix = 'chat-scroll-offset-';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
 const _guestDesktopHorizontalPadding = _chatHorizontalPadding + 6.0;
 const _messageListTailSpacer = 36.0;
+const _messageLoadingSpinnerSize = 16.0;
+const _messageLoadingStrokeWidth = 2.0;
 const _subjectFieldHeight = 24.0;
 const _subjectDividerPadding = 2.0;
 const _subjectDividerThickness = 1.0;
@@ -775,15 +777,16 @@ class _ChatState extends State<Chat> {
     return 0;
   }
 
-  void _persistScrollOffset({String? key}) {
+  void _persistScrollOffset({String? key, bool skipPageStorage = false}) {
     if (!mounted) return;
-    final bucket = PageStorage.maybeOf(context);
     final offset = _scrollController.hasClients
         ? _scrollController.offset
         : _scrollController.initialScrollOffset;
     final storageKey = key ?? _lastScrollStorageKey ?? _scrollStorageKey;
     if (storageKey.isEmpty) return;
     _scrollOffsetCache[storageKey] = offset;
+    if (skipPageStorage) return;
+    final bucket = PageStorage.maybeOf(context);
     if (bucket != null) {
       bucket.writeState(
         context,
@@ -1020,8 +1023,7 @@ class _ChatState extends State<Chat> {
     final messageId = message.stanzaID;
     if (messageId.isEmpty ||
         messageId == _selectionSpacerMessageId ||
-        messageId == _emptyStateMessageId ||
-        messageId == _loadingStateMessageId) {
+        messageId == _emptyStateMessageId) {
       return false;
     }
     final timestamp = message.timestamp;
@@ -1471,35 +1473,52 @@ class _ChatState extends State<Chat> {
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
     if (!mounted) return;
     final l10n = context.l10n;
-    await showDialog<void>(
+    final attachment = pending.attachment;
+    final file = File(attachment.path);
+    if (!await file.exists()) {
+      _showSnackbar(l10n.chatAttachmentInaccessible);
+      return;
+    }
+    final intrinsicSize = await _resolveAttachmentSize(attachment);
+    if (!mounted) return;
+    await showShadDialog<void>(
       context: context,
-      builder: (dialogContext) => Dialog(
-        insetPadding: const EdgeInsets.all(16),
-        child: Stack(
-          children: [
-            SizedBox(
-              width: MediaQuery.sizeOf(context).width * 0.9,
-              height: MediaQuery.sizeOf(context).height * 0.7,
-              child: InteractiveViewer(
-                child: Image.file(
-                  File(pending.attachment.path),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: AxiIconButton(
-                iconData: LucideIcons.x,
-                tooltip: l10n.commonClose,
-                onPressed: () => Navigator.of(dialogContext).pop(),
-              ),
-            ),
-          ],
-        ),
-      ),
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return _AttachmentPreviewDialog(
+          attachment: attachment,
+          intrinsicSize: intrinsicSize,
+          l10n: l10n,
+        );
+      },
     );
+  }
+
+  Future<Size?> _resolveAttachmentSize(EmailAttachment attachment) async {
+    final width = attachment.width;
+    final height = attachment.height;
+    if (width != null && height != null && width > 0 && height > 0) {
+      return Size(width.toDouble(), height.toDouble());
+    }
+    final file = File(attachment.path);
+    if (!await file.exists()) return null;
+    try {
+      final bytes = await file.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      codec.dispose();
+      try {
+        return Size(
+          image.width.toDouble(),
+          image.height.toDouble(),
+        );
+      } finally {
+        image.dispose();
+      }
+    } on Exception {
+      return null;
+    }
   }
 
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
@@ -2151,7 +2170,7 @@ class _ChatState extends State<Chat> {
 
   @override
   void dispose() {
-    _persistScrollOffset(key: _lastScrollStorageKey);
+    _persistScrollOffset(key: _lastScrollStorageKey, skipPageStorage: true);
     _scrollController.dispose();
     _focusNode.dispose();
     _textController.removeListener(_typingListener);
@@ -2896,19 +2915,8 @@ class _ChatState extends State<Chat> {
                                     final emptyStateLabel = searchFiltering
                                         ? context.l10n.chatEmptySearch
                                         : context.l10n.chatEmptyMessages;
-                                    if (loadingMessages) {
-                                      dashMessages.add(
-                                        ChatMessage(
-                                          user: spacerUser,
-                                          createdAt: _selectionSpacerTimestamp,
-                                          text: ' ',
-                                          customProperties: const {
-                                            'id': _loadingStateMessageId,
-                                            'loadingState': true,
-                                          },
-                                        ),
-                                      );
-                                    } else if (filteredItems.isEmpty) {
+                                    if (!loadingMessages &&
+                                        filteredItems.isEmpty) {
                                       dashMessages.add(
                                         ChatMessage(
                                           user: spacerUser,
@@ -3136,27 +3144,6 @@ class _ChatState extends State<Chat> {
                                                                 style: context
                                                                     .textTheme
                                                                     .muted,
-                                                              ),
-                                                            ),
-                                                          );
-                                                        }
-                                                        final isLoadingState =
-                                                            message.customProperties?[
-                                                                    'loadingState'] ==
-                                                                true;
-                                                        if (isLoadingState) {
-                                                          return Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                              vertical: 24,
-                                                            ),
-                                                            child: Center(
-                                                              child:
-                                                                  CircularProgressIndicator(
-                                                                color: context
-                                                                    .colorScheme
-                                                                    .primary,
                                                               ),
                                                             ),
                                                           );
@@ -4608,7 +4595,7 @@ class _ChatState extends State<Chat> {
                                                             isSingleSelection;
                                                         final Widget
                                                             animatedMessage =
-                                                            AnimatedSize(
+                                                            AxiAnimatedSize(
                                                           duration:
                                                               shouldAnimateSize
                                                                   ? _bubbleFocusDuration
@@ -4654,6 +4641,27 @@ class _ChatState extends State<Chat> {
                                                     readOnly: true,
                                                   ),
                                                 ),
+                                                if (loadingMessages)
+                                                  IgnorePointer(
+                                                    child: Align(
+                                                      alignment:
+                                                          Alignment.center,
+                                                      child: SizedBox(
+                                                        width:
+                                                            _messageLoadingSpinnerSize,
+                                                        height:
+                                                            _messageLoadingSpinnerSize,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                          strokeWidth:
+                                                              _messageLoadingStrokeWidth,
+                                                          color: context
+                                                              .colorScheme
+                                                              .primary,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
                                                 if (typingVisible)
                                                   Positioned(
                                                     left: 0,
@@ -6544,6 +6552,91 @@ class _AttachmentAccessoryButton extends StatelessWidget {
       tooltip: context.l10n.chatAttachmentTooltip,
       onPressed: enabled ? onPressed : null,
     );
+  }
+}
+
+class _AttachmentPreviewDialog extends StatelessWidget {
+  const _AttachmentPreviewDialog({
+    required this.attachment,
+    required this.intrinsicSize,
+    required this.l10n,
+  });
+
+  final EmailAttachment attachment;
+  final Size? intrinsicSize;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaSize = MediaQuery.sizeOf(context);
+    final maxWidth = (mediaSize.width - 96).clamp(240.0, mediaSize.width);
+    final maxHeight = (mediaSize.height - 160).clamp(240.0, mediaSize.height);
+    final targetSize = _fitWithinBounds(
+      intrinsicSize: intrinsicSize,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+    );
+    final colors = context.colorScheme;
+    final radius = BorderRadius.circular(18);
+    final borderSide = BorderSide(color: colors.border);
+
+    return ShadDialog(
+      padding: const EdgeInsets.all(12),
+      gap: 12,
+      constraints: BoxConstraints(
+        maxWidth: targetSize.width + 24,
+        maxHeight: targetSize.height + 24,
+      ),
+      child: Center(
+        child: DecoratedBox(
+          decoration: ShapeDecoration(
+            color: colors.card,
+            shape: ContinuousRectangleBorder(
+              borderRadius: radius,
+              side: borderSide,
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: radius,
+            child: SizedBox(
+              width: targetSize.width,
+              height: targetSize.height,
+              child: InteractiveViewer(
+                maxScale: 4,
+                child: Image.file(
+                  File(attachment.path),
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Size _fitWithinBounds({
+    required Size? intrinsicSize,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    final cappedWidth = math.max(0.0, maxWidth);
+    final cappedHeight = math.max(0.0, maxHeight);
+    if (intrinsicSize == null ||
+        intrinsicSize.width <= 0 ||
+        intrinsicSize.height <= 0) {
+      final width = math.min(cappedWidth, 360.0);
+      final height = math.min(cappedHeight, width * 0.75);
+      return Size(width, height);
+    }
+    final aspectRatio = intrinsicSize.width / intrinsicSize.height;
+    var width = math.min(intrinsicSize.width, cappedWidth);
+    var height = width / aspectRatio;
+    if (height > cappedHeight && cappedHeight > 0) {
+      height = cappedHeight;
+      width = height * aspectRatio;
+    }
+    return Size(width, height);
   }
 }
 

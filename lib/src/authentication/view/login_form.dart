@@ -4,6 +4,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -15,9 +16,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LoginForm extends StatefulWidget {
-  const LoginForm({super.key, this.onSubmitStart});
+  const LoginForm({super.key, this.onSubmitStart, this.onAutologinStart});
 
   final VoidCallback? onSubmitStart;
+  final VoidCallback? onAutologinStart;
 
   @override
   State<LoginForm> createState() => _LoginFormState();
@@ -52,7 +54,7 @@ class _LoginFormState extends State<LoginForm> {
     super.didChangeDependencies();
     if (_loginTriggered) return;
     _loginTriggered = true;
-    context.read<AuthenticationCubit>().login();
+    unawaited(_attemptAutologinWithStoredCredentials());
   }
 
   @override
@@ -71,6 +73,18 @@ class _LoginFormState extends State<LoginForm> {
           password: _passwordTextController.value.text,
           rememberMe: rememberMe,
         );
+  }
+
+  Future<void> _attemptAutologinWithStoredCredentials() async {
+    final authCubit = context.read<AuthenticationCubit>();
+    final hasStoredCredentials = await authCubit.hasStoredLoginCredentials();
+    if (!mounted || !hasStoredCredentials) {
+      firstFrameGate.allow();
+      return;
+    }
+    widget.onAutologinStart?.call();
+    unawaited(authCubit.login());
+    firstFrameGate.allow();
   }
 
   @override
@@ -217,7 +231,7 @@ class _LoginFormState extends State<LoginForm> {
                           trailing: const SizedBox.shrink(),
                           child: Text(l10n.authLogin),
                         ).withTapBounce(enabled: !loading);
-                        return AnimatedSize(
+                        return AxiAnimatedSize(
                           duration:
                               context.watch<SettingsCubit>().animationDuration,
                           curve: Curves.easeInOut,

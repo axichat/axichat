@@ -73,8 +73,11 @@ class _LoginScreenState extends State<LoginScreen>
       if (flow == _AuthFlow.signup) {
         _signupFlowLocked = true;
         _login = false;
-      } else if (_signupFlowLocked) {
-        _signupFlowLocked = false;
+      } else {
+        _login = true;
+        if (_signupFlowLocked) {
+          _signupFlowLocked = false;
+        }
       }
     });
     _operationProgressController.start();
@@ -162,6 +165,13 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  void _handleAutologinRequested() {
+    _handleSubmissionRequested(
+      _AuthFlow.login,
+      label: context.l10n.authLoggingIn,
+    );
+  }
+
   void _handleAuthState(AuthenticationState state) {
     if (state is AuthenticationNone) {
       _resetAuthUiState();
@@ -236,7 +246,9 @@ class _LoginScreenState extends State<LoginScreen>
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    final showProgressBar = _activeFlow != null || _signupButtonLoading;
+    final showProgressBar = _activeFlow != null ||
+        _signupButtonLoading ||
+        _operationProgressController.isActive;
     final size = MediaQuery.sizeOf(context);
     final allowSplitView = size.shortestSide >= compactDeviceBreakpoint &&
         size.width >= smallScreen;
@@ -303,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     side: BorderSide(color: colors.border),
                                   ),
                                 ),
-                                child: AnimatedSize(
+                                child: AxiAnimatedSize(
                                   duration: animationDuration,
                                   curve: Curves.easeInOut,
                                   child: Stack(
@@ -325,6 +337,8 @@ class _LoginScreenState extends State<LoginScreen>
                                                 _AuthFlow.login,
                                                 label: l10n.authLoggingIn,
                                               ),
+                                              onAutologinStart:
+                                                  _handleAutologinRequested,
                                             ),
                                           ),
                                         ),

@@ -199,6 +199,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void initState() {
     super.initState();
+    // Preserve an explicitly chosen day view when the grid is rebuilt
+    // (e.g., after coming from the month surface).
+    _desktopDayPinned = widget.state.viewMode == CalendarView.day;
     _viewTransitionController = AnimationController(
       duration: calendarViewTransitionDuration,
       vsync: this,
@@ -2631,6 +2634,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             } else {
               _enterSelectionMode(task.id);
             }
+          },
+        ),
+      );
+    }
+
+    if (state.model.tasks.isNotEmpty) {
+      actions.add(
+        TaskContextAction(
+          icon: Icons.select_all,
+          label: 'Select All Tasks',
+          onSelected: () {
+            context.read<T>().add(const CalendarEvent.selectionAllRequested());
           },
         ),
       );
