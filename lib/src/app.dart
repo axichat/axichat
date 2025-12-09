@@ -440,6 +440,11 @@ class MaterialAxichat extends StatelessWidget {
                         !location.authenticationRequired) {
                       unawaited(Future<void>.delayed(animationDuration, () {
                         if (!context.mounted) return;
+                        final latestAuthState =
+                            context.read<AuthenticationCubit>().state;
+                        if (latestAuthState is! AuthenticationComplete) {
+                          return;
+                        }
                         final currentLocation =
                             routeLocations[_router.state.matchedLocation]!;
                         if (currentLocation.authenticationRequired) {
