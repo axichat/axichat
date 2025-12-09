@@ -44,14 +44,16 @@ class OperationProgressController {
     );
   }
 
-  Future<void> complete() async {
+  Future<void> complete({
+    Duration duration = const Duration(milliseconds: 600),
+  }) async {
     if (!_active) {
       reset();
       return;
     }
     await _controller.animateTo(
       1.0,
-      duration: const Duration(milliseconds: 600),
+      duration: duration,
       curve: Curves.easeInOutCubic,
     );
     _active = false;

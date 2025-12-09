@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:async/async.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
@@ -26,6 +27,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 part 'chat_bloc.freezed.dart';
 part 'chat_event.dart';
@@ -1164,6 +1167,28 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
           return;
         }
+        var emailAttachmentsToSend = queuedAttachments;
+        if (attachmentsViaEmail && queuedAttachments.length > 1) {
+          try {
+            emailAttachmentsToSend = await _bundleEmailAttachments(
+              attachments: queuedAttachments,
+              caption: body,
+            );
+          } on Exception catch (error, stackTrace) {
+            _log.warning(
+              'Failed to bundle email attachments',
+              error,
+              stackTrace,
+            );
+            emit(
+              state.copyWith(
+                composerError:
+                    'Unable to bundle attachments. Please try again.',
+              ),
+            );
+            return;
+          }
+        }
         final shouldSendEmailText = body != null && !attachmentsViaEmail;
         if (shouldSendEmailText) {
           final shouldFanOut = _shouldFanOut(emailRecipients, chat);
@@ -1189,7 +1214,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (attachmentsViaEmail) {
           final captionForAttachments = hasBody ? body : null;
           await _sendQueuedAttachments(
-            attachments: queuedAttachments,
+            attachments: emailAttachmentsToSend,
             chat: chat,
             service: service!,
             recipients: emailRecipients,
@@ -1808,6 +1833,69 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<List<PendingAttachment>> _bundleEmailAttachments({
+    required List<PendingAttachment> attachments,
+    required String? caption,
+  }) async {
+    if (attachments.length <= 1) return attachments;
+    final bundled = await _createAttachmentBundle(
+      attachments: attachments,
+      caption: caption,
+    );
+    return [
+      PendingAttachment(
+        id: _nextPendingAttachmentId(),
+        attachment: bundled,
+        status: PendingAttachmentStatus.queued,
+      ),
+    ];
+  }
+
+  Future<EmailAttachment> _createAttachmentBundle({
+    required List<PendingAttachment> attachments,
+    required String? caption,
+  }) async {
+    final tempDir = await getTemporaryDirectory();
+    final bundleDir = Directory(p.join(tempDir.path, 'email_attachments'));
+    if (!await bundleDir.exists()) {
+      await bundleDir.create(recursive: true);
+    }
+    final zipName = 'attachments_${DateTime.now().microsecondsSinceEpoch}.zip';
+    final zipPath = p.join(bundleDir.path, zipName);
+    final archive = Archive();
+    for (final pending in attachments) {
+      final attachment = pending.attachment;
+      final file = File(attachment.path);
+      if (!await file.exists()) {
+        throw FileSystemException('Attachment missing', attachment.path);
+      }
+      final bytes = await file.readAsBytes();
+      final filename = attachment.fileName.isNotEmpty
+          ? attachment.fileName
+          : p.basename(attachment.path);
+      archive.addFile(
+        ArchiveFile(
+          filename,
+          bytes.length,
+          bytes,
+        ),
+      );
+    }
+    final encoded = ZipEncoder().encode(archive);
+    if (encoded == null) {
+      throw const FileSystemException('Failed to bundle attachments');
+    }
+    final zipFile = File(zipPath);
+    await zipFile.writeAsBytes(encoded, flush: true);
+    return EmailAttachment(
+      path: zipFile.path,
+      fileName: zipName,
+      sizeBytes: encoded.length,
+      mimeType: 'application/zip',
+      caption: caption,
+    );
+  }
+
   Future<void> _sendQueuedAttachments({
     required Iterable<PendingAttachment> attachments,
     required Chat chat,
@@ -1819,10 +1907,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     var index = 0;
     for (final attachment in attachments) {
-      final latest = _pendingAttachmentById(attachment.id);
-      if (latest == null) {
-        continue;
-      }
+      final latest = _pendingAttachmentById(attachment.id) ?? attachment;
       final shouldApplyCaption =
           captionForFirstAttachment != null && index == 0;
       final pendingWithCaption = shouldApplyCaption

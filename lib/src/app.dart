@@ -431,12 +431,22 @@ class MaterialAxichat extends StatelessWidget {
                   listener: (context, state) {
                     final location =
                         routeLocations[_router.state.matchedLocation]!;
+                    final animationDuration =
+                        context.read<SettingsCubit>().animationDuration;
                     if (state is AuthenticationNone &&
                         location.authenticationRequired) {
                       _router.go(const LoginRoute().location);
                     } else if (state is AuthenticationComplete &&
                         !location.authenticationRequired) {
-                      _router.go(const HomeRoute().location);
+                      unawaited(Future<void>.delayed(animationDuration, () {
+                        if (!context.mounted) return;
+                        final currentLocation =
+                            routeLocations[_router.state.matchedLocation]!;
+                        if (currentLocation.authenticationRequired) {
+                          return;
+                        }
+                        _router.go(const HomeRoute().location);
+                      }));
                     }
                     _handleShareIntent(context);
                   },
