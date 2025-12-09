@@ -47,6 +47,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _operationAcknowledged = false;
   bool _signupButtonLoading = false;
   bool _handledInitialAuthState = false;
+  bool _loginSuccessHandled = false;
 
   @override
   void initState() {
@@ -79,6 +80,7 @@ class _LoginScreenState extends State<LoginScreen>
           _signupFlowLocked = false;
         }
       }
+      _loginSuccessHandled = false;
     });
     _operationProgressController.start();
   }
@@ -132,6 +134,7 @@ class _LoginScreenState extends State<LoginScreen>
       _operationAcknowledged = false;
       _signupFlowLocked = false;
       _signupButtonLoading = false;
+      _loginSuccessHandled = false;
     });
     _operationProgressController.reset();
   }
@@ -147,6 +150,7 @@ class _LoginScreenState extends State<LoginScreen>
         _signupFlowLocked = false;
         _login = false;
       }
+      _loginSuccessHandled = false;
     });
     _operationProgressController.reset();
   }
@@ -170,6 +174,15 @@ class _LoginScreenState extends State<LoginScreen>
       _AuthFlow.login,
       label: context.l10n.authLoggingIn,
     );
+  }
+
+  Future<void> _completeLoginAnimation() async {
+    if (_loginSuccessHandled) {
+      return;
+    }
+    _loginSuccessHandled = true;
+    final duration = context.read<SettingsCubit>().animationDuration;
+    await _operationProgressController.complete(duration: duration);
   }
 
   void _handleAuthState(AuthenticationState state) {
@@ -232,6 +245,9 @@ class _LoginScreenState extends State<LoginScreen>
     if (state is AuthenticationFailure ||
         state is AuthenticationSignupFailure) {
       unawaited(_failOperation());
+    }
+    if (state is AuthenticationComplete && _activeFlow == _AuthFlow.login) {
+      unawaited(_completeLoginAnimation());
     }
   }
 
