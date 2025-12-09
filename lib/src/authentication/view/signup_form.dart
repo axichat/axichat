@@ -17,6 +17,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -87,6 +88,8 @@ class _SignupFormState extends State<SignupForm>
   AvatarUploadPayload? _signupAvatar;
   Uint8List? _signupAvatarPreview;
   Uint8List? _carouselAvatarPreview;
+  final ValueNotifier<Uint8List?> _avatarPreviewNotifier =
+      ValueNotifier<Uint8List?>(null);
   AvatarTemplate? _selectedTemplate;
   late final List<AvatarTemplate> _avatarTemplates =
       buildDefaultAvatarTemplates();
@@ -158,6 +161,7 @@ class _SignupFormState extends State<SignupForm>
       ..dispose();
     _captchaRetryTimer?.cancel();
     _stopAvatarCarousel();
+    _avatarPreviewNotifier.dispose();
     widget.onLoadingChanged?.call(false);
     _lastReportedLoading = null;
     super.dispose();
@@ -196,6 +200,27 @@ class _SignupFormState extends State<SignupForm>
       _allowInsecureResetTick++;
     }
     setState(() {});
+  }
+
+  void _updateAvatarPreview(Uint8List? bytes) {
+    if (_avatarPreviewNotifier.value == bytes) {
+      return;
+    }
+    _avatarPreviewNotifier.value = bytes;
+  }
+
+  double _measureTextHeight(
+    BuildContext context, {
+    required String text,
+    required TextStyle style,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    return painter.height;
   }
 
   void _notifyLoadingChanged(bool loading) {
@@ -290,6 +315,88 @@ class _SignupFormState extends State<SignupForm>
 
   bool get _hasUserSelectedAvatar => _signupAvatar != null;
 
+  Future<GeneratedAvatar?> _generateAvatarFromTemplate({
+    required AvatarTemplate template,
+    required Color background,
+    required ShadColorScheme colors,
+  }) async {
+    try {
+      final generated = await template.generator(background, colors);
+      if (generated.bytes.isEmpty) {
+        return null;
+      }
+      return generated;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<
+      ({
+        GeneratedAvatar generated,
+        AvatarTemplate template,
+        Color background
+      })?> _loadAnyTemplateAvatar({
+    AvatarTemplate? preferredTemplate,
+    int maxAttempts = 6,
+  }) async {
+    final colors = context.colorScheme;
+    final tried = <String>{};
+    AvatarTemplate? template = preferredTemplate;
+    while (tried.length < maxAttempts) {
+      template ??= _pickCarouselTemplate();
+      if (template == null) {
+        break;
+      }
+      if (!tried.add(template.id)) {
+        template = _pickCarouselTemplate();
+        continue;
+      }
+      final background = template.hasAlphaBackground
+          ? _randomAvatarBackgroundColor(colors)
+          : _avatarBackground;
+      final generated = await _generateAvatarFromTemplate(
+        template: template,
+        background: background,
+        colors: colors,
+      );
+      if (generated != null) {
+        return (
+          generated: generated,
+          template: template,
+          background: background
+        );
+      }
+      template = null;
+    }
+    return null;
+  }
+
+  GeneratedAvatar _fallbackGeneratedAvatar() {
+    const size = _avatarTargetSize;
+    final colors = context.colorScheme;
+    final base = _randomAvatarBackgroundColor(colors);
+    final accent = _randomAvatarBackgroundColor(colors);
+    final image = img.Image(width: size, height: size, numChannels: 4);
+    img.fill(image, color: _imgColor(base));
+    img.fillRect(
+      image,
+      x1: size ~/ 6,
+      y1: size ~/ 6,
+      x2: size - size ~/ 6 - 1,
+      y2: size - size ~/ 6 - 1,
+      color: _imgColor(accent),
+    );
+    final bytes = Uint8List.fromList(img.encodePng(image));
+    return GeneratedAvatar(
+      bytes: bytes,
+      mimeType: 'image/png',
+      width: size,
+      height: size,
+      hasAlpha: false,
+    );
+  }
+
   void _startAvatarCarousel() {
     if (_hasUserSelectedAvatar ||
         _avatarProcessing ||
@@ -325,26 +432,28 @@ class _SignupFormState extends State<SignupForm>
         _hasUserSelectedAvatar) {
       return;
     }
-    final colors = context.colorScheme;
-    final template = _pickCarouselTemplate();
-    if (template == null) {
-      return;
-    }
     _avatarCarouselInFlight = true;
-    final background = template.hasAlphaBackground
-        ? _randomAvatarBackgroundColor(colors)
-        : _avatarBackground;
     try {
-      final generated = await template.generator(background, colors);
+      final template = _pickCarouselTemplate();
+      if (template == null) {
+        return;
+      }
+      final result = await _loadAnyTemplateAvatar(
+        preferredTemplate: template,
+        maxAttempts: 6,
+      );
+      final preview = result?.generated ?? _fallbackGeneratedAvatar();
       if (!mounted || _hasUserSelectedAvatar) {
         return;
       }
-      _pushRecentCarouselAvatar(template.id);
+      if (result != null) {
+        _pushRecentCarouselAvatar(result.template.id);
+      }
       setState(() {
-        _carouselAvatarPreview = generated.bytes;
+        _carouselAvatarPreview = preview.bytes;
+        _avatarError = null;
       });
-    } catch (_) {
-      // Ignore carousel rendering failures and try again on the next tick.
+      _updateAvatarPreview(preview.bytes);
     } finally {
       _avatarCarouselInFlight = false;
     }
@@ -395,10 +504,9 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Color _randomAvatarBackgroundColor(ShadColorScheme colors) {
-    final accentHsl = HSLColor.fromColor(colors.accent);
-    final hue = (_random.nextDouble() * 360.0 + accentHsl.hue * 0.35) % 360;
-    final saturation = 0.5 + _random.nextDouble() * 0.25;
-    final lightness = 0.45 + _random.nextDouble() * 0.2;
+    final hue = _random.nextDouble() * 360.0;
+    final saturation = 0.65 + _random.nextDouble() * 0.35;
+    final lightness = 0.45 + _random.nextDouble() * 0.15;
     return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
   }
 
@@ -409,7 +517,6 @@ class _SignupFormState extends State<SignupForm>
     if (_avatarProcessing) return;
     if (!mounted) return;
     _stopAvatarCarousel();
-    final l10n = context.l10n;
     setState(() {
       _avatarProcessing = true;
       _avatarError = null;
@@ -417,31 +524,48 @@ class _SignupFormState extends State<SignupForm>
     });
     final effectiveBackground = background ?? _avatarBackground;
     try {
-      final generated =
-          await template.generator(effectiveBackground, context.colorScheme);
-      final decoded = img.decodeImage(generated.bytes);
+      final result = await _loadAnyTemplateAvatar(
+            preferredTemplate: template,
+            maxAttempts: 6,
+          ) ??
+          (
+            generated: _fallbackGeneratedAvatar(),
+            template: template,
+            background: effectiveBackground,
+          );
+      final decoded = img.decodeImage(result.generated.bytes);
       if (decoded == null) {
-        if (!mounted) return;
-        setState(() {
-          _avatarProcessing = false;
-          _avatarError = l10n.signupAvatarRenderError;
-        });
-        _resumeAvatarCarouselIfNeeded();
+        final fallback = _fallbackGeneratedAvatar();
+        final fallbackDecoded = img.decodeImage(fallback.bytes);
+        if (fallbackDecoded == null || !mounted) {
+          return;
+        }
+        _avatarBackground = _avatarBackground;
+        _signupSourceImage = fallbackDecoded;
+        _selectedTemplate = template;
+        _lastSelectionHadAlpha = false;
+        await _rebuildSignupAvatar();
         return;
       }
-      _avatarBackground = effectiveBackground;
+      _avatarBackground = result.template.hasAlphaBackground
+          ? result.background
+          : _avatarBackground;
       _signupSourceImage = decoded;
-      _selectedTemplate = template;
+      _selectedTemplate = result.template;
       _lastSelectionHadAlpha =
-          template.hasAlphaBackground || generated.hasAlpha;
+          result.template.hasAlphaBackground || result.generated.hasAlpha;
       await _rebuildSignupAvatar();
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _avatarProcessing = false;
-        _avatarError = l10n.signupAvatarLoadError;
-      });
-      _resumeAvatarCarouselIfNeeded();
+      final fallback = _fallbackGeneratedAvatar();
+      final decoded = img.decodeImage(fallback.bytes);
+      if (!mounted || decoded == null) {
+        return;
+      }
+      _avatarBackground = _avatarBackground;
+      _signupSourceImage = decoded;
+      _selectedTemplate = template;
+      _lastSelectionHadAlpha = false;
+      await _rebuildSignupAvatar();
     }
   }
 
@@ -547,6 +671,7 @@ class _SignupFormState extends State<SignupForm>
         _avatarProcessing = false;
         _avatarError = null;
       });
+      _updateAvatarPreview(payload.bytes);
       _stopAvatarCarousel();
     } catch (error) {
       if (!mounted) return;
@@ -642,71 +767,23 @@ class _SignupFormState extends State<SignupForm>
 
   Future<void> _openAvatarMenu() async {
     if (_avatarProcessing) return;
-    final l10n = context.l10n;
-    final colors = context.colorScheme;
+    _updateAvatarPreview(_signupAvatarPreview ?? _carouselAvatarPreview);
     await showShadDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return ShadDialog(
-          title: Text(
-            l10n.signupAvatarEdit,
-            style: context.modalHeaderTextStyle,
-          ),
-          actions: [
-            ShadButton.outline(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(l10n.commonCancel),
-            ).withTapBounce(),
-            ShadButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                final selection = _pickAvatarSelection();
-                if (selection == null) {
-                  return;
-                }
-                unawaited(_selectTemplate(
-                  selection.template,
-                  background: selection.background,
-                ));
-              },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: 8.0,
-                children: [
-                  const Icon(LucideIcons.sparkles),
-                  Text(l10n.signupAvatarShuffle),
-                ],
-              ),
-            ).withTapBounce(),
-          ],
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 14.0,
-            children: [
-              Text(
-                l10n.signupAvatarMenuDescription,
-                style: context.textTheme.small
-                    .copyWith(color: colors.mutedForeground),
-              ),
-              ShadButton.outline(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(_pickAvatarFromFiles());
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 8.0,
-                  children: [
-                    const Icon(LucideIcons.upload),
-                    Text(l10n.signupAvatarUploadImage),
-                  ],
-                ),
-              ).withTapBounce(),
-            ],
-          ),
-        );
-      },
+      builder: (_) => _AvatarMenuDialog(
+        avatarBytesListenable: _avatarPreviewNotifier,
+        onShuffle: () async {
+          final selection = _pickAvatarSelection();
+          if (selection == null) {
+            return;
+          }
+          await _selectTemplate(
+            selection.template,
+            background: selection.background,
+          );
+        },
+        onUpload: _pickAvatarFromFiles,
+      ),
     );
   }
 
@@ -914,6 +991,13 @@ class _SignupFormState extends State<SignupForm>
             _reloadCaptcha(resetFirstLoad: true);
           });
         }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _resumeAvatarCarouselIfNeeded();
+          if (_carouselAvatarPreview == null) {
+            unawaited(_tickAvatarCarousel());
+          }
+        });
         final bool onSubmitStep = _currentIndex == _formKeys.length - 1;
         final bool signupFlowActive =
             state is AuthenticationSignUpInProgress && onSubmitStep;
@@ -928,11 +1012,16 @@ class _SignupFormState extends State<SignupForm>
         const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
         const globalErrorPadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
         const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
+        final l10n = context.l10n;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
+        final usernameDescriptionHeight = _measureTextHeight(
+          context,
+          text: l10n.authUsernameCaseInsensitive,
+          style: context.textTheme.small,
+        );
         final showGlobalError =
             !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
-        final l10n = context.l10n;
         final displayedAvatarBytes =
             _signupAvatarPreview ?? _carouselAvatarPreview;
         return Align(
@@ -1014,11 +1103,17 @@ class _SignupFormState extends State<SignupForm>
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    _SignupAvatarSelector(
-                                      bytes: displayedAvatarBytes,
-                                      username: _jidTextController.text,
-                                      processing: _avatarProcessing,
-                                      onTap: _openAvatarMenu,
+                                    Transform.translate(
+                                      offset: Offset(
+                                        0,
+                                        -usernameDescriptionHeight,
+                                      ),
+                                      child: _SignupAvatarSelector(
+                                        bytes: displayedAvatarBytes,
+                                        username: _jidTextController.text,
+                                        processing: _avatarProcessing,
+                                        onTap: _openAvatarMenu,
+                                      ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
@@ -1432,6 +1527,117 @@ class _AvatarSelection {
   final Color background;
 }
 
+class _AvatarMenuDialog extends StatefulWidget {
+  const _AvatarMenuDialog({
+    required this.avatarBytesListenable,
+    required this.onShuffle,
+    required this.onUpload,
+  });
+
+  final ValueListenable<Uint8List?> avatarBytesListenable;
+  final Future<void> Function() onShuffle;
+  final Future<void> Function() onUpload;
+
+  @override
+  State<_AvatarMenuDialog> createState() => _AvatarMenuDialogState();
+}
+
+class _AvatarMenuDialogState extends State<_AvatarMenuDialog> {
+  bool _shuffling = false;
+
+  Future<void> _handleShuffle() async {
+    if (_shuffling) return;
+    setState(() => _shuffling = true);
+    try {
+      await widget.onShuffle();
+    } finally {
+      if (mounted) {
+        setState(() => _shuffling = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final l10n = context.l10n;
+    final busy = _shuffling;
+    return ShadDialog(
+      title: Text(
+        l10n.signupAvatarEdit,
+        style: context.modalHeaderTextStyle,
+      ),
+      actions: [
+        ShadButton.outline(
+          onPressed: busy ? null : () => Navigator.of(context).pop(),
+          child: Text(l10n.commonCancel),
+        ).withTapBounce(),
+        ShadButton(
+          onPressed: busy ? null : _handleShuffle,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 8.0,
+            children: [
+              if (busy)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colors.foreground,
+                  ),
+                )
+              else
+                const Icon(LucideIcons.sparkles),
+              Text(l10n.signupAvatarShuffle),
+            ],
+          ),
+        ).withTapBounce(),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 14.0,
+        children: [
+          Center(
+            child: ValueListenableBuilder<Uint8List?>(
+              valueListenable: widget.avatarBytesListenable,
+              builder: (_, bytes, __) => AxiAvatar(
+                jid: 'avatar@axichat',
+                size: 96,
+                subscription: Subscription.none,
+                presence: null,
+                avatarBytes: bytes,
+              ),
+            ),
+          ),
+          Text(
+            l10n.signupAvatarMenuDescription,
+            style:
+                context.textTheme.small.copyWith(color: colors.mutedForeground),
+          ),
+          ShadButton.outline(
+            onPressed: busy
+                ? null
+                : () {
+                    Navigator.of(context).pop();
+                    unawaited(widget.onUpload());
+                  },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 8.0,
+              children: [
+                const Icon(LucideIcons.upload),
+                Text(l10n.signupAvatarUploadImage),
+              ],
+            ),
+          ).withTapBounce(),
+        ],
+      ),
+    );
+  }
+}
+
 class _SignupAvatarSelector extends StatefulWidget {
   const _SignupAvatarSelector({
     required this.bytes,
@@ -1456,8 +1662,9 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final displayJid =
-        widget.username.isEmpty ? 'you@axichat' : '${widget.username}@preview';
+    final displayJid = widget.username.isEmpty
+        ? 'avatar@axichat'
+        : '${widget.username}@preview';
     final overlayVisible = _hovered || widget.processing;
     return MouseRegion(
       cursor: SystemMouseCursors.click,

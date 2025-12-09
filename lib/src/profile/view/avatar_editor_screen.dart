@@ -180,6 +180,20 @@ class _AvatarSummaryCard extends StatelessWidget {
                 children: [
                   ShadButton.outline(
                     size: ShadButtonSize.sm,
+                    onPressed: state.processing
+                        ? null
+                        : () => cubit.shuffleTemplate(colors),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 8.0,
+                      children: [
+                        Icon(LucideIcons.shuffle),
+                        Text('Shuffle'),
+                      ],
+                    ),
+                  ),
+                  ShadButton.outline(
+                    size: ShadButtonSize.sm,
                     onPressed: state.processing ? null : cubit.pickImage,
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -238,6 +252,7 @@ class _CropCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final cubit = context.read<AvatarEditorCubit>();
     final previewBytes = state.previewBytes ?? state.sourceBytes;
     final hasPreview = previewBytes != null &&
         previewBytes.isNotEmpty &&
@@ -249,9 +264,42 @@ class _CropCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 12.0,
         children: [
-          Text(
-            'Crop & compress',
-            style: context.textTheme.h4.copyWith(color: colors.foreground),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 6.0,
+                  children: [
+                    Text(
+                      'Crop & focus',
+                      style: context.textTheme.h4
+                          .copyWith(color: colors.foreground),
+                    ),
+                    Text(
+                      'Drag or resize the 3×3 grid to set your crop. The image stays fixed and the grid snaps to the center when you get close. Double tap to reset.',
+                      style: context.textTheme.small
+                          .copyWith(color: colors.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasPreview)
+                ShadButton.ghost(
+                  size: ShadButtonSize.sm,
+                  onPressed: cubit.resetCrop,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 8.0,
+                    children: [
+                      Icon(LucideIcons.refreshCcw),
+                      Text('Reset'),
+                    ],
+                  ),
+                ),
+            ],
           ),
           if (!hasPreview)
             Container(
@@ -263,23 +311,55 @@ class _CropCard extends StatelessWidget {
                 border: Border.all(color: colors.border),
               ),
               child: Text(
-                'Add a photo or pick a default avatar',
+                'Add a photo or pick a default avatar to adjust the framing.',
                 style: context.textTheme.small.copyWith(
                   color: colors.mutedForeground,
                 ),
               ),
             )
           else
-            _CropperCanvas(
-              bytes: previewBytes,
-              state: state,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 12.0,
+              children: [
+                _CropperCanvas(
+                  bytes: previewBytes,
+                  state: state,
+                ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Use the handles on the grid to resize or drag the square; it will snap to center when aligned.',
+                        style: context.textTheme.small.copyWith(
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      spacing: 4.0,
+                      children: [
+                        Text(
+                          '${state.cropRect?.width.round() ?? 0} px crop',
+                          style: context.textTheme.small
+                              .copyWith(color: colors.foreground),
+                        ),
+                        Text(
+                          'Saved at 256×256 • < 64 KB',
+                          style: context.textTheme.small.copyWith(
+                            color: colors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
-          Text(
-            'Drag the corners to position your crop. We resize to 256×256 and keep files under 64KB.',
-            style: context.textTheme.small.copyWith(
-              color: colors.mutedForeground,
-            ),
-          ),
         ],
       ),
     );
@@ -299,25 +379,16 @@ class _CropperCanvas extends StatefulWidget {
   State<_CropperCanvas> createState() => _CropperCanvasState();
 }
 
-enum _DragHandle {
-  move,
-  topLeft,
-  topRight,
-  bottomLeft,
-  bottomRight,
-}
-
 class _CropperCanvasState extends State<_CropperCanvas> {
-  static const double _maxCanvas = 240.0;
-  static const double _handleSize = 14.0;
-  static const double _minPaintPadding = 0.0;
-  static const double _minCropSide = 48.0;
+  static const double _maxCanvas = 320.0;
+  static const double _handleTouchSize = 28.0;
+  static const double _snapDistance = 12.0;
 
-  _DragHandle? _handle;
-  Rect? _startRect;
+  Rect? _startRectImage;
   Offset? _startLocal;
   double _scaleX = 1;
   double _scaleY = 1;
+  _CropDragMode _dragMode = _CropDragMode.none;
 
   @override
   Widget build(BuildContext context) {
@@ -342,13 +413,13 @@ class _CropperCanvasState extends State<_CropperCanvas> {
           cropRect.height * _scaleY,
         );
         return Center(
-          child: SizedBox(
-            width: renderWidth,
-            height: renderHeight,
+          child: ClipRRect(
+            borderRadius: context.radius,
             child: Stack(
               children: [
-                ClipRRect(
-                  borderRadius: context.radius,
+                SizedBox(
+                  width: renderWidth,
+                  height: renderHeight,
                   child: Image.memory(
                     widget.bytes,
                     width: renderWidth,
@@ -361,22 +432,22 @@ class _CropperCanvasState extends State<_CropperCanvas> {
                     behavior: HitTestBehavior.opaque,
                     onPanStart: (details) => _onPanStart(
                       details.localPosition,
+                      cropRect,
                       selectionRect,
-                      imageWidth,
-                      imageHeight,
                     ),
                     onPanUpdate: (details) => _onPanUpdate(
                       details.localPosition,
                       cubit,
+                      imageWidth,
+                      imageHeight,
                     ),
                     onPanEnd: (_) => _resetDrag(),
                     onPanCancel: _resetDrag,
+                    onDoubleTap: cubit.resetCrop,
                     child: CustomPaint(
                       painter: _CropOverlayPainter(
                         selection: selectionRect,
                         colors: colors,
-                        handleSize: _handleSize,
-                        padding: _minPaintPadding,
                       ),
                     ),
                   ),
@@ -391,145 +462,170 @@ class _CropperCanvasState extends State<_CropperCanvas> {
 
   void _onPanStart(
     Offset local,
+    Rect cropRect,
     Rect selectionRect,
-    double imageWidth,
-    double imageHeight,
   ) {
-    _handle = _hitTest(local, selectionRect);
     _startLocal = local;
-    _startRect =
-        widget.state.cropRect ?? _fallbackCropRect(imageWidth, imageHeight);
+    _startRectImage = cropRect;
+    _dragMode = _hitTest(selectionRect, local);
   }
 
   void _onPanUpdate(
     Offset local,
     AvatarEditorCubit cubit,
+    double imageWidth,
+    double imageHeight,
   ) {
-    if (_handle == null || _startRect == null || _startLocal == null) return;
+    if (_dragMode == _CropDragMode.none ||
+        _startRectImage == null ||
+        _startLocal == null) {
+      return;
+    }
     final deltaDisplay = local - _startLocal!;
     final deltaImage = Offset(
       deltaDisplay.dx / _scaleX,
       deltaDisplay.dy / _scaleY,
     );
-    final updated = _updatedRect(
-      _startRect!,
-      deltaImage,
-      _handle!,
-    );
-    cubit.updateCropRect(updated);
+    final startRect = _startRectImage!;
+    Rect? next;
+    switch (_dragMode) {
+      case _CropDragMode.move:
+        next = startRect.shift(deltaImage);
+        break;
+      case _CropDragMode.topLeft:
+      case _CropDragMode.topRight:
+      case _CropDragMode.bottomLeft:
+      case _CropDragMode.bottomRight:
+        next = _resizeFromCorner(startRect, deltaImage, _dragMode);
+        break;
+      case _CropDragMode.none:
+        break;
+    }
+    if (next == null) return;
+    next = _snapToCenter(next, imageWidth, imageHeight);
+    cubit.updateCropRect(next);
   }
 
   void _resetDrag() {
-    _handle = null;
-    _startRect = null;
+    _startRectImage = null;
     _startLocal = null;
+    _dragMode = _CropDragMode.none;
   }
 
-  _DragHandle _hitTest(Offset local, Rect selection) {
-    final hitboxes = <Rect, _DragHandle>{
-      Rect.fromCenter(
-        center: selection.topLeft,
-        width: _handleSize * 2,
-        height: _handleSize * 2,
-      ): _DragHandle.topLeft,
-      Rect.fromCenter(
-        center: selection.topRight,
-        width: _handleSize * 2,
-        height: _handleSize * 2,
-      ): _DragHandle.topRight,
-      Rect.fromCenter(
-        center: selection.bottomLeft,
-        width: _handleSize * 2,
-        height: _handleSize * 2,
-      ): _DragHandle.bottomLeft,
-      Rect.fromCenter(
-        center: selection.bottomRight,
-        width: _handleSize * 2,
-        height: _handleSize * 2,
-      ): _DragHandle.bottomRight,
-    };
-    for (final entry in hitboxes.entries) {
-      if (entry.key.contains(local)) return entry.value;
-    }
-    if (selection.contains(local)) return _DragHandle.move;
-    return _DragHandle.move;
-  }
-
-  Rect _updatedRect(
-    Rect startRect,
-    Offset delta,
-    _DragHandle handle,
+  Rect _resizeFromCorner(
+    Rect start,
+    Offset deltaImage,
+    _CropDragMode corner,
   ) {
-    switch (handle) {
-      case _DragHandle.move:
-        return startRect.shift(delta);
-      case _DragHandle.topLeft:
-        return _resizeFromCorner(
-          movingCorner: startRect.topLeft + delta,
-          anchor: startRect.bottomRight,
-        );
-      case _DragHandle.topRight:
-        return _resizeFromCorner(
-          movingCorner: startRect.topRight + delta,
-          anchor: startRect.bottomLeft,
-        );
-      case _DragHandle.bottomLeft:
-        return _resizeFromCorner(
-          movingCorner: startRect.bottomLeft + delta,
-          anchor: startRect.topRight,
-        );
-      case _DragHandle.bottomRight:
-        return _resizeFromCorner(
-          movingCorner: startRect.bottomRight + delta,
-          anchor: startRect.topLeft,
-        );
+    var left = start.left;
+    var top = start.top;
+    var right = start.right;
+    var bottom = start.bottom;
+    switch (corner) {
+      case _CropDragMode.topLeft:
+        left += deltaImage.dx;
+        top += deltaImage.dy;
+        break;
+      case _CropDragMode.topRight:
+        right += deltaImage.dx;
+        top += deltaImage.dy;
+        break;
+      case _CropDragMode.bottomLeft:
+        left += deltaImage.dx;
+        bottom += deltaImage.dy;
+        break;
+      case _CropDragMode.bottomRight:
+        right += deltaImage.dx;
+        bottom += deltaImage.dy;
+        break;
+      case _CropDragMode.move:
+      case _CropDragMode.none:
+        break;
     }
+    const minSide = AvatarEditorCubit.minCropSide;
+    left = min(left, right - minSide);
+    top = min(top, bottom - minSide);
+    right = max(right, left + minSide);
+    bottom = max(bottom, top + minSide);
+    final width = right - left;
+    final height = bottom - top;
+    final side = max(minSide, max(width, height));
+    return switch (corner) {
+      _CropDragMode.topLeft =>
+        Rect.fromLTWH(right - side, bottom - side, side, side),
+      _CropDragMode.topRight => Rect.fromLTWH(left, bottom - side, side, side),
+      _CropDragMode.bottomLeft => Rect.fromLTWH(right - side, top, side, side),
+      _CropDragMode.bottomRight => Rect.fromLTWH(left, top, side, side),
+      _CropDragMode.move => start,
+      _CropDragMode.none => start,
+    };
   }
 
-  Rect _resizeFromCorner({
-    required Offset movingCorner,
-    required Offset anchor,
-  }) {
-    final width = (anchor.dx - movingCorner.dx).abs();
-    final height = (anchor.dy - movingCorner.dy).abs();
-    final side = max(_minCropSide, max(width, height));
-    final anchorAtBottomRight =
-        anchor.dx >= movingCorner.dx && anchor.dy >= movingCorner.dy;
-    if (anchorAtBottomRight) {
-      return Rect.fromLTWH(anchor.dx - side, anchor.dy - side, side, side);
+  Rect _snapToCenter(Rect rect, double imageWidth, double imageHeight) {
+    final imageCenter = Offset(imageWidth / 2, imageHeight / 2);
+    final minScale = min(_scaleX, _scaleY);
+    final thresholdImage =
+        minScale <= 0 ? _snapDistance : _snapDistance / minScale;
+    if ((rect.center - imageCenter).distance <= thresholdImage) {
+      return Rect.fromCenter(
+        center: imageCenter,
+        width: rect.width,
+        height: rect.height,
+      );
     }
-    final anchorAtTopLeft =
-        anchor.dx <= movingCorner.dx && anchor.dy <= movingCorner.dy;
-    if (anchorAtTopLeft) {
-      return Rect.fromLTWH(anchor.dx, anchor.dy, side, side);
+    return rect;
+  }
+
+  _CropDragMode _hitTest(Rect selectionRect, Offset local) {
+    const handle = _handleTouchSize;
+    final handleRects = <_CropDragMode, Rect>{
+      _CropDragMode.topLeft: Rect.fromCenter(
+        center: selectionRect.topLeft,
+        width: handle,
+        height: handle,
+      ),
+      _CropDragMode.topRight: Rect.fromCenter(
+        center: selectionRect.topRight,
+        width: handle,
+        height: handle,
+      ),
+      _CropDragMode.bottomLeft: Rect.fromCenter(
+        center: selectionRect.bottomLeft,
+        width: handle,
+        height: handle,
+      ),
+      _CropDragMode.bottomRight: Rect.fromCenter(
+        center: selectionRect.bottomRight,
+        width: handle,
+        height: handle,
+      ),
+    };
+    for (final entry in handleRects.entries) {
+      if (entry.value.contains(local)) return entry.key;
     }
-    final anchorAtTopRight = anchor.dx >= movingCorner.dx;
-    if (anchorAtTopRight) {
-      return Rect.fromLTWH(anchor.dx - side, anchor.dy, side, side);
-    }
-    return Rect.fromLTWH(anchor.dx, anchor.dy - side, side, side);
+    if (selectionRect.contains(local)) return _CropDragMode.move;
+    return _CropDragMode.none;
   }
 
   Rect _fallbackCropRect(double imageWidth, double imageHeight) {
-    final side = min(imageWidth, imageHeight) * 0.7;
-    final left = (imageWidth - side) / 2;
-    final top = (imageHeight - side) / 2;
-    return Rect.fromLTWH(left, top, side, side);
+    final side = min(imageWidth, imageHeight) * 0.72;
+    final safeSide = max(side, AvatarEditorCubit.minCropSide);
+    final left = (imageWidth - safeSide) / 2;
+    final top = (imageHeight - safeSide) / 2;
+    return Rect.fromLTWH(left, top, safeSide, safeSide);
   }
 }
+
+enum _CropDragMode { move, topLeft, topRight, bottomLeft, bottomRight, none }
 
 class _CropOverlayPainter extends CustomPainter {
   _CropOverlayPainter({
     required this.selection,
     required this.colors,
-    required this.handleSize,
-    required this.padding,
   });
 
   final Rect selection;
   final ShadColorScheme colors;
-  final double handleSize;
-  final double padding;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -537,23 +633,23 @@ class _CropOverlayPainter extends CustomPainter {
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
       ..addRRect(
         RRect.fromRectAndRadius(
-          selection.deflate(padding),
-          const Radius.circular(8),
+          selection,
+          const Radius.circular(12),
         ),
       )
       ..fillType = PathFillType.evenOdd;
     final scrimPaint = Paint()
-      ..color = colors.background.withValues(alpha: 0.7);
+      ..color = colors.background.withValues(alpha: 0.65);
     canvas.drawPath(scrimPath, scrimPaint);
 
     final borderPaint = Paint()
       ..color = colors.primary
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 2.0;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        selection.deflate(padding),
-        const Radius.circular(8),
+        selection,
+        const Radius.circular(12),
       ),
       borderPaint,
     );
@@ -566,35 +662,40 @@ class _CropOverlayPainter extends CustomPainter {
       final dx = selection.left + selection.width * t;
       final dy = selection.top + selection.height * t;
       canvas.drawLine(
-        Offset(dx, selection.top + padding),
-        Offset(dx, selection.bottom - padding),
+        Offset(dx, selection.top),
+        Offset(dx, selection.bottom),
         gridPaint,
       );
       canvas.drawLine(
-        Offset(selection.left + padding, dy),
-        Offset(selection.right - padding, dy),
+        Offset(selection.left, dy),
+        Offset(selection.right, dy),
         gridPaint,
       );
     }
 
-    final handlePaint = Paint()
+    final cornerPaint = Paint()
       ..color = colors.primary
-      ..style = PaintingStyle.fill;
-    for (final offset in [
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    const handleLength = 14.0;
+    for (final corner in [
       selection.topLeft,
       selection.topRight,
       selection.bottomLeft,
       selection.bottomRight,
     ]) {
-      final rect = Rect.fromCenter(
-        center: offset,
-        width: handleSize,
-        height: handleSize,
+      final horizontal = Offset(
+        corner.dx +
+            (corner.dx == selection.left ? handleLength : -handleLength),
+        corner.dy,
       );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(3)),
-        handlePaint,
+      final vertical = Offset(
+        corner.dx,
+        corner.dy + (corner.dy == selection.top ? handleLength : -handleLength),
       );
+      canvas.drawLine(corner, horizontal, cornerPaint);
+      canvas.drawLine(corner, vertical, cornerPaint);
     }
   }
 
@@ -641,6 +742,40 @@ class _BackgroundPicker extends StatelessWidget {
           _ColorField(
             color: state.backgroundColor,
             onChanged: (color) => cubit.setBackgroundColor(color, colors),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _HexColorInput(
+                  color: state.backgroundColor,
+                  onSubmitted: (color) =>
+                      cubit.setBackgroundColor(color, colors),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                spacing: 6.0,
+                children: [
+                  Text(
+                    'Preview',
+                    style: context.textTheme.small.copyWith(
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      borderRadius: context.radius,
+                      color: state.backgroundColor,
+                      border: Border.all(color: colors.border),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           Wrap(
             spacing: 10,
@@ -769,6 +904,117 @@ class _ColorField extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+class _HexColorInput extends StatefulWidget {
+  const _HexColorInput({
+    required this.color,
+    required this.onSubmitted,
+  });
+
+  final Color color;
+  final ValueChanged<Color> onSubmitted;
+
+  @override
+  State<_HexColorInput> createState() => _HexColorInputState();
+}
+
+class _HexColorInputState extends State<_HexColorInput> {
+  late final TextEditingController _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _format(widget.color));
+  }
+
+  @override
+  void didUpdateWidget(covariant _HexColorInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final formatted = _format(widget.color);
+    if (_controller.text.toUpperCase() != formatted.toUpperCase()) {
+      _controller.value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 6.0,
+      children: [
+        Text(
+          'Hex value',
+          style:
+              context.textTheme.small.copyWith(color: colors.mutedForeground),
+        ),
+        ShadInput(
+          controller: _controller,
+          keyboardType: TextInputType.text,
+          placeholder: const Text('#AABBCC or #FFAABBCC'),
+          onChanged: (_) {
+            if (_error != null) {
+              setState(() {
+                _error = null;
+              });
+            }
+          },
+          onSubmitted: _handleSubmitted,
+        ),
+        if (_error != null)
+          Text(
+            _error!,
+            style: context.textTheme.small.copyWith(color: colors.destructive),
+          ),
+      ],
+    );
+  }
+
+  void _handleSubmitted(String value) {
+    final parsed = _parse(value);
+    if (parsed == null) {
+      setState(() {
+        _error = 'Use 6 or 8 hex digits';
+      });
+      return;
+    }
+    setState(() {
+      _error = null;
+    });
+    widget.onSubmitted(parsed);
+  }
+
+  Color? _parse(String value) {
+    final normalized = value.trim().replaceAll('#', '');
+    if (normalized.length != 6 && normalized.length != 8) return null;
+    final parsed = int.tryParse(normalized, radix: 16);
+    if (parsed == null) return null;
+    final argb = normalized.length == 6 ? (0xFF000000 | parsed) : parsed;
+    return Color(argb);
+  }
+
+  String _format(Color color) {
+    final hex = [color.r, color.g, color.b]
+        .map(
+          (channel) =>
+              (channel * 255.0).round().clamp(0, 255).toRadixString(16),
+        )
+        .map((channel) => channel.padLeft(2, '0'))
+        .join()
+        .toUpperCase();
+    return '#$hex';
   }
 }
 

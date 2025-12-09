@@ -137,6 +137,12 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/avatars/
+    - assets/images/avatars/abstract/
+    - assets/images/avatars/stem/
+    - assets/images/avatars/sport/
+    - assets/images/avatars/music/
+    - assets/images/avatars/misc/
     - assets/icons/
     - assets/licenses/delta_chat_core_mpl.txt
     - assets/licenses/noto_color_emoji_ofl.txt

@@ -120,14 +120,16 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           ),
         );
 
+  static const minCropSide = 48.0;
   static const _targetSize = 256;
   static const _maxBytes = 64 * 1024;
   static const _minQuality = 55;
-  static const _minCropSide = 48.0;
 
   final XmppService _xmppService;
   final ProfileCubit? _profileCubit;
   final List<AvatarTemplate> _templates;
+  final List<String> _recentShuffleIds = <String>[];
+  final _random = Random();
 
   img.Image? _decodedImage;
   Timer? _rebuildTimer;
@@ -175,8 +177,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   Future<void> selectTemplate(
     AvatarTemplate template,
-    ShadColorScheme colors,
-  ) async {
+    ShadColorScheme colors, {
+    Color? background,
+  }) async {
     emit(
       state.copyWith(
         processing: true,
@@ -186,10 +189,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       ),
     );
     try {
+      final selectedBackground = background ?? state.backgroundColor;
       final generated = await template.generator(
-        state.backgroundColor == Colors.transparent
+        selectedBackground == Colors.transparent
             ? colors.background
-            : state.backgroundColor,
+            : selectedBackground,
         colors,
       );
       final decoded = img.decodeImage(generated.bytes);
@@ -209,6 +213,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           imageWidth: decoded.width,
           imageHeight: decoded.height,
           cropRect: _initialCropRect(decoded),
+          backgroundColor: selectedBackground,
           clearError: true,
         ),
       );
@@ -237,6 +242,21 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
+  Future<void> shuffleTemplate(ShadColorScheme colors) async {
+    final template = _pickTemplate();
+    if (template == null) return;
+    final background = template.hasAlphaBackground
+        ? _randomAvatarBackgroundColor(colors)
+        : state.backgroundColor == Colors.transparent
+            ? colors.accent
+            : state.backgroundColor;
+    await selectTemplate(
+      template,
+      colors,
+      background: background,
+    );
+  }
+
   void updateCropRect(Rect rect) {
     final image = _decodedImage;
     if (image == null) return;
@@ -244,6 +264,32 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         _constrainRect(rect, image.width.toDouble(), image.height.toDouble());
     if (state.cropRect == clamped) return;
     emit(state.copyWith(cropRect: clamped));
+    _scheduleRebuild();
+  }
+
+  void resizeCropRect(double factor) {
+    final image = _decodedImage;
+    if (image == null) return;
+    final clampedFactor = factor.clamp(0.0, 1.0);
+    final maxSide = min(image.width.toDouble(), image.height.toDouble());
+    final side = minCropSide + (maxSide - minCropSide) * clampedFactor;
+    final current = state.cropRect ?? _initialCropRect(image);
+    final next = Rect.fromCenter(
+      center: current.center,
+      width: side,
+      height: side,
+    );
+    final constrained =
+        _constrainRect(next, image.width.toDouble(), image.height.toDouble());
+    emit(state.copyWith(cropRect: constrained));
+    _scheduleRebuild();
+  }
+
+  void resetCrop() {
+    final image = _decodedImage;
+    if (image == null) return;
+    final reset = _initialCropRect(image);
+    emit(state.copyWith(cropRect: reset));
     _scheduleRebuild();
   }
 
@@ -376,7 +422,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   Rect _initialCropRect(img.Image image) {
     final minSide = min(image.width, image.height).toDouble();
-    final side = max(_minCropSide, minSide * 0.8);
+    final side = max(minCropSide, minSide * 0.8);
     final left = (image.width - side) / 2;
     final top = (image.height - side) / 2;
     return _constrainRect(
@@ -389,7 +435,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Rect _constrainRect(Rect rect, double width, double height) {
     final availableSide = min(width, height);
     final desiredSide =
-        min(rect.width, rect.height).clamp(_minCropSide, availableSide);
+        min(rect.width, rect.height).clamp(minCropSide, availableSide);
     final maxLeft = width - desiredSide;
     final maxTop = height - desiredSide;
     final left = rect.left.clamp(0.0, maxLeft);
@@ -438,6 +484,40 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       bytes: jpgBytes,
       mimeType: 'image/jpeg',
     );
+  }
+
+  AvatarTemplate? _pickTemplate() {
+    final abstract = _templates
+        .where(
+            (template) => template.category == AvatarTemplateCategory.abstract)
+        .toList();
+    final nonAbstract = _templates
+        .where(
+            (template) => template.category != AvatarTemplateCategory.abstract)
+        .toList();
+    final hasAbstract = abstract.isNotEmpty;
+    final hasNonAbstract = nonAbstract.isNotEmpty;
+    if (!hasAbstract && !hasNonAbstract) return null;
+    final useAbstract = !hasNonAbstract ||
+        (hasAbstract && hasNonAbstract && _random.nextBool());
+    final pool = useAbstract ? abstract : nonAbstract;
+    final available = pool
+        .where((template) => !_recentShuffleIds.contains(template.id))
+        .toList();
+    final candidates = available.isEmpty ? pool : available;
+    final selection = candidates[_random.nextInt(candidates.length)];
+    _recentShuffleIds.add(selection.id);
+    if (_recentShuffleIds.length > 12) {
+      _recentShuffleIds.removeAt(0);
+    }
+    return selection;
+  }
+
+  Color _randomAvatarBackgroundColor(ShadColorScheme colors) {
+    final hue = _random.nextDouble() * 360.0;
+    final saturation = 0.65 + _random.nextDouble() * 0.35;
+    final lightness = 0.45 + _random.nextDouble() * 0.15;
+    return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
   }
 }
 
