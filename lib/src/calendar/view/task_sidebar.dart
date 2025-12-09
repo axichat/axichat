@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -17,7 +18,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -26,6 +26,7 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
@@ -1025,18 +1026,25 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     );
     if (!mounted || format == null) return;
     try {
-      final file = await _transferService.exportTasks(
+      final File file = await _transferService.exportTasks(
         tasks: tasks,
         format: format,
         fileNamePrefix: 'axichat_tasks',
       );
-      await Share.shareXFiles(
-        [XFile(file.path)],
+      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        file: file,
         subject: l10n.calendarExportSelected,
         text: '${l10n.calendarExportSelected} (${format.label})',
       );
       if (!mounted) return;
-      FeedbackSystem.showSuccess(context, l10n.calendarExportReady);
+      FeedbackSystem.showSuccess(
+        context,
+        calendarShareSuccessMessage(
+          outcome: shareOutcome,
+          filePath: file.path,
+          sharedText: l10n.calendarExportReady,
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(

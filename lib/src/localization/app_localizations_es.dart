@@ -1037,6 +1037,63 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se puede cargar el captcha.\nToca refrescar para intentarlo de nuevo.';
 
   @override
+  String get signupAvatarRenderError => 'No se pudo generar ese avatar.';
+
+  @override
+  String get signupAvatarLoadError => 'No se pudo cargar ese avatar.';
+
+  @override
+  String get signupAvatarReadError => 'No se pudo leer esa imagen.';
+
+  @override
+  String get signupAvatarOpenError => 'No se pudo abrir ese archivo.';
+
+  @override
+  String get signupAvatarInvalidImage => 'Ese archivo no es una imagen válida.';
+
+  @override
+  String signupAvatarSizeError(Object kilobytes) {
+    return 'El avatar debe ser menor de $kilobytes KB.';
+  }
+
+  @override
+  String get signupAvatarProcessError => 'No se pudo procesar esa imagen.';
+
+  @override
+  String get signupAvatarEdit => 'Editar avatar';
+
+  @override
+  String get signupAvatarUploadImage => 'Subir imagen';
+
+  @override
+  String get signupAvatarUpload => 'Subir';
+
+  @override
+  String get signupAvatarShuffle => 'Mezclar predeterminado';
+
+  @override
+  String get signupAvatarMenuDescription =>
+      'Los avatares predeterminados están abajo. Publicaremos el avatar cuando se cree tu cuenta XMPP.';
+
+  @override
+  String get signupAvatarBackgroundColor => 'Color de fondo';
+
+  @override
+  String get signupAvatarDefaultsTitle => 'Avatares predeterminados';
+
+  @override
+  String get signupAvatarCategoryAbstract => 'Abstracto';
+
+  @override
+  String get signupAvatarCategoryScience => 'Ciencia';
+
+  @override
+  String get signupAvatarCategorySports => 'Deportes';
+
+  @override
+  String get signupAvatarCategoryMusic => 'Música';
+
+  @override
   String get notificationsRestartTitle =>
       'Reinicia la app para activar las notificaciones';
 
@@ -1447,6 +1504,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get profileArchives => 'Ver archivos';
+
+  @override
+  String get profileEditAvatar => 'Editar avatar';
 
   @override
   String get profileChangePassword => 'Cambiar contraseña';

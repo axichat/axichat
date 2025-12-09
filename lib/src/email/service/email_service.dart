@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
 
@@ -143,6 +144,10 @@ class EmailService {
 
   void updateEndpointConfig(EndpointConfig config) {
     _endpointConfig = config;
+  }
+
+  void updateMessageStorageMode(MessageStorageMode mode) {
+    _transport.updateMessageStorageMode(mode);
   }
 
   Map<String, String> _buildConnectionConfig(String address) =>
@@ -885,14 +890,6 @@ class EmailService {
       displayName: displayName,
     );
     return sendMessage(chat: chat, body: body);
-  }
-
-  Future<void> setClientState({bool active = true}) async {
-    if (active) {
-      await start();
-    } else {
-      await stop();
-    }
   }
 
   Future<void> registerPushToken(String token) async {

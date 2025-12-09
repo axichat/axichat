@@ -71,6 +71,13 @@ class _PeerCapabilities {
 }
 
 mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
+  ImpatientCompleter<XmppDatabase> get _database;
+  set _database(ImpatientCompleter<XmppDatabase> value);
+  String? get _databasePrefix;
+  String? get _databasePassphrase;
+  Future<XmppDatabase> _buildDatabase(String prefix, String passphrase);
+  void _notifyDatabaseReloaded();
+
   Stream<List<Message>> messageStreamForChat(
     String jid, {
     int start = 0,
@@ -181,16 +188,79 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       );
     }
     if (previous == next) return;
+    unawaited(
+      _applyMessageStorageModeChange(
+        previous: previous,
+        next: next,
+      ),
+    );
+  }
+
+  Future<void> _applyMessageStorageModeChange({
+    required MessageStorageMode previous,
+    required MessageStorageMode next,
+  }) async {
+    _log.info('Message storage mode change: $previous -> $next');
     if (next.isServerOnly) {
-      unawaited(purgeMessageHistory());
+      await purgeMessageHistory();
     }
+    await _reopenDatabaseForStorageMode(
+      previous: previous,
+      next: next,
+    );
+  }
+
+  Future<void> _reopenDatabaseForStorageMode({
+    required MessageStorageMode previous,
+    required MessageStorageMode next,
+  }) async {
+    if (!_database.isCompleted) return;
+    final currentDb = _database.value;
+    final wantsInMemory = next.isServerOnly && _mamSupported;
+    final isCurrentInMemory =
+        currentDb is XmppDrift ? currentDb.isInMemory : false;
+    if (wantsInMemory == isCurrentInMemory) return;
+    _log.info(
+      'Reopening database for storage mode change '
+      '($previous -> $next); inMemoryTarget=$wantsInMemory',
+    );
+    final prefix = _databasePrefix;
+    final passphrase = _databasePassphrase;
+    if (prefix == null || passphrase == null) {
+      _log.warning(
+        'Unable to reopen database for storage mode change; missing prefix or passphrase.',
+      );
+      return;
+    }
+    try {
+      await currentDb?.close();
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to close existing database during storage mode change.',
+        error,
+        stackTrace,
+      );
+    }
+    _database = ImpatientCompleter(Completer<XmppDatabase>());
+    _database.complete(await _buildDatabase(prefix, passphrase));
+    _notifyDatabaseReloaded();
   }
 
   void _updateMamSupport(bool supported) {
     if (_mamSupported == supported) return;
+    final previousEffective = messageStorageMode;
     _mamSupported = supported;
     if (!_mamSupportController.isClosed) {
       _mamSupportController.add(supported);
+    }
+    final nextEffective = messageStorageMode;
+    if (previousEffective != nextEffective) {
+      unawaited(
+        _applyMessageStorageModeChange(
+          previous: previousEffective,
+          next: nextEffective,
+        ),
+      );
     }
   }
 
@@ -265,6 +335,36 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       (db) => db.getMessageByStanzaID(message.stanzaID),
     );
     return existing != null;
+  }
+
+  Future<void> _hydrateDuplicatePayload({
+    required Message incoming,
+    FileMetadataData? metadata,
+    String? body,
+  }) async {
+    final hasText = body?.trim().isNotEmpty == true;
+    if (metadata == null && !hasText) return;
+
+    await _dbOp<XmppDatabase>((db) async {
+      Message? existing;
+      if (incoming.originID?.isNotEmpty == true) {
+        existing = await db.getMessageByOriginID(incoming.originID!);
+      }
+      existing ??= await db.getMessageByStanzaID(incoming.stanzaID);
+      if (existing == null) return;
+
+      final needsMetadata = metadata != null &&
+          (existing.fileMetadataID == null || existing.fileMetadataID!.isEmpty);
+      final needsBody =
+          hasText && (existing.body == null || existing.body!.isEmpty);
+      if (!needsMetadata && !needsBody) return;
+
+      await db.updateMessageAttachment(
+        stanzaID: existing.stanzaID,
+        metadata: needsMetadata ? metadata : null,
+        body: needsBody ? body : null,
+      );
+    });
   }
 
   RegisteredStateKey _lastSeenKeyFor(String jid) => _lastSeenKeys.putIfAbsent(
@@ -363,6 +463,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         final reactionOnly = await _handleReactions(event);
         if (reactionOnly) return;
 
+        final metadata = _extractFileMetadata(event);
+
         var message = Message.fromMox(event);
         final isGroupChat = event.type == 'groupchat';
         final stableKey = _stableKeyForEvent(event);
@@ -370,10 +472,18 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         message = message.copyWith(
           timestamp: message.timestamp ?? DateTime.timestamp(),
         );
+        if (metadata != null) {
+          message = message.copyWith(fileMetadataID: metadata.id);
+        }
 
         if (await _isDuplicate(message, event, stableKey: stableKey)) {
           _log.fine(
             'Dropping duplicate message for ${message.chatJid} (${message.stanzaID})',
+          );
+          await _hydrateDuplicatePayload(
+            incoming: message,
+            metadata: metadata,
+            body: message.body,
           );
           return;
         }
@@ -399,8 +509,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         }
 
         unawaited(_acknowledgeMessage(event));
-
-        final metadata = _extractFileMetadata(event);
 
         if (metadata != null) {
           await _dbOp<XmppDatabase>(

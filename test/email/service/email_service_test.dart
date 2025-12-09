@@ -318,26 +318,6 @@ void main() {
     });
   });
 
-  test('setClientState keeps IO in sync with app lifecycle', () async {
-    final service = EmailService(
-      credentialStore: credentialStore,
-      databaseBuilder: () async => database,
-      transport: transport,
-      notificationService: notificationService,
-      foregroundBridge: foregroundBridge,
-    );
-
-    await service.start();
-
-    await service.setClientState(active: false);
-    verify(() => transport.stop()).called(1);
-
-    await service.setClientState(active: true);
-    verify(() => transport.start()).called(2);
-
-    addTearDown(service.shutdown);
-  });
-
   test('registerPushToken defers until provisioning completes', () async {
     final service = EmailService(
       credentialStore: credentialStore,

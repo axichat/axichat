@@ -146,6 +146,7 @@ class CalendarNavigation extends StatelessWidget {
           navButtons: navButtons,
           spacing: navSpacing,
         );
+        final bool stackNavigation = isCompact || availableWidth < 560;
         final Widget trailingRow = _TrailingControls(
           state: state,
           onDateSelected: onDateSelected,
@@ -185,25 +186,41 @@ class CalendarNavigation extends StatelessWidget {
                 fontSize: 12,
                 color: colors.mutedForeground,
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: navRow,
+              child: stackNavigation
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: navRow,
+                        ),
+                        SizedBox(height: navSpacing),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: trailingRow,
+                        ),
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: navRow,
+                          ),
+                        ),
+                        SizedBox(width: navSpacing),
+                        Flexible(
+                          flex: 0,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: trailingRow,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  SizedBox(width: navSpacing),
-                  Flexible(
-                    flex: 0,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: trailingRow,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
         );
@@ -259,19 +276,7 @@ class CalendarNavigation extends StatelessWidget {
             hoverForegroundColor: colors.primary,
             hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
           );
-    if (!compact) {
-      return _wrapWithCursor(button, onPressed != null);
-    }
-    return _wrapWithCursor(
-      AxiTooltip(
-        builder: (_) => Text(tooltip ?? label),
-        child: SizedBox(
-          height: 40,
-          child: button,
-        ),
-      ),
-      onPressed != null,
-    );
+    return button;
   }
 
   Widget _iconNavButton({
@@ -290,13 +295,6 @@ class CalendarNavigation extends StatelessWidget {
       highlighted: highlighted,
       enabled: onPressed != null,
       dense: !compact,
-    );
-  }
-
-  Widget _wrapWithCursor(Widget child, bool enabled) {
-    return MouseRegion(
-      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      child: child,
     );
   }
 
@@ -332,41 +330,27 @@ class CalendarNavigation extends StatelessWidget {
     bool dense = false,
   }) {
     final colors = context.colorScheme;
-    final double controlHeight = dense ? 34 : 40;
-    final double controlWidth = dense ? 38 : 44;
-    final Widget button = highlighted
-        ? ShadButton(
-            size: ShadButtonSize.sm,
-            backgroundColor: colors.primary,
-            hoverBackgroundColor: colors.primary.withValues(alpha: 0.85),
-            foregroundColor: Colors.white,
-            hoverForegroundColor: Colors.white,
-            onPressed: onPressed,
-            child: Icon(icon, size: 16),
-          ).withTapBounce(enabled: enabled && onPressed != null)
-        : ShadButton.outline(
-            size: ShadButtonSize.sm,
-            onPressed: onPressed,
-            foregroundColor: colors.primary,
-            hoverForegroundColor: colors.primary,
-            hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
-            child: Icon(icon, size: 16),
-          ).withTapBounce(enabled: enabled && onPressed != null);
-    Widget control = AxiTooltip(
-      builder: (_) => Text(tooltip),
-      child: SizedBox(
-        width: controlWidth,
-        height: controlHeight,
-        child: button,
-      ),
+    final bool active = enabled && onPressed != null;
+    final Color foreground = active
+        ? highlighted
+            ? colors.primaryForeground
+            : colors.primary
+        : colors.mutedForeground;
+    final Color background = highlighted ? colors.primary : colors.card;
+    final Color border = highlighted ? colors.primary : colors.border;
+    final double buttonSize = dense ? 34 : 40;
+    final double tapTarget = dense ? 40 : 48;
+    return AxiIconButton(
+      iconData: icon,
+      onPressed: active ? onPressed : null,
+      tooltip: tooltip,
+      color: foreground,
+      backgroundColor: background,
+      borderColor: border,
+      iconSize: 16,
+      buttonSize: buttonSize,
+      tapTargetSize: tapTarget,
     );
-    if (!enabled) {
-      control = Opacity(
-        opacity: 0.4,
-        child: control,
-      );
-    }
-    return _wrapWithCursor(control, enabled);
   }
 }
 

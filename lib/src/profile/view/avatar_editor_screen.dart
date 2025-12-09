@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:axichat/src/app.dart';
@@ -84,7 +85,7 @@ class _AvatarEditorBody extends StatelessWidget {
                   constraints: const BoxConstraints(maxWidth: 1200),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 16.0,
+                    spacing: 10.0,
                     children: [
                       _AvatarSummaryCard(
                         state: state,
@@ -127,11 +128,11 @@ class _AvatarSummaryCard extends StatelessWidget {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final cubit = context.read<AvatarEditorCubit>();
-    final size = isWide ? 120.0 : 96.0;
+    final size = isWide ? 104.0 : 88.0;
     final previewBytes = state.previewBytes ?? state.sourceBytes;
 
     return ShadCard(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 12.0,
@@ -237,12 +238,13 @@ class _CropCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final cubit = context.read<AvatarEditorCubit>();
     final previewBytes = state.previewBytes ?? state.sourceBytes;
-    final hasPreview = previewBytes != null && previewBytes.isNotEmpty;
-    final Uint8List? displayBytes = hasPreview ? previewBytes : null;
+    final hasPreview = previewBytes != null &&
+        previewBytes.isNotEmpty &&
+        state.imageWidth != null &&
+        state.imageHeight != null;
     return ShadCard(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 12.0,
@@ -251,90 +253,29 @@ class _CropCard extends StatelessWidget {
             'Crop & compress',
             style: context.textTheme.h4.copyWith(color: colors.foreground),
           ),
-          AspectRatio(
-            aspectRatio: 1,
-            child: DecoratedBox(
+          if (!hasPreview)
+            Container(
+              height: 180,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: colors.card,
                 borderRadius: context.radius,
                 border: Border.all(color: colors.border),
               ),
-              child: displayBytes != null
-                  ? ClipRRect(
-                      borderRadius: context.radius,
-                      child: Image.memory(
-                        displayBytes,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : Center(
-                      child: Text(
-                        'Add a photo or pick a default avatar',
-                        style: context.textTheme.small.copyWith(
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                    ),
+              child: Text(
+                'Add a photo or pick a default avatar',
+                style: context.textTheme.small.copyWith(
+                  color: colors.mutedForeground,
+                ),
+              ),
+            )
+          else
+            _CropperCanvas(
+              bytes: previewBytes,
+              state: state,
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8.0,
-            children: [
-              Text(
-                'Zoom',
-                style: context.textTheme.small.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-              Slider(
-                value: state.zoom,
-                min: 1.0,
-                max: 3.5,
-                divisions: 25,
-                activeColor: colors.primary,
-                onChanged: (value) => cubit.setZoom(value),
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8.0,
-            children: [
-              Text(
-                'Horizontal focus',
-                style: context.textTheme.small.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-              Slider(
-                value: state.focus.dx,
-                min: -1,
-                max: 1,
-                divisions: 20,
-                activeColor: colors.primary,
-                onChanged: (value) =>
-                    cubit.setFocus(Offset(value, state.focus.dy)),
-              ),
-              Text(
-                'Vertical focus',
-                style: context.textTheme.small.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-              Slider(
-                value: state.focus.dy,
-                min: -1,
-                max: 1,
-                divisions: 20,
-                activeColor: colors.primary,
-                onChanged: (value) =>
-                    cubit.setFocus(Offset(state.focus.dx, value)),
-              ),
-            ],
-          ),
           Text(
-            'We automatically resize to XEP-0084 friendly 256×256 and keep files under 64KB.',
+            'Drag the corners to position your crop. We resize to 256×256 and keep files under 64KB.',
             style: context.textTheme.small.copyWith(
               color: colors.mutedForeground,
             ),
@@ -343,6 +284,323 @@ class _CropCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CropperCanvas extends StatefulWidget {
+  const _CropperCanvas({
+    required this.bytes,
+    required this.state,
+  });
+
+  final Uint8List bytes;
+  final AvatarEditorState state;
+
+  @override
+  State<_CropperCanvas> createState() => _CropperCanvasState();
+}
+
+enum _DragHandle {
+  move,
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+}
+
+class _CropperCanvasState extends State<_CropperCanvas> {
+  static const double _maxCanvas = 240.0;
+  static const double _handleSize = 14.0;
+  static const double _minPaintPadding = 0.0;
+  static const double _minCropSide = 48.0;
+
+  _DragHandle? _handle;
+  Rect? _startRect;
+  Offset? _startLocal;
+  double _scaleX = 1;
+  double _scaleY = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final cubit = context.read<AvatarEditorCubit>();
+    final imageWidth = (widget.state.imageWidth ?? 1).toDouble();
+    final imageHeight = (widget.state.imageHeight ?? 1).toDouble();
+    final cropRect =
+        widget.state.cropRect ?? _fallbackCropRect(imageWidth, imageHeight);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxSide = min(constraints.maxWidth, _maxCanvas);
+        final aspect = imageWidth / imageHeight;
+        final renderWidth = aspect >= 1 ? maxSide : maxSide * aspect;
+        final renderHeight = aspect >= 1 ? maxSide / aspect : maxSide;
+        _scaleX = renderWidth / imageWidth;
+        _scaleY = renderHeight / imageHeight;
+        final selectionRect = Rect.fromLTWH(
+          cropRect.left * _scaleX,
+          cropRect.top * _scaleY,
+          cropRect.width * _scaleX,
+          cropRect.height * _scaleY,
+        );
+        return Center(
+          child: SizedBox(
+            width: renderWidth,
+            height: renderHeight,
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: context.radius,
+                  child: Image.memory(
+                    widget.bytes,
+                    width: renderWidth,
+                    height: renderHeight,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanStart: (details) => _onPanStart(
+                      details.localPosition,
+                      selectionRect,
+                      imageWidth,
+                      imageHeight,
+                    ),
+                    onPanUpdate: (details) => _onPanUpdate(
+                      details.localPosition,
+                      cubit,
+                    ),
+                    onPanEnd: (_) => _resetDrag(),
+                    onPanCancel: _resetDrag,
+                    child: CustomPaint(
+                      painter: _CropOverlayPainter(
+                        selection: selectionRect,
+                        colors: colors,
+                        handleSize: _handleSize,
+                        padding: _minPaintPadding,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _onPanStart(
+    Offset local,
+    Rect selectionRect,
+    double imageWidth,
+    double imageHeight,
+  ) {
+    _handle = _hitTest(local, selectionRect);
+    _startLocal = local;
+    _startRect =
+        widget.state.cropRect ?? _fallbackCropRect(imageWidth, imageHeight);
+  }
+
+  void _onPanUpdate(
+    Offset local,
+    AvatarEditorCubit cubit,
+  ) {
+    if (_handle == null || _startRect == null || _startLocal == null) return;
+    final deltaDisplay = local - _startLocal!;
+    final deltaImage = Offset(
+      deltaDisplay.dx / _scaleX,
+      deltaDisplay.dy / _scaleY,
+    );
+    final updated = _updatedRect(
+      _startRect!,
+      deltaImage,
+      _handle!,
+    );
+    cubit.updateCropRect(updated);
+  }
+
+  void _resetDrag() {
+    _handle = null;
+    _startRect = null;
+    _startLocal = null;
+  }
+
+  _DragHandle _hitTest(Offset local, Rect selection) {
+    final hitboxes = <Rect, _DragHandle>{
+      Rect.fromCenter(
+        center: selection.topLeft,
+        width: _handleSize * 2,
+        height: _handleSize * 2,
+      ): _DragHandle.topLeft,
+      Rect.fromCenter(
+        center: selection.topRight,
+        width: _handleSize * 2,
+        height: _handleSize * 2,
+      ): _DragHandle.topRight,
+      Rect.fromCenter(
+        center: selection.bottomLeft,
+        width: _handleSize * 2,
+        height: _handleSize * 2,
+      ): _DragHandle.bottomLeft,
+      Rect.fromCenter(
+        center: selection.bottomRight,
+        width: _handleSize * 2,
+        height: _handleSize * 2,
+      ): _DragHandle.bottomRight,
+    };
+    for (final entry in hitboxes.entries) {
+      if (entry.key.contains(local)) return entry.value;
+    }
+    if (selection.contains(local)) return _DragHandle.move;
+    return _DragHandle.move;
+  }
+
+  Rect _updatedRect(
+    Rect startRect,
+    Offset delta,
+    _DragHandle handle,
+  ) {
+    switch (handle) {
+      case _DragHandle.move:
+        return startRect.shift(delta);
+      case _DragHandle.topLeft:
+        return _resizeFromCorner(
+          movingCorner: startRect.topLeft + delta,
+          anchor: startRect.bottomRight,
+        );
+      case _DragHandle.topRight:
+        return _resizeFromCorner(
+          movingCorner: startRect.topRight + delta,
+          anchor: startRect.bottomLeft,
+        );
+      case _DragHandle.bottomLeft:
+        return _resizeFromCorner(
+          movingCorner: startRect.bottomLeft + delta,
+          anchor: startRect.topRight,
+        );
+      case _DragHandle.bottomRight:
+        return _resizeFromCorner(
+          movingCorner: startRect.bottomRight + delta,
+          anchor: startRect.topLeft,
+        );
+    }
+  }
+
+  Rect _resizeFromCorner({
+    required Offset movingCorner,
+    required Offset anchor,
+  }) {
+    final width = (anchor.dx - movingCorner.dx).abs();
+    final height = (anchor.dy - movingCorner.dy).abs();
+    final side = max(_minCropSide, max(width, height));
+    final anchorAtBottomRight =
+        anchor.dx >= movingCorner.dx && anchor.dy >= movingCorner.dy;
+    if (anchorAtBottomRight) {
+      return Rect.fromLTWH(anchor.dx - side, anchor.dy - side, side, side);
+    }
+    final anchorAtTopLeft =
+        anchor.dx <= movingCorner.dx && anchor.dy <= movingCorner.dy;
+    if (anchorAtTopLeft) {
+      return Rect.fromLTWH(anchor.dx, anchor.dy, side, side);
+    }
+    final anchorAtTopRight = anchor.dx >= movingCorner.dx;
+    if (anchorAtTopRight) {
+      return Rect.fromLTWH(anchor.dx - side, anchor.dy, side, side);
+    }
+    return Rect.fromLTWH(anchor.dx, anchor.dy - side, side, side);
+  }
+
+  Rect _fallbackCropRect(double imageWidth, double imageHeight) {
+    final side = min(imageWidth, imageHeight) * 0.7;
+    final left = (imageWidth - side) / 2;
+    final top = (imageHeight - side) / 2;
+    return Rect.fromLTWH(left, top, side, side);
+  }
+}
+
+class _CropOverlayPainter extends CustomPainter {
+  _CropOverlayPainter({
+    required this.selection,
+    required this.colors,
+    required this.handleSize,
+    required this.padding,
+  });
+
+  final Rect selection;
+  final ShadColorScheme colors;
+  final double handleSize;
+  final double padding;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scrimPath = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          selection.deflate(padding),
+          const Radius.circular(8),
+        ),
+      )
+      ..fillType = PathFillType.evenOdd;
+    final scrimPaint = Paint()
+      ..color = colors.background.withValues(alpha: 0.7);
+    canvas.drawPath(scrimPath, scrimPaint);
+
+    final borderPaint = Paint()
+      ..color = colors.primary
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        selection.deflate(padding),
+        const Radius.circular(8),
+      ),
+      borderPaint,
+    );
+
+    final gridPaint = Paint()
+      ..color = colors.border
+      ..strokeWidth = 1;
+    final thirds = [1 / 3, 2 / 3];
+    for (final t in thirds) {
+      final dx = selection.left + selection.width * t;
+      final dy = selection.top + selection.height * t;
+      canvas.drawLine(
+        Offset(dx, selection.top + padding),
+        Offset(dx, selection.bottom - padding),
+        gridPaint,
+      );
+      canvas.drawLine(
+        Offset(selection.left + padding, dy),
+        Offset(selection.right - padding, dy),
+        gridPaint,
+      );
+    }
+
+    final handlePaint = Paint()
+      ..color = colors.primary
+      ..style = PaintingStyle.fill;
+    for (final offset in [
+      selection.topLeft,
+      selection.topRight,
+      selection.bottomLeft,
+      selection.bottomRight,
+    ]) {
+      final rect = Rect.fromCenter(
+        center: offset,
+        width: handleSize,
+        height: handleSize,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+        handlePaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CropOverlayPainter oldDelegate) =>
+      oldDelegate.selection != selection || oldDelegate.colors != colors;
 }
 
 class _BackgroundPicker extends StatelessWidget {
@@ -481,7 +739,7 @@ class _CategoryRow extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 140,
+          height: 160,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: templates.length,
@@ -521,26 +779,31 @@ class _TemplatePreviewCard extends StatefulWidget {
 
 class _TemplatePreviewCardState extends State<_TemplatePreviewCard> {
   late Future<GeneratedAvatar> _future;
+  ShadColorScheme? _colors;
+  bool _initialized = false;
 
   @override
-  void initState() {
-    super.initState();
-    _future = widget.template.generator(
-      widget.backgroundColor,
-      context.colorScheme,
-    );
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final colors = context.colorScheme;
+    final hasChanged = !_initialized || _colors != colors;
+    if (hasChanged) {
+      _colors = colors;
+      _future = widget.template.generator(widget.backgroundColor, colors);
+      _initialized = true;
+    }
   }
 
   @override
   void didUpdateWidget(covariant _TemplatePreviewCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final needsRefresh = widget.template.hasAlphaBackground &&
-        widget.backgroundColor != oldWidget.backgroundColor;
+    final colors = _colors ?? context.colorScheme;
+    final templateChanged = widget.template != oldWidget.template;
+    final needsRefresh = templateChanged ||
+        (widget.template.hasAlphaBackground &&
+            widget.backgroundColor != oldWidget.backgroundColor);
     if (needsRefresh) {
-      _future = widget.template.generator(
-        widget.backgroundColor,
-        context.colorScheme,
-      );
+      _future = widget.template.generator(widget.backgroundColor, colors);
     }
   }
 

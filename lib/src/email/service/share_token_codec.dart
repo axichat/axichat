@@ -19,8 +19,10 @@ class ShareTokenCodec {
     caseSensitive: false,
   );
   static final RegExp _footerPattern = RegExp(
-    '(?is)^(.*?)(?:\\n\\n)?(?:--\\s*\\n)?\\s*Please do not remove:\\s*\\[s:'
+    '^(.*?)(?:\\n\\n)?(?:--\\s*\\n)?\\s*Please do not remove:\\s*\\[s:'
     '([A-Z0-9]{$_legacyTokenLength,$_maxCapabilityLength})\\]\\s*\$',
+    dotAll: true,
+    caseSensitive: false,
   );
   static const String _alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
   static final Random _random = _secureRandom();

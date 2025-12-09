@@ -306,7 +306,7 @@ class _ProfileCardSection extends StatelessWidget {
               final double statusFieldMaxWidth = wideCard ? 420.0 : 320.0;
               final actions = <AxiMenuAction>[
                 AxiMenuAction(
-                  label: 'Edit avatar',
+                  label: l10n.profileEditAvatar,
                   icon: LucideIcons.image,
                   onPressed: () => context.push(
                     const AvatarEditorRoute().location,
@@ -336,17 +336,13 @@ class _ProfileCardSection extends StatelessWidget {
               return ShadCard(
                 rowMainAxisSize: MainAxisSize.max,
                 columnCrossAxisAlignment: CrossAxisAlignment.center,
-                leading: Hero(
-                  tag: 'avatar',
-                  child: AxiAvatar(
-                    jid: profileState.jid,
-                    subscription: Subscription.both,
-                    // Presence is ingested for MUC features
-                    // but we hide presence UI for contacts.
-                    presence: null,
-                    status: profileState.status,
-                    active: false,
-                    avatarPath: profileState.avatarPath,
+                leading: _EditableAvatarButton(
+                  avatarPath: profileState.avatarPath,
+                  jid: profileState.jid,
+                  status: profileState.status,
+                  onTap: () => context.push(
+                    const AvatarEditorRoute().location,
+                    extra: locate,
                   ),
                 ),
                 title: Row(
@@ -469,6 +465,80 @@ class _ProfileCardSection extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class _EditableAvatarButton extends StatefulWidget {
+  const _EditableAvatarButton({
+    required this.avatarPath,
+    required this.jid,
+    required this.status,
+    required this.onTap,
+  });
+
+  final String? avatarPath;
+  final String jid;
+  final String? status;
+  final VoidCallback onTap;
+
+  @override
+  State<_EditableAvatarButton> createState() => _EditableAvatarButtonState();
+}
+
+class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
+  bool _hovered = false;
+  static const _size = 74.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final overlayVisible = _hovered;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _hovered = true),
+        onTapUp: (_) => setState(() => _hovered = false),
+        onTapCancel: () => setState(() => _hovered = false),
+        onTap: widget.onTap,
+        child: Hero(
+          tag: 'avatar',
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              AxiAvatar(
+                jid: widget.jid,
+                subscription: Subscription.both,
+                presence: null,
+                status: widget.status,
+                active: false,
+                size: _size,
+                avatarPath: widget.avatarPath,
+              ),
+              AnimatedOpacity(
+                opacity: overlayVisible ? 0.9 : 0.0,
+                duration: baseAnimationDuration,
+                child: Container(
+                  width: _size,
+                  height: _size,
+                  decoration: BoxDecoration(
+                    color: colors.background.withAlpha((0.4 * 255).round()),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Icon(
+                    LucideIcons.pencil,
+                    color: colors.foreground,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

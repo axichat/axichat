@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -37,7 +38,7 @@ class ShorebirdChecker extends StatelessWidget {
     if (!kEnableShorebird) {
       return const SizedBox.shrink();
     }
-    return AnimatedSize(
+    return AxiAnimatedSize(
       duration: context.watch<SettingsCubit>().animationDuration,
       curve: Curves.easeInOut,
       child: FutureBuilder<bool>(

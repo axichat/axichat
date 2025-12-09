@@ -138,11 +138,6 @@ void main() {
     when(() => mockEmailService.setForegroundKeepalive(any()))
         .thenAnswer((_) async {});
     when(
-      () => mockEmailService.setClientState(
-        active: any(named: 'active'),
-      ),
-    ).thenAnswer((_) async {});
-    when(
       () => mockEmailService.shutdown(
         jid: any(named: 'jid'),
         clearCredentials: any(named: 'clearCredentials'),

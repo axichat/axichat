@@ -7,26 +7,31 @@ mixin BaseStreamService on XmppBase {
     required Future<Stream<List<T>>> Function(D db) watchFunction,
     required Future<List<T>> Function(D db) getFunction,
   }) {
-    return StreamCompleter.fromFuture(
-      Future.value(
-        _dbOpReturning<D, Stream<List<T>>>(
-          (db) async {
-            final stream = await watchFunction(db);
-            final initial = await getFunction(db);
-            return stream.startWith(initial);
-          },
-        ),
-      ),
-    );
+    return databaseReloadStream
+        .startWith(null)
+        .asyncMap(
+          (_) => _dbOpReturning<D, Stream<List<T>>>(
+            (db) async {
+              final stream = await watchFunction(db);
+              final initial = await getFunction(db);
+              return stream.startWith(initial);
+            },
+          ),
+        )
+        .switchMap((stream) => stream);
   }
 
   /// Creates a single-item stream for watching individual entities
   Stream<T> createSingleItemStream<T, D extends Database>({
     required Future<Stream<T>> Function(D db) watchFunction,
   }) async* {
-    final stream = await _dbOpReturning<D, Future<Stream<T>>>(
-      (db) => watchFunction(db),
-    );
-    yield* await stream;
+    yield* databaseReloadStream
+        .startWith(null)
+        .asyncMap(
+          (_) => _dbOpReturning<D, Stream<T>>(
+            (db) => watchFunction(db),
+          ),
+        )
+        .switchMap((stream) => stream);
   }
 }

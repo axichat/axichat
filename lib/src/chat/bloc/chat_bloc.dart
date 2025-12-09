@@ -1164,7 +1164,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
           return;
         }
-        if (body != null) {
+        final shouldSendEmailText = body != null && !attachmentsViaEmail;
+        if (shouldSendEmailText) {
           final shouldFanOut = _shouldFanOut(emailRecipients, chat);
           if (shouldFanOut) {
             final sent = await _sendFanOut(
@@ -1186,6 +1187,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           emailSendSucceeded = true;
         }
         if (attachmentsViaEmail) {
+          final captionForAttachments = hasBody ? body : null;
           await _sendQueuedAttachments(
             attachments: queuedAttachments,
             chat: chat,
@@ -1193,6 +1195,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             recipients: emailRecipients,
             emit: emit,
             retainOnSuccess: attachmentsViaXmpp,
+            captionForFirstAttachment: captionForAttachments,
           );
           emailSendSucceeded = true;
         }
@@ -1812,20 +1815,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
     bool retainOnSuccess = false,
+    String? captionForFirstAttachment,
   }) async {
+    var index = 0;
     for (final attachment in attachments) {
       final latest = _pendingAttachmentById(attachment.id);
       if (latest == null) {
         continue;
       }
+      final shouldApplyCaption =
+          captionForFirstAttachment != null && index == 0;
+      final pendingWithCaption = shouldApplyCaption
+          ? latest.copyWith(
+              attachment: latest.attachment.copyWith(
+                caption: captionForFirstAttachment,
+              ),
+            )
+          : latest;
       await _sendPendingAttachment(
-        pending: latest,
+        pending: pendingWithCaption,
         chat: chat,
         service: service,
         recipients: recipients,
         emit: emit,
         retainOnSuccess: retainOnSuccess,
       );
+      index += 1;
     }
   }
 

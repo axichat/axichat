@@ -160,6 +160,8 @@ class _ImageAttachment extends StatelessWidget {
         final targetWidth = _resolveWidth(constraints, context);
         return Align(
           alignment: Alignment.centerLeft,
+          widthFactor: 1,
+          heightFactor: 1,
           child: SizedBox(
             width: targetWidth,
             child: _AttachmentSurface(

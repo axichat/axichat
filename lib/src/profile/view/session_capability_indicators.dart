@@ -30,17 +30,6 @@ class SessionCapabilityIndicators extends StatelessWidget {
     final l10n = context.l10n;
     final chatChip = _chatChipData(colors, l10n);
     final emailChip = _emailChipData(colors, l10n);
-    if (compact) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        spacing: _capabilityChipRunSpacing,
-        children: [
-          _CapabilityChip(data: chatChip, compact: true),
-          _CapabilityChip(data: emailChip, compact: true),
-        ],
-      );
-    }
     final chipAlignment = compact ? WrapAlignment.end : WrapAlignment.start;
     const double runSpacing = _capabilityChipRunSpacing;
     return Wrap(

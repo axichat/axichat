@@ -102,6 +102,12 @@ abstract interface class XmppDatabase implements Database {
     required String? body,
   });
 
+  Future<void> updateMessageAttachment({
+    required String stanzaID,
+    FileMetadataData? metadata,
+    String? body,
+  });
+
   Future<void> markMessageRetracted(String stanzaID);
 
   Future<void> markMessageAcked(String stanzaID);
@@ -1639,6 +1645,27 @@ WHERE subject_token IS NOT NULL
   }
 
   @override
+  Future<void> updateMessageAttachment({
+    required String stanzaID,
+    FileMetadataData? metadata,
+    String? body,
+  }) async {
+    await transaction(() async {
+      if (metadata != null) {
+        await saveFileMetadata(metadata);
+      }
+      await (update(messages)..where((tbl) => tbl.stanzaID.equals(stanzaID)))
+          .write(
+        MessagesCompanion(
+          fileMetadataID:
+              metadata != null ? Value(metadata.id) : const Value.absent(),
+          body: body != null ? Value(body) : const Value.absent(),
+        ),
+      );
+    });
+  }
+
+  @override
   Future<void> markMessageRetracted(String stanzaID) async {
     _log.info('Retracting message: $stanzaID...');
     await transaction(() async {
@@ -1745,29 +1772,98 @@ WHERE subject_token IS NOT NULL
     required String jid,
     required int maxMessages,
   }) async {
-    if (maxMessages <= 0) {
-      await removeChatMessages(jid);
-      return;
+    const int trimBatchSize = 900; // stays under SQLite's 999-variable limit
+    Iterable<List<T>> chunked<T>(List<T> items) sync* {
+      for (var index = 0; index < items.length; index += trimBatchSize) {
+        final end = index + trimBatchSize;
+        yield items.sublist(index, end > items.length ? items.length : end);
+      }
     }
-    await customUpdate(
+
+    final offset = maxMessages <= 0 ? 0 : maxMessages;
+    final pruned = await customSelect(
       '''
-DELETE FROM messages
-WHERE chat_jid = ?
-  AND stanza_i_d NOT IN (
-    SELECT stanza_i_d FROM messages
-    WHERE chat_jid = ?
-    ORDER BY timestamp DESC
-    LIMIT ?
-  )
-''',
+      SELECT stanza_i_d AS stanza_id, delta_msg_id
+      FROM messages
+      WHERE chat_jid = ?
+      ORDER BY timestamp DESC
+      LIMIT -1 OFFSET ?
+      ''',
       variables: [
         Variable<String>(jid),
-        Variable<String>(jid),
-        Variable<int>(maxMessages),
+        Variable<int>(offset),
       ],
-      updates: {messages, reactions},
-      updateKind: UpdateKind.delete,
-    );
+      readsFrom: {messages},
+    ).get();
+
+    if (pruned.isEmpty) return;
+
+    final stanzaIds = <String>[];
+    final deltaMsgIds = <int>[];
+    for (final row in pruned) {
+      stanzaIds.add(row.read<String>('stanza_id'));
+      final deltaMsgId = row.read<int?>('delta_msg_id');
+      if (deltaMsgId != null) {
+        deltaMsgIds.add(deltaMsgId);
+      }
+    }
+
+    await transaction(() async {
+      final shareIds = <String>{};
+      if (deltaMsgIds.isNotEmpty) {
+        for (final batch in chunked(deltaMsgIds)) {
+          final copies = await (select(messageCopies)
+                ..where((tbl) => tbl.dcMsgId.isIn(batch)))
+              .get();
+          shareIds.addAll(copies.map((copy) => copy.shareId));
+
+          await (delete(messageCopies)..where((tbl) => tbl.dcMsgId.isIn(batch)))
+              .go();
+        }
+      }
+
+      if (stanzaIds.isNotEmpty) {
+        for (final batch in chunked(stanzaIds)) {
+          await (delete(reactions)..where((tbl) => tbl.messageID.isIn(batch)))
+              .go();
+        }
+        for (final batch in chunked(stanzaIds)) {
+          await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(batch)))
+              .go();
+        }
+      }
+
+      if (shareIds.isNotEmpty) {
+        final remainingShareIds = <String>{};
+        final shareIdList = shareIds.toList(growable: false);
+        for (final batch in chunked(shareIdList)) {
+          final rows = await (selectOnly(messageCopies)
+                ..addColumns([messageCopies.shareId])
+                ..where(messageCopies.shareId.isIn(batch)))
+              .get();
+          remainingShareIds.addAll(
+            rows
+                .map((row) => row.read(messageCopies.shareId))
+                .whereType<String>(),
+          );
+        }
+
+        final expiredShares =
+            shareIds.difference(remainingShareIds).toList(growable: false);
+        if (expiredShares.isNotEmpty) {
+          for (final batch in chunked(expiredShares)) {
+            await (delete(messageParticipants)
+                  ..where((tbl) => tbl.shareId.isIn(batch)))
+                .go();
+          }
+          for (final batch in chunked(expiredShares)) {
+            await (delete(messageShares)
+                  ..where((tbl) => tbl.shareId.isIn(batch)))
+                .go();
+          }
+        }
+      }
+    });
   }
 
   @override
@@ -1850,7 +1946,7 @@ WHERE chat_jid = ?
 
   @override
   Future<void> removeChatMessages(String jid) =>
-      messagesAccessor.deleteChatMessages(jid);
+      trimChatMessages(jid: jid, maxMessages: 0);
 
   @override
   Stream<List<Draft>> watchDrafts({required int start, required int end}) {

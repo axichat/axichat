@@ -5,11 +5,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
@@ -350,18 +350,25 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         title: 'Export guest calendar',
       );
       if (!mounted || format == null) return;
-      final file = await _transferService.exportTasks(
+      final File file = await _transferService.exportTasks(
         tasks: tasks,
         format: format,
         fileNamePrefix: 'axichat_guest_calendar',
       );
-      await Share.shareXFiles(
-        [XFile(file.path)],
+      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        file: file,
         subject: 'Axichat guest calendar export',
         text: 'Axichat guest calendar export (${format.label})',
       );
       if (!mounted) return;
-      FeedbackSystem.showSuccess(context, 'Export ready to share.');
+      FeedbackSystem.showSuccess(
+        context,
+        calendarShareSuccessMessage(
+          outcome: shareOutcome,
+          filePath: file.path,
+          sharedText: 'Export ready to share.',
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(

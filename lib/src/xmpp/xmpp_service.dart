@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:async/async.dart';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/bool_tool.dart';
@@ -212,6 +211,7 @@ abstract interface class XmppBase {
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
+  Stream<void> get databaseReloadStream;
 
   bool get needsReset => false;
 
@@ -317,7 +317,13 @@ class XmppService extends XmppBase
 
   final Logger _xmppLogger = Logger('XmppService');
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
+  @override
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
+  final _databaseReloadController = StreamController<void>.broadcast();
+  @override
+  String? _databasePrefix;
+  @override
+  String? _databasePassphrase;
 
   final FutureOr<XmppConnection> Function() _connectionFactory;
   final FutureOr<XmppStateStore> Function(String, String) _stateStoreFactory;
@@ -342,6 +348,14 @@ class XmppService extends XmppBase
 
   @override
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
+  @override
+  Stream<void> get databaseReloadStream => _databaseReloadController.stream;
+
+  @override
+  void _notifyDatabaseReloaded() {
+    if (_databaseReloadController.isClosed) return;
+    _databaseReloadController.add(null);
+  }
 
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
@@ -548,6 +562,8 @@ class XmppService extends XmppBase
     bool reuseExistingSession = false,
     EndpointOverride? endpoint,
   }) async {
+    _databasePrefix = databasePrefix;
+    _databasePassphrase = databasePassphrase;
     if (_synchronousConnection.isCompleted && connected) {
       throw XmppAlreadyConnectedException();
     }
@@ -616,6 +632,8 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
   }) async {
+    _databasePrefix = databasePrefix;
+    _databasePassphrase = databasePassphrase;
     final targetJid = mox.JID.fromString(jid);
     final activeJid = _myJid?.toBare().toString();
     if (activeJid != null && activeJid != targetJid.toBare().toString()) {
@@ -639,6 +657,7 @@ class XmppService extends XmppBase
         await _buildDatabase(databasePrefix, databasePassphrase),
       );
     }
+    _notifyDatabaseReloaded();
     await _initializeAvatarEncryption(databasePassphrase);
     _demoOfflineMode = kEnableDemoChats && jid == kDemoSelfJid;
     if (_demoOfflineMode) {
@@ -809,6 +828,7 @@ class XmppService extends XmppBase
     });
   }
 
+  @override
   Future<XmppDatabase> _buildDatabase(
     String prefix,
     String passphrase,
@@ -888,6 +908,7 @@ class XmppService extends XmppBase
           if (!_database.isCompleted) {
             _database.complete(await _buildDatabase(prefix, passphrase));
           }
+          _notifyDatabaseReloaded();
           await _initializeAvatarEncryption(passphrase);
         } on Exception catch (e) {
           _xmppLogger.severe('Failed to create databases:', e);
@@ -1078,6 +1099,8 @@ class XmppService extends XmppBase
     _streamResumptionAttempted = false;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;
+    _databasePrefix = null;
+    _databasePassphrase = null;
 
     await super._reset();
 
@@ -1112,6 +1135,9 @@ class XmppService extends XmppBase
     }
     if (!_mamSupportController.isClosed) {
       await _mamSupportController.close();
+    }
+    if (!_databaseReloadController.isClosed) {
+      await _databaseReloadController.close();
     }
     _instance = null;
   }

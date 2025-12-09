@@ -261,7 +261,7 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? syncButton;
 
   @override
-  Size get preferredSize => const Size.fromHeight(80);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
@@ -282,46 +282,50 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       child: SafeArea(
-        child: Padding(
-          padding: calendarMarginLarge,
-          child: Row(
-            children: [
-              if (canPop)
-                AxiIconButton(
-                  iconData: LucideIcons.arrowLeft,
-                  tooltip: l10n.commonBack,
-                  color: colors.foreground,
-                  borderColor: colors.border,
-                  onPressed: onBack,
-                ),
-              const SizedBox(width: calendarGutterSm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      isGuestMode ? l10n.calendarGuestTitle : title,
-                      style: context.textTheme.h3.copyWith(
-                        color: colors.foreground,
+        bottom: false,
+        child: SizedBox(
+          height: kToolbarHeight,
+          child: Padding(
+            padding: calendarMarginLarge.copyWith(top: 0, bottom: 0),
+            child: Row(
+              children: [
+                if (canPop)
+                  AxiIconButton(
+                    iconData: LucideIcons.arrowLeft,
+                    tooltip: l10n.commonBack,
+                    color: colors.foreground,
+                    borderColor: colors.border,
+                    onPressed: onBack,
+                  ),
+                const SizedBox(width: calendarGutterSm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        isGuestMode ? l10n.calendarGuestTitle : title,
+                        style: context.textTheme.h3.copyWith(
+                          color: colors.foreground,
+                        ),
                       ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: calendarSubtitleTextStyle.copyWith(
-                        color: colors.mutedForeground,
+                      Text(
+                        subtitle,
+                        style: calendarSubtitleTextStyle.copyWith(
+                          color: colors.mutedForeground,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              _CalendarViewModeSelector(
-                selectedView: selectedView,
-                onChanged: onViewChanged,
-              ),
-              const SizedBox(width: calendarGutterSm),
-              if (syncButton != null) syncButton!,
-            ],
+                _CalendarViewModeSelector(
+                  selectedView: selectedView,
+                  onChanged: onViewChanged,
+                ),
+                const SizedBox(width: calendarGutterSm),
+                if (syncButton != null) syncButton!,
+              ],
+            ),
           ),
         ),
       ),
