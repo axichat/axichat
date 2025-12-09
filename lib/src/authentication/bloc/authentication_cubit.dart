@@ -723,11 +723,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
                 const AuthenticationFailure('Error. Please try again later.'));
             return;
           } on XmppAlreadyConnectedException catch (_) {
-            _log.fine('Re-auth attempted while already connected, ignoring.');
+            _log.fine('Re-auth attempted while already connected, proceeding.');
             await _markXmppConnected();
-            await _completeAuthTransaction();
-            authenticationCommitted = true;
-            return;
+            effectivePassword = resolvedPassword;
           } on Exception catch (error) {
             final canResumeOffline = usingStoredCredentials &&
                 hasStoredDatabaseSecrets &&

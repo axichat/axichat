@@ -27,6 +27,7 @@ import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -482,8 +483,6 @@ class XmppService extends XmppBase
         mox.CSIManager(),
         mox.StableIdManager(),
         mox.CryptographicHashManager(),
-        mox.UserAvatarManager(),
-        mox.VCardManager(),
         mox.OccupantIdManager(),
       ]);
 

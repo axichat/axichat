@@ -54,6 +54,7 @@ class _SignupFormState extends State<SignupForm>
   late TextEditingController _passwordTextController;
   late TextEditingController _password2TextController;
   late TextEditingController _captchaTextController;
+  final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
   static final _usernamePattern = RegExp(r'^[a-z][a-z0-9._-]{3,19}$');
   static final _digitCharacters = RegExp(r'[0-9]');
   static final _lowercaseCharacters = RegExp(r'[a-z]');
@@ -143,6 +144,7 @@ class _SignupFormState extends State<SignupForm>
     setState(() {
       rememberMe = preference;
     });
+    _rememberMeFieldKey.currentState?.didChange(preference);
   }
 
   @override
@@ -550,6 +552,7 @@ class _SignupFormState extends State<SignupForm>
       _avatarBackground = result.template.hasAlphaBackground
           ? result.background
           : _avatarBackground;
+      _pushRecentCarouselAvatar(result.template.id);
       _signupSourceImage = decoded;
       _selectedTemplate = result.template;
       _lastSelectionHadAlpha =
@@ -562,6 +565,7 @@ class _SignupFormState extends State<SignupForm>
         return;
       }
       _avatarBackground = _avatarBackground;
+      _pushRecentCarouselAvatar(template.id);
       _signupSourceImage = decoded;
       _selectedTemplate = template;
       _lastSelectionHadAlpha = false;
@@ -1352,7 +1356,7 @@ class _SignupFormState extends State<SignupForm>
                               Padding(
                                 padding: fieldSpacing,
                                 child: AxiCheckboxFormField(
-                                  key: const ValueKey('signup-remember'),
+                                  key: _rememberMeFieldKey,
                                   enabled: !loading,
                                   initialValue: rememberMe,
                                   inputLabel: Text(l10n.authRememberMeLabel),
@@ -1574,9 +1578,10 @@ class _AvatarMenuDialogState extends State<_AvatarMenuDialog> {
                   dimension: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      colors.primaryForeground,
-                    ),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(colors.primaryForeground),
+                    backgroundColor:
+                        colors.primaryForeground.withValues(alpha: 0.2),
                   ),
                 )
               else
