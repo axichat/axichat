@@ -178,32 +178,21 @@ class _LoginFormState extends State<LoginForm> {
                     padding: horizontalPadding.add(
                       const EdgeInsets.only(top: 12, bottom: 4),
                     ),
-                    child: Row(
-                      children: [
-                        ShadSwitch(
-                          value: rememberMe,
-                          onChanged: loading
-                              ? null
-                              : (value) {
-                                  setState(() {
-                                    rememberMe = value;
-                                  });
-                                  unawaited(
-                                    context
-                                        .read<AuthenticationCubit>()
-                                        .persistRememberMeChoice(value),
-                                  );
-                                },
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            l10n.authRememberMeLabel,
-                            style: Theme.of(context).textTheme.bodyMedium ??
-                                context.textTheme.small,
-                          ),
-                        ),
-                      ],
+                    child: AxiCheckboxFormField(
+                      key: const ValueKey('login-remember'),
+                      enabled: !loading,
+                      initialValue: rememberMe,
+                      inputLabel: Text(l10n.authRememberMeLabel),
+                      onChanged: (value) {
+                        setState(() {
+                          rememberMe = value;
+                        });
+                        unawaited(
+                          context
+                              .read<AuthenticationCubit>()
+                              .persistRememberMeChoice(value),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox.square(dimension: 20.0),

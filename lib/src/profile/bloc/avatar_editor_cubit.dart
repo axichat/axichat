@@ -452,6 +452,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       width: image.width,
       height: image.height,
       numChannels: 4,
+      format: img.Format.uint8,
     );
     img.fill(background, color: _color(state.backgroundColor));
     img.compositeImage(background, image);
@@ -531,11 +532,14 @@ class _EncodedAvatar {
   final String mimeType;
 }
 
-img.Color _color(Color color) => img.ColorInt32.rgba(
+img.Color _color(Color color) => img.ColorUint8.rgba(
       _channelToByte(color.r),
       _channelToByte(color.g),
       _channelToByte(color.b),
       _channelToByte(color.a),
     );
 
-int _channelToByte(double channel) => (channel * 255.0).round().clamp(0, 255);
+int _channelToByte(num channel) {
+  final scaled = channel <= 1.0 ? channel * 255.0 : channel;
+  return scaled.round().clamp(0, 255);
+}

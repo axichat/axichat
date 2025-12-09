@@ -480,10 +480,10 @@ class XmppService extends XmppBase
         // mox.EntityCapabilitiesManager(),
         mox.PubSubManager(),
         mox.CSIManager(),
-        // mox.UserAvatarManager(),
         mox.StableIdManager(),
         mox.CryptographicHashManager(),
-        // mox.VCardManager(),
+        mox.UserAvatarManager(),
+        mox.VCardManager(),
         mox.OccupantIdManager(),
       ]);
 

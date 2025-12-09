@@ -42,6 +42,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'localization/app_localizations.dart';
 
+Timer? _pendingAuthNavigation;
+
 class Axichat extends StatefulWidget {
   Axichat({
     super.key,
@@ -75,6 +77,7 @@ class _AxichatState extends State<Axichat> {
 
   @override
   void dispose() {
+    _pendingAuthNavigation?.cancel();
     unawaited(_reminderController.clearAll());
     super.dispose();
   }
@@ -433,12 +436,16 @@ class MaterialAxichat extends StatelessWidget {
                         routeLocations[_router.state.matchedLocation]!;
                     final animationDuration =
                         context.read<SettingsCubit>().animationDuration;
-                    if (state is AuthenticationNone &&
-                        location.authenticationRequired) {
-                      _router.go(const LoginRoute().location);
+                    if (state is AuthenticationNone) {
+                      _pendingAuthNavigation?.cancel();
+                      _pendingAuthNavigation = null;
+                      if (location.authenticationRequired) {
+                        _router.go(const LoginRoute().location);
+                      }
                     } else if (state is AuthenticationComplete &&
                         !location.authenticationRequired) {
-                      unawaited(Future<void>.delayed(animationDuration, () {
+                      _pendingAuthNavigation?.cancel();
+                      _pendingAuthNavigation = Timer(animationDuration, () {
                         if (!context.mounted) return;
                         final latestAuthState =
                             context.read<AuthenticationCubit>().state;
@@ -451,7 +458,7 @@ class MaterialAxichat extends StatelessWidget {
                           return;
                         }
                         _router.go(const HomeRoute().location);
-                      }));
+                      });
                     }
                     _handleShareIntent(context);
                   },

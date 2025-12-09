@@ -21,6 +21,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'authentication_state.dart';
 
@@ -1231,6 +1232,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       await _xmppService.publishAvatar(payload);
     } on XmppAvatarException catch (error, stackTrace) {
+      final cause = error.wrapped;
+      if (cause is mox.AvatarError) {
+        _log.info('Signup avatar publish unsupported; skipping.', cause);
+        return;
+      }
       _log.warning('Failed to publish signup avatar', error, stackTrace);
     } catch (error, stackTrace) {
       _log.warning(
