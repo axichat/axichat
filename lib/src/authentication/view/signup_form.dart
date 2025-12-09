@@ -86,15 +86,32 @@ class _SignupFormState extends State<SignupForm>
   String? _lastCaptchaServer;
   AvatarUploadPayload? _signupAvatar;
   Uint8List? _signupAvatarPreview;
+  Uint8List? _carouselAvatarPreview;
   AvatarTemplate? _selectedTemplate;
   late final List<AvatarTemplate> _avatarTemplates =
       buildDefaultAvatarTemplates();
+  late final List<AvatarTemplate> _abstractAvatarTemplates = _avatarTemplates
+      .where(
+        (template) => template.category == AvatarTemplateCategory.abstract,
+      )
+      .toList();
+  late final List<AvatarTemplate> _nonAbstractAvatarTemplates = _avatarTemplates
+      .where(
+        (template) => template.category != AvatarTemplateCategory.abstract,
+      )
+      .toList();
+  final List<String> _recentCarouselAvatarIds = <String>[];
+  static const _avatarCarouselInterval = Duration(seconds: 1);
+  static const _avatarCarouselHistoryLimit = 12;
+  Timer? _avatarCarouselTimer;
+  bool _avatarCarouselInFlight = false;
   bool _avatarInitialized = false;
   bool _avatarProcessing = false;
   String? _avatarError;
   Color _avatarBackground = Colors.transparent;
   img.Image? _signupSourceImage;
   bool _lastSelectionHadAlpha = false;
+  final _random = math.Random();
 
   var _currentIndex = 0;
   String? _errorText;
@@ -140,6 +157,7 @@ class _SignupFormState extends State<SignupForm>
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
     _captchaRetryTimer?.cancel();
+    _stopAvatarCarousel();
     widget.onLoadingChanged?.call(false);
     _lastReportedLoading = null;
     super.dispose();
@@ -156,10 +174,8 @@ class _SignupFormState extends State<SignupForm>
     _captchaSrcInitialized = true;
     if (!_avatarInitialized) {
       _avatarInitialized = true;
-      unawaited(_selectTemplate(
-        _avatarTemplates.first,
-        background: context.colorScheme.background,
-      ));
+      _avatarBackground = context.colorScheme.accent;
+      _startAvatarCarousel();
     }
   }
 
@@ -272,16 +288,132 @@ class _SignupFormState extends State<SignupForm>
       (_selectedTemplate?.hasAlphaBackground ?? false) ||
       _lastSelectionHadAlpha;
 
+  bool get _hasUserSelectedAvatar => _signupAvatar != null;
+
+  void _startAvatarCarousel() {
+    if (_hasUserSelectedAvatar ||
+        _avatarProcessing ||
+        _avatarCarouselTimer != null) {
+      return;
+    }
+    unawaited(_tickAvatarCarousel());
+    _avatarCarouselTimer = Timer.periodic(
+      _avatarCarouselInterval,
+      (_) => unawaited(_tickAvatarCarousel()),
+    );
+  }
+
+  void _stopAvatarCarousel() {
+    _avatarCarouselTimer?.cancel();
+    _avatarCarouselTimer = null;
+  }
+
+  void _resumeAvatarCarouselIfNeeded() {
+    if (_hasUserSelectedAvatar ||
+        _avatarProcessing ||
+        !_avatarInitialized ||
+        _avatarCarouselTimer != null) {
+      return;
+    }
+    _startAvatarCarousel();
+  }
+
+  Future<void> _tickAvatarCarousel() async {
+    if (_avatarCarouselInFlight ||
+        _avatarProcessing ||
+        !mounted ||
+        _hasUserSelectedAvatar) {
+      return;
+    }
+    final colors = context.colorScheme;
+    final template = _pickCarouselTemplate();
+    if (template == null) {
+      return;
+    }
+    _avatarCarouselInFlight = true;
+    final background = template.hasAlphaBackground
+        ? _randomAvatarBackgroundColor(colors)
+        : _avatarBackground;
+    try {
+      final generated = await template.generator(background, colors);
+      if (!mounted || _hasUserSelectedAvatar) {
+        return;
+      }
+      _pushRecentCarouselAvatar(template.id);
+      setState(() {
+        _carouselAvatarPreview = generated.bytes;
+      });
+    } catch (_) {
+      // Ignore carousel rendering failures and try again on the next tick.
+    } finally {
+      _avatarCarouselInFlight = false;
+    }
+  }
+
+  AvatarTemplate? _pickCarouselTemplate() {
+    final hasAbstract = _abstractAvatarTemplates.isNotEmpty;
+    final hasOther = _nonAbstractAvatarTemplates.isNotEmpty;
+    if (!hasAbstract && !hasOther) {
+      return null;
+    }
+    if (!hasOther) {
+      return _pickFromPool(_abstractAvatarTemplates);
+    }
+    if (!hasAbstract) {
+      return _pickFromPool(_nonAbstractAvatarTemplates);
+    }
+    final useAbstract = _random.nextBool();
+    return _pickFromPool(
+      useAbstract ? _abstractAvatarTemplates : _nonAbstractAvatarTemplates,
+    );
+  }
+
+  AvatarTemplate? _pickFromPool(List<AvatarTemplate> pool) {
+    if (pool.isEmpty) return null;
+    final available = pool
+        .where((template) => !_recentCarouselAvatarIds.contains(template.id))
+        .toList();
+    final candidates = available.isEmpty ? pool : available;
+    return candidates[_random.nextInt(candidates.length)];
+  }
+
+  void _pushRecentCarouselAvatar(String id) {
+    _recentCarouselAvatarIds.add(id);
+    if (_recentCarouselAvatarIds.length > _avatarCarouselHistoryLimit) {
+      _recentCarouselAvatarIds.removeAt(0);
+    }
+  }
+
+  _AvatarSelection? _pickAvatarSelection() {
+    final template = _pickCarouselTemplate();
+    if (template == null) return null;
+    final colors = context.colorScheme;
+    final background = template.hasAlphaBackground
+        ? _randomAvatarBackgroundColor(colors)
+        : _avatarBackground;
+    return _AvatarSelection(template: template, background: background);
+  }
+
+  Color _randomAvatarBackgroundColor(ShadColorScheme colors) {
+    final accentHsl = HSLColor.fromColor(colors.accent);
+    final hue = (_random.nextDouble() * 360.0 + accentHsl.hue * 0.35) % 360;
+    final saturation = 0.5 + _random.nextDouble() * 0.25;
+    final lightness = 0.45 + _random.nextDouble() * 0.2;
+    return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
+  }
+
   Future<void> _selectTemplate(
     AvatarTemplate template, {
     Color? background,
   }) async {
     if (_avatarProcessing) return;
     if (!mounted) return;
+    _stopAvatarCarousel();
     final l10n = context.l10n;
     setState(() {
       _avatarProcessing = true;
       _avatarError = null;
+      _carouselAvatarPreview = null;
     });
     final effectiveBackground = background ?? _avatarBackground;
     try {
@@ -294,6 +426,7 @@ class _SignupFormState extends State<SignupForm>
           _avatarProcessing = false;
           _avatarError = l10n.signupAvatarRenderError;
         });
+        _resumeAvatarCarouselIfNeeded();
         return;
       }
       _avatarBackground = effectiveBackground;
@@ -308,15 +441,18 @@ class _SignupFormState extends State<SignupForm>
         _avatarProcessing = false;
         _avatarError = l10n.signupAvatarLoadError;
       });
+      _resumeAvatarCarouselIfNeeded();
     }
   }
 
   Future<void> _pickAvatarFromFiles() async {
     if (!mounted) return;
+    _stopAvatarCarousel();
     final l10n = context.l10n;
     setState(() {
       _avatarProcessing = true;
       _avatarError = null;
+      _carouselAvatarPreview = null;
     });
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -330,6 +466,7 @@ class _SignupFormState extends State<SignupForm>
         setState(() {
           _avatarProcessing = false;
         });
+        _resumeAvatarCarouselIfNeeded();
         return;
       }
       final file = result.files.first;
@@ -340,6 +477,7 @@ class _SignupFormState extends State<SignupForm>
           _avatarProcessing = false;
           _avatarError = l10n.signupAvatarReadError;
         });
+        _resumeAvatarCarouselIfNeeded();
         return;
       }
       await _applyAvatarFromBytes(bytes);
@@ -349,6 +487,7 @@ class _SignupFormState extends State<SignupForm>
         _avatarProcessing = false;
         _avatarError = l10n.signupAvatarOpenError;
       });
+      _resumeAvatarCarouselIfNeeded();
     }
   }
 
@@ -369,6 +508,7 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Future<void> _applyAvatarFromBytes(Uint8List bytes) async {
+    _stopAvatarCarousel();
     final l10n = context.l10n;
     final decoded = img.decodeImage(bytes);
     if (decoded == null) {
@@ -377,6 +517,7 @@ class _SignupFormState extends State<SignupForm>
         _avatarProcessing = false;
         _avatarError = l10n.signupAvatarInvalidImage;
       });
+      _resumeAvatarCarouselIfNeeded();
       return;
     }
     _signupSourceImage = decoded;
@@ -392,6 +533,7 @@ class _SignupFormState extends State<SignupForm>
       setState(() {
         _avatarProcessing = false;
       });
+      _resumeAvatarCarouselIfNeeded();
       return;
     }
     await Future<void>.delayed(Duration.zero);
@@ -401,9 +543,11 @@ class _SignupFormState extends State<SignupForm>
       setState(() {
         _signupAvatar = payload;
         _signupAvatarPreview = payload.bytes;
+        _carouselAvatarPreview = null;
         _avatarProcessing = false;
         _avatarError = null;
       });
+      _stopAvatarCarousel();
     } catch (error) {
       if (!mounted) return;
       final message = error is _AvatarSizeException
@@ -415,6 +559,7 @@ class _SignupFormState extends State<SignupForm>
         _avatarProcessing = false;
         _avatarError = message;
       });
+      _resumeAvatarCarouselIfNeeded();
     }
   }
 
@@ -499,25 +644,54 @@ class _SignupFormState extends State<SignupForm>
     if (_avatarProcessing) return;
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    await showModalBottomSheet<void>(
+    await showShadDialog<void>(
       context: context,
-      backgroundColor: colors.card,
-      shape: RoundedRectangleBorder(borderRadius: context.radius),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
+      builder: (dialogContext) {
+        return ShadDialog(
+          title: Text(
+            l10n.signupAvatarEdit,
+            style: context.modalHeaderTextStyle,
+          ),
+          actions: [
+            ShadButton.outline(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.commonCancel),
+            ).withTapBounce(),
+            ShadButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                final selection = _pickAvatarSelection();
+                if (selection == null) {
+                  return;
+                }
+                unawaited(_selectTemplate(
+                  selection.template,
+                  background: selection.background,
+                ));
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 8.0,
+                children: [
+                  const Icon(LucideIcons.sparkles),
+                  Text(l10n.signupAvatarShuffle),
+                ],
+              ),
+            ).withTapBounce(),
+          ],
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12.0,
+            spacing: 14.0,
             children: [
               Text(
-                l10n.signupAvatarEdit,
-                style: context.textTheme.h4.copyWith(color: colors.foreground),
+                l10n.signupAvatarMenuDescription,
+                style: context.textTheme.small
+                    .copyWith(color: colors.mutedForeground),
               ),
               ShadButton.outline(
                 onPressed: () {
-                  Navigator.of(context).pop();
+                  Navigator.of(dialogContext).pop();
                   unawaited(_pickAvatarFromFiles());
                 },
                 child: Row(
@@ -528,30 +702,7 @@ class _SignupFormState extends State<SignupForm>
                     Text(l10n.signupAvatarUploadImage),
                   ],
                 ),
-              ),
-              ShadButton.secondary(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  final random = math.Random();
-                  unawaited(_selectTemplate(
-                    _avatarTemplates[random.nextInt(_avatarTemplates.length)],
-                    background: _avatarBackground,
-                  ));
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 8.0,
-                  children: [
-                    const Icon(LucideIcons.sparkles),
-                    Text(l10n.signupAvatarShuffle),
-                  ],
-                ),
-              ),
-              Text(
-                l10n.signupAvatarMenuDescription,
-                style: context.textTheme.small
-                    .copyWith(color: colors.mutedForeground),
-              ),
+              ).withTapBounce(),
             ],
           ),
         );
@@ -782,6 +933,8 @@ class _SignupFormState extends State<SignupForm>
         final showGlobalError =
             !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
         final l10n = context.l10n;
+        final displayedAvatarBytes =
+            _signupAvatarPreview ?? _carouselAvatarPreview;
         return Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -859,10 +1012,10 @@ class _SignupFormState extends State<SignupForm>
                               spacing: 10.0,
                               children: [
                                 Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     _SignupAvatarSelector(
-                                      bytes: _signupAvatarPreview,
+                                      bytes: displayedAvatarBytes,
                                       username: _jidTextController.text,
                                       processing: _avatarProcessing,
                                       onTap: _openAvatarMenu,
@@ -1269,6 +1422,16 @@ class _AvatarSizeException implements Exception {
   const _AvatarSizeException();
 }
 
+class _AvatarSelection {
+  const _AvatarSelection({
+    required this.template,
+    required this.background,
+  });
+
+  final AvatarTemplate template;
+  final Color background;
+}
+
 class _SignupAvatarSelector extends StatefulWidget {
   const _SignupAvatarSelector({
     required this.bytes,
@@ -1287,7 +1450,7 @@ class _SignupAvatarSelector extends StatefulWidget {
 }
 
 class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
-  static const _size = 72.0;
+  static const _size = 56.0;
   bool _hovered = false;
 
   @override

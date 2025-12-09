@@ -140,7 +140,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void initialize(ShadColorScheme colors) {
     final initialBackground = state.backgroundColor == Colors.transparent
-        ? colors.background
+        ? colors.accent
         : state.backgroundColor;
     emit(state.copyWith(backgroundColor: initialBackground));
     if (state.template == null && _templates.isNotEmpty) {

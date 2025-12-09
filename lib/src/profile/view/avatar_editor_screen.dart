@@ -612,13 +612,13 @@ class _BackgroundPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final cubit = context.read<AvatarEditorCubit>();
     final colors = context.colorScheme;
-    final palette = [
-      colors.background,
-      colors.card,
-      colors.secondary,
+    final presets = [
       colors.accent,
       colors.primary,
-      colors.foreground.withAlpha((0.75 * 255).round()),
+      colors.secondary,
+      colors.card,
+      colors.background,
+      colors.foreground.withAlpha((0.65 * 255).round()),
     ];
     final needsPicker = state.template?.hasAlphaBackground == true ||
         state.source == AvatarSource.upload;
@@ -630,28 +630,37 @@ class _BackgroundPicker extends StatelessWidget {
         spacing: 10.0,
         children: [
           Text(
-            'Background color (for transparent avatars)',
+            'Background color',
             style: context.textTheme.h4.copyWith(color: colors.foreground),
           ),
+          Text(
+            'Tap or drag to tint transparent avatars before saving.',
+            style:
+                context.textTheme.small.copyWith(color: colors.mutedForeground),
+          ),
+          _ColorField(
+            color: state.backgroundColor,
+            onChanged: (color) => cubit.setBackgroundColor(color, colors),
+          ),
           Wrap(
-            spacing: 12,
-            runSpacing: 12,
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              for (final color in palette)
+              for (final preset in presets)
                 GestureDetector(
-                  onTap: () => cubit.setBackgroundColor(color, colors),
+                  onTap: () => cubit.setBackgroundColor(preset, colors),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 36,
-                    height: 36,
+                    duration: const Duration(milliseconds: 140),
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(10),
+                      color: preset,
+                      shape: BoxShape.circle,
                       border: Border.all(
-                        color: state.backgroundColor == color
+                        color: state.backgroundColor == preset
                             ? colors.primary
                             : colors.border,
-                        width: state.backgroundColor == color ? 2 : 1,
+                        width: state.backgroundColor == preset ? 2 : 1,
                       ),
                     ),
                   ),
@@ -662,6 +671,120 @@ class _BackgroundPicker extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ColorField extends StatelessWidget {
+  const _ColorField({
+    required this.color,
+    required this.onChanged,
+  });
+
+  final Color color;
+  final ValueChanged<Color> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return SizedBox(
+      height: 164,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, constraints.maxHeight);
+          final knobCenter = _knobOffsetForColor(color, size);
+
+          void update(Offset position) {
+            final dx = position.dx.clamp(0.0, size.width);
+            final dy = position.dy.clamp(0.0, size.height);
+            final hue = (dx / size.width) * 360.0;
+            final tone = 1 - (dy / size.height);
+            final saturation = (0.35 + tone * 0.65).clamp(0.0, 1.0);
+            final value = (0.65 + tone * 0.35).clamp(0.0, 1.0);
+            final selection = HSVColor.fromAHSV(
+              1,
+              hue,
+              saturation,
+              value,
+            ).toColor();
+            onChanged(selection);
+          }
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanDown: (details) => update(details.localPosition),
+            onPanUpdate: (details) => update(details.localPosition),
+            child: ClipRRect(
+              borderRadius: context.radius,
+              child: Stack(
+                children: [
+                  const Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xFFFF5A5A),
+                            Color(0xFFF59E0B),
+                            Color(0xFF22C55E),
+                            Color(0xFF06B6D4),
+                            Color(0xFF6366F1),
+                            Color(0xFFF472B6),
+                            Color(0xFFFF5A5A),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.18),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.35),
+                          ],
+                          stops: const [0.0, 0.45, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: (knobCenter.dx - 9).clamp(0.0, size.width - 18),
+                    top: (knobCenter.dy - 9).clamp(0.0, size.height - 18),
+                    child: Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color,
+                        border: Border.all(color: colors.background, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+Offset _knobOffsetForColor(Color color, Size size) {
+  final hsv = HSVColor.fromColor(color);
+  final toneValues = <double>[
+    (hsv.saturation - 0.35) / 0.65,
+    (hsv.value - 0.65) / 0.35,
+  ].where((value) => value.isFinite).toList();
+  final tone = toneValues.isEmpty
+      ? 0.5
+      : toneValues.reduce((a, b) => a + b) / toneValues.length;
+  final clampedTone = tone.clamp(0.0, 1.0);
+  final dx = (hsv.hue / 360.0).clamp(0.0, 1.0) * size.width;
+  final dy = (1 - clampedTone) * size.height;
+  return Offset(dx, dy);
 }
 
 class _DefaultsSection extends StatelessWidget {
@@ -676,9 +799,10 @@ class _DefaultsSection extends StatelessWidget {
   String _labelForCategory(AvatarTemplateCategory category) {
     return switch (category) {
       AvatarTemplateCategory.abstract => 'Abstract',
-      AvatarTemplateCategory.science => 'Science',
+      AvatarTemplateCategory.stem => 'STEM',
       AvatarTemplateCategory.sports => 'Sports',
       AvatarTemplateCategory.music => 'Music',
+      AvatarTemplateCategory.misc => 'Hobbies & Games',
     };
   }
 
