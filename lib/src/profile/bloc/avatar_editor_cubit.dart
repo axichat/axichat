@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:axichat/src/profile/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/profile/avatar/avatar_templates.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -121,14 +122,21 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         );
 
   static const minCropSide = 48.0;
+  // All non-abstract templates ship with transparent backgrounds, so keep a single inset.
+  static const avatarInsetFraction = 0.10;
+  static const transparentAvatarInsetFraction = 0.10;
   static const _targetSize = 256;
   static const _maxBytes = 64 * 1024;
   static const _minQuality = 55;
+  static const _qualityStep = 5;
 
   final XmppService _xmppService;
   final ProfileCubit? _profileCubit;
   final List<AvatarTemplate> _templates;
   final List<String> _recentShuffleIds = <String>[];
+  final List<AvatarTemplate> _abstractShuffleBag = <AvatarTemplate>[];
+  final List<AvatarTemplate> _nonAbstractShuffleBag = <AvatarTemplate>[];
+  static const _shuffleHistoryLimit = 12;
   final _random = Random();
 
   img.Image? _decodedImage;
@@ -196,7 +204,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             : selectedBackground,
         colors,
       );
-      final decoded = img.decodeImage(generated.bytes);
+      final decoded = await decodeImageBytes(generated.bytes);
       if (decoded == null) {
         emit(
           state.copyWith(
@@ -233,8 +241,12 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     ShadColorScheme colors,
   ) async {
     emit(state.copyWith(backgroundColor: color));
-    if (state.template != null && state.template!.hasAlphaBackground) {
-      await selectTemplate(state.template!, colors);
+    if (state.template != null) {
+      await selectTemplate(
+        state.template!,
+        colors,
+        background: color,
+      );
       return;
     }
     if (_decodedImage != null && _decodedImage!.numChannels == 4) {
@@ -331,7 +343,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   Future<void> _loadFromBytes(Uint8List bytes) async {
-    final decoded = img.decodeImage(bytes);
+    final decoded = await decodeImageBytes(bytes);
     if (decoded == null) {
       emit(state.copyWith(error: 'That file is not a valid image.'));
       return;
@@ -361,11 +373,58 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   Future<void> _rebuildDraft() async {
     final source = _decodedImage;
-    if (source == null) return;
+    final sourceBytes = state.sourceBytes;
+    if (source == null || sourceBytes == null || sourceBytes.isEmpty) return;
+    final safeCrop = _constrainRect(
+      state.cropRect ?? _initialCropRect(source),
+      source.width.toDouble(),
+      source.height.toDouble(),
+    );
+    final template = state.template;
+    final useTemplateInset = template != null &&
+        template.category != AvatarTemplateCategory.abstract;
+    final padAlphaTemplate =
+        template?.hasAlphaBackground == true && useTemplateInset;
+    final insetFraction = useTemplateInset
+        ? (padAlphaTemplate
+            ? transparentAvatarInsetFraction
+            : avatarInsetFraction)
+        : 0.0;
+    final shouldInset = insetFraction > 0;
+    final paddingColor = _paddingColorForTemplate(
+      image: source,
+      template: template,
+      fallback: state.backgroundColor,
+    );
+    final shouldFlatten =
+        shouldInset || (paddingColor.a > 0 && source.numChannels == 4);
     emit(state.copyWith(processing: true, clearError: true));
     await Future<void>.delayed(Duration.zero);
     try {
-      final draft = _processImage(source);
+      final processed = await processAvatar(
+        AvatarProcessRequest(
+          bytes: sourceBytes,
+          cropLeft: safeCrop.left,
+          cropTop: safeCrop.top,
+          cropSide: safeCrop.width,
+          targetSize: _targetSize,
+          maxBytes: _maxBytes,
+          insetFraction: insetFraction,
+          shouldInset: shouldInset,
+          backgroundColor: paddingColor.toARGB32(),
+          flattenBackground: shouldFlatten,
+          minJpegQuality: _minQuality,
+          qualityStep: _qualityStep,
+        ),
+      );
+      final hash = sha1.convert(processed.bytes).toString();
+      final draft = AvatarUploadPayload(
+        bytes: processed.bytes,
+        mimeType: processed.mimeType,
+        width: processed.width,
+        height: processed.height,
+        hash: hash,
+      );
       emit(
         state.copyWith(
           processing: false,
@@ -385,44 +444,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
-  AvatarUploadPayload _processImage(img.Image image) {
-    final safeCrop = _constrainRect(
-      state.cropRect ?? _initialCropRect(image),
-      image.width.toDouble(),
-      image.height.toDouble(),
-    );
-    final left = safeCrop.left.round();
-    final top = safeCrop.top.round();
-    final width = min(safeCrop.width.round(), image.width - left);
-    final height = min(safeCrop.height.round(), image.height - top);
-    final cropped = img.copyCrop(
-      image,
-      x: left,
-      y: top,
-      width: width,
-      height: height,
-    );
-    final flattened = _flattenIfNeeded(cropped);
-    final resized = img.copyResize(
-      flattened,
-      width: _targetSize,
-      height: _targetSize,
-      interpolation: img.Interpolation.cubic,
-    );
-    final encoded = _encode(resized);
-    final hash = sha1.convert(encoded.bytes).toString();
-    return AvatarUploadPayload(
-      bytes: encoded.bytes,
-      mimeType: encoded.mimeType,
-      width: resized.width,
-      height: resized.height,
-      hash: hash,
-    );
-  }
-
   Rect _initialCropRect(img.Image image) {
     final minSide = min(image.width, image.height).toDouble();
-    final side = max(minCropSide, minSide * 0.8);
+    final targetSide = max(minCropSide, minSide * 0.8);
+    final side = min(targetSide, minSide);
     final left = (image.width - side) / 2;
     final top = (image.height - side) / 2;
     return _constrainRect(
@@ -433,57 +458,56 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   Rect _constrainRect(Rect rect, double width, double height) {
-    final availableSide = min(width, height);
-    final desiredSide =
-        min(rect.width, rect.height).clamp(minCropSide, availableSide);
+    if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
+      return Rect.zero;
+    }
+    final maxSide = min(width, height);
+    final minSide = min(minCropSide, maxSide);
+    final baseSide = rect.isFinite && rect.width > 0 && rect.height > 0
+        ? min(rect.width, rect.height)
+        : maxSide;
+    final desiredSide = baseSide.clamp(minSide, maxSide);
     final maxLeft = width - desiredSide;
     final maxTop = height - desiredSide;
-    final left = rect.left.clamp(0.0, maxLeft);
-    final top = rect.top.clamp(0.0, maxTop);
+    final left = rect.left.isFinite
+        ? rect.left.clamp(0.0, maxLeft)
+        : (width - desiredSide) / 2;
+    final top = rect.top.isFinite
+        ? rect.top.clamp(0.0, maxTop)
+        : (height - desiredSide) / 2;
     return Rect.fromLTWH(left, top, desiredSide, desiredSide);
   }
 
-  img.Image _flattenIfNeeded(img.Image image) {
-    final backgroundAlpha = _channelToByte(state.backgroundColor.a);
-    final shouldFlatten = (state.template?.hasAlphaBackground ?? false) ||
-        (backgroundAlpha > 0 && image.numChannels == 4);
-    if (!shouldFlatten) return image;
-    final background = img.Image(
-      width: image.width,
-      height: image.height,
-      numChannels: 4,
-      format: img.Format.uint8,
-    );
-    img.fill(background, color: _color(state.backgroundColor));
-    img.compositeImage(background, image);
-    return background;
-  }
-
-  _EncodedAvatar _encode(img.Image image) {
-    if (image.numChannels == 4) {
-      final pngBytes = Uint8List.fromList(
-        img.encodePng(image, level: 4),
-      );
-      if (pngBytes.length <= _maxBytes) {
-        return _EncodedAvatar(
-          bytes: pngBytes,
-          mimeType: 'image/png',
-        );
-      }
+  Color _paddingColorForTemplate({
+    required img.Image image,
+    AvatarTemplate? template,
+    required Color fallback,
+  }) {
+    if (template == null ||
+        template.category == AvatarTemplateCategory.abstract ||
+        image.width <= 0 ||
+        image.height <= 0) {
+      return fallback;
     }
-    var quality = 90;
-    Uint8List jpgBytes = Uint8List.fromList(
-      img.encodeJpg(image, quality: quality),
-    );
-    while (jpgBytes.length > _maxBytes && quality > _minQuality) {
-      quality -= 5;
-      jpgBytes = Uint8List.fromList(
-        img.encodeJpg(image, quality: quality),
-      );
+    if (template.hasAlphaBackground || fallback.a > 0) {
+      return fallback;
     }
-    return _EncodedAvatar(
-      bytes: jpgBytes,
-      mimeType: 'image/jpeg',
+    final samples = [
+      image.getPixel(0, 0),
+      image.getPixel(image.width - 1, 0),
+      image.getPixel(0, image.height - 1),
+      image.getPixel(image.width - 1, image.height - 1),
+    ];
+    final count = samples.length;
+    final r = samples.fold<int>(0, (sum, pixel) => sum + (pixel.r as int));
+    final g = samples.fold<int>(0, (sum, pixel) => sum + (pixel.g as int));
+    final b = samples.fold<int>(0, (sum, pixel) => sum + (pixel.b as int));
+    final a = samples.fold<int>(0, (sum, pixel) => sum + (pixel.a as int));
+    return Color.fromARGB(
+      a ~/ count,
+      r ~/ count,
+      g ~/ count,
+      b ~/ count,
     );
   }
 
@@ -502,44 +526,46 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final useAbstract = !hasNonAbstract ||
         (hasAbstract && hasNonAbstract && _random.nextBool());
     final pool = useAbstract ? abstract : nonAbstract;
-    final available = pool
-        .where((template) => !_recentShuffleIds.contains(template.id))
-        .toList();
-    final candidates = available.isEmpty ? pool : available;
-    final selection = candidates[_random.nextInt(candidates.length)];
+    final selection = _pickFromBag(
+      pool: pool,
+      bag: useAbstract ? _abstractShuffleBag : _nonAbstractShuffleBag,
+    );
     _recentShuffleIds.add(selection.id);
-    if (_recentShuffleIds.length > 12) {
+    if (_recentShuffleIds.length > _shuffleHistoryLimit) {
       _recentShuffleIds.removeAt(0);
     }
     return selection;
   }
 
+  AvatarTemplate _pickFromBag({
+    required List<AvatarTemplate> pool,
+    required List<AvatarTemplate> bag,
+  }) {
+    if (bag.isEmpty) {
+      bag.addAll(pool);
+      bag.shuffle(_random);
+    }
+    AvatarTemplate? selection;
+    final recycled = <AvatarTemplate>[];
+    while (bag.isNotEmpty) {
+      final candidate = bag.removeAt(0);
+      if (_recentShuffleIds.contains(candidate.id)) {
+        recycled.add(candidate);
+        continue;
+      }
+      selection = candidate;
+      break;
+    }
+    bag.addAll(recycled);
+    selection ??=
+        bag.isNotEmpty ? bag.removeAt(0) : pool[_random.nextInt(pool.length)];
+    return selection;
+  }
+
   Color _randomAvatarBackgroundColor(ShadColorScheme colors) {
     final hue = _random.nextDouble() * 360.0;
-    final saturation = 0.65 + _random.nextDouble() * 0.35;
-    final lightness = 0.45 + _random.nextDouble() * 0.15;
+    final saturation = 0.75 + _random.nextDouble() * 0.25;
+    final lightness = 0.38 + _random.nextDouble() * 0.17;
     return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
   }
-}
-
-class _EncodedAvatar {
-  _EncodedAvatar({
-    required this.bytes,
-    required this.mimeType,
-  });
-
-  final Uint8List bytes;
-  final String mimeType;
-}
-
-img.Color _color(Color color) => img.ColorUint8.rgba(
-      _channelToByte(color.r),
-      _channelToByte(color.g),
-      _channelToByte(color.b),
-      _channelToByte(color.a),
-    );
-
-int _channelToByte(num channel) {
-  final scaled = channel <= 1.0 ? channel * 255.0 : channel;
-  return scaled.round().clamp(0, 255);
 }

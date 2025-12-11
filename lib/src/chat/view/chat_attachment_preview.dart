@@ -189,11 +189,12 @@ class _ImageAttachment extends StatelessWidget {
     final availableWidth = constraints.maxWidth.isFinite
         ? constraints.maxWidth
         : MediaQuery.sizeOf(context).width;
+    const maxUnknownWidth = 420.0;
     final intrinsicWidth = metadata.width?.toDouble();
-    if (intrinsicWidth == null || intrinsicWidth <= 0) {
-      return availableWidth;
-    }
-    return math.min(intrinsicWidth, availableWidth);
+    final targetWidth = intrinsicWidth != null && intrinsicWidth > 0
+        ? intrinsicWidth
+        : math.min(maxUnknownWidth, availableWidth);
+    return math.min(targetWidth, availableWidth * 0.9);
   }
 
   double _aspectRatio(FileMetadataData metadata) {

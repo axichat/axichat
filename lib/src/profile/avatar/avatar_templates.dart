@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -73,6 +74,11 @@ class _AvatarAsset {
 
 List<AvatarTemplate> buildDefaultAvatarTemplates() =>
     _avatarAssets.map((asset) => asset.toTemplate()).toList();
+
+final Map<String, Uint8List> _avatarAssetBytesCache = <String, Uint8List>{};
+final Map<String, Uint8List> _avatarPngCache = <String, Uint8List>{};
+final Map<String, _AvatarAssetMeta> _avatarAssetMetaCache =
+    <String, _AvatarAssetMeta>{};
 
 const _avatarAssets = [
   _AvatarAsset(
@@ -481,44 +487,125 @@ Future<GeneratedAvatar> _loadAssetAvatar({
   required Color background,
   required bool applyBackground,
 }) async {
-  final data = await rootBundle.load(assetPath);
-  final decoded = img.decodeImage(data.buffer.asUint8List());
-  if (decoded == null) {
-    throw StateError('Failed to decode avatar asset at $assetPath');
+  final cachedMeta = _avatarAssetMetaCache[assetPath];
+  if (!applyBackground && _avatarPngCache.containsKey(assetPath)) {
+    final cachedBytes = _avatarPngCache[assetPath]!;
+    final meta = cachedMeta ??
+        const _AvatarAssetMeta(width: 0, height: 0, hasAlpha: true);
+    return GeneratedAvatar(
+      bytes: cachedBytes,
+      mimeType: 'image/png',
+      width: meta.width,
+      height: meta.height,
+      hasAlpha: meta.hasAlpha,
+    );
   }
-  final needsBackground = applyBackground && decoded.hasAlpha;
-  final processed =
-      needsBackground ? _composeOnBackground(decoded, background) : decoded;
-  final encoded = Uint8List.fromList(img.encodePng(processed));
+  final assetBytes = await _loadAvatarBytes(assetPath);
+  final result = await compute<_AvatarAssetRequest, _AvatarAssetResult>(
+    _buildAvatarFromBytes,
+    _AvatarAssetRequest(
+      bytes: assetBytes,
+      backgroundColor: background.toARGB32(),
+      applyBackground: applyBackground,
+    ),
+  );
+  _avatarAssetMetaCache[assetPath] = _AvatarAssetMeta(
+    width: result.width,
+    height: result.height,
+    hasAlpha: result.originalHasAlpha,
+  );
+  if (!applyBackground) {
+    _avatarPngCache[assetPath] = result.bytes;
+  }
   return GeneratedAvatar(
-    bytes: encoded,
+    bytes: result.bytes,
     mimeType: 'image/png',
-    width: processed.width,
-    height: processed.height,
-    hasAlpha: applyBackground && processed.hasAlpha,
+    width: result.width,
+    height: result.height,
+    hasAlpha:
+        applyBackground ? result.compositedHasAlpha : result.originalHasAlpha,
   );
 }
 
-img.Image _composeOnBackground(img.Image image, Color background) {
-  final canvas = img.Image(
-    width: image.width,
-    height: image.height,
-    numChannels: 4,
-    format: img.Format.uint8,
-  );
-  img.fill(canvas, color: _imgColor(background));
-  img.compositeImage(canvas, image);
-  return canvas;
-}
-
-img.Color _imgColor(Color color) => img.ColorUint8.rgba(
-      _channelToByte(color.r),
-      _channelToByte(color.g),
-      _channelToByte(color.b),
-      _channelToByte(color.a),
+img.Color _imgColor(int argb) => img.ColorUint8.rgba(
+      (argb >> 16) & 0xFF,
+      (argb >> 8) & 0xFF,
+      argb & 0xFF,
+      (argb >> 24) & 0xFF,
     );
 
-int _channelToByte(num channel) {
-  final scaled = channel <= 1.0 ? channel * 255.0 : channel;
-  return scaled.round().clamp(0, 255);
+Future<Uint8List> _loadAvatarBytes(String assetPath) async {
+  final cached = _avatarAssetBytesCache[assetPath];
+  if (cached != null) return cached;
+  final data = await rootBundle.load(assetPath);
+  final bytes = data.buffer.asUint8List();
+  _avatarAssetBytesCache[assetPath] = bytes;
+  return bytes;
+}
+
+_AvatarAssetResult _buildAvatarFromBytes(_AvatarAssetRequest request) {
+  final decoded = img.decodeImage(request.bytes);
+  if (decoded == null) {
+    throw StateError('Failed to decode avatar asset');
+  }
+  img.Image processed = decoded;
+  if (request.applyBackground && decoded.hasAlpha) {
+    final canvas = img.Image(
+      width: decoded.width,
+      height: decoded.height,
+      numChannels: 4,
+      format: img.Format.uint8,
+    );
+    img.fill(canvas, color: _imgColor(request.backgroundColor));
+    img.compositeImage(canvas, decoded);
+    processed = canvas;
+  }
+  final encoded = img.encodePng(processed, level: 1);
+  return _AvatarAssetResult(
+    bytes: Uint8List.fromList(encoded),
+    width: processed.width,
+    height: processed.height,
+    originalHasAlpha: decoded.hasAlpha,
+    compositedHasAlpha: processed.hasAlpha,
+  );
+}
+
+class _AvatarAssetRequest {
+  const _AvatarAssetRequest({
+    required this.bytes,
+    required this.backgroundColor,
+    required this.applyBackground,
+  });
+
+  final Uint8List bytes;
+  final int backgroundColor;
+  final bool applyBackground;
+}
+
+class _AvatarAssetResult {
+  const _AvatarAssetResult({
+    required this.bytes,
+    required this.width,
+    required this.height,
+    required this.originalHasAlpha,
+    required this.compositedHasAlpha,
+  });
+
+  final Uint8List bytes;
+  final int width;
+  final int height;
+  final bool originalHasAlpha;
+  final bool compositedHasAlpha;
+}
+
+class _AvatarAssetMeta {
+  const _AvatarAssetMeta({
+    required this.width,
+    required this.height,
+    required this.hasAlpha,
+  });
+
+  final int width;
+  final int height;
+  final bool hasAlpha;
 }

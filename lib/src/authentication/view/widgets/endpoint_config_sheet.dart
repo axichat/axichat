@@ -371,7 +371,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 ],
                 shape: SquircleBorder(
                   cornerRadius: 18,
-                  side: BorderSide(color: colors.border),
+                  side: const BorderSide(color: Colors.transparent),
                 ),
               ),
               child: Padding(

@@ -43,6 +43,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'localization/app_localizations.dart';
 
 Timer? _pendingAuthNavigation;
+AuthenticationState? _lastAuthState;
 
 class Axichat extends StatefulWidget {
   Axichat({
@@ -432,33 +433,45 @@ class MaterialAxichat extends StatelessWidget {
               listeners: [
                 BlocListener<AuthenticationCubit, AuthenticationState>(
                   listener: (context, state) {
-                    final location =
-                        routeLocations[_router.state.matchedLocation]!;
+                    final previousAuthState = _lastAuthState;
+                    _lastAuthState = state;
+                    final matchedLocation = _router.state.matchedLocation;
+                    final location = routeLocations[matchedLocation];
+                    final onGuestRoute =
+                        location == null || !location.authenticationRequired;
                     final animationDuration =
                         context.read<SettingsCubit>().animationDuration;
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
-                      if (location.authenticationRequired) {
+                      if (location?.authenticationRequired ?? true) {
                         _router.go(const LoginRoute().location);
                       }
                     } else if (state is AuthenticationComplete &&
-                        !location.authenticationRequired) {
+                        previousAuthState is! AuthenticationComplete &&
+                        onGuestRoute) {
                       _pendingAuthNavigation?.cancel();
-                      _pendingAuthNavigation = Timer(animationDuration, () {
+                      void navigateHome() {
                         if (!context.mounted) return;
                         final latestAuthState =
                             context.read<AuthenticationCubit>().state;
                         if (latestAuthState is! AuthenticationComplete) {
                           return;
                         }
-                        final currentLocation =
-                            routeLocations[_router.state.matchedLocation]!;
-                        if (currentLocation.authenticationRequired) {
+                        if (_router.state.matchedLocation ==
+                            const HomeRoute().location) {
                           return;
                         }
                         _router.go(const HomeRoute().location);
-                      });
+                        _pendingAuthNavigation = null;
+                      }
+
+                      if (animationDuration == Duration.zero) {
+                        navigateHome();
+                      } else {
+                        _pendingAuthNavigation =
+                            Timer(animationDuration, navigateHome);
+                      }
                     }
                     _handleShareIntent(context);
                   },
