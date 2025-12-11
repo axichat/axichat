@@ -94,6 +94,8 @@ dependencies:
   image: ^4.2.0
   shimmer: ^3.0.0
   cryptography: ^2.9.0
+  flex_color_picker: ^3.8.0
+  crop_your_image: ^2.0.0
 
 dependency_overrides:
   pinenacl: ^0.6.0

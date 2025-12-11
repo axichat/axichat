@@ -36,6 +36,7 @@ enum _AuthFlow {
 const double _primaryPanePadding = 12.0;
 const double _secondaryPaneGutter = 0.0;
 const double _unsplitHorizontalMargin = 16.0;
+const Duration _authOperationTimeout = Duration(seconds: 45);
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
@@ -48,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _signupButtonLoading = false;
   bool _handledInitialAuthState = false;
   bool _loginSuccessHandled = false;
+  Timer? _authTimeoutTimer;
 
   @override
   void initState() {
@@ -67,6 +69,7 @@ class _LoginScreenState extends State<LoginScreen>
     _AuthFlow flow, {
     required String label,
   }) {
+    _startAuthTimeout(flow);
     setState(() {
       _activeFlow = flow;
       _operationLabel = label;
@@ -123,9 +126,11 @@ class _LoginScreenState extends State<LoginScreen>
       _loginSuccessHandled = false;
     });
     _operationProgressController.reset();
+    _clearAuthTimeout();
   }
 
   Future<void> _failOperation() async {
+    _clearAuthTimeout();
     await _operationProgressController.fail();
     if (!mounted) return;
     setState(() {
@@ -157,10 +162,28 @@ class _LoginScreenState extends State<LoginScreen>
     }
     _loginSuccessHandled = true;
     final duration = context.read<SettingsCubit>().animationDuration;
-    await _operationProgressController.complete(duration: duration);
+    final progressDuration =
+        duration == Duration.zero ? baseAnimationDuration : duration;
+    await _operationProgressController.complete(duration: progressDuration);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _activeFlow = null;
+      _operationAcknowledged = false;
+      _operationLabel = '';
+      _signupButtonLoading = false;
+      _signupFlowLocked = false;
+    });
   }
 
   void _handleAuthState(AuthenticationState state) {
+    if (state is AuthenticationComplete ||
+        state is AuthenticationFailure ||
+        state is AuthenticationSignupFailure ||
+        state is AuthenticationNone) {
+      _clearAuthTimeout();
+    }
     if (state is AuthenticationNone) {
       _resetAuthUiState();
       return;
@@ -184,6 +207,7 @@ class _LoginScreenState extends State<LoginScreen>
       if (!_operationProgressController.isActive) {
         _operationProgressController.start();
       }
+      _startAuthTimeout(_AuthFlow.signup);
       if (loginFromSignup) {
         unawaited(_operationProgressController.reach(0.75));
       }
@@ -201,6 +225,7 @@ class _LoginScreenState extends State<LoginScreen>
       if (!_operationProgressController.isActive) {
         _operationProgressController.start();
       }
+      _startAuthTimeout(_AuthFlow.login);
       unawaited(_operationProgressController.reach(
         0.75,
         duration: const Duration(milliseconds: 500),
@@ -208,21 +233,38 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    if (!_operationAcknowledged) return;
-
     if (state is AuthenticationFailure ||
         state is AuthenticationSignupFailure) {
       unawaited(_failOperation());
+      return;
     }
-    if (state is AuthenticationComplete && _activeFlow == _AuthFlow.login) {
-      unawaited(_completeLoginAnimation());
+    if (state is AuthenticationComplete) {
+      if (_operationProgressController.isActive || _activeFlow != null) {
+        unawaited(_completeLoginAnimation());
+      } else {
+        _operationProgressController.reset();
+      }
     }
   }
 
   @override
   void dispose() {
     _operationProgressController.dispose();
+    _clearAuthTimeout();
     super.dispose();
+  }
+
+  void _startAuthTimeout(_AuthFlow flow) {
+    _authTimeoutTimer?.cancel();
+    _authTimeoutTimer = Timer(_authOperationTimeout, () async {
+      if (!mounted || _activeFlow != flow) return;
+      await _failOperation();
+    });
+  }
+
+  void _clearAuthTimeout() {
+    _authTimeoutTimer?.cancel();
+    _authTimeoutTimer = null;
   }
 
   @override
@@ -302,55 +344,45 @@ class _LoginScreenState extends State<LoginScreen>
                                 child: AxiAnimatedSize(
                                   duration: animationDuration,
                                   curve: Curves.easeInOut,
-                                  child: Stack(
-                                    children: [
-                                      AnimatedOpacity(
-                                        duration: animationDuration,
-                                        curve: Curves.easeInOut,
-                                        opacity: (!_signupFlowLocked && _login)
-                                            ? 1
-                                            : 0,
-                                        child: IgnorePointer(
-                                          ignoring:
-                                              _signupFlowLocked || !_login,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(24.0),
-                                            child: LoginForm(
-                                              onSubmitStart: () =>
-                                                  _handleSubmissionRequested(
-                                                _AuthFlow.login,
-                                                label: l10n.authLoggingIn,
-                                              ),
-                                              onAutologinStart:
-                                                  _handleAutologinRequested,
-                                            ),
+                                  child: AnimatedCrossFade(
+                                    firstCurve: Curves.easeInOut,
+                                    secondCurve: Curves.easeInOut,
+                                    sizeCurve: Curves.easeInOut,
+                                    duration: animationDuration,
+                                    crossFadeState:
+                                        (!_signupFlowLocked && _login)
+                                            ? CrossFadeState.showFirst
+                                            : CrossFadeState.showSecond,
+                                    firstChild: IgnorePointer(
+                                      ignoring: _signupFlowLocked || !_login,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(24.0),
+                                        child: LoginForm(
+                                          onSubmitStart: () =>
+                                              _handleSubmissionRequested(
+                                            _AuthFlow.login,
+                                            label: l10n.authLoggingIn,
                                           ),
+                                          onAutologinStart:
+                                              _handleAutologinRequested,
                                         ),
                                       ),
-                                      AnimatedOpacity(
-                                        duration: animationDuration,
-                                        curve: Curves.easeInOut,
-                                        opacity: (!_signupFlowLocked && _login)
-                                            ? 0
-                                            : 1,
-                                        child: IgnorePointer(
-                                          ignoring:
-                                              !_signupFlowLocked && _login,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(24.0),
-                                            child: SignupForm(
-                                              onSubmitStart: () =>
-                                                  _handleSubmissionRequested(
-                                                _AuthFlow.signup,
-                                                label: l10n.authCreatingAccount,
-                                              ),
-                                              onLoadingChanged:
-                                                  _handleSignupLoadingChanged,
-                                            ),
+                                    ),
+                                    secondChild: IgnorePointer(
+                                      ignoring: !_signupFlowLocked && _login,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(24.0),
+                                        child: SignupForm(
+                                          onSubmitStart: () =>
+                                              _handleSubmissionRequested(
+                                            _AuthFlow.signup,
+                                            label: l10n.authCreatingAccount,
                                           ),
+                                          onLoadingChanged:
+                                              _handleSignupLoadingChanged,
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),

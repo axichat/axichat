@@ -36,6 +36,8 @@ class AxiAvatar extends StatefulWidget {
   final String? avatarPath;
   final Uint8List? avatarBytes;
 
+  static const double paddingFraction = 0.0;
+
   @override
   State<AxiAvatar> createState() => _AxiAvatarState();
 }
@@ -165,15 +167,20 @@ class _AxiAvatarState extends State<AxiAvatar> {
               return ClipPath(
                 clipper: ShapeBorderClipper(shape: avatarShape),
                 child: avatarBytes != null
-                    ? Image.memory(
-                        avatarBytes,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => ColoredBox(
-                          color: backgroundColor,
-                          child: Center(
-                            child: Text(
-                              initial,
-                              style: textStyle,
+                    ? Padding(
+                        padding: EdgeInsets.all(
+                          widget.size * AxiAvatar.paddingFraction,
+                        ),
+                        child: Image.memory(
+                          avatarBytes,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => ColoredBox(
+                            color: backgroundColor,
+                            child: Center(
+                              child: Text(
+                                initial,
+                                style: textStyle,
+                              ),
                             ),
                           ),
                         ),

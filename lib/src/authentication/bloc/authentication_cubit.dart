@@ -76,9 +76,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _authRecoveryFuture = _recoverAuthTransaction();
     unawaited(_restoreEndpointConfig());
     _lifecycleListener = AppLifecycleListener(
-      onResume: login,
-      onShow: login,
-      onRestart: login,
+      onResume: _loginIfStoredCredentials,
+      onShow: _loginIfStoredCredentials,
+      onRestart: _loginIfStoredCredentials,
       onDetach: logout,
       onExitRequested: () async {
         await logout();
@@ -101,10 +101,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             }
           }
         }
-
         await _xmppService.setClientState(
-            lifeCycleState == AppLifecycleState.resumed ||
-                lifeCycleState == AppLifecycleState.inactive);
+          lifeCycleState == AppLifecycleState.resumed ||
+              lifeCycleState == AppLifecycleState.inactive,
+        );
       },
     );
     _connectivitySubscription =
@@ -325,6 +325,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       password: storedPassword,
       passwordPreHashed: storedPasswordPreHashed,
     );
+  }
+
+  Future<void> _loginIfStoredCredentials() async {
+    if (_loginInFlight || _stickyAuthActive) {
+      return;
+    }
+
+    final remember = await loadRememberMeChoice();
+    if (!remember) return;
+
+    final storedLogin = await _readStoredLoginCredentials();
+    if (!storedLogin.hasUsableCredentials) {
+      _log.fine('Skipping auto login: no stored credentials.');
+      return;
+    }
+
+    await login();
   }
 
   Future<bool> hasStoredLoginCredentials() async {
@@ -548,14 +565,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
 
-      final loginState = _activeSignupCredentialKey != null
-          ? AuthenticationLogInInProgress(fromSignup: true, config: config)
-          : AuthenticationLogInInProgress(config: config);
-
-      if (!wasAuthenticated || !usingStoredCredentials) {
-        _emit(loginState);
-      }
-
       late final String resolvedJid;
       late final String resolvedPassword;
       bool passwordPreHashed = false;
@@ -599,6 +608,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _emit(const AuthenticationNone());
         return;
       }
+
+      final loginState = _activeSignupCredentialKey != null
+          ? AuthenticationLogInInProgress(fromSignup: true, config: config)
+          : AuthenticationLogInInProgress(config: config);
+      _emit(loginState);
 
       String? emailPassword = emailCredentials?.password;
       final String displayName = resolvedJid.split('@').first;

@@ -6583,34 +6583,48 @@ class _AttachmentPreviewDialog extends StatelessWidget {
     return ShadDialog(
       padding: const EdgeInsets.all(12),
       gap: 12,
+      closeIcon: const SizedBox.shrink(),
       constraints: BoxConstraints(
         maxWidth: targetSize.width + 24,
         maxHeight: targetSize.height + 24,
       ),
-      child: Center(
-        child: DecoratedBox(
-          decoration: ShapeDecoration(
-            color: colors.card,
-            shape: ContinuousRectangleBorder(
-              borderRadius: radius,
-              side: borderSide,
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: radius,
-            child: SizedBox(
-              width: targetSize.width,
-              height: targetSize.height,
-              child: InteractiveViewer(
-                maxScale: 4,
-                child: Image.file(
-                  File(attachment.path),
-                  fit: BoxFit.contain,
+      child: Stack(
+        children: [
+          Center(
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                color: colors.card,
+                shape: ContinuousRectangleBorder(
+                  borderRadius: radius,
+                  side: borderSide,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: radius,
+                child: SizedBox(
+                  width: targetSize.width,
+                  height: targetSize.height,
+                  child: InteractiveViewer(
+                    maxScale: 4,
+                    child: Image.file(
+                      File(attachment.path),
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: ShadButton.ghost(
+              size: ShadButtonSize.sm,
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Icon(LucideIcons.x, size: 16),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -359,7 +359,6 @@ void main() {
         username: validUsername,
       ),
       expect: () => [
-        const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
             'Username and password have different nullness.'),
       ],
@@ -382,7 +381,6 @@ void main() {
         password: validPassword,
       ),
       expect: () => [
-        const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
             'Username and password have different nullness.'),
       ],
@@ -432,7 +430,6 @@ void main() {
       ),
       act: (bloc) => bloc.login(),
       expect: () => const [
-        AuthenticationLogInInProgress(),
         AuthenticationNone(),
       ],
       verify: (bloc) {
@@ -460,7 +457,6 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(),
       expect: () => const [
-        AuthenticationLogInInProgress(),
         AuthenticationNone(),
       ],
       verify: (_) {
@@ -608,10 +604,7 @@ void main() {
       'Without saved credentials, automatic login emits [AuthenticationNone].',
       build: () => bloc,
       act: (bloc) => bloc.login(),
-      expect: () => [
-        const AuthenticationLogInInProgress(),
-        const AuthenticationNone(),
-      ],
+      expect: () => [const AuthenticationNone()],
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -645,7 +638,10 @@ void main() {
         initialState: const AuthenticationComplete(),
       ),
       act: (bloc) => bloc.login(),
-      expect: () => [const AuthenticationComplete()],
+      expect: () => [
+        const AuthenticationLogInInProgress(),
+        const AuthenticationComplete(),
+      ],
       verify: (bloc) {
         verify(
           () => mockXmppService.resumeOfflineSession(
