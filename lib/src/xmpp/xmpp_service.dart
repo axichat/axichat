@@ -30,6 +30,7 @@ import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:logging/logging.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
@@ -945,13 +946,21 @@ class XmppService extends XmppBase
       }
     }
     try {
+      List<DemoChatScript>? scripts;
       await _dbOp<XmppDatabase>((db) async {
         final existingChats = await db.getChats(start: 0, end: 1);
-        if (existingChats.isNotEmpty) return;
-        final scripts = DemoChats.scripts(
+        if (existingChats.isNotEmpty) {
+          if (_demoOfflineMode) {
+            scripts = DemoChats.scripts(
+              openJid: DemoChats.defaultOpenJid,
+            );
+          }
+          return;
+        }
+        scripts = DemoChats.scripts(
           openJid: DemoChats.defaultOpenJid,
         );
-        for (final script in scripts) {
+        for (final script in scripts!) {
           final messages = script.messages;
           final chat = script.chat;
           await db.createChat(chat);
@@ -984,8 +993,56 @@ class XmppService extends XmppBase
           }
         }
       }, awaitDatabase: true);
+      if (scripts != null) {
+        await _seedDemoAvatars(scripts!);
+      }
     } on Exception catch (error, stackTrace) {
       _xmppLogger.fine('Skipping demo chat seed', error, stackTrace);
+    }
+  }
+
+  Future<void> _seedDemoAvatars(List<DemoChatScript> scripts) async {
+    if (!_demoOfflineMode) return;
+    if (avatarEncryptionKey == null) {
+      _xmppLogger.fine(
+        'Skipping demo avatar seed; encryption key unavailable.',
+      );
+      return;
+    }
+    final avatarAssets = DemoChats.avatarAssets();
+    if (avatarAssets.isEmpty) return;
+    for (final script in scripts) {
+      final avatar = avatarAssets[script.chat.jid];
+      if (avatar == null) continue;
+      await _seedDemoAvatarForJid(
+        jid: script.chat.jid,
+        avatar: avatar,
+      );
+    }
+  }
+
+  Future<void> _seedDemoAvatarForJid({
+    required String jid,
+    required DemoContactAvatar avatar,
+  }) async {
+    try {
+      final data = await rootBundle.load(avatar.assetPath);
+      if (data.lengthInBytes == 0) return;
+      final avatarPath = await _writeAvatarFile(
+        hash: avatar.hash,
+        bytes: data.buffer.asUint8List(),
+      );
+      await _storeAvatar(
+        jid: jid,
+        path: avatarPath,
+        hash: avatar.hash,
+      );
+    } catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to seed demo avatar from ${avatar.assetPath}',
+        error,
+        stackTrace,
+      );
     }
   }
 
@@ -1351,6 +1408,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       : _logIncomingOutgoing = logTraffic;
 
   static final _log = Logger('XmppSocketWrapper');
+  static const _socketClosedWithErrorLog = 'Socket closed with error.';
 
   final bool _logIncomingOutgoing;
   final StreamController<String> _dataStream = StreamController.broadcast();
@@ -1458,9 +1516,17 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
         _log.severe(error.toString());
         _eventStream.add(mox.XmppSocketErrorEvent(error));
       },
+      onDone: () {
+        _socketSubscription = null;
+      },
     );
 
     socket.done.then((_) {
+      _eventStream.add(mox.XmppSocketClosureEvent(_expectSocketClosure));
+      _expectSocketClosure = false;
+    }).catchError((Object error, StackTrace stackTrace) {
+      _log.fine(_socketClosedWithErrorLog, error, stackTrace);
+      _eventStream.add(mox.XmppSocketErrorEvent(error));
       _eventStream.add(mox.XmppSocketClosureEvent(_expectSocketClosure));
       _expectSocketClosure = false;
     });
@@ -1503,7 +1569,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
   @override
   void close() {
     _expectSocketClosure = true;
-    _socketSubscription?.cancel();
 
     final socket = _socket;
     if (socket == null) {

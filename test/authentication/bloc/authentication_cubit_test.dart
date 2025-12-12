@@ -25,6 +25,9 @@ const saltedPassword = 'saltedPassword';
 const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
 
+const missingDatabaseSecretsErrorText =
+    'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
+
 Uri _registrationMatcher() => any<Uri>(
       that: predicate((Uri uri) => uri.path.contains('/register/new/')),
     );
@@ -359,6 +362,7 @@ void main() {
         username: validUsername,
       ),
       expect: () => [
+        const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
             'Username and password have different nullness.'),
       ],
@@ -381,6 +385,7 @@ void main() {
         password: validPassword,
       ),
       expect: () => [
+        const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
             'Username and password have different nullness.'),
       ],
@@ -415,7 +420,7 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Stored login without database secrets clears transport credentials and emits [AuthenticationNone].',
+      'Stored login without database secrets blocks login and emits [AuthenticationFailure].',
       setUp: () {
         credentialStorage['jid'] = validJid;
         credentialStorage['password'] = validPassword;
@@ -430,21 +435,32 @@ void main() {
       ),
       act: (bloc) => bloc.login(),
       expect: () => const [
-        AuthenticationNone(),
+        AuthenticationLogInInProgress(),
+        AuthenticationFailure(missingDatabaseSecretsErrorText),
       ],
       verify: (bloc) {
-        expect(credentialStorage[bloc.jidStorageKey.value], isNull);
-        expect(credentialStorage[bloc.passwordStorageKey.value], isNull);
         expect(
           credentialStorage[bloc.passwordPreHashedStorageKey.value],
-          isNull,
+          equals(true.toString()),
         );
-        verify(
+        expect(
+          credentialStorage[bloc.jidStorageKey.value],
+          equals(validJid),
+        );
+        expect(
+          credentialStorage[bloc.passwordStorageKey.value],
+          equals(validPassword),
+        );
+        expect(
+          credentialStorage['remember_me_choice'],
+          equals(false.toString()),
+        );
+        verifyNever(
           () => mockEmailService.clearStoredCredentials(
             jid: validJid,
             preserveActiveSession: false,
           ),
-        ).called(1);
+        );
       },
     );
 
@@ -457,6 +473,7 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(),
       expect: () => const [
+        AuthenticationLogInInProgress(),
         AuthenticationNone(),
       ],
       verify: (_) {
@@ -604,7 +621,10 @@ void main() {
       'Without saved credentials, automatic login emits [AuthenticationNone].',
       build: () => bloc,
       act: (bloc) => bloc.login(),
-      expect: () => [const AuthenticationNone()],
+      expect: () => [
+        const AuthenticationLogInInProgress(),
+        const AuthenticationNone(),
+      ],
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -638,10 +658,7 @@ void main() {
         initialState: const AuthenticationComplete(),
       ),
       act: (bloc) => bloc.login(),
-      expect: () => [
-        const AuthenticationLogInInProgress(),
-        const AuthenticationComplete(),
-      ],
+      expect: () => [const AuthenticationComplete()],
       verify: (bloc) {
         verify(
           () => mockXmppService.resumeOfflineSession(

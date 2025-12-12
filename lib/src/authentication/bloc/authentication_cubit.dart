@@ -25,6 +25,8 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'authentication_state.dart';
 
+const _missingDatabaseSecretsErrorText =
+    'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
 const _smtpProvisioningMaxAttempts = 3;
 const _smtpProvisioningMaxDuration = Duration(seconds: 20);
 const _smtpProvisioningInitialDelay = Duration(seconds: 2);
@@ -345,6 +347,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<bool> hasStoredLoginCredentials() async {
+    final remember = await loadRememberMeChoice();
+    if (!remember) return false;
     final storedLogin = await _readStoredLoginCredentials();
     return storedLogin.hasUsableCredentials;
   }
@@ -539,25 +543,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final config = _endpointConfig;
       final xmppEnabled = config.enableXmpp;
       final smtpEnabled = config.enableSmtp;
+      final bool wasAuthenticated = state is AuthenticationComplete;
+      final bool usingStoredCredentials = username == null && password == null;
+      final loginState = _activeSignupCredentialKey != null
+          ? AuthenticationLogInInProgress(fromSignup: true, config: config)
+          : AuthenticationLogInInProgress(config: config);
+      if (!wasAuthenticated || !usingStoredCredentials) {
+        _emit(loginState);
+      }
       if (!xmppEnabled && !smtpEnabled) {
         _emit(const AuthenticationFailure(
           'Enable XMPP or SMTP to continue.',
         ));
         return;
       }
-      final bool wasAuthenticated = state is AuthenticationComplete;
-      final bool usingStoredCredentials = username == null && password == null;
-      final storedLogin =
-          usingStoredCredentials ? await _readStoredLoginCredentials() : null;
       if ((username == null) != (password == null)) {
         _emit(const AuthenticationFailure(
             'Username and password have different nullness.'));
         return;
       }
+      final storedLogin = await _readStoredLoginCredentials();
       var credentialDisposition = _CredentialDisposition.keep;
 
-      if (usingStoredCredentials &&
-          !(storedLogin?.hasUsableCredentials ?? false)) {
+      if (usingStoredCredentials && !storedLogin.hasUsableCredentials) {
         _log.info('Login aborted due to missing stored credentials.');
         _authenticatedJid = null;
         await _xmppService.disconnect();
@@ -569,7 +577,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       late final String resolvedPassword;
       bool passwordPreHashed = false;
       if (usingStoredCredentials) {
-        final loginFromStore = storedLogin!;
+        final loginFromStore = storedLogin;
         resolvedJid = loginFromStore.jid!;
         resolvedPassword = loginFromStore.password!;
         if (!loginFromStore.hasPreHashedFlag) {
@@ -594,25 +602,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
       final storedSecrets = await _readDatabaseSecrets(resolvedJid);
       final bool hasStoredDatabaseSecrets = storedSecrets.hasSecrets;
-      final bool hasStoredLoginForJid =
-          (storedLogin?.matches(resolvedJid) ?? false) &&
-              (storedLogin?.hasUsableCredentials ?? false);
+      final bool hasStoredLoginForJid = storedLogin.matches(resolvedJid);
       if (hasStoredLoginForJid && !hasStoredDatabaseSecrets) {
         _log.warning(
-          'Stored login credentials found without database secrets; clearing.',
+          'Stored login credentials found without database secrets; blocking login.',
         );
-        await _clearLoginSecrets();
-        await _clearStoredSmtpCredentials(resolvedJid);
-        _authenticatedJid = null;
-        await _xmppService.disconnect();
-        _emit(const AuthenticationNone());
+        if (usingStoredCredentials) {
+          await persistRememberMeChoice(false);
+        }
+        _emit(AuthenticationFailure(
+          _missingDatabaseSecretsErrorText,
+          config: config,
+        ));
         return;
       }
-
-      final loginState = _activeSignupCredentialKey != null
-          ? AuthenticationLogInInProgress(fromSignup: true, config: config)
-          : AuthenticationLogInInProgress(config: config);
-      _emit(loginState);
 
       String? emailPassword = emailCredentials?.password;
       final String displayName = resolvedJid.split('@').first;
@@ -786,8 +789,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           effectivePassword = resolvedPassword;
         }
 
-        final allowOfflineEmail =
-            usingStoredCredentials && hasStoredDatabaseSecrets;
+        final allowOfflineEmail = !requireEmailProvisioned;
         final provisioningStatus = await _provisionEmailWithRetry(
           displayName: displayName,
           databasePrefix: ensuredDatabasePrefix,
@@ -1112,7 +1114,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Email provisioning pending: ${error.message}');
       _lastEmailProvisioningError = null;
       return _ProvisioningStatus.pendingRecoverable;
-    } on Exception catch (error, stackTrace) {
+    } catch (error, stackTrace) {
+      if (error is Error && error is! StateError) {
+        _log.severe(
+            'Unexpected error during email provisioning', error, stackTrace);
+        rethrow;
+      }
       _log.warning('Email provisioning failed', error, stackTrace);
       if (enforceProvisioning) {
         if (allowOfflineOnRecoverable) {

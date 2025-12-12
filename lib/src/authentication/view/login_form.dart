@@ -33,6 +33,8 @@ class _LoginFormState extends State<LoginForm> {
 
   bool rememberMe = true;
 
+  static final _usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
+
   @override
   void initState() {
     super.initState();
@@ -150,7 +152,7 @@ class _LoginFormState extends State<LoginForm> {
                         autocorrect: false,
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
-                            RegExp('[a-zA-Z0-9]'),
+                            _usernameCharactersPattern,
                           ),
                         ],
                         keyboardType: TextInputType.emailAddress,

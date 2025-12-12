@@ -435,16 +435,24 @@ class MaterialAxichat extends StatelessWidget {
                   listener: (context, state) {
                     final previousAuthState = _lastAuthState;
                     _lastAuthState = state;
+                    final currentLocation =
+                        _router.routeInformationProvider.value.uri.path;
                     final matchedLocation = _router.state.matchedLocation;
-                    final location = routeLocations[matchedLocation];
-                    final onGuestRoute =
-                        location == null || !location.authenticationRequired;
+                    final currentRoute = routeLocations[currentLocation];
+                    final matchedRoute = routeLocations[matchedLocation];
+                    final effectiveRoute = currentRoute ?? matchedRoute;
+                    final onLoginRoute =
+                        currentLocation == const LoginRoute().location ||
+                            matchedLocation == const LoginRoute().location;
+                    final onGuestRoute = onLoginRoute ||
+                        effectiveRoute == null ||
+                        !effectiveRoute.authenticationRequired;
                     final animationDuration =
                         context.read<SettingsCubit>().animationDuration;
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
-                      if (location?.authenticationRequired ?? true) {
+                      if (effectiveRoute?.authenticationRequired ?? true) {
                         _router.go(const LoginRoute().location);
                       }
                     } else if (state is AuthenticationComplete &&
@@ -452,12 +460,8 @@ class MaterialAxichat extends StatelessWidget {
                         onGuestRoute) {
                       _pendingAuthNavigation?.cancel();
                       void navigateHome() {
-                        if (!context.mounted) return;
-                        final latestAuthState =
-                            context.read<AuthenticationCubit>().state;
-                        if (latestAuthState is! AuthenticationComplete) {
-                          return;
-                        }
+                        final latestAuthState = _lastAuthState;
+                        if (latestAuthState is! AuthenticationComplete) return;
                         if (_router.state.matchedLocation ==
                             const HomeRoute().location) {
                           return;

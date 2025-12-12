@@ -287,9 +287,9 @@ class EmailService {
     }
 
     final needsProvisioning = !alreadyProvisioned;
-    final startedForProvisioning = needsProvisioning && !_running;
-    if (startedForProvisioning) {
-      await start();
+    final pausedForProvisioning = needsProvisioning && _running;
+    if (pausedForProvisioning) {
+      await stop();
     }
 
     final normalizedAddress = address;
@@ -338,9 +338,6 @@ class EmailService {
             credentialsMutated && mapped.code == DeltaChatErrorCode.auth;
         if (shouldClearCredentials) {
           await _clearCredentials(scope);
-        }
-        if (startedForProvisioning) {
-          await stop();
         }
         if (isTimeout) {
           throw const EmailProvisioningException(

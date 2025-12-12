@@ -17,7 +17,6 @@ import 'package:axichat/src/profile/avatar/avatar_templates.dart';
 import 'package:axichat/src/profile/bloc/avatar_editor_cubit.dart'
     show AvatarEditorCubit;
 import 'package:axichat/src/profile/view/widgets/avatar_cropper.dart';
-import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -128,7 +127,8 @@ class _SignupFormState extends State<SignupForm>
   bool _nonAbstractAvatarsReady = false;
   bool _warmingNonAbstractAvatars = false;
   Timer? _avatarCarouselTimer;
-  bool _avatarCarouselPrefilling = false;
+  Future<bool>? _prefillCarouselFuture;
+  bool _avatarCarouselAwaitingDisplay = false;
   bool _avatarInitialized = false;
   bool _avatarProcessing = false;
   String? _avatarError;
@@ -269,6 +269,10 @@ class _SignupFormState extends State<SignupForm>
 
   void _onPressed(BuildContext context) async {
     if (_avatarProcessing) return;
+    if (_signupAvatar == null) {
+      await _materializeCurrentCarouselAvatar();
+    }
+    if (_avatarProcessing) return;
     FocusManager.instance.primaryFocus?.unfocus();
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
@@ -353,10 +357,14 @@ class _SignupFormState extends State<SignupForm>
     return _AvatarEditorMode.colorOnly;
   }
 
-  bool get _needsBackgroundPicker =>
-      _avatarEditorMode == _AvatarEditorMode.colorOnly;
-
   bool get _hasUserSelectedAvatar => _signupAvatar != null;
+
+  bool get _canShuffleAvatarBackground {
+    final template = _activeAvatarTemplate;
+    if (template == null) return false;
+    if (template.category == AvatarTemplateCategory.abstract) return false;
+    return template.hasAlphaBackground;
+  }
 
   Future<GeneratedAvatar?> _generateAvatarFromTemplate({
     required AvatarTemplate template,
@@ -536,23 +544,28 @@ class _SignupFormState extends State<SignupForm>
     return img.ColorRgba8(r, g, b, a);
   }
 
-  Future<void> _startAvatarCarousel() async {
+  Future<void> _startAvatarCarousel() {
     if (_hasUserSelectedAvatar ||
         _avatarProcessing ||
-        _avatarCarouselTimer != null ||
-        _avatarCarouselPrefilling) {
-      return;
-    }
-    await _prefillCarousel(
-      targetSize: _avatarCarouselInitialBuffer,
-      preferAbstract: !_nonAbstractAvatarsReady,
-    );
-    if (!mounted || _hasUserSelectedAvatar) {
-      return;
+        _avatarCarouselTimer != null) {
+      return Future.value();
     }
     final showedInitial = _showNextCarouselAvatar(allowFallback: false);
-    if (!showedInitial && mounted && !_hasUserSelectedAvatar) {
+    if (!showedInitial &&
+        _carouselAvatarPreview == null &&
+        _currentCarouselAvatar == null &&
+        mounted &&
+        !_hasUserSelectedAvatar) {
       _showNextCarouselAvatar();
+    }
+    unawaited(
+      _prefillCarousel(
+        targetSize: _avatarCarouselInitialBuffer,
+        preferAbstract: !_nonAbstractAvatarsReady,
+      ),
+    );
+    if (!mounted || _hasUserSelectedAvatar) {
+      return Future.value();
     }
     _avatarCarouselTimer = Timer.periodic(
       _avatarCarouselInterval,
@@ -566,6 +579,7 @@ class _SignupFormState extends State<SignupForm>
         );
       },
     );
+    return Future.value();
   }
 
   void _stopAvatarCarousel() {
@@ -627,6 +641,35 @@ class _SignupFormState extends State<SignupForm>
     });
     _updateAvatarPreview(entry.bytes);
     return true;
+  }
+
+  Future<void> _materializeCurrentCarouselAvatar() async {
+    if (_signupAvatar != null || _avatarProcessing) {
+      return;
+    }
+    final current = _currentCarouselAvatar;
+    if (current == null) {
+      return;
+    }
+    final sourceBytes = current.sourceBytes;
+    final decoded = await decodeImageBytes(sourceBytes);
+    if (decoded == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _signupSourceImage = decoded;
+      _signupSourceBytes = sourceBytes;
+      _signupImageWidth = decoded.width.toDouble();
+      _signupImageHeight = decoded.height.toDouble();
+      _signupCropRect ??= _initialSignupCropRect(
+        decoded,
+        templateCategory: current.category,
+      );
+      _selectedTemplate = current.template;
+      _avatarBackground = current.background;
+      _avatarProcessing = true;
+    });
+    await _rebuildSignupAvatar();
   }
 
   AvatarTemplate? _pickCarouselTemplate() {
@@ -706,13 +749,28 @@ class _SignupFormState extends State<SignupForm>
     int targetSize = 2,
     bool preferAbstract = false,
   }) async {
-    if (_avatarCarouselPrefilling ||
-        !mounted ||
-        _hasUserSelectedAvatar ||
-        _avatarProcessing) {
+    if (_prefillCarouselFuture != null) {
+      return _prefillCarouselFuture!;
+    }
+    if (!mounted || _hasUserSelectedAvatar || _avatarProcessing) {
       return _carouselBuffer.isNotEmpty;
     }
-    _avatarCarouselPrefilling = true;
+    final future = _performCarouselPrefill(
+      targetSize: targetSize,
+      preferAbstract: preferAbstract,
+    );
+    _prefillCarouselFuture = future;
+    try {
+      return await future;
+    } finally {
+      _prefillCarouselFuture = null;
+    }
+  }
+
+  Future<bool> _performCarouselPrefill({
+    int targetSize = 2,
+    bool preferAbstract = false,
+  }) async {
     final colors = context.colorScheme;
     if (preferAbstract &&
         !_nonAbstractAvatarsReady &&
@@ -797,8 +855,6 @@ class _SignupFormState extends State<SignupForm>
       }
     } catch (_) {
       // Ignore generation errors; fallback handled below.
-    } finally {
-      _avatarCarouselPrefilling = false;
     }
     return added > 0;
   }
@@ -1098,22 +1154,16 @@ class _SignupFormState extends State<SignupForm>
     _scheduleSignupRebuild();
   }
 
-  void _updateAvatarBackground(Color color) {
-    if (_avatarBackground == color) return;
-    final template = _selectedTemplate ?? _currentCarouselAvatar?.template;
-    setState(() {
-      _avatarBackground = color;
-    });
-    if (template != null &&
-        template.category != AvatarTemplateCategory.abstract &&
-        !_avatarProcessing) {
-      unawaited(_selectTemplate(template, background: color));
+  Future<void> _shuffleAvatarBackground() async {
+    if (_avatarProcessing || !_canShuffleAvatarBackground) {
       return;
     }
-    setState(() {
-      _avatarProcessing = true;
-    });
-    _scheduleSignupRebuild();
+    final template = _activeAvatarTemplate;
+    if (template == null) {
+      return;
+    }
+    final background = _randomAvatarBackgroundColor(context.colorScheme);
+    await _selectTemplate(template, background: background);
   }
 
   void _scheduleSignupRebuild() {
@@ -1467,12 +1517,21 @@ class _SignupFormState extends State<SignupForm>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _resumeAvatarCarouselIfNeeded();
-          if (_carouselAvatarPreview == null) {
+          if (_carouselAvatarPreview == null &&
+              !_avatarCarouselAwaitingDisplay) {
+            _avatarCarouselAwaitingDisplay = true;
             unawaited(
               _prefillCarousel(
                 targetSize: _avatarCarouselSustainBuffer,
               ).then((_) {
-                if (!mounted || _hasUserSelectedAvatar) return;
+                if (!mounted || _hasUserSelectedAvatar) {
+                  return;
+                }
+                if (_carouselAvatarPreview != null ||
+                    _currentCarouselAvatar != null ||
+                    _avatarProcessing) {
+                  return;
+                }
                 final displayed = _showNextCarouselAvatar(allowFallback: false);
                 if (!displayed &&
                     mounted &&
@@ -1480,6 +1539,8 @@ class _SignupFormState extends State<SignupForm>
                     _carouselBuffer.isEmpty) {
                   _showNextCarouselAvatar();
                 }
+              }).whenComplete(() {
+                _avatarCarouselAwaitingDisplay = false;
               }),
             );
           }
@@ -1676,14 +1737,14 @@ class _SignupFormState extends State<SignupForm>
                                                   _signupImageWidth,
                                               imageHeightProvider: () =>
                                                   _signupImageHeight,
-                                              backgroundColorProvider: () =>
-                                                  _avatarBackground,
                                               onCropChanged:
                                                   _updateSignupCropRect,
                                               onCropReset: _resetSignupCrop,
-                                              onBackgroundChanged:
-                                                  _needsBackgroundPicker
-                                                      ? _updateAvatarBackground
+                                              canShuffleBackground:
+                                                  _canShuffleAvatarBackground,
+                                              onShuffleBackground:
+                                                  _canShuffleAvatarBackground
+                                                      ? _shuffleAvatarBackground
                                                       : null,
                                               onShuffle: () async {
                                                 final selection =
@@ -2082,28 +2143,28 @@ class _SignupAvatarEditorPanel extends StatefulWidget {
     required this.avatarBytesListenable,
     required this.onShuffle,
     required this.onUpload,
+    required this.canShuffleBackground,
+    this.onShuffleBackground,
     this.sourceBytesProvider,
     this.cropRectProvider,
     this.imageWidthProvider,
     this.imageHeightProvider,
-    this.backgroundColorProvider,
     this.onCropChanged,
     this.onCropReset,
-    this.onBackgroundChanged,
   });
 
   final _AvatarEditorMode mode;
   final ValueListenable<Uint8List?> avatarBytesListenable;
   final Future<void> Function() onShuffle;
   final Future<void> Function() onUpload;
+  final bool canShuffleBackground;
+  final Future<void> Function()? onShuffleBackground;
   final Uint8List? Function()? sourceBytesProvider;
   final Rect? Function()? cropRectProvider;
   final double? Function()? imageWidthProvider;
   final double? Function()? imageHeightProvider;
-  final Color? Function()? backgroundColorProvider;
   final ValueChanged<Rect>? onCropChanged;
   final VoidCallback? onCropReset;
-  final ValueChanged<Color>? onBackgroundChanged;
 
   @override
   State<_SignupAvatarEditorPanel> createState() =>
@@ -2112,6 +2173,7 @@ class _SignupAvatarEditorPanel extends StatefulWidget {
 
 class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
   bool _shuffling = false;
+  bool _shufflingBackground = false;
   int _previewVersion = 0;
   Uint8List? _lastPreviewBytes;
   Rect? _localCropRect;
@@ -2128,6 +2190,21 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
     } finally {
       if (mounted) {
         setState(() => _shuffling = false);
+      }
+    }
+  }
+
+  Future<void> _handleShuffleBackground() async {
+    final shuffleBackground = widget.onShuffleBackground;
+    if (_shufflingBackground || shuffleBackground == null) {
+      return;
+    }
+    setState(() => _shufflingBackground = true);
+    try {
+      await shuffleBackground();
+    } finally {
+      if (mounted) {
+        setState(() => _shufflingBackground = false);
       }
     }
   }
@@ -2159,376 +2236,208 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    const avatarActionSpacing = 8.0;
     final mode = widget.mode;
     final showCrop = mode == _AvatarEditorMode.cropOnly;
-    final showColor = mode == _AvatarEditorMode.colorOnly &&
-        widget.onBackgroundChanged != null;
-    final busy = _shuffling;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 720;
-        final cropBytes = showCrop
-            ? widget.sourceBytesProvider?.call() ?? _lastPreviewBytes
-            : null;
-        final imageWidth = showCrop ? widget.imageWidthProvider?.call() : null;
-        final imageHeight =
-            showCrop ? widget.imageHeightProvider?.call() : null;
-        if (imageWidth != null &&
-            imageHeight != null &&
-            (_lastImageWidth != imageWidth ||
-                _lastImageHeight != imageHeight)) {
-          _lastImageWidth = imageWidth;
-          _lastImageHeight = imageHeight;
-          _localCropRect = null;
-        }
-        final canEditCrop = showCrop &&
-            cropBytes != null &&
-            imageWidth != null &&
-            imageHeight != null &&
-            imageWidth > 0 &&
-            imageHeight > 0 &&
-            widget.onCropChanged != null &&
-            widget.onCropReset != null;
+    final busy = _shuffling || _shufflingBackground;
+    final cropBytes = showCrop
+        ? widget.sourceBytesProvider?.call() ?? _lastPreviewBytes
+        : null;
+    final imageWidth = showCrop ? widget.imageWidthProvider?.call() : null;
+    final imageHeight = showCrop ? widget.imageHeightProvider?.call() : null;
+    if (imageWidth != null &&
+        imageHeight != null &&
+        (_lastImageWidth != imageWidth || _lastImageHeight != imageHeight)) {
+      _lastImageWidth = imageWidth;
+      _lastImageHeight = imageHeight;
+      _localCropRect = null;
+    }
+    final canEditCrop = showCrop &&
+        cropBytes != null &&
+        imageWidth != null &&
+        imageHeight != null &&
+        imageWidth > 0 &&
+        imageHeight > 0 &&
+        widget.onCropChanged != null &&
+        widget.onCropReset != null;
 
-        Widget? cropper;
-        if (canEditCrop) {
-          final Uint8List safeBytes = cropBytes;
-          final double safeImageWidth = imageWidth;
-          final double safeImageHeight = imageHeight;
-          cropper = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12.0,
-            children: [
-              Text(
-                'Crop & focus',
-                style:
-                    context.textTheme.small.copyWith(color: colors.foreground),
-              ),
-              Text(
-                'Drag or resize the square to frame your avatar. Reset to center the selection.',
-                style: context.textTheme.small.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Center(
-                  child: AvatarCropper(
-                    bytes: safeBytes,
-                    imageWidth: safeImageWidth,
-                    imageHeight: safeImageHeight,
-                    cropRect: _localCropRect ??
-                        widget.cropRectProvider?.call() ??
-                        AvatarCropper.fallbackCropRect(
-                          imageWidth: safeImageWidth,
-                          imageHeight: safeImageHeight,
-                          minCropSide: AvatarEditorCubit.minCropSide,
-                        ),
-                    onCropChanged: _scheduleCropChange,
-                    onCropReset: _handleCropReset,
-                    colors: colors,
-                    borderRadius: context.radius,
-                    minCropSide: AvatarEditorCubit.minCropSide,
-                  ),
-                ),
-              ),
-              Text(
-                'Only the area inside the circle will appear in the final avatar.',
-                style: context.textTheme.small.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-            ],
-          );
-        }
-
-        final backgroundColor = widget.backgroundColorProvider?.call();
-        final backgroundPicker = showColor &&
-                backgroundColor != null &&
-                widget.onBackgroundChanged != null
-            ? _SignupBackgroundPicker(
-                color: backgroundColor,
-                onChanged: widget.onBackgroundChanged!,
-              )
-            : null;
-
-        Widget preview = Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          spacing: 12.0,
-          children: [
-            ValueListenableBuilder<Uint8List?>(
-              valueListenable: widget.avatarBytesListenable,
-              builder: (_, bytes, __) {
-                if (!identical(bytes, _lastPreviewBytes)) {
-                  _lastPreviewBytes = bytes;
-                  _previewVersion++;
-                }
-                final previewKey = ValueKey(_previewVersion);
-                return AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeIn,
-                  switchOutCurve: Curves.easeOut,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
-                  child: AxiAvatar(
-                    key: previewKey,
-                    jid: 'avatar@axichat',
-                    size: 96,
-                    subscription: Subscription.none,
-                    presence: null,
-                    avatarBytes: bytes,
-                  ),
-                );
-              },
-            ),
-            Text(
-              l10n.signupAvatarMenuDescription,
-              style: context.textTheme.small
-                  .copyWith(color: colors.mutedForeground),
-              textAlign: TextAlign.center,
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              spacing: 8.0,
-              children: [
-                ShadButton(
-                  onPressed: busy ? null : _handleShuffle,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 8.0,
-                    children: [
-                      if (busy)
-                        SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              colors.primaryForeground,
-                            ),
-                            backgroundColor:
-                                colors.primaryForeground.withValues(alpha: 0.2),
-                          ),
-                        )
-                      else
-                        const Icon(LucideIcons.refreshCw, size: 20),
-                      Text(l10n.signupAvatarShuffle),
-                    ],
-                  ),
-                ).withTapBounce(),
-                ShadButton.outline(
-                  onPressed: busy ? null : () => unawaited(widget.onUpload()),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 8.0,
-                    children: [
-                      const Icon(LucideIcons.upload),
-                      Text(l10n.signupAvatarUploadImage),
-                    ],
-                  ),
-                ).withTapBounce(),
-              ],
-            ),
-          ],
-        );
-
-        final previewAndCrop = showCrop && cropper != null
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 12.0,
-                children: [
-                  preview,
-                  cropper,
-                ],
-              )
-            : preview;
-
-        final pickerSlot = AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          alignment: Alignment.topCenter,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeIn,
-            switchOutCurve: Curves.easeOut,
-            child: showColor && backgroundPicker != null
-                ? SizedBox(
-                    key: const ValueKey('picker'),
-                    width: isWide ? 260 : double.infinity,
-                    child: backgroundPicker,
-                  )
-                : const SizedBox.shrink(key: ValueKey('picker-empty')),
-          ),
-        );
-
-        Widget editorContent;
-        if (isWide) {
-          editorContent = Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: previewAndCrop),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeInOut,
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: EdgeInsets.only(left: showColor ? 12.0 : 0.0),
-                  child: pickerSlot,
-                ),
-              ),
-            ],
-          );
-        } else {
-          editorContent = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12.0,
-            children: [
-              previewAndCrop,
-              pickerSlot,
-            ],
-          );
-        }
-
-        return ShadCard(
-          padding: const EdgeInsets.all(12.0),
-          child: editorContent,
-        );
-      },
-    );
-  }
-}
-
-class _SignupBackgroundPicker extends StatelessWidget {
-  const _SignupBackgroundPicker({
-    required this.color,
-    required this.onChanged,
-  });
-
-  final Color color;
-  final ValueChanged<Color> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final swatches = [
-      colors.accent,
-      colors.primary,
-      colors.secondary,
-      colors.destructive,
-      colors.muted,
-      colors.card,
-      colors.background,
-      colors.foreground.withValues(alpha: 0.65),
-    ];
-    return ShadCard(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 10.0,
+    Widget? cropper;
+    if (canEditCrop) {
+      final Uint8List safeBytes = cropBytes;
+      final double safeImageWidth = imageWidth;
+      final double safeImageHeight = imageHeight;
+      cropper = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 12.0,
         children: [
           Text(
-            context.l10n.signupAvatarBackgroundColor,
+            'Crop & focus',
             style: context.textTheme.small.copyWith(color: colors.foreground),
           ),
           Text(
-            'Tint transparent avatars or uploads so the saved circle matches.',
-            style:
-                context.textTheme.small.copyWith(color: colors.mutedForeground),
+            'Drag or resize the square to frame your avatar. Reset to center the selection.',
+            style: context.textTheme.small.copyWith(
+              color: colors.mutedForeground,
+            ),
           ),
-          Material(
-            type: MaterialType.transparency,
-            child: ColorPicker(
-              color: color,
-              onColorChanged: onChanged,
-              pickersEnabled: const {
-                ColorPickerType.both: false,
-                ColorPickerType.primary: false,
-                ColorPickerType.accent: false,
-                ColorPickerType.bw: false,
-                ColorPickerType.custom: false,
-                ColorPickerType.customSecondary: false,
-                ColorPickerType.wheel: true,
-              },
-              width: 34,
-              height: 34,
-              spacing: 6,
-              runSpacing: 6,
-              hasBorder: true,
-              borderColor: colors.border,
-              borderRadius: context.radius.topLeft.x,
-              wheelDiameter: 180,
-              wheelWidth: 14,
-              showColorCode: true,
-              colorCodeHasColor: true,
-              colorCodeTextStyle:
-                  context.textTheme.small.copyWith(color: colors.foreground),
-              colorCodePrefixStyle: context.textTheme.small
-                  .copyWith(color: colors.mutedForeground),
-              heading: Text(
-                'Wheel & hex',
-                style:
-                    context.textTheme.small.copyWith(color: colors.foreground),
-              ),
-              subheading: Text(
-                'Adjust tint and opacity.',
-                style: context.textTheme.small
-                    .copyWith(color: colors.mutedForeground),
-              ),
-              actionButtons: const ColorPickerActionButtons(
-                dialogActionButtons: false,
-                closeButton: false,
-                okButton: false,
-              ),
-              copyPasteBehavior: const ColorPickerCopyPasteBehavior(
-                longPressMenu: false,
-                editFieldCopyButton: true,
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Center(
+              child: AvatarCropper(
+                bytes: safeBytes,
+                imageWidth: safeImageWidth,
+                imageHeight: safeImageHeight,
+                cropRect: _localCropRect ??
+                    widget.cropRectProvider?.call() ??
+                    AvatarCropper.fallbackCropRect(
+                      imageWidth: safeImageWidth,
+                      imageHeight: safeImageHeight,
+                      minCropSide: AvatarEditorCubit.minCropSide,
+                    ),
+                onCropChanged: _scheduleCropChange,
+                onCropReset: _handleCropReset,
+                colors: colors,
+                borderRadius: context.radius,
+                minCropSide: AvatarEditorCubit.minCropSide,
               ),
             ),
           ),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: swatches.map(
-              (swatch) {
-                final isSelected = swatch.toARGB32() == color.toARGB32();
-                return ColorIndicator(
-                  color: swatch,
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  hasBorder: true,
-                  borderColor: isSelected ? colors.primary : colors.border,
-                  elevation: isSelected ? 2 : 0,
-                  isSelected: isSelected,
-                  onSelect: () => onChanged(swatch),
-                );
-              },
-            ).toList(),
-          ),
-          Row(
-            children: [
-              ColorIndicator(
-                color: color,
-                width: 44,
-                height: 44,
-                borderRadius: context.radius.topLeft.x,
-                hasBorder: true,
-                borderColor: colors.border,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Saved background preview',
-                  style: context.textTheme.small
-                      .copyWith(color: colors.mutedForeground),
-                ),
-              ),
-            ],
+          Text(
+            'Only the area inside the circle will appear in the final avatar.',
+            style: context.textTheme.small.copyWith(
+              color: colors.mutedForeground,
+            ),
           ),
         ],
-      ),
+      );
+    }
+
+    final allowBackgroundShuffle =
+        widget.canShuffleBackground && widget.onShuffleBackground != null;
+
+    Widget preview = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      spacing: 12.0,
+      children: [
+        ValueListenableBuilder<Uint8List?>(
+          valueListenable: widget.avatarBytesListenable,
+          builder: (_, bytes, __) {
+            if (!identical(bytes, _lastPreviewBytes)) {
+              _lastPreviewBytes = bytes;
+              _previewVersion++;
+            }
+            final previewKey = ValueKey(_previewVersion);
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeIn,
+              switchOutCurve: Curves.easeOut,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+              child: AxiAvatar(
+                key: previewKey,
+                jid: 'avatar@axichat',
+                size: 96,
+                subscription: Subscription.none,
+                presence: null,
+                avatarBytes: bytes,
+              ),
+            );
+          },
+        ),
+        Text(
+          l10n.signupAvatarMenuDescription,
+          style:
+              context.textTheme.small.copyWith(color: colors.mutedForeground),
+          textAlign: TextAlign.center,
+        ),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: avatarActionSpacing,
+          runSpacing: avatarActionSpacing,
+          children: [
+            ShadButton(
+              onPressed: busy ? null : _handleShuffle,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 8.0,
+                children: [
+                  if (_shuffling)
+                    SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          colors.primaryForeground,
+                        ),
+                        backgroundColor:
+                            colors.primaryForeground.withValues(alpha: 0.2),
+                      ),
+                    )
+                  else
+                    const Icon(LucideIcons.refreshCw, size: 20),
+                  Text(l10n.signupAvatarShuffle),
+                ],
+              ),
+            ).withTapBounce(),
+            ShadButton.secondary(
+              onPressed: busy || !allowBackgroundShuffle
+                  ? null
+                  : () => unawaited(_handleShuffleBackground()),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 8.0,
+                children: [
+                  if (_shufflingBackground)
+                    SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          colors.primaryForeground,
+                        ),
+                        backgroundColor:
+                            colors.primaryForeground.withValues(alpha: 0.2),
+                      ),
+                    )
+                  else
+                    const Icon(LucideIcons.palette, size: 20),
+                  Text(l10n.signupAvatarBackgroundColor),
+                ],
+              ),
+            ).withTapBounce(),
+            ShadButton.outline(
+              onPressed: busy ? null : () => unawaited(widget.onUpload()),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 8.0,
+                children: [
+                  const Icon(LucideIcons.upload),
+                  Text(l10n.signupAvatarUploadImage),
+                ],
+              ),
+            ).withTapBounce(),
+          ],
+        ),
+      ],
+    );
+
+    final previewAndCrop = showCrop && cropper != null
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 12.0,
+            children: [
+              preview,
+              cropper,
+            ],
+          )
+        : preview;
+
+    return ShadCard(
+      padding: const EdgeInsets.all(12.0),
+      child: previewAndCrop,
     );
   }
 }
@@ -2659,7 +2568,7 @@ class _SignupProgressMeter extends StatelessWidget {
     final l10n = context.l10n;
     final targetPercent = (progressValue * 100).clamp(0.0, 100.0);
     return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: targetPercent),
+      tween: Tween<double>(end: targetPercent),
       duration: animationDuration,
       curve: Curves.easeInOut,
       builder: (context, animatedPercent, child) {

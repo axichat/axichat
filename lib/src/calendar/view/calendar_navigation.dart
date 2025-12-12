@@ -527,9 +527,11 @@ class _ViewModeToggle extends StatelessWidget {
     final ShadColorScheme colors = context.colorScheme;
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
-    final BorderRadius borderRadius =
-        BorderRadius.circular(calendarBorderRadius);
-    final Color borderColor = colors.border.withValues(alpha: 0.85);
+    final double cornerRadius = context.radius.topLeft.x;
+    final ShapeBorder outerShape = SquircleBorder(
+      cornerRadius: cornerRadius,
+      side: BorderSide(color: colors.border.withValues(alpha: 0.85)),
+    );
     final Color activeBackground = colors.primary.withValues(alpha: 0.16);
     final Color hoverBackground = colors.primary.withValues(alpha: 0.1);
     const EdgeInsets padding = EdgeInsets.symmetric(
@@ -555,13 +557,12 @@ class _ViewModeToggle extends StatelessWidget {
     final Color dividerColor = colors.border.withValues(alpha: 0.55);
 
     return DecoratedBox(
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: colors.card,
-        borderRadius: borderRadius,
-        border: Border.all(color: borderColor),
+        shape: outerShape,
       ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
+      child: ClipPath(
+        clipper: ShapeBorderClipper(shape: outerShape),
         child: SizedBox(
           height: minHeight + padding.vertical,
           width: controlWidth,
@@ -631,9 +632,10 @@ class _ViewModeToggleItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
+    final double cornerRadius = context.radius.topLeft.x;
     final BorderRadius radius = BorderRadius.horizontal(
-      left: isFirst ? const Radius.circular(calendarBorderRadius) : Radius.zero,
-      right: isLast ? const Radius.circular(calendarBorderRadius) : Radius.zero,
+      left: isFirst ? Radius.circular(cornerRadius) : Radius.zero,
+      right: isLast ? Radius.circular(cornerRadius) : Radius.zero,
     );
     final WidgetStateProperty<Color?> overlay =
         WidgetStateProperty.resolveWith((states) {
@@ -651,7 +653,7 @@ class _ViewModeToggleItem extends StatelessWidget {
       cursor: selected ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: InkWell(
         onTap: selected ? null : () => onSelected(view),
-        customBorder: RoundedRectangleBorder(borderRadius: radius),
+        customBorder: ContinuousRectangleBorder(borderRadius: radius),
         overlayColor: overlay,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
@@ -661,9 +663,9 @@ class _ViewModeToggleItem extends StatelessWidget {
             minHeight: minHeight,
           ),
           alignment: Alignment.center,
-          decoration: BoxDecoration(
+          decoration: ShapeDecoration(
             color: selected ? activeBackground : Colors.transparent,
-            borderRadius: radius,
+            shape: ContinuousRectangleBorder(borderRadius: radius),
           ),
           child: Text(
             label,
