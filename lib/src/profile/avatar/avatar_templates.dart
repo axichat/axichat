@@ -17,6 +17,7 @@ class AvatarTemplate {
     required this.category,
     required this.hasAlphaBackground,
     required this.generator,
+    this.assetPath,
   });
 
   final String id;
@@ -24,6 +25,7 @@ class AvatarTemplate {
   final AvatarTemplateCategory category;
   final bool hasAlphaBackground;
   final AvatarTemplateBuilder generator;
+  final String? assetPath;
 }
 
 class GeneratedAvatar {
@@ -68,7 +70,16 @@ class _AvatarAsset {
         background: background,
         applyBackground: hasAlphaBackground,
       ),
+      assetPath: assetPath,
     );
+  }
+}
+
+extension AvatarTemplateAssetLoader on AvatarTemplate {
+  Future<Uint8List?> loadRawBytes() async {
+    final path = assetPath;
+    if (path == null) return null;
+    return _loadAvatarBytes(path);
   }
 }
 
