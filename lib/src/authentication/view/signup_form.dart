@@ -133,6 +133,8 @@ class _SignupFormState extends State<SignupForm>
   bool _avatarProcessing = false;
   String? _avatarError;
   Color _avatarBackground = Colors.transparent;
+  bool _avatarBackgroundLocked = false;
+  Color? _lockedAvatarBackground;
   Rect? _signupCropRect;
   Uint8List? _signupSourceBytes;
   double? _signupImageWidth;
@@ -487,7 +489,9 @@ class _SignupFormState extends State<SignupForm>
         continue;
       }
       final background = template.hasAlphaBackground
-          ? _randomAvatarBackgroundColor(colors)
+          ? (_avatarBackgroundLocked
+              ? (_lockedAvatarBackground ?? _avatarBackground)
+              : _randomAvatarBackgroundColor(colors))
           : _avatarBackground;
       final generated = await _generateAvatarFromTemplate(
         template: template,
@@ -544,28 +548,37 @@ class _SignupFormState extends State<SignupForm>
     return img.ColorRgba8(r, g, b, a);
   }
 
-  Future<void> _startAvatarCarousel() {
+  Future<void> _startAvatarCarousel() async {
     if (_hasUserSelectedAvatar ||
         _avatarProcessing ||
         _avatarCarouselTimer != null) {
-      return Future.value();
+      return;
     }
-    final showedInitial = _showNextCarouselAvatar(allowFallback: false);
-    if (!showedInitial &&
-        _carouselAvatarPreview == null &&
-        _currentCarouselAvatar == null &&
-        mounted &&
-        !_hasUserSelectedAvatar) {
-      _showNextCarouselAvatar();
+
+    await _prefillCarousel(
+      targetSize: 1,
+      preferAbstract: !_nonAbstractAvatarsReady,
+    );
+    if (!mounted || _hasUserSelectedAvatar || _avatarProcessing) {
+      return;
     }
+
+    if (_carouselAvatarPreview == null && _currentCarouselAvatar == null) {
+      _showNextCarouselAvatar(allowFallback: false);
+    }
+
     unawaited(
       _prefillCarousel(
         targetSize: _avatarCarouselInitialBuffer,
         preferAbstract: !_nonAbstractAvatarsReady,
       ),
     );
-    if (!mounted || _hasUserSelectedAvatar) {
-      return Future.value();
+
+    if (!mounted ||
+        _hasUserSelectedAvatar ||
+        _avatarProcessing ||
+        _avatarCarouselTimer != null) {
+      return;
     }
     _avatarCarouselTimer = Timer.periodic(
       _avatarCarouselInterval,
@@ -579,7 +592,6 @@ class _SignupFormState extends State<SignupForm>
         );
       },
     );
-    return Future.value();
   }
 
   void _stopAvatarCarousel() {
@@ -734,7 +746,9 @@ class _SignupFormState extends State<SignupForm>
     final template = _pickCarouselTemplate();
     if (template == null) return null;
     final colors = context.colorScheme;
-    final background = _randomAvatarBackgroundColor(colors);
+    final background = _avatarBackgroundLocked
+        ? (_lockedAvatarBackground ?? _avatarBackground)
+        : _randomAvatarBackgroundColor(colors);
     return _AvatarSelection(template: template, background: background);
   }
 
@@ -920,83 +934,105 @@ class _SignupFormState extends State<SignupForm>
     });
     final effectiveBackground = background ?? _avatarBackground;
     final colors = context.colorScheme;
+    var selectedTemplate = template;
     try {
       GeneratedAvatar? generated;
+      Uint8List? sourceBytes;
       Color usedBackground = effectiveBackground;
-      if (background != null) {
-        generated = await _generateAvatarFromTemplate(
-          template: template,
-          background: effectiveBackground,
-          colors: colors,
-        );
-        generated ??= _fallbackGeneratedAvatar(background: effectiveBackground);
-      } else {
-        final result = await _loadAnyTemplateAvatar(
-              preferredTemplate: template,
-              maxAttempts: 6,
-            ) ??
-            (
-              generated:
-                  _fallbackGeneratedAvatar(background: effectiveBackground),
-              template: template,
-              background: effectiveBackground,
-            );
-        generated = result.generated;
-        usedBackground = result.background;
+
+      if (background != null &&
+          selectedTemplate.hasAlphaBackground &&
+          selectedTemplate.assetPath != null) {
+        sourceBytes = await selectedTemplate.loadRawBytes();
       }
-      final decoded = await decodeImageBytes(generated.bytes);
-      if (decoded == null) {
-        final fallback =
-            _fallbackGeneratedAvatar(background: effectiveBackground);
-        final fallbackDecoded = await decodeImageBytes(fallback.bytes);
-        if (fallbackDecoded == null || !mounted) {
-          return;
+
+      if (sourceBytes == null || sourceBytes.isEmpty) {
+        if (background != null) {
+          generated = await _generateAvatarFromTemplate(
+            template: selectedTemplate,
+            background: effectiveBackground,
+            colors: colors,
+          );
+          generated ??=
+              _fallbackGeneratedAvatar(background: effectiveBackground);
+        } else {
+          final result = await _loadAnyTemplateAvatar(
+                preferredTemplate: selectedTemplate,
+                maxAttempts: 6,
+              ) ??
+              (
+                generated:
+                    _fallbackGeneratedAvatar(background: effectiveBackground),
+                template: selectedTemplate,
+                background: effectiveBackground,
+              );
+          generated = result.generated;
+          selectedTemplate = result.template;
+          usedBackground = result.background;
         }
-        _avatarBackground = effectiveBackground;
-        _signupSourceImage = fallbackDecoded;
-        _signupSourceBytes = fallback.bytes;
-        _signupImageWidth = fallbackDecoded.width.toDouble();
-        _signupImageHeight = fallbackDecoded.height.toDouble();
-        _signupCropRect = _initialSignupCropRect(
-          fallbackDecoded,
-          templateCategory: template.category,
-        );
-        _selectedTemplate = template;
-        await _rebuildSignupAvatar();
-        return;
+        sourceBytes = generated.bytes;
       }
-      _avatarBackground =
-          template.hasAlphaBackground ? usedBackground : _avatarBackground;
-      _pushRecentCarouselAvatar(template.id);
-      _signupSourceImage = decoded;
-      _signupSourceBytes = generated.bytes;
-      _signupImageWidth = decoded.width.toDouble();
-      _signupImageHeight = decoded.height.toDouble();
-      _signupCropRect = _initialSignupCropRect(
-        decoded,
-        templateCategory: template.category,
+
+      final processingBackground = selectedTemplate.hasAlphaBackground
+          ? usedBackground
+          : _avatarBackground == Colors.transparent
+              ? colors.accent
+              : _avatarBackground;
+      final payload = await _processSignupTemplateBytes(
+        bytes: sourceBytes,
+        template: selectedTemplate,
+        background: processingBackground,
       );
-      _selectedTemplate = template;
-      await _rebuildSignupAvatar();
+      if (!mounted) return;
+      setState(() {
+        _avatarBackground = selectedTemplate.hasAlphaBackground
+            ? usedBackground
+            : _avatarBackground;
+        _pushRecentCarouselAvatar(selectedTemplate.id);
+        _signupSourceImage = null;
+        _signupSourceBytes = sourceBytes;
+        _signupImageWidth = generated?.width.toDouble();
+        _signupImageHeight = generated?.height.toDouble();
+        _signupCropRect = null;
+        _selectedTemplate = selectedTemplate;
+        _signupAvatar = payload;
+        _signupAvatarPreview = payload.bytes;
+        _carouselAvatarPreview = null;
+        _avatarProcessing = false;
+        _avatarError = null;
+      });
+      _updateAvatarPreview(payload.bytes);
+      _stopAvatarCarousel();
     } catch (_) {
-      final fallback =
-          _fallbackGeneratedAvatar(background: effectiveBackground);
-      final decoded = await decodeImageBytes(fallback.bytes);
-      if (!mounted || decoded == null) {
-        return;
-      }
-      _avatarBackground = effectiveBackground;
-      _pushRecentCarouselAvatar(template.id);
-      _signupSourceImage = decoded;
-      _signupSourceBytes = fallback.bytes;
-      _signupImageWidth = decoded.width.toDouble();
-      _signupImageHeight = decoded.height.toDouble();
-      _signupCropRect = _initialSignupCropRect(
-        decoded,
-        templateCategory: template.category,
+      if (!mounted) return;
+      final fallbackBackground = selectedTemplate.hasAlphaBackground
+          ? effectiveBackground
+          : _avatarBackground == Colors.transparent
+              ? colors.accent
+              : _avatarBackground;
+      final fallback = _fallbackGeneratedAvatar(background: fallbackBackground);
+      final payload = await _processSignupTemplateBytes(
+        bytes: fallback.bytes,
+        template: selectedTemplate,
+        background: fallbackBackground,
       );
-      _selectedTemplate = template;
-      await _rebuildSignupAvatar();
+      if (!mounted) return;
+      setState(() {
+        _avatarBackground = fallbackBackground;
+        _pushRecentCarouselAvatar(selectedTemplate.id);
+        _signupSourceImage = null;
+        _signupSourceBytes = fallback.bytes;
+        _signupImageWidth = null;
+        _signupImageHeight = null;
+        _signupCropRect = null;
+        _selectedTemplate = selectedTemplate;
+        _signupAvatar = payload;
+        _signupAvatarPreview = payload.bytes;
+        _carouselAvatarPreview = null;
+        _avatarProcessing = false;
+      });
+      _updateAvatarPreview(payload.bytes);
+      _stopAvatarCarousel();
     }
   }
 
@@ -1163,7 +1199,52 @@ class _SignupFormState extends State<SignupForm>
       return;
     }
     final background = _randomAvatarBackgroundColor(context.colorScheme);
+    _avatarBackgroundLocked = true;
+    _lockedAvatarBackground = background;
     await _selectTemplate(template, background: background);
+  }
+
+  Future<AvatarUploadPayload> _processSignupTemplateBytes({
+    required Uint8List bytes,
+    required AvatarTemplate template,
+    required Color background,
+  }) async {
+    const cropSide = 100000.0;
+    final useTemplateInset =
+        template.category != AvatarTemplateCategory.abstract;
+    final padAlphaTemplate = template.hasAlphaBackground && useTemplateInset;
+    final insetFraction = useTemplateInset
+        ? (padAlphaTemplate
+            ? _avatarTransparentInsetFraction
+            : _avatarInsetFraction)
+        : 0.0;
+    final shouldInset = insetFraction > 0;
+    final shouldFlatten =
+        shouldInset || template.hasAlphaBackground || background.a > 0;
+    final processed = await processAvatar(
+      AvatarProcessRequest(
+        bytes: bytes,
+        cropLeft: 0,
+        cropTop: 0,
+        cropSide: cropSide,
+        targetSize: _avatarTargetSize,
+        maxBytes: _avatarMaxBytes,
+        insetFraction: insetFraction,
+        shouldInset: shouldInset,
+        backgroundColor: background.toARGB32(),
+        flattenBackground: shouldFlatten,
+        minJpegQuality: _avatarMinJpegQuality,
+        qualityStep: _avatarQualityStep,
+      ),
+    );
+    final hash = sha1.convert(processed.bytes).toString();
+    return AvatarUploadPayload(
+      bytes: processed.bytes,
+      mimeType: processed.mimeType,
+      width: processed.width,
+      height: processed.height,
+      hash: hash,
+    );
   }
 
   void _scheduleSignupRebuild() {
@@ -2396,10 +2477,10 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          colors.primaryForeground,
+                          colors.secondaryForeground,
                         ),
                         backgroundColor:
-                            colors.primaryForeground.withValues(alpha: 0.2),
+                            colors.secondaryForeground.withValues(alpha: 0.2),
                       ),
                     )
                   else
