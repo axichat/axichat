@@ -2,6 +2,16 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models.dart';
 
+class DemoContactAvatar {
+  const DemoContactAvatar({
+    required this.assetPath,
+    required this.hash,
+  });
+
+  final String assetPath;
+  final String hash;
+}
+
 class DemoChatScript {
   DemoChatScript({
     required this.chat,
@@ -16,6 +26,42 @@ class DemoChatScript {
 
 class DemoChats {
   DemoChats._();
+
+  static const String _demoDomain = 'axi.im';
+  static const String _demoConferenceDomain = 'conference.$_demoDomain';
+  static const String _washingtonJid = 'washington@$_demoDomain';
+  static const String _jeffersonJid = 'jefferson@$_demoDomain';
+  static const String _adamsJid = 'adams@$_demoDomain';
+  static const String _madisonJid = 'madison@$_demoDomain';
+  static const String _hamiltonJid = 'hamilton@$_demoDomain';
+  static const String _groupJid = 'founders@$_demoConferenceDomain';
+
+  static const Map<String, DemoContactAvatar> _avatars =
+      <String, DemoContactAvatar>{
+    _washingtonJid: DemoContactAvatar(
+      assetPath: 'assets/images/avatars/misc/sword.png',
+      hash: 'demo-avatar-washington',
+    ),
+    _jeffersonJid: DemoContactAvatar(
+      assetPath: 'assets/images/avatars/music/violin.png',
+      hash: 'demo-avatar-jefferson',
+    ),
+    _adamsJid: DemoContactAvatar(
+      assetPath: 'assets/images/avatars/misc/chess.png',
+      hash: 'demo-avatar-adams',
+    ),
+    _madisonJid: DemoContactAvatar(
+      assetPath: 'assets/images/avatars/stem/compass.png',
+      hash: 'demo-avatar-madison',
+    ),
+    _hamiltonJid: DemoContactAvatar(
+      assetPath: 'assets/images/avatars/music/microphone.png',
+      hash: 'demo-avatar-hamilton',
+    ),
+  };
+
+  static Map<String, DemoContactAvatar> avatarAssets() =>
+      Map<String, DemoContactAvatar>.unmodifiable(_avatars);
 
   static final List<DemoChatScript> _scripts = _buildScripts();
 
@@ -46,14 +92,12 @@ class DemoChats {
 
   static List<DemoChatScript> _buildScripts() {
     final now = DateTime.now();
-    const domain = 'axi.im';
-    const conferenceDomain = 'conference.$domain';
-    const washingtonJid = 'washington@$domain';
-    const jeffersonJid = 'jefferson@$domain';
-    const adamsJid = 'adams@$domain';
-    const madisonJid = 'madison@$domain';
-    const hamiltonJid = 'hamilton@$domain';
-    const groupJid = 'founders@$conferenceDomain';
+    const washingtonJid = _washingtonJid;
+    const jeffersonJid = _jeffersonJid;
+    const adamsJid = _adamsJid;
+    const madisonJid = _madisonJid;
+    const hamiltonJid = _hamiltonJid;
+    const groupJid = _groupJid;
 
     Chat directChat(String jid, String title, List<Message> messages) => Chat(
           jid: jid,

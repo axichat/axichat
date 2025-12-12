@@ -337,17 +337,6 @@ class DeltaContextHandle {
     }
   }
 
-  bool _isOutgoingState(int state) => _outgoingStates.contains(state);
-
-  static const _outgoingStates = <int>{
-    18, // OutPreparing
-    19, // OutDraft
-    20, // OutPending
-    24, // OutFailed
-    26, // OutDelivered
-    28, // OutMdnRcvd
-  };
-
   Future<DeltaMessage?> getMessage(int messageId) async {
     final msgPtr = _bindings.dc_get_msg(_context, messageId);
     if (msgPtr == ffi.nullptr) {
@@ -357,6 +346,9 @@ class DeltaContextHandle {
       final viewType = _bindings.dc_msg_get_viewtype(msgPtr);
       final text =
           _takeString(_bindings.dc_msg_get_text(msgPtr), bindings: _bindings);
+      final subject = _cleanString(
+        _takeString(_bindings.dc_msg_get_subject(msgPtr), bindings: _bindings),
+      );
       final chatId = _bindings.dc_msg_get_chat_id(msgPtr);
       final id = _bindings.dc_msg_get_id(msgPtr);
       final filePath = _cleanString(
@@ -378,11 +370,12 @@ class DeltaContextHandle {
               timestampSeconds * 1000,
               isUtc: true,
             ).toLocal();
-      final isOutgoing = _isOutgoingState(_bindings.dc_msg_get_state(msgPtr));
+      final isOutgoing = _bindings.dc_msg_is_outgoing(msgPtr) != 0;
       return DeltaMessage(
         id: id,
         chatId: chatId,
         text: text,
+        subject: subject,
         viewType: viewType,
         filePath: filePath,
         fileName: fileName,
@@ -627,6 +620,7 @@ class DeltaMessage {
     required this.id,
     required this.chatId,
     this.text,
+    this.subject,
     this.viewType,
     this.filePath,
     this.fileName,
@@ -641,6 +635,7 @@ class DeltaMessage {
   final int id;
   final int chatId;
   final String? text;
+  final String? subject;
   final int? viewType;
   final String? filePath;
   final String? fileName;

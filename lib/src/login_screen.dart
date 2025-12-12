@@ -20,6 +20,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:logging/logging.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,8 +41,10 @@ const Duration _authOperationTimeout = Duration(seconds: 45);
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
+  final _authUiLog = Logger('AuthUi');
   var _login = false;
   var _signupFlowLocked = false;
+  var _progressStickyVisible = false;
   late OperationProgressController _operationProgressController;
   String _operationLabel = '';
   _AuthFlow? _activeFlow;
@@ -74,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen>
       _activeFlow = flow;
       _operationLabel = label;
       _operationAcknowledged = false;
+      _progressStickyVisible = true;
       if (flow == _AuthFlow.signup) {
         _signupFlowLocked = true;
         _login = false;
@@ -123,6 +127,7 @@ class _LoginScreenState extends State<LoginScreen>
       _operationAcknowledged = false;
       _signupFlowLocked = false;
       _signupButtonLoading = false;
+      _progressStickyVisible = false;
       _loginSuccessHandled = false;
     });
     _operationProgressController.reset();
@@ -137,6 +142,7 @@ class _LoginScreenState extends State<LoginScreen>
       final wasSignupFlow = _activeFlow == _AuthFlow.signup;
       _activeFlow = null;
       _operationAcknowledged = false;
+      _progressStickyVisible = false;
       if (wasSignupFlow && _signupFlowLocked) {
         _signupFlowLocked = false;
         _login = false;
@@ -169,15 +175,22 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     setState(() {
-      _activeFlow = null;
-      _operationAcknowledged = false;
-      _operationLabel = '';
       _signupButtonLoading = false;
       _signupFlowLocked = false;
     });
   }
 
   void _handleAuthState(AuthenticationState state) {
+    if (kDebugMode) {
+      _authUiLog.fine(
+        'state=${state.runtimeType} activeFlow=$_activeFlow '
+        'ack=$_operationAcknowledged progressActive=${_operationProgressController.isActive}',
+      );
+    }
+
+    if (state is AuthenticationSignUpInProgress && !state.fromSubmission) {
+      return;
+    }
     if (state is AuthenticationComplete ||
         state is AuthenticationFailure ||
         state is AuthenticationSignupFailure ||
@@ -185,6 +198,10 @@ class _LoginScreenState extends State<LoginScreen>
       _clearAuthTimeout();
     }
     if (state is AuthenticationNone) {
+      if (_activeFlow != null || _operationProgressController.isActive) {
+        // Ignore redundant resets while an auth flow is already in progress.
+        return;
+      }
       _resetAuthUiState();
       return;
     }
@@ -272,7 +289,8 @@ class _LoginScreenState extends State<LoginScreen>
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    final showProgressBar = _activeFlow != null ||
+    final showProgressBar = _progressStickyVisible ||
+        _activeFlow != null ||
         _signupButtonLoading ||
         _operationProgressController.isActive;
     final size = MediaQuery.sizeOf(context);

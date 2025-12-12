@@ -356,41 +356,48 @@ class _CalendarViewModeSelector extends StatelessWidget {
       }
     }
 
-    return Container(
-      decoration: BoxDecoration(
+    final selectorShape = SquircleBorder(
+      cornerRadius: calendarBorderRadius * 2,
+      side: const BorderSide(color: calendarBorderColor),
+    );
+
+    return DecoratedBox(
+      decoration: ShapeDecoration(
         color: calendarSelectedDayColor,
-        borderRadius: BorderRadius.circular(calendarEventRadius),
-        border: Border.all(color: calendarBorderColor),
+        shape: selectorShape,
       ),
-      child: ShadSelect<CalendarView>(
-        initialValue: selectedView,
-        placeholder: Text(
-          l10n.calendarViewLabel,
-          style: calendarCaptionTextStyle,
-        ),
-        options: CalendarView.values
-            .map(
-              (view) => ShadOption(
-                value: view,
-                child: Text(labelForView(view).toUpperCase()),
+      child: ClipPath(
+        clipper: ShapeBorderClipper(shape: selectorShape),
+        child: ShadSelect<CalendarView>(
+          initialValue: selectedView,
+          placeholder: Text(
+            l10n.calendarViewLabel,
+            style: calendarCaptionTextStyle,
+          ),
+          options: CalendarView.values
+              .map(
+                (view) => ShadOption(
+                  value: view,
+                  child: Text(labelForView(view).toUpperCase()),
+                ),
+              )
+              .toList(),
+          selectedOptionBuilder: (context, value) {
+            final label = labelForView(value);
+            return Text(
+              label.toUpperCase(),
+              style: calendarCaptionTextStyle.copyWith(
+                color: calendarTitleColor,
+                fontWeight: FontWeight.w600,
               ),
-            )
-            .toList(),
-        selectedOptionBuilder: (context, value) {
-          final label = labelForView(value);
-          return Text(
-            label.toUpperCase(),
-            style: calendarCaptionTextStyle.copyWith(
-              color: calendarTitleColor,
-              fontWeight: FontWeight.w600,
-            ),
-          );
-        },
-        onChanged: (view) {
-          if (view != null) {
-            onChanged(view);
-          }
-        },
+            );
+          },
+          onChanged: (view) {
+            if (view != null) {
+              onChanged(view);
+            }
+          },
+        ),
       ),
     );
   }

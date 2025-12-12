@@ -62,8 +62,6 @@ class DeltaEventConsumer {
   MessageStorageMode _messageStorageMode;
   final Logger _log;
 
-  XmppDatabase? _database;
-
   void updateMessageStorageMode(MessageStorageMode mode) {
     _messageStorageMode = mode;
   }
@@ -109,7 +107,8 @@ class DeltaEventConsumer {
       _log.warning('Incoming event for missing msgId=$msgId');
       return;
     }
-    if (_isDeltaStockMessage(msg)) {
+    if (_isDeltaStockMessage(msg) ||
+        (!msg.isOutgoing && await _isDeltaSystemChat(chatId))) {
       _log.finer('Dropping Delta stock message msgId=$msgId chatId=$chatId');
       return;
     }
@@ -168,7 +167,8 @@ class DeltaEventConsumer {
   Future<void> _hydrateMessage(int chatId, int msgId) async {
     final msg = await _context.getMessage(msgId);
     if (msg == null) return;
-    if (_isDeltaStockMessage(msg)) {
+    if (_isDeltaStockMessage(msg) ||
+        (!msg.isOutgoing && await _isDeltaSystemChat(chatId))) {
       _log.finer('Dropping Delta stock message msgId=$msgId chatId=$chatId');
       return;
     }
@@ -319,7 +319,7 @@ class DeltaEventConsumer {
   }
 
   Future<XmppDatabase> _db() async {
-    return _database ??= await _databaseBuilder();
+    return await _databaseBuilder();
   }
 
   Future<void> _storeMessage({
@@ -463,25 +463,32 @@ class DeltaEventConsumer {
   }
 
   Future<void> purgeDeltaStockMessages() async {
-    final db = await _db();
-    final chats = await db.getChats(start: 0, end: 0);
-    for (final chat in chats) {
-      if (chat.deltaChatId == null) continue;
-      final messages = await db.getAllMessagesForChat(chat.jid);
-      for (final message in messages) {
-        if (await _isDeltaStockStoredMessage(db, message)) {
-          _log.finer(
-            'Removing stored Delta stock message ${message.stanzaID}'
-            ' for chat ${chat.jid}',
-          );
-          await db.deleteMessage(message.stanzaID);
+    try {
+      final db = await _db();
+      final chats = await db.getChats(start: 0, end: 0);
+      for (final chat in chats) {
+        if (chat.deltaChatId == null) continue;
+        final messages = await db.getAllMessagesForChat(chat.jid);
+        for (final message in messages) {
+          if (await _isDeltaStockStoredMessage(db, message)) {
+            await db.deleteMessage(message.stanzaID);
+          }
         }
       }
+    } on StateError catch (error, stackTrace) {
+      _log.fine(
+        'Skipping Delta stock purge because the database is unavailable.',
+        error,
+        stackTrace,
+      );
+    } catch (error, stackTrace) {
+      _log.warning('Failed to purge Delta stock messages.', error, stackTrace);
     }
   }
 
   bool _isDeltaStockMessage(DeltaMessage msg) =>
       _matchesDeltaWelcomeText(msg.text) ||
+      _matchesDeltaWelcomeText(msg.subject) ||
       _matchesDeltaWelcomeAttachment(msg.fileName) ||
       _matchesDeltaWelcomeAttachment(msg.filePath);
 
@@ -489,15 +496,28 @@ class DeltaEventConsumer {
     XmppDatabase db,
     Message message,
   ) async {
-    if (message.deltaChatId == null) return false;
-    if (_matchesDeltaWelcomeText(message.body)) {
-      return true;
-    }
+    if (_matchesDeltaWelcomeText(message.body)) return true;
     final metadataId = message.fileMetadataID;
-    if (metadataId == null) return false;
-    final metadata = await db.getFileMetadata(metadataId);
-    return _matchesDeltaWelcomeAttachment(metadata?.filename) ||
-        _matchesDeltaWelcomeAttachment(metadata?.path);
+    if (metadataId != null) {
+      final metadata = await db.getFileMetadata(metadataId);
+      if (_matchesDeltaWelcomeAttachment(metadata?.filename) ||
+          _matchesDeltaWelcomeAttachment(metadata?.path)) {
+        return true;
+      }
+    }
+    final deltaMsgId = message.deltaMsgId;
+    if (deltaMsgId == null) return false;
+    final deltaMessage = await _context.getMessage(deltaMsgId);
+    if (deltaMessage == null) return false;
+    if (_isDeltaStockMessage(deltaMessage)) return true;
+    return !deltaMessage.isOutgoing &&
+        await _isDeltaSystemChat(deltaMessage.chatId);
+  }
+
+  Future<bool> _isDeltaSystemChat(int chatId) async {
+    final remote = await _context.getChat(chatId);
+    final normalized = _normalizedAddress(remote?.contactAddress, chatId);
+    return normalized == fallbackEmailAddressForChat(chatId);
   }
 }
 
@@ -523,19 +543,28 @@ String _stripSubjectHeader(String body, String subject) {
 bool _matchesDeltaWelcomeText(String? text) {
   if (text == null) return false;
   final normalized = text.toLowerCase();
+  if (normalized.contains('autocrypt setup message')) {
+    return true;
+  }
   final mentionsDelta =
       normalized.contains('delta chat') || normalized.contains('deltachat');
+  if (normalized.contains('messages in this chat are generated locally')) {
+    return true;
+  }
   final generatedLocally = normalized.contains('generated locally') ||
       normalized.contains('created locally') ||
       normalized.contains('generated automatically');
-  if (mentionsDelta && generatedLocally) {
+  final mentionsSetup = normalized.contains('setup message') ||
+      normalized.contains('autocrypt setup message');
+  final mentionsDevice = normalized.contains('device message');
+  if (generatedLocally && (mentionsDelta || mentionsDevice || mentionsSetup)) {
     return true;
   }
   return normalized.contains('welcome to delta chat') ||
       normalized.contains('welcome to deltachat') ||
       normalized.contains('generated locally by your delta chat app') ||
-      (mentionsDelta && normalized.contains('device message')) ||
-      (mentionsDelta && normalized.contains('setup message'));
+      (mentionsDelta && mentionsDevice) ||
+      (mentionsDelta && mentionsSetup);
 }
 
 bool _matchesDeltaWelcomeAttachment(String? value) {

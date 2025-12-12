@@ -3336,17 +3336,14 @@ class _DayEventBulletRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: colors.primary,
-                  shape: BoxShape.circle,
-                ),
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: colors.primary,
+                shape: BoxShape.circle,
               ),
             ),
             const SizedBox(width: calendarGutterSm),
