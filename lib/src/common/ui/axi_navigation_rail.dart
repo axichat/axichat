@@ -4,6 +4,10 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
+
+const double _railHeaderHorizontalPaddingCollapsed = 12.0;
+const double _railHeaderHorizontalPaddingExpanded = 18.0;
 
 class AxiRailDestination {
   const AxiRailDestination({
@@ -62,6 +66,8 @@ class AxiNavigationRail extends StatelessWidget {
     this.showTitle = true,
     this.collapsed = false,
     this.onToggleCollapse,
+    this.toggleExpandedTooltip,
+    this.toggleCollapsedTooltip,
     this.backgroundColor,
     this.footer,
   }) : assert(destinations.length > 0, 'Destinations cannot be empty');
@@ -72,6 +78,8 @@ class AxiNavigationRail extends StatelessWidget {
   final bool showTitle;
   final bool collapsed;
   final VoidCallback? onToggleCollapse;
+  final String? toggleExpandedTooltip;
+  final String? toggleCollapsedTooltip;
   final Color? backgroundColor;
   final Widget? footer;
 
@@ -101,6 +109,13 @@ class AxiNavigationRail extends StatelessWidget {
       letterSpacing: -0.3,
       color: colors.foreground,
     );
+    final Widget? toggleButton = onToggleCollapse == null
+        ? null
+        : AxiIconButton(
+            iconData: LucideIcons.menu,
+            tooltip: collapsed ? toggleCollapsedTooltip : toggleExpandedTooltip,
+            onPressed: onToggleCollapse,
+          );
     return AnimatedContainer(
       duration: context.watch<SettingsCubit>().animationDuration,
       curve: Curves.easeInOutCubic,
@@ -123,26 +138,32 @@ class AxiNavigationRail extends StatelessWidget {
                 ),
               ),
               child: SizedBox(
-                height: 56,
+                height: kToolbarHeight,
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: (collapsed ? 4 : 6) + 12,
+                    horizontal: collapsed
+                        ? _railHeaderHorizontalPaddingCollapsed
+                        : _railHeaderHorizontalPaddingExpanded,
                   ),
-                  child: Row(
-                    children: [
-                      if (showTitle && !collapsed)
-                        Expanded(
-                          child: Text(
-                            appDisplayName,
-                            style: titleStyle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        )
-                      else if (showTitle)
-                        const Spacer(),
-                    ],
-                  ),
+                  child: collapsed
+                      ? Center(child: toggleButton ?? const SizedBox.shrink())
+                      : Row(
+                          children: [
+                            if (toggleButton != null) toggleButton,
+                            if (toggleButton != null) const SizedBox(width: 12),
+                            if (showTitle)
+                              Expanded(
+                                child: Text(
+                                  appDisplayName,
+                                  style: titleStyle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              )
+                            else
+                              const Spacer(),
+                          ],
+                        ),
                 ),
               ),
             ),

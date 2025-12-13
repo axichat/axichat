@@ -179,9 +179,10 @@ class _AvatarSummaryCard extends StatelessWidget {
                 children: [
                   ShadButton.outline(
                     size: ShadButtonSize.sm,
-                    onPressed: state.processing || state.publishing || state.shuffling
-                        ? null
-                        : () => cubit.shuffleTemplate(colors),
+                    onPressed:
+                        state.processing || state.publishing || state.shuffling
+                            ? null
+                            : () => cubit.shuffleTemplate(colors),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8.0,
@@ -195,8 +196,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 colors.foreground,
                               ),
-                              backgroundColor:
-                                  colors.border,
+                              backgroundColor: colors.border,
                             ),
                           )
                         else
@@ -656,7 +656,9 @@ class _TemplatePreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final previewBackground = template.hasAlphaBackground
-        ? (backgroundColor == Colors.transparent ? colors.accent : backgroundColor)
+        ? (backgroundColor == Colors.transparent
+            ? colors.accent
+            : backgroundColor)
         : colors.card;
     final assetPath = template.assetPath;
     return GestureDetector(
