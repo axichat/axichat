@@ -38,9 +38,13 @@ class ProfileCubit extends Cubit<ProfileState> {
           emit(state.copyWith(avatarPath: null, avatarHash: null));
           return;
         }
+        final path = avatar.path?.trim();
+        if (path != null && path.isNotEmpty) {
+          unawaited(_xmppService.loadAvatarBytes(path));
+        }
         emit(
           state.copyWith(
-            avatarPath: avatar.path ?? state.avatarPath,
+            avatarPath: path ?? state.avatarPath,
             avatarHash: avatar.hash ?? state.avatarHash,
           ),
         );
@@ -94,9 +98,13 @@ class ProfileCubit extends Cubit<ProfileState> {
   Future<void> _loadAvatar() async {
     final stored = await _xmppService.getOwnAvatar();
     if (stored == null || stored.isEmpty) return;
+    final path = stored.path?.trim();
+    if (path != null && path.isNotEmpty) {
+      unawaited(_xmppService.loadAvatarBytes(path));
+    }
     emit(
       state.copyWith(
-        avatarPath: stored.path ?? state.avatarPath,
+        avatarPath: path ?? state.avatarPath,
         avatarHash: stored.hash ?? state.avatarHash,
       ),
     );

@@ -17,6 +17,21 @@ import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'chat_transport.dart';
 
 const _selfDomain = 'user.delta.chat';
+const _deltaConfigClearedValue = '';
+const _deltaCredentialConfigKeys = <String>[
+  'addr',
+  'mail_pw',
+  'send_pw',
+  'displayname',
+  'mail_server',
+  'mail_port',
+  'mail_security',
+  'mail_user',
+  'send_server',
+  'send_port',
+  'send_security',
+  'send_user',
+];
 
 class EmailDeltaTransport implements ChatTransport {
   EmailDeltaTransport({
@@ -89,6 +104,27 @@ class EmailDeltaTransport implements ChatTransport {
     }
     await _ensureContextReady();
     return _context?.isConfigured ?? false;
+  }
+
+  Future<void> deconfigureAccount() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) {
+      return;
+    }
+    await stop();
+    for (final key in _deltaCredentialConfigKeys) {
+      try {
+        await context.setConfig(key: key, value: _deltaConfigClearedValue);
+      } on Exception catch (error, stackTrace) {
+        _log.warning(
+            'Failed to clear Delta config key $key', error, stackTrace);
+      }
+    }
+    _accountAddress = null;
   }
 
   @override

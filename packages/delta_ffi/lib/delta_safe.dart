@@ -151,6 +151,14 @@ class DeltaContextHandle {
     _bindings.dc_configure(_context);
   }
 
+  Future<void> setConfig({
+    required String key,
+    required String value,
+  }) async {
+    _ensureState(_opened, 'set config $key');
+    await _setConfig(key, value);
+  }
+
   Future<void> startIo() async {
     _ensureState(_opened, 'start IO');
     final owner = _accountsOwner;

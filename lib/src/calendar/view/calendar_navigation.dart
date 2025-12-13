@@ -525,21 +525,19 @@ class _ViewModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final ShadColorScheme colors = context.colorScheme;
+    final shadTheme = ShadTheme.of(context);
+    final secondaryButtonTheme = shadTheme.secondaryButtonTheme;
+    final buttonSizeTheme =
+        secondaryButtonTheme.sizesTheme?.sm ?? shadTheme.buttonSizesTheme.sm!;
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
-    final double cornerRadius = context.radius.topLeft.x;
-    final ShapeBorder outerShape = SquircleBorder(
-      cornerRadius: cornerRadius,
-      side: BorderSide(color: colors.border.withValues(alpha: 0.85)),
-    );
     final Color activeBackground = colors.primary.withValues(alpha: 0.16);
     final Color hoverBackground = colors.primary.withValues(alpha: 0.1);
-    const EdgeInsets padding = EdgeInsets.symmetric(
-      horizontal: calendarInsetSm,
-      vertical: 6,
+    final EdgeInsets padding = EdgeInsets.symmetric(
+      horizontal: compact ? calendarGutterSm : calendarGutterMd,
     );
     const double labelFontSize = 11;
-    final double minHeight = compact ? 26 : 28;
+    final double minHeight = buttonSizeTheme.height;
     final double minWidth = isExpandedSize ? 132 : 110;
     final double preferredWidth = isExpandedSize ? 152 : 128;
     final double widthScale = isExpandedSize ? 0.38 : 0.5;
@@ -555,16 +553,17 @@ class _ViewModeToggle extends StatelessWidget {
       letterSpacing: 0.1,
     );
     final Color dividerColor = colors.border.withValues(alpha: 0.55);
+    final ShadDecoration outerDecoration =
+        (secondaryButtonTheme.decoration ?? const ShadDecoration()).copyWith(
+      color: secondaryButtonTheme.backgroundColor ?? colors.secondary,
+    );
 
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.card,
-        shape: outerShape,
-      ),
-      child: ClipPath(
-        clipper: ShapeBorderClipper(shape: outerShape),
+    return ShadDecorator(
+      decoration: outerDecoration,
+      child: ClipRRect(
+        borderRadius: shadTheme.radius,
         child: SizedBox(
-          height: minHeight + padding.vertical,
+          height: minHeight,
           width: controlWidth,
           child: Row(
             mainAxisSize: MainAxisSize.min,

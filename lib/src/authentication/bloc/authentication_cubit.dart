@@ -27,6 +27,8 @@ part 'authentication_state.dart';
 
 const _missingDatabaseSecretsErrorText =
     'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
+const _emailAuthFailureErrorText =
+    'Email authentication failed. Please log in again.';
 const _smtpProvisioningMaxAttempts = 3;
 const _smtpProvisioningMaxDuration = Duration(seconds: 20);
 const _smtpProvisioningInitialDelay = Duration(seconds: 2);
@@ -607,19 +609,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final bool hasStoredLoginForJid = storedLogin.matches(resolvedJid);
       if (hasStoredLoginForJid && !hasStoredDatabaseSecrets) {
         _log.warning(
-          'Stored login credentials found without database secrets; blocking login.',
+          'Stored login credentials found without database secrets; blocking auto-login.',
         );
         if (usingStoredCredentials) {
           await persistRememberMeChoice(false);
+          _authenticatedJid = null;
+          await _xmppService.disconnect();
+          _emit(const AuthenticationFailure(_missingDatabaseSecretsErrorText));
+          return;
         }
-        _emit(AuthenticationFailure(
-          _missingDatabaseSecretsErrorText,
-          config: config,
-        ));
-        return;
       }
 
-      String? emailPassword = emailCredentials?.password;
+      final String? fallbackEmailPassword =
+          passwordPreHashed ? null : resolvedPassword;
+      String? emailPassword =
+          emailCredentials?.password ?? fallbackEmailPassword;
       final String displayName = resolvedJid.split('@').first;
       _authenticatedJid ??= resolvedJid;
 
@@ -653,12 +657,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         final emailService = smtpEnabled ? _emailService : null;
         if (emailPassword == null && emailService != null) {
           final existing = await emailService.currentAccount(resolvedJid);
-          emailPassword = existing?.password ?? resolvedPassword;
+          emailPassword = existing?.password;
         }
 
-        final enforceEmailProvisioning = requireEmailProvisioned ||
-            _activeSignupCredentialKey != null ||
-            emailService != null;
+        final enforceEmailProvisioning =
+            requireEmailProvisioned || _activeSignupCredentialKey != null;
 
         final reuseExistingSession = _xmppService.databasesInitialized &&
             _xmppService.myJid == resolvedJid;
@@ -1059,11 +1062,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return _ProvisioningStatus.ready;
     }
     var resolvedPassword = emailPassword;
+    if (resolvedPassword != null && resolvedPassword.isEmpty) {
+      resolvedPassword = null;
+    }
     if (resolvedPassword == null) {
       final existing = await emailService.currentAccount(jid);
       resolvedPassword = existing?.password;
     }
-    if (resolvedPassword == null) {
+    if (resolvedPassword == null && enforceProvisioning) {
       if (!_stickyAuthActive) {
         _emit(const AuthenticationFailure(
             'Stored email password missing. Please log in manually.'));
@@ -1086,6 +1092,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _markSmtpProvisioned();
       return _ProvisioningStatus.ready;
     } on EmailProvisioningException catch (error) {
+      if (!enforceProvisioning && allowOfflineOnRecoverable) {
+        _log.warning(
+          'Email provisioning deferred; continuing offline: ${error.message}',
+        );
+        _lastEmailProvisioningError = error;
+        return _ProvisioningStatus.pendingRecoverable;
+      }
       final shouldWipeCredentials = error.shouldWipeCredentials;
       final shouldAbort = shouldWipeCredentials ||
           (enforceProvisioning && !error.isRecoverable);
@@ -1305,14 +1318,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is! AuthenticationComplete) {
       return;
     }
-    _log.warning(
-      'Email auth failure detected; forcing credential wipe.',
-      exception,
-    );
+    if (exception.code != DeltaChatErrorCode.auth) {
+      return;
+    }
     await logout(severity: LogoutSeverity.normal);
-    _emit(const AuthenticationFailure(
-      'Email authentication failed. Please log in again.',
-    ));
+    _emit(const AuthenticationFailure(_emailAuthFailureErrorText));
   }
 
   Future<void> signup({

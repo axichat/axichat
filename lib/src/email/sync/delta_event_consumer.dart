@@ -107,8 +107,7 @@ class DeltaEventConsumer {
       _log.warning('Incoming event for missing msgId=$msgId');
       return;
     }
-    if (_isDeltaStockMessage(msg) ||
-        (!msg.isOutgoing && await _isDeltaSystemChat(chatId))) {
+    if (_isDeltaStockMessage(msg) || await _isDeltaSystemChat(chatId)) {
       _log.finer('Dropping Delta stock message msgId=$msgId chatId=$chatId');
       return;
     }
@@ -167,8 +166,7 @@ class DeltaEventConsumer {
   Future<void> _hydrateMessage(int chatId, int msgId) async {
     final msg = await _context.getMessage(msgId);
     if (msg == null) return;
-    if (_isDeltaStockMessage(msg) ||
-        (!msg.isOutgoing && await _isDeltaSystemChat(chatId))) {
+    if (_isDeltaStockMessage(msg) || await _isDeltaSystemChat(chatId)) {
       _log.finer('Dropping Delta stock message msgId=$msgId chatId=$chatId');
       return;
     }
@@ -510,8 +508,7 @@ class DeltaEventConsumer {
     final deltaMessage = await _context.getMessage(deltaMsgId);
     if (deltaMessage == null) return false;
     if (_isDeltaStockMessage(deltaMessage)) return true;
-    return !deltaMessage.isOutgoing &&
-        await _isDeltaSystemChat(deltaMessage.chatId);
+    return await _isDeltaSystemChat(deltaMessage.chatId);
   }
 
   Future<bool> _isDeltaSystemChat(int chatId) async {
