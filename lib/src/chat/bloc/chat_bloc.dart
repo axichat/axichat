@@ -164,9 +164,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
     if (jid != null) {
+      final chatLookupJid = _chatLookupJid;
+      if (chatLookupJid == null) return;
       _notificationService.dismissNotifications();
       _chatSubscription = _chatsService
-          .chatStream(jid!)
+          .chatStream(chatLookupJid)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
       _subscribeToMessages(limit: messageBatchSize, filter: state.viewFilter);
       unawaited(_initializeViewFilter());
@@ -217,7 +219,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return !_axiDomainPattern.hasMatch(normalized);
   }
 
+  bool get _forceAllWithContactViewFilter {
+    if (_isEmailChat) return true;
+    return _isEmailOnlyAddress(jid);
+  }
+
   final String? jid;
+  late final String? _chatLookupJid = jid == null
+      ? null
+      : _isEmailOnlyAddress(jid)
+          ? jid!.trim().toLowerCase()
+          : jid;
   final MessageService _messageService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
@@ -383,6 +395,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _initializeViewFilter() async {
     if (jid == null) return;
+    if (_forceAllWithContactViewFilter) return;
     try {
       final filter = await _chatsService.loadChatViewFilter(jid!);
       add(ChatViewFilterChanged(filter: filter, persist: false));
@@ -479,7 +492,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required int limit,
     required MessageTimelineFilter filter,
   }) {
-    final targetJid = state.chat?.jid ?? jid;
+    final targetJid = state.chat?.jid ?? _chatLookupJid ?? jid;
     if (targetJid == null) return;
     unawaited(_messageSubscription?.cancel());
     _currentMessageLimit = limit;
@@ -527,6 +540,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         previousChat?.defaultTransport != event.chat.defaultTransport;
     final typingShouldClear =
         typingContextChanged || event.chat.defaultTransport.isEmail;
+    const forcedViewFilter = MessageTimelineFilter.allWithContact;
+    final nextViewFilter = resetContext && event.chat.defaultTransport.isEmail
+        ? forcedViewFilter
+        : state.viewFilter;
     emit(state.copyWith(
       chat: event.chat,
       showAlert: event.chat.alert != null && state.chat?.alert == null,
@@ -545,10 +562,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       typingParticipants:
           typingShouldClear ? const [] : state.typingParticipants,
       typing: event.chat.defaultTransport.isEmail ? false : state.typing,
+      viewFilter: nextViewFilter,
     ));
     if (resetContext) {
       _subscribeToMessages(
-          limit: _currentMessageLimit, filter: state.viewFilter);
+        limit: _currentMessageLimit,
+        filter: state.viewFilter,
+      );
     }
     if (typingContextChanged) {
       _subscribeToTypingParticipants(event.chat);
@@ -1666,10 +1686,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     if (jid == null) return;
-    emit(state.copyWith(viewFilter: event.filter));
-    _subscribeToMessages(limit: _currentMessageLimit, filter: event.filter);
-    if (event.persist) {
-      await _chatsService.saveChatViewFilter(jid: jid!, filter: event.filter);
+    const forcedFilter = MessageTimelineFilter.allWithContact;
+    final effectiveFilter =
+        _forceAllWithContactViewFilter ? forcedFilter : event.filter;
+    emit(state.copyWith(viewFilter: effectiveFilter));
+    _subscribeToMessages(limit: _currentMessageLimit, filter: effectiveFilter);
+    if (event.persist && !_forceAllWithContactViewFilter) {
+      await _chatsService.saveChatViewFilter(
+          jid: jid!, filter: effectiveFilter);
     }
   }
 
