@@ -312,8 +312,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final imageWidth = state.imageWidth?.toDouble();
     final imageHeight = state.imageHeight?.toDouble();
     if (imageWidth == null || imageHeight == null) return;
-    final clamped =
-        _constrainRect(rect, imageWidth, imageHeight);
+    final clamped = _constrainRect(rect, imageWidth, imageHeight);
     if (state.cropRect == clamped) return;
     emit(state.copyWith(cropRect: clamped));
     _scheduleRebuild();

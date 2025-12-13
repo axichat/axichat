@@ -153,7 +153,6 @@ class _CalendarWidgetState
     bool usesDesktopLayout,
     Widget layout,
   ) {
-    final colors = context.colorScheme;
     final Widget tintedLayout = CalendarNavSurface(child: layout);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -161,10 +160,6 @@ class _CalendarWidgetState
         _CalendarAppBar(
           state: state,
           onBackPressed: _handleCalendarBackPressed,
-        ),
-        Divider(
-          height: 1,
-          color: colors.border,
         ),
         Expanded(child: tintedLayout),
       ],
@@ -266,29 +261,31 @@ class _CalendarAppBar extends StatelessWidget {
     final Color background = CalendarNavSurface.backgroundColor(context);
     final EdgeInsets toolbarPadding =
         calendarMarginLarge.copyWith(top: 0, bottom: 0);
-    return Material(
-      color: background,
-      child: SafeArea(
-        bottom: false,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: kToolbarHeight),
-          child: Padding(
-            padding: toolbarPadding,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                AxiIconButton(
-                  iconData: LucideIcons.arrowLeft,
-                  tooltip: 'Back to chats',
-                  color: colors.foreground,
-                  borderColor: colors.border,
-                  onPressed: onBackPressed,
-                ),
-                const Spacer(),
-                SyncControls(state: state),
-              ],
-            ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        border: Border(
+          bottom: BorderSide(color: colors.border),
+        ),
+      ),
+      child: SizedBox(
+        height: kToolbarHeight,
+        child: Padding(
+          padding: toolbarPadding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              AxiIconButton(
+                iconData: LucideIcons.arrowLeft,
+                tooltip: 'Back to chats',
+                color: colors.foreground,
+                borderColor: colors.border,
+                onPressed: onBackPressed,
+              ),
+              const Spacer(),
+              SyncControls(state: state),
+            ],
           ),
         ),
       ),

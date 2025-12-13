@@ -641,7 +641,6 @@ class _NexusState extends State<Nexus> {
   @override
   Widget build(BuildContext context) {
     final showToast = ShadToaster.maybeOf(context)?.show;
-    final l10n = context.l10n;
     final HomeSearchState? searchState =
         context.watch<HomeSearchCubit?>()?.state;
     final ChatsState? chatsState = context.watch<ChatsCubit?>()?.state;
@@ -672,16 +671,6 @@ class _NexusState extends State<Nexus> {
       children: [
         AxiAppBar(
           showTitle: widget.navPlacement != NavPlacement.rail,
-          leading: widget.navPlacement == NavPlacement.rail &&
-                  widget.onToggleNavRail != null
-              ? AxiIconButton(
-                  iconData: LucideIcons.menu,
-                  tooltip: widget.navRailCollapsed
-                      ? l10n.homeRailShowMenu
-                      : l10n.homeRailHideMenu,
-                  onPressed: widget.onToggleNavRail,
-                )
-              : null,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1132,6 +1121,8 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
         onToggleCollapse: widget.onCollapsedChanged == null
             ? null
             : () => widget.onCollapsedChanged!(!widget.collapsed),
+        toggleExpandedTooltip: l10n.homeRailHideMenu,
+        toggleCollapsedTooltip: l10n.homeRailShowMenu,
         backgroundColor: context.colorScheme.background,
         footer: _AccessibilityFindActionRailItem(
           collapsed: widget.collapsed,

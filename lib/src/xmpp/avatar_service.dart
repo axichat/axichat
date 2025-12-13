@@ -389,7 +389,8 @@ mixin AvatarService on XmppBase {
           );
           rethrow;
         } catch (retryError, retryStackTrace) {
-          _avatarLog.severe('Failed to publish avatar', retryError, retryStackTrace);
+          _avatarLog.severe(
+              'Failed to publish avatar', retryError, retryStackTrace);
           throw XmppAvatarException(retryError);
         }
       }
