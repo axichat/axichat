@@ -3323,6 +3323,8 @@ class _DayEventBulletRow extends StatelessWidget {
     required this.onTap,
   });
 
+  static const double _bulletSize = 6;
+
   final DayEvent event;
   final VoidCallback onTap;
 
@@ -3335,36 +3337,33 @@ class _DayEventBulletRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: colors.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: calendarGutterSm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.title,
-                    style: textTheme.small.copyWith(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: colors.foreground,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Container(
+                  width: _bulletSize,
+                  height: _bulletSize,
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    shape: BoxShape.circle,
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
+              const WidgetSpan(
+                child: SizedBox(width: calendarGutterSm),
+              ),
+              TextSpan(text: event.title),
+            ],
+          ),
+          style: textTheme.small.copyWith(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: colors.foreground,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );

@@ -107,13 +107,22 @@ class _AxiAvatarState extends State<AxiAvatar> {
       return;
     }
 
+    final xmpp = context.read<XmppService>();
+    final cached = xmpp.cachedAvatarBytes(path);
+    if (cached != null && cached.isNotEmpty) {
+      setState(() {
+        _resolvedAvatarBytes = cached;
+        _loadingPath = path;
+      });
+      return;
+    }
+
     if (_loadingPath == path && _resolvedAvatarBytes != null) {
       return;
     }
 
     _loadingPath = path;
     try {
-      final xmpp = context.read<XmppService>();
       final bytes = await xmpp.loadAvatarBytes(path);
       if (!mounted || _loadingPath != path) {
         return;

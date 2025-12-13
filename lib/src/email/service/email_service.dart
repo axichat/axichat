@@ -32,6 +32,7 @@ const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
 const _defaultImapPort = '993';
 const _defaultSecurityMode = 'ssl';
+const _unknownEmailPassword = '';
 
 typedef EmailConnectionConfigBuilder = Map<String, String> Function(
   String address,
@@ -256,16 +257,13 @@ class EmailService {
 
     final resolvedPasswordOverride = passwordOverride;
     if (resolvedPasswordOverride != null &&
-        resolvedPasswordOverride.isNotEmpty) {
-      if (password == null || password != resolvedPasswordOverride) {
-        password = resolvedPasswordOverride;
-        credentialsMutated = true;
-        if (shouldPersistCredentials) {
-          await _credentialStore.write(key: passwordKey, value: password);
-        }
+        resolvedPasswordOverride.isNotEmpty &&
+        (password == null || password != resolvedPasswordOverride)) {
+      password = resolvedPasswordOverride;
+      credentialsMutated = true;
+      if (shouldPersistCredentials) {
+        await _credentialStore.write(key: passwordKey, value: password);
       }
-    } else if (password == null) {
-      throw StateError('Failed to resolve email password.');
     }
 
     var alreadyProvisioned = (await _readCredentialWithLegacy(
@@ -277,7 +275,9 @@ class EmailService {
         _ephemeralProvisionedScopes.contains(scope)) {
       alreadyProvisioned = true;
     }
-    if (credentialsMutated) {
+    final shouldForceProvisioning =
+        shouldPersistCredentials && credentialsMutated;
+    if (shouldForceProvisioning) {
       alreadyProvisioned = false;
       _ephemeralProvisionedScopes.remove(scope);
       if (shouldPersistCredentials) {
@@ -285,7 +285,7 @@ class EmailService {
         await _credentialStore.write(key: legacyProvisionedKey, value: 'false');
       }
     }
-    if (!alreadyProvisioned && !credentialsMutated) {
+    if (!alreadyProvisioned && !shouldForceProvisioning) {
       try {
         alreadyProvisioned = await _transport.isConfigured();
       } on Exception {
@@ -300,6 +300,9 @@ class EmailService {
     }
 
     final normalizedAddress = address;
+    if (needsProvisioning && (password == null || password.isEmpty)) {
+      throw StateError('Failed to resolve email password.');
+    }
     final normalizedPassword = password;
 
     if (needsProvisioning) {
@@ -307,7 +310,7 @@ class EmailService {
       try {
         await _transport.configureAccount(
           address: normalizedAddress,
-          password: normalizedPassword,
+          password: normalizedPassword!,
           displayName: displayName,
           additional: _buildConnectionConfig(normalizedAddress),
         );
@@ -378,7 +381,7 @@ class EmailService {
 
     final account = EmailAccount(
       address: normalizedAddress,
-      password: normalizedPassword,
+      password: normalizedPassword ?? _unknownEmailPassword,
     );
     _activeAccount = account;
     _ephemeralProvisionedScopes.add(scope);
@@ -439,6 +442,11 @@ class EmailService {
     if (!clearCredentials) {
       return;
     }
+    try {
+      await _transport.deconfigureAccount();
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to deconfigure email account', error, stackTrace);
+    }
     final scope = _scopeForOptionalJid(jid);
     if (scope != null) {
       await _clearCredentials(scope);
@@ -448,6 +456,11 @@ class EmailService {
   Future<void> burn({String? jid}) async {
     final scope = _scopeForOptionalJid(jid);
     await stop();
+    try {
+      await _transport.deconfigureAccount();
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to deconfigure email account', error, stackTrace);
+    }
     _detachTransportListener();
     await _stopForegroundKeepalive();
     _clearNotificationQueue();
@@ -1654,6 +1667,9 @@ class EmailService {
   Future<void> persistActiveCredentials({required String jid}) async {
     final scope = _scopeForJid(jid);
     if (_activeAccount == null || _activeCredentialScope != scope) {
+      return;
+    }
+    if (_activeAccount!.password.isEmpty) {
       return;
     }
     final addressKey = _addressKeyForScope(scope);

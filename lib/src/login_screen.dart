@@ -38,6 +38,7 @@ enum _AuthFlow {
 const double _primaryPanePadding = 12.0;
 const double _secondaryPaneGutter = 0.0;
 const double _unsplitHorizontalMargin = 16.0;
+const double _authCardCornerRadius = 20.0;
 const Duration _authOperationTimeout = Duration(seconds: 45);
 
 class _LoginScreenState extends State<LoginScreen>
@@ -52,6 +53,9 @@ class _LoginScreenState extends State<LoginScreen>
   bool _operationAcknowledged = false;
   bool _signupButtonLoading = false;
   bool _handledInitialAuthState = false;
+  bool _storedCredentialCheckStarted = false;
+  bool? _hasStoredCredentials;
+  bool _userSelectedMode = false;
   bool _loginSuccessHandled = false;
   Timer? _authTimeoutTimer;
 
@@ -64,9 +68,40 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_storedCredentialCheckStarted) {
+      _storedCredentialCheckStarted = true;
+      unawaited(_resolveStoredCredentials());
+    }
     if (_handledInitialAuthState) return;
     _handledInitialAuthState = true;
     _handleAuthState(context.read<AuthenticationCubit>().state);
+  }
+
+  Future<void> _resolveStoredCredentials() async {
+    bool hasStoredCredentials = false;
+    try {
+      hasStoredCredentials =
+          await context.read<AuthenticationCubit>().hasStoredLoginCredentials();
+    } on Exception catch (error, stackTrace) {
+      if (kDebugMode) {
+        _authUiLog.fine(
+          'Failed to resolve stored credentials availability',
+          error,
+          stackTrace,
+        );
+      }
+      hasStoredCredentials = false;
+    }
+    if (!mounted) return;
+    setState(() {
+      _hasStoredCredentials = hasStoredCredentials;
+      if (!_userSelectedMode &&
+          _activeFlow == null &&
+          !_signupFlowLocked &&
+          !_signupButtonLoading) {
+        _login = hasStoredCredentials;
+      }
+    });
   }
 
   void _handleSubmissionRequested(
@@ -296,10 +331,23 @@ class _LoginScreenState extends State<LoginScreen>
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    final authCardShape = SquircleBorder(
+      cornerRadius: _authCardCornerRadius,
+      side: BorderSide(color: colors.border),
+    );
+    final authCardClipShape = SquircleBorder(
+      cornerRadius: _authCardCornerRadius,
+    );
     final showProgressBar = _progressStickyVisible ||
         _activeFlow != null ||
         _signupButtonLoading ||
         _operationProgressController.isActive;
+    final showAuthModePlaceholder = _hasStoredCredentials == null &&
+        !_userSelectedMode &&
+        _activeFlow == null &&
+        !_signupFlowLocked &&
+        !_signupButtonLoading &&
+        !_operationProgressController.isActive;
     final size = MediaQuery.sizeOf(context);
     final allowSplitView = size.shortestSide >= compactDeviceBreakpoint &&
         size.width >= smallScreen;
@@ -361,57 +409,73 @@ class _LoginScreenState extends State<LoginScreen>
                               DecoratedBox(
                                 decoration: ShapeDecoration(
                                   color: colors.card,
-                                  shape: SquircleBorder(
-                                    cornerRadius: 20,
-                                    side: BorderSide(color: colors.border),
-                                  ),
+                                  shape: authCardShape,
                                 ),
-                                child: AxiAnimatedSize(
-                                  duration: animationDuration,
-                                  curve: Curves.easeInOut,
-                                  child: AnimatedCrossFade(
-                                    firstCurve: Curves.easeInOut,
-                                    secondCurve: Curves.easeInOut,
-                                    sizeCurve: Curves.easeInOut,
+                                child: ClipPath(
+                                  clipper: ShapeBorderClipper(
+                                    shape: authCardClipShape,
+                                  ),
+                                  child: AxiAnimatedSize(
                                     duration: animationDuration,
-                                    crossFadeState:
-                                        (!_signupFlowLocked && _login)
-                                            ? CrossFadeState.showFirst
-                                            : CrossFadeState.showSecond,
-                                    firstChild: IgnorePointer(
-                                      ignoring: _signupFlowLocked || !_login,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(24.0),
-                                        child: LoginForm(
-                                          onSubmitStart: () =>
-                                              _handleSubmissionRequested(
-                                            _AuthFlow.login,
-                                            label: l10n.authLoggingIn,
-                                          ),
-                                          onAutologinStart:
-                                              _handleAutologinRequested,
-                                        ),
-                                      ),
-                                    ),
-                                    secondChild: IgnorePointer(
-                                      ignoring: !_signupFlowLocked && _login,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(24.0),
-                                        child: BlocProvider(
-                                          create: (_) => SignupAvatarCubit(),
-                                          child: SignupForm(
-                                            visible:
+                                    curve: Curves.easeInOut,
+                                    child: Stack(
+                                      children: [
+                                        AnimatedCrossFade(
+                                          firstCurve: Curves.easeInOut,
+                                          secondCurve: Curves.easeInOut,
+                                          sizeCurve: Curves.easeInOut,
+                                          duration: animationDuration,
+                                          crossFadeState:
+                                              (!_signupFlowLocked && _login)
+                                                  ? CrossFadeState.showFirst
+                                                  : CrossFadeState.showSecond,
+                                          firstChild: IgnorePointer(
+                                            ignoring:
                                                 _signupFlowLocked || !_login,
-                                            onSubmitStart: () =>
-                                                _handleSubmissionRequested(
-                                              _AuthFlow.signup,
-                                              label: l10n.authCreatingAccount,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.all(24.0),
+                                              child: LoginForm(
+                                                onSubmitStart: () =>
+                                                    _handleSubmissionRequested(
+                                                  _AuthFlow.login,
+                                                  label: l10n.authLoggingIn,
+                                                ),
+                                                onAutologinStart:
+                                                    _handleAutologinRequested,
+                                              ),
                                             ),
-                                            onLoadingChanged:
-                                                _handleSignupLoadingChanged,
+                                          ),
+                                          secondChild: IgnorePointer(
+                                            ignoring:
+                                                !_signupFlowLocked && _login,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.all(24.0),
+                                              child: BlocProvider(
+                                                create: (_) =>
+                                                    SignupAvatarCubit(),
+                                                child: SignupForm(
+                                                  visible: _signupFlowLocked ||
+                                                      !_login,
+                                                  onSubmitStart: () =>
+                                                      _handleSubmissionRequested(
+                                                    _AuthFlow.signup,
+                                                    label: l10n
+                                                        .authCreatingAccount,
+                                                  ),
+                                                  onLoadingChanged:
+                                                      _handleSignupLoadingChanged,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
+                                        if (showAuthModePlaceholder)
+                                          const Positioned.fill(
+                                            child: _AuthModePlaceholder(),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -448,6 +512,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           onPressed: () {
                                             final nextLogin = !_login;
                                             setState(() {
+                                              _userSelectedMode = true;
                                               _login = nextLogin;
                                             });
                                           },
@@ -484,6 +549,21 @@ class _LoginScreenState extends State<LoginScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AuthModePlaceholder extends StatelessWidget {
+  const _AuthModePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return ColoredBox(
+      color: colors.card,
+      child: const Center(
+        child: AxiProgressIndicator(),
       ),
     );
   }

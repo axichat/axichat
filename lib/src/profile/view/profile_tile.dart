@@ -55,6 +55,7 @@ class ProfileTile extends StatelessWidget {
                         child: AxiAvatar(
                           jid: state.jid,
                           subscription: Subscription.both,
+                          avatarPath: state.avatarPath,
                           // Presence is parsed for backend features but hidden in UI.
                           presence: null,
                           status: null,

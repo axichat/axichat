@@ -76,46 +76,26 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = true;
-  late final VoidCallback _focusFallbackListener;
   bool Function(KeyEvent event)? _globalShortcutHandler;
 
   @override
   void initState() {
     super.initState();
-    _focusFallbackListener = _restoreShortcutFocusIfEmpty;
-    FocusManager.instance.addListener(_focusFallbackListener);
     _globalShortcutHandler = _handleGlobalShortcut;
     HardwareKeyboard.instance.addHandler(_globalShortcutHandler!);
-    WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) {
-        _shortcutFocusNode.requestFocus();
-        _restoreShortcutFocusIfEmpty();
-      },
-    );
   }
 
   @override
   void dispose() {
-    FocusManager.instance.removeListener(_focusFallbackListener);
     final handler = _globalShortcutHandler;
     if (handler != null) {
       HardwareKeyboard.instance.removeHandler(handler);
     }
-    WidgetsBinding.instance.removeObserver(this);
     _shortcutFocusNode.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed &&
-        _shortcutFocusNode.canRequestFocus) {
-      _shortcutFocusNode.requestFocus();
-    }
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
@@ -139,17 +119,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
     final locate = context.read;
     return shouldOpen && locate<AccessibilityActionBloc?>()?.isClosed == false;
-  }
-
-  void _restoreShortcutFocusIfEmpty() {
-    final primary = FocusManager.instance.primaryFocus;
-    if (primary == null ||
-        primary.context == null ||
-        identical(primary, FocusManager.instance.rootScope)) {
-      if (_shortcutFocusNode.canRequestFocus) {
-        _shortcutFocusNode.requestFocus();
-      }
-    }
   }
 
   bool _handleGlobalShortcut(KeyEvent event) {

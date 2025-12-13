@@ -143,6 +143,7 @@ class _AvatarCropperState extends State<AvatarCropper> {
                   maskColor: colors.background.withValues(alpha: 0.55),
                   radius: widget.borderRadius.topLeft.x,
                   initialRectBuilder: InitialRectBuilder.withArea(initialArea),
+                  willUpdateScale: (_) => false,
                   overlayBuilder: (context, rect) {
                     if (!_isValidRect(rect)) {
                       return const SizedBox.shrink();

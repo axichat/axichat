@@ -33,6 +33,33 @@ mixin AvatarService on XmppBase {
   final Set<String> _avatarRefreshInProgress = {};
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
+  static const int _avatarBytesCacheLimit = 64;
+  static const Duration _avatarPublishTimeout = Duration(seconds: 30);
+  final LinkedHashMap<String, Uint8List> _avatarBytesCache = LinkedHashMap();
+
+  Uint8List? cachedAvatarBytes(String path) {
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) return null;
+    final bytes = _avatarBytesCache.remove(normalizedPath);
+    if (bytes == null) return null;
+    _avatarBytesCache[normalizedPath] = bytes;
+    return bytes;
+  }
+
+  void _cacheAvatarBytes(String path, Uint8List bytes) {
+    if (bytes.isEmpty) return;
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) return;
+    _avatarBytesCache.remove(normalizedPath);
+    _avatarBytesCache[normalizedPath] = bytes;
+    while (_avatarBytesCache.length > _avatarBytesCacheLimit) {
+      _avatarBytesCache.remove(_avatarBytesCache.keys.first);
+    }
+  }
+
+  void _evictCachedAvatarBytes(String path) {
+    _avatarBytesCache.remove(path.trim());
+  }
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
@@ -292,6 +319,7 @@ mixin AvatarService on XmppBase {
     }
 
     if (existingPath != null && existingPath.isNotEmpty) {
+      _evictCachedAvatarBytes(existingPath);
       final file = File(existingPath);
       if (await file.exists()) {
         try {
@@ -355,25 +383,22 @@ mixin AvatarService on XmppBase {
     AvatarUploadPayload payload, {
     bool public = false,
   }) async {
-    final manager = _connection.getManager<mox.UserAvatarManager>();
     final targetJid = _avatarSafeBareJid(payload.jid ?? myJid);
-    if (manager == null || targetJid == null) {
+    if (targetJid == null) {
       throw XmppAvatarException();
     }
     try {
       return await _publishAvatarOnce(
-        manager,
         payload: payload,
         targetJid: targetJid,
         public: public,
       );
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
-      if (cause is mox.AvatarError) {
+      if (cause is mox.AvatarError || cause is mox.PubSubError) {
         final retryPublic = !public;
         try {
           return await _publishAvatarOnce(
-            manager,
             payload: payload,
             targetJid: targetJid,
             public: retryPublic,
@@ -405,34 +430,63 @@ mixin AvatarService on XmppBase {
     }
   }
 
-  Future<AvatarUploadResult> _publishAvatarOnce(
-    mox.UserAvatarManager manager, {
+  Future<AvatarUploadResult> _publishAvatarOnce({
     required AvatarUploadPayload payload,
     required String targetJid,
     required bool public,
   }) async {
-    final dataResult = await manager.publishUserAvatar(
-      base64Encode(payload.bytes),
-      payload.hash,
-      public,
-    );
-    if (dataResult.isType<mox.AvatarError>()) {
-      throw XmppAvatarException(dataResult.get<mox.AvatarError>());
+    const openAccessModel = 'open';
+    const rosterAccessModel = 'roster';
+    final pubsub = _connection.getManager<mox.PubSubManager>();
+    if (pubsub == null) {
+      throw XmppAvatarException('PubSub is unavailable');
+    }
+    final host = mox.JID.fromString(targetJid);
+    final accessModel = public ? openAccessModel : rosterAccessModel;
+    final publishOptions = mox.PubSubPublishOptions(accessModel: accessModel);
+
+    final dataPayload =
+        (mox.XmlBuilder.withNamespace('data', mox.userAvatarDataXmlns)
+              ..text(base64Encode(payload.bytes)))
+            .build();
+    final dataResult = await pubsub
+        .publish(
+          host,
+          mox.userAvatarDataXmlns,
+          dataPayload,
+          id: payload.hash,
+          options: publishOptions,
+          autoCreate: true,
+        )
+        .timeout(_avatarPublishTimeout);
+    if (dataResult.isType<mox.PubSubError>()) {
+      throw XmppAvatarException(dataResult.get<mox.PubSubError>());
     }
 
-    final metadataResult = await manager.publishUserAvatarMetadata(
-      mox.UserAvatarMetadata(
-        payload.hash,
-        payload.bytes.length,
-        payload.width,
-        payload.height,
-        payload.mimeType,
-        null,
-      ),
-      public,
-    );
-    if (metadataResult.isType<mox.AvatarError>()) {
-      throw XmppAvatarException(metadataResult.get<mox.AvatarError>());
+    final metadataPayload =
+        (mox.XmlBuilder.withNamespace('metadata', mox.userAvatarMetadataXmlns)
+              ..child(
+                (mox.XmlBuilder('info')
+                      ..attr('bytes', payload.bytes.length.toString())
+                      ..attr('height', payload.height.toString())
+                      ..attr('width', payload.width.toString())
+                      ..attr('type', payload.mimeType)
+                      ..attr('id', payload.hash))
+                    .build(),
+              ))
+            .build();
+    final metadataResult = await pubsub
+        .publish(
+          host,
+          mox.userAvatarMetadataXmlns,
+          metadataPayload,
+          id: payload.hash,
+          options: publishOptions,
+          autoCreate: true,
+        )
+        .timeout(_avatarPublishTimeout);
+    if (metadataResult.isType<mox.PubSubError>()) {
+      throw XmppAvatarException(metadataResult.get<mox.PubSubError>());
     }
 
     final path = await _writeAvatarFile(
@@ -447,26 +501,41 @@ mixin AvatarService on XmppBase {
   }
 
   Future<Uint8List?> loadAvatarBytes(String path) async {
-    final file = File(path);
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) return null;
+
+    final cached = cachedAvatarBytes(normalizedPath);
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+
+    final file = File(normalizedPath);
     if (!await file.exists()) return null;
     try {
       final bytes = await file.readAsBytes();
       if (bytes.isEmpty) return null;
-      final isEncrypted = p.extension(path).toLowerCase() == '.enc';
+      final isEncrypted = p.extension(normalizedPath).toLowerCase() == '.enc';
       if (!isEncrypted) {
+        _cacheAvatarBytes(normalizedPath, bytes);
         return bytes;
       }
       if (avatarEncryptionKey == null) {
-        _avatarLog.warning('Avatar key unavailable; cannot decrypt $path');
+        _avatarLog.warning(
+          'Avatar key unavailable; cannot decrypt $normalizedPath',
+        );
         return null;
       }
-      return await _decryptAvatarBytes(bytes);
+      final decrypted = await _decryptAvatarBytes(bytes);
+      if (decrypted.isEmpty) return null;
+      _cacheAvatarBytes(normalizedPath, decrypted);
+      return decrypted;
     } catch (error, stackTrace) {
       _avatarLog.warning(
-        'Failed to load avatar from $path; deleting corrupted cache entry.',
+        'Failed to load avatar from $normalizedPath; deleting corrupted cache entry.',
         error,
         stackTrace,
       );
+      _evictCachedAvatarBytes(normalizedPath);
       try {
         await file.delete();
       } catch (_) {}
@@ -538,6 +607,8 @@ mixin AvatarService on XmppBase {
     final file = File(p.join(directory.path, filename));
     final encrypted = await _encryptAvatarBytes(bytes);
     await file.writeAsBytes(encrypted, flush: true);
+    final rawBytes = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+    _cacheAvatarBytes(file.path, rawBytes);
     return file.path;
   }
 

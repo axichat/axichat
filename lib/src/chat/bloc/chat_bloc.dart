@@ -184,7 +184,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         (connectionState) {
           add(_XmppConnectionStateChanged(connectionState));
           if (connectionState == ConnectionState.connected) {
-            if (!_isEmailChat) {
+            final chat = state.chat;
+            if (chat != null && _xmppAllowedForChat(chat)) {
               unawaited(_catchUpFromMam());
             }
           }
@@ -203,7 +204,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   static const messageBatchSize = 50;
   static final RegExp _axiDomainPattern =
-      RegExp(r'@axi\.im$', caseSensitive: false);
+      RegExp(r'@(?:[\\w-]+\\.)*axi\\.im$', caseSensitive: false);
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
     final normalized = value.trim().toLowerCase();
@@ -260,6 +261,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  bool _isAxiDomainJid(String? value) {
+    final bare = _bareJid(value);
+    if (bare == null) return false;
+    final normalized = bare.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    return _axiDomainPattern.hasMatch(normalized);
+  }
+
+  bool _xmppAllowedForChat(Chat chat) {
+    if (chat.defaultTransport.isEmail) return false;
+    final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
+    return _isAxiDomainJid(candidate);
+  }
+
   Future<int> _archivedMessageCount(Chat chat) {
     if (_messageService.messageStorageMode.isServerOnly) {
       final visibleMessages = state.items.where(
@@ -290,7 +305,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _loadEarlierFromMam({required int desiredWindow}) async {
     final chat = state.chat;
     if (chat == null || _mamLoading || _mamComplete) return;
-    if (chat.defaultTransport.isEmail) return;
+    if (!_xmppAllowedForChat(chat)) return;
     final localCount = await _archivedMessageCount(chat);
     if (localCount >= desiredWindow) return;
     final beforeId = _mamBeforeId ??
@@ -322,7 +337,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _catchUpFromMam() async {
     final chat = state.chat;
     if (chat == null) return;
-    if (chat.defaultTransport.isEmail) return;
+    if (!_xmppAllowedForChat(chat)) return;
     final lastSeen = await _messageService.loadLastSeenTimestamp(
       chat.remoteJid,
     );
@@ -388,7 +403,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _hydrateLatestFromMam(Chat chat) async {
-    if (chat.defaultTransport.isEmail) return;
+    if (!_xmppAllowedForChat(chat)) return;
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
     final localCount = await _archivedMessageCount(chat);
     if (localCount >= _currentMessageLimit) return;
@@ -444,6 +459,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _ensureMucMembership(Chat chat) async {
     if (chat.type != ChatType.groupChat) return;
+    if (!_xmppAllowedForChat(chat)) return;
     if (state.xmppConnectionState != ConnectionState.connected) return;
     try {
       await _mucService.ensureJoined(
@@ -463,12 +479,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required int limit,
     required MessageTimelineFilter filter,
   }) {
-    if (jid == null) return;
+    final targetJid = state.chat?.jid ?? jid;
+    if (targetJid == null) return;
     unawaited(_messageSubscription?.cancel());
     _currentMessageLimit = limit;
     _messageSubscription = _messageService
         .messageStreamForChat(
-          jid!,
+          targetJid,
           end: limit,
           filter: filter,
         )
@@ -476,7 +493,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _subscribeToTypingParticipants(Chat chat) {
-    if (chat.defaultTransport.isEmail) {
+    if (!_xmppAllowedForChat(chat)) {
       unawaited(_typingParticipantsSubscription?.cancel());
       _typingParticipantsSubscription = null;
       return;
@@ -529,11 +546,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           typingShouldClear ? const [] : state.typingParticipants,
       typing: event.chat.defaultTransport.isEmail ? false : state.typing,
     ));
+    if (resetContext) {
+      _subscribeToMessages(
+          limit: _currentMessageLimit, filter: state.viewFilter);
+    }
     if (typingContextChanged) {
       _subscribeToTypingParticipants(event.chat);
     }
     _resetMamCursors(resetContext);
-    if (!event.chat.defaultTransport.isEmail) {
+    if (_xmppAllowedForChat(event.chat)) {
       unawaited(_hydrateLatestFromMam(event.chat));
     }
     unawaited(_roomSubscription?.cancel());
@@ -601,16 +622,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _hydrateShareReplies(event.items, emit);
     }
 
+    final chat = state.chat;
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
-    if (!_isEmailChat &&
-        state.chat?.type != ChatType.groupChat &&
+    if (chat != null &&
+        _xmppAllowedForChat(chat) &&
+        chat.type != ChatType.groupChat &&
         lifecycleState == AppLifecycleState.resumed) {
       final selfBare = _bareJid(_chatsService.myJid);
       for (final item in event.items) {
         if (!item.displayed &&
             _bareJid(item.senderJid) != selfBare &&
             item.body?.isNotEmpty == true) {
-          _messageService.sendReadMarker(jid!, item.stanzaID);
+          _messageService.sendReadMarker(chat.jid, item.stanzaID);
         }
       }
     }

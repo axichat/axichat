@@ -146,6 +146,17 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _sourceMaxDimension = 768;
   static const _sourceJpegQuality = 86;
   static const _rebuildDelay = Duration(milliseconds: 220);
+  static const _missingDraftMessage = 'Pick or build an avatar first.';
+  static const _xmppDisconnectedMessage =
+      'Connect to XMPP before saving your avatar.';
+  static const _avatarPublishRejectedMessage =
+      'Your server rejected avatar publishing.';
+  static const _avatarPublishTimeoutMessage =
+      'Avatar upload timed out. Please try again.';
+  static const _avatarPublishGenericMessage =
+      'Could not publish avatar. Check your connection and try again.';
+  static const _avatarPublishUnexpectedMessage =
+      'Unexpected error while uploading avatar.';
 
   final XmppService _xmppService;
   final ProfileCubit? _profileCubit;
@@ -355,13 +366,13 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Future<void> publish() async {
     final draft = state.draft;
     if (draft == null) {
-      emit(state.copyWith(error: 'Pick or build an avatar first.'));
+      emit(state.copyWith(error: _missingDraftMessage));
       return;
     }
     if (!_xmppService.connected) {
       emit(
         state.copyWith(
-          error: 'Connect to XMPP before saving your avatar.',
+          error: _xmppDisconnectedMessage,
         ),
       );
       return;
@@ -382,22 +393,36 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       );
     } on XmppAvatarException catch (error) {
       final cause = error.wrapped;
+      final message = switch (cause) {
+        TimeoutException() => _avatarPublishTimeoutMessage,
+        mox.PubSubError() => _pubSubErrorMessage(cause),
+        mox.AvatarError() => _avatarPublishRejectedMessage,
+        _ => _avatarPublishGenericMessage,
+      };
       emit(
         state.copyWith(
           publishing: false,
-          error: cause is mox.AvatarError
-              ? 'Your server rejected avatar publishing.'
-              : 'Could not publish avatar. Check your connection and try again.',
+          error: message,
         ),
       );
     } catch (_) {
       emit(
         state.copyWith(
           publishing: false,
-          error: 'Unexpected error while uploading avatar.',
+          error: _avatarPublishUnexpectedMessage,
         ),
       );
     }
+  }
+
+  String _pubSubErrorMessage(mox.PubSubError error) {
+    final message = error.message.trim();
+    final suggestion = error.recoverySuggestion?.trim();
+    if (suggestion == null || suggestion.isEmpty) {
+      return message.isEmpty ? _avatarPublishGenericMessage : message;
+    }
+    if (message.isEmpty) return suggestion;
+    return '$message $suggestion';
   }
 
   void _scheduleRebuild() {

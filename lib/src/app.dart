@@ -198,16 +198,21 @@ class _AxichatState extends State<Axichat> {
               key: const Key('guest_calendar_bloc'),
             ),
         ],
-        child: MaterialAxichat(),
+        child: const MaterialAxichat(),
       ),
     );
   }
 }
 
-class MaterialAxichat extends StatelessWidget {
-  MaterialAxichat({super.key});
+class MaterialAxichat extends StatefulWidget {
+  const MaterialAxichat({super.key});
 
-  final _router = GoRouter(
+  @override
+  State<MaterialAxichat> createState() => _MaterialAxichatState();
+}
+
+class _MaterialAxichatState extends State<MaterialAxichat> {
+  late final GoRouter _router = GoRouter(
     restorationScopeId: 'app',
     redirect: (context, routerState) {
       final authState = context.read<AuthenticationCubit>().state;
@@ -229,6 +234,12 @@ class MaterialAxichat extends StatelessWidget {
     },
     routes: $appRoutes,
   );
+
+  @override
+  void dispose() {
+    _router.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -745,11 +756,8 @@ class AxiDragScrollBehavior extends MaterialScrollBehavior {
   @override
   Set<PointerDeviceKind> get dragDevices => const {
         PointerDeviceKind.touch,
-        PointerDeviceKind.mouse,
         PointerDeviceKind.stylus,
         PointerDeviceKind.invertedStylus,
-        PointerDeviceKind.trackpad,
-        PointerDeviceKind.unknown,
       };
 }
 
