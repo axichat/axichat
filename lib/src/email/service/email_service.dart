@@ -244,7 +244,7 @@ class EmailService {
             ? address
             : preferredAddress);
     if (resolvedAddress == null || resolvedAddress.isEmpty) {
-      throw StateError('Failed to resolve email address for $jid');
+      throw StateError('Failed to resolve email address.');
     }
     if (address == null || address != resolvedAddress) {
       address = resolvedAddress;
@@ -265,7 +265,7 @@ class EmailService {
         }
       }
     } else if (password == null) {
-      throw StateError('Failed to resolve email password for $jid');
+      throw StateError('Failed to resolve email password.');
     }
 
     var alreadyProvisioned = (await _readCredentialWithLegacy(
@@ -283,6 +283,13 @@ class EmailService {
       if (shouldPersistCredentials) {
         await _credentialStore.write(key: provisionedKey, value: 'false');
         await _credentialStore.write(key: legacyProvisionedKey, value: 'false');
+      }
+    }
+    if (!alreadyProvisioned && !credentialsMutated) {
+      try {
+        alreadyProvisioned = await _transport.isConfigured();
+      } on Exception {
+        alreadyProvisioned = false;
       }
     }
 
@@ -354,7 +361,7 @@ class EmailService {
           );
         }
         throw EmailProvisioningException(
-          'Unable to configure email for $address. Please check your credentials.',
+          'Unable to configure email. Please check your credentials.',
           shouldWipeCredentials: mapped.code == DeltaChatErrorCode.permission ||
               mapped.code == DeltaChatErrorCode.auth,
         );
@@ -390,7 +397,7 @@ class EmailService {
       legacy: _legacyAddressKeyForScope(scope),
     );
     if (address == null || address.isEmpty) {
-      throw StateError('No email address found for $jid');
+      throw StateError('No email address found.');
     }
     await _credentialStore.write(
       key: _passwordKeyForScope(scope),
@@ -1502,7 +1509,7 @@ class EmailService {
     }
     final domain = _domainFromAddress(address) ?? config.domain;
     if (domain.isEmpty) {
-      throw StateError('Unable to resolve email server host for $address');
+      throw StateError('Unable to resolve email server host.');
     }
     return domain;
   }

@@ -6,7 +6,7 @@ import 'package:axichat/src/chats/view/archives_screen.dart';
 import 'package:axichat/src/email/demo/email_demo_screen.dart';
 import 'package:axichat/src/home_screen.dart';
 import 'package:axichat/src/login_screen.dart';
-import 'package:axichat/src/profile/view/avatar_editor_screen.dart';
+import 'package:axichat/src/avatar/view/avatar_editor_screen.dart';
 import 'package:axichat/src/profile_screen.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';

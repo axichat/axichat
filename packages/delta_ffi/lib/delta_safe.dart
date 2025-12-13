@@ -113,6 +113,11 @@ class DeltaContextHandle {
     _opened = true;
   }
 
+  bool get isConfigured {
+    _ensureState(_opened, 'check configuration state');
+    return _bindings.dc_is_configured(_context) != 0;
+  }
+
   Future<void> configureAccount({
     required String address,
     required String password,

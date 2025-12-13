@@ -275,6 +275,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 DefaultTabController.maybeOf(context)?.index ??
                                     0,
                             collapsed: _railCollapsed,
+                            onCollapsedChanged: (collapsed) {
+                              setState(() {
+                                _railCollapsed = collapsed;
+                              });
+                            },
                             onDestinationSelected: (index) {
                               final controller =
                                   DefaultTabController.maybeOf(context);
@@ -640,7 +645,6 @@ class _NexusState extends State<Nexus> {
   @override
   Widget build(BuildContext context) {
     final showToast = ShadToaster.maybeOf(context)?.show;
-    final l10n = context.l10n;
     final HomeSearchState? searchState =
         context.watch<HomeSearchCubit?>()?.state;
     final ChatsState? chatsState = context.watch<ChatsCubit?>()?.state;
@@ -671,16 +675,6 @@ class _NexusState extends State<Nexus> {
       children: [
         AxiAppBar(
           showTitle: widget.navPlacement != NavPlacement.rail,
-          leading: widget.navPlacement == NavPlacement.rail &&
-                  widget.onToggleNavRail != null
-              ? AxiIconButton(
-                  iconData: LucideIcons.menu,
-                  tooltip: widget.navRailCollapsed
-                      ? l10n.homeRailShowMenu
-                      : l10n.homeRailHideMenu,
-                  onPressed: widget.onToggleNavRail,
-                )
-              : null,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

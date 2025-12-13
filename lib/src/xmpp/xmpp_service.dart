@@ -210,6 +210,7 @@ abstract interface class XmppBase {
   RegisteredStateKey get selfAvatarPathKey;
   RegisteredStateKey get selfAvatarHashKey;
   SecretKey? get avatarEncryptionKey;
+  Stream<StoredAvatar?> get selfAvatarStream;
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
@@ -322,6 +323,7 @@ class XmppService extends XmppBase
   @override
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
   final _databaseReloadController = StreamController<void>.broadcast();
+  final _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
   @override
   String? _databasePrefix;
   @override
@@ -351,12 +353,19 @@ class XmppService extends XmppBase
   @override
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
   @override
+  Stream<StoredAvatar?> get selfAvatarStream => _selfAvatarController.stream;
+  @override
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
 
   @override
   void _notifyDatabaseReloaded() {
     if (_databaseReloadController.isClosed) return;
     _databaseReloadController.add(null);
+  }
+
+  void _notifySelfAvatarUpdated(StoredAvatar? avatar) {
+    if (_selfAvatarController.isClosed) return;
+    _selfAvatarController.add(avatar);
   }
 
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
@@ -1194,6 +1203,9 @@ class XmppService extends XmppBase
     }
     if (!_databaseReloadController.isClosed) {
       await _databaseReloadController.close();
+    }
+    if (!_selfAvatarController.isClosed) {
+      await _selfAvatarController.close();
     }
     _instance = null;
   }

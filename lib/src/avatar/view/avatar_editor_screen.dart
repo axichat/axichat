@@ -1,9 +1,9 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
+import 'package:axichat/src/avatar/view/widgets/avatar_cropper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/profile/avatar/avatar_templates.dart';
-import 'package:axichat/src/profile/bloc/avatar_editor_cubit.dart';
-import 'package:axichat/src/profile/view/widgets/avatar_cropper.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -268,7 +268,7 @@ class _CropCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final cubit = context.read<AvatarEditorCubit>();
-    final previewBytes = state.previewBytes ?? state.sourceBytes;
+    final sourceBytes = state.sourceBytes;
     final imageWidth = state.imageWidth?.toDouble();
     final imageHeight = state.imageHeight?.toDouble();
     final cropRect =
@@ -281,8 +281,8 @@ class _CropCard extends StatelessWidget {
                   )
                 : null)
             : state.cropRect;
-    final hasPreview = previewBytes != null &&
-        previewBytes.isNotEmpty &&
+    final hasPreview = sourceBytes != null &&
+        sourceBytes.isNotEmpty &&
         imageWidth != null &&
         imageHeight != null &&
         imageWidth > 0 &&
@@ -355,7 +355,7 @@ class _CropCard extends StatelessWidget {
               spacing: 12.0,
               children: [
                 AvatarCropper(
-                  bytes: previewBytes,
+                  bytes: sourceBytes,
                   imageWidth: imageWidth,
                   imageHeight: imageHeight,
                   cropRect: cropRect,
