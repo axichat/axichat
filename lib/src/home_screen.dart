@@ -1,6 +1,7 @@
 // ignore_for_file: unnecessary_type_check
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
@@ -20,8 +21,8 @@ import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart' as chat_view;
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chat_selection_bar.dart';
-import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_add_button.dart';
+import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -275,11 +276,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 DefaultTabController.maybeOf(context)?.index ??
                                     0,
                             collapsed: _railCollapsed,
-                            onCollapsedChanged: (collapsed) {
-                              setState(() {
-                                _railCollapsed = collapsed;
-                              });
-                            },
                             onDestinationSelected: (index) {
                               final controller =
                                   DefaultTabController.maybeOf(context);
@@ -645,6 +641,7 @@ class _NexusState extends State<Nexus> {
   @override
   Widget build(BuildContext context) {
     final showToast = ShadToaster.maybeOf(context)?.show;
+    final l10n = context.l10n;
     final HomeSearchState? searchState =
         context.watch<HomeSearchCubit?>()?.state;
     final ChatsState? chatsState = context.watch<ChatsCubit?>()?.state;
@@ -675,6 +672,16 @@ class _NexusState extends State<Nexus> {
       children: [
         AxiAppBar(
           showTitle: widget.navPlacement != NavPlacement.rail,
+          leading: widget.navPlacement == NavPlacement.rail &&
+                  widget.onToggleNavRail != null
+              ? AxiIconButton(
+                  iconData: LucideIcons.menu,
+                  tooltip: widget.navRailCollapsed
+                      ? l10n.homeRailShowMenu
+                      : l10n.homeRailHideMenu,
+                  onPressed: widget.onToggleNavRail,
+                )
+              : null,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

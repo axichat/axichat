@@ -51,8 +51,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
   int _previewVersion = 0;
   Uint8List? _lastPreviewBytes;
   Rect? _localCropRect;
-  double? _lastImageWidth;
-  double? _lastImageHeight;
   Rect? _pendingCropRect;
   bool _cropChangeScheduled = false;
 
@@ -65,8 +63,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     }
     if (oldWidget.imageWidth != widget.imageWidth ||
         oldWidget.imageHeight != widget.imageHeight) {
-      _lastImageWidth = widget.imageWidth;
-      _lastImageHeight = widget.imageHeight;
       _localCropRect = null;
     }
   }

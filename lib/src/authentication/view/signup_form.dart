@@ -1,33 +1,24 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/authentication/view/terms_checkbox.dart';
+import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
+import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
+import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
-import 'package:axichat/src/profile/avatar/avatar_image_utils.dart';
-import 'package:axichat/src/profile/avatar/avatar_templates.dart';
-import 'package:axichat/src/profile/bloc/avatar_editor_cubit.dart'
-    show AvatarEditorCubit;
-import 'package:axichat/src/profile/view/widgets/avatar_cropper.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
-import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
-import 'package:image/image.dart' as img;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:xml/xml.dart';
 
@@ -36,10 +27,12 @@ class SignupForm extends StatefulWidget {
     super.key,
     this.onSubmitStart,
     this.onLoadingChanged,
+    this.visible = true,
   });
 
   final VoidCallback? onSubmitStart;
   final ValueChanged<bool>? onLoadingChanged;
+  final bool visible;
 
   @override
   State<SignupForm> createState() => _SignupFormState();
@@ -48,8 +41,6 @@ class SignupForm extends StatefulWidget {
 enum _PasswordStrengthLevel { empty, weak, medium, stronger }
 
 enum _InsecurePasswordReason { weak, breached }
-
-enum _AvatarEditorMode { none, colorOnly, cropOnly }
 
 const _strengthMediumColor = Color(0xFFF97316);
 const _strengthStrongColor = Color(0xFF22C55E);
@@ -69,14 +60,6 @@ class _SignupFormState extends State<SignupForm>
   static const double _maxEntropyBits = 120;
   static const double _weakEntropyThreshold = 50;
   static const double _strongEntropyThreshold = 80;
-  static const int _avatarTargetSize = 256;
-  static const int _avatarMaxBytes = 64 * 1024;
-  static const int _avatarMinJpegQuality = 35;
-  static const int _avatarQualityStep = 5;
-  static const double _avatarInsetFraction =
-      AvatarEditorCubit.avatarInsetFraction;
-  static const double _avatarTransparentInsetFraction =
-      AvatarEditorCubit.transparentAvatarInsetFraction;
 
   final _formKeys = [
     GlobalKey<FormState>(),
@@ -96,52 +79,7 @@ class _SignupFormState extends State<SignupForm>
   bool _captchaHasLoadedOnce = false;
   Timer? _captchaRetryTimer;
   String? _lastCaptchaServer;
-  AvatarUploadPayload? _signupAvatar;
-  Uint8List? _signupAvatarPreview;
-  Uint8List? _carouselAvatarPreview;
-  _CarouselAvatar? _currentCarouselAvatar;
-  final ValueNotifier<Uint8List?> _avatarPreviewNotifier =
-      ValueNotifier<Uint8List?>(null);
-  AvatarTemplate? _selectedTemplate;
   bool _showAvatarEditor = false;
-  final List<_CarouselAvatar> _carouselBuffer = <_CarouselAvatar>[];
-  late final List<AvatarTemplate> _avatarTemplates =
-      buildDefaultAvatarTemplates();
-  late final List<AvatarTemplate> _abstractAvatarTemplates = _avatarTemplates
-      .where(
-        (template) => template.category == AvatarTemplateCategory.abstract,
-      )
-      .toList();
-  late final List<AvatarTemplate> _nonAbstractAvatarTemplates = _avatarTemplates
-      .where(
-        (template) => template.category != AvatarTemplateCategory.abstract,
-      )
-      .toList();
-  final List<String> _recentCarouselAvatarIds = <String>[];
-  static const _avatarCarouselInterval = Duration(seconds: 1);
-  static const _avatarCarouselInitialBuffer = 4;
-  static const _avatarCarouselSustainBuffer = 3;
-  static const _avatarCarouselHistoryLimit = 12;
-  final List<AvatarTemplate> _abstractCarouselBag = <AvatarTemplate>[];
-  final List<AvatarTemplate> _nonAbstractCarouselBag = <AvatarTemplate>[];
-  bool _nonAbstractAvatarsReady = false;
-  bool _warmingNonAbstractAvatars = false;
-  Timer? _avatarCarouselTimer;
-  Future<bool>? _prefillCarouselFuture;
-  bool _avatarCarouselAwaitingDisplay = false;
-  bool _avatarInitialized = false;
-  bool _avatarProcessing = false;
-  String? _avatarError;
-  Color _avatarBackground = Colors.transparent;
-  bool _avatarBackgroundLocked = false;
-  Color? _lockedAvatarBackground;
-  Rect? _signupCropRect;
-  Uint8List? _signupSourceBytes;
-  double? _signupImageWidth;
-  double? _signupImageHeight;
-  Timer? _signupRebuildTimer;
-  img.Image? _signupSourceImage;
-  final _random = math.Random();
 
   var _currentIndex = 0;
   String? _errorText;
@@ -188,9 +126,6 @@ class _SignupFormState extends State<SignupForm>
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
     _captchaRetryTimer?.cancel();
-    _signupRebuildTimer?.cancel();
-    _stopAvatarCarousel();
-    _avatarPreviewNotifier.dispose();
     widget.onLoadingChanged?.call(false);
     _lastReportedLoading = null;
     super.dispose();
@@ -199,17 +134,15 @@ class _SignupFormState extends State<SignupForm>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    context
+        .read<SignupAvatarCubit>()
+        .setVisible(widget.visible, context.colorScheme);
     if (_captchaSrcInitialized) {
       return;
     }
     _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
     _captchaSrc = _loadCaptchaSrc();
     _captchaSrcInitialized = true;
-    if (!_avatarInitialized) {
-      _avatarInitialized = true;
-      _avatarBackground = context.colorScheme.accent;
-      unawaited(_startAvatarCarousel());
-    }
   }
 
   void _handleFieldProgressChanged() {
@@ -229,13 +162,6 @@ class _SignupFormState extends State<SignupForm>
       _allowInsecureResetTick++;
     }
     setState(() {});
-  }
-
-  void _updateAvatarPreview(Uint8List? bytes) {
-    if (_avatarPreviewNotifier.value == bytes) {
-      return;
-    }
-    _avatarPreviewNotifier.value = bytes;
   }
 
   double _measureTextHeight(
@@ -269,12 +195,44 @@ class _SignupFormState extends State<SignupForm>
     });
   }
 
-  void _onPressed(BuildContext context) async {
-    if (_avatarProcessing) return;
-    if (_signupAvatar == null) {
-      await _materializeCurrentCarouselAvatar();
+  @override
+  void didUpdateWidget(covariant SignupForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.visible != widget.visible) {
+      context
+          .read<SignupAvatarCubit>()
+          .setVisible(widget.visible, context.colorScheme);
     }
-    if (_avatarProcessing) return;
+  }
+
+  String? _avatarErrorText(
+    SignupAvatarState avatarState,
+    AppLocalizations l10n,
+  ) {
+    final error = avatarState.error;
+    if (error == null) {
+      return null;
+    }
+    return switch (error.type) {
+      SignupAvatarErrorType.openFailed => l10n.signupAvatarOpenError,
+      SignupAvatarErrorType.readFailed => l10n.signupAvatarReadError,
+      SignupAvatarErrorType.invalidImage => l10n.signupAvatarInvalidImage,
+      SignupAvatarErrorType.sizeExceeded => l10n.signupAvatarSizeError(
+          error.maxKilobytes ?? SignupAvatarCubit.avatarMaxKilobytes,
+        ),
+      SignupAvatarErrorType.processingFailed => avatarState.sourceBytes != null
+          ? l10n.signupAvatarProcessError
+          : l10n.signupAvatarRenderError,
+    };
+  }
+
+  void _onPressed(BuildContext context) async {
+    final avatarCubit = context.read<SignupAvatarCubit>();
+    if (avatarCubit.state.processing) return;
+    if (avatarCubit.state.avatar == null) {
+      avatarCubit.materializeCurrentCarouselAvatar();
+    }
+    if (avatarCubit.state.processing) return;
     FocusManager.instance.primaryFocus?.unfocus();
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
@@ -288,7 +246,7 @@ class _SignupFormState extends State<SignupForm>
           captchaID: splitSrc[splitSrc.indexOf('captcha') + 1],
           captcha: _captchaTextController.value.text,
           rememberMe: rememberMe,
-          avatar: _signupAvatar,
+          avatar: avatarCubit.state.avatar,
         );
   }
 
@@ -348,7 +306,6 @@ class _SignupFormState extends State<SignupForm>
       _showAvatarEditor = true;
     });
   }
-
 
   void _markCaptchaLoaded() {
     if (_captchaHasLoadedOnce) return;
@@ -464,7 +421,7 @@ class _SignupFormState extends State<SignupForm>
   double get _progressValue => _completedStepCount / _progressSegmentCount;
 
   Future<void> _handleContinuePressed(BuildContext context) async {
-    if (_avatarProcessing) return;
+    if (context.read<SignupAvatarCubit>().state.processing) return;
     final formState = _formKeys[_currentIndex].currentState;
     if (formState?.validate() == false) {
       return;
@@ -547,6 +504,9 @@ class _SignupFormState extends State<SignupForm>
         }
       },
       builder: (context, state) {
+        final l10n = context.l10n;
+        final avatarState = context.watch<SignupAvatarCubit>().state;
+        final avatarErrorText = _avatarErrorText(avatarState, l10n);
         if (_lastCaptchaServer != state.server) {
           _lastCaptchaServer = state.server;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -554,40 +514,10 @@ class _SignupFormState extends State<SignupForm>
             _reloadCaptcha(resetFirstLoad: true);
           });
         }
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _resumeAvatarCarouselIfNeeded();
-          if (_carouselAvatarPreview == null &&
-              !_avatarCarouselAwaitingDisplay) {
-            _avatarCarouselAwaitingDisplay = true;
-            unawaited(
-              _prefillCarousel(
-                targetSize: _avatarCarouselSustainBuffer,
-              ).then((_) {
-                if (!mounted || _hasUserSelectedAvatar) {
-                  return;
-                }
-                if (_carouselAvatarPreview != null ||
-                    _currentCarouselAvatar != null ||
-                    _avatarProcessing) {
-                  return;
-                }
-                final displayed = _showNextCarouselAvatar(allowFallback: false);
-                if (!displayed &&
-                    mounted &&
-                    !_hasUserSelectedAvatar &&
-                    _carouselBuffer.isEmpty) {
-                  _showNextCarouselAvatar();
-                }
-              }).whenComplete(() {
-                _avatarCarouselAwaitingDisplay = false;
-              }),
-            );
-          }
-        });
         final bool onSubmitStep = _currentIndex == _formKeys.length - 1;
-        final bool signupFlowActive =
-            state is AuthenticationSignUpInProgress && onSubmitStep;
+        final bool signupFlowActive = state is AuthenticationSignUpInProgress &&
+            state.fromSubmission &&
+            onSubmitStep;
         final bool latchActive = (_lastReportedLoading ?? false) &&
             (state is AuthenticationLogInInProgress ||
                 state is AuthenticationComplete);
@@ -599,7 +529,6 @@ class _SignupFormState extends State<SignupForm>
         const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
         const globalErrorPadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
         const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
-        final l10n = context.l10n;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
         final usernameDescriptionHeight = _measureTextHeight(
@@ -609,8 +538,6 @@ class _SignupFormState extends State<SignupForm>
         );
         final showGlobalError =
             !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
-        final displayedAvatarBytes =
-            _signupAvatarPreview ?? _carouselAvatarPreview;
         return Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -695,11 +622,11 @@ class _SignupFormState extends State<SignupForm>
                                         0,
                                         -usernameDescriptionHeight,
                                       ),
-                                      child: _SignupAvatarSelector(
-                                        bytes: displayedAvatarBytes,
+                                      child: SignupAvatarSelector(
+                                        bytes: avatarState.displayedBytes,
                                         username: _jidTextController.text,
-                                        processing: _avatarProcessing,
-                                        onTap: _openAvatarMenu,
+                                        processing: avatarState.processing,
+                                        onTap: _openAvatarEditor,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -738,9 +665,9 @@ class _SignupFormState extends State<SignupForm>
                                     ),
                                   ],
                                 ),
-                                if (_avatarError != null)
+                                if (avatarErrorText != null)
                                   Text(
-                                    _avatarError!,
+                                    avatarErrorText,
                                     style: TextStyle(
                                       color: context.colorScheme.destructive,
                                       fontSize: 12,
@@ -759,46 +686,41 @@ class _SignupFormState extends State<SignupForm>
                                         ),
                                         child: Stack(
                                           children: [
-                                            _SignupAvatarEditorPanel(
-                                              mode: _avatarEditorMode,
-                                              avatarBytesListenable:
-                                                  _avatarPreviewNotifier,
-                                              sourceBytesProvider: () =>
-                                                  _signupSourceBytes ??
-                                                  _currentCarouselAvatar
-                                                      ?.sourceBytes ??
-                                                  _currentCarouselAvatar
-                                                      ?.bytes ??
-                                                  _carouselAvatarPreview ??
-                                                  _signupAvatarPreview,
-                                              cropRectProvider: () =>
-                                                  _signupCropRect,
-                                              imageWidthProvider: () =>
-                                                  _signupImageWidth,
-                                              imageHeightProvider: () =>
-                                                  _signupImageHeight,
-                                              onCropChanged:
-                                                  _updateSignupCropRect,
-                                              onCropReset: _resetSignupCrop,
-                                              canShuffleBackground:
-                                                  _canShuffleAvatarBackground,
-                                              onShuffleBackground:
-                                                  _canShuffleAvatarBackground
-                                                      ? _shuffleAvatarBackground
-                                                      : null,
-                                              onShuffle: () async {
-                                                final selection =
-                                                    _pickAvatarSelection();
-                                                if (selection == null) {
-                                                  return;
-                                                }
-                                                await _selectTemplate(
-                                                  selection.template,
-                                                  background:
-                                                      selection.background,
-                                                );
-                                              },
-                                              onUpload: _pickAvatarFromFiles,
+                                            SignupAvatarEditorPanel(
+                                              mode: avatarState.editorMode,
+                                              avatarBytes:
+                                                  avatarState.displayedBytes,
+                                              cropBytes:
+                                                  avatarState.sourceBytes,
+                                              cropRect: avatarState.cropRect,
+                                              imageWidth:
+                                                  avatarState.imageWidth,
+                                              imageHeight:
+                                                  avatarState.imageHeight,
+                                              onCropChanged: (rect) => context
+                                                  .read<SignupAvatarCubit>()
+                                                  .updateCropRect(rect),
+                                              onCropReset: context
+                                                  .read<SignupAvatarCubit>()
+                                                  .resetCrop,
+                                              onShuffle: () => context
+                                                  .read<SignupAvatarCubit>()
+                                                  .shuffleTemplate(
+                                                    context.colorScheme,
+                                                  ),
+                                              onUpload: context
+                                                  .read<SignupAvatarCubit>()
+                                                  .pickAvatarFromFiles,
+                                              canShuffleBackground: avatarState
+                                                  .canShuffleBackground,
+                                              onShuffleBackground: avatarState
+                                                      .canShuffleBackground
+                                                  ? () => context
+                                                      .read<SignupAvatarCubit>()
+                                                      .shuffleBackground(
+                                                        context.colorScheme,
+                                                      )
+                                                  : null,
                                             ),
                                             Positioned(
                                               top: 6,
@@ -1073,7 +995,7 @@ class _SignupFormState extends State<SignupForm>
                               child: ShadButton(
                                 enabled: !loading &&
                                     !isCheckingPwned &&
-                                    !_avatarProcessing,
+                                    !avatarState.processing,
                                 onPressed: () async {
                                   await _handleContinuePressed(context);
                                 },
@@ -1101,7 +1023,7 @@ class _SignupFormState extends State<SignupForm>
                           ? ShadButton(
                               enabled: !loading &&
                                   !cleanupBlocked &&
-                                  !_avatarProcessing,
+                                  !avatarState.processing,
                               onPressed: cleanupBlocked
                                   ? null
                                   : () => _onPressed(context),
@@ -1147,6 +1069,7 @@ class _SignupFormState extends State<SignupForm>
   bool get wantKeepAlive => true;
 }
 
+/*
 class _AvatarSizeException implements Exception {
   const _AvatarSizeException();
 }
@@ -1587,6 +1510,7 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
   }
 }
 
+*/
 class _SignupProgressMeter extends StatelessWidget {
   const _SignupProgressMeter({
     required this.progressValue,
