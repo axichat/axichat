@@ -73,6 +73,8 @@ class _LoginScreenState extends State<LoginScreen>
     _AuthFlow flow, {
     required String label,
   }) {
+    final shouldRestartProgress =
+        _activeFlow != flow || !_operationProgressController.isActive;
     _startAuthTimeout(flow);
     setState(() {
       _activeFlow = flow;
@@ -90,7 +92,9 @@ class _LoginScreenState extends State<LoginScreen>
       }
       _loginSuccessHandled = false;
     });
-    _operationProgressController.start();
+    if (shouldRestartProgress) {
+      _operationProgressController.start();
+    }
   }
 
   void _handleSignupLoadingChanged(bool isLoading) {
@@ -177,7 +181,9 @@ class _LoginScreenState extends State<LoginScreen>
     }
     setState(() {
       _signupButtonLoading = false;
-      _signupFlowLocked = false;
+      if (_activeFlow != _AuthFlow.signup) {
+        _signupFlowLocked = false;
+      }
     });
   }
 

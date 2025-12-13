@@ -85,10 +85,18 @@ class _AvatarCropperState extends State<AvatarCropper> {
   @override
   Widget build(BuildContext context) {
     if (!_hasValidImage) {
-      return const SizedBox.square(
+      final colors = widget.colors;
+      return SizedBox.square(
         dimension: _maxDimension,
         child: Center(
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: SizedBox.square(
+            dimension: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colors.foreground,
+              backgroundColor: colors.border,
+            ),
+          ),
         ),
       );
     }
@@ -198,7 +206,8 @@ class _AvatarCropperState extends State<AvatarCropper> {
                       dimension: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: colors.primary,
+                        color: colors.foreground,
+                        backgroundColor: colors.border,
                       ),
                     ),
                   ),

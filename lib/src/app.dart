@@ -452,7 +452,8 @@ class MaterialAxichat extends StatelessWidget {
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
-                      if (effectiveRoute?.authenticationRequired ?? true) {
+                      if (!onLoginRoute &&
+                          (effectiveRoute?.authenticationRequired ?? true)) {
                         _router.go(const LoginRoute().location);
                       }
                     } else if (state is AuthenticationComplete &&

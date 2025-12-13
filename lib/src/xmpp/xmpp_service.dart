@@ -211,6 +211,7 @@ abstract interface class XmppBase {
   RegisteredStateKey get selfAvatarHashKey;
   SecretKey? get avatarEncryptionKey;
   Stream<StoredAvatar?> get selfAvatarStream;
+  void _notifySelfAvatarUpdated(StoredAvatar? avatar);
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
@@ -363,6 +364,7 @@ class XmppService extends XmppBase
     _databaseReloadController.add(null);
   }
 
+  @override
   void _notifySelfAvatarUpdated(StoredAvatar? avatar) {
     if (_selfAvatarController.isClosed) return;
     _selfAvatarController.add(avatar);

@@ -179,26 +179,24 @@ class _AvatarSummaryCard extends StatelessWidget {
                 children: [
                   ShadButton.outline(
                     size: ShadButtonSize.sm,
-                    onPressed: state.processing
+                    onPressed: state.processing || state.publishing || state.shuffling
                         ? null
                         : () => cubit.shuffleTemplate(colors),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8.0,
                       children: [
-                        if (state.processing)
+                        if (state.shuffling)
                           SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.4,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                colors.primaryForeground,
+                                colors.foreground,
                               ),
                               backgroundColor:
-                                  colors.primaryForeground.withValues(
-                                alpha: 0.2,
-                              ),
+                                  colors.border,
                             ),
                           )
                         else
@@ -209,7 +207,9 @@ class _AvatarSummaryCard extends StatelessWidget {
                   ),
                   ShadButton.outline(
                     size: ShadButtonSize.sm,
-                    onPressed: state.processing ? null : cubit.pickImage,
+                    onPressed: state.processing || state.publishing
+                        ? null
+                        : cubit.pickImage,
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8.0,
@@ -227,10 +227,19 @@ class _AvatarSummaryCard extends StatelessWidget {
                         ? null
                         : cubit.publish,
                     child: state.publishing
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                colors.primaryForeground,
+                              ),
+                              backgroundColor:
+                                  colors.primaryForeground.withValues(
+                                alpha: 0.2,
+                              ),
+                            ),
                           )
                         : Text(l10n.commonSave),
                   ),
@@ -630,7 +639,7 @@ class _CategoryRow extends StatelessWidget {
   }
 }
 
-class _TemplatePreviewCard extends StatefulWidget {
+class _TemplatePreviewCard extends StatelessWidget {
   const _TemplatePreviewCard({
     required this.template,
     required this.isSelected,
@@ -644,44 +653,14 @@ class _TemplatePreviewCard extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_TemplatePreviewCard> createState() => _TemplatePreviewCardState();
-}
-
-class _TemplatePreviewCardState extends State<_TemplatePreviewCard> {
-  late Future<GeneratedAvatar> _future;
-  ShadColorScheme? _colors;
-  bool _initialized = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final colors = context.colorScheme;
-    final hasChanged = !_initialized || _colors != colors;
-    if (hasChanged) {
-      _colors = colors;
-      _future = widget.template.generator(widget.backgroundColor, colors);
-      _initialized = true;
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _TemplatePreviewCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final colors = _colors ?? context.colorScheme;
-    final templateChanged = widget.template != oldWidget.template;
-    final needsRefresh = templateChanged ||
-        (widget.template.hasAlphaBackground &&
-            widget.backgroundColor != oldWidget.backgroundColor);
-    if (needsRefresh) {
-      _future = widget.template.generator(widget.backgroundColor, colors);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final previewBackground = template.hasAlphaBackground
+        ? (backgroundColor == Colors.transparent ? colors.accent : backgroundColor)
+        : colors.card;
+    final assetPath = template.assetPath;
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         width: 120,
@@ -689,8 +668,8 @@ class _TemplatePreviewCardState extends State<_TemplatePreviewCard> {
           color: colors.card,
           borderRadius: context.radius,
           border: Border.all(
-            color: widget.isSelected ? colors.primary : colors.border,
-            width: widget.isSelected ? 2 : 1,
+            color: isSelected ? colors.primary : colors.border,
+            width: isSelected ? 2 : 1,
           ),
         ),
         child: Column(
@@ -700,29 +679,23 @@ class _TemplatePreviewCardState extends State<_TemplatePreviewCard> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(10.0),
-                child: FutureBuilder<GeneratedAvatar>(
-                  future: _future,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData) {
-                      return ClipRRect(
-                        borderRadius: context.radius,
-                        child: Image.memory(
-                          snapshot.data!.bytes,
-                          fit: BoxFit.cover,
-                        ),
-                      );
-                    }
-                    return Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: colors.primary,
-                        ),
-                      ),
-                    );
-                  },
+                child: ClipRRect(
+                  borderRadius: context.radius,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(color: previewBackground),
+                    child: assetPath == null
+                        ? Center(
+                            child: Icon(
+                              LucideIcons.imageOff,
+                              size: 20,
+                              color: colors.mutedForeground,
+                            ),
+                          )
+                        : Image.asset(
+                            assetPath,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
                 ),
               ),
             ),
@@ -732,12 +705,12 @@ class _TemplatePreviewCardState extends State<_TemplatePreviewCard> {
                 vertical: 8.0,
               ),
               child: Text(
-                widget.template.label,
+                template.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.textTheme.small.copyWith(
                   color: colors.foreground,
-                  fontWeight: widget.isSelected ? FontWeight.w700 : null,
+                  fontWeight: isSelected ? FontWeight.w700 : null,
                 ),
               ),
             ),

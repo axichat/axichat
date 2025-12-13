@@ -113,6 +113,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         xmppService.connectivityStream.listen((connectionState) {
       if (connectionState == ConnectionState.connected) {
         unawaited(_emailService?.handleNetworkAvailable());
+        unawaited(_publishPendingAvatar());
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
         unawaited(_emailService?.handleNetworkLost());
@@ -173,6 +174,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
   AvatarUploadPayload? _signupAvatarDraft;
+  var _signupAvatarPublishInFlight = false;
   _AuthTransaction? _authTransaction;
   late final Future<void> _authRecoveryFuture;
   bool get _stickyAuthActive => state is AuthenticationComplete;
@@ -1247,13 +1249,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _publishPendingAvatar() async {
     final payload = _signupAvatarDraft;
     if (payload == null) return;
-    _signupAvatarDraft = null;
+    if (_signupAvatarPublishInFlight) {
+      return;
+    }
+    if (!_xmppService.connected || !_stickyAuthActive) {
+      return;
+    }
+    _signupAvatarPublishInFlight = true;
     try {
       await _xmppService.publishAvatar(payload);
+      _signupAvatarDraft = null;
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
       if (cause is mox.AvatarError) {
-        _log.info('Signup avatar publish unsupported; skipping.', cause);
+        _signupAvatarDraft = null;
+        _log.info('Signup avatar publish rejected; skipping.', cause);
+        return;
+      }
+      if (_looksLikeConnectivityError(error) || !_xmppService.connected) {
+        _log.warning(
+          'Failed to publish signup avatar; will retry when connected.',
+          error,
+          stackTrace,
+        );
         return;
       }
       _log.warning('Failed to publish signup avatar', error, stackTrace);
@@ -1263,6 +1281,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
+    } finally {
+      _signupAvatarPublishInFlight = false;
     }
   }
 
@@ -1472,7 +1492,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<bool> checkNotPwned({required String password}) async {
-    _emit(const AuthenticationSignUpInProgress(fromSubmission: false));
     final hash = sha1.convert(utf8.encode(password)).toString().toUpperCase();
     final subhash = hash.substring(0, 5);
     try {
@@ -1483,17 +1502,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           final pwned = '$subhash${e.split(':')[0]}';
           return pwned == hash;
         })) {
-          _emit(const AuthenticationSignupFailure(
-              'Hackers have already found this password so it is insecure. '
-              'Use a different one or allow insecure passwords.'));
           return false;
         }
       }
     } on Exception catch (_) {
-      _emit(const AuthenticationNone());
       return true;
     }
-    _emit(const AuthenticationNone());
     return true;
   }
 

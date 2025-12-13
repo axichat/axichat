@@ -184,7 +184,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         (connectionState) {
           add(_XmppConnectionStateChanged(connectionState));
           if (connectionState == ConnectionState.connected) {
-            unawaited(_catchUpFromMam());
+            if (!_isEmailChat) {
+              unawaited(_catchUpFromMam());
+            }
           }
         },
       );
@@ -288,6 +290,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _loadEarlierFromMam({required int desiredWindow}) async {
     final chat = state.chat;
     if (chat == null || _mamLoading || _mamComplete) return;
+    if (chat.defaultTransport.isEmail) return;
     final localCount = await _archivedMessageCount(chat);
     if (localCount >= desiredWindow) return;
     final beforeId = _mamBeforeId ??
@@ -319,6 +322,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _catchUpFromMam() async {
     final chat = state.chat;
     if (chat == null) return;
+    if (chat.defaultTransport.isEmail) return;
     final lastSeen = await _messageService.loadLastSeenTimestamp(
       chat.remoteJid,
     );
@@ -384,6 +388,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _hydrateLatestFromMam(Chat chat) async {
+    if (chat.defaultTransport.isEmail) return;
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
     final localCount = await _archivedMessageCount(chat);
     if (localCount >= _currentMessageLimit) return;
@@ -528,7 +533,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _subscribeToTypingParticipants(event.chat);
     }
     _resetMamCursors(resetContext);
-    unawaited(_hydrateLatestFromMam(event.chat));
+    if (!event.chat.defaultTransport.isEmail) {
+      unawaited(_hydrateLatestFromMam(event.chat));
+    }
     unawaited(_roomSubscription?.cancel());
     if (event.chat.type == ChatType.groupChat) {
       _roomSubscription = _mucService
@@ -1371,7 +1378,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final nextLimit = state.items.length + messageBatchSize;
     _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
-    await _loadEarlierFromMam(desiredWindow: nextLimit);
+    if (!_isEmailChat) {
+      await _loadEarlierFromMam(desiredWindow: nextLimit);
+    }
   }
 
   Future<void> _onChatAlertHidden(

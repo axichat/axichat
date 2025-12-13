@@ -12,6 +12,7 @@ import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum AvatarSource {
@@ -142,7 +143,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _maxBytes = 64 * 1024;
   static const _minQuality = 55;
   static const _qualityStep = 5;
-  static const _sourceMaxDimension = 1024;
+  static const _sourceMaxDimension = 768;
   static const _sourceJpegQuality = 86;
   static const _rebuildDelay = Duration(milliseconds: 220);
 
@@ -358,6 +359,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       emit(state.copyWith(error: 'Pick or build an avatar first.'));
       return;
     }
+    if (!_xmppService.connected) {
+      emit(
+        state.copyWith(
+          error: 'Connect to XMPP before saving your avatar.',
+        ),
+      );
+      return;
+    }
     emit(state.copyWith(publishing: true, clearError: true));
     try {
       final result = await _xmppService.publishAvatar(draft);
@@ -372,11 +381,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           clearError: true,
         ),
       );
-    } on XmppAvatarException {
+    } on XmppAvatarException catch (error) {
+      final cause = error.wrapped;
       emit(
         state.copyWith(
           publishing: false,
-          error: 'Could not publish avatar. Please try again.',
+          error: cause is mox.AvatarError
+              ? 'Your server rejected avatar publishing.'
+              : 'Could not publish avatar. Check your connection and try again.',
         ),
       );
     } catch (_) {
