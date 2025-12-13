@@ -11,6 +11,7 @@ import 'package:axichat/src/authentication/view/widgets/operation_progress_bar.d
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
+import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
@@ -92,6 +93,7 @@ class _LoginScreenState extends State<LoginScreen>
       }
       hasStoredCredentials = false;
     }
+    firstFrameGate.allow();
     if (!mounted) return;
     setState(() {
       _hasStoredCredentials = hasStoredCredentials;
@@ -418,65 +420,63 @@ class _LoginScreenState extends State<LoginScreen>
                                   child: AxiAnimatedSize(
                                     duration: animationDuration,
                                     curve: Curves.easeInOut,
-                                    child: Stack(
-                                      children: [
-                                        AnimatedCrossFade(
-                                          firstCurve: Curves.easeInOut,
-                                          secondCurve: Curves.easeInOut,
-                                          sizeCurve: Curves.easeInOut,
-                                          duration: animationDuration,
-                                          crossFadeState:
-                                              (!_signupFlowLocked && _login)
-                                                  ? CrossFadeState.showFirst
-                                                  : CrossFadeState.showSecond,
-                                          firstChild: IgnorePointer(
-                                            ignoring:
-                                                _signupFlowLocked || !_login,
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.all(24.0),
-                                              child: LoginForm(
-                                                onSubmitStart: () =>
-                                                    _handleSubmissionRequested(
-                                                  _AuthFlow.login,
-                                                  label: l10n.authLoggingIn,
-                                                ),
-                                                onAutologinStart:
-                                                    _handleAutologinRequested,
-                                              ),
-                                            ),
-                                          ),
-                                          secondChild: IgnorePointer(
-                                            ignoring:
-                                                !_signupFlowLocked && _login,
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.all(24.0),
-                                              child: BlocProvider(
-                                                create: (_) =>
-                                                    SignupAvatarCubit(),
-                                                child: SignupForm(
-                                                  visible: _signupFlowLocked ||
-                                                      !_login,
+                                    child: showAuthModePlaceholder
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(24.0),
+                                            child: _AuthModePlaceholder(),
+                                          )
+                                        : AnimatedCrossFade(
+                                            firstCurve: Curves.easeInOut,
+                                            secondCurve: Curves.easeInOut,
+                                            sizeCurve: Curves.easeInOut,
+                                            duration: animationDuration,
+                                            crossFadeState:
+                                                (!_signupFlowLocked && _login)
+                                                    ? CrossFadeState.showFirst
+                                                    : CrossFadeState.showSecond,
+                                            firstChild: IgnorePointer(
+                                              ignoring:
+                                                  _signupFlowLocked || !_login,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.all(24.0),
+                                                child: LoginForm(
                                                   onSubmitStart: () =>
                                                       _handleSubmissionRequested(
-                                                    _AuthFlow.signup,
-                                                    label: l10n
-                                                        .authCreatingAccount,
+                                                    _AuthFlow.login,
+                                                    label: l10n.authLoggingIn,
                                                   ),
-                                                  onLoadingChanged:
-                                                      _handleSignupLoadingChanged,
+                                                  onAutologinStart:
+                                                      _handleAutologinRequested,
+                                                ),
+                                              ),
+                                            ),
+                                            secondChild: IgnorePointer(
+                                              ignoring:
+                                                  !_signupFlowLocked && _login,
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.all(24.0),
+                                                child: BlocProvider(
+                                                  create: (_) =>
+                                                      SignupAvatarCubit(),
+                                                  child: SignupForm(
+                                                    visible:
+                                                        _signupFlowLocked ||
+                                                            !_login,
+                                                    onSubmitStart: () =>
+                                                        _handleSubmissionRequested(
+                                                      _AuthFlow.signup,
+                                                      label: l10n
+                                                          .authCreatingAccount,
+                                                    ),
+                                                    onLoadingChanged:
+                                                        _handleSignupLoadingChanged,
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        if (showAuthModePlaceholder)
-                                          const Positioned.fill(
-                                            child: _AuthModePlaceholder(),
-                                          ),
-                                      ],
-                                    ),
                                   ),
                                 ),
                               ),

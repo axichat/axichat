@@ -135,6 +135,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           ),
         );
 
+  void _emitIfOpen(AvatarEditorState next) {
+    if (isClosed) return;
+    emit(next);
+  }
+
   static const minCropSide = 48.0;
   // All non-abstract templates ship with transparent backgrounds, so keep a single inset.
   static const avatarInsetFraction = 0.10;
@@ -181,7 +186,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final initialBackground = state.backgroundColor == Colors.transparent
         ? colors.accent
         : state.backgroundColor;
-    emit(state.copyWith(backgroundColor: initialBackground));
+    _emitIfOpen(state.copyWith(backgroundColor: initialBackground));
     unawaited(_loadInitialAvatar());
   }
 
@@ -195,6 +200,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       if (bytes == null || bytes.isEmpty) {
         return;
       }
+      if (isClosed) return;
       await _loadFromBytes(bytes, buildDraft: false);
     } catch (_) {}
   }
@@ -212,12 +218,12 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       final bytes = file.bytes ??
           (file.path != null ? await File(file.path!).readAsBytes() : null);
       if (bytes == null || bytes.isEmpty) {
-        emit(state.copyWith(error: 'Could not read that file.'));
+        _emitIfOpen(state.copyWith(error: 'Could not read that file.'));
         return;
       }
       await _loadFromBytes(bytes, buildDraft: true);
     } catch (_) {
-      emit(
+      _emitIfOpen(
         state.copyWith(
           error: 'Unable to open that image. Please try a different file.',
         ),
@@ -230,7 +236,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     ShadColorScheme colors, {
     Color? background,
   }) async {
-    emit(
+    _emitIfOpen(
       state.copyWith(
         processing: true,
         source: AvatarSource.template,
@@ -250,7 +256,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             : selectedBackground,
         colors,
       );
-      emit(
+      if (isClosed) return;
+      _emitIfOpen(
         state.copyWith(
           sourceBytes: generated.bytes,
           imageWidth: generated.width,
@@ -265,7 +272,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       );
       await _rebuildDraft();
     } catch (_) {
-      emit(
+      if (isClosed) return;
+      _emitIfOpen(
         state.copyWith(
           processing: false,
           clearDraft: true,
@@ -279,7 +287,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     Color color,
     ShadColorScheme colors,
   ) async {
-    emit(state.copyWith(backgroundColor: color));
+    _emitIfOpen(state.copyWith(backgroundColor: color));
     if (state.template != null) {
       await selectTemplate(
         state.template!,
@@ -295,10 +303,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (state.processing || state.publishing || state.shuffling) {
       return;
     }
-    emit(state.copyWith(shuffling: true, clearError: true));
+    _emitIfOpen(state.copyWith(shuffling: true, clearError: true));
     final template = _pickTemplate();
     if (template == null) {
-      emit(state.copyWith(shuffling: false));
+      _emitIfOpen(state.copyWith(shuffling: false));
       return;
     }
     final background = template.hasAlphaBackground
@@ -313,9 +321,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         background: background,
       );
     } finally {
-      if (!isClosed) {
-        emit(state.copyWith(shuffling: false));
-      }
+      _emitIfOpen(state.copyWith(shuffling: false));
     }
   }
 
@@ -325,7 +331,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (imageWidth == null || imageHeight == null) return;
     final clamped = _constrainRect(rect, imageWidth, imageHeight);
     if (state.cropRect == clamped) return;
-    emit(state.copyWith(cropRect: clamped));
+    _emitIfOpen(state.copyWith(cropRect: clamped));
     _scheduleRebuild();
   }
 
@@ -347,7 +353,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       height: side,
     );
     final constrained = _constrainRect(next, imageWidth, imageHeight);
-    emit(state.copyWith(cropRect: constrained));
+    _emitIfOpen(state.copyWith(cropRect: constrained));
     _scheduleRebuild();
   }
 
@@ -359,32 +365,32 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       imageWidth: imageWidth,
       imageHeight: imageHeight,
     );
-    emit(state.copyWith(cropRect: reset));
+    _emitIfOpen(state.copyWith(cropRect: reset));
     _scheduleRebuild();
   }
 
   Future<void> publish() async {
     final draft = state.draft;
     if (draft == null) {
-      emit(state.copyWith(error: _missingDraftMessage));
+      _emitIfOpen(state.copyWith(error: _missingDraftMessage));
       return;
     }
     if (!_xmppService.connected) {
-      emit(
+      _emitIfOpen(
         state.copyWith(
           error: _xmppDisconnectedMessage,
         ),
       );
       return;
     }
-    emit(state.copyWith(publishing: true, clearError: true));
+    _emitIfOpen(state.copyWith(publishing: true, clearError: true));
     try {
       final result = await _xmppService.publishAvatar(draft);
       _profileCubit?.updateAvatar(
         path: result.path,
         hash: result.hash,
       );
-      emit(
+      _emitIfOpen(
         state.copyWith(
           publishing: false,
           lastSavedPath: result.path,
@@ -399,14 +405,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         mox.AvatarError() => _avatarPublishRejectedMessage,
         _ => _avatarPublishGenericMessage,
       };
-      emit(
+      _emitIfOpen(
         state.copyWith(
           publishing: false,
           error: message,
         ),
       );
     } catch (_) {
-      emit(
+      _emitIfOpen(
         state.copyWith(
           publishing: false,
           error: _avatarPublishUnexpectedMessage,
@@ -434,6 +440,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   Future<void> _rebuildDraft() async {
+    if (isClosed) return;
     if (_draftBuildInProgress) {
       _draftBuildRequested = true;
       return;
@@ -441,6 +448,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _draftBuildInProgress = true;
     try {
       while (true) {
+        if (isClosed) return;
         _draftBuildRequested = false;
         final sourceBytes = state.sourceBytes;
         final imageWidth = state.imageWidth?.toDouble();
@@ -452,7 +460,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             imageWidth <= 0 ||
             imageHeight <= 0) {
           if (state.processing) {
-            emit(state.copyWith(processing: false));
+            _emitIfOpen(state.copyWith(processing: false));
           }
           return;
         }
@@ -479,8 +487,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         final paddingColor = state.backgroundColor;
         final shouldFlatten = shouldInset || paddingColor.a > 0;
 
-        emit(state.copyWith(processing: true, clearError: true));
+        _emitIfOpen(state.copyWith(processing: true, clearError: true));
         await Future<void>.delayed(Duration.zero);
+        if (isClosed) return;
 
         try {
           final processed = await processAvatar(
@@ -499,6 +508,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
               qualityStep: _qualityStep,
             ),
           );
+          if (isClosed) return;
           final hash = sha1.convert(processed.bytes).toString();
           final draft = AvatarUploadPayload(
             bytes: processed.bytes,
@@ -507,7 +517,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             height: processed.height,
             hash: hash,
           );
-          emit(
+          _emitIfOpen(
             state.copyWith(
               processing: false,
               draft: draft,
@@ -517,7 +527,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             ),
           );
         } catch (_) {
-          emit(
+          if (isClosed) return;
+          _emitIfOpen(
             state.copyWith(
               processing: false,
               clearDraft: true,
@@ -640,7 +651,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     Uint8List bytes, {
     required bool buildDraft,
   }) async {
-    emit(
+    _emitIfOpen(
       state.copyWith(
         processing: true,
         clearError: true,
@@ -657,7 +668,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       if (isClosed) return;
       final imageWidth = prepared.width.toDouble();
       final imageHeight = prepared.height.toDouble();
-      emit(
+      _emitIfOpen(
         state.copyWith(
           source: AvatarSource.upload,
           sourceBytes: prepared.bytes,
@@ -678,12 +689,13 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         ),
       );
       if (!buildDraft) {
-        emit(state.copyWith(processing: false, clearError: true));
+        _emitIfOpen(state.copyWith(processing: false, clearError: true));
         return;
       }
       await _rebuildDraft();
     } catch (_) {
-      emit(
+      if (isClosed) return;
+      _emitIfOpen(
         state.copyWith(
           processing: false,
           error: 'That file is not a valid image.',

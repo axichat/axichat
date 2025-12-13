@@ -608,19 +608,6 @@ class _ShortcutBindings extends StatelessWidget {
       return child;
     }
     final env = EnvScope.of(context);
-    AccessibilityActionBloc? accessibilityBloc() {
-      final focusedContext = FocusManager.instance.primaryFocus?.context;
-      final targetContext = focusedContext ?? context;
-      try {
-        return BlocProvider.of<AccessibilityActionBloc>(
-          targetContext,
-          listen: false,
-        );
-      } on Exception {
-        return null;
-      }
-    }
-
     final routedChild = Actions(
       actions: {
         ComposeIntent: CallbackAction<ComposeIntent>(
@@ -631,30 +618,15 @@ class _ShortcutBindings extends StatelessWidget {
             return null;
           },
         ),
-        OpenFindActionIntent: CallbackAction<OpenFindActionIntent>(
-          onInvoke: (_) {
-            accessibilityBloc()?.add(const AccessibilityMenuOpened());
-            return null;
-          },
-        ),
       },
       child: child,
     );
     final shortcuts = <ShortcutActivator, Intent>{
       _composeActivator(env.platform): const ComposeIntent(),
-      _searchActivator(env.platform): const ToggleSearchIntent(),
-      _findActionActivator(env.platform): const OpenFindActionIntent(),
     };
-    if (env.supportsDesktopShortcuts) {
-      shortcuts[_calendarActivator(env.platform)] =
-          const ToggleCalendarIntent();
-    }
-    return Focus(
-      autofocus: true,
-      child: Shortcuts(
-        shortcuts: shortcuts,
-        child: routedChild,
-      ),
+    return Shortcuts(
+      shortcuts: shortcuts,
+      child: routedChild,
     );
   }
 }

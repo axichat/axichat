@@ -76,7 +76,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _focusNode.onKeyEvent = _handleKeyEvent;
+    _focusNode
+      ..onKeyEvent = _handleKeyEvent
+      ..addListener(_handleAutocompleteFocusChanged);
     _renderedRecipients = _visibleRecipientsForState();
     _barCollapsed = widget.collapsedByDefault;
     _collapseController = AnimationController(
@@ -416,6 +418,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       return true;
     }
     return false;
+  }
+
+  void _handleAutocompleteFocusChanged() {
+    if (_focusNode.hasFocus) return;
+    final submitted = _handleAutocompleteSubmit();
+    if (!submitted) return;
+    _controller.clear();
+    _updateSuggestions(const <FanOutTarget>[]);
   }
 
   void _handleBackspacePress() {

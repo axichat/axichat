@@ -256,6 +256,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             onCalendarSelected: () {
                               context.read<ChatsCubit?>()?.toggleCalendar();
                             },
+                            onCollapsedChanged: (collapsed) {
+                              setState(() {
+                                _railCollapsed = collapsed;
+                              });
+                            },
                           )
                         : null;
 
@@ -496,13 +501,35 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Builder(
         builder: (context) {
           final platform = Theme.of(context).platform;
+          final isApple =
+              platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
           final findActivators = findActionActivators(platform);
+          final composeActivator = SingleActivator(
+            LogicalKeyboardKey.keyN,
+            meta: isApple,
+            control: !isApple,
+          );
+          final searchActivator = SingleActivator(
+            LogicalKeyboardKey.keyF,
+            meta: isApple,
+            control: !isApple,
+          );
+          final calendarActivator = SingleActivator(
+            LogicalKeyboardKey.keyC,
+            meta: isApple,
+            control: !isApple,
+            shift: true,
+          );
           return Focus(
             focusNode: _shortcutFocusNode,
             autofocus: true,
             onKeyEvent: _handleHomeKeyEvent,
             child: Shortcuts(
               shortcuts: {
+                composeActivator: const ComposeIntent(),
+                searchActivator: const ToggleSearchIntent(),
+                if (EnvScope.of(context).supportsDesktopShortcuts)
+                  calendarActivator: const ToggleCalendarIntent(),
                 for (final activator in findActivators)
                   activator: const OpenFindActionIntent(),
               },
