@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
@@ -173,6 +173,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   static const _avatarCarouselSustainBuffer = 3;
   static const _avatarCarouselHistoryLimit = 12;
   static const _rebuildDelay = Duration(milliseconds: 140);
+  static const _abstractWarmupDuration = Duration(seconds: 3);
 
   static const _randomBackgroundSaturationMin = 0.75;
   static const _randomBackgroundSaturationRange = 0.25;
@@ -195,6 +196,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   bool _initialized = false;
   bool _carouselEnabled = true;
   ShadColorScheme? _colors;
+  DateTime? _abstractOnlyUntil;
 
   Timer? _rebuildTimer;
   img.Image? _sourceImage;
@@ -211,6 +213,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _colors = colors;
     if (_initialized) return;
     _initialized = true;
+    _abstractOnlyUntil = DateTime.now().add(_abstractWarmupDuration);
     emit(
       state.copyWith(
         backgroundColor: colors.accent,
@@ -220,6 +223,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     if (_carouselEnabled) {
       unawaited(_startAvatarCarousel());
     }
+  }
+
+  bool get _abstractWarmupActive {
+    final until = _abstractOnlyUntil;
+    return until != null && DateTime.now().isBefore(until);
   }
 
   void setVisible(bool visible, ShadColorScheme colors) {
@@ -661,7 +669,20 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     if (colors == null) return;
 
     if (state.carouselPreviewBytes == null && _currentCarouselAvatar == null) {
-      _showNextCarouselAvatar(colors, allowFallback: true);
+      await _prefillCarousel(
+        targetSize: 1,
+        preferAbstract: true,
+      );
+      if (isClosed ||
+          !_carouselEnabled ||
+          state.hasUserSelectedAvatar ||
+          state.processing ||
+          _avatarCarouselTimer != null) {
+        return;
+      }
+      if (!_showNextCarouselAvatar(colors, allowFallback: false)) {
+        _showNextCarouselAvatar(colors, allowFallback: true);
+      }
     }
 
     unawaited(
@@ -803,8 +824,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }) async {
     final colors = _colors;
     if (colors == null) return false;
+    final warmupActive = _abstractWarmupActive;
 
-    if (preferAbstract &&
+    if (!warmupActive &&
+        preferAbstract &&
         !_nonAbstractAvatarsReady &&
         !_warmingNonAbstractAvatars &&
         _nonAbstractTemplates.isNotEmpty) {
@@ -822,9 +845,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
           !state.processing &&
           _carouselBuffer.length < targetSize &&
           attempts < maxAttempts) {
-        final useAbstractOnly = preferAbstract &&
-            !_nonAbstractAvatarsReady &&
-            _abstractTemplates.isNotEmpty;
+        final useAbstractOnly =
+            (warmupActive || (preferAbstract && !_nonAbstractAvatarsReady)) &&
+                _abstractTemplates.isNotEmpty;
         AvatarTemplate? template = useAbstractOnly
             ? _pickFromPool(
                 _abstractTemplates,
@@ -1033,14 +1056,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final base = background == Colors.transparent ? accent : background;
     final image = img.Image(width: size, height: size, numChannels: 4);
     img.fill(image, color: _imgColor(base));
-    img.fillRect(
-      image,
-      x1: size ~/ 6,
-      y1: size ~/ 6,
-      x2: size - size ~/ 6 - 1,
-      y2: size - size ~/ 6 - 1,
-      color: _imgColor(accent),
-    );
     final bytes = Uint8List.fromList(img.encodePng(image, level: 1));
     return GeneratedAvatar(
       bytes: bytes,

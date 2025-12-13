@@ -8,6 +8,7 @@ import 'package:axichat/src/authentication/view/debug_delete_credentials.dart';
 import 'package:axichat/src/authentication/view/login_form.dart';
 import 'package:axichat/src/authentication/view/signup_form.dart';
 import 'package:axichat/src/authentication/view/widgets/operation_progress_bar.dart';
+import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -390,14 +391,19 @@ class _LoginScreenState extends State<LoginScreen>
                                       ignoring: !_signupFlowLocked && _login,
                                       child: Padding(
                                         padding: const EdgeInsets.all(24.0),
-                                        child: SignupForm(
-                                          onSubmitStart: () =>
-                                              _handleSubmissionRequested(
-                                            _AuthFlow.signup,
-                                            label: l10n.authCreatingAccount,
+                                        child: BlocProvider(
+                                          create: (_) => SignupAvatarCubit(),
+                                          child: SignupForm(
+                                            visible:
+                                                _signupFlowLocked || !_login,
+                                            onSubmitStart: () =>
+                                                _handleSubmissionRequested(
+                                              _AuthFlow.signup,
+                                              label: l10n.authCreatingAccount,
+                                            ),
+                                            onLoadingChanged:
+                                                _handleSignupLoadingChanged,
                                           ),
-                                          onLoadingChanged:
-                                              _handleSignupLoadingChanged,
                                         ),
                                       ),
                                     ),

@@ -113,7 +113,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         xmppService.connectivityStream.listen((connectionState) {
       if (connectionState == ConnectionState.connected) {
         unawaited(_emailService?.handleNetworkAvailable());
-        unawaited(_publishPendingAvatar());
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
         unawaited(_emailService?.handleNetworkLost());
@@ -174,7 +173,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
   AvatarUploadPayload? _signupAvatarDraft;
-  bool _signupAvatarPublishInProgress = false;
   _AuthTransaction? _authTransaction;
   late final Future<void> _authRecoveryFuture;
   bool get _stickyAuthActive => state is AuthenticationComplete;
@@ -1247,16 +1245,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _publishPendingAvatar() async {
-    if (_signupAvatarPublishInProgress) {
-      return;
-    }
     final payload = _signupAvatarDraft;
     if (payload == null) return;
-    _signupAvatarPublishInProgress = true;
+    _signupAvatarDraft = null;
     try {
-      await _xmppService.publishAvatar(payload, public: false);
-      _signupAvatarDraft = null;
+      await _xmppService.publishAvatar(payload);
     } on XmppAvatarException catch (error, stackTrace) {
+      final cause = error.wrapped;
+      if (cause is mox.AvatarError) {
+        _log.info('Signup avatar publish unsupported; skipping.', cause);
+        return;
+      }
       _log.warning('Failed to publish signup avatar', error, stackTrace);
     } catch (error, stackTrace) {
       _log.warning(
@@ -1264,8 +1263,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
-    } finally {
-      _signupAvatarPublishInProgress = false;
     }
   }
 

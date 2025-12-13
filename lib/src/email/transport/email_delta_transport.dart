@@ -83,6 +83,14 @@ class EmailDeltaTransport implements ChatTransport {
     _databasePassphrase = databasePassphrase;
   }
 
+  Future<bool> isConfigured() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return false;
+    }
+    await _ensureContextReady();
+    return _context?.isConfigured ?? false;
+  }
+
   @override
   Future<void> configureAccount({
     required String address,
