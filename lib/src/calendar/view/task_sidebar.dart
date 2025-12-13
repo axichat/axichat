@@ -2129,16 +2129,15 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<void> _openCriticalPathSearch() async {
-    final bloc = context.read<B>();
     final CalendarCriticalPath? targetPath = _activeCriticalPathId != null
-        ? bloc.state.model.criticalPaths[_activeCriticalPathId!]
-        : bloc.state.focusedCriticalPath;
+        ? context.read<B>().state.model.criticalPaths[_activeCriticalPathId!]
+        : context.read<B>().state.focusedCriticalPath;
     if (targetPath == null) {
       return;
     }
     await showCalendarTaskSearch(
       context: context,
-      bloc: bloc,
+      bloc: context.read<B>(),
       locate: context.read,
       targetPath: targetPath,
       requiresLongPressForDrag: requiresLongPressForDrag,

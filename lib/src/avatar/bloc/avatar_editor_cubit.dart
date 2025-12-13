@@ -12,7 +12,6 @@ import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum AvatarSource {
@@ -31,6 +30,7 @@ class AvatarEditorState extends Equatable {
     this.previewBytes,
     this.template,
     this.draft,
+    this.shuffling = false,
     this.processing = false,
     this.publishing = false,
     this.error,
@@ -43,6 +43,7 @@ class AvatarEditorState extends Equatable {
   final Uint8List? previewBytes;
   final AvatarTemplate? template;
   final AvatarUploadPayload? draft;
+  final bool shuffling;
   final bool processing;
   final bool publishing;
   final String? error;
@@ -59,6 +60,7 @@ class AvatarEditorState extends Equatable {
     Uint8List? previewBytes,
     AvatarTemplate? template,
     AvatarUploadPayload? draft,
+    bool? shuffling,
     bool? processing,
     bool? publishing,
     String? error,
@@ -69,13 +71,21 @@ class AvatarEditorState extends Equatable {
     String? lastSavedPath,
     int? estimatedBytes,
     bool clearError = false,
+    bool clearSourceBytes = false,
+    bool clearPreviewBytes = false,
+    bool clearTemplate = false,
+    bool clearDraft = false,
+    bool clearEstimatedBytes = false,
+    bool clearLastSavedPath = false,
   }) {
     return AvatarEditorState(
       source: source ?? this.source,
-      sourceBytes: sourceBytes ?? this.sourceBytes,
-      previewBytes: previewBytes ?? this.previewBytes,
-      template: template ?? this.template,
-      draft: draft ?? this.draft,
+      sourceBytes: clearSourceBytes ? null : sourceBytes ?? this.sourceBytes,
+      previewBytes:
+          clearPreviewBytes ? null : previewBytes ?? this.previewBytes,
+      template: clearTemplate ? null : template ?? this.template,
+      draft: clearDraft ? null : draft ?? this.draft,
+      shuffling: shuffling ?? this.shuffling,
       processing: processing ?? this.processing,
       publishing: publishing ?? this.publishing,
       error: clearError ? null : error ?? this.error,
@@ -83,8 +93,10 @@ class AvatarEditorState extends Equatable {
       imageWidth: imageWidth ?? this.imageWidth,
       imageHeight: imageHeight ?? this.imageHeight,
       backgroundColor: backgroundColor ?? this.backgroundColor,
-      lastSavedPath: lastSavedPath ?? this.lastSavedPath,
-      estimatedBytes: estimatedBytes ?? this.estimatedBytes,
+      lastSavedPath:
+          clearLastSavedPath ? null : lastSavedPath ?? this.lastSavedPath,
+      estimatedBytes:
+          clearEstimatedBytes ? null : estimatedBytes ?? this.estimatedBytes,
     );
   }
 
@@ -95,6 +107,7 @@ class AvatarEditorState extends Equatable {
         previewBytes,
         template,
         draft?.hash,
+        shuffling,
         processing,
         publishing,
         error,
@@ -129,6 +142,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _maxBytes = 64 * 1024;
   static const _minQuality = 55;
   static const _qualityStep = 5;
+  static const _sourceMaxDimension = 1024;
+  static const _sourceJpegQuality = 86;
+  static const _rebuildDelay = Duration(milliseconds: 220);
 
   final XmppService _xmppService;
   final ProfileCubit? _profileCubit;
@@ -139,8 +155,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _shuffleHistoryLimit = 12;
   final _random = Random();
 
-  img.Image? _decodedImage;
   Timer? _rebuildTimer;
+  bool _draftBuildInProgress = false;
+  bool _draftBuildRequested = false;
 
   @override
   Future<void> close() async {
@@ -166,7 +183,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       if (bytes == null || bytes.isEmpty) {
         return;
       }
-      await _loadFromBytes(bytes);
+      await _loadFromBytes(bytes, buildDraft: false);
     } catch (_) {}
   }
 
@@ -176,6 +193,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         type: FileType.image,
         allowMultiple: false,
         withData: true,
+        withReadStream: true,
       );
       if (result == null || result.files.isEmpty) return;
       final file = result.files.first;
@@ -185,7 +203,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         emit(state.copyWith(error: 'Could not read that file.'));
         return;
       }
-      await _loadFromBytes(bytes);
+      await _loadFromBytes(bytes, buildDraft: true);
     } catch (_) {
       emit(
         state.copyWith(
@@ -205,6 +223,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         processing: true,
         source: AvatarSource.template,
         template: template,
+        clearDraft: true,
+        clearPreviewBytes: true,
+        clearEstimatedBytes: true,
+        clearLastSavedPath: true,
         clearError: true,
       ),
     );
@@ -216,23 +238,15 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             : selectedBackground,
         colors,
       );
-      final decoded = await decodeImageBytes(generated.bytes);
-      if (decoded == null) {
-        emit(
-          state.copyWith(
-            processing: false,
-            error: 'Unable to build that avatar.',
-          ),
-        );
-        return;
-      }
-      _decodedImage = decoded;
       emit(
         state.copyWith(
           sourceBytes: generated.bytes,
-          imageWidth: decoded.width,
-          imageHeight: decoded.height,
-          cropRect: _initialCropRect(decoded),
+          imageWidth: generated.width,
+          imageHeight: generated.height,
+          cropRect: _initialCropRect(
+            imageWidth: generated.width.toDouble(),
+            imageHeight: generated.height.toDouble(),
+          ),
           backgroundColor: selectedBackground,
           clearError: true,
         ),
@@ -242,6 +256,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       emit(
         state.copyWith(
           processing: false,
+          clearDraft: true,
           error: 'Failed to load that avatar option.',
         ),
       );
@@ -261,58 +276,78 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       );
       return;
     }
-    if (_decodedImage != null && _decodedImage!.numChannels == 4) {
-      await _rebuildDraft();
-    }
+    await _rebuildDraft();
   }
 
   Future<void> shuffleTemplate(ShadColorScheme colors) async {
+    if (state.processing || state.publishing || state.shuffling) {
+      return;
+    }
+    emit(state.copyWith(shuffling: true, clearError: true));
     final template = _pickTemplate();
-    if (template == null) return;
+    if (template == null) {
+      emit(state.copyWith(shuffling: false));
+      return;
+    }
     final background = template.hasAlphaBackground
         ? _randomAvatarBackgroundColor(colors)
         : state.backgroundColor == Colors.transparent
             ? colors.accent
             : state.backgroundColor;
-    await selectTemplate(
-      template,
-      colors,
-      background: background,
-    );
+    try {
+      await selectTemplate(
+        template,
+        colors,
+        background: background,
+      );
+    } finally {
+      if (!isClosed) {
+        emit(state.copyWith(shuffling: false));
+      }
+    }
   }
 
   void updateCropRect(Rect rect) {
-    final image = _decodedImage;
-    if (image == null) return;
+    final imageWidth = state.imageWidth?.toDouble();
+    final imageHeight = state.imageHeight?.toDouble();
+    if (imageWidth == null || imageHeight == null) return;
     final clamped =
-        _constrainRect(rect, image.width.toDouble(), image.height.toDouble());
+        _constrainRect(rect, imageWidth, imageHeight);
     if (state.cropRect == clamped) return;
     emit(state.copyWith(cropRect: clamped));
     _scheduleRebuild();
   }
 
   void resizeCropRect(double factor) {
-    final image = _decodedImage;
-    if (image == null) return;
+    final imageWidth = state.imageWidth?.toDouble();
+    final imageHeight = state.imageHeight?.toDouble();
+    if (imageWidth == null || imageHeight == null) return;
     final clampedFactor = factor.clamp(0.0, 1.0);
-    final maxSide = min(image.width.toDouble(), image.height.toDouble());
+    final maxSide = min(imageWidth, imageHeight);
     final side = minCropSide + (maxSide - minCropSide) * clampedFactor;
-    final current = state.cropRect ?? _initialCropRect(image);
+    final current = state.cropRect ??
+        _initialCropRect(
+          imageWidth: imageWidth,
+          imageHeight: imageHeight,
+        );
     final next = Rect.fromCenter(
       center: current.center,
       width: side,
       height: side,
     );
-    final constrained =
-        _constrainRect(next, image.width.toDouble(), image.height.toDouble());
+    final constrained = _constrainRect(next, imageWidth, imageHeight);
     emit(state.copyWith(cropRect: constrained));
     _scheduleRebuild();
   }
 
   void resetCrop() {
-    final image = _decodedImage;
-    if (image == null) return;
-    final reset = _initialCropRect(image);
+    final imageWidth = state.imageWidth?.toDouble();
+    final imageHeight = state.imageHeight?.toDouble();
+    if (imageWidth == null || imageHeight == null) return;
+    final reset = _initialCropRect(
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+    );
     emit(state.copyWith(cropRect: reset));
     _scheduleRebuild();
   }
@@ -354,118 +389,130 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
-  Future<void> _loadFromBytes(Uint8List bytes) async {
-    final decoded = await decodeImageBytes(bytes);
-    if (decoded == null) {
-      emit(state.copyWith(error: 'That file is not a valid image.'));
-      return;
-    }
-    _decodedImage = decoded;
-    emit(
-      state.copyWith(
-        source: AvatarSource.upload,
-        sourceBytes: bytes,
-        template: null,
-        imageWidth: decoded.width,
-        imageHeight: decoded.height,
-        cropRect: _initialCropRect(decoded),
-        clearError: true,
-      ),
-    );
-    await _rebuildDraft();
-  }
-
   void _scheduleRebuild() {
     _rebuildTimer?.cancel();
     _rebuildTimer = Timer(
-      const Duration(milliseconds: 140),
+      _rebuildDelay,
       _rebuildDraft,
     );
   }
 
   Future<void> _rebuildDraft() async {
-    final source = _decodedImage;
-    final sourceBytes = state.sourceBytes;
-    if (source == null || sourceBytes == null || sourceBytes.isEmpty) return;
-    final safeCrop = _constrainRect(
-      state.cropRect ?? _initialCropRect(source),
-      source.width.toDouble(),
-      source.height.toDouble(),
-    );
-    final template = state.template;
-    final useTemplateInset = template != null &&
-        template.category != AvatarTemplateCategory.abstract;
-    final padAlphaTemplate =
-        template?.hasAlphaBackground == true && useTemplateInset;
-    final insetFraction = useTemplateInset
-        ? (padAlphaTemplate
-            ? transparentAvatarInsetFraction
-            : avatarInsetFraction)
-        : 0.0;
-    final shouldInset = insetFraction > 0;
-    final paddingColor = _paddingColorForTemplate(
-      image: source,
-      template: template,
-      fallback: state.backgroundColor,
-    );
-    final shouldFlatten =
-        shouldInset || (paddingColor.a > 0 && source.numChannels == 4);
-    emit(state.copyWith(processing: true, clearError: true));
-    await Future<void>.delayed(Duration.zero);
+    if (_draftBuildInProgress) {
+      _draftBuildRequested = true;
+      return;
+    }
+    _draftBuildInProgress = true;
     try {
-      final processed = await processAvatar(
-        AvatarProcessRequest(
-          bytes: sourceBytes,
-          cropLeft: safeCrop.left,
-          cropTop: safeCrop.top,
-          cropSide: safeCrop.width,
-          targetSize: _targetSize,
-          maxBytes: _maxBytes,
-          insetFraction: insetFraction,
-          shouldInset: shouldInset,
-          backgroundColor: paddingColor.toARGB32(),
-          flattenBackground: shouldFlatten,
-          minJpegQuality: _minQuality,
-          qualityStep: _qualityStep,
-        ),
-      );
-      final hash = sha1.convert(processed.bytes).toString();
-      final draft = AvatarUploadPayload(
-        bytes: processed.bytes,
-        mimeType: processed.mimeType,
-        width: processed.width,
-        height: processed.height,
-        hash: hash,
-      );
-      emit(
-        state.copyWith(
-          processing: false,
-          draft: draft,
-          previewBytes: draft.bytes,
-          estimatedBytes: draft.bytes.length,
-          clearError: true,
-        ),
-      );
-    } catch (_) {
-      emit(
-        state.copyWith(
-          processing: false,
-          error: 'Unable to process that image.',
-        ),
-      );
+      while (true) {
+        _draftBuildRequested = false;
+        final sourceBytes = state.sourceBytes;
+        final imageWidth = state.imageWidth?.toDouble();
+        final imageHeight = state.imageHeight?.toDouble();
+        if (sourceBytes == null ||
+            sourceBytes.isEmpty ||
+            imageWidth == null ||
+            imageHeight == null ||
+            imageWidth <= 0 ||
+            imageHeight <= 0) {
+          if (state.processing) {
+            emit(state.copyWith(processing: false));
+          }
+          return;
+        }
+        final safeCrop = _constrainRect(
+          state.cropRect ??
+              _initialCropRect(
+                imageWidth: imageWidth,
+                imageHeight: imageHeight,
+              ),
+          imageWidth,
+          imageHeight,
+        );
+        final template = state.template;
+        final useTemplateInset = template != null &&
+            template.category != AvatarTemplateCategory.abstract;
+        final padAlphaTemplate =
+            template?.hasAlphaBackground == true && useTemplateInset;
+        final insetFraction = useTemplateInset
+            ? (padAlphaTemplate
+                ? transparentAvatarInsetFraction
+                : avatarInsetFraction)
+            : 0.0;
+        final shouldInset = insetFraction > 0;
+        final paddingColor = state.backgroundColor;
+        final shouldFlatten = shouldInset || paddingColor.a > 0;
+
+        emit(state.copyWith(processing: true, clearError: true));
+        await Future<void>.delayed(Duration.zero);
+
+        try {
+          final processed = await processAvatar(
+            AvatarProcessRequest(
+              bytes: sourceBytes,
+              cropLeft: safeCrop.left,
+              cropTop: safeCrop.top,
+              cropSide: safeCrop.width,
+              targetSize: _targetSize,
+              maxBytes: _maxBytes,
+              insetFraction: insetFraction,
+              shouldInset: shouldInset,
+              backgroundColor: paddingColor.toARGB32(),
+              flattenBackground: shouldFlatten,
+              minJpegQuality: _minQuality,
+              qualityStep: _qualityStep,
+            ),
+          );
+          final hash = sha1.convert(processed.bytes).toString();
+          final draft = AvatarUploadPayload(
+            bytes: processed.bytes,
+            mimeType: processed.mimeType,
+            width: processed.width,
+            height: processed.height,
+            hash: hash,
+          );
+          emit(
+            state.copyWith(
+              processing: false,
+              draft: draft,
+              previewBytes: draft.bytes,
+              estimatedBytes: draft.bytes.length,
+              clearError: true,
+            ),
+          );
+        } catch (_) {
+          emit(
+            state.copyWith(
+              processing: false,
+              clearDraft: true,
+              clearPreviewBytes: true,
+              error: 'Unable to process that image.',
+            ),
+          );
+        }
+
+        if (!_draftBuildRequested) {
+          return;
+        }
+      }
+    } finally {
+      _draftBuildInProgress = false;
     }
   }
 
-  Rect _initialCropRect(img.Image image) {
-    final minSide = min(image.width, image.height).toDouble();
+  Rect _initialCropRect({
+    required double imageWidth,
+    required double imageHeight,
+  }) {
+    final minSide = min(imageWidth, imageHeight);
     final targetSide = max(minCropSide, minSide * 0.8);
     final side = min(targetSide, minSide);
-    final left = (image.width - side) / 2;
-    final top = (image.height - side) / 2;
+    final left = (imageWidth - side) / 2;
+    final top = (imageHeight - side) / 2;
     return _constrainRect(
       Rect.fromLTWH(left, top, side, side),
-      image.width.toDouble(),
-      image.height.toDouble(),
+      imageWidth,
+      imageHeight,
     );
   }
 
@@ -487,39 +534,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final top = rect.top.isFinite
         ? rect.top.clamp(0.0, maxTop)
         : (height - desiredSide) / 2;
-    return Rect.fromLTWH(left, top, desiredSide, desiredSide);
-  }
-
-  Color _paddingColorForTemplate({
-    required img.Image image,
-    AvatarTemplate? template,
-    required Color fallback,
-  }) {
-    if (template == null ||
-        template.category == AvatarTemplateCategory.abstract ||
-        image.width <= 0 ||
-        image.height <= 0) {
-      return fallback;
-    }
-    if (template.hasAlphaBackground || fallback.a > 0) {
-      return fallback;
-    }
-    final samples = [
-      image.getPixel(0, 0),
-      image.getPixel(image.width - 1, 0),
-      image.getPixel(0, image.height - 1),
-      image.getPixel(image.width - 1, image.height - 1),
-    ];
-    final count = samples.length;
-    final r = samples.fold<int>(0, (sum, pixel) => sum + (pixel.r as int));
-    final g = samples.fold<int>(0, (sum, pixel) => sum + (pixel.g as int));
-    final b = samples.fold<int>(0, (sum, pixel) => sum + (pixel.b as int));
-    final a = samples.fold<int>(0, (sum, pixel) => sum + (pixel.a as int));
-    return Color.fromARGB(
-      a ~/ count,
-      r ~/ count,
-      g ~/ count,
-      b ~/ count,
+    return Rect.fromLTWH(
+      left.roundToDouble(),
+      top.roundToDouble(),
+      desiredSide.roundToDouble(),
+      desiredSide.roundToDouble(),
     );
   }
 
@@ -579,5 +598,61 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final saturation = 0.75 + _random.nextDouble() * 0.25;
     final lightness = 0.38 + _random.nextDouble() * 0.17;
     return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
+  }
+
+  Future<void> _loadFromBytes(
+    Uint8List bytes, {
+    required bool buildDraft,
+  }) async {
+    emit(
+      state.copyWith(
+        processing: true,
+        clearError: true,
+      ),
+    );
+    try {
+      final prepared = await prepareAvatarSource(
+        AvatarSourcePrepareRequest(
+          bytes: bytes,
+          maxDimension: _sourceMaxDimension,
+          jpegQuality: _sourceJpegQuality,
+        ),
+      );
+      if (isClosed) return;
+      final imageWidth = prepared.width.toDouble();
+      final imageHeight = prepared.height.toDouble();
+      emit(
+        state.copyWith(
+          source: AvatarSource.upload,
+          sourceBytes: prepared.bytes,
+          imageWidth: prepared.width,
+          imageHeight: prepared.height,
+          cropRect: _initialCropRect(
+            imageWidth: imageWidth,
+            imageHeight: imageHeight,
+          ),
+          previewBytes: buildDraft ? null : prepared.bytes,
+          clearTemplate: true,
+          clearDraft: true,
+          clearPreviewBytes: buildDraft,
+          estimatedBytes: buildDraft ? null : prepared.bytes.length,
+          clearEstimatedBytes: buildDraft,
+          clearLastSavedPath: true,
+          clearError: true,
+        ),
+      );
+      if (!buildDraft) {
+        emit(state.copyWith(processing: false, clearError: true));
+        return;
+      }
+      await _rebuildDraft();
+    } catch (_) {
+      emit(
+        state.copyWith(
+          processing: false,
+          error: 'That file is not a valid image.',
+        ),
+      );
+    }
   }
 }

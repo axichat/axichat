@@ -585,7 +585,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatMessagesUpdated event,
     Emitter<ChatState> emit,
   ) async {
-    emit(state.copyWith(items: event.items));
+    emit(state.copyWith(items: event.items, messagesLoaded: true));
     if (state.chat?.type == ChatType.groupChat) {
       _mucService.trackOccupantsFromMessages(state.chat!.jid, event.items);
     }

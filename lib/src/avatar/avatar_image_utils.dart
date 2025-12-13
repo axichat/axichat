@@ -10,6 +10,11 @@ Future<img.Image?> decodeImageBytes(Uint8List bytes) async =>
 Future<ProcessedAvatar> processAvatar(AvatarProcessRequest request) =>
     compute(_processAvatar, request);
 
+Future<AvatarPreparedSource> prepareAvatarSource(
+  AvatarSourcePrepareRequest request,
+) =>
+    compute(_prepareAvatarSource, request);
+
 ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
   final image = img.decodeImage(request.bytes);
   if (image == null) {
@@ -120,12 +125,80 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
   );
 }
 
+AvatarPreparedSource _prepareAvatarSource(AvatarSourcePrepareRequest request) {
+  final image = img.decodeImage(request.bytes);
+  if (image == null) {
+    throw StateError('Invalid image bytes.');
+  }
+
+  final maxSide = image.width > image.height ? image.width : image.height;
+  if (maxSide <= 0) {
+    throw StateError('Decoded image has invalid dimensions.');
+  }
+
+  final maxDimension = request.maxDimension;
+  if (maxSide <= maxDimension) {
+    return AvatarPreparedSource(
+      bytes: request.bytes,
+      width: image.width,
+      height: image.height,
+    );
+  }
+
+  final scale = maxDimension / maxSide;
+  final targetWidth = (image.width * scale).round().clamp(1, maxDimension);
+  final targetHeight = (image.height * scale).round().clamp(1, maxDimension);
+  final resized = img.copyResize(
+    image,
+    width: targetWidth,
+    height: targetHeight,
+    interpolation: img.Interpolation.cubic,
+  );
+
+  final hasAlpha = resized.numChannels == 4;
+  final bytes = hasAlpha
+      ? Uint8List.fromList(img.encodePng(resized, level: 3))
+      : Uint8List.fromList(
+          img.encodeJpg(resized, quality: request.jpegQuality),
+        );
+
+  return AvatarPreparedSource(
+    bytes: bytes,
+    width: resized.width,
+    height: resized.height,
+  );
+}
+
 img.Color _imgColor(int argb) => img.ColorUint8.rgba(
       (argb >> 16) & 0xFF,
       (argb >> 8) & 0xFF,
       argb & 0xFF,
       (argb >> 24) & 0xFF,
     );
+
+class AvatarSourcePrepareRequest {
+  const AvatarSourcePrepareRequest({
+    required this.bytes,
+    required this.maxDimension,
+    required this.jpegQuality,
+  });
+
+  final Uint8List bytes;
+  final int maxDimension;
+  final int jpegQuality;
+}
+
+class AvatarPreparedSource {
+  const AvatarPreparedSource({
+    required this.bytes,
+    required this.width,
+    required this.height,
+  });
+
+  final Uint8List bytes;
+  final int width;
+  final int height;
+}
 
 class AvatarProcessRequest {
   const AvatarProcessRequest({

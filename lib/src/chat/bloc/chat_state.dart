@@ -4,6 +4,7 @@ part of 'chat_bloc.dart';
 class ChatState with _$ChatState {
   const factory ChatState({
     required List<Message> items,
+    @Default(false) bool messagesLoaded,
     Chat? chat,
     RoomState? roomState,
     Message? focused,
