@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:axichat/src/profile/avatar/avatar_image_utils.dart';
-import 'package:axichat/src/profile/avatar/avatar_templates.dart';
+import 'package:axichat/src/avatar/avatar_image_utils.dart';
+import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -153,9 +153,21 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         ? colors.accent
         : state.backgroundColor;
     emit(state.copyWith(backgroundColor: initialBackground));
-    if (state.template == null && _templates.isNotEmpty) {
-      unawaited(selectTemplate(_templates.first, colors));
+    unawaited(_loadInitialAvatar());
+  }
+
+  Future<void> _loadInitialAvatar() async {
+    final avatarPath = _profileCubit?.state.avatarPath?.trim();
+    if (avatarPath == null || avatarPath.isEmpty) {
+      return;
     }
+    try {
+      final bytes = await _xmppService.loadAvatarBytes(avatarPath);
+      if (bytes == null || bytes.isEmpty) {
+        return;
+      }
+      await _loadFromBytes(bytes);
+    } catch (_) {}
   }
 
   Future<void> pickImage() async {
