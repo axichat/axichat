@@ -288,6 +288,7 @@ mixin AvatarService on XmppBase {
         },
         awaitDatabase: true,
       );
+      owner._notifySelfAvatarUpdated(null);
     }
 
     if (existingPath != null && existingPath.isNotEmpty) {
@@ -331,6 +332,7 @@ mixin AvatarService on XmppBase {
     );
     if (myBareJid != null && myBareJid == jid) {
       await _persistOwnAvatar(path, hash);
+      owner._notifySelfAvatarUpdated(StoredAvatar(path: path, hash: hash));
     }
   }
 
@@ -351,7 +353,7 @@ mixin AvatarService on XmppBase {
 
   Future<AvatarUploadResult> publishAvatar(
     AvatarUploadPayload payload, {
-    bool public = true,
+    bool public = false,
   }) async {
     final manager = _connection.getManager<mox.UserAvatarManager>();
     final targetJid = _avatarSafeBareJid(payload.jid ?? myJid);
@@ -359,41 +361,39 @@ mixin AvatarService on XmppBase {
       throw XmppAvatarException();
     }
     try {
-      final dataResult = await manager.publishUserAvatar(
-        base64Encode(payload.bytes),
-        payload.hash,
-        public,
+      return await _publishAvatarOnce(
+        manager,
+        payload: payload,
+        targetJid: targetJid,
+        public: public,
       );
-      if (dataResult.isType<mox.AvatarError>()) {
-        throw XmppAvatarException(dataResult.get<mox.AvatarError>());
-      }
-
-      final metadataResult = await manager.publishUserAvatarMetadata(
-        mox.UserAvatarMetadata(
-          payload.hash,
-          payload.bytes.length,
-          payload.width,
-          payload.height,
-          payload.mimeType,
-          null,
-        ),
-        public,
-      );
-      if (metadataResult.isType<mox.AvatarError>()) {
-        throw XmppAvatarException(metadataResult.get<mox.AvatarError>());
-      }
-
-      final path = await _writeAvatarFile(
-        hash: payload.hash,
-        bytes: payload.bytes,
-      );
-      await _storeAvatar(jid: targetJid, path: path, hash: payload.hash);
-      final vCardManager = _connection.getManager<mox.VCardManager>();
-      vCardManager?.setLastHash(targetJid, payload.hash);
-
-      return AvatarUploadResult(path: path, hash: payload.hash);
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
+      if (cause is mox.AvatarError) {
+        final retryPublic = !public;
+        try {
+          return await _publishAvatarOnce(
+            manager,
+            payload: payload,
+            targetJid: targetJid,
+            public: retryPublic,
+          );
+        } on XmppAvatarException catch (retryError, retryStackTrace) {
+          final retryCause = retryError.wrapped;
+          final isAvatarError = retryCause is mox.AvatarError;
+          final log = isAvatarError ? _avatarLog.warning : _avatarLog.severe;
+          log(
+            'Failed to publish avatar',
+            retryError,
+            isAvatarError ? null : retryStackTrace,
+          );
+          rethrow;
+        } catch (retryError, retryStackTrace) {
+          _avatarLog.severe('Failed to publish avatar', retryError, retryStackTrace);
+          throw XmppAvatarException(retryError);
+        }
+      }
+
       final isAvatarError = cause is mox.AvatarError;
       final log = isAvatarError ? _avatarLog.warning : _avatarLog.severe;
       log('Failed to publish avatar', error, isAvatarError ? null : stackTrace);
@@ -402,6 +402,47 @@ mixin AvatarService on XmppBase {
       _avatarLog.severe('Failed to publish avatar', error, stackTrace);
       throw XmppAvatarException(error);
     }
+  }
+
+  Future<AvatarUploadResult> _publishAvatarOnce(
+    mox.UserAvatarManager manager, {
+    required AvatarUploadPayload payload,
+    required String targetJid,
+    required bool public,
+  }) async {
+    final dataResult = await manager.publishUserAvatar(
+      base64Encode(payload.bytes),
+      payload.hash,
+      public,
+    );
+    if (dataResult.isType<mox.AvatarError>()) {
+      throw XmppAvatarException(dataResult.get<mox.AvatarError>());
+    }
+
+    final metadataResult = await manager.publishUserAvatarMetadata(
+      mox.UserAvatarMetadata(
+        payload.hash,
+        payload.bytes.length,
+        payload.width,
+        payload.height,
+        payload.mimeType,
+        null,
+      ),
+      public,
+    );
+    if (metadataResult.isType<mox.AvatarError>()) {
+      throw XmppAvatarException(metadataResult.get<mox.AvatarError>());
+    }
+
+    final path = await _writeAvatarFile(
+      hash: payload.hash,
+      bytes: payload.bytes,
+    );
+    await _storeAvatar(jid: targetJid, path: path, hash: payload.hash);
+    final vCardManager = _connection.getManager<mox.VCardManager>();
+    vCardManager?.setLastHash(targetJid, payload.hash);
+
+    return AvatarUploadResult(path: path, hash: payload.hash);
   }
 
   Future<Uint8List?> loadAvatarBytes(String path) async {

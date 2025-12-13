@@ -32,6 +32,20 @@ class ProfileCubit extends Cubit<ProfileState> {
     _statusSubscription = _presenceService?.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
     );
+    _selfAvatarSubscription = _xmppService.selfAvatarStream.listen(
+      (avatar) {
+        if (avatar == null || avatar.isEmpty) {
+          emit(state.copyWith(avatarPath: null, avatarHash: null));
+          return;
+        }
+        emit(
+          state.copyWith(
+            avatarPath: avatar.path ?? state.avatarPath,
+            avatarHash: avatar.hash ?? state.avatarHash,
+          ),
+        );
+      },
+    );
     unawaited(_loadAvatar());
     if (_omemoService != null) {
       loadFingerprints();
@@ -44,11 +58,13 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   late final StreamSubscription<Presence?>? _presenceSubscription;
   late final StreamSubscription<String?>? _statusSubscription;
+  late final StreamSubscription<StoredAvatar?> _selfAvatarSubscription;
 
   @override
   Future<void> close() async {
     await _presenceSubscription?.cancel();
     await _statusSubscription?.cancel();
+    await _selfAvatarSubscription.cancel();
     return super.close();
   }
 

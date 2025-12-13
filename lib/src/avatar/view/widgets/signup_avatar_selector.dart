@@ -6,6 +6,9 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const String _fallbackSignupAvatarAssetPath =
+    'assets/images/avatars/abstract/abstract1.png';
+
 class SignupAvatarSelector extends StatefulWidget {
   const SignupAvatarSelector({
     super.key,
@@ -28,6 +31,7 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
   static const _size = 56.0;
   bool _hovered = false;
   int _previewVersion = 0;
+  bool _fallbackAvatarPrecached = false;
 
   @override
   void didUpdateWidget(covariant SignupAvatarSelector oldWidget) {
@@ -38,12 +42,22 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_fallbackAvatarPrecached) return;
+    _fallbackAvatarPrecached = true;
+    precacheImage(const AssetImage(_fallbackSignupAvatarAssetPath), context);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final displayJid = widget.username.isEmpty
         ? 'avatar@axichat'
         : '${widget.username}@preview';
     final overlayVisible = _hovered || widget.processing;
+    final bytes = widget.bytes;
+    final hasBytes = bytes != null && bytes.isNotEmpty;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -66,14 +80,32 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
                   opacity: animation,
                   child: child,
                 ),
-                child: AxiAvatar(
-                  key: ValueKey(_previewVersion),
-                  jid: displayJid,
-                  size: _size,
-                  subscription: Subscription.none,
-                  presence: null,
-                  avatarBytes: widget.bytes,
-                ),
+                child: hasBytes
+                    ? AxiAvatar(
+                        key: ValueKey(_previewVersion),
+                        jid: displayJid,
+                        size: _size,
+                        subscription: Subscription.none,
+                        presence: null,
+                        avatarBytes: bytes,
+                      )
+                    : SizedBox.square(
+                        key: ValueKey(_previewVersion),
+                        dimension: _size,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.card,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: colors.border),
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              _fallbackSignupAvatarAssetPath,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      ),
               ),
             ),
             AnimatedOpacity(
