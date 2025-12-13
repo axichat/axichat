@@ -2256,16 +2256,21 @@ class _ChatState extends State<Chat> {
               BlocListener<ChatBloc, ChatState>(
                 listenWhen: (previous, current) =>
                     previous.chat?.jid != current.chat?.jid,
-                listener: (_, __) {
+                listener: (_, state) {
                   _animatedMessageIds.clear();
                   _hydratedAnimatedMessages = false;
                   _chatOpenedAt = DateTime.now();
+                  if (state.messagesLoaded) {
+                    _hydrateAnimatedMessages(state.items);
+                  }
                 },
               ),
               BlocListener<ChatBloc, ChatState>(
                 listenWhen: (previous, current) =>
                     !_hydratedAnimatedMessages &&
-                    previous.items != current.items,
+                    current.messagesLoaded &&
+                    (previous.items != current.items ||
+                        previous.messagesLoaded != current.messagesLoaded),
                 listener: (_, state) => _hydrateAnimatedMessages(state.items),
               ),
             ],
@@ -2691,7 +2696,7 @@ class _ChatState extends State<Chat> {
                                         )
                                         .toList();
                                     final loadingMessages =
-                                        !_hydratedAnimatedMessages;
+                                        !state.messagesLoaded;
                                     final selectedMessages =
                                         _collectSelectedMessages(filteredItems);
                                     if (_multiSelectActive &&

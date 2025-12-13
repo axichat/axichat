@@ -68,6 +68,19 @@ class DeltaMessageType {
   static const int file = 60;
 }
 
+class DeltaMessageState {
+  static const int undefined = 0;
+  static const int inFresh = 10;
+  static const int inNoticed = 13;
+  static const int inSeen = 16;
+  static const int outPreparing = 18;
+  static const int outDraft = 19;
+  static const int outPending = 20;
+  static const int outFailed = 24;
+  static const int outDelivered = 26;
+  static const int outMdnRcvd = 28;
+}
+
 class DeltaChatType {
   static const int single = 100;
   static const int group = 200;
@@ -99,6 +112,7 @@ class DeltaContextHandle {
 
   bool _opened = false;
   bool _ioRunning = false;
+  bool? _supportsMessageIsOutgoing;
 
   Future<void> open({required String passphrase}) async {
     final result = _withCString(passphrase, (passPtr) {
@@ -342,6 +356,30 @@ class DeltaContextHandle {
     }
   }
 
+  bool _messageIsOutgoing(ffi.Pointer<dc_msg_t> msgPtr) {
+    final supportsSymbol = _supportsMessageIsOutgoing;
+    if (supportsSymbol != false) {
+      try {
+        final isOutgoing = _bindings.dc_msg_is_outgoing(msgPtr) != 0;
+        _supportsMessageIsOutgoing = true;
+        return isOutgoing;
+      } on Object catch (error) {
+        if (error is! ArgumentError && error is! UnsupportedError) {
+          rethrow;
+        }
+        _supportsMessageIsOutgoing = false;
+      }
+    }
+
+    final state = _bindings.dc_msg_get_state(msgPtr);
+    return state == DeltaMessageState.outPreparing ||
+        state == DeltaMessageState.outDraft ||
+        state == DeltaMessageState.outPending ||
+        state == DeltaMessageState.outFailed ||
+        state == DeltaMessageState.outDelivered ||
+        state == DeltaMessageState.outMdnRcvd;
+  }
+
   Future<DeltaMessage?> getMessage(int messageId) async {
     final msgPtr = _bindings.dc_get_msg(_context, messageId);
     if (msgPtr == ffi.nullptr) {
@@ -375,7 +413,7 @@ class DeltaContextHandle {
               timestampSeconds * 1000,
               isUtc: true,
             ).toLocal();
-      final isOutgoing = _bindings.dc_msg_is_outgoing(msgPtr) != 0;
+      final isOutgoing = _messageIsOutgoing(msgPtr);
       return DeltaMessage(
         id: id,
         chatId: chatId,
