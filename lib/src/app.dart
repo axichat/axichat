@@ -733,8 +733,9 @@ class AxiDragScrollBehavior extends MaterialScrollBehavior {
   };
 
   @override
-  Set<PointerDeviceKind> get dragDevices =>
-      defaultTargetPlatform.isMobile ? _mobileDragDevices : _touchDragDevices;
+  Set<PointerDeviceKind> get dragDevices => defaultTargetPlatform.isMobile
+      ? _mobileDragDevices
+      : const <PointerDeviceKind>{};
 }
 
 SystemUiOverlayStyle _systemUiOverlayStyleFor(ThemeData theme) {

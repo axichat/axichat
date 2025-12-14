@@ -2,6 +2,8 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -13,12 +15,38 @@ class BlocklistTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rosterCubit = context.read<RosterCubit?>();
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
           state is BlocklistLoading && (state.jid == jid || state.jid == null),
       builder: (context, disabled) {
+        final Widget avatar = rosterCubit == null
+            ? AxiAvatar(jid: jid)
+            : BlocBuilder<RosterCubit, RosterState>(
+                buildWhen: (_, current) => current is RosterAvailable,
+                builder: (context, rosterState) {
+                  final cachedItems = rosterState is RosterAvailable
+                      ? rosterState.items
+                      : context.read<RosterCubit>()['items']
+                          as List<RosterItem>?;
+                  final normalizedJid = jid.trim().toLowerCase();
+                  String? avatarPath;
+                  if (cachedItems != null) {
+                    for (final item in cachedItems) {
+                      if (item.jid.toLowerCase() == normalizedJid) {
+                        avatarPath = item.avatarPath;
+                        break;
+                      }
+                    }
+                  }
+                  return AxiAvatar(
+                    jid: jid,
+                    avatarPath: avatarPath,
+                  );
+                },
+              );
         return AxiListTile(
-          leading: AxiAvatar(jid: jid),
+          leading: avatar,
           title: jid,
           actions: [
             ShadButton.ghost(

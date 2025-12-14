@@ -10,6 +10,9 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const String _fallbackSignupAvatarAssetPath =
+    'assets/images/avatars/abstract/abstract1.png';
+
 class SignupAvatarEditorPanel extends StatefulWidget {
   const SignupAvatarEditorPanel({
     super.key,
@@ -53,6 +56,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
   Rect? _localCropRect;
   Rect? _pendingCropRect;
   bool _cropChangeScheduled = false;
+  bool _fallbackAvatarPrecached = false;
 
   @override
   void didUpdateWidget(covariant SignupAvatarEditorPanel oldWidget) {
@@ -65,6 +69,14 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
         oldWidget.imageHeight != widget.imageHeight) {
       _localCropRect = null;
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_fallbackAvatarPrecached) return;
+    _fallbackAvatarPrecached = true;
+    precacheImage(const AssetImage(_fallbackSignupAvatarAssetPath), context);
   }
 
   Future<void> _handleShuffle() async {
@@ -191,6 +203,8 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
         widget.canShuffleBackground && widget.onShuffleBackground != null;
 
     final previewKey = ValueKey(_previewVersion);
+    final previewBytes = widget.avatarBytes;
+    final hasPreviewBytes = previewBytes != null && previewBytes.isNotEmpty;
     Widget preview = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -204,14 +218,32 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
             opacity: animation,
             child: child,
           ),
-          child: AxiAvatar(
-            key: previewKey,
-            jid: 'avatar@axichat',
-            size: 96,
-            subscription: Subscription.none,
-            presence: null,
-            avatarBytes: widget.avatarBytes,
-          ),
+          child: hasPreviewBytes
+              ? AxiAvatar(
+                  key: previewKey,
+                  jid: 'avatar@axichat',
+                  size: 96,
+                  subscription: Subscription.none,
+                  presence: null,
+                  avatarBytes: previewBytes,
+                )
+              : SizedBox.square(
+                  key: previewKey,
+                  dimension: 96,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.card,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        _fallbackSignupAvatarAssetPath,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
         ),
         Text(
           l10n.signupAvatarMenuDescription,

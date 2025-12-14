@@ -121,7 +121,10 @@ class _AxiAvatarState extends State<AxiAvatar> {
       return;
     }
 
-    _loadingPath = path;
+    setState(() {
+      _resolvedAvatarBytes = null;
+      _loadingPath = path;
+    });
     try {
       final bytes = await xmpp.loadAvatarBytes(path);
       if (!mounted || _loadingPath != path) {
@@ -129,11 +132,15 @@ class _AxiAvatarState extends State<AxiAvatar> {
       }
       setState(() {
         _resolvedAvatarBytes = bytes;
+        if (bytes == null || bytes.isEmpty) {
+          _loadingPath = null;
+        }
       });
     } catch (_) {
       if (!mounted || _loadingPath != path) return;
       setState(() {
         _resolvedAvatarBytes = null;
+        _loadingPath = null;
       });
     }
   }
@@ -155,6 +162,11 @@ class _AxiAvatarState extends State<AxiAvatar> {
         children: [
           BlocBuilder<SettingsCubit, SettingsState>(
             builder: (context, state) {
+              final path = widget.avatarPath?.trim();
+              final isLoadingAvatar = avatarBytes == null &&
+                  path != null &&
+                  path.isNotEmpty &&
+                  _loadingPath == path;
               final displayLabel = _displayLabelForJid(widget.jid);
               final initial = displayLabel.isNotEmpty
                   ? displayLabel.substring(0, 1).toUpperCase()
@@ -186,10 +198,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
                           errorBuilder: (_, __, ___) => ColoredBox(
                             color: backgroundColor,
                             child: Center(
-                              child: Text(
-                                initial,
-                                style: textStyle,
-                              ),
+                              child: Text(initial, style: textStyle),
                             ),
                           ),
                         ),
@@ -197,10 +206,9 @@ class _AxiAvatarState extends State<AxiAvatar> {
                     : ColoredBox(
                         color: backgroundColor,
                         child: Center(
-                          child: Text(
-                            initial,
-                            style: textStyle,
-                          ),
+                          child: isLoadingAvatar
+                              ? const SizedBox.shrink()
+                              : Text(initial, style: textStyle),
                         ),
                       ),
               );
