@@ -889,8 +889,11 @@ class _ChatState extends State<Chat> {
             child: Material(
               color: context.colorScheme.background,
               elevation: 12,
-              child: BlocProvider.value(
-                value: locate<ChatBloc>(),
+              child: MultiBlocProvider(
+                providers: [
+                  BlocProvider.value(value: locate<ChatBloc>()),
+                  BlocProvider.value(value: locate<RosterCubit>()),
+                ],
                 child: Builder(
                   builder: (dialogContext) => _RoomMembersDrawerContent(
                     onInvite: (jid) =>
