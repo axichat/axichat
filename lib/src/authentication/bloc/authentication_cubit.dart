@@ -1704,8 +1704,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         responseBody.isEmpty ? fallback : responseBody,
       ));
       _log.warning(
-        'Password change failed (${response.statusCode}) '
-        '${responseBody.isEmpty ? '' : responseBody}',
+        'Password change failed (${response.statusCode}).',
       );
     } on Exception catch (error, stackTrace) {
       _log.warning('Password change failed', error, stackTrace);
