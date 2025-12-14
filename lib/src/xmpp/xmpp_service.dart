@@ -328,6 +328,7 @@ class XmppService extends XmppBase
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
   @override
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
+  var _hasInitializedDatabases = false;
   final _databaseReloadController = StreamController<void>.broadcast();
   final _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
   @override
@@ -648,6 +649,7 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
   }) async {
+    final shouldNotify = _hasInitializedDatabases;
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
     final targetJid = mox.JID.fromString(jid);
@@ -673,7 +675,10 @@ class XmppService extends XmppBase
         await _buildDatabase(databasePrefix, databasePassphrase),
       );
     }
-    _notifyDatabaseReloaded();
+    _hasInitializedDatabases = true;
+    if (shouldNotify) {
+      _notifyDatabaseReloaded();
+    }
     await _initializeAvatarEncryption(databasePassphrase);
     _demoOfflineMode = kEnableDemoChats && jid == kDemoSelfJid;
     if (_demoOfflineMode) {
@@ -922,6 +927,7 @@ class XmppService extends XmppBase
       defer: _reset,
       operation: () async {
         try {
+          final shouldNotify = _hasInitializedDatabases;
           _xmppLogger.info('Opening databases...');
           if (!_stateStore.isCompleted) {
             _stateStore.complete(await _stateStoreFactory(prefix, passphrase));
@@ -929,7 +935,10 @@ class XmppService extends XmppBase
           if (!_database.isCompleted) {
             _database.complete(await _buildDatabase(prefix, passphrase));
           }
-          _notifyDatabaseReloaded();
+          _hasInitializedDatabases = true;
+          if (shouldNotify) {
+            _notifyDatabaseReloaded();
+          }
           await _initializeAvatarEncryption(passphrase);
         } on Exception catch (e) {
           _xmppLogger.severe('Failed to create databases:', e);
