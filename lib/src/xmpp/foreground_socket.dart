@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/flavor_prefix.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
@@ -284,7 +285,14 @@ class ForegroundSocket extends TaskHandler {
 
   static void _sendToMain(List<Object> strings) {
     final data = strings.join(join);
-    _log.fine('Sending to main: $data');
+    final type = strings.isEmpty ? 'Unknown' : strings.first.toString();
+    final payloadLength = strings
+        .skip(1)
+        .fold<int>(0, (sum, part) => sum + part.toString().length);
+    _log.fine(
+      'Sending to main: type=$type parts=${strings.length} '
+      'payloadLen=$payloadLength',
+    );
     FlutterForegroundTask.sendDataToMain(data);
   }
 
@@ -313,7 +321,12 @@ class ForegroundSocket extends TaskHandler {
 
   @override
   void onReceiveData(covariant String data) async {
-    _log.fine('Received task: $data');
+    final separatorIndex = data.indexOf(join);
+    final type =
+        separatorIndex == -1 ? data : data.substring(0, separatorIndex);
+    final payloadLength =
+        separatorIndex == -1 ? 0 : data.length - separatorIndex - join.length;
+    _log.fine('Received task: type=$type payloadLen=$payloadLength');
     _socket ??= XmppSocketWrapper();
     if (data.startsWith('$connectPrefix$join')) {
       final split = data.split(join);
@@ -416,7 +429,12 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   var _serviceAcquired = false;
 
   Future<void> _onReceiveTaskData(String data) async {
-    _log.fine('Received main: $data');
+    final separatorIndex = data.indexOf(join);
+    final type =
+        separatorIndex == -1 ? data : data.substring(0, separatorIndex);
+    final payloadLength =
+        separatorIndex == -1 ? 0 : data.length - separatorIndex - join.length;
+    _log.fine('Received main: type=$type payloadLen=$payloadLength');
     if (data.startsWith('$dataPrefix$join')) {
       _dataStream.add(data.substring('$dataPrefix$join'.length));
     } else if (data == socketErrorPrefix) {
@@ -450,8 +468,14 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   }
 
   void _sendToTask(List<Object> strings) {
-    final data = strings.join(join);
-    _log.info('Sending to task: $data');
+    final type = strings.isEmpty ? 'Unknown' : strings.first.toString();
+    final payloadLength = strings
+        .skip(1)
+        .fold<int>(0, (sum, part) => sum + part.toString().length);
+    _log.info(
+      'Sending to task: type=$type parts=${strings.length} '
+      'payloadLen=$payloadLength',
+    );
     unawaited(_bridge.send(strings));
   }
 
@@ -614,12 +638,18 @@ void _configureLogging() {
     Logger.root
       ..level = Level.ALL
       ..onRecord.listen((record) {
+        final sanitizedMessage = SafeLogging.sanitizeMessage(record.message);
+        final sanitizedError = SafeLogging.sanitizeError(record.error);
+        final sanitizedStackTrace =
+            SafeLogging.sanitizeStackTrace(record.stackTrace);
         final buffer = StringBuffer()
-          ..write('${record.level.name}: ${record.time}: ${record.message}');
+          ..write(
+            '${record.level.name}: ${record.time}: $sanitizedMessage',
+          );
         if (record.stackTrace != null) {
           buffer
-            ..write(' Exception: ${record.error}')
-            ..write(' Stack Trace: ${record.stackTrace}');
+            ..write(' Exception: $sanitizedError')
+            ..write(' Stack Trace: $sanitizedStackTrace');
         }
         // ignore: avoid_print
         print(buffer.toString());
