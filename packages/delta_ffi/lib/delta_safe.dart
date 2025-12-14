@@ -68,6 +68,16 @@ class DeltaMessageType {
   static const int file = 60;
 }
 
+class DeltaChatlistEntry {
+  const DeltaChatlistEntry({
+    required this.chatId,
+    required this.msgId,
+  });
+
+  final int chatId;
+  final int msgId;
+}
+
 class DeltaMessageState {
   static const int undefined = 0;
   static const int inFresh = 10;
@@ -342,6 +352,83 @@ class DeltaContextHandle {
       );
     } finally {
       _bindings.dc_chat_unref(chatPtr);
+    }
+  }
+
+  Future<List<DeltaChatlistEntry>> getChatlist({
+    int flags = 0,
+    String? query,
+    int queryId = 0,
+  }) async {
+    _ensureState(_opened, 'get chat list');
+    ffi.Pointer<ffi.Char> queryPointer = ffi.nullptr;
+    ffi.Pointer<dc_chatlist_t> chatlistPointer = ffi.nullptr;
+    try {
+      final normalizedQuery = query?.trim();
+      if (normalizedQuery != null && normalizedQuery.isNotEmpty) {
+        queryPointer = _toCString(normalizedQuery);
+      }
+      chatlistPointer = _bindings.dc_get_chatlist(
+        _context,
+        flags,
+        queryPointer,
+        queryId,
+      );
+      if (chatlistPointer == ffi.nullptr) {
+        return const <DeltaChatlistEntry>[];
+      }
+      final count = _bindings.dc_chatlist_get_cnt(chatlistPointer);
+      final entries = <DeltaChatlistEntry>[];
+      for (var index = 0; index < count; index++) {
+        entries.add(
+          DeltaChatlistEntry(
+            chatId: _bindings.dc_chatlist_get_chat_id(chatlistPointer, index),
+            msgId: _bindings.dc_chatlist_get_msg_id(chatlistPointer, index),
+          ),
+        );
+      }
+      return entries;
+    } catch (error) {
+      if (error is ArgumentError || error is UnsupportedError) {
+        return const <DeltaChatlistEntry>[];
+      }
+      rethrow;
+    } finally {
+      if (chatlistPointer != ffi.nullptr) {
+        _bindings.dc_chatlist_unref(chatlistPointer);
+      }
+      if (queryPointer != ffi.nullptr) {
+        malloc.free(queryPointer);
+      }
+    }
+  }
+
+  Future<List<int>> getChatMessageIds({
+    required int chatId,
+    int flags = 0,
+  }) async {
+    _ensureState(_opened, 'get chat messages');
+    ffi.Pointer<dc_array_t> array = ffi.nullptr;
+    try {
+      array = _bindings.dc_get_chat_msgs(_context, chatId, flags, 0);
+      if (array == ffi.nullptr) {
+        return const <int>[];
+      }
+      final count = _bindings.dc_array_get_cnt(array);
+      final ids = <int>[];
+      for (var index = 0; index < count; index++) {
+        ids.add(_bindings.dc_array_get_id(array, index));
+      }
+      return ids;
+    } catch (error) {
+      if (error is ArgumentError || error is UnsupportedError) {
+        return const <int>[];
+      }
+      rethrow;
+    } finally {
+      if (array != ffi.nullptr) {
+        _bindings.dc_array_unref(array);
+      }
     }
   }
 

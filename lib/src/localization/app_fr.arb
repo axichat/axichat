@@ -368,7 +368,7 @@
   "signupAvatarUploadImage": "Importer une image",
   "signupAvatarUpload": "Importer",
   "signupAvatarShuffle": "Mélanger un avatar par défaut",
-  "signupAvatarMenuDescription": "Les avatars par défaut sont listés ci-dessous. Nous publierons l’avatar quand votre compte XMPP sera créé.",
+  "signupAvatarMenuDescription": "Nous publierons l’avatar quand votre compte XMPP sera créé.",
   "signupAvatarBackgroundColor": "Couleur d’arrière-plan",
   "signupAvatarDefaultsTitle": "Avatars par défaut",
   "signupAvatarCategoryAbstract": "Abstrait",

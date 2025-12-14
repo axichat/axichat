@@ -368,7 +368,7 @@
   "signupAvatarUploadImage": "上載圖片",
   "signupAvatarUpload": "上載",
   "signupAvatarShuffle": "隨機預設頭像",
-  "signupAvatarMenuDescription": "以下列出預設頭像。我們會在建立 XMPP 帳戶後發布你的頭像。",
+  "signupAvatarMenuDescription": "我們會在建立 XMPP 帳戶後發布你的頭像。",
   "signupAvatarBackgroundColor": "背景顏色",
   "signupAvatarDefaultsTitle": "預設頭像",
   "signupAvatarCategoryAbstract": "抽象",

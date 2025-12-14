@@ -65,6 +65,7 @@ class DraftForm extends StatefulWidget {
 class _DraftFormState extends State<DraftForm> {
   final _formKey = GlobalKey<FormState>();
   bool _showValidationMessages = false;
+  String? _sendErrorMessage;
   late final MessageService _messageService;
   late final TextEditingController _bodyTextController;
   late final TextEditingController _subjectTextController;
@@ -104,9 +105,9 @@ class _DraftFormState extends State<DraftForm> {
     super.dispose();
   }
 
-  void _bodyListener() => setState(() {});
+  void _bodyListener() => setState(() => _sendErrorMessage = null);
 
-  void _subjectListener() => setState(() {});
+  void _subjectListener() => setState(() => _sendErrorMessage = null);
 
   void _appendTaskShareText(CalendarTask task) {
     final String shareText = task.toShareText();
@@ -171,6 +172,7 @@ class _DraftFormState extends State<DraftForm> {
             if (state is DraftSending) {
               if (_sendingDraft && mounted) {
                 setState(() {
+                  _sendErrorMessage = null;
                   _pendingAttachments = _pendingAttachments
                       .map(
                         (pending) => pending.copyWith(
@@ -187,34 +189,30 @@ class _DraftFormState extends State<DraftForm> {
                 setState(() {
                   _sendCompletionHandled = true;
                   _sendingDraft = false;
+                  _sendErrorMessage = state.message;
                   _pendingAttachments = _pendingAttachments
                       .map(
                         (pending) => pending.copyWith(
-                          status: PendingAttachmentStatus.failed,
-                          errorMessage: state.message,
+                          status: PendingAttachmentStatus.queued,
+                          clearErrorMessage: true,
                         ),
                       )
                       .toList();
                 });
               }
-              ShadToaster.maybeOf(context)?.show(
-                FeedbackToast.error(
-                  title: l10n.draftErrorTitle,
-                  message: state.message,
-                ),
-              );
             } else if (state is DraftSendComplete) {
               _handleSendComplete();
             }
           },
           builder: (context, state) {
             final isSending = state is DraftSending && _sendingDraft;
-            final showFailure = state is DraftFailure && _sendingDraft;
             final enabled = !isSending;
             final bodyText = _bodyTextController.text.trim();
             final subjectText = _subjectTextController.text.trim();
             final pendingAttachments = _pendingAttachments;
             final hasAttachments = pendingAttachments.isNotEmpty;
+            final hasPreparingAttachments =
+                pendingAttachments.any((pending) => pending.isPreparing);
             final split = _splitRecipients();
             final hasActiveRecipients = split.hasActiveRecipients;
             final hasContent = _hasContent(hasAttachments: hasAttachments);
@@ -232,7 +230,13 @@ class _DraftFormState extends State<DraftForm> {
               hasActiveRecipients: hasActiveRecipients,
               hasContent: hasContent,
             );
-            final readyToSend = sendBlocker == null;
+            final bool showSendBlockerMessage = _showValidationMessages &&
+                sendBlocker != null &&
+                sendBlocker != l10n.draftNoRecipients;
+            final String? sendErrorMessage = _sendErrorMessage;
+            final readyToSend = sendBlocker == null &&
+                !_addingAttachment &&
+                !hasPreparingAttachments;
 
             return _DraftTaskDropRegion(
               onTaskDropped: enabled ? _handleTaskDrop : null,
@@ -323,15 +327,30 @@ class _DraftFormState extends State<DraftForm> {
                               readyToSend: readyToSend,
                               sending: isSending,
                               disabledReason: sendBlocker,
-                              onPressed: isSending ? null : _handleSendDraft,
+                              onPressed: isSending ||
+                                      _addingAttachment ||
+                                      hasPreparingAttachments
+                                  ? null
+                                  : _handleSendDraft,
                             ),
                           ],
                         ),
-                        if (_showValidationMessages && sendBlocker != null)
+                        if (showSendBlockerMessage)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
                               sendBlocker,
+                              style: TextStyle(
+                                color: context.colorScheme.destructive,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        if (sendErrorMessage != null && sendBlocker == null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              sendErrorMessage,
                               style: TextStyle(
                                 color: context.colorScheme.destructive,
                                 fontWeight: FontWeight.w600,
@@ -401,16 +420,6 @@ class _DraftFormState extends State<DraftForm> {
                                   style: context.textTheme.muted,
                                 ),
                               ],
-                            ),
-                          ),
-                        if (showFailure)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              state.message,
-                              style: TextStyle(
-                                color: context.colorScheme.destructive,
-                              ),
                             ),
                           ),
                         Row(
@@ -512,6 +521,7 @@ class _DraftFormState extends State<DraftForm> {
 
   void _handleRecipientAdded(FanOutTarget target) {
     setState(() {
+      _sendErrorMessage = null;
       final existingIndex =
           _recipients.indexWhere((recipient) => recipient.key == target.key);
       if (existingIndex >= 0) {
@@ -526,6 +536,7 @@ class _DraftFormState extends State<DraftForm> {
 
   void _handleRecipientRemoved(String key) {
     setState(() {
+      _sendErrorMessage = null;
       _recipients.removeWhere((recipient) => recipient.key == key);
     });
     _revalidateFormIfNeeded();
@@ -533,6 +544,7 @@ class _DraftFormState extends State<DraftForm> {
 
   void _handleRecipientToggled(String key) {
     setState(() {
+      _sendErrorMessage = null;
       final index = _recipients.indexWhere((recipient) => recipient.key == key);
       if (index == -1) return;
       final recipient = _recipients[index];
@@ -561,26 +573,54 @@ class _DraftFormState extends State<DraftForm> {
       }
       final size = file.size > 0 ? file.size : await File(path).length();
       final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
+      final pendingId = _nextPendingAttachmentId();
       var attachment = EmailAttachment(
         path: path,
         fileName: file.name.isNotEmpty ? file.name : path.split('/').last,
         sizeBytes: size,
         mimeType: mimeType,
       );
-      attachment = await EmailAttachmentOptimizer.optimize(attachment);
-      if (!mounted) return;
       setState(() {
         _pendingAttachments = [
           ..._pendingAttachments,
           PendingAttachment(
-            id: attachment.metadataId ?? _nextPendingAttachmentId(),
+            id: pendingId,
             attachment: attachment,
+            isPreparing: true,
           ),
         ];
       });
+      attachment = await EmailAttachmentOptimizer.optimize(attachment);
+      if (!mounted) return;
+      setState(() {
+        _pendingAttachments = _pendingAttachments
+            .map(
+              (pending) => pending.id == pendingId
+                  ? pending.copyWith(
+                      attachment: attachment,
+                      isPreparing: false,
+                    )
+                  : pending,
+            )
+            .toList();
+      });
     } on PlatformException catch (error) {
+      if (mounted) {
+        setState(() {
+          _pendingAttachments = _pendingAttachments
+              .where((pending) => !pending.isPreparing)
+              .toList();
+        });
+      }
       _showToast(error.message ?? l10n.draftAttachmentFailed);
     } on Exception {
+      if (mounted) {
+        setState(() {
+          _pendingAttachments = _pendingAttachments
+              .where((pending) => !pending.isPreparing)
+              .toList();
+        });
+      }
       _showToast(l10n.draftAttachmentFailed);
     } finally {
       if (mounted) {
@@ -669,7 +709,14 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _handleSendDraft() async {
     final l10n = context.l10n;
-    setState(() => _showValidationMessages = true);
+    setState(() {
+      _showValidationMessages = true;
+      _sendErrorMessage = null;
+    });
+    if (_addingAttachment ||
+        _pendingAttachments.any((pending) => pending.isPreparing)) {
+      return;
+    }
     if (context.read<DraftCubit?>() == null) return;
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
@@ -694,12 +741,7 @@ class _DraftFormState extends State<DraftForm> {
       hasContent: _hasContent(hasAttachments: hasAttachments),
     );
     final formValid = _formKey.currentState?.validate() ?? false;
-    if (validationMessage != null || !formValid) {
-      if (validationMessage != null) {
-        _showToast(validationMessage);
-      }
-      return;
-    }
+    if (validationMessage != null || !formValid) return;
     if (mounted) {
       setState(() {
         _sendingDraft = true;

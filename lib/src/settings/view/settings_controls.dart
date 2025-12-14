@@ -172,55 +172,7 @@ class SettingsControls extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(12.0),
-              child: AxiListTile(
-                title: l10n.settingsMessageStorageTitle,
-                subtitle: l10n.settingsMessageStorageSubtitle,
-                actions: [
-                  StreamBuilder<bool>(
-                    stream: context.read<XmppService>().mamSupportStream,
-                    initialData: context.read<XmppService>().mamSupported,
-                    builder: (context, snapshot) {
-                      final mamSupported = snapshot.data ?? false;
-                      final options = mamSupported
-                          ? MessageStorageMode.values
-                          : const [MessageStorageMode.local];
-                      final effectiveMode = mamSupported
-                          ? state.messageStorageMode
-                          : MessageStorageMode.local;
-                      return SizedBox(
-                        width: 220,
-                        child: ShadSelect<MessageStorageMode>(
-                          initialValue: effectiveMode,
-                          onChanged: (mode) {
-                            if (mode == null) return;
-                            if (mode.isServerOnly && !mamSupported) return;
-                            context
-                                .read<SettingsCubit>()
-                                .updateMessageStorageMode(mode);
-                          },
-                          options: options
-                              .map(
-                                (mode) => ShadOption<MessageStorageMode>(
-                                  value: mode,
-                                  child: Text(
-                                    mode.isLocal
-                                        ? l10n.settingsMessageStorageLocal
-                                        : l10n.settingsMessageStorageServerOnly,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          selectedOptionBuilder: (context, mode) => Text(
-                            mode.isLocal
-                                ? l10n.settingsMessageStorageLocal
-                                : l10n.settingsMessageStorageServerOnly,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
+              child: MessageStorageTile(state: state),
             ),
             Padding(
               padding: const EdgeInsets.all(12.0),
@@ -279,6 +231,100 @@ class SettingsControls extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class MessageStorageTile extends StatelessWidget {
+  const MessageStorageTile({super.key, required this.state});
+
+  final SettingsState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final l10n = context.l10n;
+    return AnimatedContainer(
+      duration: baseAnimationDuration,
+      decoration: ShapeDecoration(
+        color: colors.card,
+        shape: SquircleBorder(
+          cornerRadius: 18,
+          side: BorderSide(color: colors.border),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.settingsMessageStorageTitle,
+                    style: context.textTheme.small.copyWith(
+                      color: colors.foreground,
+                      height: 1.2,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                StreamBuilder<bool>(
+                  stream: context.read<XmppService>().mamSupportStream,
+                  initialData: context.read<XmppService>().mamSupported,
+                  builder: (context, snapshot) {
+                    final mamSupported = snapshot.data ?? false;
+                    final options = mamSupported
+                        ? MessageStorageMode.values
+                        : const [MessageStorageMode.local];
+                    final effectiveMode = mamSupported
+                        ? state.messageStorageMode
+                        : MessageStorageMode.local;
+                    return ShadSelect<MessageStorageMode>(
+                      initialValue: effectiveMode,
+                      onChanged: (mode) {
+                        if (mode == null) return;
+                        if (mode.isServerOnly && !mamSupported) return;
+                        context
+                            .read<SettingsCubit>()
+                            .updateMessageStorageMode(mode);
+                      },
+                      options: options
+                          .map(
+                            (mode) => ShadOption<MessageStorageMode>(
+                              value: mode,
+                              child: Text(
+                                mode.isLocal
+                                    ? l10n.settingsMessageStorageLocal
+                                    : l10n.settingsMessageStorageServerOnly,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      selectedOptionBuilder: (context, mode) => Text(
+                        mode.isLocal
+                            ? l10n.settingsMessageStorageLocal
+                            : l10n.settingsMessageStorageServerOnly,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.settingsMessageStorageSubtitle,
+              style: context.textTheme.muted
+                  .copyWith(color: colors.mutedForeground, height: 1.2),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

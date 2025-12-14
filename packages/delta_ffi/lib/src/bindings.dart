@@ -473,6 +473,132 @@ class DeltaChatBindings {
   late final _dc_get_last_error = _dc_get_last_errorPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_context_t>)>();
 
+  ffi.Pointer<dc_chatlist_t> dc_get_chatlist(
+    ffi.Pointer<dc_context_t> ctx,
+    int flags,
+    ffi.Pointer<ffi.Char> query_str,
+    int query_id,
+  ) {
+    return _dc_get_chatlist(
+      ctx,
+      flags,
+      query_str,
+      query_id,
+    );
+  }
+
+  late final _dc_get_chatlistPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_chatlist_t> Function(
+              ffi.Pointer<dc_context_t>,
+              ffi.Int32,
+              ffi.Pointer<ffi.Char>,
+              ffi.Uint32)>>('dc_get_chatlist');
+  late final _dc_get_chatlist = _dc_get_chatlistPtr.asFunction<
+      ffi.Pointer<dc_chatlist_t> Function(
+          ffi.Pointer<dc_context_t>, int, ffi.Pointer<ffi.Char>, int)>();
+
+  void dc_chatlist_unref(
+    ffi.Pointer<dc_chatlist_t> chatlist,
+  ) {
+    return _dc_chatlist_unref(
+      chatlist,
+    );
+  }
+
+  late final _dc_chatlist_unrefPtr = _lookup<
+          ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_chatlist_t>)>>(
+      'dc_chatlist_unref');
+  late final _dc_chatlist_unref = _dc_chatlist_unrefPtr
+      .asFunction<void Function(ffi.Pointer<dc_chatlist_t>)>();
+
+  int dc_chatlist_get_cnt(
+    ffi.Pointer<dc_chatlist_t> chatlist,
+  ) {
+    return _dc_chatlist_get_cnt(
+      chatlist,
+    );
+  }
+
+  late final _dc_chatlist_get_cntPtr = _lookup<
+          ffi.NativeFunction<ffi.UintPtr Function(ffi.Pointer<dc_chatlist_t>)>>(
+      'dc_chatlist_get_cnt');
+  late final _dc_chatlist_get_cnt = _dc_chatlist_get_cntPtr
+      .asFunction<int Function(ffi.Pointer<dc_chatlist_t>)>();
+
+  int dc_chatlist_get_chat_id(
+    ffi.Pointer<dc_chatlist_t> chatlist,
+    int index,
+  ) {
+    return _dc_chatlist_get_chat_id(
+      chatlist,
+      index,
+    );
+  }
+
+  late final _dc_chatlist_get_chat_idPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Uint32 Function(ffi.Pointer<dc_chatlist_t>,
+              ffi.UintPtr)>>('dc_chatlist_get_chat_id');
+  late final _dc_chatlist_get_chat_id = _dc_chatlist_get_chat_idPtr
+      .asFunction<int Function(ffi.Pointer<dc_chatlist_t>, int)>();
+
+  int dc_chatlist_get_msg_id(
+    ffi.Pointer<dc_chatlist_t> chatlist,
+    int index,
+  ) {
+    return _dc_chatlist_get_msg_id(
+      chatlist,
+      index,
+    );
+  }
+
+  late final _dc_chatlist_get_msg_idPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Uint32 Function(ffi.Pointer<dc_chatlist_t>,
+              ffi.UintPtr)>>('dc_chatlist_get_msg_id');
+  late final _dc_chatlist_get_msg_id = _dc_chatlist_get_msg_idPtr
+      .asFunction<int Function(ffi.Pointer<dc_chatlist_t>, int)>();
+
+  ffi.Pointer<dc_array_t> dc_get_chat_msgs(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+    int flags,
+    int marker1before,
+  ) {
+    return _dc_get_chat_msgs(
+      ctx,
+      chat_id,
+      flags,
+      marker1before,
+    );
+  }
+
+  late final _dc_get_chat_msgsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_array_t> Function(ffi.Pointer<dc_context_t>,
+              ffi.Uint32, ffi.Uint32, ffi.Uint32)>>('dc_get_chat_msgs');
+  late final _dc_get_chat_msgs = _dc_get_chat_msgsPtr.asFunction<
+      ffi.Pointer<dc_array_t> Function(
+          ffi.Pointer<dc_context_t>, int, int, int)>();
+
+  int dc_get_msg_cnt(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+  ) {
+    return _dc_get_msg_cnt(
+      ctx,
+      chat_id,
+    );
+  }
+
+  late final _dc_get_msg_cntPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int32 Function(
+              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_get_msg_cnt');
+  late final _dc_get_msg_cnt = _dc_get_msg_cntPtr
+      .asFunction<int Function(ffi.Pointer<dc_context_t>, int)>();
+
   ffi.Pointer<dc_event_emitter_t> dc_get_event_emitter(
     ffi.Pointer<dc_context_t> ctx,
   ) {
@@ -1333,6 +1459,8 @@ final class dc_event_emitter extends ffi.Opaque {}
 
 final class dc_chat extends ffi.Opaque {}
 
+final class dc_chatlist extends ffi.Opaque {}
+
 final class dc_contact extends ffi.Opaque {}
 
 final class dc_msg extends ffi.Opaque {}
@@ -1342,6 +1470,7 @@ typedef dc_event_emitter_t = dc_event_emitter;
 typedef dc_event_t = dc_event;
 typedef dc_msg_t = dc_msg;
 typedef dc_chat_t = dc_chat;
+typedef dc_chatlist_t = dc_chatlist;
 typedef dc_contact_t = dc_contact;
 typedef dc_accounts_t = dc_accounts;
 typedef dc_array_t = dc_array;

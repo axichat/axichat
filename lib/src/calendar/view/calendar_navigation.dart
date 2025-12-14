@@ -187,19 +187,15 @@ class CalendarNavigation extends StatelessWidget {
                 color: colors.mutedForeground,
               ),
               child: stackNavigation
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
+                  ? Wrap(
+                      spacing: navSpacing,
+                      runSpacing: navSpacing,
+                      alignment: WrapAlignment.spaceBetween,
+                      runAlignment: WrapAlignment.start,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: navRow,
-                        ),
-                        SizedBox(height: navSpacing),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: trailingRow,
-                        ),
+                        navRow,
+                        trailingRow,
                       ],
                     )
                   : Row(

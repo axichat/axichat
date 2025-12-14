@@ -776,6 +776,7 @@ class XmppService extends XmppBase
     await _resolveMamSupportForAccount();
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
+    unawaited(refreshSelfAvatarIfNeeded());
     if (messageStorageMode.isServerOnly) {
       await purgeMessageHistory();
     }

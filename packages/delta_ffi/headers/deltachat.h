@@ -1,6 +1,7 @@
 #ifndef DELTACHAT_WRAPPER_H
 #define DELTACHAT_WRAPPER_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -13,6 +14,7 @@ typedef struct dc_event_emitter dc_event_emitter_t;
 typedef struct dc_accounts dc_accounts_t;
 typedef struct dc_array dc_array_t;
 typedef struct dc_chat dc_chat_t;
+typedef struct dc_chatlist dc_chatlist_t;
 typedef struct dc_contact dc_contact_t;
 typedef struct dc_msg dc_msg_t;
 
@@ -75,6 +77,14 @@ void dc_stop_io(dc_context_t* ctx);
 void dc_maybe_network(dc_context_t* ctx);
 int32_t dc_get_connectivity(dc_context_t* ctx);
 char* dc_get_last_error(dc_context_t* ctx);
+
+dc_chatlist_t* dc_get_chatlist(dc_context_t* ctx, int flags, const char* query_str, uint32_t query_id);
+void dc_chatlist_unref(dc_chatlist_t* chatlist);
+size_t dc_chatlist_get_cnt(const dc_chatlist_t* chatlist);
+uint32_t dc_chatlist_get_chat_id(const dc_chatlist_t* chatlist, size_t index);
+uint32_t dc_chatlist_get_msg_id(const dc_chatlist_t* chatlist, size_t index);
+dc_array_t* dc_get_chat_msgs(dc_context_t* ctx, uint32_t chat_id, uint32_t flags, uint32_t marker1before);
+int dc_get_msg_cnt(dc_context_t* ctx, uint32_t chat_id);
 
 dc_event_emitter_t* dc_get_event_emitter(dc_context_t* ctx);
 void dc_event_emitter_unref(dc_event_emitter_t* emitter);

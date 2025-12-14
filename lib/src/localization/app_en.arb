@@ -439,7 +439,7 @@
   "signupAvatarUploadImage": "Upload image",
   "signupAvatarUpload": "Upload",
   "signupAvatarShuffle": "Shuffle default",
-  "signupAvatarMenuDescription": "Defaults are listed below. We publish the avatar when your XMPP account is created.",
+  "signupAvatarMenuDescription": "We publish the avatar when your XMPP account is created.",
   "signupAvatarBackgroundColor": "Background color",
   "signupAvatarDefaultsTitle": "Default avatars",
   "signupAvatarCategoryAbstract": "Abstract",

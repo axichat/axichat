@@ -1144,8 +1144,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final trimmedText = event.text.trim();
     final attachments = List<PendingAttachment>.from(state.pendingAttachments);
     final queuedAttachments = attachments
-        .where(
-            (attachment) => attachment.status == PendingAttachmentStatus.queued)
+        .where((attachment) =>
+            attachment.status == PendingAttachmentStatus.queued &&
+            !attachment.isPreparing)
         .toList();
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
     final hasSubject = state.emailSubject?.trim().isNotEmpty == true;
@@ -1608,16 +1609,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? _composeEmailBody(rawCaption!, quotedDraft)
         : null;
     var preparedAttachment = event.attachment.copyWith(caption: caption);
+    final pendingId = _nextPendingAttachmentId();
+    final placeholder = PendingAttachment(
+      id: pendingId,
+      attachment: preparedAttachment,
+      isPreparing: true,
+    );
+    emit(
+      state.copyWith(
+        pendingAttachments: [...state.pendingAttachments, placeholder],
+        quoting: null,
+      ),
+    );
     try {
       preparedAttachment =
           await EmailAttachmentOptimizer.optimize(preparedAttachment);
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to optimize attachment', error, stackTrace);
     }
-    _addPendingAttachment(preparedAttachment, emit);
-    if (state.quoting != null) {
-      emit(state.copyWith(quoting: null));
-    }
+    _replacePendingAttachment(
+      placeholder.copyWith(
+        attachment: preparedAttachment,
+        isPreparing: false,
+      ),
+      emit,
+    );
   }
 
   Future<void> _onChatAttachmentRetryRequested(
@@ -2679,22 +2695,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return null;
-  }
-
-  PendingAttachment _addPendingAttachment(
-    EmailAttachment attachment,
-    Emitter<ChatState> emit,
-  ) {
-    final pending = PendingAttachment(
-      id: _nextPendingAttachmentId(),
-      attachment: attachment,
-    );
-    emit(
-      state.copyWith(
-        pendingAttachments: [...state.pendingAttachments, pending],
-      ),
-    );
-    return pending;
   }
 
   void _replacePendingAttachment(
