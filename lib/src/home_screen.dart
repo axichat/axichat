@@ -35,6 +35,7 @@ import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/demo/demo_calendar.dart';
 import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
@@ -421,18 +422,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   final reminderController =
                       context.read<CalendarReminderController>();
                   final xmppService = context.read<XmppService>();
-                  final bool seedDemoCalendar =
-                      kEnableDemoChats && xmppService.myJid == kDemoSelfJid;
+                  const bool seedDemoCalendar = kEnableDemoChats;
                   final storage = calendarStorage;
                   final DayEventRepository dayEventRepository =
                       DayEventRepository(
                     database: xmppService.database,
                   );
 
-                  return CalendarBloc(
+                  final CalendarBloc bloc = CalendarBloc(
                     reminderController: reminderController,
                     dayEventRepository: dayEventRepository,
-                    seedDemoData: seedDemoCalendar,
                     syncManagerBuilder: (bloc) {
                       final manager = CalendarSyncManager(
                         readModel: () => bloc.currentModel,
@@ -468,6 +467,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     storage: storage,
                     onDispose: xmppService.clearCalendarSyncCallback,
                   )..add(const CalendarEvent.started());
+                  if (seedDemoCalendar) {
+                    bloc.add(
+                      CalendarEvent.remoteModelApplied(
+                        model: DemoCalendar.franklin(
+                          anchor: DateTime.now(),
+                        ),
+                      ),
+                    );
+                  }
+                  return bloc;
                 },
               ),
             BlocProvider(
