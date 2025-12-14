@@ -318,6 +318,15 @@ mixin AvatarService on XmppBase {
 
     if (existingPath != null && existingPath.isNotEmpty) {
       _evictCachedAvatarBytes(existingPath);
+      final cacheDirectory = await _avatarCacheDirectory();
+      if (!_isSafeAvatarCachePath(
+        cacheDirectory: cacheDirectory,
+        filePath: existingPath,
+      )) {
+        _avatarLog
+            .warning('Refusing to delete avatar outside cache directory.');
+        return;
+      }
       final file = File(existingPath);
       if (await file.exists()) {
         try {
@@ -501,6 +510,16 @@ mixin AvatarService on XmppBase {
     final normalizedPath = path.trim();
     if (normalizedPath.isEmpty) return null;
 
+    final cacheDirectory = await _avatarCacheDirectory();
+    if (!_isSafeAvatarCachePath(
+      cacheDirectory: cacheDirectory,
+      filePath: normalizedPath,
+    )) {
+      _avatarLog.warning('Rejected avatar path outside cache directory.');
+      _evictCachedAvatarBytes(normalizedPath);
+      return null;
+    }
+
     final cached = cachedAvatarBytes(normalizedPath);
     if (cached != null && cached.isNotEmpty) {
       return cached;
@@ -621,6 +640,17 @@ mixin AvatarService on XmppBase {
     }
     _avatarDirectory = directory;
     return directory;
+  }
+
+  bool _isSafeAvatarCachePath({
+    required Directory cacheDirectory,
+    required String filePath,
+  }) {
+    final normalizedFile = p.normalize(filePath.trim());
+    if (normalizedFile.isEmpty) return false;
+    if (!p.isAbsolute(normalizedFile)) return false;
+    final normalizedRoot = p.normalize(cacheDirectory.path);
+    return p.isWithin(normalizedRoot, normalizedFile);
   }
 
   String? _avatarSafeBareJid(String? jid) {
