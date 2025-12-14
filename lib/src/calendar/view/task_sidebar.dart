@@ -39,6 +39,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'calendar_task_search.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_task_title_tooltip.dart';
+import 'widgets/calendar_drag_exclude.dart';
 import 'calendar_transfer_sheet.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_checklist_controller.dart';
@@ -3811,12 +3812,14 @@ class _SidebarTaskTileBody extends StatelessWidget {
                 ),
                 const SizedBox(width: calendarInsetMd),
                 if (trailing != null) ...[
-                  trailing!,
+                  CalendarDragExclude(child: trailing!),
                   const SizedBox(width: calendarInsetMd),
                 ],
-                CalendarCompletionCheckbox(
-                  value: task.isCompleted,
-                  onChanged: onToggleCompletion,
+                CalendarDragExclude(
+                  child: CalendarCompletionCheckbox(
+                    value: task.isCompleted,
+                    onChanged: onToggleCompletion,
+                  ),
                 ),
               ],
             ),

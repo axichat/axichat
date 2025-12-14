@@ -59,7 +59,7 @@ class _CalendarTaskTitleTooltipState extends State<CalendarTaskTitleTooltip> {
     if (_pointerDown) {
       return;
     }
-    setState(() => _pointerDown = true);
+    _pointerDown = true;
     _hideTooltip();
   }
 
@@ -67,14 +67,14 @@ class _CalendarTaskTitleTooltipState extends State<CalendarTaskTitleTooltip> {
     if (!_pointerDown) {
       return;
     }
-    setState(() => _pointerDown = false);
+    _pointerDown = false;
   }
 
   void _handlePointerCancel(PointerCancelEvent _) {
     if (!_pointerDown) {
       return;
     }
-    setState(() => _pointerDown = false);
+    _pointerDown = false;
   }
 
   void _handleEnter(PointerEnterEvent _) {
