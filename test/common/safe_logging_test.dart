@@ -17,6 +17,28 @@ void main() {
       expect(sanitized, isNot(contains('/home/eliot/secret.txt')));
     });
 
+    test('Redacts absolute file paths wrapped in punctuation', () {
+      const message = 'Exception opening file (/home/eliot/secret.txt).';
+      final sanitized = SafeLogging.sanitizeMessage(message);
+      expect(sanitized, contains('(${SafeLogging.redactedPath})'));
+      expect(sanitized, isNot(contains('/home/eliot/secret.txt')));
+    });
+
+    test('Redacts password-like values', () {
+      const message = '{"password":"hunter2","passphrase":"opensesame"}';
+      final sanitized = SafeLogging.sanitizeMessage(message);
+      expect(sanitized, contains(SafeLogging.redactedSecret));
+      expect(sanitized, isNot(contains('hunter2')));
+      expect(sanitized, isNot(contains('opensesame')));
+    });
+
+    test('Redacts XMPP XML body contents', () {
+      const message = '<message><body>Hello there</body></message>';
+      final sanitized = SafeLogging.sanitizeMessage(message);
+      expect(sanitized, contains(SafeLogging.redactedSecret));
+      expect(sanitized, isNot(contains('Hello there')));
+    });
+
     test('Redacts file:// uris', () {
       const message = 'Avatar uri=file:///tmp/avatar.enc';
       final sanitized = SafeLogging.sanitizeMessage(message);

@@ -1621,6 +1621,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Arrête de recevoir les notifications de messages.';
 
   @override
+  String get settingsNotificationPreviews => 'Aperçu des notifications';
+
+  @override
+  String get settingsNotificationPreviewsDescription =>
+      'Afficher le contenu des messages dans les notifications et sur l’écran de verrouillage.';
+
+  @override
   String get settingsReadReceipts => 'Envoyer les accusés de lecture';
 
   @override
