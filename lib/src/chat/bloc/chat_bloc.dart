@@ -496,13 +496,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (targetJid == null) return;
     unawaited(_messageSubscription?.cancel());
     _currentMessageLimit = limit;
-    _messageSubscription = _messageService
-        .messageStreamForChat(
-          targetJid,
-          end: limit,
-          filter: filter,
-        )
-        .listen((items) => add(_ChatMessagesUpdated(items)));
+    final chat = state.chat;
+    final isEmailContext = (chat != null && chat.defaultTransport.isEmail) ||
+        _isEmailOnlyAddress(targetJid);
+    final stream = isEmailContext
+        ? _emailService?.messageStreamForChat(
+            targetJid,
+            end: limit,
+            filter: filter,
+          )
+        : _messageService.messageStreamForChat(
+            targetJid,
+            end: limit,
+            filter: filter,
+          );
+    if (stream == null) return;
+    _messageSubscription =
+        stream.listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
   void _subscribeToTypingParticipants(Chat chat) {
