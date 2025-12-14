@@ -337,6 +337,9 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
 
   @override
   void handleEvent(PointerEvent event, covariant HitTestEntry entry) {
+    if (!attached || owner == null) {
+      return;
+    }
     super.handleEvent(event, entry);
     if (!enableInteractions || _isDraggingSelf) {
       return;

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RendererBinding;
+import 'package:flutter/rendering.dart'
+    show BoxHitTestResult, HitTestEntry, RenderMetaData, RendererBinding;
 import 'package:flutter/widgets.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'calendar_drag_exclude.dart';
 
 class CalendarSidebarDraggable extends StatefulWidget {
   const CalendarSidebarDraggable({
@@ -34,6 +36,7 @@ class CalendarSidebarDraggable extends StatefulWidget {
 
 class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
   bool _dragSessionActive = false;
+  bool _suppressDrag = false;
   Rect? _sourceBounds;
   Size _childSize = Size.zero;
   double? _pointerNormalized;
@@ -41,10 +44,39 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
   int? _activePointerId;
   Offset? _trackedPointer;
 
+  bool _isDragExcluded(Offset localPosition) {
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize) {
+      return false;
+    }
+    final BoxHitTestResult result = BoxHitTestResult();
+    box.hitTest(result, position: localPosition);
+    for (final HitTestEntry entry in result.path) {
+      final Object target = entry.target;
+      if (target is RenderMetaData &&
+          target.metaData == CalendarDragExclude.marker) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void _handlePointerDown(PointerDownEvent event) {
     if (_dragSessionActive) {
       return;
     }
+
+    final bool shouldSuppress = _isDragExcluded(event.localPosition);
+    if (shouldSuppress != _suppressDrag) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _suppressDrag = shouldSuppress);
+    }
+    if (shouldSuppress) {
+      return;
+    }
+
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final Size size = box?.size ?? Size.zero;
     final double width = size.width.isFinite ? size.width : 0.0;
@@ -95,6 +127,13 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
     if (_activePointerId == event.pointer) {
       _activePointerId = null;
       _trackedPointer = null;
+    }
+    if (_suppressDrag) {
+      if (mounted) {
+        setState(() => _suppressDrag = false);
+      } else {
+        _suppressDrag = false;
+      }
     }
   }
 
@@ -207,10 +246,12 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       child: widget.child,
     );
 
+    final bool canDrag = !_suppressDrag;
     if (widget.requiresLongPress) {
       return LongPressDraggable<CalendarDragPayload>(
         data: _dragPayload(),
         dragAnchorStrategy: _centerDragAnchorStrategy,
+        maxSimultaneousDrags: canDrag ? 1 : 0,
         feedback: widget.feedback,
         childWhenDragging: widget.childWhenDragging,
         rootOverlay: true,
@@ -225,6 +266,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
     return Draggable<CalendarDragPayload>(
       data: _dragPayload(),
       dragAnchorStrategy: _centerDragAnchorStrategy,
+      maxSimultaneousDrags: canDrag ? 1 : 0,
       feedback: widget.feedback,
       childWhenDragging: widget.childWhenDragging,
       rootOverlay: true,
