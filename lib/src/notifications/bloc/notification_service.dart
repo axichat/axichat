@@ -226,6 +226,7 @@ class NotificationService {
     List<FutureOr<bool>> extraConditions = const [],
     bool allowForeground = false,
     String? payload,
+    String? threadKey,
   }) async {
     if (mute) return;
     if (!await hasAllNotificationPermissions()) return;
@@ -241,9 +242,13 @@ class NotificationService {
     final notificationDetails = await _messageNotificationDetails(
       showPreview: notificationPreviewsEnabled,
     );
+    final stableKey = (threadKey ?? payload)?.trim();
+    final notificationId = stableKey == null || stableKey.isEmpty
+        ? Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000)
+        : _stableNotificationId(stableKey);
 
     await _plugin.show(
-      Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
+      notificationId,
       _sanitizeMessageNotificationTitle(title),
       notificationPreviewsEnabled ? body : null,
       notificationDetails,
@@ -466,5 +471,14 @@ class NotificationService {
     if (normalized.isEmpty) return _genericMessageNotificationTitle;
     if (normalized.contains('@')) return _genericMessageNotificationTitle;
     return normalized;
+  }
+
+  int _stableNotificationId(String key) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in key.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    return (hash & 0x7fffffff) + 1;
   }
 }

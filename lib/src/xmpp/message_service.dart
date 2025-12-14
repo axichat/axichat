@@ -2253,7 +2253,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           expected: metadata.plainTextHashes,
           bytes: plainBytes,
         );
-        decryptedTmp = File(p.join(directory.path, '.${metadata.id}.decrypted'));
+        decryptedTmp =
+            File(p.join(directory.path, '.${metadata.id}.decrypted'));
         await decryptedTmp.writeAsBytes(plainBytes, flush: true);
         await _replaceFile(source: decryptedTmp, destination: finalFile);
         decryptedTmp = null;
@@ -2504,8 +2505,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   Uint8List? _decodeSha256Expected(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return null;
-    final looksLikeHex = trimmed.length == 64 &&
-        RegExp(r'^[0-9a-fA-F]+$').hasMatch(trimmed);
+    final looksLikeHex =
+        trimmed.length == 64 && RegExp(r'^[0-9a-fA-F]+$').hasMatch(trimmed);
     if (looksLikeHex) {
       try {
         final bytes = <int>[];

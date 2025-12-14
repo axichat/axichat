@@ -11,7 +11,6 @@ import 'package:axichat/src/xmpp/xmpp_service.dart' show XmppService;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ChatAttachmentPreview extends StatelessWidget {
@@ -268,65 +267,6 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
       return metadata.width! / metadata.height!;
     }
     return 4 / 3;
-  }
-}
-
-class _AttachmentLoadingPlaceholder extends StatelessWidget {
-  const _AttachmentLoadingPlaceholder({this.progress});
-
-  final double? progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final l10n = context.l10n;
-    final label = progress == null
-        ? l10n.chatAttachmentLoading
-        : l10n.chatAttachmentLoadingProgress(
-            '${(progress!.clamp(0, 1) * 100).toStringAsFixed(0)}%',
-          );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Shimmer.fromColors(
-          baseColor: colors.muted.withValues(alpha: 0.2),
-          highlightColor: colors.muted.withValues(alpha: 0.35),
-          child: Container(color: colors.card),
-        ),
-        Center(
-          child: DecoratedBox(
-            decoration: ShapeDecoration(
-              color: colors.background.withValues(alpha: 0.85),
-              shape: SquircleBorder(cornerRadius: 12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    LucideIcons.image,
-                    size: 16,
-                    color: colors.mutedForeground,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: context.textTheme.small.copyWith(
-                      color: colors.mutedForeground,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }
 

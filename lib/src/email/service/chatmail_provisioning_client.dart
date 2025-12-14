@@ -59,6 +59,9 @@ class EmailProvisioningClient {
         _ownsClient = httpClient == null,
         _log = logger ?? Logger('EmailProvisioningClient') {
     _validateBaseUrl(_baseUrl);
+    if (!_sharedSecretConfigured) {
+      _log.warning('Email provisioning shared secret missing.');
+    }
   }
 
   factory EmailProvisioningClient.fromEnvironment({
@@ -90,6 +93,9 @@ class EmailProvisioningClient {
   final bool _ownsClient;
   final Logger _log;
 
+  bool get _sharedSecretConfigured =>
+      _sharedSecret.isNotEmpty && _sharedSecret != _sharedSecretPlaceholder;
+
   void _validateBaseUrl(Uri baseUrl) {
     final scheme = baseUrl.scheme.toLowerCase();
     if (scheme == 'https') return;
@@ -105,10 +111,21 @@ class EmailProvisioningClient {
     );
   }
 
+  void _ensureConfigured(String message) {
+    if (_sharedSecretConfigured) return;
+    throw EmailProvisioningApiException(
+      message,
+      code: EmailProvisioningApiErrorCode.unavailable,
+    );
+  }
+
   Future<EmailProvisioningCredentials> createAccount({
     required String localpart,
     required String password,
   }) async {
+    _ensureConfigured(
+      'Signup is temporarily unavailable. Please try again later.',
+    );
     final normalizedLocalpart = localpart.trim();
     if (normalizedLocalpart.isEmpty) {
       throw const EmailProvisioningApiException(
@@ -210,6 +227,9 @@ class EmailProvisioningClient {
     required String email,
     required String password,
   }) async {
+    _ensureConfigured(
+      'We could not delete your email account. Please try again later.',
+    );
     final uri = _buildEndpoint('account');
     final normalizedEmail = email.trim();
     final headers = _headers();
@@ -289,6 +309,9 @@ class EmailProvisioningClient {
     required String oldPassword,
     required String newPassword,
   }) async {
+    _ensureConfigured(
+      'We could not change your password. Please try again later.',
+    );
     final uri = _buildEndpoint('password');
     final headers = _headers();
     final payload = jsonEncode({
@@ -374,14 +397,7 @@ class EmailProvisioningClient {
   }
 
   static String _normalizeSharedSecret(String sharedSecret) {
-    final normalized = sharedSecret.trim();
-    if (normalized.isEmpty || normalized == _sharedSecretPlaceholder) {
-      throw StateError(
-        'Email provisioning shared secret missing. Set '
-        '--dart-define=$_sharedSecretDefineKey=<secret> before running.',
-      );
-    }
-    return normalized;
+    return sharedSecret.trim();
   }
 
   void close() {

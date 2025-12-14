@@ -762,6 +762,7 @@ class XmppService extends XmppBase
             message.senderJid != myJid,
           ],
           payload: message.chatJid,
+          threadKey: message.chatJid,
         );
       },
     );
