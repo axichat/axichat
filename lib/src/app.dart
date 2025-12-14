@@ -31,6 +31,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -580,7 +581,8 @@ extension ThemeExtension on BuildContext {
 }
 
 extension TargetPlatformExtension on TargetPlatform {
-  bool get isApple => this == TargetPlatform.macOS || this == TargetPlatform.iOS;
+  bool get isApple =>
+      this == TargetPlatform.macOS || this == TargetPlatform.iOS;
 
   bool get isMobile =>
       this == TargetPlatform.android || this == TargetPlatform.iOS;
