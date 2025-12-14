@@ -132,23 +132,26 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
             bool isGhost = false,
             bool interactive = true,
           }) {
-            return _CalendarEventContainer(
-              task: widget.task,
-              eventColor: _eventColor,
-              isDragging: isDragging,
-              isGhost: isGhost,
-              interactive: interactive,
-              isHovering: _isHovering,
-              isDayView: widget.isDayView,
-              showDescription: _showDescription,
-              height: widget.height,
-              timeRange: _timeRange,
-              cursor: _getMouseCursor(interactive),
-              onHoverChanged: _onHoverChanged,
-              onTap: widget.onTap ?? _handleTap,
-              onResizeStart: _startResize,
-              onResizeUpdate: _updateResize,
-              onResizeEnd: _endResize,
+            return CalendarTaskTitleTooltip(
+              title: widget.task.title,
+              child: _CalendarEventContainer(
+                task: widget.task,
+                eventColor: _eventColor,
+                isDragging: isDragging,
+                isGhost: isGhost,
+                interactive: interactive,
+                isHovering: _isHovering,
+                isDayView: widget.isDayView,
+                showDescription: _showDescription,
+                height: widget.height,
+                timeRange: _timeRange,
+                cursor: _getMouseCursor(interactive),
+                onHoverChanged: _onHoverChanged,
+                onTap: widget.onTap ?? _handleTap,
+                onResizeStart: _startResize,
+                onResizeUpdate: _updateResize,
+                onResizeEnd: _endResize,
+              ),
             );
           }
 
@@ -595,21 +598,18 @@ class _CalendarEventContent extends StatelessWidget {
                 const SizedBox(width: calendarInsetMd),
               ],
               Expanded(
-                child: CalendarTaskTitleTooltip(
-                  title: task.title,
-                  child: Text(
-                    task.title,
-                    style: TextStyle(
-                      fontSize: height < 40 ? 11 : 13,
-                      fontWeight: FontWeight.w500,
-                      color: textColor,
-                      decoration:
-                          task.isCompleted ? TextDecoration.lineThrough : null,
-                      letterSpacing: -0.1,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: height < 40 ? 1 : 2,
+                child: Text(
+                  task.title,
+                  style: TextStyle(
+                    fontSize: height < 40 ? 11 : 13,
+                    fontWeight: FontWeight.w500,
+                    color: textColor,
+                    decoration:
+                        task.isCompleted ? TextDecoration.lineThrough : null,
+                    letterSpacing: -0.1,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: height < 40 ? 1 : 2,
                 ),
               ),
             ],

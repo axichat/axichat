@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class CalendarTaskTitleTooltip extends StatelessWidget {
   const CalendarTaskTitleTooltip({
@@ -17,6 +18,14 @@ class CalendarTaskTitleTooltip extends StatelessWidget {
     final String trimmed = title.trim();
     if (trimmed.isEmpty) {
       return child;
+    }
+
+    final bool hasShadTheme = ShadTheme.maybeOf(context, listen: false) != null;
+    if (!hasShadTheme) {
+      return Tooltip(
+        message: trimmed,
+        child: child,
+      );
     }
 
     return AxiTooltip(
