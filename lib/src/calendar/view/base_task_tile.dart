@@ -15,7 +15,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'feedback_system.dart';
 import 'widgets/calendar_completion_checkbox.dart';
-import 'widgets/calendar_task_title_tooltip.dart';
+import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_checklist.dart';
 
 abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
@@ -129,7 +129,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                   onDelete: handleDelete,
                 );
             }
-            return CalendarTaskTitleTooltip(
+            return CalendarTaskTitleHoverReporter(
               title: task.title,
               enabled: !_isUpdating,
               child: tile,

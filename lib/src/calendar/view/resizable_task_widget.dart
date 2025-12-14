@@ -9,7 +9,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'controllers/task_interaction_controller.dart';
-import 'widgets/calendar_task_title_tooltip.dart';
+import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/calendar_task_tile_render.dart';
 
 class DragFeedbackHint {
@@ -238,7 +238,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
               final Widget contextualized = _wrapWithContextMenu(sizedBody);
 
-              return CalendarTaskTitleTooltip(
+              return CalendarTaskTitleHoverReporter(
                 title: task.title,
                 enabled: widget.enableInteractions &&
                     !isDragging &&
