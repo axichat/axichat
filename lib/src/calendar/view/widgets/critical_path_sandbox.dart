@@ -10,7 +10,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'calendar_task_title_tooltip.dart';
+import 'calendar_task_title_hover_reporter.dart';
 
 class CriticalPathSandbox extends StatefulWidget {
   const CriticalPathSandbox({
@@ -709,7 +709,7 @@ class _TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool completed = task.isCompleted;
 
-    return CalendarTaskTitleTooltip(
+    return CalendarTaskTitleHoverReporter(
       title: task.title,
       enabled: onTap != null,
       child: Material(
@@ -950,7 +950,7 @@ extension on _CriticalPathSandboxState {
                       final String? deadlineLabel = deadline != null
                           ? 'Deadline: ${deadline.toIso8601String().split('T').first}'
                           : null;
-                      return CalendarTaskTitleTooltip(
+                      return CalendarTaskTitleHoverReporter(
                         title: task.title,
                         child: InkWell(
                           onTap: () => Navigator.of(sheetContext).pop(task),

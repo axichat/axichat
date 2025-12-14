@@ -16,7 +16,7 @@ import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/task_input.dart' as task_input;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'widgets/calendar_task_title_tooltip.dart';
+import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_text_field.dart';
 
 typedef CalendarSearchTileBuilder = Widget Function(
@@ -522,7 +522,7 @@ class _SearchResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final String? subtitle = _subtitle();
-    return CalendarTaskTitleTooltip(
+    return CalendarTaskTitleHoverReporter(
       title: task.title,
       child: Material(
         color: colors.card,

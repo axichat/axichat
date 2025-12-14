@@ -38,7 +38,7 @@ import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'calendar_task_search.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'widgets/calendar_task_title_tooltip.dart';
+import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/calendar_drag_exclude.dart';
 import 'calendar_transfer_sheet.dart';
 import 'controllers/calendar_sidebar_controller.dart';
@@ -3704,7 +3704,7 @@ class _SelectionTaskTile extends StatelessWidget {
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverTaskId == task.id;
 
-    return CalendarTaskTitleTooltip(
+    return CalendarTaskTitleHoverReporter(
       title: task.title,
       enabled: !isActive,
       child: Container(
@@ -5399,7 +5399,7 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
       tile = host._wrapWithSidebarContextMenu(task: task, child: tile);
     }
 
-    return CalendarTaskTitleTooltip(
+    return CalendarTaskTitleHoverReporter(
       title: task.title,
       enabled: enableInteraction && !isActive,
       child: tile,

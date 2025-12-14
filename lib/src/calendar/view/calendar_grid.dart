@@ -41,6 +41,7 @@ import 'controllers/task_popover_controller.dart';
 import 'resizable_task_widget.dart';
 import 'task_edit_session_tracker.dart';
 import 'widgets/calendar_render_surface.dart';
+import 'widgets/calendar_hover_title_bubble.dart';
 import 'widgets/calendar_surface_drag_target.dart';
 import 'widgets/calendar_task_surface.dart';
 import 'widgets/day_event_editor.dart';
@@ -3226,6 +3227,11 @@ class _CalendarWeekView extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     SizedBox.expand(child: gridBody),
+                    Positioned(
+                      bottom: compact ? 12 : 24,
+                      left: compact ? 8 : 16,
+                      child: const CalendarHoverTitleBubble(),
+                    ),
                     Positioned(
                       bottom: compact ? 12 : 24,
                       right: compact ? 8 : 16,

@@ -1,11 +1,13 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
@@ -344,6 +346,8 @@ class _MemberTile extends StatefulWidget {
 class _MemberTileState extends State<_MemberTile> {
   bool _showActions = false;
 
+  static const double _avatarSize = 40.0;
+
   void _toggleActions() => setState(() => _showActions = !_showActions);
 
   void _closeActions() => setState(() => _showActions = false);
@@ -353,43 +357,99 @@ class _MemberTileState extends State<_MemberTile> {
     final colors = context.colorScheme;
     final borderColor =
         widget.isSelf ? colors.primary.withValues(alpha: 0.3) : colors.border;
+    final avatarKey = _avatarKey(widget.occupant);
     final rosterCubit = context.read<RosterCubit?>();
-    final Widget avatar = rosterCubit == null
-        ? AxiAvatar(
-            jid: _avatarKey(widget.occupant),
-            size: 40,
-          )
-        : BlocBuilder<RosterCubit, RosterState>(
-            buildWhen: (_, current) => current is RosterAvailable,
-            builder: (context, rosterState) {
-              final cachedItems = rosterState is RosterAvailable
-                  ? rosterState.items
-                  : context.read<RosterCubit>()['items'] as List<RosterItem>?;
-              final realJid = widget.occupant.realJid?.trim();
-              final bareJid = realJid == null || realJid.isEmpty
-                  ? null
-                  : realJid.contains('/')
-                      ? realJid.split('/').first
-                      : realJid;
-              final normalizedBareJid = bareJid?.toLowerCase();
-              String? avatarPath;
-              if (normalizedBareJid != null &&
-                  normalizedBareJid.isNotEmpty &&
-                  cachedItems != null) {
-                for (final item in cachedItems) {
-                  if (item.jid.toLowerCase() == normalizedBareJid) {
-                    avatarPath = item.avatarPath;
-                    break;
-                  }
-                }
-              }
+
+    String? resolveAvatarPath({
+      required List<RosterItem>? rosterItems,
+      required List<Chat>? chats,
+      required ProfileState profile,
+    }) {
+      if (widget.isSelf) {
+        final selfPath = profile.avatarPath?.trim();
+        if (selfPath?.isNotEmpty == true) {
+          return selfPath;
+        }
+      }
+
+      final realJid = widget.occupant.realJid?.trim();
+      if (realJid == null || realJid.isEmpty) {
+        return null;
+      }
+
+      final bareJid =
+          realJid.contains('/') ? realJid.split('/').first : realJid;
+      final normalizedBareJid = bareJid.trim().toLowerCase();
+      if (normalizedBareJid.isEmpty) return null;
+
+      if (rosterItems != null) {
+        for (final item in rosterItems) {
+          if (item.jid.trim().toLowerCase() != normalizedBareJid) continue;
+          final path = item.avatarPath?.trim();
+          if (path?.isNotEmpty == true) {
+            return path;
+          }
+          break;
+        }
+      }
+
+      if (chats != null) {
+        for (final chat in chats) {
+          final candidateBare = chat.remoteJid.trim().toLowerCase();
+          if (candidateBare != normalizedBareJid) continue;
+          final path = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
+          if (path?.isNotEmpty == true) {
+            return path;
+          }
+          break;
+        }
+      }
+
+      return null;
+    }
+
+    final avatar = BlocBuilder<ChatsCubit, ChatsState>(
+      buildWhen: (previous, current) => previous.items != current.items,
+      builder: (context, chatsState) {
+        return BlocBuilder<ProfileCubit, ProfileState>(
+          buildWhen: (previous, current) =>
+              previous.avatarPath != current.avatarPath,
+          builder: (context, profileState) {
+            final chats = chatsState.items;
+            if (rosterCubit == null) {
+              final avatarPath = resolveAvatarPath(
+                rosterItems: null,
+                chats: chats,
+                profile: profileState,
+              );
               return AxiAvatar(
-                jid: _avatarKey(widget.occupant),
-                size: 40,
+                jid: avatarKey,
+                size: _avatarSize,
                 avatarPath: avatarPath,
               );
-            },
-          );
+            }
+            return BlocBuilder<RosterCubit, RosterState>(
+              buildWhen: (_, current) => current is RosterAvailable,
+              builder: (context, rosterState) {
+                final cachedItems = rosterState is RosterAvailable
+                    ? rosterState.items
+                    : context.read<RosterCubit>()['items'] as List<RosterItem>?;
+                final avatarPath = resolveAvatarPath(
+                  rosterItems: cachedItems,
+                  chats: chats,
+                  profile: profileState,
+                );
+                return AxiAvatar(
+                  jid: avatarKey,
+                  size: _avatarSize,
+                  avatarPath: avatarPath,
+                );
+              },
+            );
+          },
+        );
+      },
+    );
 
     final tile = AxiListTile(
       onTap: widget.actions.isEmpty ? null : _toggleActions,
