@@ -901,6 +901,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _demoLoginInProgress = true;
     _loginInFlight = true;
     try {
+      if (state is! AuthenticationInProgress &&
+          state is! AuthenticationComplete) {
+        _emit(AuthenticationLogInInProgress(config: _endpointConfig));
+      }
       await _authRecoveryFuture;
       final demoDomain = kDemoSelfJid.split('@').last;
       final demoConfig = EndpointConfig(

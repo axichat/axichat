@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'widgets/task_checklist.dart';
+import 'widgets/calendar_task_title_tooltip.dart';
 
 class CalendarEventWidget extends StatefulWidget {
   final CalendarTask task;
@@ -594,18 +595,21 @@ class _CalendarEventContent extends StatelessWidget {
                 const SizedBox(width: calendarInsetMd),
               ],
               Expanded(
-                child: Text(
-                  task.title,
-                  style: TextStyle(
-                    fontSize: height < 40 ? 11 : 13,
-                    fontWeight: FontWeight.w500,
-                    color: textColor,
-                    decoration:
-                        task.isCompleted ? TextDecoration.lineThrough : null,
-                    letterSpacing: -0.1,
+                child: CalendarTaskTitleTooltip(
+                  title: task.title,
+                  child: Text(
+                    task.title,
+                    style: TextStyle(
+                      fontSize: height < 40 ? 11 : 13,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                      decoration:
+                          task.isCompleted ? TextDecoration.lineThrough : null,
+                      letterSpacing: -0.1,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: height < 40 ? 1 : 2,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: height < 40 ? 1 : 2,
                 ),
               ),
             ],

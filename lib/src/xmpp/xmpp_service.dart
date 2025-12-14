@@ -40,6 +40,7 @@ import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
 import 'package:omemo_dart/omemo_dart.dart'
     show RatchetMapKey, OmemoDataPackage; // For persistence types only
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:retry/retry.dart' show RetryOptions;
@@ -1065,32 +1066,30 @@ class XmppService extends XmppBase
     required ui.Color background,
   }) async {
     try {
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      final width = image.width;
-      final height = image.height;
-      final recorder = ui.PictureRecorder();
-      final canvas = ui.Canvas(recorder);
-      canvas.drawRect(
-        ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
-        ui.Paint()..color = background,
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return bytes;
+      final canvas = img.Image(
+        width: decoded.width,
+        height: decoded.height,
+        numChannels: 4,
+        format: img.Format.uint8,
       );
-      canvas.drawImage(image, ui.Offset.zero, ui.Paint());
-      final picture = recorder.endRecording();
-      final composed = await picture.toImage(width, height);
-      final byteData = await composed.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      image.dispose();
-      composed.dispose();
-      final output = byteData?.buffer.asUint8List();
-      if (output == null || output.isEmpty) return bytes;
+      img.fill(canvas, color: _imgColor(background.toARGB32()));
+      img.compositeImage(canvas, decoded);
+      final output = Uint8List.fromList(img.encodePng(canvas, level: 4));
+      if (output.isEmpty) return bytes;
       return output;
     } on Exception {
       return bytes;
     }
   }
+
+  img.Color _imgColor(int argb) => img.ColorUint8.rgba(
+        (argb >> 16) & 0xFF,
+        (argb >> 8) & 0xFF,
+        argb & 0xFF,
+        (argb >> 24) & 0xFF,
+      );
 
   Future<void> _seedDemoAvatarForJid({
     required String jid,

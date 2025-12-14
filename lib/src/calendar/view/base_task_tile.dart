@@ -15,6 +15,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'feedback_system.dart';
 import 'widgets/calendar_completion_checkbox.dart';
+import 'widgets/calendar_task_title_tooltip.dart';
 import 'widgets/task_checklist.dart';
 
 abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
@@ -383,17 +384,20 @@ class _MediumTaskTile extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        task.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: textColor,
-                          decoration: task.isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
+                      child: CalendarTaskTitleTooltip(
+                        title: task.title,
+                        child: Text(
+                          task.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: textColor,
+                            decoration: task.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
                         ),
                       ),
                     ),
@@ -685,15 +689,18 @@ class _TaskTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      task.title,
-      maxLines: maxLines,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: fontSize,
-        fontWeight: FontWeight.w500,
-        decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-        color: task.isCompleted ? calendarPrimaryColor : calendarTitleColor,
+    return CalendarTaskTitleTooltip(
+      title: task.title,
+      child: Text(
+        task.title,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w500,
+          decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+          color: task.isCompleted ? calendarPrimaryColor : calendarTitleColor,
+        ),
       ),
     );
   }

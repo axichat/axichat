@@ -9,6 +9,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'controllers/task_interaction_controller.dart';
+import 'widgets/calendar_task_title_tooltip.dart';
 import 'widgets/calendar_task_tile_render.dart';
 
 class DragFeedbackHint {
@@ -430,16 +431,19 @@ class _ResizableTaskBody extends StatelessWidget {
               ),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  task.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: titleColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    decoration:
-                        task.isCompleted ? TextDecoration.lineThrough : null,
+                child: CalendarTaskTitleTooltip(
+                  title: task.title,
+                  child: Text(
+                    task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      decoration:
+                          task.isCompleted ? TextDecoration.lineThrough : null,
+                    ),
                   ),
                 ),
               ),
@@ -477,15 +481,18 @@ class _ResizableTaskBody extends StatelessWidget {
         descriptionLines >= 4 ? TextOverflow.fade : TextOverflow.ellipsis;
 
     Widget titleSection() {
-      final title = Text(
-        task.title,
-        maxLines: titleLines,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: titleColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+      final title = CalendarTaskTitleTooltip(
+        title: task.title,
+        child: Text(
+          task.title,
+          maxLines: titleLines,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: titleColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+          ),
         ),
       );
 
