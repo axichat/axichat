@@ -37,7 +37,15 @@ final _capabilityCacheKey =
     XmppStateStore.registerKey('message_peer_capabilities');
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
+const Duration _httpAttachmentGetTimeout = Duration(minutes: 2);
+const int _xmppAttachmentDownloadLimitFallbackBytes = 50 * 1024 * 1024;
+const int _aesGcmTagLengthBytes = 16;
+const int _attachmentMaxFilenameLength = 120;
 const int serverOnlyChatMessageCap = 500;
+const Set<String> _safeHttpUploadLogHeaders = {
+  HttpHeaders.contentLengthHeader,
+  HttpHeaders.contentTypeHeader,
+};
 
 class _PeerCapabilities {
   const _PeerCapabilities({
@@ -452,6 +460,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
   var _capabilityCacheLoaded = false;
+  final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
+  Directory? _attachmentDirectory;
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -622,7 +632,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       mox.FileUploadNotificationManager(),
       // mox.StickersManager(),
       // mox.MUCManager(),
-      // mox.SFSManager(),
+      mox.SFSManager(),
     ]);
 
   mox.MessageEvent _buildOutgoingMessageEvent({
@@ -746,7 +756,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       throw XmppMessageException();
     }
     if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
-      _log.warning('Blocked XMPP attachment send to foreign domain: $jid');
+      _log.warning('Blocked XMPP attachment send to foreign domain.');
       throw XmppForeignDomainException();
     }
     final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
@@ -757,7 +767,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     final uploadSupport = httpUploadSupport;
     _log.fine(
       'HTTP upload support snapshot: supported=${uploadSupport.supported} '
-      'entity=${uploadSupport.entityJid ?? 'unknown'} '
       'maxSize=${uploadSupport.maxFileSizeBytes ?? 'unspecified'}',
     );
     if (!await uploadManager.isSupported()) {
@@ -766,13 +775,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
     final file = File(attachment.path);
     if (!await file.exists()) {
-      _log.warning('Attachment missing on disk: ${attachment.path}');
+      _log.warning('Attachment missing on disk.');
       throw XmppMessageException();
     }
     final actualSize = await file.length();
     _log.fine(
       'Attachment size check: declared=${attachment.sizeBytes} '
-      'actual=$actualSize path=${file.path}',
+      'actual=$actualSize',
     );
     if (attachment.sizeBytes > 0 && attachment.sizeBytes != actualSize) {
       _log.fine(
@@ -915,7 +924,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     try {
       _log.fine(
         'Requesting HTTP upload slot for $filename size=$sizeBytes '
-        'contentType=$contentType target=$uploadTarget',
+        'contentType=$contentType',
       );
       return await _requestUploadSlotViaStanza(
         uploadJid: uploadTarget,
@@ -993,6 +1002,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       if (putUrl == null || getUrl == null) {
         throw XmppUploadMisconfiguredException();
       }
+      _validateHttpUploadSlotUrls(
+        putUrl: putUrl,
+        getUrl: getUrl,
+      );
       final headers = Map<String, String>.fromEntries(
         slot
                 ?.findTags('header')
@@ -1016,6 +1029,29 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
   }
 
+  void _validateHttpUploadSlotUrls({
+    required String putUrl,
+    required String getUrl,
+  }) {
+    final putUri = Uri.tryParse(putUrl);
+    final getUri = Uri.tryParse(getUrl);
+    if (putUri == null || getUri == null) {
+      throw XmppUploadMisconfiguredException('Upload slot URL invalid.');
+    }
+    const allowInsecure = !kReleaseMode && kAllowInsecureXmppHttpUploadSlots;
+    final putIsHttps = putUri.scheme.toLowerCase() == 'https';
+    final getIsHttps = getUri.scheme.toLowerCase() == 'https';
+    if (putIsHttps && getIsHttps) return;
+    if (allowInsecure) {
+      _log.warning(
+        'Using non-HTTPS upload slot URLs '
+        '(development override enabled).',
+      );
+      return;
+    }
+    throw XmppUploadMisconfiguredException('Upload slot URLs must use HTTPS.');
+  }
+
   Future<void> _uploadFileToSlot(
     _UploadSlot slot,
     File file, {
@@ -1037,19 +1073,34 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         request.headers.contentType = ContentType.parse(contentType);
       }
       request.headers.contentLength = uploadLength;
+      final safeHeaders = <String>{
+        ...slot.headers.keys
+            .map((key) => key.toLowerCase())
+            .where(_safeHttpUploadLogHeaders.contains),
+        ..._safeHttpUploadLogHeaders,
+      }.toList()
+        ..sort();
+      final redactedHeaders = slot.headers.keys
+          .where(
+            (key) => !_safeHttpUploadLogHeaders.contains(key.toLowerCase()),
+          )
+          .length;
+      final headerSuffix =
+          redactedHeaders > 0 ? ' (+$redactedHeaders redacted)' : '';
       _log.finer(
-        'HTTP upload PUT ${uri.path} len=$uploadLength headers=${request.headers}',
+        'HTTP upload PUT started len=$uploadLength '
+        'headers=${safeHeaders.join(',')}$headerSuffix',
       );
       await file.openRead().timeout(_httpUploadPutTimeout).forEach(request.add);
       _log.finer(
         'HTTP upload PUT stream sent in ${stopwatch.elapsedMilliseconds}ms '
-        'len=$uploadLength path=${uri.path}',
+        'len=$uploadLength',
       );
       final response = await request.close().timeout(_httpUploadPutTimeout);
       final statusCode = response.statusCode;
       _log.finer(
         'HTTP upload PUT received status $statusCode '
-        'after ${stopwatch.elapsedMilliseconds}ms path=${uri.path}',
+        'after ${stopwatch.elapsedMilliseconds}ms',
       );
       final bodyBytes = await response
           .timeout(_httpUploadPutTimeout)
@@ -1061,24 +1112,23 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       if (!success) {
         _log.warning(
           'HTTP upload failed with status $statusCode '
-          'for ${uri.path} body=${utf8.decode(bodyBytes, allowMalformed: true)}',
+          '(bodyLen=${bodyBytes.length})',
         );
         throw XmppMessageException();
       }
       _log.finer(
         'HTTP upload PUT completed with $statusCode '
         'in ${stopwatch.elapsedMilliseconds}ms '
-        'path=${uri.path} bodyLen=${bodyBytes.length}',
+        'bodyLen=${bodyBytes.length}',
       );
     } on TimeoutException {
       _log.warning(
-        'HTTP upload timed out after ${_httpUploadPutTimeout.inSeconds}s '
-        'for ${uri.path}',
+        'HTTP upload timed out after ${_httpUploadPutTimeout.inSeconds}s',
       );
       throw XmppUploadUnavailableException();
     } catch (error, stackTrace) {
       _log.warning(
-        'HTTP upload failed for ${uri.path}',
+        'HTTP upload failed.',
         error,
         stackTrace,
       );
@@ -1711,6 +1761,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     _lastSeenKeys.clear();
     _capabilityCache.clear();
     _capabilityCacheLoaded = false;
+    _inboundAttachmentDownloads.clear();
+    _attachmentDirectory = null;
   }
 
   // Future<void> _handleMessage(mox.MessageEvent event) async {
@@ -2028,13 +2080,29 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   }
 
   FileMetadataData? _extractFileMetadata(mox.MessageEvent event) {
+    final fun = event.extensions.get<mox.FileUploadNotificationData>();
     final statelessData = event.extensions.get<mox.StatelessFileSharingData>();
+    final oobUrl = event.extensions.get<mox.OOBData>()?.url;
     if (statelessData == null || statelessData.sources.isEmpty) {
-      if (event.extensions.get<mox.OOBData>()?.url case final url?) {
+      if (fun != null) {
+        final name = fun.metadata.name;
+        final fallbackName = oobUrl == null ? null : _filenameFromUrl(oobUrl);
         return FileMetadataData(
           id: uuid.v4(),
-          sourceUrls: [url],
-          filename: p.basename(url),
+          sourceUrls: oobUrl == null ? null : [oobUrl],
+          filename: p.normalize(name ?? fallbackName ?? 'attachment'),
+          mimeType: fun.metadata.mediaType,
+          sizeBytes: fun.metadata.size,
+          width: fun.metadata.width,
+          height: fun.metadata.height,
+          plainTextHashes: fun.metadata.hashes,
+        );
+      }
+      if (oobUrl != null) {
+        return FileMetadataData(
+          id: uuid.v4(),
+          sourceUrls: [oobUrl],
+          filename: _filenameFromUrl(oobUrl),
         );
       }
       return null;
@@ -2049,7 +2117,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         sourceUrls: urls,
         filename:
             p.normalize(statelessData.metadata.name ?? p.basename(urls.first)),
+        mimeType: statelessData.metadata.mediaType,
         sizeBytes: statelessData.metadata.size,
+        width: statelessData.metadata.width,
+        height: statelessData.metadata.height,
         plainTextHashes: statelessData.metadata.hashes,
       );
     } else {
@@ -2061,13 +2132,347 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         sourceUrls: [encryptedSource.source.url],
         filename: p.normalize(statelessData.metadata.name ??
             p.basename(encryptedSource.source.url)),
+        mimeType: statelessData.metadata.mediaType,
         encryptionKey: base64Encode(encryptedSource.key),
         encryptionIV: base64Encode(encryptedSource.iv),
         encryptionScheme: encryptedSource.encryption.toNamespace(),
         cipherTextHashes: encryptedSource.hashes,
         plainTextHashes: statelessData.metadata.hashes,
         sizeBytes: statelessData.metadata.size,
+        width: statelessData.metadata.width,
+        height: statelessData.metadata.height,
       );
+    }
+  }
+
+  String _filenameFromUrl(String url) {
+    final uri = Uri.tryParse(url);
+    final segments = uri?.pathSegments;
+    final candidate = segments != null && segments.isNotEmpty
+        ? segments.last
+        : p.basename(url);
+    final normalized = p.basename(candidate).trim();
+    return normalized.isEmpty ? 'attachment' : normalized;
+  }
+
+  Stream<FileMetadataData?> fileMetadataStream(String id) =>
+      createSingleItemStream<FileMetadataData?, XmppDatabase>(
+        watchFunction: (db) async {
+          final stream = db.watchFileMetadata(id);
+          final initial = await db.getFileMetadata(id);
+          return stream.startWith(initial);
+        },
+      );
+
+  Future<String?> downloadInboundAttachment({
+    required String metadataId,
+    String? stanzaId,
+  }) async {
+    final existing = _inboundAttachmentDownloads[metadataId];
+    if (existing != null) return await existing;
+    final future = _downloadInboundAttachment(
+      metadataId: metadataId,
+      stanzaId: stanzaId,
+    );
+    _inboundAttachmentDownloads[metadataId] = future;
+    try {
+      return await future;
+    } finally {
+      if (_inboundAttachmentDownloads[metadataId] == future) {
+        _inboundAttachmentDownloads.remove(metadataId);
+      }
+    }
+  }
+
+  Future<String?> _downloadInboundAttachment({
+    required String metadataId,
+    String? stanzaId,
+  }) async {
+    try {
+      final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+        (db) => db.getFileMetadata(metadataId),
+      );
+      if (metadata == null) return null;
+
+      final existingPath = metadata.path?.trim();
+      if (existingPath != null && existingPath.isNotEmpty) {
+        final existingFile = File(existingPath);
+        if (await existingFile.exists()) return existingFile.path;
+      }
+
+      final urls = metadata.sourceUrls;
+      final url = urls == null || urls.isEmpty ? null : urls.first.trim();
+      if (url == null || url.isEmpty) {
+        throw XmppMessageException();
+      }
+
+      final uri = Uri.tryParse(url);
+      if (uri == null) {
+        throw XmppMessageException();
+      }
+
+      final directory = await _attachmentCacheDirectory();
+      final safeFileName = _attachmentFileName(metadata);
+      final finalFile = File(p.join(directory.path, safeFileName));
+      final tmpFile = File(p.join(directory.path, '.${metadata.id}.download'));
+      final maxBytes = _attachmentDownloadLimitBytes(metadata);
+      final expectedSize = metadata.sizeBytes;
+      if (expectedSize != null && expectedSize > 0 && expectedSize > maxBytes) {
+        throw XmppFileTooBigException(maxBytes);
+      }
+      await _downloadUrlToFile(
+        uri: uri,
+        destination: tmpFile,
+        maxBytes: maxBytes,
+      );
+
+      final encrypted = metadata.encryptionScheme?.isNotEmpty == true;
+      if (encrypted) {
+        final cipherBytes = await tmpFile.readAsBytes();
+        await _verifySha256Hash(
+          expected: metadata.cipherTextHashes,
+          bytes: cipherBytes,
+        );
+        final plainBytes = await _decryptAttachmentBytes(
+          metadata: metadata,
+          cipherBytes: cipherBytes,
+        );
+        await _verifySha256Hash(
+          expected: metadata.plainTextHashes,
+          bytes: plainBytes,
+        );
+        final decryptedTmp =
+            File(p.join(directory.path, '.${metadata.id}.decrypted'));
+        await decryptedTmp.writeAsBytes(plainBytes, flush: true);
+        await _replaceFile(source: decryptedTmp, destination: finalFile);
+      } else {
+        await _verifySha256HashForFile(
+          expected: metadata.plainTextHashes,
+          file: tmpFile,
+        );
+        await _replaceFile(source: tmpFile, destination: finalFile);
+      }
+
+      try {
+        await tmpFile.delete();
+      } on Exception {
+        // Ignore cleanup failures.
+      }
+
+      final updatedMetadata = metadata.copyWith(path: finalFile.path);
+      await _dbOp<XmppDatabase>(
+        (db) => db.saveFileMetadata(updatedMetadata),
+        awaitDatabase: true,
+      );
+      return finalFile.path;
+    } on XmppAbortedException {
+      return null;
+    } on XmppException catch (_) {
+      if (stanzaId != null) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: stanzaId,
+            error: MessageError.fileDownloadFailure,
+          ),
+          awaitDatabase: true,
+        );
+      }
+      rethrow;
+    } on Exception {
+      if (stanzaId != null) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: stanzaId,
+            error: MessageError.fileDownloadFailure,
+          ),
+          awaitDatabase: true,
+        );
+      }
+      throw XmppMessageException();
+    }
+  }
+
+  int _attachmentDownloadLimitBytes(FileMetadataData metadata) {
+    final limit = httpUploadSupport.maxFileSizeBytes;
+    if (limit != null && limit > 0) return limit;
+    return _xmppAttachmentDownloadLimitFallbackBytes;
+  }
+
+  Future<Directory> _attachmentCacheDirectory() async {
+    final cached = _attachmentDirectory;
+    if (cached != null && await cached.exists()) {
+      return cached;
+    }
+    final supportDir = await getApplicationSupportDirectory();
+    final prefix = _databasePrefix;
+    final normalizedPrefix = prefix == null || prefix.isEmpty
+        ? 'shared'
+        : prefix.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final directory = Directory(
+      p.join(supportDir.path, 'attachments', normalizedPrefix),
+    );
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+    _attachmentDirectory = directory;
+    return directory;
+  }
+
+  String _attachmentFileName(FileMetadataData metadata) {
+    final sanitized = _sanitizeAttachmentFilename(metadata.filename);
+    return '${metadata.id}_$sanitized';
+  }
+
+  String _sanitizeAttachmentFilename(String filename) {
+    final base = p.basename(filename).trim();
+    if (base.isEmpty) return 'attachment';
+    final strippedSeparators = base.replaceAll(RegExp(r'[\\/]'), '_');
+    final collapsedWhitespace =
+        strippedSeparators.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (collapsedWhitespace.isEmpty) return 'attachment';
+    final safe = collapsedWhitespace.replaceAll(
+      RegExp(r'[^a-zA-Z0-9._() \[\]-]'),
+      '_',
+    );
+    final normalized = safe.trim();
+    if (normalized.isEmpty) return 'attachment';
+    if (normalized.length <= _attachmentMaxFilenameLength) return normalized;
+    final extension = p.extension(normalized);
+    final baseName = p.basenameWithoutExtension(normalized);
+    final maxBase = _attachmentMaxFilenameLength - extension.length;
+    if (maxBase <= 0) {
+      return normalized.substring(0, _attachmentMaxFilenameLength);
+    }
+    return '${baseName.substring(0, maxBase)}$extension';
+  }
+
+  Future<void> _replaceFile({
+    required File source,
+    required File destination,
+  }) async {
+    if (await destination.exists()) {
+      await destination.delete();
+    }
+    await source.rename(destination.path);
+  }
+
+  Future<void> _downloadUrlToFile({
+    required Uri uri,
+    required File destination,
+    required int maxBytes,
+  }) async {
+    final client = HttpClient()..connectionTimeout = _httpAttachmentGetTimeout;
+    try {
+      final request =
+          await client.getUrl(uri).timeout(_httpAttachmentGetTimeout);
+      final response = await request.close().timeout(_httpAttachmentGetTimeout);
+      final statusCode = response.statusCode;
+      final success = statusCode >= 200 && statusCode < 300;
+      if (!success) {
+        throw XmppMessageException();
+      }
+      final responseLength = response.contentLength;
+      if (responseLength != -1 && responseLength > maxBytes) {
+        throw XmppFileTooBigException(maxBytes);
+      }
+      final sink = destination.openWrite();
+      var received = 0;
+      try {
+        await for (final chunk in response.timeout(_httpAttachmentGetTimeout)) {
+          received += chunk.length;
+          if (received > maxBytes) {
+            throw XmppFileTooBigException(maxBytes);
+          }
+          sink.add(chunk);
+        }
+      } finally {
+        await sink.close();
+      }
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<Uint8List> _decryptAttachmentBytes({
+    required FileMetadataData metadata,
+    required List<int> cipherBytes,
+  }) async {
+    final scheme = metadata.encryptionScheme?.trim();
+    final keyEncoded = metadata.encryptionKey?.trim();
+    final ivEncoded = metadata.encryptionIV?.trim();
+    if (scheme == null ||
+        scheme.isEmpty ||
+        keyEncoded == null ||
+        keyEncoded.isEmpty ||
+        ivEncoded == null ||
+        ivEncoded.isEmpty) {
+      throw XmppMessageException();
+    }
+    final keyBytes = base64Decode(keyEncoded);
+    final ivBytes = base64Decode(ivEncoded);
+    switch (scheme) {
+      case mox.sfsEncryptionAes128GcmNoPaddingXmlns:
+      case mox.sfsEncryptionAes256GcmNoPaddingXmlns:
+        if (cipherBytes.length <= _aesGcmTagLengthBytes) {
+          throw XmppMessageException();
+        }
+        final macBytes =
+            cipherBytes.sublist(cipherBytes.length - _aesGcmTagLengthBytes);
+        final body =
+            cipherBytes.sublist(0, cipherBytes.length - _aesGcmTagLengthBytes);
+        final secretBox = SecretBox(
+          body,
+          nonce: ivBytes,
+          mac: Mac(macBytes),
+        );
+        final algorithm = scheme == mox.sfsEncryptionAes128GcmNoPaddingXmlns
+            ? AesGcm.with128bits()
+            : AesGcm.with256bits();
+        final decrypted = await algorithm.decrypt(
+          secretBox,
+          secretKey: SecretKey(keyBytes),
+        );
+        return Uint8List.fromList(decrypted);
+      case mox.sfsEncryptionAes256CbcPkcs7Xmlns:
+        final algorithm = AesCbc.with256bits(macAlgorithm: MacAlgorithm.empty);
+        final secretBox = SecretBox(
+          cipherBytes,
+          nonce: ivBytes,
+          mac: Mac.empty,
+        );
+        final decrypted = await algorithm.decrypt(
+          secretBox,
+          secretKey: SecretKey(keyBytes),
+        );
+        return Uint8List.fromList(decrypted);
+    }
+    throw XmppMessageException();
+  }
+
+  Future<void> _verifySha256Hash({
+    required Map<mox.HashFunction, String>? expected,
+    required List<int> bytes,
+  }) async {
+    if (expected == null || expected.isEmpty) return;
+    final hashValue = expected[mox.HashFunction.sha256]?.trim();
+    if (hashValue == null || hashValue.isEmpty) return;
+    final computed = base64Encode(sha256.convert(bytes).bytes);
+    if (computed != hashValue) {
+      throw XmppMessageException();
+    }
+  }
+
+  Future<void> _verifySha256HashForFile({
+    required Map<mox.HashFunction, String>? expected,
+    required File file,
+  }) async {
+    if (expected == null || expected.isEmpty) return;
+    final hashValue = expected[mox.HashFunction.sha256]?.trim();
+    if (hashValue == null || hashValue.isEmpty) return;
+    final digest = await sha256.bind(file.openRead()).first;
+    final computed = base64Encode(digest.bytes);
+    if (computed != hashValue) {
+      throw XmppMessageException();
     }
   }
 

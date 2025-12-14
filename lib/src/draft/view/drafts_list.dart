@@ -1,8 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -133,13 +133,14 @@ class _DraftsListBody extends StatelessWidget {
             padding: _draftListItemPadding,
             child: AxiListTile(
               key: Key(item.id.toString()),
-              onTap: () => context.read<ComposeWindowCubit>().openDraft(
-                    id: item.id,
-                    jids: item.jids,
-                    body: item.body ?? '',
-                    subject: item.subject ?? '',
-                    attachmentMetadataIds: item.attachmentMetadataIds,
-                  ),
+              onTap: () => openComposeDraft(
+                context,
+                id: item.id,
+                jids: item.jids,
+                body: item.body ?? '',
+                subject: item.subject ?? '',
+                attachmentMetadataIds: item.attachmentMetadataIds,
+              ),
               menuItems: [
                 AxiDeleteMenuItem(
                   onPressed: () async {

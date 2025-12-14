@@ -31,6 +31,7 @@ class NotificationService {
   bool _foregroundCheckUnavailable = false;
 
   bool mute = false;
+  bool notificationPreviewsEnabled = false;
 
   bool get needsPermissions =>
       Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
@@ -42,6 +43,7 @@ class NotificationService {
 
   static const String _unsupportedSchedulingMessage =
       'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
+  static const String _genericMessageNotificationTitle = 'New message';
 
   String get channel => 'Messages';
 
@@ -212,6 +214,37 @@ class NotificationService {
       Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
       title,
       body,
+      notificationDetails,
+      payload: payload,
+    );
+  }
+
+  Future<void> sendMessageNotification({
+    required String title,
+    String? body,
+    List<FutureOr<bool>> extraConditions = const [],
+    bool allowForeground = false,
+    String? payload,
+  }) async {
+    if (mute) return;
+    if (!await hasAllNotificationPermissions()) return;
+    final bool appInForeground = await _isAppOnForeground();
+    if (!allowForeground && appInForeground) {
+      return;
+    }
+    for (final condition in extraConditions) {
+      if (!await condition) return;
+    }
+
+    await _ensureInitialized();
+    final notificationDetails = await _messageNotificationDetails(
+      showPreview: notificationPreviewsEnabled,
+    );
+
+    await _plugin.show(
+      Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
+      _sanitizeMessageNotificationTitle(title),
+      notificationPreviewsEnabled ? body : null,
       notificationDetails,
       payload: payload,
     );
@@ -397,5 +430,40 @@ class NotificationService {
       windows: windowsDetails,
       linux: linuxDetails,
     );
+  }
+
+  Future<NotificationDetails> _messageNotificationDetails({
+    required bool showPreview,
+  }) async {
+    await _ensureInitialized();
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    final androidDetails = AndroidNotificationDetails(
+      channel,
+      channel,
+      groupKey: '${packageInfo.packageName}.MESSAGES',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: androidIconPath,
+      category: AndroidNotificationCategory.message,
+      visibility: showPreview
+          ? NotificationVisibility.public
+          : NotificationVisibility.private,
+    );
+    const windowsDetails = WindowsNotificationDetails();
+    const linuxDetails = LinuxNotificationDetails();
+
+    return NotificationDetails(
+      android: androidDetails,
+      windows: windowsDetails,
+      linux: linuxDetails,
+    );
+  }
+
+  String _sanitizeMessageNotificationTitle(String title) {
+    final normalized = title.trim();
+    if (normalized.isEmpty) return _genericMessageNotificationTitle;
+    if (normalized.contains('@')) return _genericMessageNotificationTitle;
+    return normalized;
   }
 }

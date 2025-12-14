@@ -1844,8 +1844,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         responseBody.isEmpty ? fallback : responseBody,
       ));
       _log.warning(
-        'Account deletion failed (${response.statusCode}) '
-        '${responseBody.isEmpty ? '' : responseBody}',
+        'Account deletion failed (${response.statusCode}).',
       );
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to delete account', error, stackTrace);

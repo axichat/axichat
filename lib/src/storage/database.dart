@@ -228,6 +228,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<FileMetadataData?> getFileMetadata(String id);
 
+  Stream<FileMetadataData?> watchFileMetadata(String id);
+
   Future<void> deleteFileMetadata(String id);
 
   Stream<List<Chat>> watchChats({required int start, required int end});
@@ -789,6 +791,10 @@ class FileMetadataAccessor
   Future<FileMetadataData?> selectOne(Object value) =>
       (select(table)..where((table) => table.id.equals(value as String)))
           .getSingleOrNull();
+
+  Stream<FileMetadataData?> watchOne(String id) =>
+      (select(table)..where((table) => table.id.equals(id)))
+          .watchSingleOrNull();
 
   Future<FileMetadataData?> selectOneByPlaintextHashes(
           Map<HashFunction, String> hashes) =>
@@ -1519,9 +1525,7 @@ WHERE subject_token IS NOT NULL
     Message message, {
     ChatType chatType = ChatType.chat,
   }) async {
-    final bodyPreview =
-        message.body == null ? 'no body' : '${message.body!.length} chars';
-    _log.fine('Persisting message ${message.stanzaID}; body=$bodyPreview');
+    _log.fine('Persisting message');
     final trimmedBody = message.body?.trim();
     final hasBody = trimmedBody?.isNotEmpty == true;
     final hasAttachment = message.fileMetadataID?.isNotEmpty == true;
@@ -1572,7 +1576,7 @@ WHERE subject_token IS NOT NULL
       final persisted = await messagesAccessor.selectOne(message.stanzaID);
       if (persisted == null) {
         _log.warning(
-          'Message insert ignored for ${message.stanzaID}; retrying with upsert',
+          'Message insert ignored; retrying with upsert',
         );
         await into(messages).insertOnConflictUpdate(messageToSave);
       }
@@ -1609,7 +1613,7 @@ WHERE subject_token IS NOT NULL
     required String stanzaID,
     required MessageError error,
   }) async {
-    _log.info('Updating message: $stanzaID with error: ${error.name}...');
+    _log.info('Updating message error');
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       error: Value(error),
@@ -1622,7 +1626,7 @@ WHERE subject_token IS NOT NULL
     required int deviceID,
     required String to,
   }) async {
-    _log.info('Updating message: $stanzaID with device: $deviceID...');
+    _log.info('Updating message device');
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       deviceID: Value(deviceID),
@@ -1635,8 +1639,7 @@ WHERE subject_token IS NOT NULL
     required String stanzaID,
     required String? body,
   }) async {
-    final bodyPreview = body == null ? 'no body' : '${body.length} chars';
-    _log.fine('Editing message $stanzaID; body=$bodyPreview');
+    _log.fine('Editing message');
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       edited: const Value(true),
@@ -1667,7 +1670,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> markMessageRetracted(String stanzaID) async {
-    _log.info('Retracting message: $stanzaID...');
+    _log.info('Retracting message');
     await transaction(() async {
       final message = await (update(messages)
             ..where((messages) => messages.stanzaID.equals(stanzaID)))
@@ -1686,7 +1689,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> markMessageAcked(String stanzaID) async {
-    _log.info('Marking message: $stanzaID acked...');
+    _log.info('Marking message acked');
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       acked: const Value(true),
@@ -1695,7 +1698,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> markMessageReceived(String stanzaID) async {
-    _log.info('Marking message: $stanzaID received...');
+    _log.info('Marking message received');
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       received: const Value(true),
@@ -1704,7 +1707,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> markMessageDisplayed(String stanzaID) async {
-    _log.info('Marking message: $stanzaID displayed...');
+    _log.info('Marking message displayed');
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       displayed: const Value(true),
@@ -1713,7 +1716,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> deleteMessage(String stanzaID) async {
-    _log.info('Deleting message: $stanzaID...');
+    _log.info('Deleting message');
     final existing = await messagesAccessor.selectOne(stanzaID);
     if (existing == null) return;
     await transaction(() async {
@@ -1986,7 +1989,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> saveOmemoDevice(OmemoDevice device) async {
-    _log.info('Saving OMEMO device: $device from jid: ${device.jid}');
+    _log.info('Saving OMEMO device');
     await omemoDevicesAccessor.insertOrUpdateOne(await device.toDb());
   }
 
@@ -2141,6 +2144,10 @@ WHERE subject_token IS NOT NULL
       fileMetadataAccessor.selectOne(id);
 
   @override
+  Stream<FileMetadataData?> watchFileMetadata(String id) =>
+      fileMetadataAccessor.watchOne(id);
+
+  @override
   Future<void> deleteFileMetadata(String id) async {
     await fileMetadataAccessor.deleteOne(id);
   }
@@ -2227,7 +2234,7 @@ WHERE subject_token IS NOT NULL
     required String jid,
     required bool muted,
   }) async {
-    _log.info('Marking chat: $jid as muted: $muted');
+    _log.info('Updating chat muted state');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(muted: Value(muted)));
   }
@@ -2237,7 +2244,7 @@ WHERE subject_token IS NOT NULL
     required String jid,
     required bool enabled,
   }) async {
-    _log.info('Setting chat: $jid share signature to: $enabled');
+    _log.info('Updating chat share signature');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
       ChatsCompanion(shareSignatureEnabled: Value(enabled)),
     );
@@ -2248,7 +2255,7 @@ WHERE subject_token IS NOT NULL
     required String jid,
     required bool favorited,
   }) async {
-    _log.info('Marking chat: $jid as favorited: $favorited');
+    _log.info('Updating chat favorite state');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(favorited: Value(favorited)));
   }
@@ -2258,7 +2265,7 @@ WHERE subject_token IS NOT NULL
     required String jid,
     required bool archived,
   }) async {
-    _log.info('Marking chat: $jid as archived: $archived');
+    _log.info('Updating chat archived state');
     await transaction(() async {
       final chat = await chatsAccessor.selectOne(jid);
       if (chat == null) return;
@@ -2333,7 +2340,7 @@ WHERE subject_token IS NOT NULL
     required String jid,
     required bool hidden,
   }) async {
-    _log.info('Marking chat: $jid as hidden: $hidden');
+    _log.info('Updating chat hidden state');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(hidden: Value(hidden)));
   }
@@ -2368,14 +2375,14 @@ WHERE subject_token IS NOT NULL
     required String jid,
     required bool responsive,
   }) async {
-    _log.info('Marking chat: $jid as marker responsive: $responsive');
+    _log.info('Updating chat marker responsiveness');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(markerResponsive: Value(responsive)));
   }
 
   @override
   Future<void> markChatsMarkerResponsive({required bool responsive}) async {
-    _log.info('Marking all chats as marker responsive: $responsive');
+    _log.info('Updating marker responsiveness for all chats');
     await (update(chats))
         .write(ChatsCompanion(markerResponsive: Value(responsive)));
   }
@@ -2385,7 +2392,7 @@ WHERE subject_token IS NOT NULL
     required String chatJid,
     required mox.ChatState state,
   }) async {
-    _log.info('Updating chat state to ${state.name}...');
+    _log.info('Updating chat state');
     await chatsAccessor.updateOne(ChatsCompanion(
       jid: Value(chatJid),
       chatState: Value(state),
@@ -2397,7 +2404,7 @@ WHERE subject_token IS NOT NULL
     required String chatJid,
     required String? alert,
   }) async {
-    _log.info('Updating chat alert to $alert...');
+    _log.info('Updating chat alert');
     await chatsAccessor.updateOne(ChatsCompanion(
       jid: Value(chatJid),
       alert: Value(alert),
@@ -2409,7 +2416,7 @@ WHERE subject_token IS NOT NULL
     required String chatJid,
     required EncryptionProtocol protocol,
   }) async {
-    _log.info('Updating chat encryption protocol to ${protocol.name}...');
+    _log.info('Updating chat encryption protocol');
     await chatsAccessor.updateOne(ChatsCompanion(
       jid: Value(chatJid),
       encryptionProtocol: Value(protocol),
@@ -2439,7 +2446,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> saveRosterItem(RosterItem item) async {
-    _log.info('Adding ${item.jid} to roster...');
+    _log.info('Saving roster item');
     await transaction(() async {
       await createChat(Chat.fromJid(item.jid));
       await rosterAccessor.insertOrUpdateOne(item);
@@ -2451,7 +2458,7 @@ WHERE subject_token IS NOT NULL
   Future<void> saveRosterItems(List<RosterItem> items) async {
     await transaction(() async {
       for (final item in items) {
-        _log.info('Adding ${item.jid} to roster...');
+        _log.info('Saving roster item');
         await createChat(Chat.fromJid(item.jid));
         await rosterAccessor.insertOrUpdateOne(item);
         await invitesAccessor.deleteOne(item.jid);
@@ -2461,7 +2468,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> updateRosterItem(RosterItem item) async {
-    _log.info('Updating ${item.jid} in roster...');
+    _log.info('Updating roster item');
     await transaction(() async {
       await rosterAccessor.updateOne(item);
       await invitesAccessor.deleteOne(item.jid);
@@ -2472,7 +2479,7 @@ WHERE subject_token IS NOT NULL
   Future<void> updateRosterItems(List<RosterItem> items) async {
     await transaction(() async {
       for (final item in items) {
-        _log.info('Updating ${item.jid} in roster...');
+        _log.info('Updating roster item');
         await rosterAccessor.updateOne(item);
         await invitesAccessor.deleteOne(item.jid);
       }
@@ -2481,7 +2488,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> removeRosterItem(String jid) async {
-    _log.info('Removing $jid from roster...');
+    _log.info('Removing roster item');
     await transaction(() async {
       await rosterAccessor.deleteOne(jid);
       await chatsAccessor.deleteOne(jid);
@@ -2492,7 +2499,7 @@ WHERE subject_token IS NOT NULL
   Future<void> removeRosterItems(List<String> jids) async {
     await transaction(() async {
       for (final jid in jids) {
-        _log.info('Removing $jid from roster...');
+        _log.info('Removing roster item');
         await rosterAccessor.deleteOne(jid);
         await chatsAccessor.deleteOne(jid);
       }
@@ -2505,8 +2512,7 @@ WHERE subject_token IS NOT NULL
     required Presence presence,
     String? status,
   }) async {
-    _log.info('Saving ${jid.toString()} presence: $presence '
-        'and status: $status...');
+    _log.info('Updating presence');
     await rosterAccessor.updateOne(RosterCompanion(
       jid: Value(jid),
       presence: Value(presence),
@@ -2519,7 +2525,7 @@ WHERE subject_token IS NOT NULL
     required String jid,
     required Subscription subscription,
   }) async {
-    _log.info('Updating $jid subscription state to ${subscription.name}');
+    _log.info('Updating roster subscription');
     await rosterAccessor.updateOne(
       RosterCompanion(
         jid: Value(jid),
@@ -2533,7 +2539,7 @@ WHERE subject_token IS NOT NULL
     required String jid,
     Ask? ask,
   }) async {
-    _log.info('Updating $jid ask state to ${ask?.name ?? 'none'}');
+    _log.info('Updating roster ask state');
     await rosterAccessor.updateOne(
       RosterCompanion(
         jid: Value(jid),
@@ -2559,7 +2565,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> markSubscriptionBoth(String jid) async {
-    _log.info('Marking $jid as subscription: both...');
+    _log.info('Marking roster subscription as mutual');
     await transaction(() async {
       await rosterAccessor.updateOne(RosterCompanion(
         jid: Value(jid),
@@ -2583,13 +2589,13 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> saveInvite(Invite invite) async {
-    _log.info('Saving invite from ${invite.jid}...');
+    _log.info('Saving invite');
     await invitesAccessor.insertOne(invite);
   }
 
   @override
   Future<void> deleteInvite(String jid) async {
-    _log.info('Deleting invite from $jid...');
+    _log.info('Deleting invite');
     await invitesAccessor.deleteOne(jid);
   }
 
@@ -2611,7 +2617,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> blockJid(String jid) async {
-    _log.info('Adding $jid to blocklist...');
+    _log.info('Adding to blocklist');
     await blocklistAccessor.insertOne(BlocklistCompanion(jid: Value(jid)));
   }
 
@@ -2619,7 +2625,7 @@ WHERE subject_token IS NOT NULL
   Future<void> blockJids(List<String> jids) async {
     await transaction(() async {
       for (final jid in jids) {
-        _log.info('Adding $jid to blocklist...');
+        _log.info('Adding to blocklist');
         await blocklistAccessor.insertOne(BlocklistCompanion(jid: Value(jid)));
       }
     });
@@ -2627,7 +2633,7 @@ WHERE subject_token IS NOT NULL
 
   @override
   Future<void> unblockJid(String jid) async {
-    _log.info('Removing $jid from blocklist...');
+    _log.info('Removing from blocklist');
     await blocklistAccessor.deleteOne(jid);
   }
 
@@ -2635,7 +2641,7 @@ WHERE subject_token IS NOT NULL
   Future<void> unblockJids(List<String> jids) async {
     await transaction(() async {
       for (final jid in jids) {
-        _log.info('Removing $jid from blocklist...');
+        _log.info('Removing from blocklist');
         await blocklistAccessor.deleteOne(jid);
       }
     });

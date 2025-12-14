@@ -148,7 +148,6 @@ mixin AvatarService on XmppBase {
       if (bytes.isEmpty) return;
 
       final path = await _writeAvatarFile(
-        hash: avatarData.hash,
         bytes: bytes,
       );
 
@@ -191,7 +190,6 @@ mixin AvatarService on XmppBase {
       if (bytes.isEmpty) return;
 
       final path = await _writeAvatarFile(
-        hash: hash,
         bytes: bytes,
       );
 
@@ -490,7 +488,6 @@ mixin AvatarService on XmppBase {
     }
 
     final path = await _writeAvatarFile(
-      hash: payload.hash,
       bytes: payload.bytes,
     );
     await _storeAvatar(jid: targetJid, path: path, hash: payload.hash);
@@ -521,7 +518,7 @@ mixin AvatarService on XmppBase {
       }
       if (avatarEncryptionKey == null) {
         _avatarLog.warning(
-          'Avatar key unavailable; cannot decrypt $normalizedPath',
+          'Avatar key unavailable; cannot decrypt cached avatar.',
         );
         return null;
       }
@@ -531,7 +528,7 @@ mixin AvatarService on XmppBase {
       return decrypted;
     } catch (error, stackTrace) {
       _avatarLog.warning(
-        'Failed to load avatar from $normalizedPath; deleting corrupted cache entry.',
+        'Failed to load cached avatar; deleting corrupted cache entry.',
         error,
         stackTrace,
       );
@@ -599,11 +596,11 @@ mixin AvatarService on XmppBase {
   }
 
   Future<String> _writeAvatarFile({
-    required String hash,
     required List<int> bytes,
   }) async {
     final directory = await _avatarCacheDirectory();
-    final filename = '$hash.enc';
+    final contentHash = sha256.convert(bytes).toString();
+    final filename = '$contentHash.enc';
     final file = File(p.join(directory.path, filename));
     final encrypted = await _encryptAvatarBytes(bytes);
     await file.writeAsBytes(encrypted, flush: true);

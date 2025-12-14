@@ -3,7 +3,7 @@ import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
+import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -115,7 +115,8 @@ class _RosterListBody extends StatelessWidget {
                 ShadContextMenuItem(
                   leading: const Icon(LucideIcons.pencilLine),
                   child: Text(l10n.rosterCompose),
-                  onPressed: () => context.read<ComposeWindowCubit>().openDraft(
+                  onPressed: () => openComposeDraft(
+                    context,
                     jids: [item.jid],
                     attachmentMetadataIds: const <String>[],
                   ),
