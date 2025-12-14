@@ -27,6 +27,14 @@ const double _expandedHeaderPadding = 4;
 const double _chipAvatarSize = 20.0;
 const double _chipStatusBadgeSize = 12.0;
 const double _chipStatusBadgeBorderWidth = 1.5;
+const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
+  4,
+  0,
+  8,
+  0,
+);
+const EdgeInsets _recipientChipLabelPadding =
+    EdgeInsets.symmetric(horizontal: 2);
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -865,8 +873,8 @@ class _RecipientChip extends StatelessWidget {
         selectedShadowColor: colors.shadow,
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+        padding: _recipientChipPadding,
+        labelPadding: _recipientChipLabelPadding,
       ),
     );
   }

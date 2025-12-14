@@ -556,9 +556,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     required double imageWidth,
     required double imageHeight,
   }) {
-    final minSide = min(imageWidth, imageHeight);
-    final targetSide = max(minCropSide, minSide * 0.8);
-    final side = min(targetSide, minSide);
+    final side = min(imageWidth, imageHeight);
     final left = (imageWidth - side) / 2;
     final top = (imageHeight - side) / 2;
     return _constrainRect(

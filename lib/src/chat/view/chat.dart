@@ -2337,7 +2337,15 @@ class _ChatState extends State<Chat> {
                   final path =
                       (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
                   if (path == null || path.isEmpty) continue;
-                  chatAvatarPathsByJid[chat.jid.toLowerCase()] = path;
+                  final normalizedJid = chat.jid.trim().toLowerCase();
+                  if (normalizedJid.isNotEmpty) {
+                    chatAvatarPathsByJid[normalizedJid] = path;
+                  }
+                  final normalizedRemoteJid =
+                      chat.remoteJid.trim().toLowerCase();
+                  if (normalizedRemoteJid.isNotEmpty) {
+                    chatAvatarPathsByJid[normalizedRemoteJid] = path;
+                  }
                 }
                 String? avatarPathForBareJid(String jid) {
                   final normalized = jid.trim().toLowerCase();

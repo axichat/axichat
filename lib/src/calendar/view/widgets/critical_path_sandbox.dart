@@ -10,6 +10,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'calendar_task_title_tooltip.dart';
 
 class CriticalPathSandbox extends StatefulWidget {
   const CriticalPathSandbox({
@@ -730,14 +731,17 @@ class _TaskCard extends StatelessWidget {
                   ),
                   const SizedBox(width: calendarInsetSm),
                   Expanded(
-                    child: Text(
-                      task.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.small.copyWith(
-                        fontWeight: FontWeight.w700,
-                        decoration:
-                            completed ? TextDecoration.lineThrough : null,
+                    child: CalendarTaskTitleTooltip(
+                      title: task.title,
+                      child: Text(
+                        task.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.small.copyWith(
+                          fontWeight: FontWeight.w700,
+                          decoration:
+                              completed ? TextDecoration.lineThrough : null,
+                        ),
                       ),
                     ),
                   ),
@@ -976,10 +980,13 @@ extension on _CriticalPathSandboxState {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      task.title,
-                                      style: textTheme.small.copyWith(
-                                        fontWeight: FontWeight.w700,
+                                    CalendarTaskTitleTooltip(
+                                      title: task.title,
+                                      child: Text(
+                                        task.title,
+                                        style: textTheme.small.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
                                     if (deadlineLabel != null) ...[

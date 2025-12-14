@@ -43,8 +43,7 @@ class AvatarCropper extends StatefulWidget {
     }
     final minSide = min(imageWidth, imageHeight);
     final effectiveMinSide = min(minCropSide, minSide);
-    final targetSide = minSide * 0.72;
-    final safeSide = targetSide.clamp(effectiveMinSide, minSide);
+    final safeSide = minSide.clamp(effectiveMinSide, minSide);
     final left = (imageWidth - safeSide) / 2;
     final top = (imageHeight - safeSide) / 2;
     return Rect.fromLTWH(left, top, safeSide, safeSide);

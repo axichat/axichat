@@ -16,6 +16,7 @@ import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/task_input.dart' as task_input;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'widgets/calendar_task_title_tooltip.dart';
 import 'widgets/task_text_field.dart';
 
 typedef CalendarSearchTileBuilder = Widget Function(
@@ -532,10 +533,13 @@ class _SearchResultTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                task.title,
-                style: context.textTheme.small.copyWith(
-                  fontWeight: FontWeight.w700,
+              CalendarTaskTitleTooltip(
+                title: task.title,
+                child: Text(
+                  task.title,
+                  style: context.textTheme.small.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               if (subtitle != null) ...[

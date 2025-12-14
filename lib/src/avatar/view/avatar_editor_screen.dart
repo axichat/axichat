@@ -97,10 +97,7 @@ class _AvatarEditorBody extends StatelessWidget {
                         profile: profile,
                         isWide: isWide,
                       ),
-                      _CropCard(state: state),
-                      _BackgroundPicker(
-                        state: state,
-                      ),
+                      _AvatarEditorToolsSection(state: state),
                       _DefaultsSection(
                         templates: templates,
                         state: state,
@@ -116,6 +113,48 @@ class _AvatarEditorBody extends StatelessWidget {
     );
   }
 }
+
+class _AvatarEditorToolsSection extends StatelessWidget {
+  const _AvatarEditorToolsSection({required this.state});
+
+  final AvatarEditorState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final showBackgroundPicker = state.template?.hasAlphaBackground == true ||
+        state.source == AvatarSource.upload;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final panelCount = showBackgroundPicker ? 2 : 1;
+        final panelWidth = (panelCount == 2
+                ? (maxWidth - _avatarEditorToolsSpacing) / panelCount
+                : maxWidth)
+            .clamp(0.0, _avatarEditorToolsMaxPanelWidth)
+            .toDouble();
+        return Wrap(
+          spacing: _avatarEditorToolsSpacing,
+          runSpacing: _avatarEditorToolsSpacing,
+          alignment: WrapAlignment.center,
+          children: [
+            SizedBox(
+              width: panelWidth,
+              child: _CropCard(state: state),
+            ),
+            if (showBackgroundPicker)
+              SizedBox(
+                width: panelWidth,
+                child: _BackgroundPicker(state: state),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+const _avatarEditorToolsSpacing = 12.0;
+const _avatarEditorToolsMaxPanelWidth = 420.0;
 
 class _AvatarSummaryCard extends StatelessWidget {
   const _AvatarSummaryCard({
@@ -208,7 +247,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                           )
                         else
                           const Icon(LucideIcons.refreshCw, size: 20),
-                        const Text('Shuffle'),
+                        Text(l10n.signupAvatarShuffle),
                       ],
                     ),
                   ),
@@ -217,12 +256,12 @@ class _AvatarSummaryCard extends StatelessWidget {
                     onPressed: state.processing || state.publishing
                         ? null
                         : cubit.pickImage,
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8.0,
                       children: [
-                        Icon(LucideIcons.upload),
-                        Text('Upload image'),
+                        const Icon(LucideIcons.upload),
+                        Text(l10n.signupAvatarUploadImage),
                       ],
                     ),
                   ),
@@ -312,42 +351,14 @@ class _CropCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 12.0,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 6.0,
-                  children: [
-                    Text(
-                      'Crop & focus',
-                      style: context.textTheme.h4
-                          .copyWith(color: colors.foreground),
-                    ),
-                    Text(
-                      'Drag or resize the square to set your crop. Use reset to center and follow the circle to match the saved avatar.',
-                      style: context.textTheme.small
-                          .copyWith(color: colors.mutedForeground),
-                    ),
-                  ],
-                ),
-              ),
-              if (hasPreview)
-                ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: cubit.resetCrop,
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 8.0,
-                    children: [
-                      Icon(LucideIcons.refreshCcw),
-                      Text('Reset'),
-                    ],
-                  ),
-                ),
-            ],
+          Text(
+            'Crop & focus',
+            style: context.textTheme.h4.copyWith(color: colors.foreground),
+          ),
+          Text(
+            'Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.',
+            style:
+                context.textTheme.small.copyWith(color: colors.mutedForeground),
           ),
           if (!hasPreview)
             Container(
@@ -370,16 +381,18 @@ class _CropCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: 12.0,
               children: [
-                AvatarCropper(
-                  bytes: sourceBytes,
-                  imageWidth: imageWidth,
-                  imageHeight: imageHeight,
-                  cropRect: cropRect,
-                  onCropChanged: cubit.updateCropRect,
-                  onCropReset: cubit.resetCrop,
-                  colors: colors,
-                  borderRadius: context.radius,
-                  minCropSide: AvatarEditorCubit.minCropSide,
+                Center(
+                  child: AvatarCropper(
+                    bytes: sourceBytes,
+                    imageWidth: imageWidth,
+                    imageHeight: imageHeight,
+                    cropRect: cropRect,
+                    onCropChanged: cubit.updateCropRect,
+                    onCropReset: cubit.resetCrop,
+                    colors: colors,
+                    borderRadius: context.radius,
+                    minCropSide: AvatarEditorCubit.minCropSide,
+                  ),
                 ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,7 +400,7 @@ class _CropCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        'Use the handles on the grid to resize or drag the square; it will snap to center when aligned.',
+                        'Use the handles on the grid to resize or drag the square.',
                         style: context.textTheme.small.copyWith(
                           color: colors.mutedForeground,
                         ),
@@ -456,50 +469,58 @@ class _BackgroundPicker extends StatelessWidget {
             style:
                 context.textTheme.small.copyWith(color: colors.mutedForeground),
           ),
-          ColorPicker(
-            color: state.backgroundColor,
-            onColorChanged: (color) => cubit.setBackgroundColor(color, colors),
-            pickersEnabled: const {
-              ColorPickerType.both: false,
-              ColorPickerType.primary: false,
-              ColorPickerType.accent: false,
-              ColorPickerType.bw: false,
-              ColorPickerType.custom: false,
-              ColorPickerType.customSecondary: false,
-              ColorPickerType.wheel: true,
-            },
-            width: 40,
-            height: 40,
-            spacing: 8,
-            runSpacing: 8,
-            hasBorder: true,
-            borderColor: colors.border,
-            borderRadius: context.radius.topLeft.x,
-            wheelDiameter: 220,
-            wheelWidth: 14,
-            showColorCode: true,
-            colorCodeHasColor: true,
-            colorCodeTextStyle:
-                context.textTheme.small.copyWith(color: colors.foreground),
-            colorCodePrefixStyle:
-                context.textTheme.small.copyWith(color: colors.mutedForeground),
-            heading: Text(
-              'Wheel & hex',
-              style: context.textTheme.small.copyWith(color: colors.foreground),
-            ),
-            subheading: Text(
-              'Drag the wheel or enter a hex value.',
-              style: context.textTheme.small
-                  .copyWith(color: colors.mutedForeground),
-            ),
-            actionButtons: const ColorPickerActionButtons(
-              dialogActionButtons: false,
-              closeButton: false,
-              okButton: false,
-            ),
-            copyPasteBehavior: const ColorPickerCopyPasteBehavior(
-              longPressMenu: false,
-              editFieldCopyButton: true,
+          Center(
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: _avatarEditorColorPickerWidth),
+              child: ColorPicker(
+                color: state.backgroundColor,
+                onColorChanged: (color) =>
+                    cubit.setBackgroundColor(color, colors),
+                pickersEnabled: const {
+                  ColorPickerType.both: false,
+                  ColorPickerType.primary: false,
+                  ColorPickerType.accent: false,
+                  ColorPickerType.bw: false,
+                  ColorPickerType.custom: false,
+                  ColorPickerType.customSecondary: false,
+                  ColorPickerType.wheel: true,
+                },
+                width: 40,
+                height: 40,
+                spacing: 8,
+                runSpacing: 8,
+                hasBorder: true,
+                borderColor: colors.border,
+                borderRadius: context.radius.topLeft.x,
+                wheelDiameter: 220,
+                wheelWidth: 14,
+                showColorCode: true,
+                colorCodeHasColor: true,
+                colorCodeTextStyle:
+                    context.textTheme.small.copyWith(color: colors.foreground),
+                colorCodePrefixStyle: context.textTheme.small
+                    .copyWith(color: colors.mutedForeground),
+                heading: Text(
+                  'Wheel & hex',
+                  style: context.textTheme.small
+                      .copyWith(color: colors.foreground),
+                ),
+                subheading: Text(
+                  'Drag the wheel or enter a hex value.',
+                  style: context.textTheme.small
+                      .copyWith(color: colors.mutedForeground),
+                ),
+                actionButtons: const ColorPickerActionButtons(
+                  dialogActionButtons: false,
+                  closeButton: false,
+                  okButton: false,
+                ),
+                copyPasteBehavior: const ColorPickerCopyPasteBehavior(
+                  longPressMenu: false,
+                  editFieldCopyButton: true,
+                ),
+              ),
             ),
           ),
           Wrap(
@@ -548,6 +569,8 @@ class _BackgroundPicker extends StatelessWidget {
     );
   }
 }
+
+const _avatarEditorColorPickerWidth = 340.0;
 
 class _DefaultsSection extends StatelessWidget {
   const _DefaultsSection({
@@ -666,30 +689,13 @@ class _CategoryCarouselCard extends StatefulWidget {
 class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
   final CarouselSliderController _carouselController =
       CarouselSliderController();
-  int _activeIndex = 0;
-
-  @override
-  void didUpdateWidget(covariant _CategoryCarouselCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final itemCount = widget.templates.length;
-    if (itemCount == 0) {
-      _activeIndex = 0;
-      return;
-    }
-    final lastIndex = itemCount - 1;
-    final clampedIndex = _activeIndex.clamp(0, lastIndex);
-    if (clampedIndex != _activeIndex) {
-      _activeIndex = clampedIndex;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final templates = widget.templates;
     if (templates.isEmpty) return const SizedBox.shrink();
-    final canGoBack = _activeIndex > 0;
-    final canGoForward = _activeIndex < templates.length - 1;
+    final canNavigate = templates.length > 1;
     return ShadCard(
       padding: _avatarDefaultsCarouselCardPadding,
       child: Column(
@@ -709,7 +715,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
               AxiIconButton(
                 iconData: LucideIcons.chevronLeft,
                 tooltip: 'Previous',
-                onPressed: canGoBack
+                onPressed: canNavigate
                     ? () => _carouselController.previousPage(
                           duration: baseAnimationDuration,
                           curve: _avatarDefaultsCarouselControlAnimationCurve,
@@ -720,7 +726,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
               AxiIconButton(
                 iconData: LucideIcons.chevronRight,
                 tooltip: 'Next',
-                onPressed: canGoForward
+                onPressed: canNavigate
                     ? () => _carouselController.nextPage(
                           duration: baseAnimationDuration,
                           curve: _avatarDefaultsCarouselControlAnimationCurve,
@@ -755,10 +761,6 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
                   height: _avatarTemplateCarouselHeight,
                   viewportFraction: viewportFraction,
                   enlargeCenterPage: true,
-                  onPageChanged: (index, _) {
-                    if (index == _activeIndex) return;
-                    setState(() => _activeIndex = index);
-                  },
                 ),
               );
             },
@@ -791,64 +793,76 @@ class _TemplatePreviewCard extends StatelessWidget {
             : backgroundColor)
         : colors.card;
     final assetPath = template.assetPath;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: _avatarTemplateCardAnimationDuration,
-        width: _avatarTemplateCardWidth,
-        decoration: BoxDecoration(
-          color: colors.card,
-          borderRadius: context.radius,
-          border: Border.all(
-            color: isSelected ? colors.primary : colors.border,
-            width: isSelected ? 2 : 1,
+    final labelStyle = isSelected
+        ? context.textTheme.p.copyWith(
+            color: colors.primary,
+            fontWeight: FontWeight.w700,
+          )
+        : context.textTheme.small.copyWith(
+            color: colors.mutedForeground,
+          );
+    final border = isSelected
+        ? Border.all(
+            color: colors.primary,
+            width: 2,
+          )
+        : null;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: _avatarTemplateCardAnimationDuration,
+          width: _avatarTemplateCardWidth,
+          decoration: BoxDecoration(
+            color: colors.card,
+            borderRadius: context.radius,
+            border: border,
           ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          spacing: 8.0,
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(10.0),
-                child: ClipRRect(
-                  borderRadius: context.radius,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(color: previewBackground),
-                    child: assetPath == null
-                        ? Center(
-                            child: Icon(
-                              LucideIcons.imageOff,
-                              size: 20,
-                              color: colors.mutedForeground,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            spacing: 8.0,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: ClipRRect(
+                    borderRadius: context.radius,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(color: previewBackground),
+                      child: assetPath == null
+                          ? Center(
+                              child: Icon(
+                                LucideIcons.imageOff,
+                                size: 20,
+                                color: colors.mutedForeground,
+                              ),
+                            )
+                          : Image.asset(
+                              assetPath,
+                              fit: BoxFit.cover,
                             ),
-                          )
-                        : Image.asset(
-                            assetPath,
-                            fit: BoxFit.cover,
-                          ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8.0,
-                vertical: 8.0,
-              ),
-              child: Text(
-                template.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.textTheme.small.copyWith(
-                  color: colors.foreground,
-                  fontWeight: isSelected ? FontWeight.w700 : null,
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 8.0,
+                ),
+                child: Text(
+                  template.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: labelStyle,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+      ).withTapBounce(),
     );
   }
 }
