@@ -30,7 +30,7 @@ import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
-import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
+import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
@@ -551,7 +551,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 actions: {
                   ComposeIntent: CallbackAction<ComposeIntent>(
                     onInvoke: (_) {
-                      context.read<ComposeWindowCubit>().openDraft(
+                      openComposeDraft(
+                        context,
                         attachmentMetadataIds: const <String>[],
                       );
                       return null;

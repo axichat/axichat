@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -104,12 +105,18 @@ void _configureLogging() {
     Logger.root
       ..level = Level.ALL
       ..onRecord.listen((record) {
+        final sanitizedMessage = SafeLogging.sanitizeMessage(record.message);
+        final sanitizedError = SafeLogging.sanitizeError(record.error);
+        final sanitizedStackTrace =
+            SafeLogging.sanitizeStackTrace(record.stackTrace);
         final buffer = StringBuffer()
-          ..write('${record.level.name}: ${record.time}: ${record.message}');
+          ..write(
+            '${record.level.name}: ${record.time}: $sanitizedMessage',
+          );
         if (record.stackTrace != null) {
           buffer
-            ..write(' Exception: ${record.error}')
-            ..write(' Stack Trace: ${record.stackTrace}');
+            ..write(' Exception: $sanitizedError')
+            ..write(' Stack Trace: $sanitizedStackTrace');
         }
         print(buffer.toString());
       });

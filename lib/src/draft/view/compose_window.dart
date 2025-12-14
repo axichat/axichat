@@ -1,14 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
-import 'package:axichat/src/draft/view/draft_form.dart';
-import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/draft/view/compose_draft_content.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -208,36 +204,12 @@ class _ComposeWindowBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final xmppService = context.read<XmppService>();
-    final emailService = context.read<EmailService?>();
-    final suggestionAddresses = <String>{
-      if (xmppService.myJid?.isNotEmpty == true) xmppService.myJid!,
-      if (emailService?.activeAccount?.address.isNotEmpty == true)
-        emailService!.activeAccount!.address,
-    };
-    final suggestionDomains = <String>{
-      EndpointConfig.defaultDomain,
-      ...suggestionAddresses.map(_domainFromAddress).whereType<String>(),
-    };
-
-    return MultiBlocProvider(
-      providers: [
-        if (context.read<ChatsCubit?>() != null)
-          BlocProvider.value(value: context.read<ChatsCubit>()),
-      ],
-      child: SizedBox(
-        height: availableHeight,
-        child: DraftForm(
-          id: seed.id,
-          jids: seed.jids,
-          body: seed.body,
-          subject: seed.subject,
-          attachmentMetadataIds: seed.attachmentMetadataIds,
-          suggestionAddresses: suggestionAddresses,
-          suggestionDomains: suggestionDomains,
-          onClosed: () => context.read<ComposeWindowCubit>().closeWindow(id),
-          onDiscarded: () => context.read<ComposeWindowCubit>().closeWindow(id),
-        ),
+    return SizedBox(
+      height: availableHeight,
+      child: ComposeDraftContent(
+        seed: seed,
+        onClosed: () => context.read<ComposeWindowCubit>().closeWindow(id),
+        onDiscarded: () => context.read<ComposeWindowCubit>().closeWindow(id),
       ),
     );
   }
@@ -470,15 +442,4 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     final dy = offset.dy.clamp(_composeWindowPadding + viewPadding.top, maxY);
     return Offset(dx, dy);
   }
-}
-
-String? _domainFromAddress(String? value) {
-  final trimmed = value?.trim();
-  if (trimmed == null || trimmed.isEmpty || !trimmed.contains('@')) {
-    return null;
-  }
-  final parts = trimmed.split('@');
-  if (parts.length != 2) return null;
-  final domain = parts.last.trim().toLowerCase();
-  return domain.isEmpty ? null : domain;
 }

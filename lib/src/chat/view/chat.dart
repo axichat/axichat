@@ -638,7 +638,7 @@ class _ChatState extends State<Chat> {
   bool _composerHasText = false;
   String _lastSubjectValue = '';
   final _approvedAttachmentSenders = <String>{};
-  final _fileMetadataFutures = <String, Future<FileMetadataData?>>{};
+  final _fileMetadataStreams = <String, Stream<FileMetadataData?>>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   var _chatOpenedAt = DateTime.now();
@@ -1083,14 +1083,10 @@ class _ChatState extends State<Chat> {
     // No-op now that recipient bar height is derived from layout constraints.
   }
 
-  Future<FileMetadataData?> _metadataFutureFor(String id) {
-    return _fileMetadataFutures.putIfAbsent(
+  Stream<FileMetadataData?> _metadataStreamFor(String id) {
+    return _fileMetadataStreams.putIfAbsent(
       id,
-      () async {
-        final xmpp = context.read<XmppService>();
-        final db = await xmpp.database;
-        return db.getFileMetadata(id);
-      },
+      () => context.read<XmppService>().fileMetadataStream(id),
     );
   }
 
@@ -3815,8 +3811,11 @@ class _ChatState extends State<Chat> {
                                                           );
                                                           bubbleChildren.add(
                                                             ChatAttachmentPreview(
-                                                              metadataFuture:
-                                                                  _metadataFutureFor(
+                                                              stanzaId:
+                                                                  messageModel
+                                                                      .stanzaID,
+                                                              metadataStream:
+                                                                  _metadataStreamFor(
                                                                 metadataId,
                                                               ),
                                                               allowed:

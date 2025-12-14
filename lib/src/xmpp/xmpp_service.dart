@@ -13,6 +13,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
@@ -29,6 +30,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -747,13 +749,17 @@ class XmppService extends XmppBase
     await _messageSubscription?.cancel();
     _messageSubscription = _messageStream.stream.listen(
       (message) async {
-        await _notificationService.sendNotification(
-          title: message.senderJid,
+        final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+          (db) async => db.getChat(message.chatJid),
+        );
+        if (chat?.muted ?? false) {
+          return;
+        }
+        await _notificationService.sendMessageNotification(
+          title: chat?.title ?? message.senderJid,
           body: message.body,
           extraConditions: [
             message.senderJid != myJid,
-            !await _dbOpReturning<XmppDatabase, bool>((db) async =>
-                (await db.getChat(message.chatJid))?.muted ?? false),
           ],
           payload: message.chatJid,
         );
@@ -1278,10 +1284,7 @@ class XmppService extends XmppBase
           ? raw
           : await _applyDemoAvatarBackground(
               bytes: raw, background: background);
-      final avatarPath = await _writeAvatarFile(
-        hash: avatar.hash,
-        bytes: bytes,
-      );
+      final avatarPath = await _writeAvatarFile(bytes: bytes);
       await _storeAvatar(
         jid: jid,
         path: avatarPath,

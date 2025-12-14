@@ -22,6 +22,7 @@ class SettingsState with _$SettingsState {
     @Default(ThemeMode.light) ThemeMode themeMode,
     @Default(ShadColor.blue) ShadColor shadColor,
     @Default(false) bool mute,
+    @Default(false) bool notificationPreviewsEnabled,
     @Default(true) bool readReceipts,
     @Default(true) bool indicateTyping,
     @Default(false) bool lowMotion,

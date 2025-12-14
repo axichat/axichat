@@ -2094,8 +2094,9 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                       label: attachmentLabel ??
                           context.l10n.accessibilityAttachmentGeneric,
                       child: ChatAttachmentPreview(
-                        metadataFuture:
-                            Future<FileMetadataData?>.value(attachment),
+                        stanzaId: currentMessage?.stanzaID ?? '',
+                        metadataStream:
+                            Stream<FileMetadataData?>.value(attachment),
                         allowed: true,
                       ),
                     )

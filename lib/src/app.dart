@@ -16,6 +16,7 @@ import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
@@ -248,7 +249,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
-        context.read<NotificationService>().mute = state.mute;
+        context.read<NotificationService>()
+          ..mute = state.mute
+          ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
         final xmppService = context.read<XmppService>();
         xmppService.updateMessageStorageMode(state.messageStorageMode);
         context
@@ -555,7 +558,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     final authState = context.read<AuthenticationCubit>().state;
     if (authState is! AuthenticationComplete) return;
     final payload = shareState.payload!;
-    context.read<ComposeWindowCubit>().openDraft(
+    openComposeDraft(
+      context,
+      navigator: _router.routerDelegate.navigatorKey.currentState,
       body: payload.text,
       jids: const [''],
       attachmentMetadataIds: const <String>[],
@@ -623,7 +628,8 @@ class _ShortcutBindings extends StatelessWidget {
       actions: {
         ComposeIntent: CallbackAction<ComposeIntent>(
           onInvoke: (_) {
-            context.read<ComposeWindowCubit>().openDraft(
+            openComposeDraft(
+              context,
               attachmentMetadataIds: const <String>[],
             );
             return null;
