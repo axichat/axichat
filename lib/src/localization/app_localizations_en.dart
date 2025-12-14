@@ -1596,6 +1596,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Stop receiving message notifications.';
 
   @override
+  String get settingsNotificationPreviews => 'Notification previews';
+
+  @override
+  String get settingsNotificationPreviewsDescription =>
+      'Show message content in notifications and on the lock screen.';
+
+  @override
   String get settingsReadReceipts => 'Send read receipts';
 
   @override

@@ -45,10 +45,14 @@ void openComposeDraft(
     subject: subject,
     attachmentMetadataIds: attachmentMetadataIds,
   );
+  T locate<T>() => context.read<T>();
   unawaited(
     resolvedNavigator.push<void>(
       MaterialPageRoute(
-        builder: (context) => ComposeScreen(seed: seed),
+        builder: (_) => ComposeScreen(
+          seed: seed,
+          locate: locate,
+        ),
       ),
     ),
   );

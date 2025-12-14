@@ -20,12 +20,11 @@ class ComposeDraftContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final xmppService = context.read<XmppService>();
-    final emailService = context.read<EmailService?>();
+    final myJid = context.watch<XmppService>().myJid;
+    final emailAddress = context.watch<EmailService?>()?.activeAccount?.address;
     final suggestionAddresses = <String>{
-      if (xmppService.myJid?.isNotEmpty == true) xmppService.myJid!,
-      if (emailService?.activeAccount?.address.isNotEmpty == true)
-        emailService!.activeAccount!.address,
+      if (myJid?.isNotEmpty == true) myJid!,
+      if (emailAddress?.isNotEmpty == true) emailAddress!,
     };
     final suggestionDomains = <String>{
       EndpointConfig.defaultDomain,

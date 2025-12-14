@@ -1615,6 +1615,14 @@ class AppLocalizationsEs extends AppLocalizations {
       'Deja de recibir notificaciones de mensajes.';
 
   @override
+  String get settingsNotificationPreviews =>
+      'Previsualizaciones de notificación';
+
+  @override
+  String get settingsNotificationPreviewsDescription =>
+      'Mostrar el contenido de los mensajes en notificaciones y en la pantalla de bloqueo.';
+
+  @override
   String get settingsReadReceipts => 'Enviar confirmaciones de lectura';
 
   @override

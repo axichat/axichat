@@ -513,10 +513,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         if (event.encryptionError is omemo.InvalidKeyExchangeSignatureError) {
           return;
         }
-        if (event.extensions.get<mox.FileUploadNotificationData>()
-            case final data?) {
-          if (data.metadata.name == null) return;
-        }
 
         unawaited(_acknowledgeMessage(event));
 
@@ -2124,9 +2120,20 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         plainTextHashes: statelessData.metadata.hashes,
       );
     } else {
-      final encryptedSource = statelessData.sources
-          .whereType<mox.StatelessFileSharingEncryptedSource>()
-          .first;
+      final encryptedSources = statelessData.sources
+          .whereType<mox.StatelessFileSharingEncryptedSource>();
+      final encryptedSource =
+          encryptedSources.isEmpty ? null : encryptedSources.first;
+      if (encryptedSource == null) {
+        if (oobUrl != null) {
+          return FileMetadataData(
+            id: uuid.v4(),
+            sourceUrls: [oobUrl],
+            filename: _filenameFromUrl(oobUrl),
+          );
+        }
+        return null;
+      }
       return FileMetadataData(
         id: uuid.v4(),
         sourceUrls: [encryptedSource.source.url],
@@ -2188,6 +2195,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     required String metadataId,
     String? stanzaId,
   }) async {
+    File? tmpFile;
+    File? decryptedTmp;
     try {
       final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
         (db) => db.getFileMetadata(metadataId),
@@ -2210,11 +2219,14 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       if (uri == null) {
         throw XmppMessageException();
       }
+      if (uri.scheme != 'http' && uri.scheme != 'https') {
+        throw XmppMessageException();
+      }
 
       final directory = await _attachmentCacheDirectory();
       final safeFileName = _attachmentFileName(metadata);
       final finalFile = File(p.join(directory.path, safeFileName));
-      final tmpFile = File(p.join(directory.path, '.${metadata.id}.download'));
+      tmpFile = File(p.join(directory.path, '.${metadata.id}.download'));
       final maxBytes = _attachmentDownloadLimitBytes(metadata);
       final expectedSize = metadata.sizeBytes;
       if (expectedSize != null && expectedSize > 0 && expectedSize > maxBytes) {
@@ -2241,22 +2253,17 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           expected: metadata.plainTextHashes,
           bytes: plainBytes,
         );
-        final decryptedTmp =
-            File(p.join(directory.path, '.${metadata.id}.decrypted'));
+        decryptedTmp = File(p.join(directory.path, '.${metadata.id}.decrypted'));
         await decryptedTmp.writeAsBytes(plainBytes, flush: true);
         await _replaceFile(source: decryptedTmp, destination: finalFile);
+        decryptedTmp = null;
       } else {
         await _verifySha256HashForFile(
           expected: metadata.plainTextHashes,
           file: tmpFile,
         );
         await _replaceFile(source: tmpFile, destination: finalFile);
-      }
-
-      try {
-        await tmpFile.delete();
-      } on Exception {
-        // Ignore cleanup failures.
+        tmpFile = null;
       }
 
       final updatedMetadata = metadata.copyWith(path: finalFile.path);
@@ -2289,6 +2296,17 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         );
       }
       throw XmppMessageException();
+    } finally {
+      try {
+        await tmpFile?.delete();
+      } on Exception {
+        // Ignore cleanup failures.
+      }
+      try {
+        await decryptedTmp?.delete();
+      } on Exception {
+        // Ignore cleanup failures.
+      }
     }
   }
 
@@ -2454,10 +2472,14 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     required List<int> bytes,
   }) async {
     if (expected == null || expected.isEmpty) return;
-    final hashValue = expected[mox.HashFunction.sha256]?.trim();
-    if (hashValue == null || hashValue.isEmpty) return;
-    final computed = base64Encode(sha256.convert(bytes).bytes);
-    if (computed != hashValue) {
+    final hashValue = expected[mox.HashFunction.sha256];
+    if (hashValue == null || hashValue.trim().isEmpty) return;
+    final expectedBytes = _decodeSha256Expected(hashValue);
+    if (expectedBytes == null) {
+      throw XmppMessageException();
+    }
+    final computed = sha256.convert(bytes).bytes;
+    if (!_constantTimeBytesEqual(computed, expectedBytes)) {
       throw XmppMessageException();
     }
   }
@@ -2467,13 +2489,57 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     required File file,
   }) async {
     if (expected == null || expected.isEmpty) return;
-    final hashValue = expected[mox.HashFunction.sha256]?.trim();
-    if (hashValue == null || hashValue.isEmpty) return;
-    final digest = await sha256.bind(file.openRead()).first;
-    final computed = base64Encode(digest.bytes);
-    if (computed != hashValue) {
+    final hashValue = expected[mox.HashFunction.sha256];
+    if (hashValue == null || hashValue.trim().isEmpty) return;
+    final expectedBytes = _decodeSha256Expected(hashValue);
+    if (expectedBytes == null) {
       throw XmppMessageException();
     }
+    final digest = await sha256.bind(file.openRead()).first;
+    if (!_constantTimeBytesEqual(digest.bytes, expectedBytes)) {
+      throw XmppMessageException();
+    }
+  }
+
+  Uint8List? _decodeSha256Expected(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final looksLikeHex = trimmed.length == 64 &&
+        RegExp(r'^[0-9a-fA-F]+$').hasMatch(trimmed);
+    if (looksLikeHex) {
+      try {
+        final bytes = <int>[];
+        for (var index = 0; index < trimmed.length; index += 2) {
+          bytes.add(int.parse(trimmed.substring(index, index + 2), radix: 16));
+        }
+        return Uint8List.fromList(bytes);
+      } on Exception {
+        return null;
+      }
+    }
+    final normalized = _normalizeBase64(trimmed);
+    try {
+      final decoded = base64Decode(normalized);
+      return decoded.length == 32 ? Uint8List.fromList(decoded) : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  String _normalizeBase64(String input) {
+    final sanitized = input.replaceAll('-', '+').replaceAll('_', '/');
+    final padding = sanitized.length % 4;
+    if (padding == 0) return sanitized;
+    return '$sanitized${'=' * (4 - padding)}';
+  }
+
+  bool _constantTimeBytesEqual(List<int> left, List<int> right) {
+    if (left.length != right.length) return false;
+    var result = 0;
+    for (var index = 0; index < left.length; index++) {
+      result |= left[index] ^ right[index];
+    }
+    return result == 0;
   }
 
 // Future<bool> _downloadAllowed(String chatJid) async {

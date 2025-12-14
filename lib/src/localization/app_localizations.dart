@@ -2918,6 +2918,18 @@ abstract class AppLocalizations {
   /// **'Stop receiving message notifications.'**
   String get settingsMuteNotificationsDescription;
 
+  /// No description provided for @settingsNotificationPreviews.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification previews'**
+  String get settingsNotificationPreviews;
+
+  /// No description provided for @settingsNotificationPreviewsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Show message content in notifications and on the lock screen.'**
+  String get settingsNotificationPreviewsDescription;
+
   /// No description provided for @settingsReadReceipts.
   ///
   /// In en, this message translates to:
