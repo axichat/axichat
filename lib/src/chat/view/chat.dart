@@ -3905,12 +3905,23 @@ class _ChatState extends State<Chat> {
                                                         double extraOuterRight =
                                                             0;
                                                         if (hasAvatarSlot) {
+                                                          final messageAvatarPath =
+                                                              state.chat?.type ==
+                                                                      ChatType
+                                                                          .groupChat
+                                                                  ? null
+                                                                  : state.chat
+                                                                          ?.avatarPath ??
+                                                                      state.chat
+                                                                          ?.contactAvatarPath;
                                                           avatarOverlay =
                                                               _MessageAvatar(
                                                             jid: messageModel
                                                                 .senderJid,
                                                             size:
                                                                 _messageAvatarSize,
+                                                            avatarPath:
+                                                                messageAvatarPath,
                                                           );
                                                           avatarStyle =
                                                               const CutoutStyle(
@@ -5526,16 +5537,22 @@ _CutoutLayoutResult<String> _layoutTypingStrip(
 }
 
 class _MessageAvatar extends StatelessWidget {
-  const _MessageAvatar({required this.jid, required this.size});
+  const _MessageAvatar({
+    required this.jid,
+    required this.size,
+    this.avatarPath,
+  });
 
   final String jid;
   final double size;
+  final String? avatarPath;
 
   @override
   Widget build(BuildContext context) {
     return AxiAvatar(
       jid: jid,
       size: size,
+      avatarPath: avatarPath,
     );
   }
 }

@@ -11,7 +11,7 @@ import 'package:axichat/src/authentication/view/widgets/operation_progress_bar.d
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
-import 'package:axichat/src/common/startup/first_frame_gate.dart';
+import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
@@ -54,9 +54,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _operationAcknowledged = false;
   bool _signupButtonLoading = false;
   bool _handledInitialAuthState = false;
-  bool _storedCredentialCheckStarted = false;
-  bool? _hasStoredCredentials;
-  bool _userSelectedMode = false;
+  bool _initialAuthModeResolved = false;
   bool _loginSuccessHandled = false;
   Timer? _authTimeoutTimer;
 
@@ -69,41 +67,13 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_storedCredentialCheckStarted) {
-      _storedCredentialCheckStarted = true;
-      unawaited(_resolveStoredCredentials());
+    if (!_initialAuthModeResolved) {
+      _initialAuthModeResolved = true;
+      _login = context.read<AuthBootstrap>().hasStoredLoginCredentials;
     }
     if (_handledInitialAuthState) return;
     _handledInitialAuthState = true;
     _handleAuthState(context.read<AuthenticationCubit>().state);
-  }
-
-  Future<void> _resolveStoredCredentials() async {
-    bool hasStoredCredentials = false;
-    try {
-      hasStoredCredentials =
-          await context.read<AuthenticationCubit>().hasStoredLoginCredentials();
-    } on Exception catch (error, stackTrace) {
-      if (kDebugMode) {
-        _authUiLog.fine(
-          'Failed to resolve stored credentials availability',
-          error,
-          stackTrace,
-        );
-      }
-      hasStoredCredentials = false;
-    }
-    firstFrameGate.allow();
-    if (!mounted) return;
-    setState(() {
-      _hasStoredCredentials = hasStoredCredentials;
-      if (!_userSelectedMode &&
-          _activeFlow == null &&
-          !_signupFlowLocked &&
-          !_signupButtonLoading) {
-        _login = hasStoredCredentials;
-      }
-    });
   }
 
   void _handleSubmissionRequested(
@@ -344,12 +314,6 @@ class _LoginScreenState extends State<LoginScreen>
         _activeFlow != null ||
         _signupButtonLoading ||
         _operationProgressController.isActive;
-    final showAuthModePlaceholder = _hasStoredCredentials == null &&
-        !_userSelectedMode &&
-        _activeFlow == null &&
-        !_signupFlowLocked &&
-        !_signupButtonLoading &&
-        !_operationProgressController.isActive;
     final size = MediaQuery.sizeOf(context);
     final allowSplitView = size.shortestSide >= compactDeviceBreakpoint &&
         size.width >= smallScreen;
@@ -420,63 +384,55 @@ class _LoginScreenState extends State<LoginScreen>
                                   child: AxiAnimatedSize(
                                     duration: animationDuration,
                                     curve: Curves.easeInOut,
-                                    child: showAuthModePlaceholder
-                                        ? const Padding(
-                                            padding: EdgeInsets.all(24.0),
-                                            child: _AuthModePlaceholder(),
-                                          )
-                                        : AnimatedCrossFade(
-                                            firstCurve: Curves.easeInOut,
-                                            secondCurve: Curves.easeInOut,
-                                            sizeCurve: Curves.easeInOut,
-                                            duration: animationDuration,
-                                            crossFadeState:
-                                                (!_signupFlowLocked && _login)
-                                                    ? CrossFadeState.showFirst
-                                                    : CrossFadeState.showSecond,
-                                            firstChild: IgnorePointer(
-                                              ignoring:
-                                                  _signupFlowLocked || !_login,
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.all(24.0),
-                                                child: LoginForm(
-                                                  onSubmitStart: () =>
-                                                      _handleSubmissionRequested(
-                                                    _AuthFlow.login,
-                                                    label: l10n.authLoggingIn,
-                                                  ),
-                                                  onAutologinStart:
-                                                      _handleAutologinRequested,
-                                                ),
-                                              ),
+                                    child: AnimatedCrossFade(
+                                      firstCurve: Curves.easeInOut,
+                                      secondCurve: Curves.easeInOut,
+                                      sizeCurve: Curves.easeInOut,
+                                      duration: animationDuration,
+                                      crossFadeState:
+                                          (!_signupFlowLocked && _login)
+                                              ? CrossFadeState.showFirst
+                                              : CrossFadeState.showSecond,
+                                      firstChild: IgnorePointer(
+                                        ignoring: _signupFlowLocked || !_login,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(24.0),
+                                          child: LoginForm(
+                                            key: const ValueKey('login-form'),
+                                            onSubmitStart: () =>
+                                                _handleSubmissionRequested(
+                                              _AuthFlow.login,
+                                              label: l10n.authLoggingIn,
                                             ),
-                                            secondChild: IgnorePointer(
-                                              ignoring:
-                                                  !_signupFlowLocked && _login,
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.all(24.0),
-                                                child: BlocProvider(
-                                                  create: (_) =>
-                                                      SignupAvatarCubit(),
-                                                  child: SignupForm(
-                                                    visible:
-                                                        _signupFlowLocked ||
-                                                            !_login,
-                                                    onSubmitStart: () =>
-                                                        _handleSubmissionRequested(
-                                                      _AuthFlow.signup,
-                                                      label: l10n
-                                                          .authCreatingAccount,
-                                                    ),
-                                                    onLoadingChanged:
-                                                        _handleSignupLoadingChanged,
-                                                  ),
-                                                ),
+                                            onAutologinStart:
+                                                _handleAutologinRequested,
+                                          ),
+                                        ),
+                                      ),
+                                      secondChild: IgnorePointer(
+                                        ignoring: !_signupFlowLocked && _login,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(24.0),
+                                          child: BlocProvider(
+                                            create: (_) => SignupAvatarCubit(),
+                                            child: SignupForm(
+                                              key: const ValueKey(
+                                                'signup-form',
                                               ),
+                                              visible:
+                                                  _signupFlowLocked || !_login,
+                                              onSubmitStart: () =>
+                                                  _handleSubmissionRequested(
+                                                _AuthFlow.signup,
+                                                label: l10n.authCreatingAccount,
+                                              ),
+                                              onLoadingChanged:
+                                                  _handleSignupLoadingChanged,
                                             ),
                                           ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -512,7 +468,6 @@ class _LoginScreenState extends State<LoginScreen>
                                           onPressed: () {
                                             final nextLogin = !_login;
                                             setState(() {
-                                              _userSelectedMode = true;
                                               _login = nextLogin;
                                             });
                                           },
@@ -549,21 +504,6 @@ class _LoginScreenState extends State<LoginScreen>
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AuthModePlaceholder extends StatelessWidget {
-  const _AuthModePlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    return ColoredBox(
-      color: colors.card,
-      child: const Center(
-        child: AxiProgressIndicator(),
       ),
     );
   }

@@ -708,15 +708,6 @@ SingleActivator _calendarActivator(TargetPlatform platform) {
   );
 }
 
-SingleActivator _findActionActivator(TargetPlatform platform) {
-  final isApple = _isApplePlatform(platform);
-  return SingleActivator(
-    LogicalKeyboardKey.keyK,
-    meta: isApple,
-    control: !isApple,
-  );
-}
-
 bool _isApplePlatform(TargetPlatform platform) {
   return platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
 }

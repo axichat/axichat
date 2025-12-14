@@ -220,8 +220,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool get _forceAllWithContactViewFilter {
-    if (_isEmailChat) return true;
-    return _isEmailOnlyAddress(jid);
+    return _isEmailChat;
   }
 
   final String? jid;
@@ -497,22 +496,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     unawaited(_messageSubscription?.cancel());
     _currentMessageLimit = limit;
     final chat = state.chat;
-    final isEmailContext = (chat != null && chat.defaultTransport.isEmail) ||
-        _isEmailOnlyAddress(targetJid);
-    final stream = isEmailContext
-        ? _emailService?.messageStreamForChat(
-            targetJid,
-            end: limit,
-            filter: filter,
-          )
-        : _messageService.messageStreamForChat(
-            targetJid,
-            end: limit,
-            filter: filter,
-          );
-    if (stream == null) return;
-    _messageSubscription =
-        stream.listen((items) => add(_ChatMessagesUpdated(items)));
+    final emailService = _emailService;
+    if (chat?.defaultTransport.isEmail == true && emailService != null) {
+      _messageSubscription = emailService
+          .messageStreamForChat(
+        targetJid,
+        end: limit,
+        filter: filter,
+      )
+          .listen(
+        (items) => add(_ChatMessagesUpdated(items)),
+        onError: (Object error, StackTrace stackTrace) {
+          _log.fine('Email message stream failed', error, stackTrace);
+        },
+      );
+      return;
+    }
+    _messageSubscription = _messageService
+        .messageStreamForChat(
+          targetJid,
+          end: limit,
+          filter: filter,
+        )
+        .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
   void _subscribeToTypingParticipants(Chat chat) {

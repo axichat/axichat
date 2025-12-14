@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
+import 'package:axichat/src/demo/demo_calendar.dart';
 import 'base_calendar_bloc.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
@@ -18,6 +19,7 @@ class CalendarBloc extends BaseCalendarBloc {
     required super.storage,
     super.reminderController,
     super.dayEventRepository,
+    bool seedDemoData = false,
     VoidCallback? onDispose,
   })  : _syncManagerBuilder = syncManagerBuilder,
         _onDispose = onDispose,
@@ -30,6 +32,12 @@ class CalendarBloc extends BaseCalendarBloc {
     on<CalendarSyncPushed>(_onCalendarSyncPushed);
     on<CalendarRemoteModelApplied>(_onRemoteModelApplied);
     on<CalendarRemoteTaskApplied>(_onRemoteTaskApplied);
+
+    if (seedDemoData && _canSeedDemoCalendar(state.model)) {
+      final CalendarModel demoModel =
+          DemoCalendar.franklin(anchor: DateTime.now());
+      add(CalendarEvent.remoteModelApplied(model: demoModel));
+    }
   }
 
   final CalendarSyncManager Function(CalendarBloc bloc) _syncManagerBuilder;
@@ -217,3 +225,8 @@ class CalendarBloc extends BaseCalendarBloc {
 
   CalendarModel get currentModel => state.model;
 }
+
+bool _canSeedDemoCalendar(CalendarModel model) =>
+    model.tasks.isEmpty &&
+    model.dayEvents.isEmpty &&
+    model.criticalPaths.isEmpty;
