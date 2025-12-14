@@ -163,46 +163,42 @@ class _QuickAddModalState extends State<QuickAddModal>
   @override
   Widget build(BuildContext context) {
     if (widget.surface == QuickAddModalSurface.bottomSheet) {
-      final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
       return SafeArea(
         top: false,
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: Form(
-            key: _formKey,
-            child: _QuickAddModalContent(
-              isSheet: true,
-              formController: _formController,
-              taskNameController: _taskNameController,
-              descriptionController: _descriptionController,
-              locationController: _locationController,
-              checklistController: _checklistController,
-              taskNameFocusNode: _taskNameFocusNode,
-              locationHelper: widget.locationHelper,
-              onTaskNameChanged: _handleTaskNameChanged,
-              onTaskSubmit: () {
-                _submitTask();
-              },
-              onClose: _dismissModal,
-              onLocationChanged: _handleLocationEdited,
-              onStartChanged: _onUserStartChanged,
-              onEndChanged: _onUserEndChanged,
-              onScheduleCleared: _onUserScheduleCleared,
-              onDeadlineChanged: _onUserDeadlineChanged,
-              onRecurrenceChanged: _onUserRecurrenceChanged,
-              onImportantChanged: _onUserImportantChanged,
-              onUrgentChanged: _onUserUrgentChanged,
-              onRemindersChanged: _onRemindersChanged,
-              actionInsetBuilder: _quickAddActionInset,
-              fallbackDate: widget.prefilledDateTime,
-              onAddToCriticalPath: _queueCriticalPathForDraft,
-              queuedPaths: _queuedPaths(),
-              onRemoveQueuedPath: _removeQueuedCriticalPath,
-              hasCalendarBloc: widget.hasCalendarBloc,
-              formError: _formError,
-              titleValidator: _validateTaskTitle,
-              titleAutovalidateMode: _titleAutovalidateMode,
-            ),
+        child: Form(
+          key: _formKey,
+          child: _QuickAddModalContent(
+            isSheet: true,
+            formController: _formController,
+            taskNameController: _taskNameController,
+            descriptionController: _descriptionController,
+            locationController: _locationController,
+            checklistController: _checklistController,
+            taskNameFocusNode: _taskNameFocusNode,
+            locationHelper: widget.locationHelper,
+            onTaskNameChanged: _handleTaskNameChanged,
+            onTaskSubmit: () {
+              _submitTask();
+            },
+            onClose: _dismissModal,
+            onLocationChanged: _handleLocationEdited,
+            onStartChanged: _onUserStartChanged,
+            onEndChanged: _onUserEndChanged,
+            onScheduleCleared: _onUserScheduleCleared,
+            onDeadlineChanged: _onUserDeadlineChanged,
+            onRecurrenceChanged: _onUserRecurrenceChanged,
+            onImportantChanged: _onUserImportantChanged,
+            onUrgentChanged: _onUserUrgentChanged,
+            onRemindersChanged: _onRemindersChanged,
+            actionInsetBuilder: _quickAddActionInset,
+            fallbackDate: widget.prefilledDateTime,
+            onAddToCriticalPath: _queueCriticalPathForDraft,
+            queuedPaths: _queuedPaths(),
+            onRemoveQueuedPath: _removeQueuedCriticalPath,
+            hasCalendarBloc: widget.hasCalendarBloc,
+            formError: _formError,
+            titleValidator: _validateTaskTitle,
+            titleAutovalidateMode: _titleAutovalidateMode,
           ),
         ),
       );
@@ -1443,6 +1439,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
     backgroundColor: Colors.transparent,
     surfacePadding: EdgeInsets.zero,
     dialogMaxWidth: 760,
+    showCloseButton: false,
     builder: (sheetContext) {
       final B? resolvedBloc = resolveBloc();
       final bool hasBloc = resolvedBloc != null;

@@ -25,13 +25,13 @@ void main() {
   late MockCredentialStore credentialStore;
   late MockXmppService xmppService;
   late MockHttpClient httpClient;
-  late MockChatmailProvisioningClient provisioningClient;
+  late MockEmailProvisioningClient provisioningClient;
 
   setUp(() {
     credentialStore = MockCredentialStore();
     xmppService = MockXmppService();
     httpClient = MockHttpClient();
-    provisioningClient = MockChatmailProvisioningClient();
+    provisioningClient = MockEmailProvisioningClient();
 
     when(() => xmppService.connectivityStream).thenAnswer(
       (_) => const Stream<mox.XmppConnectionState>.empty(),

@@ -35,6 +35,7 @@ const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
 );
 const EdgeInsets _recipientChipLabelPadding =
     EdgeInsets.symmetric(horizontal: 2);
+const TextInputType _recipientKeyboardType = TextInputType.emailAddress;
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -1189,13 +1190,17 @@ class _RecipientAutocompleteField extends StatelessWidget {
                           focusNode: fieldFocusNode,
                           cursorColor: colors.primary,
                           maxLines: 1,
-                          keyboardType: TextInputType.emailAddress,
+                          keyboardType: _recipientKeyboardType,
                           textCapitalization: TextCapitalization.none,
                           autocorrect: false,
                           smartDashesType: SmartDashesType.disabled,
                           smartQuotesType: SmartQuotesType.disabled,
                           enableSuggestions: false,
-                          autofillHints: const [AutofillHints.email],
+                          autofillHints: const [
+                            AutofillHints.email,
+                            AutofillHints.username,
+                            AutofillHints.newUsername,
+                          ],
                           decoration: InputDecoration(
                             hintText: context.l10n.recipientsAddHint,
                             hintStyle: textStyle?.copyWith(color: hintColor),

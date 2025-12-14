@@ -1012,33 +1012,15 @@ class _DateLabelState extends State<_DateLabel> {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final spec = ResponsiveHelper.spec(sheetContext);
-            final media = MediaQuery.of(sheetContext);
             final EdgeInsets modalMargin = spec.modalMargin;
-            final double topPadding = modalMargin.top > media.viewPadding.top
-                ? modalMargin.top
-                : media.viewPadding.top;
-            final double leftPadding = modalMargin.left > media.viewPadding.left
-                ? modalMargin.left
-                : media.viewPadding.left;
-            final double rightPadding =
-                modalMargin.right > media.viewPadding.right
-                    ? modalMargin.right
-                    : media.viewPadding.right;
-            final double safeBottom = media.viewPadding.bottom;
-            final double keyboardInset = media.viewInsets.bottom;
-            final double bottomInset =
-                keyboardInset > safeBottom ? keyboardInset : safeBottom;
             final double fixedBottomPadding =
                 math.max(12.0, modalMargin.bottom * 0.6);
-            final double bottomPadding = fixedBottomPadding + bottomInset;
-            return AnimatedPadding(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
+            return Padding(
               padding: EdgeInsets.only(
-                left: leftPadding,
-                right: rightPadding,
-                top: topPadding,
-                bottom: bottomPadding,
+                left: modalMargin.left,
+                right: modalMargin.right,
+                top: modalMargin.top,
+                bottom: fixedBottomPadding,
               ),
               child: _CalendarDropdown(
                 margin: EdgeInsets.zero,

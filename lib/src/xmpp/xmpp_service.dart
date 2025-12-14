@@ -30,6 +30,8 @@ import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
 import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:cryptography/cryptography.dart';
@@ -497,7 +499,7 @@ class XmppService extends XmppBase
         ]),
         mox.PingManager(const Duration(minutes: 3)),
         // mox.EntityCapabilitiesManager(),
-        mox.PubSubManager(),
+        SafePubSubManager(),
         mox.CSIManager(),
         mox.StableIdManager(),
         mox.CryptographicHashManager(),
@@ -1984,7 +1986,7 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   }
 }
 
-// PubSubManager wrapper removed - moxxmpp v0.5.0's base implementation works correctly
+// PubSubManager wrapper lives in safe_pubsub_manager.dart.
 
 /// Custom SASL SCRAM negotiator that adds support for pre-hashed passwords.
 ///
