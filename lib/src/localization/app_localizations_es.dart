@@ -1073,7 +1073,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get signupAvatarMenuDescription =>
-      'Los avatares predeterminados están abajo. Publicaremos el avatar cuando se cree tu cuenta XMPP.';
+      'Publicaremos el avatar cuando se cree tu cuenta XMPP.';
 
   @override
   String get signupAvatarBackgroundColor => 'Color de fondo';

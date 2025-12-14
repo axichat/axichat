@@ -368,7 +368,7 @@
   "signupAvatarUploadImage": "Subir imagen",
   "signupAvatarUpload": "Subir",
   "signupAvatarShuffle": "Mezclar predeterminado",
-  "signupAvatarMenuDescription": "Los avatares predeterminados están abajo. Publicaremos el avatar cuando se cree tu cuenta XMPP.",
+  "signupAvatarMenuDescription": "Publicaremos el avatar cuando se cree tu cuenta XMPP.",
   "signupAvatarBackgroundColor": "Color de fondo",
   "signupAvatarDefaultsTitle": "Avatares predeterminados",
   "signupAvatarCategoryAbstract": "Abstracto",

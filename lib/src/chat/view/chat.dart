@@ -1164,13 +1164,18 @@ class _ChatState extends State<Chat> {
 
   void _handleSendMessage() {
     final text = _textController.text.trim();
+    final bool hasPreparingAttachments =
+        context.read<ChatBloc>().state.pendingAttachments.any(
+              (attachment) => attachment.isPreparing,
+            );
     final bool hasQueuedAttachments =
         context.read<ChatBloc>().state.pendingAttachments.any(
               (attachment) =>
                   attachment.status == PendingAttachmentStatus.queued,
             );
     final hasSubject = _subjectController.text.trim().isNotEmpty;
-    final canSend = text.isNotEmpty || hasQueuedAttachments || hasSubject;
+    final canSend = !hasPreparingAttachments &&
+        (text.isNotEmpty || hasQueuedAttachments || hasSubject);
     if (!canSend) return;
     context.read<ChatBloc>().add(ChatMessageSent(text: text));
     if (text.isNotEmpty) {
@@ -6386,11 +6391,15 @@ class _ChatComposerSection extends StatelessWidget {
         ? _desktopComposerHorizontalInset
         : _composerHorizontalInset;
     final hasQueuedAttachments = pendingAttachments.any(
-      (attachment) => attachment.status == PendingAttachmentStatus.queued,
+      (attachment) =>
+          attachment.status == PendingAttachmentStatus.queued &&
+          !attachment.isPreparing,
     );
+    final hasPreparingAttachments =
+        pendingAttachments.any((attachment) => attachment.isPreparing);
     final hasSubjectText = subjectController.text.trim().isNotEmpty;
-    final sendEnabled =
-        composerHasText || hasQueuedAttachments || hasSubjectText;
+    final sendEnabled = !hasPreparingAttachments &&
+        (composerHasText || hasQueuedAttachments || hasSubjectText);
     final subjectHeader = _SubjectTextField(
       controller: subjectController,
       focusNode: subjectFocusNode,

@@ -103,6 +103,32 @@ mixin AvatarService on XmppBase {
     }
   }
 
+  Future<void> refreshSelfAvatarIfNeeded({bool force = false}) async {
+    final bareJid = _myJid?.toBare().toString();
+    if (bareJid == null || bareJid.isEmpty) return;
+
+    if (!force) {
+      try {
+        final path = await _dbOpReturning<XmppStateStore, String?>(
+          (ss) => ss.read(key: selfAvatarPathKey) as String?,
+        );
+        final normalizedPath = path?.trim();
+        if (normalizedPath != null && normalizedPath.isNotEmpty) {
+          final bytes = await loadAvatarBytes(normalizedPath);
+          if (bytes != null && bytes.isNotEmpty) {
+            return;
+          }
+        }
+      } on XmppAbortedException {
+        return;
+      }
+    }
+
+    final existingHash = await _storedAvatarHash(bareJid);
+    final shouldForce = force || existingHash?.trim().isNotEmpty == true;
+    await _refreshAvatarForJid(bareJid, force: shouldForce);
+  }
+
   Future<void> _refreshRosterAvatarsFromCache() async {
     List<String> rosterJids;
     try {
@@ -137,7 +163,10 @@ mixin AvatarService on XmppBase {
       if (!force &&
           existingHash != null &&
           existingHash == selectedMetadata.id) {
-        return;
+        final existingPath = await _storedAvatarPath(bareJid);
+        if (await _hasCachedAvatarFile(existingPath)) {
+          return;
+        }
       }
 
       final avatarDataResult = await manager.getUserAvatarData(
@@ -177,7 +206,12 @@ mixin AvatarService on XmppBase {
     if (!added) return;
     try {
       final existingHash = await _storedAvatarHash(bareJid);
-      if (existingHash == hash) return;
+      if (existingHash == hash) {
+        final existingPath = await _storedAvatarPath(bareJid);
+        if (await _hasCachedAvatarFile(existingPath)) {
+          return;
+        }
+      }
 
       final manager = _connection.getManager<mox.VCardManager>();
       if (manager == null) return;
@@ -673,5 +707,18 @@ mixin AvatarService on XmppBase {
     } on Exception {
       return null;
     }
+  }
+
+  Future<bool> _hasCachedAvatarFile(String? path) async {
+    final normalized = path?.trim();
+    if (normalized == null || normalized.isEmpty) return false;
+    final cacheDirectory = await _avatarCacheDirectory();
+    if (!_isSafeAvatarCachePath(
+      cacheDirectory: cacheDirectory,
+      filePath: normalized,
+    )) {
+      return false;
+    }
+    return File(normalized).exists();
   }
 }

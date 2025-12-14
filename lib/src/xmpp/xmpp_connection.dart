@@ -74,6 +74,10 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.httpFileUploadManager);
       case == mox.FileUploadNotificationManager:
         return getManagerById(mox.fileUploadNotificationManager);
+      case == mox.UserAvatarManager:
+        return getManagerById(mox.userAvatarManager);
+      case == mox.VCardManager:
+        return getManagerById(mox.vcardManager);
       default:
         return null;
     }

@@ -94,7 +94,9 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
   Widget build(BuildContext context) {
     final pending = widget.pending;
     Widget preview;
-    if (pending.attachment.isImage) {
+    if (pending.isPreparing) {
+      preview = _PendingAttachmentSkeleton(pending: pending);
+    } else if (pending.attachment.isImage) {
       preview = _PendingImageAttachment(
         pending: pending,
         onRetry: widget.onRetry,
@@ -217,6 +219,12 @@ class _PendingImageAttachment extends StatelessWidget {
               child: Image.file(
                 File(pending.attachment.path),
                 fit: BoxFit.cover,
+                frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                  if (wasSynchronouslyLoaded || frame != null) {
+                    return child;
+                  }
+                  return _PendingImageSkeleton(borderRadius: borderRadius);
+                },
                 errorBuilder: (_, __, ___) => ColoredBox(
                   color: colors.card,
                   child: Icon(
@@ -338,6 +346,189 @@ class _PendingFileAttachment extends StatelessWidget {
             onRemove: onRemove,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PendingAttachmentSkeleton extends StatelessWidget {
+  const _PendingAttachmentSkeleton({required this.pending});
+
+  final PendingAttachment pending;
+
+  @override
+  Widget build(BuildContext context) {
+    if (pending.attachment.isImage) {
+      return const _PendingImageSkeleton();
+    }
+    return const _PendingFileSkeleton();
+  }
+}
+
+class _PendingImageSkeleton extends StatelessWidget {
+  const _PendingImageSkeleton({this.borderRadius});
+
+  final BorderRadius? borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    const extent = 72.0;
+    final radius = borderRadius ?? BorderRadius.circular(16);
+    return SizedBox(
+      width: extent,
+      height: extent,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: const _ShimmerSurface(),
+      ),
+    );
+  }
+}
+
+class _PendingFileSkeleton extends StatelessWidget {
+  const _PendingFileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    const borderRadiusValue = 16.0;
+    const iconExtent = 40.0;
+    const iconRadius = 12.0;
+    const lineHeight = 12.0;
+    const primaryLineWidth = 150.0;
+    const secondaryLineWidth = 110.0;
+    const actionWidth = 28.0;
+
+    final borderRadius = BorderRadius.circular(borderRadiusValue);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: borderRadius,
+        border: Border.all(
+          color: colors.border,
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: iconExtent,
+                height: iconExtent,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(iconRadius),
+                  child: const _ShimmerSurface(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 16,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: const _ShimmerSurface(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: primaryLineWidth,
+                          height: lineHeight,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: const _ShimmerSurface(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: secondaryLineWidth,
+                          height: lineHeight,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: const _ShimmerSurface(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: actionWidth,
+              height: actionWidth,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: const _ShimmerSurface(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShimmerSurface extends StatefulWidget {
+  const _ShimmerSurface();
+
+  @override
+  State<_ShimmerSurface> createState() => _ShimmerSurfaceState();
+}
+
+class _ShimmerSurfaceState extends State<_ShimmerSurface>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final base = colors.border.withValues(alpha: 0.30);
+    final highlight = colors.card.withValues(alpha: 0.85);
+    return ExcludeSemantics(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final shimmer = _controller.value;
+          final start = (shimmer - 0.25).clamp(0.0, 1.0);
+          final mid = shimmer.clamp(0.0, 1.0);
+          final end = (shimmer + 0.25).clamp(0.0, 1.0);
+          return SizedBox.expand(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [base, highlight, base],
+                  stops: [start, mid, end],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

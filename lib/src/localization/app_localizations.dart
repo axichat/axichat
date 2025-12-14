@@ -1970,7 +1970,7 @@ abstract class AppLocalizations {
   /// No description provided for @signupAvatarMenuDescription.
   ///
   /// In en, this message translates to:
-  /// **'Defaults are listed below. We publish the avatar when your XMPP account is created.'**
+  /// **'We publish the avatar when your XMPP account is created.'**
   String get signupAvatarMenuDescription;
 
   /// No description provided for @signupAvatarBackgroundColor.
