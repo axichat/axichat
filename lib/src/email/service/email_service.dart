@@ -1147,6 +1147,7 @@ class EmailService {
         title: chat?.title ?? message.senderJid,
         body: notificationBody,
         payload: chat?.jid,
+        threadKey: message.chatJid,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
