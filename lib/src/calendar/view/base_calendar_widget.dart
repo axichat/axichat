@@ -368,35 +368,40 @@ class _CalendarViewModeSelector extends StatelessWidget {
       ),
       child: ClipPath(
         clipper: ShapeBorderClipper(shape: selectorShape),
-        child: ShadSelect<CalendarView>(
-          initialValue: selectedView,
-          placeholder: Text(
-            l10n.calendarViewLabel,
-            style: calendarCaptionTextStyle,
-          ),
-          options: CalendarView.values
-              .map(
-                (view) => ShadOption(
-                  value: view,
-                  child: Text(labelForView(view).toUpperCase()),
-                ),
-              )
-              .toList(),
-          selectedOptionBuilder: (context, value) {
-            final label = labelForView(value);
-            return Text(
-              label.toUpperCase(),
-              style: calendarCaptionTextStyle.copyWith(
-                color: calendarTitleColor,
-                fontWeight: FontWeight.w600,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: calendarViewModeMinWidth),
+          child: IntrinsicWidth(
+            child: ShadSelect<CalendarView>(
+              initialValue: selectedView,
+              placeholder: Text(
+                l10n.calendarViewLabel,
+                style: calendarCaptionTextStyle,
               ),
-            );
-          },
-          onChanged: (view) {
-            if (view != null) {
-              onChanged(view);
-            }
-          },
+              options: CalendarView.values
+                  .map(
+                    (view) => ShadOption(
+                      value: view,
+                      child: Text(labelForView(view).toUpperCase()),
+                    ),
+                  )
+                  .toList(),
+              selectedOptionBuilder: (context, value) {
+                final label = labelForView(value);
+                return Text(
+                  label.toUpperCase(),
+                  style: calendarCaptionTextStyle.copyWith(
+                    color: calendarTitleColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              },
+              onChanged: (view) {
+                if (view != null) {
+                  onChanged(view);
+                }
+              },
+            ),
+          ),
         ),
       ),
     );

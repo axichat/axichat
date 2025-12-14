@@ -82,6 +82,7 @@ const baseAnimationDuration = Duration(milliseconds: 300);
 
 /// Duration for cross-fading calendar view transitions.
 const calendarViewTransitionDuration = Duration(milliseconds: 400);
+const double calendarViewModeMinWidth = 120.0;
 const calendarClockTickInterval = Duration(minutes: 1);
 const calendarDragWidthDebounceDelay = Duration(milliseconds: 120);
 const calendarTaskSplitPreviewAnimationDuration = Duration(milliseconds: 120);
