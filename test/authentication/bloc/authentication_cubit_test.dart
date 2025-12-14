@@ -5,7 +5,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/chatmail_provisioning_client.dart'
+import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -43,7 +43,7 @@ void main() {
   });
 
   late Client mockHttpClient;
-  late MockChatmailProvisioningClient mockProvisioningClient;
+  late MockEmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
   late Map<String, String?> credentialStorage;
 
@@ -55,7 +55,7 @@ void main() {
     mockNotificationService = MockNotificationService();
     mockEmailService = MockEmailService();
     mockHttpClient = MockHttpClient();
-    mockProvisioningClient = MockChatmailProvisioningClient();
+    mockProvisioningClient = MockEmailProvisioningClient();
 
     when(
       () => mockEmailService.clearStoredCredentials(

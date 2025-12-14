@@ -7,7 +7,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/email/service/chatmail_provisioning_client.dart'
+import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -2418,7 +2418,7 @@ class _PendingAccountDeletion {
         createdAt = createdAt ?? DateTime.now().toIso8601String();
 
   factory _PendingAccountDeletion.fromJson(Map<String, dynamic> json) {
-    final rawEmail = (json['email'] ?? json['chatmailEmail']) as String? ?? '';
+    final rawEmail = json['email'] as String? ?? '';
     return _PendingAccountDeletion(
       username: (json['username'] as String? ?? '').trim(),
       host: (json['host'] as String? ?? AuthenticationCubit.domain).trim(),

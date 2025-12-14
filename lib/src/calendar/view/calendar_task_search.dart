@@ -75,6 +75,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
     context: context,
     dialogMaxWidth: 760,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
+    showCloseButton: false,
     builder: (sheetContext) {
       final B resolvedBloc = resolveBloc();
       return _CalendarTaskSearchSheet<B>(
@@ -213,10 +214,9 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                       : Scrollbar(
                           key: const ValueKey('results'),
                           child: ListView.separated(
-                            padding: EdgeInsets.only(
+                            padding: const EdgeInsets.only(
                               top: calendarInsetSm,
-                              bottom: MediaQuery.viewInsetsOf(context).bottom +
-                                  calendarInsetMd,
+                              bottom: calendarInsetMd,
                             ),
                             itemCount: results.length,
                             separatorBuilder: (_, __) =>

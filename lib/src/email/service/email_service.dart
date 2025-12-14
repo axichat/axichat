@@ -33,6 +33,7 @@ const _connectivityConnectingMin = 2000;
 const _defaultImapPort = '993';
 const _defaultSecurityMode = 'ssl';
 const _unknownEmailPassword = '';
+const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
 
 typedef EmailConnectionConfigBuilder = Map<String, String> Function(
   String address,
@@ -124,9 +125,6 @@ class EmailService {
   bool _running = false;
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
-  final Map<String, RegisteredCredentialKey> _legacyAddressKeys = {};
-  final Map<String, RegisteredCredentialKey> _legacyPasswordKeys = {};
-  final Map<String, RegisteredCredentialKey> _legacyProvisionedKeys = {};
   final Set<String> _ephemeralProvisionedScopes = {};
   final _authFailureController =
       StreamController<DeltaChatException>.broadcast(sync: true);
@@ -142,6 +140,9 @@ class EmailService {
       StreamController<EmailSyncState>.broadcast(sync: true);
   EmailSyncState _syncState = const EmailSyncState.ready();
   bool _channelOverflowRecoveryInProgress = false;
+  final Map<String, RegisteredCredentialKey> _bootstrapKeys = {};
+  Future<void>? _bootstrapFuture;
+  int _bootstrapOperationId = 0;
 
   void updateEndpointConfig(EndpointConfig config) {
     _endpointConfig = config;
@@ -169,15 +170,16 @@ class EmailService {
 
   Future<EmailAccount?> currentAccount(String jid) async {
     final scope = _scopeForJid(jid);
-    final address = await _readCredentialWithLegacy(
-      primary: _addressKeyForScope(scope),
-      legacy: _legacyAddressKeyForScope(scope),
+    final address = await _credentialStore.read(
+      key: _addressKeyForScope(scope),
     );
-    final password = await _readCredentialWithLegacy(
-      primary: _passwordKeyForScope(scope),
-      legacy: _legacyPasswordKeyForScope(scope),
+    final password = await _credentialStore.read(
+      key: _passwordKeyForScope(scope),
     );
-    if (address == null || password == null) {
+    if (address == null ||
+        address.isEmpty ||
+        password == null ||
+        password.isEmpty) {
       return null;
     }
     return EmailAccount(
@@ -221,18 +223,9 @@ class EmailService {
     final addressKey = _addressKeyForScope(scope);
     final passwordKey = _passwordKeyForScope(scope);
     final provisionedKey = _provisionedKeyForScope(scope);
-    final legacyAddressKey = _legacyAddressKeyForScope(scope);
-    final legacyPasswordKey = _legacyPasswordKeyForScope(scope);
-    final legacyProvisionedKey = _legacyProvisionedKeyForScope(scope);
 
-    var address = await _readCredentialWithLegacy(
-      primary: addressKey,
-      legacy: legacyAddressKey,
-    );
-    var password = await _readCredentialWithLegacy(
-      primary: passwordKey,
-      legacy: legacyPasswordKey,
-    );
+    var address = await _credentialStore.read(key: addressKey);
+    var password = await _credentialStore.read(key: passwordKey);
     final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
     final preferredAddress = _preferredAddressFromJid(jid);
     var credentialsMutated = false;
@@ -266,11 +259,8 @@ class EmailService {
       }
     }
 
-    var alreadyProvisioned = (await _readCredentialWithLegacy(
-          primary: provisionedKey,
-          legacy: legacyProvisionedKey,
-        )) ==
-        'true';
+    var alreadyProvisioned =
+        (await _credentialStore.read(key: provisionedKey)) == 'true';
     if (!shouldPersistCredentials &&
         _ephemeralProvisionedScopes.contains(scope)) {
       alreadyProvisioned = true;
@@ -282,7 +272,6 @@ class EmailService {
       _ephemeralProvisionedScopes.remove(scope);
       if (shouldPersistCredentials) {
         await _credentialStore.write(key: provisionedKey, value: 'false');
-        await _credentialStore.write(key: legacyProvisionedKey, value: 'false');
       }
     }
     if (!alreadyProvisioned && !shouldForceProvisioning) {
@@ -317,20 +306,12 @@ class EmailService {
         await _transport.purgeStockMessages();
         if (shouldPersistCredentials) {
           await _credentialStore.write(key: provisionedKey, value: 'true');
-          await _credentialStore.write(
-            key: legacyProvisionedKey,
-            value: 'true',
-          );
         } else {
           _ephemeralProvisionedScopes.add(scope);
         }
       } on DeltaSafeException catch (error, stackTrace) {
         if (shouldPersistCredentials) {
           await _credentialStore.write(key: provisionedKey, value: 'false');
-          await _credentialStore.write(
-            key: legacyProvisionedKey,
-            value: 'false',
-          );
         } else {
           _ephemeralProvisionedScopes.remove(scope);
         }
@@ -385,6 +366,9 @@ class EmailService {
     );
     _activeAccount = account;
     _ephemeralProvisionedScopes.add(scope);
+    unawaited(
+      _bootstrapFromCoreIfNeeded(scope: scope, databasePrefix: databasePrefix),
+    );
     return account;
   }
 
@@ -395,19 +379,14 @@ class EmailService {
   }) async {
     await _ensureReady();
     final scope = _scopeForJid(jid);
-    final address = await _readCredentialWithLegacy(
-      primary: _addressKeyForScope(scope),
-      legacy: _legacyAddressKeyForScope(scope),
+    final address = await _credentialStore.read(
+      key: _addressKeyForScope(scope),
     );
     if (address == null || address.isEmpty) {
       throw StateError('No email address found.');
     }
     await _credentialStore.write(
       key: _passwordKeyForScope(scope),
-      value: password,
-    );
-    await _credentialStore.write(
-      key: _legacyPasswordKeyForScope(scope),
       value: password,
     );
     await _transport.configureAccount(
@@ -924,6 +903,7 @@ class EmailService {
       return;
     }
     await _transport.notifyNetworkAvailable();
+    unawaited(_bootstrapActiveAccountIfNeeded());
   }
 
   Future<void> handleNetworkLost() async {
@@ -1082,9 +1062,11 @@ class EmailService {
         break;
       case DeltaEventType.accountsBackgroundFetchDone:
         _handleBackgroundFetchDone();
+        unawaited(_bootstrapActiveAccountIfNeeded());
         break;
       case DeltaEventType.connectivityChanged:
         unawaited(_refreshConnectivityState());
+        unawaited(_bootstrapActiveAccountIfNeeded());
         break;
       case DeltaEventType.channelOverflow:
         unawaited(_handleChannelOverflow());
@@ -1286,6 +1268,85 @@ class EmailService {
     final token = _pendingPushToken;
     if (token == null || token.isEmpty) return;
     await _transport.registerPushToken(token);
+  }
+
+  Future<void> _bootstrapActiveAccountIfNeeded() async {
+    final scope = _activeCredentialScope;
+    final prefix = _databasePrefix;
+    if (scope == null || prefix == null) {
+      return;
+    }
+    await _bootstrapFromCoreIfNeeded(scope: scope, databasePrefix: prefix);
+  }
+
+  Future<void> _bootstrapFromCoreIfNeeded({
+    required String scope,
+    required String databasePrefix,
+  }) async {
+    final bootstrapKey = _bootstrapKeyFor(
+      scope: scope,
+      databasePrefix: databasePrefix,
+    );
+    final bootstrapped =
+        (await _credentialStore.read(key: bootstrapKey)) == true.toString();
+    if (bootstrapped) {
+      return;
+    }
+    final existing = _bootstrapFuture;
+    if (existing != null) {
+      return;
+    }
+    final operationId = ++_bootstrapOperationId;
+    final future = _runBootstrapFromCore(
+      operationId: operationId,
+      bootstrapKey: bootstrapKey,
+    );
+    _bootstrapFuture = future;
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_bootstrapFuture, future)) {
+          _bootstrapFuture = null;
+        }
+      }),
+    );
+  }
+
+  Future<void> _runBootstrapFromCore({
+    required int operationId,
+    required RegisteredCredentialKey bootstrapKey,
+  }) async {
+    if (_syncState.status == EmailSyncStatus.ready) {
+      _updateSyncState(
+        const EmailSyncState.recovering('Syncing email history…'),
+      );
+    }
+    try {
+      final didBootstrap = await _transport.bootstrapFromCore();
+      if (operationId != _bootstrapOperationId) {
+        return;
+      }
+      if (didBootstrap) {
+        await _credentialStore.write(
+          key: bootstrapKey,
+          value: true.toString(),
+        );
+      }
+      if (operationId != _bootstrapOperationId) {
+        return;
+      }
+      await _refreshConnectivityState();
+    } on Exception catch (error, stackTrace) {
+      if (operationId != _bootstrapOperationId) {
+        return;
+      }
+      _log.warning('Email history bootstrap failed', error, stackTrace);
+      if (_syncState.status == EmailSyncStatus.ready ||
+          _syncState.status == EmailSyncStatus.recovering) {
+        _updateSyncState(
+          const EmailSyncState.recovering('Email sync will retry shortly…'),
+        );
+      }
+    }
   }
 
   Future<void> _stopForegroundKeepalive() async {
@@ -1565,24 +1626,10 @@ class EmailService {
     );
   }
 
-  RegisteredCredentialKey _legacyAddressKeyForScope(String scope) {
-    return _legacyAddressKeys.putIfAbsent(
-      scope,
-      () => CredentialStore.registerKey('chatmail_address_$scope'),
-    );
-  }
-
   RegisteredCredentialKey _passwordKeyForScope(String scope) {
     return _passwordKeys.putIfAbsent(
       scope,
       () => CredentialStore.registerKey('email_password_$scope'),
-    );
-  }
-
-  RegisteredCredentialKey _legacyPasswordKeyForScope(String scope) {
-    return _legacyPasswordKeys.putIfAbsent(
-      scope,
-      () => CredentialStore.registerKey('chatmail_password_$scope'),
     );
   }
 
@@ -1593,10 +1640,14 @@ class EmailService {
     );
   }
 
-  RegisteredCredentialKey _legacyProvisionedKeyForScope(String scope) {
-    return _legacyProvisionedKeys.putIfAbsent(
-      scope,
-      () => CredentialStore.registerKey('chatmail_provisioned_$scope'),
+  RegisteredCredentialKey _bootstrapKeyFor({
+    required String scope,
+    required String databasePrefix,
+  }) {
+    final identifier = '${_emailBootstrapKeyPrefix}_${databasePrefix}_$scope';
+    return _bootstrapKeys.putIfAbsent(
+      identifier,
+      () => CredentialStore.registerKey(identifier),
     );
   }
 
@@ -1607,43 +1658,10 @@ class EmailService {
 
   String _normalizeJid(String jid) => jid.split('/').first;
 
-  Future<String?> _readCredentialWithLegacy({
-    required RegisteredCredentialKey primary,
-    required RegisteredCredentialKey legacy,
-  }) async {
-    final value = await _credentialStore.read(key: primary);
-    if (value != null && value.isNotEmpty) {
-      return value;
-    }
-    final legacyValue = await _credentialStore.read(key: legacy);
-    if (legacyValue != null && legacyValue.isNotEmpty) {
-      await _credentialStore.write(key: primary, value: legacyValue);
-      return legacyValue;
-    }
-    return null;
-  }
-
-  Future<void> _deleteCredentialPair({
-    required RegisteredCredentialKey primary,
-    required RegisteredCredentialKey legacy,
-  }) async {
-    await _credentialStore.delete(key: primary);
-    await _credentialStore.delete(key: legacy);
-  }
-
   Future<void> _clearCredentials(String scope) async {
-    await _deleteCredentialPair(
-      primary: _addressKeyForScope(scope),
-      legacy: _legacyAddressKeyForScope(scope),
-    );
-    await _deleteCredentialPair(
-      primary: _passwordKeyForScope(scope),
-      legacy: _legacyPasswordKeyForScope(scope),
-    );
-    await _deleteCredentialPair(
-      primary: _provisionedKeyForScope(scope),
-      legacy: _legacyProvisionedKeyForScope(scope),
-    );
+    await _credentialStore.delete(key: _addressKeyForScope(scope));
+    await _credentialStore.delete(key: _passwordKeyForScope(scope));
+    await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     if (_activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;
@@ -1676,13 +1694,11 @@ class EmailService {
     final addressKey = _addressKeyForScope(scope);
     final passwordKey = _passwordKeyForScope(scope);
     final provisionedKey = _provisionedKeyForScope(scope);
-    final legacyProvisionedKey = _legacyProvisionedKeyForScope(scope);
     await _credentialStore.write(
         key: addressKey, value: _activeAccount!.address);
     await _credentialStore.write(
         key: passwordKey, value: _activeAccount!.password);
     await _credentialStore.write(key: provisionedKey, value: 'true');
-    await _credentialStore.write(key: legacyProvisionedKey, value: 'true');
     _ephemeralProvisionedScopes.add(scope);
   }
 
@@ -1691,18 +1707,9 @@ class EmailService {
     bool preserveActiveSession = false,
   }) async {
     final scope = _scopeForJid(jid);
-    await _deleteCredentialPair(
-      primary: _addressKeyForScope(scope),
-      legacy: _legacyAddressKeyForScope(scope),
-    );
-    await _deleteCredentialPair(
-      primary: _passwordKeyForScope(scope),
-      legacy: _legacyPasswordKeyForScope(scope),
-    );
-    await _deleteCredentialPair(
-      primary: _provisionedKeyForScope(scope),
-      legacy: _legacyProvisionedKeyForScope(scope),
-    );
+    await _credentialStore.delete(key: _addressKeyForScope(scope));
+    await _credentialStore.delete(key: _passwordKeyForScope(scope));
+    await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     if (!preserveActiveSession && _activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;

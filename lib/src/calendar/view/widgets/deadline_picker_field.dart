@@ -280,16 +280,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         surfacePadding: EdgeInsets.zero,
         builder: (sheetContext) {
           final MediaQueryData hostMediaQuery = MediaQuery.of(sheetContext);
-          final MediaQueryData viewMedia =
-              MediaQueryData.fromView(View.of(sheetContext));
-          final double safeBottomInset = viewMedia.viewPadding.bottom;
-          final double keyboardInset = hostMediaQuery.viewInsets.bottom;
           final double desiredHeight = widget.showTimeSelectors
               ? _timePickerDesiredHeight
               : _datePickerExpandedHeight;
-          final double additionalBottomPadding = safeBottomInset > keyboardInset
-              ? safeBottomInset - keyboardInset
-              : 0.0;
 
           final previousMonth =
               DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
@@ -353,25 +346,22 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                   availableHeight.isFinite && availableHeight > 0
                       ? math.min(desiredHeight, availableHeight)
                       : desiredHeight;
-              return Padding(
-                padding: EdgeInsets.only(bottom: additionalBottomPadding),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: _deadlinePickerSheetMaxWidth,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(calendarGutterLg),
-                      child: _DeadlineDropdownSurface(
-                        maxHeight: maxHeight,
-                        dropdownKey: _dropdownKey,
-                        minWidth: _deadlinePickerSheetMinWidth,
-                        showTimeSelectors: widget.showTimeSelectors,
-                        monthHeader: header,
-                        calendarGrid: calendarGrid,
-                        timeSelectors: timeSelectors,
-                        actions: actions,
-                      ),
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: _deadlinePickerSheetMaxWidth,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(calendarGutterLg),
+                    child: _DeadlineDropdownSurface(
+                      maxHeight: maxHeight,
+                      dropdownKey: _dropdownKey,
+                      minWidth: _deadlinePickerSheetMinWidth,
+                      showTimeSelectors: widget.showTimeSelectors,
+                      monthHeader: header,
+                      calendarGrid: calendarGrid,
+                      timeSelectors: timeSelectors,
+                      actions: actions,
                     ),
                   ),
                 ),

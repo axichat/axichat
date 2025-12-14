@@ -696,12 +696,11 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   @override
   Widget build(BuildContext context) {
     final titleStyle = context.modalHeaderTextStyle;
-    final viewInsets = MediaQuery.of(context).viewInsets.bottom;
     final l10n = context.l10n;
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(
-          bottom: _inviteSheetHorizontalPadding + viewInsets,
+        padding: const EdgeInsets.only(
+          bottom: _inviteSheetHorizontalPadding,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
