@@ -7,9 +7,8 @@ import 'calendar_hover_title_scope.dart';
 class CalendarHoverTitleBubble extends StatelessWidget {
   const CalendarHoverTitleBubble({super.key});
 
-  static const double _maxWidth = 420.0;
-  static const Duration _fadeDuration = Duration(milliseconds: 120);
-  static const Duration _sizeDuration = Duration(milliseconds: 160);
+  static const double _height = 30.0;
+  static const double _maxWidth = 640.0;
 
   @override
   Widget build(BuildContext context) {
@@ -26,51 +25,44 @@ class CalendarHoverTitleBubble extends StatelessWidget {
         animation: controller,
         builder: (context, _) {
           final String title = controller.title ?? '';
-          final bool visible = title.isNotEmpty;
+          if (title.isEmpty) {
+            return const SizedBox.shrink();
+          }
 
-          return AnimatedSwitcher(
-            duration: _fadeDuration,
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SizeTransition(
-                  sizeFactor: animation,
-                  axisAlignment: -1,
-                  child: child,
+          return ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxWidth),
+            child: IntrinsicWidth(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.card,
+                  border: Border(
+                    top: BorderSide(color: colors.border),
+                    right: BorderSide(color: colors.border),
+                  ),
                 ),
-              );
-            },
-            child: !visible
-                ? const SizedBox.shrink()
-                : AnimatedSize(
-                    duration: _sizeDuration,
-                    alignment: Alignment.bottomLeft,
-                    curve: Curves.easeOut,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: _maxWidth),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: colors.popover,
-                          borderRadius: context.radius,
-                          border: Border.all(color: colors.border),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: calendarInsetLg,
-                            vertical: calendarInsetMd,
-                          ),
-                          child: Text(
-                            title,
-                            style: context.textTheme.small.copyWith(
-                              color: colors.foreground,
-                            ),
-                          ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints.tightFor(height: _height),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: calendarInsetLg,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.small.copyWith(
+                          fontSize: 13,
+                          color: colors.mutedForeground,
                         ),
                       ),
                     ),
                   ),
+                ),
+              ),
+            ),
           );
         },
       ),

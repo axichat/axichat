@@ -7,10 +7,10 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -348,9 +348,29 @@ class _MemberTileState extends State<_MemberTile> {
 
   static const double _avatarSize = 40.0;
 
+  late final XmppService _xmppService;
+  Future<StoredAvatar?>? _selfAvatarFuture;
+
   void _toggleActions() => setState(() => _showActions = !_showActions);
 
   void _closeActions() => setState(() => _showActions = false);
+
+  @override
+  void initState() {
+    super.initState();
+    _xmppService = context.read<XmppService>();
+    if (widget.isSelf) {
+      _selfAvatarFuture = _xmppService.getOwnAvatar();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _MemberTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isSelf && widget.isSelf) {
+      _selfAvatarFuture = _xmppService.getOwnAvatar();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -358,15 +378,14 @@ class _MemberTileState extends State<_MemberTile> {
     final borderColor =
         widget.isSelf ? colors.primary.withValues(alpha: 0.3) : colors.border;
     final avatarKey = _avatarKey(widget.occupant);
-    final rosterCubit = context.read<RosterCubit?>();
 
     String? resolveAvatarPath({
       required List<RosterItem>? rosterItems,
       required List<Chat>? chats,
-      required ProfileState profile,
+      required String? selfAvatarPath,
     }) {
       if (widget.isSelf) {
-        final selfPath = profile.avatarPath?.trim();
+        final selfPath = selfAvatarPath?.trim();
         if (selfPath?.isNotEmpty == true) {
           return selfPath;
         }
@@ -408,43 +427,69 @@ class _MemberTileState extends State<_MemberTile> {
       return null;
     }
 
+    Widget avatarFromSources({
+      required List<Chat>? chats,
+      required List<RosterItem>? rosterItems,
+      required StoredAvatar? selfAvatar,
+    }) {
+      final selfAvatarPath = selfAvatar?.path;
+      final avatarPath = resolveAvatarPath(
+        rosterItems: rosterItems,
+        chats: chats,
+        selfAvatarPath: selfAvatarPath,
+      );
+      return AxiAvatar(
+        jid: avatarKey,
+        size: _avatarSize,
+        avatarPath: avatarPath,
+      );
+    }
+
+    Widget avatarBuilder({
+      required List<Chat>? chats,
+      required List<RosterItem>? rosterItems,
+    }) {
+      if (!widget.isSelf) {
+        return avatarFromSources(
+          chats: chats,
+          rosterItems: rosterItems,
+          selfAvatar: null,
+        );
+      }
+
+      final seededAvatarFuture = _selfAvatarFuture;
+      return FutureBuilder<StoredAvatar?>(
+        future: seededAvatarFuture,
+        builder: (context, snapshot) {
+          final stored = snapshot.data;
+          return StreamBuilder<StoredAvatar?>(
+            stream: _xmppService.selfAvatarStream,
+            initialData: stored,
+            builder: (context, streamSnapshot) {
+              final effectiveAvatar = streamSnapshot.data ?? stored;
+              return avatarFromSources(
+                chats: chats,
+                rosterItems: rosterItems,
+                selfAvatar: effectiveAvatar,
+              );
+            },
+          );
+        },
+      );
+    }
+
     final avatar = BlocBuilder<ChatsCubit, ChatsState>(
       buildWhen: (previous, current) => previous.items != current.items,
       builder: (context, chatsState) {
-        return BlocBuilder<ProfileCubit, ProfileState>(
-          buildWhen: (previous, current) =>
-              previous.avatarPath != current.avatarPath,
-          builder: (context, profileState) {
-            final chats = chatsState.items;
-            if (rosterCubit == null) {
-              final avatarPath = resolveAvatarPath(
-                rosterItems: null,
-                chats: chats,
-                profile: profileState,
-              );
-              return AxiAvatar(
-                jid: avatarKey,
-                size: _avatarSize,
-                avatarPath: avatarPath,
-              );
-            }
-            return BlocBuilder<RosterCubit, RosterState>(
-              buildWhen: (_, current) => current is RosterAvailable,
-              builder: (context, rosterState) {
-                final cachedItems = rosterState is RosterAvailable
-                    ? rosterState.items
-                    : context.read<RosterCubit>()['items'] as List<RosterItem>?;
-                final avatarPath = resolveAvatarPath(
-                  rosterItems: cachedItems,
-                  chats: chats,
-                  profile: profileState,
-                );
-                return AxiAvatar(
-                  jid: avatarKey,
-                  size: _avatarSize,
-                  avatarPath: avatarPath,
-                );
-              },
+        final chats = chatsState.items;
+        return BlocBuilder<RosterCubit, RosterState>(
+          buildWhen: (_, current) => current is RosterAvailable,
+          builder: (context, rosterState) {
+            final cachedItems =
+                rosterState is RosterAvailable ? rosterState.items : null;
+            return avatarBuilder(
+              chats: chats,
+              rosterItems: cachedItems,
             );
           },
         );

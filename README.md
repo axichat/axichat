@@ -96,9 +96,16 @@
 
 ## Screenshots
 
-<p float="left">
-  <img src="/metadata/en-US/images/phoneScreenshots/1-unread_chats_white.png" width="49%"  alt="Chats page" />
-  <img src="/metadata/en-US/images/phoneScreenshots/4-open_chat_dark.png" width="49%"  alt="Message page" />
+<p align="center">
+  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" alt="Axichat desktop screenshot 1" />
+</p>
+
+<p align="center">
+  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" alt="Axichat desktop screenshot 2" />
+</p>
+
+<p align="center">
+  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" alt="Axichat calendar screenshot" />
 </p>
 
 ## Downloading & Installing
@@ -109,4 +116,3 @@
    - **Android** – Sideload the APK or deploy through your preferred device manager.
    - **Windows** – Extract the archive and run `Axichat.exe`.
    - **Linux** – Extract into a directory and launch `./axichat` (see `linux/axichat.desktop` for desktop entry guidance).
-
