@@ -238,24 +238,27 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
               final Widget contextualized = _wrapWithContextMenu(sizedBody);
 
-              return CalendarTaskTileRenderRegion(
-                task: task,
-                interactionController: controller,
-                minutesPerStep: widget.minutesPerStep,
-                stepHeight: widget.stepHeight,
-                enableInteractions: widget.enableInteractions && !isDragging,
-                isSelectionMode: widget.isSelectionMode,
-                isSelected: widget.isSelected,
-                isPopoverOpen: widget.isPopoverOpen,
-                onResizePreview: widget.onResizePreview,
-                onResizeEnd: widget.onResizeEnd,
-                onResizePointerMove: widget.onResizePointerMove,
-                onDragPointerDown: widget.onDragPointerDown,
-                onTap: widget.onTap,
-                onToggleSelection: widget.onToggleSelection,
-                onContextMenuPosition: _captureContextMenuOffsets,
-                handleExtent: widget.resizeHandleExtent,
-                child: contextualized,
+              return CalendarTaskTitleTooltip(
+                title: task.title,
+                child: CalendarTaskTileRenderRegion(
+                  task: task,
+                  interactionController: controller,
+                  minutesPerStep: widget.minutesPerStep,
+                  stepHeight: widget.stepHeight,
+                  enableInteractions: widget.enableInteractions && !isDragging,
+                  isSelectionMode: widget.isSelectionMode,
+                  isSelected: widget.isSelected,
+                  isPopoverOpen: widget.isPopoverOpen,
+                  onResizePreview: widget.onResizePreview,
+                  onResizeEnd: widget.onResizeEnd,
+                  onResizePointerMove: widget.onResizePointerMove,
+                  onDragPointerDown: widget.onDragPointerDown,
+                  onTap: widget.onTap,
+                  onToggleSelection: widget.onToggleSelection,
+                  onContextMenuPosition: _captureContextMenuOffsets,
+                  handleExtent: widget.resizeHandleExtent,
+                  child: contextualized,
+                ),
               );
             }
 

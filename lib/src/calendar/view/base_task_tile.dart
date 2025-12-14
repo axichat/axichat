@@ -129,7 +129,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                   onDelete: handleDelete,
                 );
             }
-            return tile;
+            return CalendarTaskTitleTooltip(title: task.title, child: tile);
           },
         ),
       ),
@@ -384,20 +384,17 @@ class _MediumTaskTile extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: CalendarTaskTitleTooltip(
-                        title: task.title,
-                        child: Text(
-                          task.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: textColor,
-                            decoration: task.isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
+                      child: Text(
+                        task.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: textColor,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                     ),
@@ -689,18 +686,15 @@ class _TaskTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CalendarTaskTitleTooltip(
-      title: task.title,
-      child: Text(
-        task.title,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w500,
-          decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-          color: task.isCompleted ? calendarPrimaryColor : calendarTitleColor,
-        ),
+    return Text(
+      task.title,
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w500,
+        decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+        color: task.isCompleted ? calendarPrimaryColor : calendarTitleColor,
       ),
     );
   }

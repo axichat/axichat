@@ -3703,37 +3703,41 @@ class _SelectionTaskTile extends StatelessWidget {
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverTaskId == task.id;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: calendarGutterSm),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => onFocusTask(task),
-            child: Container(
-              decoration: BoxDecoration(
-                color: isActive ? calendarSidebarBackgroundColor : Colors.white,
-                border: Border(
-                  left: BorderSide(color: borderColor, width: 3),
-                  top: const BorderSide(color: calendarBorderColor),
-                  right: const BorderSide(color: calendarBorderColor),
-                  bottom: const BorderSide(color: calendarBorderColor),
+    return CalendarTaskTitleTooltip(
+      title: task.title,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: calendarGutterSm),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(calendarBorderRadius),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => onFocusTask(task),
+              child: Container(
+                decoration: BoxDecoration(
+                  color:
+                      isActive ? calendarSidebarBackgroundColor : Colors.white,
+                  border: Border(
+                    left: BorderSide(color: borderColor, width: 3),
+                    top: const BorderSide(color: calendarBorderColor),
+                    right: const BorderSide(color: calendarBorderColor),
+                    bottom: const BorderSide(color: calendarBorderColor),
+                  ),
                 ),
-              ),
-              child: _SidebarTaskTileBody(
-                task: task,
-                scheduleLabel: scheduleLabel,
-                onToggleCompletion: (completed) =>
-                    onToggleCompletion(task, completed),
-                trailing: AxiTooltip(
-                  builder: (_) => Text(context.l10n.calendarSelectionRemove),
-                  child: ShadIconButton.ghost(
-                    onPressed: () => onRemoveTask(task),
-                    icon: const Icon(
-                      Icons.close,
-                      size: 16,
-                      color: calendarSubtitleColor,
+                child: _SidebarTaskTileBody(
+                  task: task,
+                  scheduleLabel: scheduleLabel,
+                  onToggleCompletion: (completed) =>
+                      onToggleCompletion(task, completed),
+                  trailing: AxiTooltip(
+                    builder: (_) => Text(context.l10n.calendarSelectionRemove),
+                    child: ShadIconButton.ghost(
+                      onPressed: () => onRemoveTask(task),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: calendarSubtitleColor,
+                      ),
                     ),
                   ),
                 ),
@@ -3776,19 +3780,15 @@ class _SidebarTaskTileBody extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CalendarTaskTitleTooltip(
-                        title: task.title,
-                        child: Text(
-                          task.title,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: task.isCompleted
-                                ? calendarPrimaryColor
-                                : calendarTitleColor,
-                            decoration: task.isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
+                      Text(
+                        task.title,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: task.isCompleted
+                              ? calendarPrimaryColor
+                              : calendarTitleColor,
+                          decoration:
+                              task.isCompleted ? TextDecoration.lineThrough : null,
                         ),
                       ),
                       if (scheduleLabel != null) ...[
@@ -5394,7 +5394,7 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
       tile = host._wrapWithSidebarContextMenu(task: task, child: tile);
     }
 
-    return tile;
+    return CalendarTaskTitleTooltip(title: task.title, child: tile);
   }
 }
 

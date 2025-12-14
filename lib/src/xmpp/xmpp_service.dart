@@ -1007,10 +1007,32 @@ class XmppService extends XmppBase
         }
       }, awaitDatabase: true);
       if (scripts != null) {
+        _seedDemoRoomOccupants(scripts!);
         await _seedDemoAvatars(scripts!);
       }
     } on Exception catch (error, stackTrace) {
       _xmppLogger.fine('Skipping demo chat seed', error, stackTrace);
+    }
+  }
+
+  void _seedDemoRoomOccupants(List<DemoChatScript> scripts) {
+    if (!_demoOfflineMode) return;
+    for (final script in scripts) {
+      final chat = script.chat;
+      if (chat.type != ChatType.groupChat) continue;
+      final roomState = script.roomState;
+      if (roomState == null) continue;
+      for (final occupant in roomState.occupants.values) {
+        updateOccupantFromPresence(
+          roomJid: chat.jid,
+          occupantId: occupant.occupantId,
+          nick: occupant.nick,
+          realJid: occupant.realJid,
+          affiliation: occupant.affiliation,
+          role: occupant.role,
+          isPresent: occupant.isPresent,
+        );
+      }
     }
   }
 

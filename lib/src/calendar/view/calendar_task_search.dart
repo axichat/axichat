@@ -522,34 +522,34 @@ class _SearchResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final String? subtitle = _subtitle();
-    return Material(
-      color: colors.card,
-      borderRadius: BorderRadius.circular(calendarBorderRadius.toDouble()),
-      child: InkWell(
-        onTap: onTap,
+    return CalendarTaskTitleTooltip(
+      title: task.title,
+      child: Material(
+        color: colors.card,
         borderRadius: BorderRadius.circular(calendarBorderRadius.toDouble()),
-        child: Padding(
-          padding: const EdgeInsets.all(calendarGutterMd),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CalendarTaskTitleTooltip(
-                title: task.title,
-                child: Text(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(calendarBorderRadius.toDouble()),
+          child: Padding(
+            padding: const EdgeInsets.all(calendarGutterMd),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   task.title,
                   style: context.textTheme.small.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: calendarInsetSm),
-                Text(
-                  subtitle,
-                  style: context.textTheme.muted,
-                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: calendarInsetSm),
+                  Text(
+                    subtitle,
+                    style: context.textTheme.muted,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
