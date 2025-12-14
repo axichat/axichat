@@ -4019,15 +4019,45 @@ class _ChatState extends State<Chat> {
                                                           final normalizedBareRealJid =
                                                               bareRealJid
                                                                   ?.toLowerCase();
-                                                          final messageAvatarPath = normalizedBareRealJid ==
-                                                                      null ||
+                                                          final senderJid =
+                                                              messageModel
+                                                                  .senderJid
+                                                                  .trim();
+                                                          final senderBareJid =
+                                                              senderJid
+                                                                      .contains(
+                                                            '/',
+                                                          )
+                                                                  ? senderJid
+                                                                      .split(
+                                                                        '/',
+                                                                      )
+                                                                      .first
+                                                                  : senderJid;
+                                                          final normalizedSenderBareJid =
+                                                              senderBareJid
+                                                                  .toLowerCase();
+                                                          final isRoomChat =
+                                                              state.roomState !=
+                                                                  null;
+                                                          final avatarLookupJid = (normalizedBareRealJid !=
+                                                                      null &&
                                                                   normalizedBareRealJid
-                                                                      .isEmpty
-                                                              ? null
-                                                              : rosterAvatarPathsByJid[
-                                                                      normalizedBareRealJid] ??
-                                                                  chatAvatarPathsByJid[
-                                                                      normalizedBareRealJid];
+                                                                      .isNotEmpty)
+                                                              ? normalizedBareRealJid
+                                                              : !isRoomChat &&
+                                                                      normalizedSenderBareJid
+                                                                          .isNotEmpty
+                                                                  ? normalizedSenderBareJid
+                                                                  : null;
+                                                          final messageAvatarPath =
+                                                              avatarLookupJid ==
+                                                                      null
+                                                                  ? null
+                                                                  : rosterAvatarPathsByJid[
+                                                                          avatarLookupJid] ??
+                                                                      chatAvatarPathsByJid[
+                                                                          avatarLookupJid];
                                                           avatarOverlay =
                                                               _MessageAvatar(
                                                             jid: messageModel

@@ -165,6 +165,8 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   static const int avatarMaxKilobytes = avatarMaxBytes ~/ 1024;
   static const int avatarMinJpegQuality = 35;
   static const int avatarQualityStep = 5;
+  static const int _sourceMaxDimension = 768;
+  static const int _sourceJpegQuality = 86;
   static const double avatarInsetFraction = 0.10;
   static const double avatarTransparentInsetFraction = 0.10;
   static const double minCropSide = 48.0;
@@ -455,8 +457,48 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }
 
   Future<void> _applyAvatarFromBytes(Uint8List bytes) async {
-    final decoded = await decodeImageBytes(bytes);
-    if (decoded == null) {
+    try {
+      final prepared = await prepareAvatarSource(
+        AvatarSourcePrepareRequest(
+          bytes: bytes,
+          maxDimension: _sourceMaxDimension,
+          jpegQuality: _sourceJpegQuality,
+        ),
+      );
+      if (isClosed) return;
+      final preparedBytes = prepared.bytes;
+      final decoded = await decodeImageBytes(preparedBytes);
+      if (decoded == null) {
+        if (isClosed) return;
+        emit(
+          state.copyWith(
+            processing: false,
+            error: const SignupAvatarError(SignupAvatarErrorType.invalidImage),
+          ),
+        );
+        _resumeAvatarCarouselIfNeeded();
+        return;
+      }
+      _sourceImage = decoded;
+      final width = prepared.width.toDouble();
+      final height = prepared.height.toDouble();
+      emit(
+        state.copyWith(
+          sourceBytes: preparedBytes,
+          imageWidth: width,
+          imageHeight: height,
+          cropRect: _fallbackCropRect(
+            imageWidth: width,
+            imageHeight: height,
+          ),
+          activeTemplate: null,
+          activeCategory: null,
+          backgroundColor: Colors.transparent,
+          clearError: true,
+        ),
+      );
+      await _rebuildAvatar();
+    } catch (_) {
       if (isClosed) return;
       emit(
         state.copyWith(
@@ -465,25 +507,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         ),
       );
       _resumeAvatarCarouselIfNeeded();
-      return;
     }
-    _sourceImage = decoded;
-    emit(
-      state.copyWith(
-        sourceBytes: bytes,
-        imageWidth: decoded.width.toDouble(),
-        imageHeight: decoded.height.toDouble(),
-        cropRect: _fallbackCropRect(
-          imageWidth: decoded.width.toDouble(),
-          imageHeight: decoded.height.toDouble(),
-        ),
-        activeTemplate: null,
-        activeCategory: null,
-        backgroundColor: Colors.transparent,
-        clearError: true,
-      ),
-    );
-    await _rebuildAvatar();
   }
 
   Future<Uint8List?> _loadPickedFileBytes(PlatformFile file) async {

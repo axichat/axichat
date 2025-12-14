@@ -137,7 +137,12 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void _emitIfOpen(AvatarEditorState next) {
     if (isClosed) return;
-    emit(next);
+    try {
+      emit(next);
+    } on StateError {
+      if (isClosed) return;
+      rethrow;
+    }
   }
 
   static const minCropSide = 48.0;

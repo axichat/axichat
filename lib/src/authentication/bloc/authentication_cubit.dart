@@ -182,6 +182,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   String? _activeSignupCredentialKey;
   AvatarUploadPayload? _signupAvatarDraft;
   var _signupAvatarPublishInFlight = false;
+  Timer? _signupAvatarPublishRetryTimer;
+  var _signupAvatarPublishRetryAttempts = 0;
+  static const _signupAvatarPublishRetryInitialDelay =
+      Duration(milliseconds: 250);
+  static const _signupAvatarPublishRetryMaxDelay = Duration(seconds: 3);
+  static const _signupAvatarPublishMaxRetryAttempts = 10;
   _AuthTransaction? _authTransaction;
   late final Future<void> _authRecoveryFuture;
   late final Future<void> _endpointConfigRecoveryFuture;
@@ -507,6 +513,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
+    _signupAvatarPublishRetryTimer?.cancel();
+    _signupAvatarPublishRetryTimer = null;
     if (_foregroundListener != null) {
       foregroundServiceActive.removeListener(_foregroundListener!);
       _foregroundListener = null;
@@ -515,6 +523,33 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _credentialStore.close();
     await _emailService?.shutdown(jid: _authenticatedJid);
     return super.close();
+  }
+
+  void _scheduleSignupAvatarPublishRetry() {
+    if (_signupAvatarDraft == null || _signupAvatarPublishInFlight) {
+      return;
+    }
+    if (_signupAvatarPublishRetryTimer != null) {
+      return;
+    }
+    final int clampedAttempts = (_signupAvatarPublishRetryAttempts + 1).clamp(
+      1,
+      _signupAvatarPublishMaxRetryAttempts,
+    );
+    _signupAvatarPublishRetryAttempts = clampedAttempts;
+    final int delayMillis =
+        (_signupAvatarPublishRetryInitialDelay.inMilliseconds * clampedAttempts)
+            .clamp(
+      _signupAvatarPublishRetryInitialDelay.inMilliseconds,
+      _signupAvatarPublishRetryMaxDelay.inMilliseconds,
+    );
+    _signupAvatarPublishRetryTimer = Timer(
+      Duration(milliseconds: delayMillis),
+      () {
+        _signupAvatarPublishRetryTimer = null;
+        unawaited(_publishPendingAvatar());
+      },
+    );
   }
 
   Future<void> login({
@@ -1270,17 +1305,26 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (_signupAvatarPublishInFlight) {
       return;
     }
-    if (!_xmppService.connected || !_stickyAuthActive) {
+    if (!_xmppService.connected ||
+        !_stickyAuthActive ||
+        !_xmppService.databasesInitialized) {
+      _scheduleSignupAvatarPublishRetry();
       return;
     }
     _signupAvatarPublishInFlight = true;
     try {
       await _xmppService.publishAvatar(payload);
       _signupAvatarDraft = null;
+      _signupAvatarPublishRetryAttempts = 0;
+      _signupAvatarPublishRetryTimer?.cancel();
+      _signupAvatarPublishRetryTimer = null;
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
       if (cause is mox.AvatarError) {
         _signupAvatarDraft = null;
+        _signupAvatarPublishRetryAttempts = 0;
+        _signupAvatarPublishRetryTimer?.cancel();
+        _signupAvatarPublishRetryTimer = null;
         _log.info('Signup avatar publish rejected; skipping.', cause);
         return;
       }
@@ -1290,15 +1334,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           error,
           stackTrace,
         );
+        _scheduleSignupAvatarPublishRetry();
         return;
       }
       _log.warning('Failed to publish signup avatar', error, stackTrace);
+      _scheduleSignupAvatarPublishRetry();
     } catch (error, stackTrace) {
       _log.warning(
         'Unexpected error publishing signup avatar',
         error,
         stackTrace,
       );
+      _scheduleSignupAvatarPublishRetry();
     } finally {
       _signupAvatarPublishInFlight = false;
     }

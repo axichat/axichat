@@ -66,6 +66,11 @@ class _AvatarEditorBody extends StatelessWidget {
             backgroundColor: colors.background,
             surfaceTintColor: Colors.transparent,
             scrolledUnderElevation: 0,
+            shape: Border(
+              bottom: BorderSide(
+                color: colors.border,
+              ),
+            ),
             leading: Padding(
               padding: const EdgeInsets.only(left: 12.0),
               child: AxiIconButton(
@@ -197,7 +202,8 @@ class _AvatarSummaryCard extends StatelessWidget {
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 colors.foreground,
                               ),
-                              backgroundColor: colors.border,
+                              backgroundColor:
+                                  colors.foreground.withValues(alpha: 0.2),
                             ),
                           )
                         else

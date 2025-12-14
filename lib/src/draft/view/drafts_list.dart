@@ -4,6 +4,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -100,6 +101,34 @@ class _DraftsListBody extends StatelessWidget {
         itemBuilder: (context, index) {
           final item = visibleItems[index];
           final recipients = item.jids.length;
+          final rosterCubit = context.read<RosterCubit?>();
+          final Widget leadingAvatar = recipients == 1
+              ? rosterCubit == null
+                  ? AxiAvatar(jid: item.jids[0])
+                  : BlocBuilder<RosterCubit, RosterState>(
+                      buildWhen: (_, current) => current is RosterAvailable,
+                      builder: (context, rosterState) {
+                        final cachedItems = rosterState is RosterAvailable
+                            ? rosterState.items
+                            : context.read<RosterCubit>()['items']
+                                as List<RosterItem>?;
+                        final normalizedJid = item.jids[0].trim().toLowerCase();
+                        String? avatarPath;
+                        if (cachedItems != null) {
+                          for (final rosterItem in cachedItems) {
+                            if (rosterItem.jid.toLowerCase() == normalizedJid) {
+                              avatarPath = rosterItem.avatarPath;
+                              break;
+                            }
+                          }
+                        }
+                        return AxiAvatar(
+                          jid: item.jids[0],
+                          avatarPath: avatarPath,
+                        );
+                      },
+                    )
+              : AxiAvatar(jid: recipients.toString());
           return ListItemPadding(
             padding: _draftListItemPadding,
             child: AxiListTile(
@@ -125,9 +154,7 @@ class _DraftsListBody extends StatelessWidget {
                   },
                 )
               ],
-              leading: AxiAvatar(
-                jid: recipients == 1 ? item.jids[0] : recipients.toString(),
-              ),
+              leading: leadingAvatar,
               title:
                   '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
               minTileHeight: _draftTileHeight,

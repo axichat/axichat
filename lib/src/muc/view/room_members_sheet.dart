@@ -6,8 +6,11 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RoomMembersSheet extends StatelessWidget {
@@ -350,13 +353,47 @@ class _MemberTileState extends State<_MemberTile> {
     final colors = context.colorScheme;
     final borderColor =
         widget.isSelf ? colors.primary.withValues(alpha: 0.3) : colors.border;
+    final rosterCubit = context.read<RosterCubit?>();
+    final Widget avatar = rosterCubit == null
+        ? AxiAvatar(
+            jid: _avatarKey(widget.occupant),
+            size: 40,
+          )
+        : BlocBuilder<RosterCubit, RosterState>(
+            buildWhen: (_, current) => current is RosterAvailable,
+            builder: (context, rosterState) {
+              final cachedItems = rosterState is RosterAvailable
+                  ? rosterState.items
+                  : context.read<RosterCubit>()['items'] as List<RosterItem>?;
+              final realJid = widget.occupant.realJid?.trim();
+              final bareJid = realJid == null || realJid.isEmpty
+                  ? null
+                  : realJid.contains('/')
+                      ? realJid.split('/').first
+                      : realJid;
+              final normalizedBareJid = bareJid?.toLowerCase();
+              String? avatarPath;
+              if (normalizedBareJid != null &&
+                  normalizedBareJid.isNotEmpty &&
+                  cachedItems != null) {
+                for (final item in cachedItems) {
+                  if (item.jid.toLowerCase() == normalizedBareJid) {
+                    avatarPath = item.avatarPath;
+                    break;
+                  }
+                }
+              }
+              return AxiAvatar(
+                jid: _avatarKey(widget.occupant),
+                size: 40,
+                avatarPath: avatarPath,
+              );
+            },
+          );
 
     final tile = AxiListTile(
       onTap: widget.actions.isEmpty ? null : _toggleActions,
-      leading: AxiAvatar(
-        jid: _avatarKey(widget.occupant),
-        size: 40,
-      ),
+      leading: avatar,
       title: widget.occupant.nick,
       subtitle: widget.subtitle,
       selected: widget.isSelf,
