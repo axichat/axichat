@@ -1548,6 +1548,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsMuteNotificationsDescription => '停止接收消息通知。';
 
   @override
+  String get settingsNotificationPreviews => '通知预览';
+
+  @override
+  String get settingsNotificationPreviewsDescription => '在通知和锁屏上显示消息内容。';
+
+  @override
   String get settingsReadReceipts => '发送已读回执';
 
   @override
@@ -3780,6 +3786,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsMuteNotificationsDescription => '停止接收訊息通知。';
+
+  @override
+  String get settingsNotificationPreviews => '通知預覽';
+
+  @override
+  String get settingsNotificationPreviewsDescription => '在通知和鎖定畫面上顯示訊息內容。';
 
   @override
   String get settingsReadReceipts => '傳送已讀回條';

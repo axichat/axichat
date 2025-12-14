@@ -159,35 +159,27 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     if (!hasLocalFile && url == null) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
     }
-    if (!hasLocalFile && _encrypted) {
-      return _EncryptedAttachment(
+    final radius = BorderRadius.circular(18);
+    if (!hasLocalFile) {
+      if (_encrypted) {
+        return _EncryptedAttachment(
+          filename: metadata.filename,
+          downloading: _downloading,
+          onPressed: _downloading ? null : () => _downloadAndOpen(url: url),
+        );
+      }
+      return _RemoteImageAttachment(
         filename: metadata.filename,
         downloading: _downloading,
         onPressed: _downloading ? null : () => _downloadAndOpen(url: url),
       );
     }
-    final radius = BorderRadius.circular(18);
-    final image = hasLocalFile
-        ? Image.file(
-            localFile!,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                const Center(child: Icon(Icons.broken_image_outlined)),
-          )
-        : Image.network(
-            url!,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                const Center(child: Icon(Icons.broken_image_outlined)),
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              final value = progress.expectedTotalBytes == null
-                  ? null
-                  : progress.cumulativeBytesLoaded /
-                      progress.expectedTotalBytes!;
-              return _AttachmentLoadingPlaceholder(progress: value);
-            },
-          );
+    final image = Image.file(
+      localFile!,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) =>
+          const Center(child: Icon(Icons.broken_image_outlined)),
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final targetWidth = _resolveWidth(constraints, context);
@@ -204,7 +196,8 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
               child: ClipRRect(
                 borderRadius: radius,
                 child: GestureDetector(
-                  onTap: () => _downloadAndOpen(url: url),
+                  onTap: () =>
+                      _openAttachment(context, path: widget.metadata.path),
                   child: AspectRatio(
                     aspectRatio: _aspectRatio(metadata),
                     child: image,
@@ -517,6 +510,88 @@ class _EncryptedAttachment extends StatelessWidget {
                     children: [
                       Icon(
                         LucideIcons.lock,
+                        size: 18,
+                        color: colors.mutedForeground,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          filename,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.textTheme.small.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ShadButton(
+                      onPressed: onPressed,
+                      enabled: onPressed != null,
+                      leading: downloading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : null,
+                      child: Text(
+                        downloading
+                            ? l10n.chatAttachmentLoading
+                            : l10n.chatAttachmentDownload,
+                      ),
+                    ).withTapBounce(enabled: onPressed != null),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RemoteImageAttachment extends StatelessWidget {
+  const _RemoteImageAttachment({
+    required this.filename,
+    required this.downloading,
+    required this.onPressed,
+  });
+
+  final String filename;
+  final bool downloading;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final width = availableWidth * 0.9;
+        return Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: 1,
+          heightFactor: 1,
+          child: SizedBox(
+            width: width,
+            child: _AttachmentSurface(
+              backgroundColor: colors.card,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 12,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.image,
                         size: 18,
                         color: colors.mutedForeground,
                       ),

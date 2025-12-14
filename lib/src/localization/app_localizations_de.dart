@@ -1622,6 +1622,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Keine Nachrichtenbenachrichtigungen mehr erhalten.';
 
   @override
+  String get settingsNotificationPreviews => 'Benachrichtigungsvorschau';
+
+  @override
+  String get settingsNotificationPreviewsDescription =>
+      'Nachrichteninhalt in Benachrichtigungen und auf dem Sperrbildschirm anzeigen.';
+
+  @override
   String get settingsReadReceipts => 'Lesebestätigungen senden';
 
   @override

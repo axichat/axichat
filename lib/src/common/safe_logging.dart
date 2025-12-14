@@ -7,11 +7,34 @@ class SafeLogging {
   static const int _minSecretPreviewLength = 8;
   static const int _secretPreviewPrefixLength = 4;
 
+  static final RegExp _xmlBodyPattern = RegExp(
+    r'(<body\b[^>]*>).*?(</body>)',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  static final RegExp _jsonPasswordPattern = RegExp(
+    r'("(?:(?:old_|new_)?password|password2|passphrase)"\s*:\s*")[^"]*"',
+    caseSensitive: false,
+  );
+  static final RegExp _keyValuePasswordPattern = RegExp(
+    r'(\b(?:(?:old_|new_)?password|password2|passphrase)\b\s*[:=]\s*)\S+',
+    caseSensitive: false,
+  );
+  static final RegExp _authorizationHeaderPattern = RegExp(
+    r'(\bAuthorization\b\s*:\s*)([^\r\n]+)',
+    caseSensitive: false,
+  );
+  static final RegExp _xAuthTokenHeaderPattern = RegExp(
+    r'(\bX-Auth-Token\b\s*:\s*)([^\r\n]+)',
+    caseSensitive: false,
+  );
+
   static final RegExp _fileUriPattern = RegExp(r'\bfile://\S+');
-  static final RegExp _absolutePathAfterWhitespacePattern =
-      RegExp(r'(^|\s)(?:~/|/|[A-Za-z]:\\)\S+');
-  static final RegExp _absolutePathAfterEqualsPattern =
-      RegExp(r'=(?:~/|/|[A-Za-z]:\\)\S+');
+  static final RegExp _absolutePathTokenPattern = RegExp(
+    r'''(^|[\s\(\[\{<'"=,:])(?:~/|/|[A-Za-z]:\\|\\\\)\S+''',
+  );
+  static final RegExp _pathTrailingPunctuationPattern =
+      RegExp(r'''[)\]\},;.'"]+$''');
   static final RegExp _accountIdentifierTokenPattern = RegExp(r'\S*@\S*');
   static final RegExp _hexSecretPattern =
       RegExp('\\b[a-fA-F0-9]{$_minSecretLength,}\\b');
@@ -28,14 +51,39 @@ class SafeLogging {
 
   static String _sanitize(String input) {
     var output = input;
-    output = output.replaceAll(_fileUriPattern, redactedPath);
-    output = output.replaceAllMapped(_absolutePathAfterWhitespacePattern, (m) {
-      final leadingWhitespace = m.group(1) ?? '';
-      return '$leadingWhitespace$redactedPath';
-    });
     output = output.replaceAllMapped(
-      _absolutePathAfterEqualsPattern,
-      (_) => '=$redactedPath',
+      _xmlBodyPattern,
+      (m) => '${m.group(1)}$redactedSecret${m.group(2)}',
+    );
+    output = output.replaceAllMapped(
+      _jsonPasswordPattern,
+      (m) => '${m.group(1)}$redactedSecret"',
+    );
+    output = output.replaceAllMapped(
+      _keyValuePasswordPattern,
+      (m) => '${m.group(1)}$redactedSecret',
+    );
+    output = output.replaceAllMapped(
+      _authorizationHeaderPattern,
+      (m) => '${m.group(1)}$redactedSecret',
+    );
+    output = output.replaceAllMapped(
+      _xAuthTokenHeaderPattern,
+      (m) => '${m.group(1)}$redactedSecret',
+    );
+    output = output.replaceAll(_fileUriPattern, redactedPath);
+    output = output.replaceAllMapped(
+      _absolutePathTokenPattern,
+      (m) {
+        final matchText = m.group(0) ?? '';
+        final leading = m.group(1) ?? '';
+        final pathWithSuffix = matchText.substring(leading.length);
+        final suffixMatch = _pathTrailingPunctuationPattern.firstMatch(
+          pathWithSuffix,
+        );
+        final suffix = suffixMatch?.group(0) ?? '';
+        return '$leading$redactedPath$suffix';
+      },
     );
     output = output.replaceAllMapped(
       _accountIdentifierTokenPattern,
