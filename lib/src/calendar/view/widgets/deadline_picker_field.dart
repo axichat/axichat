@@ -1,13 +1,20 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 
 typedef DeadlineChanged = void Function(DateTime? value);
+
+const double _deadlinePickerOverlayWidth = 320.0;
+const double _deadlinePickerDropdownMinWidth = 320.0;
+const double _deadlinePickerSheetMaxWidth = 560.0;
+const double _deadlinePickerSheetMinWidth = 0.0;
 
 class _AttachAwareScrollController extends ScrollController {
   _AttachAwareScrollController({
@@ -32,7 +39,7 @@ class DeadlinePickerField extends StatefulWidget {
     this.placeholder = 'Set deadline (optional)',
     this.showStatusColors = true,
     this.showTimeSelectors = true,
-    this.overlayWidth = 320.0,
+    this.overlayWidth = _deadlinePickerOverlayWidth,
     this.minDate,
     this.maxDate,
   });
@@ -101,6 +108,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   final OverlayPortalController _portalController = OverlayPortalController();
   bool _isOpen = false;
+  bool _isBottomSheetOpen = false;
   Object? _tapRegionGroupId;
 
   DateTime? _currentValue;
@@ -227,6 +235,13 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   void _toggleOverlay(BuildContext context) {
+    if (_shouldUseSheetMenus(context)) {
+      if (_isBottomSheetOpen) {
+        return;
+      }
+      _showBottomSheet(context);
+      return;
+    }
     if (_isOpen) {
       _hideOverlay();
     } else {
@@ -241,6 +256,141 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       _isOpen = true;
     });
     _portalController.show();
+  }
+
+  bool get _hasMouseInput =>
+      RendererBinding.instance.mouseTracker.mouseIsConnected;
+
+  bool _shouldUseSheetMenus(BuildContext context) {
+    return ResponsiveHelper.isCompact(context) || !_hasMouseInput;
+  }
+
+  Future<void> _showBottomSheet(BuildContext context) async {
+    if (!mounted) {
+      return;
+    }
+    _initialValue = _currentValue;
+    setState(() => _isBottomSheetOpen = true);
+
+    try {
+      await showAdaptiveBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        surfacePadding: EdgeInsets.zero,
+        builder: (sheetContext) {
+          final MediaQueryData hostMediaQuery = MediaQuery.of(sheetContext);
+          final MediaQueryData viewMedia =
+              MediaQueryData.fromView(View.of(sheetContext));
+          final double safeBottomInset = viewMedia.viewPadding.bottom;
+          final double keyboardInset = hostMediaQuery.viewInsets.bottom;
+          final double desiredHeight = widget.showTimeSelectors
+              ? _timePickerDesiredHeight
+              : _datePickerExpandedHeight;
+          final double additionalBottomPadding = safeBottomInset > keyboardInset
+              ? safeBottomInset - keyboardInset
+              : 0.0;
+
+          final previousMonth =
+              DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
+          final nextMonth =
+              DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
+          final VoidCallback? handlePrevious =
+              _canNavigateToMonth(previousMonth)
+                  ? () => _updateVisibleMonth(previousMonth)
+                  : null;
+          final VoidCallback? handleNext = _canNavigateToMonth(nextMonth)
+              ? () => _updateVisibleMonth(nextMonth)
+              : null;
+
+          void closeSheet() => Navigator.of(sheetContext).maybePop();
+
+          final header = _DeadlineMonthHeader(
+            label: _monthLabel(_visibleMonth),
+            onPrevious: handlePrevious,
+            onNext: handleNext,
+          );
+          final calendarGrid = _DeadlineCalendarGrid(
+            visibleMonth: _visibleMonth,
+            selectedDate: _currentValue,
+            isDateWithinBounds: _isDateWithinBounds,
+            onDaySelected: _onDaySelected,
+          );
+          final DateTime selectedTime = _currentValue ?? DateTime.now();
+          final timeSelectors = _DeadlineTimeSelectors(
+            showTimeSelectors: widget.showTimeSelectors,
+            selectedHour: selectedTime.hour,
+            selectedMinute: _roundToFive(selectedTime.minute),
+            hourValues: _hourValues,
+            minuteValues: _minuteValues,
+            hourController: _hourScrollController,
+            minuteController: _minuteScrollController,
+            onHourSelected: _onHourSelected,
+            onMinuteSelected: _onMinuteSelected,
+          );
+          final actions = _DeadlinePickerActions(
+            showTimeSelectors: widget.showTimeSelectors,
+            hasValue: _currentValue != null,
+            onCancel: () {
+              _handleCancel();
+              closeSheet();
+            },
+            onClear: _currentValue != null
+                ? () {
+                    _clearDeadline();
+                    closeSheet();
+                  }
+                : null,
+            onDone: closeSheet,
+          );
+
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final double availableHeight = constraints.maxHeight.isFinite
+                  ? constraints.maxHeight
+                  : hostMediaQuery.size.height;
+              final double maxHeight =
+                  availableHeight.isFinite && availableHeight > 0
+                      ? math.min(desiredHeight, availableHeight)
+                      : desiredHeight;
+              return Padding(
+                padding: EdgeInsets.only(bottom: additionalBottomPadding),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: _deadlinePickerSheetMaxWidth,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(calendarGutterLg),
+                      child: _DeadlineDropdownSurface(
+                        maxHeight: maxHeight,
+                        dropdownKey: _dropdownKey,
+                        minWidth: _deadlinePickerSheetMinWidth,
+                        showTimeSelectors: widget.showTimeSelectors,
+                        monthHeader: header,
+                        calendarGrid: calendarGrid,
+                        timeSelectors: timeSelectors,
+                        actions: actions,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      if (!mounted) {
+        _isBottomSheetOpen = false;
+        _initialValue = null;
+      } else {
+        setState(() {
+          _isBottomSheetOpen = false;
+          _initialValue = null;
+        });
+      }
+    }
   }
 
   void _hideOverlay() {
@@ -737,6 +887,7 @@ class _DeadlineAnchoredDropdown extends StatelessWidget {
         child: _DeadlineDropdownSurface(
           maxHeight: maxHeight,
           dropdownKey: dropdownKey,
+          minWidth: _deadlinePickerDropdownMinWidth,
           showTimeSelectors: showTimeSelectors,
           monthHeader: monthHeader,
           calendarGrid: calendarGrid,
@@ -762,6 +913,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
   const _DeadlineDropdownSurface({
     required this.maxHeight,
     required this.dropdownKey,
+    required this.minWidth,
     required this.showTimeSelectors,
     required this.monthHeader,
     required this.calendarGrid,
@@ -771,6 +923,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
 
   final double maxHeight;
   final GlobalKey dropdownKey;
+  final double minWidth;
   final bool showTimeSelectors;
   final Widget monthHeader;
   final Widget calendarGrid;
@@ -784,7 +937,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: maxHeight,
-          minWidth: 320,
+          minWidth: minWidth,
         ),
         child: Material(
           borderRadius: BorderRadius.circular(12),
