@@ -298,7 +298,7 @@ const calendarSidebarScrollPadding = EdgeInsets.only(bottom: 24.0);
 const calendarSidebarAdvancedAnimationDuration = Duration(milliseconds: 220);
 
 // Hover title preview
-const calendarHoverTitleSettleDuration = Duration(milliseconds: 250);
+const calendarHoverTitleSettleDuration = Duration.zero;
 
 // Sidebar completion tile metrics
 const calendarCompletionTileBorderRadius = 10.0;
