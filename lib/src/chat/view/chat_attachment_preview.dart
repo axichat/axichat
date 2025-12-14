@@ -164,13 +164,13 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
         return _EncryptedAttachment(
           filename: metadata.filename,
           downloading: _downloading,
-          onPressed: _downloading ? null : () => _downloadAndOpen(url: url),
+          onPressed: _downloading ? null : () => _downloadAttachment(),
         );
       }
       return _RemoteImageAttachment(
         filename: metadata.filename,
         downloading: _downloading,
-        onPressed: _downloading ? null : () => _downloadAndOpen(url: url),
+        onPressed: _downloading ? null : () => _downloadAttachment(),
       );
     }
     final image = Image.file(
@@ -210,7 +210,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     );
   }
 
-  Future<void> _downloadAndOpen({String? url}) async {
+  Future<void> _downloadAttachment() async {
     if (_downloading) return;
     setState(() {
       _downloading = true;
@@ -219,16 +219,19 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     final toaster = ShadToaster.maybeOf(context);
     try {
       final xmpp = context.read<XmppService>();
-      final downloaded = await xmpp.downloadInboundAttachment(
+      final downloadedPath = await xmpp.downloadInboundAttachment(
         metadataId: widget.metadata.id,
         stanzaId: widget.stanzaId,
       );
       if (!mounted) return;
-      await _openAttachment(
-        context,
-        url: _encrypted ? null : url,
-        path: downloaded ?? widget.metadata.path,
-      );
+      if (downloadedPath == null || downloadedPath.trim().isEmpty) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+      }
     } on Exception {
       if (!mounted) return;
       _showToast(
@@ -237,9 +240,6 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
         l10n.chatAttachmentUnavailable,
         destructive: true,
       );
-      if (!_encrypted) {
-        await _openAttachment(context, url: url, path: widget.metadata.path);
-      }
     } finally {
       if (mounted) {
         setState(() {
@@ -285,9 +285,6 @@ class _FileAttachment extends StatefulWidget {
 
 class _FileAttachmentState extends State<_FileAttachment> {
   var _downloading = false;
-
-  bool get _encrypted =>
-      widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
 
   @override
   Widget build(BuildContext context) {
@@ -361,7 +358,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
               onPressed: url == null && metadata.path == null
                   ? null
                   : () => _downloadAndOpen(
-                        url: url,
                         existingPath: metadata.path,
                       ),
             ),
@@ -371,7 +367,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
   }
 
   Future<void> _downloadAndOpen({
-    required String? url,
     required String? existingPath,
   }) async {
     if (_downloading) return;
@@ -382,16 +377,24 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final toaster = ShadToaster.maybeOf(context);
     try {
       final xmpp = context.read<XmppService>();
-      final downloaded = await xmpp.downloadInboundAttachment(
+      final downloadedPath = await xmpp.downloadInboundAttachment(
         metadataId: widget.metadata.id,
         stanzaId: widget.stanzaId,
       );
       if (!mounted) return;
-      await _openAttachment(
-        context,
-        url: _encrypted ? null : url,
-        path: downloaded ?? existingPath,
-      );
+      final resolvedPath = downloadedPath?.trim().isNotEmpty == true
+          ? downloadedPath
+          : existingPath;
+      if (resolvedPath == null || resolvedPath.trim().isEmpty) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+        return;
+      }
+      await _openAttachment(context, path: resolvedPath);
     } on Exception {
       if (!mounted) return;
       _showToast(
@@ -400,9 +403,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
         l10n.chatAttachmentUnavailable,
         destructive: true,
       );
-      if (!_encrypted) {
-        await _openAttachment(context, url: url, path: existingPath);
-      }
     } finally {
       if (mounted) {
         setState(() {

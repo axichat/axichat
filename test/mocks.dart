@@ -183,6 +183,17 @@ void prepareMockConnection() {
 }
 
 Future<void> connectSuccessfully(XmppService xmppService) async {
+  when(
+    () => mockNotificationService.sendMessageNotification(
+      title: any(named: 'title'),
+      body: any(named: 'body'),
+      extraConditions: any(named: 'extraConditions'),
+      allowForeground: any(named: 'allowForeground'),
+      payload: any(named: 'payload'),
+      threadKey: any(named: 'threadKey'),
+    ),
+  ).thenAnswer((_) async {});
+
   when(() => mockStateStore.write(
         key: any(named: 'key'),
         value: any(named: 'value'),
@@ -230,6 +241,17 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
 }
 
 Future<void> connectUnsuccessfully(XmppService xmppService) async {
+  when(
+    () => mockNotificationService.sendMessageNotification(
+      title: any(named: 'title'),
+      body: any(named: 'body'),
+      extraConditions: any(named: 'extraConditions'),
+      allowForeground: any(named: 'allowForeground'),
+      payload: any(named: 'payload'),
+      threadKey: any(named: 'threadKey'),
+    ),
+  ).thenAnswer((_) async {});
+
   when(() => mockStateStore.write(
         key: any(named: 'key'),
         value: any(named: 'value'),
