@@ -34,6 +34,7 @@ import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
@@ -420,6 +421,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   final reminderController =
                       context.read<CalendarReminderController>();
                   final xmppService = context.read<XmppService>();
+                  final bool seedDemoCalendar =
+                      kEnableDemoChats && xmppService.myJid == kDemoSelfJid;
                   final storage = calendarStorage;
                   final DayEventRepository dayEventRepository =
                       DayEventRepository(
@@ -429,6 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   return CalendarBloc(
                     reminderController: reminderController,
                     dayEventRepository: dayEventRepository,
+                    seedDemoData: seedDemoCalendar,
                     syncManagerBuilder: (bloc) {
                       final manager = CalendarSyncManager(
                         readModel: () => bloc.currentModel,
@@ -501,8 +505,8 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Builder(
         builder: (context) {
           final platform = Theme.of(context).platform;
-          final isApple =
-              platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
+          final isApple = platform == TargetPlatform.macOS ||
+              platform == TargetPlatform.iOS;
           final findActivators = findActionActivators(platform);
           final composeActivator = SingleActivator(
             LogicalKeyboardKey.keyN,

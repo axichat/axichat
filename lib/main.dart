@@ -6,10 +6,12 @@ import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
-import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Column, Table;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -30,6 +32,15 @@ Future<void> main() async {
   firstFrameGate.defer(binding);
   _installKeyboardGuard();
 
+  const capability = Capability();
+  const policy = Policy();
+  final credentialStore = CredentialStore(
+    capability: capability,
+    policy: policy,
+  );
+  final storedCredentialsFuture =
+      resolveHasStoredLoginCredentials(credentialStore);
+
   _configureLogging();
   _registerThirdPartyLicenses();
 
@@ -45,7 +56,6 @@ Future<void> main() async {
   registerCalendarHiveAdapters();
   await storageManager.ensureGuestStorage();
 
-  const capability = Capability();
   final notificationService = NotificationService();
   await notificationService.init();
 
@@ -56,25 +66,32 @@ Future<void> main() async {
     initForegroundService();
   }
 
-  runApp(
-    withForeground
-        ? WithForegroundTask(
-            child: Material(
-              child: Axichat(
-                notificationService: notificationService,
-                capability: capability,
-                storageManager: storageManager,
-              ),
+  final hasStoredLoginCredentials = await storedCredentialsFuture;
+  final authBootstrap =
+      AuthBootstrap(hasStoredLoginCredentials: hasStoredLoginCredentials);
+  final app = withForeground
+      ? WithForegroundTask(
+          child: Material(
+            child: Axichat(
+              notificationService: notificationService,
+              capability: capability,
+              storageManager: storageManager,
             ),
-          )
-        : Axichat(
-            notificationService: notificationService,
-            capability: capability,
-            storageManager: storageManager,
           ),
-  );
+        )
+      : Axichat(
+          notificationService: notificationService,
+          capability: capability,
+          storageManager: storageManager,
+        );
 
-  firstFrameGate.scheduleFallback();
+  runApp(
+    RepositoryProvider.value(
+      value: authBootstrap,
+      child: app,
+    ),
+  );
+  firstFrameGate.allow();
 }
 
 var _loggerConfigured = false;

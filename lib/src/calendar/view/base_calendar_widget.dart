@@ -381,7 +381,12 @@ class _CalendarViewModeSelector extends StatelessWidget {
                   .map(
                     (view) => ShadOption(
                       value: view,
-                      child: Text(labelForView(view).toUpperCase()),
+                      child: Text(
+                        labelForView(view).toUpperCase(),
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   )
                   .toList(),
@@ -393,6 +398,9 @@ class _CalendarViewModeSelector extends StatelessWidget {
                     color: calendarTitleColor,
                     fontWeight: FontWeight.w600,
                   ),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
                 );
               },
               onChanged: (view) {

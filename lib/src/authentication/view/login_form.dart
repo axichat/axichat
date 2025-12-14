@@ -4,7 +4,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -82,13 +81,9 @@ class _LoginFormState extends State<LoginForm> {
   Future<void> _attemptAutologinWithStoredCredentials() async {
     final authCubit = context.read<AuthenticationCubit>();
     final hasStoredCredentials = await authCubit.hasStoredLoginCredentials();
-    if (!mounted || !hasStoredCredentials) {
-      firstFrameGate.allow();
-      return;
-    }
+    if (!mounted || !hasStoredCredentials) return;
     widget.onAutologinStart?.call();
     unawaited(authCubit.login());
-    firstFrameGate.allow();
   }
 
   @override
