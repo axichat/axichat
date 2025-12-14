@@ -97,15 +97,15 @@
 ## Screenshots
 
 <p align="center">
-  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" alt="Axichat desktop screenshot 1" />
+  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="100%" alt="Axichat desktop screenshot 1" />
 </p>
 
 <p align="center">
-  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" alt="Axichat desktop screenshot 2" />
+  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="100%" alt="Axichat desktop screenshot 2" />
 </p>
 
 <p align="center">
-  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" alt="Axichat calendar screenshot" />
+  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="100%" alt="Axichat calendar screenshot" />
 </p>
 
 ## Downloading & Installing

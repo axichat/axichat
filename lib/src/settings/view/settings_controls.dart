@@ -235,6 +235,17 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
+                label: Text(l10n.settingsNotificationPreviews),
+                sublabel: Text(l10n.settingsNotificationPreviewsDescription),
+                value: state.notificationPreviewsEnabled,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleNotificationPreviews(enabled),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
                 label: Text(l10n.settingsReadReceipts),
                 value: state.readReceipts,
                 onChanged: (readReceipts) => context

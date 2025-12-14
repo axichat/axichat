@@ -1,9 +1,11 @@
 import 'dart:convert';
 
+import 'package:axichat/src/common/security_flags.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
-const _defaultProvisioningBaseUrl = 'http://axi.im:8787';
+const _defaultProvisioningBaseUrl = 'https://axi.im:8787';
 const _baseUrlDefineKey = 'EMAIL_PROVISIONING_BASE_URL';
 const _sharedSecretDefineKey = 'EMAIL_PROVISIONING_SHARED_SECRET';
 const _sharedSecretPlaceholder = 'set-email-shared-secret';
@@ -55,7 +57,9 @@ class EmailProvisioningClient {
         _sharedSecret = _normalizeSharedSecret(sharedSecret),
         _httpClient = httpClient ?? http.Client(),
         _ownsClient = httpClient == null,
-        _log = logger ?? Logger('EmailProvisioningClient');
+        _log = logger ?? Logger('EmailProvisioningClient') {
+    _validateBaseUrl(_baseUrl);
+  }
 
   factory EmailProvisioningClient.fromEnvironment({
     http.Client? httpClient,
@@ -85,6 +89,21 @@ class EmailProvisioningClient {
   final http.Client _httpClient;
   final bool _ownsClient;
   final Logger _log;
+
+  void _validateBaseUrl(Uri baseUrl) {
+    final scheme = baseUrl.scheme.toLowerCase();
+    if (scheme == 'https') return;
+    const allowInsecure = !kReleaseMode && kAllowInsecureEmailProvisioning;
+    if (!allowInsecure) {
+      throw StateError(
+        'Email provisioning base URL must use HTTPS in this build.',
+      );
+    }
+    _log.warning(
+      'Using insecure email provisioning base URL '
+      '(development override enabled).',
+    );
+  }
 
   Future<EmailProvisioningCredentials> createAccount({
     required String localpart,
@@ -135,7 +154,7 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode == 401) {
-      _log.severe('Email provisioning unauthorized: ${response.body}');
+      _log.severe('Email provisioning unauthorized.');
       throw const EmailProvisioningApiException(
         'Signup is temporarily unavailable. Please try again later.',
         code: EmailProvisioningApiErrorCode.unauthorized,
@@ -143,10 +162,8 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode >= 500) {
-      final detail = _errorMessageFrom(response.body);
       _log.warning(
-        'Email provisioning unavailable: ${response.statusCode}'
-        '${detail == null ? '' : ' $detail'}',
+        'Email provisioning unavailable: ${response.statusCode}',
       );
       throw const EmailProvisioningApiException(
         'We couldn\'t reach the email service. Please check your '
@@ -157,7 +174,7 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode == 403) {
-      _log.severe('Email provisioning forbidden: ${response.body}');
+      _log.severe('Email provisioning forbidden.');
       throw const EmailProvisioningApiException(
         'Signup is temporarily unavailable. Please try again later.',
         code: EmailProvisioningApiErrorCode.unauthorized,
@@ -171,7 +188,7 @@ class EmailProvisioningClient {
       final recoverable = response.statusCode != 451;
       _log.info(
         'Email provisioning rejected request '
-        '(${response.statusCode}): $message',
+        '(${response.statusCode}).',
       );
       throw EmailProvisioningApiException(
         message,
@@ -223,7 +240,7 @@ class EmailProvisioningClient {
 
     if (response.statusCode == 200 || response.statusCode == 404) {
       if (response.statusCode == 404) {
-        _log.info('Email account already deleted for $normalizedEmail');
+        _log.info('Email account already deleted.');
       }
       return;
     }
@@ -237,9 +254,7 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode == 403) {
-      _log.severe(
-        'Email account deletion forbidden: ${response.body}',
-      );
+      _log.severe('Email account deletion forbidden.');
       throw const EmailProvisioningApiException(
         'Unable to delete email account. Please try again later.',
         code: EmailProvisioningApiErrorCode.unauthorized,
@@ -247,10 +262,8 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode >= 500) {
-      final detail = _errorMessageFrom(response.body);
       _log.warning(
-        'Email account deletion unavailable: ${response.statusCode}'
-        '${detail == null ? '' : ' $detail'}',
+        'Email account deletion unavailable: ${response.statusCode}',
       );
       throw const EmailProvisioningApiException(
         'We could not delete your email account. Please try again later.',
@@ -262,7 +275,7 @@ class EmailProvisioningClient {
     final detail = _errorMessageFrom(response.body);
     _log.warning(
       'Email account deletion failed (${response.statusCode})'
-      '${detail == null ? '' : ': $detail'}',
+      '.',
     );
     throw EmailProvisioningApiException(
       detail ?? 'Unable to delete email account. Please try again later.',
@@ -320,10 +333,8 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode >= 500) {
-      final detail = _errorMessageFrom(response.body);
       _log.warning(
-        'Email password change unavailable: ${response.statusCode}'
-        '${detail == null ? '' : ' $detail'}',
+        'Email password change unavailable: ${response.statusCode}',
       );
       throw const EmailProvisioningApiException(
         'We could not change your password. Please try again later.',

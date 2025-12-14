@@ -627,6 +627,8 @@
   "settingsMessageStorageServerOnly": "Nur Server",
   "settingsMuteNotifications": "Benachrichtigungen stummschalten",
   "settingsMuteNotificationsDescription": "Keine Nachrichtenbenachrichtigungen mehr erhalten.",
+  "settingsNotificationPreviews": "Benachrichtigungsvorschau",
+  "settingsNotificationPreviewsDescription": "Nachrichteninhalt in Benachrichtigungen und auf dem Sperrbildschirm anzeigen.",
   "settingsReadReceipts": "Lesebestätigungen senden",
   "settingsTypingIndicators": "Tippanzeigen senden",
   "settingsTypingIndicatorsDescription": "Lässt andere im Chat sehen, wenn du tippst.",

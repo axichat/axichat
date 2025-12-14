@@ -20,11 +20,8 @@ abstract class KeyValueDatabase<K, V> implements Database {
 
 class RegisteredStateKey {
   RegisteredStateKey._(this.value) {
-    _log.info('Registering key: $value...');
     _registeredKeys.add(this);
   }
-
-  final _log = Logger('RegisteredStateKey');
 
   final String value;
 
@@ -55,9 +52,7 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   @override
   Object? read({required RegisteredStateKey key}) {
     if (!initialized) return null;
-    final result = Hive.box(boxName).get(key.value);
-    _log.info('Read ${key.value}: $result');
-    return result;
+    return Hive.box(boxName).get(key.value);
   }
 
   @override
@@ -66,7 +61,6 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
     required Object? value,
   }) async {
     if (!initialized) return false;
-    _log.info('Writing ${key.value}: $value...');
     await Hive.box(boxName).put(key.value, value);
     return true;
   }
@@ -74,7 +68,6 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   @override
   Future<bool> delete({required RegisteredStateKey key}) async {
     if (!initialized) return false;
-    _log.info('Deleting ${key.value}...');
     await Hive.box(boxName).delete(key.value);
     return true;
   }
@@ -103,7 +96,7 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   Future<bool> deleteAll({bool burn = false}) async {
     if (!initialized) return false;
     if (burn) {
-      _log.info('Deleting box: $boxName from disk...');
+      _log.info('Deleting state store box from disk...');
       await Hive.box(boxName).deleteFromDisk();
     } else {
       await Hive.box(boxName)

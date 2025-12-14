@@ -1143,7 +1143,7 @@ class EmailService {
       if (chat?.muted ?? false) {
         return;
       }
-      await notificationService.sendNotification(
+      await notificationService.sendMessageNotification(
         title: chat?.title ?? message.senderJid,
         body: notificationBody,
         payload: chat?.jid,

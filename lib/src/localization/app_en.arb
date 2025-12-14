@@ -698,6 +698,8 @@
   "settingsMessageStorageServerOnly": "Server-only",
   "settingsMuteNotifications": "Mute notifications",
   "settingsMuteNotificationsDescription": "Stop receiving message notifications.",
+  "settingsNotificationPreviews": "Notification previews",
+  "settingsNotificationPreviewsDescription": "Show message content in notifications and on the lock screen.",
   "settingsReadReceipts": "Send read receipts",
   "settingsTypingIndicators": "Send typing indicators",
   "settingsTypingIndicatorsDescription": "Let other people in a chat see when you are typing.",

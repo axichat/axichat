@@ -1,8 +1,7 @@
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
+import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class DraftButton extends StatelessWidget {
@@ -14,7 +13,8 @@ class DraftButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     void handleCompose() {
-      context.read<ComposeWindowCubit>().openDraft(
+      openComposeDraft(
+        context,
         attachmentMetadataIds: const <String>[],
       );
     }

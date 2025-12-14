@@ -627,6 +627,8 @@
   "settingsMessageStorageServerOnly": "仅服务器",
   "settingsMuteNotifications": "静音通知",
   "settingsMuteNotificationsDescription": "停止接收消息通知。",
+  "settingsNotificationPreviews": "通知预览",
+  "settingsNotificationPreviewsDescription": "在通知和锁屏上显示消息内容。",
   "settingsReadReceipts": "发送已读回执",
   "settingsTypingIndicators": "发送正在输入指示",
   "settingsTypingIndicatorsDescription": "让聊天中的其他人看到你正在输入。",

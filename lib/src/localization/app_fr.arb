@@ -627,6 +627,8 @@
   "settingsMessageStorageServerOnly": "Serveur uniquement",
   "settingsMuteNotifications": "Couper les notifications",
   "settingsMuteNotificationsDescription": "Arrête de recevoir les notifications de messages.",
+  "settingsNotificationPreviews": "Aperçu des notifications",
+  "settingsNotificationPreviewsDescription": "Afficher le contenu des messages dans les notifications et sur l’écran de verrouillage.",
   "settingsReadReceipts": "Envoyer les accusés de lecture",
   "settingsTypingIndicators": "Envoyer les indicateurs de saisie",
   "settingsTypingIndicatorsDescription": "Permet aux autres dans le chat de voir quand vous tapez.",

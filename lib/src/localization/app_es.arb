@@ -627,6 +627,8 @@
   "settingsMessageStorageServerOnly": "Solo servidor",
   "settingsMuteNotifications": "Silenciar notificaciones",
   "settingsMuteNotificationsDescription": "Deja de recibir notificaciones de mensajes.",
+  "settingsNotificationPreviews": "Previsualizaciones de notificación",
+  "settingsNotificationPreviewsDescription": "Mostrar el contenido de los mensajes en notificaciones y en la pantalla de bloqueo.",
   "settingsReadReceipts": "Enviar confirmaciones de lectura",
   "settingsTypingIndicators": "Enviar indicadores de escritura",
   "settingsTypingIndicatorsDescription": "Permite que otros en el chat vean cuando estás escribiendo.",

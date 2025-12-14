@@ -6,11 +6,8 @@ import 'package:logging/logging.dart';
 
 class RegisteredCredentialKey {
   RegisteredCredentialKey._(this.value) {
-    _log.info('Registering key: $value...');
     _registeredKeys.add(this);
   }
-
-  final _log = Logger('RegisteredCredentialKey');
 
   final String value;
 

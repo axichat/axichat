@@ -15,14 +15,14 @@ class CalendarStorageRegistry implements Storage {
   /// Registers [storage] for the provided [prefix]. Keys that begin with the
   /// prefix will be persisted using the registered storage.
   void registerPrefix(String prefix, Storage storage) {
-    _log.fine('Registering storage for prefix "$prefix"');
+    _log.fine('Registering calendar storage prefix');
     _prefixToStorage[prefix] = storage;
   }
 
   /// Removes any storage mapped to [prefix]. Subsequent operations will fall
   /// back to the default storage.
   void unregisterPrefix(String prefix) {
-    _log.fine('Unregistering storage for prefix "$prefix"');
+    _log.fine('Unregistering calendar storage prefix');
     _prefixToStorage.remove(prefix);
   }
 

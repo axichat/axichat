@@ -629,6 +629,8 @@
   "settingsMessageStorageServerOnly": "僅伺服器",
   "settingsMuteNotifications": "靜音通知",
   "settingsMuteNotificationsDescription": "停止接收訊息通知。",
+  "settingsNotificationPreviews": "通知預覽",
+  "settingsNotificationPreviewsDescription": "在通知和鎖定畫面上顯示訊息內容。",
   "settingsReadReceipts": "傳送已讀回條",
   "settingsTypingIndicators": "傳送輸入指示",
   "settingsTypingIndicatorsDescription": "讓聊天中的其他人看到你正在輸入。",

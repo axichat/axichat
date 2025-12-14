@@ -33,6 +33,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(mute: mute));
   }
 
+  void toggleNotificationPreviews(bool enabled) {
+    emit(state.copyWith(notificationPreviewsEnabled: enabled));
+  }
+
   void toggleReadReceipts(bool readReceipts) {
     emit(state.copyWith(readReceipts: readReceipts));
   }
