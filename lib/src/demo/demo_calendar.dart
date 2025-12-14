@@ -4,13 +4,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 
-const int _demoWorkdayCount = 5;
-const int _demoWorkdayStartHour = 8;
-const int _demoWorkdayEndHour = 18;
-const int _demoWorkdaySlotsPerDay = _demoWorkdayEndHour - _demoWorkdayStartHour;
-const int _demoWorkdayOccupiedSlotsPerDay = 8;
-
-const Duration _demoTaskDuration = Duration(hours: 1);
+const Duration _demoTaskDuration = Duration(minutes: 60);
 const Duration _demoReminderLeadShort = Duration(minutes: 15);
 const Duration _demoReminderLeadMedium = Duration(hours: 1);
 
@@ -40,11 +34,6 @@ class DemoCalendar {
     }
 
     model = _attachCriticalPaths(model);
-
-    assert(
-      _hasExactWorkWeekOccupancy(model, weekStart),
-      'Demo calendar must occupy exactly 80% of workday cells.',
-    );
 
     return model;
   }
@@ -116,11 +105,6 @@ DateTime _startOfWeek(DateTime date) {
   return midnight.subtract(Duration(days: daysFromMonday));
 }
 
-DateTime _atWeekdayHour(DateTime weekStart, int weekdayOffset, int hour) {
-  final DateTime day = weekStart.add(Duration(days: weekdayOffset));
-  return DateTime(day.year, day.month, day.day, hour);
-}
-
 DateTime _atWeekdayTime(
   DateTime weekStart,
   int weekdayOffset, {
@@ -136,6 +120,8 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
   const String postOffice = 'Philadelphia Post Office';
   const String workshop = 'Workshop';
   const int tuesdayOffset = 1;
+  const int saturdayOffset = 5;
+  const int sundayOffset = 6;
 
   const ReminderPreferences startReminder = ReminderPreferences(
     enabled: true,
@@ -147,122 +133,354 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
 
   final List<CalendarTask> tasks = <CalendarTask>[];
 
-  // Weekdays only: Monday=0..Friday=4.
-  for (var weekdayOffset = 0;
-      weekdayOffset < _demoWorkdayCount;
-      weekdayOffset++) {
-    tasks
-      ..add(
-        _scheduledTask(
-          title: 'Morning correspondence & ledgers',
-          scheduledTime: _atWeekdayHour(weekStart, weekdayOffset, 8),
-          location: printingHouse,
-          priority: TaskPriority.important,
-          reminders: startReminder,
-          checklist: const <TaskChecklistItem>[
-            TaskChecklistItem(id: 'letters', label: 'Reply to letters'),
-            TaskChecklistItem(id: 'accounts', label: 'Update accounts'),
-            TaskChecklistItem(id: 'plan', label: 'Set today’s priorities'),
-          ],
-        ),
-      )
-      ..add(
-        _scheduledTask(
-          title: 'Press run: Gazette proofs & corrections',
-          scheduledTime: _atWeekdayHour(weekStart, weekdayOffset, 9),
-          location: printingHouse,
-          priority: TaskPriority.important,
-          checklist: const <TaskChecklistItem>[
-            TaskChecklistItem(id: 'edit', label: 'Edit copy'),
-            TaskChecklistItem(id: 'set', label: 'Set type'),
-            TaskChecklistItem(id: 'proof', label: 'Proof & correct'),
-          ],
-        ),
-      );
+  // Monday (0)
+  tasks
+    ..add(
+      _scheduledTask(
+        title: 'Rise & plan the day (virtues)',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 5, minute: 10),
+        duration: const Duration(minutes: 25),
+        priority: TaskPriority.important,
+        reminders: startReminder,
+        checklist: const <TaskChecklistItem>[
+          TaskChecklistItem(id: 'virtue', label: 'Select virtue of the day'),
+          TaskChecklistItem(id: 'top3', label: 'Write top 3 intentions'),
+        ],
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Breakfast & reading',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 6, minute: 0),
+        duration: const Duration(minutes: 45),
+        location: 'Home',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Morning correspondence & ledgers',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 8, minute: 5),
+        duration: const Duration(minutes: 70),
+        location: printingHouse,
+        priority: TaskPriority.important,
+        reminders: startReminder,
+        checklist: const <TaskChecklistItem>[
+          TaskChecklistItem(id: 'letters', label: 'Reply to letters'),
+          TaskChecklistItem(id: 'accounts', label: 'Update accounts'),
+          TaskChecklistItem(id: 'plan', label: 'Set today’s priorities'),
+        ],
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Press run: Gazette proofs & corrections',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 9, minute: 30),
+        duration: const Duration(minutes: 90),
+        location: printingHouse,
+        priority: TaskPriority.important,
+        checklist: const <TaskChecklistItem>[
+          TaskChecklistItem(id: 'edit', label: 'Edit copy'),
+          TaskChecklistItem(id: 'set', label: 'Set type'),
+          TaskChecklistItem(id: 'proof', label: 'Proof & correct'),
+        ],
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Coffee break',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 10, minute: 55),
+        duration: const Duration(minutes: 15),
+        location: printingHouse,
+      ).copyWith(isCompleted: true),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Walk to market (fresh supplies)',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 12, minute: 10),
+        duration: const Duration(minutes: 35),
+        location: 'Market',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Dispatches & deliveries',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 13, minute: 20),
+        duration: const Duration(minutes: 50),
+        location: postOffice,
+        priority: TaskPriority.urgent,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Experiments & notes (electricity)',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 15, minute: 5),
+        duration: const Duration(minutes: 80),
+        location: workshop,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Evening letters (friends & patrons)',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 19, minute: 10),
+        duration: const Duration(minutes: 60),
+        location: 'Home',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Reflection & journal',
+        scheduledTime: _atWeekdayTime(weekStart, 0, hour: 21, minute: 40),
+        duration: const Duration(minutes: 20),
+        location: 'Home',
+      ),
+    );
 
-    if (weekdayOffset != tuesdayOffset) {
-      tasks.add(
+  // Tuesday (1): show overlaps in the grid.
+  tasks
+    ..add(
+      _scheduledTask(
+        title: 'Early workshop: tools & repairs',
+        scheduledTime:
+            _atWeekdayTime(weekStart, tuesdayOffset, hour: 6, minute: 20),
+        duration: const Duration(minutes: 55),
+        location: workshop,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Appointments & walk-ins',
+        scheduledTime:
+            _atWeekdayTime(weekStart, tuesdayOffset, hour: 8, minute: 40),
+        duration: const Duration(minutes: 50),
+        location: printingHouse,
+      ),
+    )
+    ..addAll(
+      <CalendarTask>[
         _scheduledTask(
-          title: 'Appointments & walk-ins',
-          scheduledTime: _atWeekdayHour(weekStart, weekdayOffset, 10),
-          location: printingHouse,
-        ),
-      );
-    }
-
-    tasks
-      ..add(
-        _scheduledTask(
-          title: 'Apprentices: instruction & review',
-          scheduledTime: _atWeekdayHour(weekStart, weekdayOffset, 11),
-          location: workshop,
-          priority: TaskPriority.important,
-        ),
-      )
-      ..add(
-        _scheduledTask(
-          title: 'Dispatches & deliveries',
-          scheduledTime: _atWeekdayHour(weekStart, weekdayOffset, 13),
-          location: postOffice,
+          title: 'Committee meeting: civic improvements',
+          scheduledTime:
+              _atWeekdayTime(weekStart, tuesdayOffset, hour: 10, minute: 0),
+          duration: const Duration(minutes: 60),
+          location: 'State House',
           priority: TaskPriority.urgent,
         ),
-      )
-      ..add(
         _scheduledTask(
-          title: 'Experiments & notes (electricity)',
-          scheduledTime: _atWeekdayHour(weekStart, weekdayOffset, 14),
-          location: workshop,
-        ),
-      )
-      ..add(
-        _scheduledTask(
-          title: 'Subscriptions, invoices, and receipts',
-          scheduledTime: _atWeekdayHour(weekStart, weekdayOffset, 15),
+          title: 'Printer’s client: pamphlet commission',
+          scheduledTime:
+              _atWeekdayTime(weekStart, tuesdayOffset, hour: 10, minute: 0),
+          duration: const Duration(minutes: 45),
           location: printingHouse,
-          priority: TaskPriority.important,
+          priority: TaskPriority.urgent,
         ),
-      )
-      ..add(
-        _scheduledTask(
-          title: 'Writing block (letters, editorials, proposals)',
-          scheduledTime: _atWeekdayHour(weekStart, weekdayOffset, 16),
-          location: printingHouse,
-        ),
-      );
-  }
-
-  // Side-by-side example: overlap two meetings in the same hour on Tuesday.
-  tasks.addAll(
-    <CalendarTask>[
-      _scheduledTask(
-        title: 'Committee meeting: civic improvements',
-        scheduledTime: _atWeekdayHour(weekStart, tuesdayOffset, 10),
-        location: 'State House',
-        priority: TaskPriority.urgent,
-      ),
-      _scheduledTask(
-        title: 'Printer’s client: pamphlet commission',
-        scheduledTime: _atWeekdayHour(weekStart, tuesdayOffset, 10),
-        location: printingHouse,
-        priority: TaskPriority.urgent,
-      ),
-    ],
-  );
-
-  // Feature highlights: a few anchored tasks with distinct priorities.
-  tasks.add(
-    _scheduledTask(
-      title: 'Weekly mail dispatch (seal & log)',
-      scheduledTime: _atWeekdayHour(weekStart, 4, 13),
-      location: postOffice,
-      priority: TaskPriority.critical,
-      checklist: const <TaskChecklistItem>[
-        TaskChecklistItem(id: 'sort', label: 'Sort packets'),
-        TaskChecklistItem(id: 'seal', label: 'Seal bags'),
-        TaskChecklistItem(id: 'log', label: 'Log departures'),
       ],
-    ),
-  );
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Press run: type setting & proofs',
+        scheduledTime:
+            _atWeekdayTime(weekStart, tuesdayOffset, hour: 11, minute: 15),
+        duration: const Duration(minutes: 105),
+        location: printingHouse,
+        priority: TaskPriority.important,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Dinner with friends',
+        scheduledTime:
+            _atWeekdayTime(weekStart, tuesdayOffset, hour: 18, minute: 30),
+        duration: const Duration(minutes: 90),
+        location: 'Tavern',
+      ),
+    );
+
+  // Wednesday (2)
+  tasks
+    ..add(
+      _scheduledTask(
+        title: 'Swim / exercise',
+        scheduledTime: _atWeekdayTime(weekStart, 2, hour: 5, minute: 45),
+        duration: const Duration(minutes: 40),
+        location: 'River',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Subscriptions, invoices, and receipts',
+        scheduledTime: _atWeekdayTime(weekStart, 2, hour: 9, minute: 5),
+        duration: const Duration(minutes: 80),
+        location: printingHouse,
+        priority: TaskPriority.important,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Library Company: acquire new volumes',
+        scheduledTime: _atWeekdayTime(weekStart, 2, hour: 13, minute: 10),
+        duration: const Duration(minutes: 65),
+        location: 'Library Company Hall',
+        priority: TaskPriority.important,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Writing block (editorial)',
+        scheduledTime: _atWeekdayTime(weekStart, 2, hour: 15, minute: 30),
+        duration: const Duration(minutes: 75),
+        location: printingHouse,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Family time',
+        scheduledTime: _atWeekdayTime(weekStart, 2, hour: 20, minute: 0),
+        duration: const Duration(minutes: 75),
+        location: 'Home',
+      ),
+    );
+
+  // Thursday (3)
+  tasks
+    ..add(
+      _scheduledTask(
+        title: 'Post Office: routes & complaints',
+        scheduledTime: _atWeekdayTime(weekStart, 3, hour: 7, minute: 50),
+        duration: const Duration(minutes: 55),
+        location: postOffice,
+        priority: TaskPriority.urgent,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Apprentices: instruction & review',
+        scheduledTime: _atWeekdayTime(weekStart, 3, hour: 10, minute: 20),
+        duration: const Duration(minutes: 70),
+        location: workshop,
+        priority: TaskPriority.important,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Experiment prep (glass, silk, brass)',
+        scheduledTime: _atWeekdayTime(weekStart, 3, hour: 14, minute: 0),
+        duration: const Duration(minutes: 45),
+        location: workshop,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Evening reading: philosophy',
+        scheduledTime: _atWeekdayTime(weekStart, 3, hour: 21, minute: 0),
+        duration: const Duration(minutes: 45),
+        location: 'Home',
+      ),
+    );
+
+  // Friday (4): longer day + critical task.
+  tasks
+    ..add(
+      _scheduledTask(
+        title: 'Morning correspondence & ledgers',
+        scheduledTime: _atWeekdayTime(weekStart, 4, hour: 7, minute: 30),
+        duration: const Duration(minutes: 60),
+        location: printingHouse,
+        priority: TaskPriority.important,
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Weekly mail dispatch (seal & log)',
+        scheduledTime: _atWeekdayTime(weekStart, 4, hour: 13, minute: 0),
+        duration: const Duration(minutes: 60),
+        location: postOffice,
+        priority: TaskPriority.critical,
+        checklist: const <TaskChecklistItem>[
+          TaskChecklistItem(id: 'sort', label: 'Sort packets'),
+          TaskChecklistItem(id: 'seal', label: 'Seal bags'),
+          TaskChecklistItem(id: 'log', label: 'Log departures'),
+        ],
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Junto: discussion & minutes',
+        scheduledTime: _atWeekdayTime(weekStart, 4, hour: 19, minute: 30),
+        duration: const Duration(minutes: 110),
+        location: 'Junto Club',
+        priority: TaskPriority.important,
+      ),
+    );
+
+  // Saturday (5): errands + leisure + late evening.
+  tasks
+    ..add(
+      _scheduledTask(
+        title: 'Long walk',
+        scheduledTime:
+            _atWeekdayTime(weekStart, saturdayOffset, hour: 8, minute: 10),
+        duration: const Duration(minutes: 75),
+        location: 'Outdoors',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Errands & supplies',
+        scheduledTime:
+            _atWeekdayTime(weekStart, saturdayOffset, hour: 10, minute: 15),
+        duration: const Duration(minutes: 95),
+        location: 'Market',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Fix the kite & twine (for next storm)',
+        scheduledTime:
+            _atWeekdayTime(weekStart, saturdayOffset, hour: 15, minute: 40),
+        duration: const Duration(minutes: 50),
+        location: 'Home',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Music / relaxation',
+        scheduledTime:
+            _atWeekdayTime(weekStart, saturdayOffset, hour: 21, minute: 15),
+        duration: const Duration(minutes: 45),
+        location: 'Home',
+      ),
+    );
+
+  // Sunday (6): lighter day with a few anchors.
+  tasks
+    ..add(
+      _scheduledTask(
+        title: 'Quiet reading & correspondence',
+        scheduledTime:
+            _atWeekdayTime(weekStart, sundayOffset, hour: 9, minute: 0),
+        duration: const Duration(minutes: 75),
+        location: 'Home',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Visit friends',
+        scheduledTime:
+            _atWeekdayTime(weekStart, sundayOffset, hour: 13, minute: 30),
+        duration: const Duration(minutes: 120),
+        location: 'Town',
+      ),
+    )
+    ..add(
+      _scheduledTask(
+        title: 'Prepare week plan',
+        scheduledTime:
+            _atWeekdayTime(weekStart, sundayOffset, hour: 18, minute: 45),
+        duration: const Duration(minutes: 40),
+        location: 'Home',
+        priority: TaskPriority.important,
+      ),
+    );
 
   return tasks;
 }
@@ -304,6 +522,17 @@ List<CalendarTask> _unscheduledTasks() {
       title: 'Library Company: trustees session (schedule time)',
       priority: TaskPriority.important,
       location: 'Library Company Hall',
+    ),
+    _unscheduledTask(
+      title: 'Draft sermon notes (optional)',
+    ),
+    _unscheduledTask(
+      title: 'Organize workshop shelves',
+      location: 'Workshop',
+      checklist: const <TaskChecklistItem>[
+        TaskChecklistItem(id: 'bins', label: 'Label bins'),
+        TaskChecklistItem(id: 'tools', label: 'Return tools'),
+      ],
     ),
   ];
 }
@@ -370,6 +599,12 @@ List<DayEvent> _dayEvents(DateTime weekStart) {
       startDate: weekStart.add(const Duration(days: 3)),
       description: 'Equipment check & muster practice.',
     ),
+    DayEvent.create(
+      title: 'Weekend visitors',
+      startDate: weekStart.add(const Duration(days: 5)),
+      endDate: weekStart.add(const Duration(days: 6)),
+      description: 'Guests in town; keep the schedule flexible.',
+    ),
   ];
 }
 
@@ -413,56 +648,4 @@ CalendarModel _attachCriticalPaths(CalendarModel model) {
     );
   }
   return updated;
-}
-
-bool _hasExactWorkWeekOccupancy(CalendarModel model, DateTime weekStart) {
-  final DateTime monday = weekStart;
-  final DateTime friday =
-      monday.add(const Duration(days: _demoWorkdayCount - 1));
-
-  final DateTime rangeStart = DateTime(
-    monday.year,
-    monday.month,
-    monday.day,
-    _demoWorkdayStartHour,
-  );
-  final DateTime rangeEnd = DateTime(
-    friday.year,
-    friday.month,
-    friday.day,
-    _demoWorkdayEndHour,
-  ).add(const Duration(days: 1));
-
-  final Set<String> occupiedCells = <String>{};
-
-  for (final CalendarTask task in model.tasks.values) {
-    final DateTime? start = task.scheduledTime;
-    if (start == null) {
-      continue;
-    }
-    if (start.isBefore(rangeStart) || !start.isBefore(rangeEnd)) {
-      continue;
-    }
-    if (start.weekday < DateTime.monday || start.weekday > DateTime.friday) {
-      continue;
-    }
-    final int hour = start.hour;
-    if (hour < _demoWorkdayStartHour || hour >= _demoWorkdayEndHour) {
-      continue;
-    }
-    final String key = '${start.year}-${start.month}-${start.day}-$hour';
-    occupiedCells.add(key);
-  }
-
-  const int totalCells = _demoWorkdayCount * _demoWorkdaySlotsPerDay;
-  const int expectedOccupied =
-      _demoWorkdayCount * _demoWorkdayOccupiedSlotsPerDay;
-
-  const double occupancyRatio =
-      _demoWorkdayOccupiedSlotsPerDay / _demoWorkdaySlotsPerDay;
-  assert(occupancyRatio == 0.8,
-      'Demo occupancy ratio constant must be exactly 0.8');
-
-  return occupiedCells.length == expectedOccupied &&
-      expectedOccupied * 5 == totalCells * 4;
 }

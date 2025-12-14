@@ -2,11 +2,13 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/axi_avatar.dart';
 import 'package:axichat/src/common/ui/string_to_color.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/foundation.dart';
@@ -22,6 +24,9 @@ const int _maxAutocompleteSuggestions = 8;
 const double _suggestionTileHeight = 56;
 const double _suggestionMaxHeight = 320;
 const double _expandedHeaderPadding = 4;
+const double _chipAvatarSize = 20.0;
+const double _chipStatusBadgeSize = 12.0;
+const double _chipStatusBadgeBorderWidth = 1.5;
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -120,6 +125,15 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final colors = theme.colorScheme;
     final l10n = context.l10n;
     final recipients = widget.recipients;
+    final rosterItems =
+        (context.watch<RosterCubit?>()?.cache['items'] as List<RosterItem>?) ??
+            const <RosterItem>[];
+    final avatarPathsByJid = <String, String>{};
+    for (final item in rosterItems) {
+      final path = item.avatarPath?.trim();
+      if (path == null || path.isEmpty) continue;
+      avatarPathsByJid[item.jid.toLowerCase()] = path;
+    }
     final visibleRecipients = _visibleRecipientsForState();
     final overflow = recipients.length - visibleRecipients.length;
     final chips = <Widget>[
@@ -130,6 +144,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           isRemoving: _removingKeys.contains(recipient.key),
           child: _RecipientChip(
             recipient: recipient,
+            avatarPathsByJid: avatarPathsByJid,
             status: _statusFor(recipient),
             pendingRemoval: _pendingRemovalKey == recipient.key,
             onToggle: () => widget.onRecipientToggled(recipient.key),
@@ -298,6 +313,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                           focusNode: _focusNode,
                           tapRegionGroup: _autocompleteTapRegionGroup,
                           backgroundColor: barBackground,
+                          avatarPathsByJid: avatarPathsByJid,
                           optionsBuilder: (raw) => _autocompleteOptions(
                             raw,
                             availableAutocompleteChats,
@@ -772,6 +788,7 @@ class _DomainCompletion {
 class _RecipientChip extends StatelessWidget {
   const _RecipientChip({
     required this.recipient,
+    required this.avatarPathsByJid,
     required this.onToggle,
     required this.onRemove,
     this.pendingRemoval = false,
@@ -779,6 +796,7 @@ class _RecipientChip extends StatelessWidget {
   });
 
   final ComposerRecipient recipient;
+  final Map<String, String> avatarPathsByJid;
   final VoidCallback onToggle;
   final VoidCallback? onRemove;
   final bool pendingRemoval;
@@ -815,13 +833,11 @@ class _RecipientChip extends StatelessWidget {
       child: InputChip(
         shape: const StadiumBorder(),
         showCheckmark: false,
-        avatar: statusIcon == null
-            ? null
-            : SizedBox(
-                width: 16,
-                height: 16,
-                child: statusIcon,
-              ),
+        avatar: _RecipientChipAvatar(
+          target: recipient.target,
+          avatarPathsByJid: avatarPathsByJid,
+          status: status,
+        ),
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -880,25 +896,92 @@ class _RecipientChip extends StatelessWidget {
     if (brightness == Brightness.light) return scheme.onSurface;
     return scheme.onSurface;
   }
+}
 
-  Widget? _statusIcon() {
-    switch (status) {
-      case FanOutRecipientState.failed:
-        return const Icon(Icons.warning_amber_rounded,
-            size: 16, color: Colors.red);
-      case FanOutRecipientState.sent:
-        return const Icon(Icons.check, size: 16, color: Colors.green);
-      case FanOutRecipientState.queued:
-      case FanOutRecipientState.sending:
-        return const SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        );
-      case null:
-        return null;
+class _RecipientChipAvatar extends StatelessWidget {
+  const _RecipientChipAvatar({
+    required this.target,
+    required this.avatarPathsByJid,
+    this.status,
+  });
+
+  final FanOutTarget target;
+  final Map<String, String> avatarPathsByJid;
+  final FanOutRecipientState? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final chat = target.chat;
+    final avatar = chat != null
+        ? TransportAwareAvatar(
+            chat: chat,
+            size: _chipAvatarSize,
+            showBadge: false,
+          )
+        : AxiAvatar(
+            jid: target.address ?? target.displayName ?? '',
+            size: _chipAvatarSize,
+            shape: AxiAvatarShape.circle,
+            avatarPath: avatarPathsByJid[
+                (target.address ?? target.displayName ?? '').toLowerCase()],
+          );
+    final badgeIcon = _statusIcon(status, colors);
+    if (badgeIcon == null) {
+      return SizedBox.square(dimension: _chipAvatarSize, child: avatar);
     }
+    final badgeBackground = colors.surface;
+    final badgeBorder = colors.surface;
+    return SizedBox.square(
+      dimension: _chipAvatarSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(child: avatar),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: _chipStatusBadgeSize,
+              height: _chipStatusBadgeSize,
+              decoration: BoxDecoration(
+                color: badgeBackground,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: badgeBorder,
+                  width: _chipStatusBadgeBorderWidth,
+                ),
+              ),
+              child: Center(child: badgeIcon),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+
+  Widget? _statusIcon(FanOutRecipientState? state, ColorScheme colors) =>
+      switch (state) {
+        FanOutRecipientState.failed => Icon(
+            Icons.warning_amber_rounded,
+            size: _chipStatusBadgeSize - 2,
+            color: colors.error,
+          ),
+        FanOutRecipientState.sent => Icon(
+            Icons.check,
+            size: _chipStatusBadgeSize - 2,
+            color: colors.primary,
+          ),
+        FanOutRecipientState.queued || FanOutRecipientState.sending => SizedBox(
+            width: _chipStatusBadgeSize - 2,
+            height: _chipStatusBadgeSize - 2,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        null => null,
+      };
 }
 
 class _RecipientsCountBadge extends StatelessWidget {
@@ -1021,6 +1104,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
     required this.focusNode,
     required this.tapRegionGroup,
     required this.backgroundColor,
+    required this.avatarPathsByJid,
     required this.optionsBuilder,
     required this.highlightedIndexListenable,
     required this.onManualEntry,
@@ -1033,6 +1117,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
   final FocusNode focusNode;
   final Object tapRegionGroup;
   final Color backgroundColor;
+  final Map<String, String> avatarPathsByJid;
   final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
   final bool Function(String value) onManualEntry;
@@ -1197,6 +1282,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
                         builder: (context, highlightedIndex, _) {
                           return _AutocompleteOptionsList(
                             options: optionList,
+                            avatarPathsByJid: avatarPathsByJid,
                             onSelected: (option) {
                               onSelected(option);
                               controller.clear();
@@ -1235,6 +1321,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
 class _AutocompleteOptionsList extends StatelessWidget {
   const _AutocompleteOptionsList({
     required this.options,
+    required this.avatarPathsByJid,
     required this.onSelected,
     required this.titleStyle,
     required this.subtitleStyle,
@@ -1246,6 +1333,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
   });
 
   final List<FanOutTarget> options;
+  final Map<String, String> avatarPathsByJid;
   final ValueChanged<FanOutTarget> onSelected;
   final TextStyle? titleStyle;
   final TextStyle? subtitleStyle;
@@ -1306,7 +1394,10 @@ class _AutocompleteOptionsList extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 child: Row(
                   children: [
-                    _SuggestionAvatar(option: option),
+                    _SuggestionAvatar(
+                      option: option,
+                      avatarPathsByJid: avatarPathsByJid,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1347,25 +1438,31 @@ class _AutocompleteOptionsList extends StatelessWidget {
 }
 
 class _SuggestionAvatar extends StatelessWidget {
-  const _SuggestionAvatar({required this.option});
+  const _SuggestionAvatar({
+    required this.option,
+    required this.avatarPathsByJid,
+  });
 
   final FanOutTarget option;
+  final Map<String, String> avatarPathsByJid;
 
   @override
   Widget build(BuildContext context) {
     if (option.chat != null) {
-      return AxiAvatar(
-        jid: option.chat!.jid,
+      return TransportAwareAvatar(
+        chat: option.chat!,
         size: 32,
-        shape: AxiAvatarShape.circle,
+        showBadge: false,
       );
     }
     final address = option.address ?? option.chat?.emailAddress ?? '';
     final jid = address.isNotEmpty ? address : option.displayName ?? '';
+    final avatarPath = avatarPathsByJid[jid.toLowerCase()];
     return AxiAvatar(
       jid: jid,
       size: 32,
       shape: AxiAvatarShape.circle,
+      avatarPath: avatarPath,
     );
   }
 }

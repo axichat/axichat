@@ -78,7 +78,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
     _emailService?.updateEndpointConfig(_endpointConfig);
     _authRecoveryFuture = _recoverAuthTransaction();
-    unawaited(_restoreEndpointConfig());
+    _endpointConfigRecoveryFuture = _restoreEndpointConfig();
+    unawaited(_endpointConfigRecoveryFuture);
     _lifecycleListener = AppLifecycleListener(
       onResume: _loginIfStoredCredentials,
       onShow: _loginIfStoredCredentials,
@@ -179,6 +180,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   var _signupAvatarPublishInFlight = false;
   _AuthTransaction? _authTransaction;
   late final Future<void> _authRecoveryFuture;
+  late final Future<void> _endpointConfigRecoveryFuture;
   bool get _stickyAuthActive => state is AuthenticationComplete;
   bool _loginInFlight = false;
   bool _demoLoginInProgress = false;
@@ -535,26 +537,28 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         'smtpEnabled: ${_endpointConfig.enableSmtp})',
       );
       _lastEmailProvisioningError = null;
-      await _authRecoveryFuture;
-      if (state is AuthenticationComplete && _xmppService.connected) {
-        return;
-      }
-      if (state is AuthenticationLogInInProgress) {
-        _log.fine('Ignoring login request while another is in progress.');
-        return;
-      }
       final AuthenticationState previousState = state;
+      final usingStoredCredentials = username == null && password == null;
+      final wasAuthenticated = previousState is AuthenticationComplete;
+      final configBeforeRecovery = _endpointConfig;
+      final loginState = _activeSignupCredentialKey != null
+          ? AuthenticationLogInInProgress(
+              fromSignup: true,
+              config: configBeforeRecovery,
+            )
+          : AuthenticationLogInInProgress(config: configBeforeRecovery);
+      if ((!wasAuthenticated || !usingStoredCredentials) &&
+          previousState is! AuthenticationLogInInProgress) {
+        _emit(loginState);
+      }
+      await _authRecoveryFuture;
+      if (previousState is AuthenticationComplete && _xmppService.connected) {
+        return;
+      }
+      await _endpointConfigRecoveryFuture;
       final config = _endpointConfig;
       final xmppEnabled = config.enableXmpp;
       final smtpEnabled = config.enableSmtp;
-      final bool wasAuthenticated = state is AuthenticationComplete;
-      final bool usingStoredCredentials = username == null && password == null;
-      final loginState = _activeSignupCredentialKey != null
-          ? AuthenticationLogInInProgress(fromSignup: true, config: config)
-          : AuthenticationLogInInProgress(config: config);
-      if (!wasAuthenticated || !usingStoredCredentials) {
-        _emit(loginState);
-      }
       if (!xmppEnabled && !smtpEnabled) {
         _emit(const AuthenticationFailure(
           'Enable XMPP or SMTP to continue.',

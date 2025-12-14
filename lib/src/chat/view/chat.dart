@@ -2339,6 +2339,54 @@ class _ChatState extends State<Chat> {
                   if (path == null || path.isEmpty) continue;
                   chatAvatarPathsByJid[chat.jid.toLowerCase()] = path;
                 }
+                String? avatarPathForBareJid(String jid) {
+                  final normalized = jid.trim().toLowerCase();
+                  if (normalized.isEmpty) return null;
+                  return rosterAvatarPathsByJid[normalized] ??
+                      chatAvatarPathsByJid[normalized];
+                }
+
+                String? avatarPathForTypingParticipant(String participant) {
+                  final trimmed = participant.trim();
+                  if (trimmed.isEmpty) return null;
+                  final slashIndex = trimmed.indexOf('/');
+                  if (slashIndex == -1) {
+                    return avatarPathForBareJid(trimmed);
+                  }
+                  final bareParticipant =
+                      trimmed.substring(0, slashIndex).trim().toLowerCase();
+                  final roomJid = chatEntity?.jid.trim().toLowerCase();
+                  final isRoomParticipant =
+                      roomJid != null && bareParticipant == roomJid;
+                  if (!isRoomParticipant) {
+                    return avatarPathForBareJid(
+                      trimmed.substring(0, slashIndex),
+                    );
+                  }
+                  final roomState = state.roomState;
+                  if (roomState == null) return null;
+                  final nick = trimmed.substring(slashIndex + 1).trim();
+                  if (nick.isEmpty) return null;
+
+                  Occupant? occupant = roomState.occupants[trimmed];
+                  if (occupant == null) {
+                    for (final candidate in roomState.occupants.values) {
+                      if (candidate.nick == nick) {
+                        occupant = candidate;
+                        break;
+                      }
+                    }
+                  }
+
+                  final realJid = occupant?.realJid?.trim();
+                  if (realJid == null || realJid.isEmpty) return null;
+                  final realSlashIndex = realJid.indexOf('/');
+                  final bareRealJid = realSlashIndex == -1
+                      ? realJid
+                      : realJid.substring(0, realSlashIndex);
+                  return avatarPathForBareJid(bareRealJid);
+                }
+
                 final retryEntry = _lastReportEntryWhere(
                   fanOutReports.entries,
                   (entry) => entry.value.hasFailures,
@@ -3060,6 +3108,17 @@ class _ChatState extends State<Chat> {
                                                     fallbackTypingJid.isNotEmpty
                                                 ? [fallbackTypingJid]
                                                 : const <String>[];
+                                    final typingAvatarPaths =
+                                        <String, String>{};
+                                    for (final participant in typingAvatars) {
+                                      final path =
+                                          avatarPathForTypingParticipant(
+                                        participant,
+                                      );
+                                      if (path == null || path.isEmpty)
+                                        continue;
+                                      typingAvatarPaths[participant] = path;
+                                    }
                                     final typingVisible =
                                         state.typing == true ||
                                             remoteTyping ||
@@ -4774,6 +4833,8 @@ class _ChatState extends State<Chat> {
                                                                   _TypingIndicatorPill(
                                                                 participants:
                                                                     typingAvatars,
+                                                                avatarPaths:
+                                                                    typingAvatarPaths,
                                                               ),
                                                             ),
                                                           ),
@@ -5821,33 +5882,24 @@ class _RecipientAvatarBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final trimmed = chat.displayName.trim();
-    final initialCode = trimmed.isEmpty ? null : trimmed.runes.first;
-    final initial = initialCode == null
-        ? '?'
-        : String.fromCharCode(initialCode).toUpperCase();
-    final background = stringToColor(chat.jid);
-    final textColor = colors.background;
+    const borderWidth = 1.6;
+    final avatarPath = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
+    final resolvedAvatarPath =
+        avatarPath?.isNotEmpty == true ? avatarPath : null;
     return Container(
       width: _recipientAvatarSize,
       height: _recipientAvatarSize,
+      padding: const EdgeInsets.all(borderWidth),
       decoration: BoxDecoration(
-        color: background,
+        color: colors.card,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: colors.card,
-          width: 1.6,
-        ),
       ),
-      child: Center(
-        child: Text(
-          initial,
-          style: TextStyle(
-            fontSize: _recipientAvatarSize * 0.45,
-            fontWeight: FontWeight.w600,
-            color: textColor,
-            letterSpacing: 0.5,
-          ),
+      child: ClipOval(
+        child: AxiAvatar(
+          jid: chat.avatarIdentifier,
+          size: _recipientAvatarSize - (borderWidth * 2),
+          shape: AxiAvatarShape.circle,
+          avatarPath: resolvedAvatarPath,
         ),
       ),
     );
@@ -5880,16 +5932,24 @@ class _RecipientOverflowAvatar extends StatelessWidget {
 }
 
 class _TypingIndicatorPill extends StatelessWidget {
-  const _TypingIndicatorPill({required this.participants});
+  const _TypingIndicatorPill({
+    required this.participants,
+    required this.avatarPaths,
+  });
 
   final List<String> participants;
+  final Map<String, String> avatarPaths;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final avatarStrip =
-            participants.isEmpty ? null : _TypingAvatarStrip(participants);
+        final avatarStrip = participants.isEmpty
+            ? null
+            : _TypingAvatarStrip(
+                participants: participants,
+                avatarPaths: avatarPaths,
+              );
         final hasBoundedWidth =
             constraints.hasBoundedWidth && constraints.maxWidth.isFinite;
         final maxWidth = hasBoundedWidth ? constraints.maxWidth : null;
@@ -5918,9 +5978,13 @@ class _TypingIndicatorPill extends StatelessWidget {
 }
 
 class _TypingAvatarStrip extends StatelessWidget {
-  const _TypingAvatarStrip(this.participants);
+  const _TypingAvatarStrip({
+    required this.participants,
+    required this.avatarPaths,
+  });
 
   final List<String> participants;
+  final Map<String, String> avatarPaths;
 
   @override
   Widget build(BuildContext context) {
@@ -5940,7 +6004,10 @@ class _TypingAvatarStrip extends StatelessWidget {
           children.add(
             Positioned(
               left: offset,
-              child: _TypingAvatar(jid: visible[i]),
+              child: _TypingAvatar(
+                jid: visible[i],
+                avatarPath: avatarPaths[visible[i]],
+              ),
             ),
           );
         }
@@ -5975,9 +6042,13 @@ class _TypingAvatarStrip extends StatelessWidget {
 }
 
 class _TypingAvatar extends StatelessWidget {
-  const _TypingAvatar({required this.jid});
+  const _TypingAvatar({
+    required this.jid,
+    this.avatarPath,
+  });
 
   final String jid;
+  final String? avatarPath;
 
   @override
   Widget build(BuildContext context) {
@@ -5994,6 +6065,7 @@ class _TypingAvatar extends StatelessWidget {
         child: AxiAvatar(
           jid: jid,
           size: _recipientAvatarSize - (_typingAvatarBorderWidth * 2),
+          avatarPath: avatarPath,
         ),
       ),
     );

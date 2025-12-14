@@ -15,10 +15,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LoginForm extends StatefulWidget {
-  const LoginForm({super.key, this.onSubmitStart, this.onAutologinStart});
+  const LoginForm({super.key, this.onSubmitStart});
 
   final VoidCallback? onSubmitStart;
-  final VoidCallback? onAutologinStart;
 
   @override
   State<LoginForm> createState() => _LoginFormState();
@@ -27,7 +26,6 @@ class LoginForm extends StatefulWidget {
 class _LoginFormState extends State<LoginForm> {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
-  var _loginTriggered = false;
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
 
   bool rememberMe = true;
@@ -53,14 +51,6 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_loginTriggered) return;
-    _loginTriggered = true;
-    unawaited(_attemptAutologinWithStoredCredentials());
-  }
-
-  @override
   void dispose() {
     _jidTextController.dispose();
     _passwordTextController.dispose();
@@ -76,14 +66,6 @@ class _LoginFormState extends State<LoginForm> {
           password: _passwordTextController.value.text,
           rememberMe: rememberMe,
         );
-  }
-
-  Future<void> _attemptAutologinWithStoredCredentials() async {
-    final authCubit = context.read<AuthenticationCubit>();
-    final hasStoredCredentials = await authCubit.hasStoredLoginCredentials();
-    if (!mounted || !hasStoredCredentials) return;
-    widget.onAutologinStart?.call();
-    unawaited(authCubit.login());
   }
 
   @override
