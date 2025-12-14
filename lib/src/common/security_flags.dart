@@ -17,3 +17,11 @@ const bool kAllowInsecureXmppHttpUploadSlots = bool.fromEnvironment(
   kAllowInsecureXmppHttpUploadSlotsDefine,
   defaultValue: false,
 );
+
+const String kAllowInsecureXmppAttachmentDownloadsDefine =
+    'ALLOW_INSECURE_XMPP_ATTACHMENT_DOWNLOADS';
+
+const bool kAllowInsecureXmppAttachmentDownloads = bool.fromEnvironment(
+  kAllowInsecureXmppAttachmentDownloadsDefine,
+  defaultValue: false,
+);

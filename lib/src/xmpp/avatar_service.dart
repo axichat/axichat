@@ -33,6 +33,8 @@ mixin AvatarService on XmppBase {
   final Set<String> _avatarRefreshInProgress = {};
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
+  static const int _maxAvatarBytes = 512 * 1024;
+  static const int _maxAvatarBase64Length = ((_maxAvatarBytes + 2) ~/ 3) * 4;
   static const int _avatarBytesCacheLimit = 64;
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
   final LinkedHashMap<String, Uint8List> _avatarBytesCache = LinkedHashMap();
@@ -146,6 +148,7 @@ mixin AvatarService on XmppBase {
       final avatarData = avatarDataResult.get<mox.UserAvatarData>();
       final bytes = avatarData.data;
       if (bytes.isEmpty) return;
+      if (bytes.length > _maxAvatarBytes) return;
 
       final path = await _writeAvatarFile(
         bytes: bytes,
@@ -183,11 +186,16 @@ mixin AvatarService on XmppBase {
           await manager.requestVCard(mox.JID.fromString(bareJid));
       if (vcardResult.isType<mox.VCardError>()) return;
       final vcard = vcardResult.get<mox.VCard>();
-      final encoded = vcard.photo?.binval?.replaceAll('\n', '').trim();
-      if (encoded == null || encoded.isEmpty) return;
+      final rawEncoded = vcard.photo?.binval?.trim();
+      if (rawEncoded == null || rawEncoded.isEmpty) return;
+      if (rawEncoded.length > _maxAvatarBase64Length * 2) return;
+      final encoded = rawEncoded.replaceAll(RegExp(r'\s+'), '');
+      if (encoded.isEmpty) return;
+      if (encoded.length > _maxAvatarBase64Length) return;
 
       final bytes = base64Decode(encoded);
       if (bytes.isEmpty) return;
+      if (bytes.length > _maxAvatarBytes) return;
 
       final path = await _writeAvatarFile(
         bytes: bytes,
@@ -221,11 +229,16 @@ mixin AvatarService on XmppBase {
     List<mox.UserAvatarMetadata> metadata,
   ) {
     if (metadata.isEmpty) return null;
-    final sorted = [...metadata]..sort(
+    final filtered = metadata
+        .where((item) => item.length > 0 && item.length <= _maxAvatarBytes);
+    if (filtered.isEmpty) return null;
+    final sorted = [...filtered]..sort(
         (a, b) {
           final sizeA = (a.width ?? 0) * (a.height ?? 0);
           final sizeB = (b.width ?? 0) * (b.height ?? 0);
-          return sizeB.compareTo(sizeA);
+          final dimensionCompare = sizeB.compareTo(sizeA);
+          if (dimensionCompare != 0) return dimensionCompare;
+          return b.length.compareTo(a.length);
         },
       );
     return sorted.first;
