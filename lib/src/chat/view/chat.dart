@@ -2322,6 +2322,23 @@ class _ChatState extends State<Chat> {
                 final showAttachmentWarning =
                     warningEntry?.value.attachmentWarning ?? false;
                 final chatsState = context.watch<ChatsCubit?>()?.state;
+                final rosterItems = (context.watch<RosterCubit>().cache['items']
+                        as List<RosterItem>?) ??
+                    const <RosterItem>[];
+                final rosterAvatarPathsByJid = <String, String>{};
+                for (final item in rosterItems) {
+                  final path = item.avatarPath?.trim();
+                  if (path == null || path.isEmpty) continue;
+                  rosterAvatarPathsByJid[item.jid.toLowerCase()] = path;
+                }
+                final chatAvatarPathsByJid = <String, String>{};
+                for (final chat
+                    in chatsState?.items ?? const <chat_models.Chat>[]) {
+                  final path =
+                      (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
+                  if (path == null || path.isEmpty) continue;
+                  chatAvatarPathsByJid[chat.jid.toLowerCase()] = path;
+                }
                 final retryEntry = _lastReportEntryWhere(
                   fanOutReports.entries,
                   (entry) => entry.value.hasFailures,
@@ -3905,15 +3922,52 @@ class _ChatState extends State<Chat> {
                                                         double extraOuterRight =
                                                             0;
                                                         if (hasAvatarSlot) {
-                                                          final messageAvatarPath =
-                                                              state.chat?.type ==
-                                                                      ChatType
-                                                                          .groupChat
+                                                          final occupantIdCandidate =
+                                                              messageModel
+                                                                  .occupantID
+                                                                  ?.trim();
+                                                          final occupantId =
+                                                              occupantIdCandidate !=
+                                                                          null &&
+                                                                      occupantIdCandidate
+                                                                          .isNotEmpty
+                                                                  ? occupantIdCandidate
+                                                                  : messageModel
+                                                                      .senderJid;
+                                                          final occupant = state
+                                                                  .roomState
+                                                                  ?.occupants[
+                                                              occupantId];
+                                                          final realJid =
+                                                              occupant?.realJid
+                                                                  ?.trim();
+                                                          final bareRealJid =
+                                                              realJid == null ||
+                                                                      realJid
+                                                                          .isEmpty
                                                                   ? null
-                                                                  : state.chat
-                                                                          ?.avatarPath ??
-                                                                      state.chat
-                                                                          ?.contactAvatarPath;
+                                                                  : realJid
+                                                                          .contains(
+                                                                      '/',
+                                                                    )
+                                                                      ? realJid
+                                                                          .split(
+                                                                            '/',
+                                                                          )
+                                                                          .first
+                                                                      : realJid;
+                                                          final normalizedBareRealJid =
+                                                              bareRealJid
+                                                                  ?.toLowerCase();
+                                                          final messageAvatarPath = normalizedBareRealJid ==
+                                                                      null ||
+                                                                  normalizedBareRealJid
+                                                                      .isEmpty
+                                                              ? null
+                                                              : rosterAvatarPathsByJid[
+                                                                      normalizedBareRealJid] ??
+                                                                  chatAvatarPathsByJid[
+                                                                      normalizedBareRealJid];
                                                           avatarOverlay =
                                                               _MessageAvatar(
                                                             jid: messageModel

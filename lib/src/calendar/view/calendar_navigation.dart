@@ -521,6 +521,14 @@ class _ViewModeToggle extends StatelessWidget {
   final ValueChanged<CalendarView> onChanged;
   final bool compact;
 
+  static const double _labelFontSize = 10;
+  static const double _minWidthExpanded = 180;
+  static const double _preferredWidthExpanded = 204;
+  static const double _minWidthRegular = 168;
+  static const double _preferredWidthRegular = 192;
+  static const double _widthScaleExpanded = 0.42;
+  static const double _widthScaleRegular = 0.56;
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -536,11 +544,13 @@ class _ViewModeToggle extends StatelessWidget {
     final EdgeInsets padding = EdgeInsets.symmetric(
       horizontal: compact ? calendarGutterSm : calendarGutterMd,
     );
-    const double labelFontSize = 11;
     final double minHeight = buttonSizeTheme.height;
-    final double minWidth = isExpandedSize ? 132 : 110;
-    final double preferredWidth = isExpandedSize ? 152 : 128;
-    final double widthScale = isExpandedSize ? 0.38 : 0.5;
+    final double minWidth =
+        isExpandedSize ? _minWidthExpanded : _minWidthRegular;
+    final double preferredWidth =
+        isExpandedSize ? _preferredWidthExpanded : _preferredWidthRegular;
+    final double widthScale =
+        isExpandedSize ? _widthScaleExpanded : _widthScaleRegular;
     final double mediaWidth = MediaQuery.of(context).size.width;
     final double controlWidth = math.min(
       preferredWidth,
@@ -548,7 +558,7 @@ class _ViewModeToggle extends StatelessWidget {
     );
     final bool useShortLabels = !isExpandedSize;
     final TextStyle textStyle = context.textTheme.small.copyWith(
-      fontSize: labelFontSize,
+      fontSize: _labelFontSize,
       fontWeight: FontWeight.w700,
       letterSpacing: 0.1,
     );
@@ -671,6 +681,9 @@ class _ViewModeToggleItem extends StatelessWidget {
             style: textStyle.copyWith(
               color: selected ? colors.primary : colors.mutedForeground,
             ),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ).withTapBounce(enabled: !selected),
