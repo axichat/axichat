@@ -3227,10 +3227,10 @@ class _CalendarWeekView extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     SizedBox.expand(child: gridBody),
-                    Positioned(
-                      bottom: compact ? 12 : 24,
-                      left: compact ? 8 : 16,
-                      child: const CalendarHoverTitleBubble(),
+                    const Positioned(
+                      bottom: 0,
+                      left: 0,
+                      child: CalendarHoverTitleBubble(),
                     ),
                     Positioned(
                       bottom: compact ? 12 : 24,

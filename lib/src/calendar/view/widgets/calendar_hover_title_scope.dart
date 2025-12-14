@@ -32,6 +32,18 @@ class CalendarHoverTitleController extends ChangeNotifier {
       return;
     }
 
+    if (settleDuration == Duration.zero) {
+      _pendingTitle = null;
+      _settleTimer?.cancel();
+      _settleTimer = null;
+      if (_title == trimmed) {
+        return;
+      }
+      _title = trimmed;
+      notifyListeners();
+      return;
+    }
+
     _pendingTitle = trimmed;
     _settleTimer?.cancel();
     _settleTimer = Timer(settleDuration, () {
