@@ -13,6 +13,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';

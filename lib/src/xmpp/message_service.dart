@@ -39,6 +39,7 @@ const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
 const Duration _httpAttachmentGetTimeout = Duration(minutes: 2);
 const int _xmppAttachmentDownloadLimitFallbackBytes = 50 * 1024 * 1024;
+const int _xmppAttachmentDownloadMaxRedirects = 5;
 const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
 const int serverOnlyChatMessageCap = 500;
@@ -2219,9 +2220,30 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       if (uri == null) {
         throw XmppMessageException();
       }
-      if (uri.scheme != 'http' && uri.scheme != 'https') {
+      final scheme = uri.scheme.toLowerCase();
+      if (scheme != 'http' && scheme != 'https') {
         throw XmppMessageException();
       }
+      if (uri.userInfo.trim().isNotEmpty) {
+        throw XmppMessageException();
+      }
+      if (uri.host.trim().isEmpty) {
+        throw XmppMessageException();
+      }
+
+      final encrypted = metadata.encryptionScheme?.isNotEmpty == true;
+      const allowInsecureHosts =
+          !kReleaseMode && kAllowInsecureXmppAttachmentDownloads;
+      final allowHttp = !kReleaseMode ||
+          encrypted ||
+          _hasExpectedSha256Hash(metadata.plainTextHashes) ||
+          _hasExpectedSha256Hash(metadata.cipherTextHashes);
+
+      await _validateInboundAttachmentDownloadUri(
+        uri,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
+      );
 
       final directory = await _attachmentCacheDirectory();
       final safeFileName = _attachmentFileName(metadata);
@@ -2232,13 +2254,15 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       if (expectedSize != null && expectedSize > 0 && expectedSize > maxBytes) {
         throw XmppFileTooBigException(maxBytes);
       }
-      await _downloadUrlToFile(
+      final responseMimeType = await _downloadUrlToFile(
         uri: uri,
         destination: tmpFile,
         maxBytes: maxBytes,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
       );
 
-      final encrypted = metadata.encryptionScheme?.isNotEmpty == true;
+      late final int resolvedSizeBytes;
       if (encrypted) {
         final cipherBytes = await tmpFile.readAsBytes();
         await _verifySha256Hash(
@@ -2253,6 +2277,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           expected: metadata.plainTextHashes,
           bytes: plainBytes,
         );
+        resolvedSizeBytes = plainBytes.length;
         decryptedTmp =
             File(p.join(directory.path, '.${metadata.id}.decrypted'));
         await decryptedTmp.writeAsBytes(plainBytes, flush: true);
@@ -2265,9 +2290,19 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         );
         await _replaceFile(source: tmpFile, destination: finalFile);
         tmpFile = null;
+        resolvedSizeBytes = await finalFile.length();
       }
 
-      final updatedMetadata = metadata.copyWith(path: finalFile.path);
+      final resolvedMime = metadata.mimeType?.trim().isNotEmpty == true
+          ? metadata.mimeType
+          : responseMimeType?.trim().isNotEmpty == true
+              ? responseMimeType
+              : null;
+      final updatedMetadata = metadata.copyWith(
+        path: finalFile.path,
+        mimeType: resolvedMime,
+        sizeBytes: resolvedSizeBytes,
+      );
       await _dbOp<XmppDatabase>(
         (db) => db.saveFileMetadata(updatedMetadata),
         awaitDatabase: true,
@@ -2375,42 +2410,119 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     await source.rename(destination.path);
   }
 
-  Future<void> _downloadUrlToFile({
+  Future<String?> _downloadUrlToFile({
     required Uri uri,
     required File destination,
     required int maxBytes,
+    required bool allowHttp,
+    required bool allowInsecureHosts,
   }) async {
     final client = HttpClient()..connectionTimeout = _httpAttachmentGetTimeout;
     try {
-      final request =
-          await client.getUrl(uri).timeout(_httpAttachmentGetTimeout);
-      final response = await request.close().timeout(_httpAttachmentGetTimeout);
-      final statusCode = response.statusCode;
-      final success = statusCode >= 200 && statusCode < 300;
-      if (!success) {
-        throw XmppMessageException();
-      }
-      final responseLength = response.contentLength;
-      if (responseLength != -1 && responseLength > maxBytes) {
-        throw XmppFileTooBigException(maxBytes);
-      }
-      final sink = destination.openWrite();
-      var received = 0;
-      try {
-        await for (final chunk in response.timeout(_httpAttachmentGetTimeout)) {
-          received += chunk.length;
-          if (received > maxBytes) {
-            throw XmppFileTooBigException(maxBytes);
+      var redirects = 0;
+      var current = uri;
+      while (true) {
+        await _validateInboundAttachmentDownloadUri(
+          current,
+          allowHttp: allowHttp,
+          allowInsecureHosts: allowInsecureHosts,
+        );
+        final request =
+            await client.getUrl(current).timeout(_httpAttachmentGetTimeout)
+              ..followRedirects = false
+              ..maxRedirects = 0;
+        final response =
+            await request.close().timeout(_httpAttachmentGetTimeout);
+        final statusCode = response.statusCode;
+
+        if (_isHttpRedirectStatusCode(statusCode)) {
+          final location = response.headers.value(HttpHeaders.locationHeader);
+          await response.listen((_) {}).cancel();
+          if (location == null || location.trim().isEmpty) {
+            throw XmppMessageException();
           }
-          sink.add(chunk);
+          if (redirects >= _xmppAttachmentDownloadMaxRedirects) {
+            throw XmppMessageException();
+          }
+          final redirected = current.resolve(location.trim());
+          final redirectedScheme = redirected.scheme.toLowerCase();
+          if (current.scheme.toLowerCase() == 'https' &&
+              redirectedScheme == 'http') {
+            throw XmppMessageException();
+          }
+          current = redirected;
+          redirects += 1;
+          continue;
         }
-      } finally {
-        await sink.close();
+
+        final success = statusCode >= 200 && statusCode < 300;
+        if (!success) {
+          throw XmppMessageException();
+        }
+
+        final mimeType = response.headers.contentType?.mimeType;
+        final responseLength = response.contentLength;
+        if (responseLength != -1 && responseLength > maxBytes) {
+          throw XmppFileTooBigException(maxBytes);
+        }
+        final sink = destination.openWrite();
+        var received = 0;
+        try {
+          await for (final chunk
+              in response.timeout(_httpAttachmentGetTimeout)) {
+            received += chunk.length;
+            if (received > maxBytes) {
+              throw XmppFileTooBigException(maxBytes);
+            }
+            sink.add(chunk);
+          }
+        } finally {
+          await sink.close();
+        }
+        return mimeType;
       }
     } finally {
       client.close(force: true);
     }
   }
+
+  Future<void> _validateInboundAttachmentDownloadUri(
+    Uri uri, {
+    required bool allowHttp,
+    required bool allowInsecureHosts,
+  }) async {
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') {
+      throw XmppMessageException();
+    }
+    if (scheme == 'http' && !allowHttp) {
+      throw XmppMessageException();
+    }
+    if (uri.userInfo.trim().isNotEmpty) {
+      throw XmppMessageException();
+    }
+    final host = uri.host.trim();
+    if (host.isEmpty) {
+      throw XmppMessageException();
+    }
+    if (!allowInsecureHosts) {
+      final safe = await isSafeHostForRemoteConnection(host)
+          .timeout(_httpAttachmentGetTimeout);
+      if (!safe) {
+        throw XmppMessageException();
+      }
+    }
+  }
+
+  bool _isHttpRedirectStatusCode(int statusCode) => switch (statusCode) {
+        HttpStatus.movedPermanently ||
+        HttpStatus.found ||
+        HttpStatus.seeOther ||
+        HttpStatus.temporaryRedirect ||
+        HttpStatus.permanentRedirect =>
+          true,
+        _ => false,
+      };
 
   Future<Uint8List> _decryptAttachmentBytes({
     required FileMetadataData metadata,
@@ -2483,6 +2595,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     if (!_constantTimeBytesEqual(computed, expectedBytes)) {
       throw XmppMessageException();
     }
+  }
+
+  bool _hasExpectedSha256Hash(Map<mox.HashFunction, String>? expected) {
+    if (expected == null || expected.isEmpty) return false;
+    final hashValue = expected[mox.HashFunction.sha256];
+    if (hashValue == null || hashValue.trim().isEmpty) return false;
+    return _decodeSha256Expected(hashValue) != null;
   }
 
   Future<void> _verifySha256HashForFile({
