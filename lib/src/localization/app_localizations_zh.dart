@@ -1030,7 +1030,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get signupAvatarShuffle => '随机默认头像';
 
   @override
-  String get signupAvatarMenuDescription => '下面列出了默认头像。创建 XMPP 账号后才会发布头像。';
+  String get signupAvatarMenuDescription => '创建 XMPP 账号后才会发布头像。';
 
   @override
   String get signupAvatarBackgroundColor => '背景颜色';
@@ -3270,7 +3270,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get signupAvatarShuffle => '隨機預設頭像';
 
   @override
-  String get signupAvatarMenuDescription => '以下列出預設頭像。我們會在建立 XMPP 帳戶後發布你的頭像。';
+  String get signupAvatarMenuDescription => '我們會在建立 XMPP 帳戶後發布你的頭像。';
 
   @override
   String get signupAvatarBackgroundColor => '背景顏色';

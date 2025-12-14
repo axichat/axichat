@@ -368,7 +368,7 @@
   "signupAvatarUploadImage": "Bild hochladen",
   "signupAvatarUpload": "Hochladen",
   "signupAvatarShuffle": "Standard zufällig wählen",
-  "signupAvatarMenuDescription": "Standard-Avatare stehen unten. Wir veröffentlichen den Avatar, sobald dein XMPP-Konto erstellt ist.",
+  "signupAvatarMenuDescription": "Wir veröffentlichen den Avatar, sobald dein XMPP-Konto erstellt ist.",
   "signupAvatarBackgroundColor": "Hintergrundfarbe",
   "signupAvatarDefaultsTitle": "Standard-Avatare",
   "signupAvatarCategoryAbstract": "Abstrakt",

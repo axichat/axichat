@@ -8,17 +8,20 @@ class PendingAttachment extends Equatable {
     required this.id,
     required this.attachment,
     this.status = PendingAttachmentStatus.queued,
+    this.isPreparing = false,
     this.errorMessage,
   });
 
   final String id;
   final EmailAttachment attachment;
   final PendingAttachmentStatus status;
+  final bool isPreparing;
   final String? errorMessage;
 
   PendingAttachment copyWith({
     EmailAttachment? attachment,
     PendingAttachmentStatus? status,
+    bool? isPreparing,
     String? errorMessage,
     bool clearErrorMessage = false,
   }) {
@@ -26,11 +29,13 @@ class PendingAttachment extends Equatable {
       id: id,
       attachment: attachment ?? this.attachment,
       status: status ?? this.status,
+      isPreparing: isPreparing ?? this.isPreparing,
       errorMessage:
           clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
     );
   }
 
   @override
-  List<Object?> get props => [id, attachment, status, errorMessage];
+  List<Object?> get props =>
+      [id, attachment, status, isPreparing, errorMessage];
 }

@@ -7,8 +7,8 @@ import 'package:logging/logging.dart';
 
 const _defaultProvisioningBaseUrl = 'https://axi.im:8787';
 const _baseUrlDefineKey = 'EMAIL_PROVISIONING_BASE_URL';
-const _sharedSecretDefineKey = 'EMAIL_PROVISIONING_SHARED_SECRET';
-const _sharedSecretPlaceholder = 'set-email-shared-secret';
+const _publicTokenDefineKey = 'EMAIL_PUBLIC_TOKEN';
+const _publicTokenPlaceholder = 'set-email-public-token';
 
 class EmailProvisioningCredentials {
   const EmailProvisioningCredentials({
@@ -50,17 +50,17 @@ class EmailProvisioningApiException implements Exception {
 class EmailProvisioningClient {
   EmailProvisioningClient({
     required Uri baseUrl,
-    required String sharedSecret,
+    required String publicToken,
     http.Client? httpClient,
     Logger? logger,
   })  : _baseUrl = _normalizeBase(baseUrl),
-        _sharedSecret = _normalizeSharedSecret(sharedSecret),
+        _publicToken = _normalizePublicToken(publicToken),
         _httpClient = httpClient ?? http.Client(),
         _ownsClient = httpClient == null,
         _log = logger ?? Logger('EmailProvisioningClient') {
     _validateBaseUrl(_baseUrl);
-    if (!_sharedSecretConfigured) {
-      _log.warning('Email provisioning shared secret missing.');
+    if (!_publicTokenConfigured) {
+      _log.warning('Email provisioning public token missing.');
     }
   }
 
@@ -72,29 +72,29 @@ class EmailProvisioningClient {
       _baseUrlDefineKey,
       defaultValue: '',
     );
-    const envSharedSecret = String.fromEnvironment(
-      _sharedSecretDefineKey,
-      defaultValue: _sharedSecretPlaceholder,
+    const envPublicToken = String.fromEnvironment(
+      _publicTokenDefineKey,
+      defaultValue: _publicTokenPlaceholder,
     );
     final baseUrl = envBaseUrl.isEmpty
         ? Uri.parse(_defaultProvisioningBaseUrl)
         : Uri.parse(envBaseUrl);
     return EmailProvisioningClient(
       baseUrl: baseUrl,
-      sharedSecret: envSharedSecret,
+      publicToken: envPublicToken,
       httpClient: httpClient,
       logger: logger,
     );
   }
 
   final Uri _baseUrl;
-  final String _sharedSecret;
+  final String _publicToken;
   final http.Client _httpClient;
   final bool _ownsClient;
   final Logger _log;
 
-  bool get _sharedSecretConfigured =>
-      _sharedSecret.isNotEmpty && _sharedSecret != _sharedSecretPlaceholder;
+  bool get _publicTokenConfigured =>
+      _publicToken.isNotEmpty && _publicToken != _publicTokenPlaceholder;
 
   void _validateBaseUrl(Uri baseUrl) {
     final scheme = baseUrl.scheme.toLowerCase();
@@ -112,7 +112,7 @@ class EmailProvisioningClient {
   }
 
   void _ensureConfigured(String message) {
-    if (_sharedSecretConfigured) return;
+    if (_publicTokenConfigured) return;
     throw EmailProvisioningApiException(
       message,
       code: EmailProvisioningApiErrorCode.unavailable,
@@ -384,7 +384,7 @@ class EmailProvisioningClient {
 
   Map<String, String> _headers() => {
         'Content-Type': 'application/json',
-        'X-Auth-Token': _sharedSecret,
+        'X-Auth-Token': _publicToken,
       };
 
   static Uri _normalizeBase(Uri baseUrl) {
@@ -396,8 +396,8 @@ class EmailProvisioningClient {
     return baseUrl;
   }
 
-  static String _normalizeSharedSecret(String sharedSecret) {
-    return sharedSecret.trim();
+  static String _normalizePublicToken(String token) {
+    return token.trim();
   }
 
   void close() {

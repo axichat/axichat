@@ -144,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isBlocking = context.read<XmppService>() is BlockingService;
     final navPlacement = EnvScope.of(context).navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
-    final Storage? calendarStorage = context.read<Storage?>();
+    final Storage? calendarStorage = context.watch<Storage?>();
     final bool hasCalendarBloc = calendarStorage != null;
     final chatsFilters = chatsSearchFilters(l10n);
     final spamFilters = spamSearchFilters(l10n);
