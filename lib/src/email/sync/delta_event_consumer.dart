@@ -15,6 +15,9 @@ import 'package:path/path.dart' as p;
 
 const _deltaDomain = 'delta.chat';
 const _deltaSelfJid = 'dc-self@$_deltaDomain';
+const _deltaChatLastSpecialId = 9;
+const _deltaChatlistArchivedOnlyFlag = 0x01;
+const _bootstrapYieldEveryMessages = 40;
 
 enum DeltaEventType {
   info(100),
@@ -51,19 +54,130 @@ class DeltaEventConsumer {
     required Future<XmppDatabase> Function() databaseBuilder,
     required DeltaContextHandle context,
     MessageStorageMode messageStorageMode = MessageStorageMode.local,
+    String? Function()? selfJidProvider,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
         _messageStorageMode = messageStorageMode,
+        _selfJidProvider = selfJidProvider,
         _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
   MessageStorageMode _messageStorageMode;
+  final String? Function()? _selfJidProvider;
   final Logger _log;
 
   void updateMessageStorageMode(MessageStorageMode mode) {
     _messageStorageMode = mode;
+  }
+
+  String get _selfJid => _selfJidProvider?.call() ?? _deltaSelfJid;
+
+  Future<bool> bootstrapFromCore() async {
+    final unarchived = await _context.getChatlist();
+    final archived = await _context.getChatlist(
+      flags: _deltaChatlistArchivedOnlyFlag,
+    );
+    if (unarchived.isEmpty && archived.isEmpty) {
+      return false;
+    }
+
+    final archivedChatIds = <int>{
+      for (final entry in archived)
+        if (entry.chatId > _deltaChatLastSpecialId) entry.chatId,
+    };
+
+    final entriesByChatId = <int, DeltaChatlistEntry>{};
+    void register(Iterable<DeltaChatlistEntry> entries) {
+      for (final entry in entries) {
+        if (entry.chatId <= _deltaChatLastSpecialId) continue;
+        final existing = entriesByChatId[entry.chatId];
+        if (existing == null ||
+            (existing.msgId <= 0 && entry.msgId > existing.msgId)) {
+          entriesByChatId[entry.chatId] = entry;
+        }
+      }
+    }
+
+    register(unarchived);
+    register(archived);
+
+    final db = await _db();
+    var didBootstrap = false;
+
+    for (final entry in entriesByChatId.values) {
+      final chatId = entry.chatId;
+      if (await _isDeltaSystemChat(chatId)) {
+        continue;
+      }
+      didBootstrap = true;
+      final chat = await _ensureChat(chatId);
+      final shouldArchive = archivedChatIds.contains(chatId);
+      var updated = chat;
+      if (updated.archived != shouldArchive) {
+        updated = updated.copyWith(archived: shouldArchive);
+      }
+      if (entry.msgId > 0) {
+        final last = await _context.getMessage(entry.msgId);
+        final timestamp = last?.timestamp;
+        final preview = last?.text?.trim();
+        if (timestamp != null && timestamp != updated.lastChangeTimestamp) {
+          updated = updated.copyWith(lastChangeTimestamp: timestamp);
+        }
+        if (preview != null &&
+            preview.isNotEmpty &&
+            preview != updated.lastMessage) {
+          updated = updated.copyWith(lastMessage: preview);
+        }
+      }
+      if (updated != chat) {
+        await db.updateChat(updated);
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    for (final chatId in entriesByChatId.keys) {
+      if (await _isDeltaSystemChat(chatId)) {
+        continue;
+      }
+      final chat = await _ensureChat(chatId);
+      final msgIds = await _context.getChatMessageIds(chatId: chatId);
+      if (msgIds.isEmpty) {
+        continue;
+      }
+      final int startIndex = _messageStorageMode.isServerOnly &&
+              msgIds.length > serverOnlyChatMessageCap
+          ? msgIds.length - serverOnlyChatMessageCap
+          : 0;
+      var imported = 0;
+      for (var index = startIndex; index < msgIds.length; index++) {
+        final msg = await _context.getMessage(msgIds[index]);
+        if (msg == null) continue;
+        await _ingestDeltaMessage(
+          chatId: chatId,
+          msg: msg,
+          chat: chat,
+          skipSystemChatCheck: true,
+        );
+        imported += 1;
+        if (imported % _bootstrapYieldEveryMessages == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+
+      final last = await _context.getMessage(msgIds.last);
+      final lastTimestamp = last?.timestamp;
+      if (lastTimestamp != null) {
+        final stored = await db.getChatByDeltaChatId(chatId);
+        if (stored != null && stored.lastChangeTimestamp != lastTimestamp) {
+          await db
+              .updateChat(stored.copyWith(lastChangeTimestamp: lastTimestamp));
+        }
+      }
+    }
+
+    return didBootstrap;
   }
 
   Future<void> handle(DeltaCoreEvent event) async {
@@ -107,11 +221,27 @@ class DeltaEventConsumer {
       _log.warning('Incoming event for missing msgId=$msgId');
       return;
     }
-    if (_isDeltaStockMessage(msg) || await _isDeltaSystemChat(chatId)) {
-      _log.finer('Dropping Delta stock message msgId=$msgId chatId=$chatId');
+    await _ingestDeltaMessage(chatId: chatId, msg: msg);
+  }
+
+  Future<void> _hydrateMessage(int chatId, int msgId) async {
+    final msg = await _context.getMessage(msgId);
+    if (msg == null) return;
+    await _ingestDeltaMessage(chatId: chatId, msg: msg);
+  }
+
+  Future<void> _ingestDeltaMessage({
+    required int chatId,
+    required DeltaMessage msg,
+    Chat? chat,
+    bool skipSystemChatCheck = false,
+  }) async {
+    if (_isDeltaStockMessage(msg) ||
+        (!skipSystemChatCheck && await _isDeltaSystemChat(chatId))) {
+      _log.finer('Dropping Delta stock message msgId=${msg.id} chatId=$chatId');
       return;
     }
-    final chat = await _ensureChat(chatId);
+    final resolvedChat = chat ?? await _ensureChat(chatId);
     final stanzaId = _stanzaId(msg.id);
     final db = await _db();
     final existing = await db.getMessageByStanzaID(stanzaId);
@@ -119,32 +249,35 @@ class DeltaEventConsumer {
       return;
     }
     final timestamp = msg.timestamp ?? DateTime.timestamp();
-    final emailAddress = chat.emailAddress?.toLowerCase();
-    if (emailAddress != null &&
+    final isOutgoing = msg.isOutgoing;
+    final senderJid = isOutgoing ? _selfJid : resolvedChat.jid;
+    final emailAddress = resolvedChat.emailAddress?.toLowerCase();
+    if (!isOutgoing &&
+        emailAddress != null &&
         emailAddress.isNotEmpty &&
         await db.isEmailAddressBlocked(emailAddress)) {
       await db.incrementEmailBlockCount(emailAddress);
       return;
     }
     var warning = MessageWarning.none;
-    final bool isSpamAddress = emailAddress != null &&
+    if (!isOutgoing &&
+        emailAddress != null &&
         emailAddress.isNotEmpty &&
-        await db.isEmailAddressSpam(emailAddress);
-    if (isSpamAddress) {
+        await db.isEmailAddressSpam(emailAddress)) {
       warning = MessageWarning.emailSpamQuarantined;
-      await db.markChatSpam(jid: chat.jid, spam: true);
+      await db.markChatSpam(jid: resolvedChat.jid, spam: true);
     }
     var message = Message(
       stanzaID: stanzaId,
-      senderJid: chat.jid,
-      chatJid: chat.jid,
+      senderJid: senderJid,
+      chatJid: resolvedChat.jid,
       timestamp: timestamp,
       body: msg.text,
       warning: warning,
       encryptionProtocol: EncryptionProtocol.none,
-      received: true,
+      received: !isOutgoing,
       acked: true,
-      deltaChatId: chat.deltaChatId,
+      deltaChatId: resolvedChat.deltaChatId,
       deltaMsgId: msg.id,
     );
     message = await _applyShareMetadata(
@@ -158,49 +291,7 @@ class DeltaEventConsumer {
     await _storeMessage(
       db: db,
       message: message,
-      chatJid: chat.jid,
-    );
-    await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
-  }
-
-  Future<void> _hydrateMessage(int chatId, int msgId) async {
-    final msg = await _context.getMessage(msgId);
-    if (msg == null) return;
-    if (_isDeltaStockMessage(msg) || await _isDeltaSystemChat(chatId)) {
-      _log.finer('Dropping Delta stock message msgId=$msgId chatId=$chatId');
-      return;
-    }
-    final chat = await _ensureChat(chatId);
-    final stanzaId = _stanzaId(msg.id);
-    final db = await _db();
-    final existing = await db.getMessageByStanzaID(stanzaId);
-    if (existing != null) {
-      return;
-    }
-    final timestamp = msg.timestamp ?? DateTime.timestamp();
-    var message = Message(
-      stanzaID: stanzaId,
-      senderJid: _deltaSelfJid,
-      chatJid: chat.jid,
-      timestamp: timestamp,
-      body: msg.text,
-      encryptionProtocol: EncryptionProtocol.none,
-      acked: true,
-      deltaChatId: chat.deltaChatId,
-      deltaMsgId: msg.id,
-    );
-    message = await _applyShareMetadata(
-      db: db,
-      message: message,
-      rawBody: msg.text,
-      chatId: chatId,
-      msgId: msg.id,
-    );
-    message = await _attachFileMetadata(db: db, message: message, delta: msg);
-    await _storeMessage(
-      db: db,
-      message: message,
-      chatJid: chat.jid,
+      chatJid: resolvedChat.jid,
     );
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }

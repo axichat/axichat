@@ -237,6 +237,14 @@ class EmailDeltaTransport implements ChatTransport {
     await _eventConsumer?.purgeDeltaStockMessages();
   }
 
+  Future<bool> bootstrapFromCore() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return false;
+    }
+    await _ensureContextReady();
+    return await _eventConsumer?.bootstrapFromCore() ?? false;
+  }
+
   Future<void> notifyNetworkAvailable() async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -436,6 +444,7 @@ class EmailDeltaTransport implements ChatTransport {
         databaseBuilder: _databaseBuilder,
         context: _context!,
         messageStorageMode: _messageStorageMode,
+        selfJidProvider: () => _selfJid,
         logger: _log,
       );
       return true;
@@ -458,6 +467,7 @@ class EmailDeltaTransport implements ChatTransport {
           databaseBuilder: _databaseBuilder,
           context: _context!,
           messageStorageMode: _messageStorageMode,
+          selfJidProvider: () => _selfJid,
           logger: _log,
         );
       }

@@ -50,6 +50,7 @@ Future<DayEventEditorResult?> showDayEventEditor({
       horizontal: calendarGutterSm,
       vertical: calendarInsetSm,
     ),
+    showCloseButton: false,
     builder: (BuildContext sheetContext) {
       return _DayEventEditorForm(
         initialDate: normalized,
@@ -106,7 +107,6 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final bool isEditing = widget.existing != null;
     final colors = context.colorScheme;
     final TextStyle titleStyle = calendarTitleTextStyle.copyWith(fontSize: 18);
-    final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(context);
 
     return Form(
       key: _formKey,
@@ -142,11 +142,11 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
           ),
           Flexible(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
+              padding: const EdgeInsets.fromLTRB(
                 calendarGutterMd,
                 calendarInsetLg,
                 calendarGutterMd,
-                calendarGutterMd + viewInsets.bottom,
+                calendarGutterMd,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,11 +231,11 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
               return TaskFormActionsRow(
                 includeTopBorder: true,
                 gap: calendarGutterSm,
-                padding: EdgeInsets.fromLTRB(
+                padding: const EdgeInsets.fromLTRB(
                   calendarGutterLg,
                   calendarGutterMd,
                   calendarGutterLg,
-                  calendarGutterMd + viewInsets.bottom,
+                  calendarGutterMd,
                 ),
                 children: [
                   const Spacer(),

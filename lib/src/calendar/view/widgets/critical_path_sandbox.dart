@@ -883,6 +883,7 @@ extension on _CriticalPathSandboxState {
       context: context,
       dialogMaxWidth: 560,
       surfacePadding: const EdgeInsets.all(calendarGutterLg),
+      showCloseButton: false,
       builder: (sheetContext) {
         final ShadTextTheme textTheme = sheetContext.textTheme;
         final ShadColorScheme colors = sheetContext.colorScheme;
@@ -1031,6 +1032,7 @@ extension on _CriticalPathSandboxState {
       context: context,
       dialogMaxWidth: 440,
       surfacePadding: const EdgeInsets.all(calendarGutterLg),
+      showCloseButton: false,
       builder: (sheetContext) {
         final ShadTextTheme textTheme = sheetContext.textTheme;
         final ShadColorScheme colors = sheetContext.colorScheme;

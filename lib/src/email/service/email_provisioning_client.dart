@@ -447,9 +447,3 @@ class EmailProvisioningClient {
     return null;
   }
 }
-
-// Backwards compatibility aliases for existing callers.
-typedef ChatmailCredentials = EmailProvisioningCredentials;
-typedef ChatmailProvisioningException = EmailProvisioningApiException;
-typedef ChatmailProvisioningErrorCode = EmailProvisioningApiErrorCode;
-typedef ChatmailProvisioningClient = EmailProvisioningClient;

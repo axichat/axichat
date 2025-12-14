@@ -136,7 +136,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.viewInsetsOf(context);
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final l10n = context.l10n;
@@ -352,7 +351,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           left: widget.compact ? 12 : 24,
           right: widget.compact ? 12 : 24,
           top: widget.compact ? 12 : 24,
-          bottom: (widget.compact ? 12 : 24) + viewInsets.bottom,
+          bottom: widget.compact ? 12 : 24,
         ),
         child: Center(
           child: ConstrainedBox(

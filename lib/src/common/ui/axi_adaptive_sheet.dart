@@ -11,11 +11,12 @@ Future<T?> showAdaptiveBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool isScrollControlled = false,
-  bool useSafeArea = false,
+  bool useSafeArea = true,
   bool showDragHandle = false,
   bool enableDrag = true,
   bool useRootNavigator = false,
   bool isDismissible = true,
+  bool showCloseButton = true,
   Color? backgroundColor,
   Color? barrierColor,
   EdgeInsets? dialogInsetPadding,
@@ -25,6 +26,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
 }) {
   final commandSurface = resolveCommandSurface(context);
   final scheme = ShadTheme.of(context).colorScheme;
+  const Duration keyboardInsetAnimationDuration = Duration(milliseconds: 220);
 
   if (commandSurface == CommandSurface.sheet) {
     return showModalBottomSheet<T>(
@@ -38,9 +40,15 @@ Future<T?> showAdaptiveBottomSheet<T>({
       barrierColor: barrierColor,
       useRootNavigator: useRootNavigator,
       builder: (sheetContext) {
-        final Widget child = builder(sheetContext);
         final double bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
-        return Padding(
+        final Widget child = _AxiSheetChrome(
+          showCloseButton: showCloseButton,
+          onClose: () => Navigator.of(sheetContext).maybePop(),
+          child: builder(sheetContext),
+        );
+        return AnimatedPadding(
+          duration: keyboardInsetAnimationDuration,
+          curve: Curves.easeOutCubic,
           padding: EdgeInsets.only(bottom: bottomInset),
           child: AxiModalSurface(
             backgroundColor: backgroundColor ?? scheme.card,
@@ -67,7 +75,11 @@ Future<T?> showAdaptiveBottomSheet<T>({
       final mediaQuery = MediaQuery.of(dialogContext);
       final Size size = mediaQuery.size;
       final EdgeInsets viewInsets = mediaQuery.viewInsets;
-      final Widget child = builder(dialogContext);
+      final Widget child = _AxiSheetChrome(
+        showCloseButton: showCloseButton,
+        onClose: () => Navigator.of(dialogContext).maybePop(),
+        child: builder(dialogContext),
+      );
       final EdgeInsets dialogInsets = EdgeInsets.fromLTRB(
         resolvedInsets.left,
         resolvedInsets.top,
@@ -97,6 +109,66 @@ Future<T?> showAdaptiveBottomSheet<T>({
       );
     },
   );
+}
+
+class _AxiSheetChrome extends StatelessWidget {
+  const _AxiSheetChrome({
+    required this.child,
+    required this.onClose,
+    required this.showCloseButton,
+  });
+
+  static const EdgeInsets _closeButtonPadding = EdgeInsets.only(
+    top: 4,
+    right: 4,
+    bottom: 8,
+  );
+  static const EdgeInsets _closeButtonTapPadding = EdgeInsets.all(12);
+  static const double _closeButtonIconSize = 16;
+
+  final Widget child;
+  final VoidCallback onClose;
+  final bool showCloseButton;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showCloseButton) {
+      return child;
+    }
+
+    final colors = ShadTheme.of(context).colorScheme;
+    final tooltip = MaterialLocalizations.of(context).closeButtonTooltip;
+    final closeButton = Tooltip(
+      message: tooltip,
+      child: ShadIconButton.ghost(
+        icon: Icon(
+          LucideIcons.x,
+          size: _closeButtonIconSize,
+          color: colors.mutedForeground,
+        ),
+        padding: _closeButtonTapPadding,
+        onPressed: onClose,
+      ),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: _closeButtonPadding,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: closeButton,
+          ),
+        ),
+        Flexible(
+          fit: FlexFit.loose,
+          child: child,
+        ),
+      ],
+    );
+  }
 }
 
 class AxiModalSurface extends StatelessWidget {

@@ -878,6 +878,7 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
     context: context,
     dialogMaxWidth: 420,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
+    showCloseButton: false,
     builder: (sheetContext) {
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -1120,6 +1121,7 @@ Future<String?> promptCriticalPathName({
     context: context,
     dialogMaxWidth: 420,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
+    showCloseButton: false,
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {

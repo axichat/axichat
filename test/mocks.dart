@@ -6,7 +6,7 @@ import 'dart:isolate';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/main.dart';
-import 'package:axichat/src/email/service/chatmail_provisioning_client.dart';
+import 'package:axichat/src/email/service/email_provisioning_client.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -43,8 +43,8 @@ class MockMucService extends Mock implements MucService {}
 
 class MockEmailService extends Mock implements EmailService {}
 
-class MockChatmailProvisioningClient extends Mock
-    implements ChatmailProvisioningClient {}
+class MockEmailProvisioningClient extends Mock
+    implements EmailProvisioningClient {}
 
 class MockOmemoService extends Mock implements OmemoService {}
 
