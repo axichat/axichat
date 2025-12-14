@@ -60,6 +60,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     NotificationService? notificationService,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
+    bool autoLoginOnStart = false,
     AuthenticationState? initialState,
     EndpointConfig? initialEndpointConfig,
     EndpointResolver endpointResolver = const EndpointResolver(),
@@ -132,6 +133,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     unawaited(_purgeLegacySignupDraft());
     if (kEnableDemoChats) {
       unawaited(_loginToDemoMode());
+    }
+    if (autoLoginOnStart && state is AuthenticationNone) {
+      unawaited(login());
     }
   }
 
