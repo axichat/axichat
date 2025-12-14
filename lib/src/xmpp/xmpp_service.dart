@@ -1031,6 +1031,65 @@ class XmppService extends XmppBase
         avatar: avatar,
       );
     }
+    final selfAvatar = avatarAssets[kDemoSelfJid];
+    if (selfAvatar != null) {
+      await _seedDemoAvatarForJid(
+        jid: kDemoSelfJid,
+        avatar: selfAvatar,
+      );
+    }
+  }
+
+  static const ui.Color _demoWashingtonBackground = ui.Color(0xFF0A84FF);
+  static const ui.Color _demoJeffersonBackground = ui.Color(0xFFFFD60A);
+  static const ui.Color _demoAdamsBackground = ui.Color(0xFFFF3B30);
+  static const ui.Color _demoMadisonBackground = ui.Color(0xFF34C759);
+  static const ui.Color _demoHamiltonBackground = ui.Color(0xFFAF52DE);
+  static const ui.Color _demoFranklinBackground = ui.Color(0xFFFFFFFF);
+
+  ui.Color? _demoAvatarBackgroundForJid(String jid) {
+    final normalized = jid.trim().toLowerCase();
+    return switch (normalized) {
+      kDemoSelfJid => _demoFranklinBackground,
+      'washington@axi.im' => _demoWashingtonBackground,
+      'jefferson@axi.im' => _demoJeffersonBackground,
+      'adams@axi.im' => _demoAdamsBackground,
+      'madison@axi.im' => _demoMadisonBackground,
+      'hamilton@axi.im' => _demoHamiltonBackground,
+      _ => null,
+    };
+  }
+
+  Future<Uint8List> _applyDemoAvatarBackground({
+    required Uint8List bytes,
+    required ui.Color background,
+  }) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final width = image.width;
+      final height = image.height;
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      canvas.drawRect(
+        ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+        ui.Paint()..color = background,
+      );
+      canvas.drawImage(image, ui.Offset.zero, ui.Paint());
+      final picture = recorder.endRecording();
+      final composed = await picture.toImage(width, height);
+      final byteData = await composed.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      image.dispose();
+      composed.dispose();
+      final output = byteData?.buffer.asUint8List();
+      if (output == null || output.isEmpty) return bytes;
+      return output;
+    } on Exception {
+      return bytes;
+    }
   }
 
   Future<void> _seedDemoAvatarForJid({
@@ -1040,9 +1099,15 @@ class XmppService extends XmppBase
     try {
       final data = await rootBundle.load(avatar.assetPath);
       if (data.lengthInBytes == 0) return;
+      final background = _demoAvatarBackgroundForJid(jid);
+      final raw = data.buffer.asUint8List();
+      final bytes = background == null
+          ? raw
+          : await _applyDemoAvatarBackground(
+              bytes: raw, background: background);
       final avatarPath = await _writeAvatarFile(
         hash: avatar.hash,
-        bytes: data.buffer.asUint8List(),
+        bytes: bytes,
       );
       await _storeAvatar(
         jid: jid,

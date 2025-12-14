@@ -685,9 +685,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             _log.warning('Endpoint resolution failed: ${error.message}');
             await _clearAuthTransaction();
             authenticationCommitted = true;
-            if (previousState is! AuthenticationComplete) {
-              _emit(const AuthenticationComplete());
-            }
             return;
           }
         }

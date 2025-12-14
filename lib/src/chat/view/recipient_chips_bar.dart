@@ -817,7 +817,6 @@ class _RecipientChip extends StatelessWidget {
     );
     final foreground =
         included ? _foregroundColor(background, colors) : colors.onSurface;
-    final statusIcon = _statusIcon();
     final accentColor = baseColor.withValues(alpha: 1);
     final removalColor = colors.error;
     final effectiveBackground = pendingRemoval

@@ -3115,8 +3115,9 @@ class _ChatState extends State<Chat> {
                                           avatarPathForTypingParticipant(
                                         participant,
                                       );
-                                      if (path == null || path.isEmpty)
+                                      if (path == null || path.isEmpty) {
                                         continue;
+                                      }
                                       typingAvatarPaths[participant] = path;
                                     }
                                     final typingVisible =
