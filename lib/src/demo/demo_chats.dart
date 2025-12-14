@@ -38,6 +38,10 @@ class DemoChats {
 
   static const Map<String, DemoContactAvatar> _avatars =
       <String, DemoContactAvatar>{
+    kDemoSelfJid: DemoContactAvatar(
+      assetPath: 'assets/images/avatars/stem/atom.png',
+      hash: 'demo-avatar-franklin',
+    ),
     _washingtonJid: DemoContactAvatar(
       assetPath: 'assets/images/avatars/misc/sword.png',
       hash: 'demo-avatar-washington',

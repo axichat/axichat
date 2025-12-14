@@ -55,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _signupButtonLoading = false;
   bool _handledInitialAuthState = false;
   bool _initialAuthModeResolved = false;
+  bool _autologinRequested = false;
   bool _loginSuccessHandled = false;
   Timer? _authTimeoutTimer;
 
@@ -67,9 +68,16 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final bootstrap = context.read<AuthBootstrap>();
     if (!_initialAuthModeResolved) {
       _initialAuthModeResolved = true;
-      _login = context.read<AuthBootstrap>().hasStoredLoginCredentials;
+      _login = bootstrap.hasStoredLoginCredentials;
+    }
+    if (!_autologinRequested &&
+        bootstrap.hasStoredLoginCredentials &&
+        context.read<AuthenticationCubit>().state is AuthenticationNone) {
+      _autologinRequested = true;
+      unawaited(context.read<AuthenticationCubit>().login());
     }
     if (_handledInitialAuthState) return;
     _handledInitialAuthState = true;
@@ -162,16 +170,6 @@ class _LoginScreenState extends State<LoginScreen>
       _loginSuccessHandled = false;
     });
     _operationProgressController.reset();
-  }
-
-  void _handleAutologinRequested() {
-    if (_activeFlow == _AuthFlow.signup || _signupFlowLocked) {
-      return;
-    }
-    _handleSubmissionRequested(
-      _AuthFlow.login,
-      label: context.l10n.authLoggingIn,
-    );
   }
 
   Future<void> _completeLoginAnimation() async {
@@ -404,8 +402,6 @@ class _LoginScreenState extends State<LoginScreen>
                                               _AuthFlow.login,
                                               label: l10n.authLoggingIn,
                                             ),
-                                            onAutologinStart:
-                                                _handleAutologinRequested,
                                           ),
                                         ),
                                       ),
