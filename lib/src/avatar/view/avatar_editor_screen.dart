@@ -552,45 +552,94 @@ class _DefaultsSection extends StatelessWidget {
   final List<AvatarTemplate> templates;
   final AvatarEditorState state;
 
-  String _labelForCategory(AvatarTemplateCategory category) {
-    return switch (category) {
-      AvatarTemplateCategory.abstract => 'Abstract',
-      AvatarTemplateCategory.stem => 'STEM',
-      AvatarTemplateCategory.sports => 'Sports',
-      AvatarTemplateCategory.music => 'Music',
-      AvatarTemplateCategory.misc => 'Hobbies & Games',
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final cubit = context.read<AvatarEditorCubit>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 12.0,
+      spacing: _avatarDefaultsSectionSpacing,
       children: [
         Text(
           'Default avatars',
           style: context.textTheme.h4.copyWith(color: colors.foreground),
         ),
-        for (final category in AvatarTemplateCategory.values)
-          _CategoryRow(
-            title: _labelForCategory(category),
-            templates: templates
-                .where((template) => template.category == category)
-                .toList(),
-            selectedId: state.template?.id,
-            onSelect: (template) => cubit.selectTemplate(template, colors),
-            backgroundColor: state.backgroundColor,
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = constraints.maxWidth;
+            final columns = maxWidth >= largeScreen
+                ? _avatarDefaultsColumnsWide
+                : maxWidth >= mediumScreen
+                    ? _avatarDefaultsColumnsMedium
+                    : _avatarDefaultsColumnsNarrow;
+            final cardWidth = columns == _avatarDefaultsColumnsNarrow
+                ? maxWidth
+                : (maxWidth - (_avatarDefaultsWrapSpacing * (columns - 1))) /
+                    columns;
+            final templatesByCategory =
+                <AvatarTemplateCategory, List<AvatarTemplate>>{
+              for (final category in AvatarTemplateCategory.values)
+                category: templates
+                    .where(
+                      (template) => template.category == category,
+                    )
+                    .toList(),
+            };
+            return Wrap(
+              spacing: _avatarDefaultsWrapSpacing,
+              runSpacing: _avatarDefaultsWrapSpacing,
+              children: [
+                for (final entry in templatesByCategory.entries)
+                  if (entry.value.isNotEmpty)
+                    SizedBox(
+                      width: cardWidth,
+                      child: _CategoryCarouselCard(
+                        title: entry.key.label,
+                        templates: entry.value,
+                        selectedId: state.template?.id,
+                        onSelect: (template) =>
+                            cubit.selectTemplate(template, colors),
+                        backgroundColor: state.backgroundColor,
+                      ),
+                    ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
 }
 
-class _CategoryRow extends StatelessWidget {
-  const _CategoryRow({
+const _avatarDefaultsSectionSpacing = 12.0;
+const _avatarDefaultsWrapSpacing = 12.0;
+const _avatarDefaultsColumnsWide = 3;
+const _avatarDefaultsColumnsMedium = 2;
+const _avatarDefaultsColumnsNarrow = 1;
+
+const _avatarDefaultsCarouselCardPadding = EdgeInsets.all(12.0);
+const _avatarDefaultsCarouselCardSpacing = 10.0;
+const _avatarDefaultsCarouselControlSpacing = 6.0;
+const _avatarDefaultsCarouselControlAnimationCurve = Curves.easeOutCubic;
+
+const _avatarTemplateCarouselHeight = 160.0;
+const _avatarTemplateCardWidth = 120.0;
+const _avatarTemplateCardAnimationDuration = Duration(milliseconds: 160);
+const _avatarTemplateCarouselItemSpacing = 12.0;
+const _avatarTemplateCarouselMinViewportFraction = 0.28;
+
+extension _AvatarTemplateCategoryLabel on AvatarTemplateCategory {
+  String get label => switch (this) {
+        AvatarTemplateCategory.abstract => 'Abstract',
+        AvatarTemplateCategory.stem => 'STEM',
+        AvatarTemplateCategory.sports => 'Sports',
+        AvatarTemplateCategory.music => 'Music',
+        AvatarTemplateCategory.misc => 'Hobbies & Games',
+      };
+}
+
+class _CategoryCarouselCard extends StatefulWidget {
+  const _CategoryCarouselCard({
     required this.title,
     required this.templates,
     required this.selectedId,
@@ -605,37 +654,111 @@ class _CategoryRow extends StatelessWidget {
   final Color backgroundColor;
 
   @override
+  State<_CategoryCarouselCard> createState() => _CategoryCarouselCardState();
+}
+
+class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
+  final CarouselSliderController _carouselController =
+      CarouselSliderController();
+  int _activeIndex = 0;
+
+  @override
+  void didUpdateWidget(covariant _CategoryCarouselCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final itemCount = widget.templates.length;
+    if (itemCount == 0) {
+      _activeIndex = 0;
+      return;
+    }
+    final lastIndex = itemCount - 1;
+    final clampedIndex = _activeIndex.clamp(0, lastIndex);
+    if (clampedIndex != _activeIndex) {
+      _activeIndex = clampedIndex;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final templates = widget.templates;
     if (templates.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 8.0,
-      children: [
-        Text(
-          title,
-          style: context.textTheme.muted.copyWith(
-            color: colors.mutedForeground,
+    final canGoBack = _activeIndex > 0;
+    final canGoForward = _activeIndex < templates.length - 1;
+    return ShadCard(
+      padding: _avatarDefaultsCarouselCardPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: _avatarDefaultsCarouselCardSpacing,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.title,
+                  style: context.textTheme.muted.copyWith(
+                    color: colors.mutedForeground,
+                  ),
+                ),
+              ),
+              AxiIconButton(
+                iconData: LucideIcons.chevronLeft,
+                tooltip: 'Previous',
+                onPressed: canGoBack
+                    ? () => _carouselController.previousPage(
+                          duration: baseAnimationDuration,
+                          curve: _avatarDefaultsCarouselControlAnimationCurve,
+                        )
+                    : null,
+              ),
+              const SizedBox(width: _avatarDefaultsCarouselControlSpacing),
+              AxiIconButton(
+                iconData: LucideIcons.chevronRight,
+                tooltip: 'Next',
+                onPressed: canGoForward
+                    ? () => _carouselController.nextPage(
+                          duration: baseAnimationDuration,
+                          curve: _avatarDefaultsCarouselControlAnimationCurve,
+                        )
+                    : null,
+              ),
+            ],
           ),
-        ),
-        SizedBox(
-          height: 160,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: templates.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final template = templates[index];
-              return _TemplatePreviewCard(
-                template: template,
-                isSelected: template.id == selectedId,
-                backgroundColor: backgroundColor,
-                onTap: () => onSelect(template),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final viewportFraction =
+                  (_avatarTemplateCardWidth / constraints.maxWidth)
+                      .clamp(_avatarTemplateCarouselMinViewportFraction, 1.0);
+              return CarouselSlider.builder(
+                carouselController: _carouselController,
+                itemCount: templates.length,
+                itemBuilder: (context, index, _) {
+                  final template = templates[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: _avatarTemplateCarouselItemSpacing / 2,
+                    ),
+                    child: _TemplatePreviewCard(
+                      template: template,
+                      isSelected: template.id == widget.selectedId,
+                      backgroundColor: widget.backgroundColor,
+                      onTap: () => widget.onSelect(template),
+                    ),
+                  );
+                },
+                options: CarouselOptions(
+                  height: _avatarTemplateCarouselHeight,
+                  viewportFraction: viewportFraction,
+                  enlargeCenterPage: true,
+                  onPageChanged: (index, _) {
+                    if (index == _activeIndex) return;
+                    setState(() => _activeIndex = index);
+                  },
+                ),
               );
             },
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -665,8 +788,8 @@ class _TemplatePreviewCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 120,
+        duration: _avatarTemplateCardAnimationDuration,
+        width: _avatarTemplateCardWidth,
         decoration: BoxDecoration(
           color: colors.card,
           borderRadius: context.radius,
