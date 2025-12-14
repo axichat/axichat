@@ -134,6 +134,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
           }) {
             return CalendarTaskTitleTooltip(
               title: widget.task.title,
+              enabled: interactive && !isDragging && !_isResizing,
               child: _CalendarEventContainer(
                 task: widget.task,
                 eventColor: _eventColor,

@@ -240,6 +240,10 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
               return CalendarTaskTitleTooltip(
                 title: task.title,
+                enabled: widget.enableInteractions &&
+                    !isDragging &&
+                    !isResizing &&
+                    !widget.isPopoverOpen,
                 child: CalendarTaskTileRenderRegion(
                   task: task,
                   interactionController: controller,
@@ -434,19 +438,16 @@ class _ResizableTaskBody extends StatelessWidget {
               ),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: CalendarTaskTitleTooltip(
-                  title: task.title,
-                  child: Text(
-                    task.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: titleColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      decoration:
-                          task.isCompleted ? TextDecoration.lineThrough : null,
-                    ),
+                child: Text(
+                  task.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    decoration:
+                        task.isCompleted ? TextDecoration.lineThrough : null,
                   ),
                 ),
               ),
@@ -484,18 +485,15 @@ class _ResizableTaskBody extends StatelessWidget {
         descriptionLines >= 4 ? TextOverflow.fade : TextOverflow.ellipsis;
 
     Widget titleSection() {
-      final title = CalendarTaskTitleTooltip(
-        title: task.title,
-        child: Text(
-          task.title,
-          maxLines: titleLines,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: titleColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-          ),
+      final title = Text(
+        task.title,
+        maxLines: titleLines,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: titleColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          decoration: task.isCompleted ? TextDecoration.lineThrough : null,
         ),
       );
 

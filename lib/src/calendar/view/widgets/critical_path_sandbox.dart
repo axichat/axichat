@@ -709,30 +709,32 @@ class _TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool completed = task.isCompleted;
 
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
+    return CalendarTaskTitleTooltip(
+      title: task.title,
+      enabled: onTap != null,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.all(calendarInsetMd),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    completed
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
-                    size: 16,
-                    color: completed ? colors.primary : colors.mutedForeground,
-                  ),
-                  const SizedBox(width: calendarInsetSm),
-                  Expanded(
-                    child: CalendarTaskTitleTooltip(
-                      title: task.title,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.all(calendarInsetMd),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      completed
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      size: 16,
+                      color:
+                          completed ? colors.primary : colors.mutedForeground,
+                    ),
+                    const SizedBox(width: calendarInsetSm),
+                    Expanded(
                       child: Text(
                         task.title,
                         maxLines: 2,
@@ -744,18 +746,18 @@ class _TaskCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: calendarInsetSm),
-              Text(
-                label,
-                style: textTheme.small.copyWith(
-                  fontSize: 11,
-                  color: colors.mutedForeground,
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: calendarInsetSm),
+                Text(
+                  label,
+                  style: textTheme.small.copyWith(
+                    fontSize: 11,
+                    color: colors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -948,63 +950,66 @@ extension on _CriticalPathSandboxState {
                       final String? deadlineLabel = deadline != null
                           ? 'Deadline: ${deadline.toIso8601String().split('T').first}'
                           : null;
-                      return InkWell(
-                        onTap: () => Navigator.of(sheetContext).pop(task),
-                        borderRadius:
-                            BorderRadius.circular(calendarBorderRadius),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: calendarGutterMd,
-                            vertical: calendarInsetMd,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colors.card,
-                            borderRadius: BorderRadius.circular(
-                              calendarBorderRadius,
+                      return CalendarTaskTitleTooltip(
+                        title: task.title,
+                        child: InkWell(
+                          onTap: () => Navigator.of(sheetContext).pop(task),
+                          borderRadius:
+                              BorderRadius.circular(calendarBorderRadius),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: calendarGutterMd,
+                              vertical: calendarInsetMd,
                             ),
-                            border: Border.all(color: colors.border),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                task.isCompleted
-                                    ? Icons.check_circle
-                                    : Icons.circle_outlined,
-                                size: 20,
-                                color: task.isCompleted
-                                    ? colors.primary
-                                    : colors.mutedForeground,
+                            decoration: BoxDecoration(
+                              color: colors.card,
+                              borderRadius: BorderRadius.circular(
+                                calendarBorderRadius,
                               ),
-                              const SizedBox(width: calendarGutterSm),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    CalendarTaskTitleTooltip(
-                                      title: task.title,
-                                      child: Text(
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  task.isCompleted
+                                      ? Icons.check_circle
+                                      : Icons.circle_outlined,
+                                  size: 20,
+                                  color: task.isCompleted
+                                      ? colors.primary
+                                      : colors.mutedForeground,
+                                ),
+                                const SizedBox(width: calendarGutterSm),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
                                         task.title,
                                         style: textTheme.small.copyWith(
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                    ),
-                                    if (deadlineLabel != null) ...[
-                                      const SizedBox(height: calendarInsetSm),
-                                      Text(
-                                        deadlineLabel,
-                                        style: textTheme.muted,
-                                      ),
+                                      if (deadlineLabel != null) ...[
+                                        const SizedBox(
+                                          height: calendarInsetSm,
+                                        ),
+                                        Text(
+                                          deadlineLabel,
+                                          style: textTheme.muted,
+                                        ),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
-                              ),
-                              Icon(
-                                Icons.add,
-                                size: 18,
-                                color: colors.mutedForeground,
-                              ),
-                            ],
+                                Icon(
+                                  Icons.add,
+                                  size: 18,
+                                  color: colors.mutedForeground,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       );

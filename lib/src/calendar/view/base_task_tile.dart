@@ -129,7 +129,11 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                   onDelete: handleDelete,
                 );
             }
-            return CalendarTaskTitleTooltip(title: task.title, child: tile);
+            return CalendarTaskTitleTooltip(
+              title: task.title,
+              enabled: !_isUpdating,
+              child: tile,
+            );
           },
         ),
       ),

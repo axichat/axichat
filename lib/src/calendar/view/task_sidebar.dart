@@ -3705,6 +3705,7 @@ class _SelectionTaskTile extends StatelessWidget {
 
     return CalendarTaskTitleTooltip(
       title: task.title,
+      enabled: !isActive,
       child: Container(
         margin: const EdgeInsets.only(bottom: calendarGutterSm),
         child: ClipRRect(
@@ -3787,8 +3788,9 @@ class _SidebarTaskTileBody extends StatelessWidget {
                           color: task.isCompleted
                               ? calendarPrimaryColor
                               : calendarTitleColor,
-                          decoration:
-                              task.isCompleted ? TextDecoration.lineThrough : null,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                       if (scheduleLabel != null) ...[
@@ -5394,7 +5396,11 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
       tile = host._wrapWithSidebarContextMenu(task: task, child: tile);
     }
 
-    return CalendarTaskTitleTooltip(title: task.title, child: tile);
+    return CalendarTaskTitleTooltip(
+      title: task.title,
+      enabled: enableInteraction && !isActive,
+      child: tile,
+    );
   }
 }
 
