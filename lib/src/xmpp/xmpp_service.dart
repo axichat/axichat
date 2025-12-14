@@ -1008,6 +1008,7 @@ class XmppService extends XmppBase
       }, awaitDatabase: true);
       if (scripts != null) {
         _seedDemoRoomOccupants(scripts!);
+        await _seedDemoReactions(scripts!);
         await _seedDemoAvatars(scripts!);
       }
     } on Exception catch (error, stackTrace) {
@@ -1034,6 +1035,157 @@ class XmppService extends XmppBase
         );
       }
     }
+  }
+
+  static const _demoReactionThumbsUp = '👍';
+  static const _demoReactionFire = '🔥';
+  static const _demoReactionHeart = '❤️';
+  static const _demoReactionLaugh = '😂';
+  static const _demoReactionSparkles = '✨';
+  static const _demoReactionMind = '🧠';
+  static const _demoReactionScroll = '📜';
+  static const _demoReactionMoney = '💰';
+  static const _demoReactionClap = '👏';
+
+  static const _demoFounderBareJids = <String>[
+    kDemoSelfJid,
+    'washington@axi.im',
+    'jefferson@axi.im',
+    'adams@axi.im',
+    'madison@axi.im',
+    'hamilton@axi.im',
+  ];
+
+  Future<void> _seedDemoReactions(List<DemoChatScript> scripts) async {
+    if (!_demoOfflineMode) return;
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        for (final script in scripts) {
+          final chat = script.chat;
+          final messages = script.messages;
+          if (messages.length < 2) continue;
+
+          final existingReactions = await db.getReactionsForChat(chat.jid);
+          bool hasReactionsForMessage(String messageId) {
+            for (final reaction in existingReactions) {
+              if (reaction.messageID == messageId) return true;
+            }
+            return false;
+          }
+
+          if (chat.type == ChatType.groupChat) {
+            final franklinMessage = messages
+                .where(
+                  (message) =>
+                      (_nickFromSender(message.senderJid) ?? '')
+                          .toLowerCase() ==
+                      'franklin',
+                )
+                .firstOrNull;
+            if (franklinMessage != null &&
+                !hasReactionsForMessage(franklinMessage.stanzaID)) {
+              const reactors = _demoFounderBareJids;
+              await db.replaceReactions(
+                messageId: franklinMessage.stanzaID,
+                senderJid: reactors[0],
+                emojis: const [
+                  _demoReactionClap,
+                  _demoReactionFire,
+                  _demoReactionHeart,
+                  _demoReactionLaugh,
+                  _demoReactionSparkles,
+                ],
+              );
+              await db.replaceReactions(
+                messageId: franklinMessage.stanzaID,
+                senderJid: reactors[1],
+                emojis: const [
+                  _demoReactionClap,
+                  _demoReactionFire,
+                  _demoReactionThumbsUp,
+                ],
+              );
+              await db.replaceReactions(
+                messageId: franklinMessage.stanzaID,
+                senderJid: reactors[2],
+                emojis: const [
+                  _demoReactionClap,
+                  _demoReactionHeart,
+                  _demoReactionScroll,
+                ],
+              );
+              await db.replaceReactions(
+                messageId: franklinMessage.stanzaID,
+                senderJid: reactors[3],
+                emojis: const [
+                  _demoReactionClap,
+                  _demoReactionFire,
+                  _demoReactionThumbsUp,
+                ],
+              );
+              await db.replaceReactions(
+                messageId: franklinMessage.stanzaID,
+                senderJid: reactors[4],
+                emojis: const [
+                  _demoReactionClap,
+                  _demoReactionMind,
+                  _demoReactionThumbsUp,
+                ],
+              );
+              await db.replaceReactions(
+                messageId: franklinMessage.stanzaID,
+                senderJid: reactors[5],
+                emojis: const [
+                  _demoReactionClap,
+                  _demoReactionMoney,
+                  _demoReactionFire,
+                ],
+              );
+            }
+
+            final madisonMessages = messages.where(
+              (message) =>
+                  (_nickFromSender(message.senderJid) ?? '').toLowerCase() ==
+                  'madison',
+            );
+            final madisonSecondMessage = madisonMessages.length >= 2
+                ? madisonMessages.elementAt(1)
+                : null;
+            if (madisonSecondMessage != null &&
+                !hasReactionsForMessage(madisonSecondMessage.stanzaID)) {
+              await db.replaceReactions(
+                messageId: madisonSecondMessage.stanzaID,
+                senderJid: kDemoSelfJid,
+                emojis: const [
+                  _demoReactionThumbsUp,
+                  _demoReactionMind,
+                ],
+              );
+              await db.replaceReactions(
+                messageId: madisonSecondMessage.stanzaID,
+                senderJid: 'washington@axi.im',
+                emojis: const [
+                  _demoReactionClap,
+                ],
+              );
+            }
+            continue;
+          }
+
+          final targetMessage = messages[messages.length - 2];
+          if (hasReactionsForMessage(targetMessage.stanzaID)) continue;
+
+          final senderBare = _safeBareJid(targetMessage.senderJid);
+          final reactor = senderBare == kDemoSelfJid ? chat.jid : kDemoSelfJid;
+          await db.replaceReactions(
+            messageId: targetMessage.stanzaID,
+            senderJid: reactor,
+            emojis: const [_demoReactionThumbsUp],
+          );
+        }
+      },
+      awaitDatabase: true,
+    );
   }
 
   Future<void> _seedDemoAvatars(List<DemoChatScript> scripts) async {

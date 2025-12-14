@@ -450,7 +450,11 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       onToggleSelection?.call();
       return;
     }
-    onTap?.call(task, _globalBounds());
+    final Rect bounds = _globalBounds();
+    if (bounds == Rect.zero) {
+      return;
+    }
+    onTap?.call(task, bounds);
   }
 
   bool _shouldDelayResizeForPointer(PointerDeviceKind kind) {
@@ -496,8 +500,19 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   Rect _globalBounds() {
-    final Offset origin = localToGlobal(Offset.zero);
-    return origin & size;
+    if (!attached || !hasSize) {
+      return Rect.zero;
+    }
+    final PipelineOwner? pipelineOwner = owner;
+    if (pipelineOwner == null) {
+      return Rect.zero;
+    }
+    try {
+      final Offset origin = localToGlobal(Offset.zero);
+      return origin & size;
+    } catch (_) {
+      return Rect.zero;
+    }
   }
 
   void _resetPointerState() {
