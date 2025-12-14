@@ -675,6 +675,9 @@ class _NexusState extends State<Nexus> {
     };
     final showFindActionInHeader = widget.navPlacement != NavPlacement.rail;
     final showShortcutHints = widget.navPlacement != NavPlacement.bottom;
+    final tabViewPhysics = defaultTargetPlatform.isMobile
+        ? null
+        : const NeverScrollableScrollPhysics();
     final header = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -742,6 +745,7 @@ class _NexusState extends State<Nexus> {
           ),
         ),
         child: TabBarView(
+          physics: tabViewPhysics,
           children: widget.tabs.map((tab) {
             return Scaffold(
               extendBodyBehindAppBar: true,

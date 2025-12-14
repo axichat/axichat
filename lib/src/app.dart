@@ -11,6 +11,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
@@ -163,6 +164,8 @@ class _AxichatState extends State<Axichat> {
               xmppService: context.read<XmppService>(),
               emailService: context.read<EmailService>(),
               notificationService: context.read<NotificationService>(),
+              autoLoginOnStart:
+                  context.read<AuthBootstrap>().hasStoredLoginCredentials,
             ),
           ),
           BlocProvider(
@@ -576,6 +579,13 @@ extension ThemeExtension on BuildContext {
       );
 }
 
+extension TargetPlatformExtension on TargetPlatform {
+  bool get isApple => this == TargetPlatform.macOS || this == TargetPlatform.iOS;
+
+  bool get isMobile =>
+      this == TargetPlatform.android || this == TargetPlatform.iOS;
+}
+
 class ComposeIntent extends Intent {
   const ComposeIntent();
 }
@@ -681,46 +691,48 @@ class _ShortcutHintProvider extends InheritedWidget {
 }
 
 SingleActivator _composeActivator(TargetPlatform platform) {
-  final isApple = _isApplePlatform(platform);
   return SingleActivator(
     LogicalKeyboardKey.keyN,
-    meta: isApple,
-    control: !isApple,
+    meta: platform.isApple,
+    control: !platform.isApple,
   );
 }
 
 SingleActivator _searchActivator(TargetPlatform platform) {
-  final isApple = _isApplePlatform(platform);
   return SingleActivator(
     LogicalKeyboardKey.keyF,
-    meta: isApple,
-    control: !isApple,
+    meta: platform.isApple,
+    control: !platform.isApple,
   );
 }
 
 SingleActivator _calendarActivator(TargetPlatform platform) {
-  final isApple = _isApplePlatform(platform);
   return SingleActivator(
     LogicalKeyboardKey.keyC,
-    meta: isApple,
-    control: !isApple,
+    meta: platform.isApple,
+    control: !platform.isApple,
     shift: true,
   );
-}
-
-bool _isApplePlatform(TargetPlatform platform) {
-  return platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
 }
 
 class AxiDragScrollBehavior extends MaterialScrollBehavior {
   const AxiDragScrollBehavior();
 
+  static const _touchDragDevices = <PointerDeviceKind>{
+    PointerDeviceKind.touch,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+  };
+
+  static const _mobileDragDevices = <PointerDeviceKind>{
+    ..._touchDragDevices,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+  };
+
   @override
-  Set<PointerDeviceKind> get dragDevices => const {
-        PointerDeviceKind.touch,
-        PointerDeviceKind.stylus,
-        PointerDeviceKind.invertedStylus,
-      };
+  Set<PointerDeviceKind> get dragDevices =>
+      defaultTargetPlatform.isMobile ? _mobileDragDevices : _touchDragDevices;
 }
 
 SystemUiOverlayStyle _systemUiOverlayStyleFor(ThemeData theme) {
