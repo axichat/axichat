@@ -16,6 +16,7 @@ import 'calendar_experience_state.dart';
 import 'feedback_system.dart';
 import 'sync_controls.dart';
 import 'task_sidebar.dart';
+import 'widgets/calendar_hover_title_scope.dart';
 import 'widgets/calendar_mobile_tab_shell.dart';
 
 class CalendarWidget extends StatefulWidget {
@@ -50,6 +51,14 @@ class CalendarNavSurface extends StatelessWidget {
 class _CalendarWidgetState
     extends CalendarExperienceState<CalendarWidget, CalendarBloc> {
   bool _mobileInitialScrollSynced = false;
+  late final CalendarHoverTitleController _hoverTitleController =
+      CalendarHoverTitleController();
+
+  @override
+  void dispose() {
+    _hoverTitleController.dispose();
+    super.dispose();
+  }
 
   @override
   void handleStateChanges(BuildContext context, CalendarState state) {
@@ -154,15 +163,18 @@ class _CalendarWidgetState
     Widget layout,
   ) {
     final Widget tintedLayout = CalendarNavSurface(child: layout);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _CalendarAppBar(
-          state: state,
-          onBackPressed: _handleCalendarBackPressed,
-        ),
-        Expanded(child: tintedLayout),
-      ],
+    return CalendarHoverTitleScope(
+      controller: _hoverTitleController,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _CalendarAppBar(
+            state: state,
+            onBackPressed: _handleCalendarBackPressed,
+          ),
+          Expanded(child: tintedLayout),
+        ],
+      ),
     );
   }
 

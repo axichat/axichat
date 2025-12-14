@@ -20,6 +20,7 @@ import 'package:axichat/src/calendar/view/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/task_sidebar.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_loading_overlay.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
@@ -34,6 +35,15 @@ class GuestCalendarWidget extends StatefulWidget {
 
 class _GuestCalendarWidgetState
     extends CalendarExperienceState<GuestCalendarWidget, GuestCalendarBloc> {
+  late final CalendarHoverTitleController _hoverTitleController =
+      CalendarHoverTitleController();
+
+  @override
+  void dispose() {
+    _hoverTitleController.dispose();
+    super.dispose();
+  }
+
   @override
   String get dragLogTag => 'guest-calendar';
 
@@ -130,18 +140,21 @@ class _GuestCalendarWidgetState
     bool usesDesktopLayout,
     Widget layout,
   ) {
-    return SafeArea(
-      top: true,
-      bottom: false,
-      child: Column(
-        children: [
-          _GuestBanner(
-            onNavigateBack: _handleBannerBackNavigation,
-            onSignUp: () => context.go('/login'),
-            transferMenu: _GuestTransferMenu(state: state),
-          ),
-          Expanded(child: layout),
-        ],
+    return CalendarHoverTitleScope(
+      controller: _hoverTitleController,
+      child: SafeArea(
+        top: true,
+        bottom: false,
+        child: Column(
+          children: [
+            _GuestBanner(
+              onNavigateBack: _handleBannerBackNavigation,
+              onSignUp: () => context.go('/login'),
+              transferMenu: _GuestTransferMenu(state: state),
+            ),
+            Expanded(child: layout),
+          ],
+        ),
       ),
     );
   }

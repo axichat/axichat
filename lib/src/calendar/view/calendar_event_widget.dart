@@ -10,7 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'widgets/task_checklist.dart';
-import 'widgets/calendar_task_title_tooltip.dart';
+import 'widgets/calendar_task_title_hover_reporter.dart';
 
 class CalendarEventWidget extends StatefulWidget {
   final CalendarTask task;
@@ -132,7 +132,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
             bool isGhost = false,
             bool interactive = true,
           }) {
-            return CalendarTaskTitleTooltip(
+            return CalendarTaskTitleHoverReporter(
               title: widget.task.title,
               enabled: interactive && !isDragging && !_isResizing,
               child: _CalendarEventContainer(
