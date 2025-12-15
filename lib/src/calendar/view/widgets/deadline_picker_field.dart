@@ -279,92 +279,172 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         backgroundColor: Colors.transparent,
         surfacePadding: EdgeInsets.zero,
         builder: (sheetContext) {
-          final MediaQueryData hostMediaQuery = MediaQuery.of(sheetContext);
-          final double desiredHeight = widget.showTimeSelectors
-              ? _timePickerDesiredHeight
-              : _datePickerExpandedHeight;
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              final MediaQueryData hostMediaQuery = MediaQuery.of(sheetContext);
+              final double desiredHeight = widget.showTimeSelectors
+                  ? _timePickerDesiredHeight
+                  : _datePickerExpandedHeight;
 
-          final previousMonth =
-              DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
-          final nextMonth =
-              DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
-          final VoidCallback? handlePrevious =
-              _canNavigateToMonth(previousMonth)
-                  ? () => _updateVisibleMonth(previousMonth)
+              void closeSheet() => Navigator.of(sheetContext).maybePop();
+
+              void updateVisibleMonth(DateTime month) {
+                setSheetState(() {
+                  _visibleMonth = _monthStart(month);
+                  _ensureVisibleMonthInRange();
+                });
+              }
+
+              void handleDaySelected(DateTime date) {
+                if (!_isDateWithinBounds(date)) return;
+                final baseTime = _currentValue ?? DateTime.now();
+                final newValue = widget.showTimeSelectors
+                    ? DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        baseTime.hour,
+                        baseTime.minute,
+                      )
+                    : DateTime(date.year, date.month, date.day);
+                setSheetState(() {
+                  _currentValue = newValue;
+                  _visibleMonth = _monthStart(date);
+                });
+                widget.onChanged(newValue);
+              }
+
+              void handleHourSelected(int hour) {
+                if (!widget.showTimeSelectors) return;
+                final value = _currentValue ?? DateTime.now();
+                final updated = DateTime(
+                  value.year,
+                  value.month,
+                  value.day,
+                  hour,
+                  value.minute,
+                );
+                setSheetState(() => _currentValue = updated);
+                widget.onChanged(updated);
+                _animateHour(hour);
+              }
+
+              void handleMinuteSelected(int minute) {
+                if (!widget.showTimeSelectors) return;
+                final value = _currentValue ?? DateTime.now();
+                final updated = DateTime(
+                  value.year,
+                  value.month,
+                  value.day,
+                  value.hour,
+                  minute,
+                );
+                setSheetState(() => _currentValue = updated);
+                widget.onChanged(updated);
+                _animateMinute(minute);
+              }
+
+              void handleCancel() {
+                final DateTime? target = _initialValue;
+                setSheetState(() {
+                  _currentValue = target;
+                  _visibleMonth = _monthStart(target ?? DateTime.now());
+                  _ensureVisibleMonthInRange();
+                });
+                if (!_sameMoment(widget.value, target)) {
+                  widget.onChanged(target);
+                }
+                final DateTime reference = target ?? DateTime.now();
+                _jumpToCurrent(reference);
+                closeSheet();
+              }
+
+              void handleClear() {
+                final fallback = DateTime.now();
+                setSheetState(() => _currentValue = null);
+                widget.onChanged(null);
+                if (widget.showTimeSelectors) {
+                  _animateHour(fallback.hour);
+                  _animateMinute(_roundToFive(fallback.minute));
+                }
+                closeSheet();
+              }
+
+              final previousMonth =
+                  DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
+              final nextMonth =
+                  DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
+              final VoidCallback? handlePrevious =
+                  _canNavigateToMonth(previousMonth)
+                      ? () => updateVisibleMonth(previousMonth)
+                      : null;
+              final VoidCallback? handleNext = _canNavigateToMonth(nextMonth)
+                  ? () => updateVisibleMonth(nextMonth)
                   : null;
-          final VoidCallback? handleNext = _canNavigateToMonth(nextMonth)
-              ? () => _updateVisibleMonth(nextMonth)
-              : null;
 
-          void closeSheet() => Navigator.of(sheetContext).maybePop();
+              final header = _DeadlineMonthHeader(
+                label: _monthLabel(_visibleMonth),
+                onPrevious: handlePrevious,
+                onNext: handleNext,
+              );
+              final calendarGrid = _DeadlineCalendarGrid(
+                visibleMonth: _visibleMonth,
+                selectedDate: _currentValue,
+                isDateWithinBounds: _isDateWithinBounds,
+                onDaySelected: handleDaySelected,
+              );
+              final DateTime selectedTime = _currentValue ?? DateTime.now();
+              final timeSelectors = _DeadlineTimeSelectors(
+                showTimeSelectors: widget.showTimeSelectors,
+                selectedHour: selectedTime.hour,
+                selectedMinute: _roundToFive(selectedTime.minute),
+                hourValues: _hourValues,
+                minuteValues: _minuteValues,
+                hourController: _hourScrollController,
+                minuteController: _minuteScrollController,
+                onHourSelected: handleHourSelected,
+                onMinuteSelected: handleMinuteSelected,
+              );
+              final actions = _DeadlinePickerActions(
+                showTimeSelectors: widget.showTimeSelectors,
+                hasValue: _currentValue != null,
+                onCancel: handleCancel,
+                onClear: _currentValue != null ? handleClear : null,
+                onDone: closeSheet,
+              );
 
-          final header = _DeadlineMonthHeader(
-            label: _monthLabel(_visibleMonth),
-            onPrevious: handlePrevious,
-            onNext: handleNext,
-          );
-          final calendarGrid = _DeadlineCalendarGrid(
-            visibleMonth: _visibleMonth,
-            selectedDate: _currentValue,
-            isDateWithinBounds: _isDateWithinBounds,
-            onDaySelected: _onDaySelected,
-          );
-          final DateTime selectedTime = _currentValue ?? DateTime.now();
-          final timeSelectors = _DeadlineTimeSelectors(
-            showTimeSelectors: widget.showTimeSelectors,
-            selectedHour: selectedTime.hour,
-            selectedMinute: _roundToFive(selectedTime.minute),
-            hourValues: _hourValues,
-            minuteValues: _minuteValues,
-            hourController: _hourScrollController,
-            minuteController: _minuteScrollController,
-            onHourSelected: _onHourSelected,
-            onMinuteSelected: _onMinuteSelected,
-          );
-          final actions = _DeadlinePickerActions(
-            showTimeSelectors: widget.showTimeSelectors,
-            hasValue: _currentValue != null,
-            onCancel: () {
-              _handleCancel();
-              closeSheet();
-            },
-            onClear: _currentValue != null
-                ? () {
-                    _clearDeadline();
-                    closeSheet();
-                  }
-                : null,
-            onDone: closeSheet,
-          );
-
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final double availableHeight = constraints.maxHeight.isFinite
-                  ? constraints.maxHeight
-                  : hostMediaQuery.size.height;
-              final double maxHeight =
-                  availableHeight.isFinite && availableHeight > 0
-                      ? math.min(desiredHeight, availableHeight)
-                      : desiredHeight;
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: _deadlinePickerSheetMaxWidth,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(calendarGutterLg),
-                    child: _DeadlineDropdownSurface(
-                      maxHeight: maxHeight,
-                      dropdownKey: _dropdownKey,
-                      minWidth: _deadlinePickerSheetMinWidth,
-                      showTimeSelectors: widget.showTimeSelectors,
-                      monthHeader: header,
-                      calendarGrid: calendarGrid,
-                      timeSelectors: timeSelectors,
-                      actions: actions,
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final double availableHeight = constraints.maxHeight.isFinite
+                      ? constraints.maxHeight
+                      : hostMediaQuery.size.height;
+                  final double maxHeight =
+                      availableHeight.isFinite && availableHeight > 0
+                          ? math.min(desiredHeight, availableHeight)
+                          : desiredHeight;
+                  return Align(
+                    alignment: Alignment.bottomCenter,
+                    heightFactor: 1,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: _deadlinePickerSheetMaxWidth,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(calendarGutterLg),
+                        child: _DeadlineDropdownSurface(
+                          maxHeight: maxHeight,
+                          dropdownKey: _dropdownKey,
+                          minWidth: _deadlinePickerSheetMinWidth,
+                          showTimeSelectors: widget.showTimeSelectors,
+                          monthHeader: header,
+                          calendarGrid: calendarGrid,
+                          timeSelectors: timeSelectors,
+                          actions: actions,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           );

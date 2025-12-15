@@ -181,7 +181,27 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               offset: Offset(0, 8),
             ),
           ];
-    Widget buildBody(double keyboardInset) {
+    Widget buildBody({
+      required double keyboardInset,
+      required double safeBottom,
+    }) {
+      final bool keyboardOpen = keyboardInset > safeBottom;
+      final Widget actionRow = ValueListenableBuilder<TextEditingValue>(
+        valueListenable: _titleController,
+        builder: (context, value, _) {
+          final bool canSave = TaskTitleValidation.validate(value.text) == null;
+          return _EditTaskActionsRow(
+            task: widget.task,
+            onDelete: () {
+              widget.onTaskDeleted(widget.task.id);
+              widget.onClose();
+            },
+            onCancel: widget.onClose,
+            onSave: _handleSave,
+            canSave: canSave,
+          );
+        },
+      );
       return Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.disabled,
@@ -197,7 +217,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                   calendarGutterLg,
                   calendarGutterMd,
                   calendarGutterLg,
-                  calendarGutterMd + (isSheet ? keyboardInset : 0),
+                  calendarGutterMd +
+                      (isSheet && keyboardOpen ? keyboardInset : 0),
                 ),
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.manual,
@@ -284,37 +305,25 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       blocOverride: widget.inlineActionsBloc,
                     ),
                     const SizedBox(height: calendarFormGap),
+                    if (keyboardOpen) actionRow,
                   ],
                 ),
               ),
             ),
-            AnimatedPadding(
-              duration: baseAnimationDuration,
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(
-                bottom: _actionBarBottomInset(context),
-              ),
-              child: SafeArea(
+            if (!keyboardOpen)
+              SafeArea(
                 top: false,
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _titleController,
-                  builder: (context, value, _) {
-                    final bool canSave =
-                        TaskTitleValidation.validate(value.text) == null;
-                    return _EditTaskActionsRow(
-                      task: widget.task,
-                      onDelete: () {
-                        widget.onTaskDeleted(widget.task.id);
-                        widget.onClose();
-                      },
-                      onCancel: widget.onClose,
-                      onSave: _handleSave,
-                      canSave: canSave,
-                    );
-                  },
+                bottom: true,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: calendarGutterLg,
+                    right: calendarGutterLg,
+                    bottom: calendarGutterMd + safeBottom,
+                    top: calendarGutterMd,
+                  ),
+                  child: actionRow,
                 ),
               ),
-            ),
           ],
         ),
       );
@@ -325,7 +334,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         final double resolvedMaxHeight = constraints.hasBoundedHeight
             ? constraints.maxHeight
             : widget.maxHeight;
-        final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+        final mediaQuery = MediaQuery.of(context);
+        final double keyboardInset = mediaQuery.viewInsets.bottom;
+        final double safeBottom = mediaQuery.viewPadding.bottom;
         final Widget surfaced = Material(
           color: Colors.transparent,
           child: ClipRRect(
@@ -342,7 +353,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                 border: isSheet ? null : Border.all(color: calendarBorderColor),
                 boxShadow: boxShadow,
               ),
-              child: buildBody(keyboardInset),
+              child: buildBody(
+                keyboardInset: keyboardInset,
+                safeBottom: safeBottom,
+              ),
             ),
           ),
         );
@@ -354,7 +368,11 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             child: surfaced,
           );
         }
-        return surfaced;
+        return SafeArea(
+          top: true,
+          bottom: false,
+          child: surfaced,
+        );
       },
     );
   }
@@ -478,19 +496,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       widget.onTaskUpdated(updatedTask);
     }
     widget.onClose();
-  }
-
-  double _actionBarBottomInset(BuildContext context) {
-    if (widget.isSheet) {
-      return 0;
-    }
-    final mediaQuery = MediaQuery.of(context);
-    final double keyboardInset = mediaQuery.viewInsets.bottom;
-    final double safePadding = mediaQuery.viewPadding.bottom;
-    if (keyboardInset <= safePadding) {
-      return 0;
-    }
-    return keyboardInset - safePadding;
   }
 }
 
