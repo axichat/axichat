@@ -202,8 +202,8 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
               child: ClipRRect(
                 borderRadius: radius,
                 child: GestureDetector(
-                  onTap: () =>
-                      _openAttachment(context, path: widget.metadata.path),
+                  onTap: () => _openImagePreview(context,
+                      file: localFile, metadata: metadata),
                   child: AspectRatio(
                     aspectRatio: _aspectRatio(metadata),
                     child: image,
@@ -275,6 +275,129 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     }
     return 4 / 3;
   }
+}
+
+Future<void> _openImagePreview(
+  BuildContext context, {
+  required File file,
+  required FileMetadataData metadata,
+}) async {
+  if (!await file.exists()) return;
+  await showShadDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (dialogContext) {
+      return _ImageAttachmentPreviewDialog(
+        file: file,
+        metadata: metadata,
+      );
+    },
+  );
+}
+
+class _ImageAttachmentPreviewDialog extends StatelessWidget {
+  const _ImageAttachmentPreviewDialog({
+    required this.file,
+    required this.metadata,
+  });
+
+  final File file;
+  final FileMetadataData metadata;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaSize = MediaQuery.sizeOf(context);
+    final maxWidth = (mediaSize.width - 96).clamp(240.0, mediaSize.width);
+    final maxHeight = (mediaSize.height - 160).clamp(240.0, mediaSize.height);
+    final intrinsic = _intrinsicSizeFrom(metadata);
+    final targetSize = _fitWithinBounds(
+      intrinsicSize: intrinsic,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+    );
+    final colors = context.colorScheme;
+    final radius = BorderRadius.circular(18);
+    final borderSide = BorderSide(color: colors.border);
+    return ShadDialog(
+      padding: const EdgeInsets.all(12),
+      gap: 12,
+      closeIcon: const SizedBox.shrink(),
+      constraints: BoxConstraints(
+        maxWidth: targetSize.width + 24,
+        maxHeight: targetSize.height + 24,
+      ),
+      child: Stack(
+        children: [
+          Center(
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                color: colors.card,
+                shape: ContinuousRectangleBorder(
+                  borderRadius: radius,
+                  side: borderSide,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: radius,
+                child: SizedBox(
+                  width: targetSize.width,
+                  height: targetSize.height,
+                  child: InteractiveViewer(
+                    maxScale: 4,
+                    child: Image.file(
+                      file,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: ShadButton.ghost(
+              size: ShadButtonSize.sm,
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Icon(LucideIcons.x, size: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Size? _intrinsicSizeFrom(FileMetadataData metadata) {
+  final width = metadata.width;
+  final height = metadata.height;
+  if (width == null || height == null) return null;
+  if (width <= 0 || height <= 0) return null;
+  return Size(width.toDouble(), height.toDouble());
+}
+
+Size _fitWithinBounds({
+  required Size? intrinsicSize,
+  required double maxWidth,
+  required double maxHeight,
+}) {
+  final cappedWidth = math.max(0.0, maxWidth);
+  final cappedHeight = math.max(0.0, maxHeight);
+  if (intrinsicSize == null ||
+      intrinsicSize.width <= 0 ||
+      intrinsicSize.height <= 0) {
+    final width = math.min(cappedWidth, 360.0);
+    final height = math.min(cappedHeight, width * 0.75);
+    return Size(width, height);
+  }
+  final aspectRatio = intrinsicSize.width / intrinsicSize.height;
+  var width = math.min(intrinsicSize.width, cappedWidth);
+  var height = width / aspectRatio;
+  if (height > cappedHeight && cappedHeight > 0) {
+    height = cappedHeight;
+    width = height * aspectRatio;
+  }
+  return Size(width, height);
 }
 
 class _FileAttachment extends StatefulWidget {
