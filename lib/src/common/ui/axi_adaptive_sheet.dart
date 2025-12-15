@@ -39,6 +39,8 @@ Future<T?> showAdaptiveBottomSheet<T>({
       barrierColor: barrierColor,
       useRootNavigator: useRootNavigator,
       builder: (sheetContext) {
+        final MediaQueryData windowMediaQuery =
+            MediaQueryData.fromView(View.of(sheetContext));
         final Color resolvedBackground = backgroundColor ?? scheme.card;
         final bool transparentSurface = resolvedBackground.a == 0;
         const BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
@@ -60,15 +62,16 @@ Future<T?> showAdaptiveBottomSheet<T>({
             child: child,
           ),
         );
-        if (!useSafeArea) {
-          return surface;
-        }
-        return SafeArea(
-          top: true,
-          bottom: false,
-          left: false,
-          right: false,
-          child: surface,
+        if (!useSafeArea) return surface;
+        return MediaQuery(
+          data: windowMediaQuery,
+          child: SafeArea(
+            top: true,
+            bottom: true,
+            left: false,
+            right: false,
+            child: surface,
+          ),
         );
       },
     );

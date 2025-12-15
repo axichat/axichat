@@ -313,6 +313,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
               return CalendarTaskDraggable(
                 task: task,
                 geometry: geometry,
+                resizeHandleExtent: bindings.resizeHandleExtent,
                 globalRectProvider: bindings.globalRectProvider,
                 interactionController: _interactionController,
                 onDragStarted: _callbacks.onDragStarted,

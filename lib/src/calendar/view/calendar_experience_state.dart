@@ -330,6 +330,16 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     FeedbackSystem.showInfo(context, 'Drag canceled');
   }
 
+  @override
+  void onDragDayShiftRequested(int deltaDays) {
+    final DateTime selected = calendarBloc.state.selectedDate;
+    calendarBloc.add(
+      CalendarEvent.dateSelected(
+        date: selected.add(Duration(days: deltaDays)),
+      ),
+    );
+  }
+
   /// Hook for subclasses to react to bloc state changes.
   void handleStateChanges(BuildContext context, CalendarState state);
 

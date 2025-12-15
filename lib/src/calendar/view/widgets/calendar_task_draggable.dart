@@ -19,6 +19,7 @@ class CalendarTaskDraggable extends StatefulWidget {
     super.key,
     required this.task,
     required this.geometry,
+    required this.resizeHandleExtent,
     required this.globalRectProvider,
     required this.interactionController,
     required this.onDragStarted,
@@ -35,6 +36,7 @@ class CalendarTaskDraggable extends StatefulWidget {
 
   final CalendarTask task;
   final CalendarTaskGeometry geometry;
+  final double resizeHandleExtent;
   final CalendarTaskGlobalRectProvider globalRectProvider;
   final TaskInteractionController interactionController;
   final void Function(CalendarTask task, Rect bounds) onDragStarted;
@@ -57,7 +59,12 @@ class CalendarTaskDraggable extends StatefulWidget {
 }
 
 class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
-  static const double _resizeHandleExtent = 12.0;
+  static const double _touchHandleHorizontalFraction = 0.45;
+  static const double _touchHandleHorizontalMax = 56.0;
+  static const double _touchHandleHorizontalMin = 28.0;
+  static const double _minTaskHeightForResizeHandles = 14.0;
+  static const double _resizeHandleVisibilityPadding = 4.0;
+  static const double _centeredHandleGateThreshold = 10.0;
 
   Offset? _lastPointerLocal;
   Offset? _lastPointerGlobal;
@@ -296,15 +303,42 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   }
 
   bool _isPointerOverResizeHandle(Offset local, Size size) {
-    if (!size.isFinite) {
+    if (!widget.enabled || !size.isFinite) {
       return false;
     }
     final double height = size.height;
     if (height <= 0) {
       return false;
     }
-    return local.dy <= _resizeHandleExtent ||
-        (height - local.dy) <= _resizeHandleExtent;
+    final CalendarTask task = widget.task;
+    if (task.isCompleted || task.scheduledTime == null) {
+      return false;
+    }
+
+    final double available =
+        (height - _resizeHandleVisibilityPadding).clamp(0.0, double.infinity);
+    if (available < _minTaskHeightForResizeHandles) {
+      return false;
+    }
+
+    final double extent =
+        math.max(widget.resizeHandleExtent, 0.0).clamp(0.0, double.infinity);
+    final double width = size.width;
+
+    if (extent > _centeredHandleGateThreshold && width.isFinite && width > 0) {
+      final double handleWidth = math.max(
+        _touchHandleHorizontalMin,
+        math.min(
+            width * _touchHandleHorizontalFraction, _touchHandleHorizontalMax),
+      );
+      final double left = (width - handleWidth) / 2;
+      final double right = left + handleWidth;
+      if (local.dx < left || local.dx > right) {
+        return false;
+      }
+    }
+
+    return local.dy <= extent || (height - local.dy) <= extent;
   }
 
   Rect? _resolveGlobalBounds({Offset? fallbackTopLeft}) {
