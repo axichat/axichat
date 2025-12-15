@@ -49,7 +49,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
           onClose: () => Navigator.of(sheetContext).maybePop(),
           child: builder(sheetContext),
         );
-        return SizedBox(
+        final Widget surface = SizedBox(
           width: double.infinity,
           child: AxiModalSurface(
             backgroundColor: resolvedBackground,
@@ -58,6 +58,20 @@ Future<T?> showAdaptiveBottomSheet<T>({
             borderRadius: sheetRadius,
             shadows: transparentSurface ? const <BoxShadow>[] : null,
             child: child,
+          ),
+        );
+        if (!useSafeArea) {
+          return surface;
+        }
+        return SafeArea(
+          top: true,
+          bottom: false,
+          left: false,
+          right: false,
+          child: MediaQuery.removePadding(
+            context: sheetContext,
+            removeTop: true,
+            child: surface,
           ),
         );
       },
