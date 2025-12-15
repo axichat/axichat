@@ -2343,6 +2343,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         backgroundColor: Colors.transparent,
         showCloseButton: false,
         builder: (sheetContext) {
+          final mediaQuery = MediaQuery.of(sheetContext);
+          final double maxHeight =
+              mediaQuery.size.height - mediaQuery.viewPadding.vertical;
           void closeSheet() {
             _sidebarController.setActivePopoverTaskId(null);
             TaskEditSessionTracker.instance.end(task.id, this);
@@ -2354,7 +2357,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
             child: Builder(
               builder: (context) => EditTaskDropdown<B>(
                 task: displayTask,
-                maxHeight: double.infinity,
+                maxHeight: maxHeight,
                 isSheet: true,
                 inlineActionsBloc: locate<B>(),
                 inlineActionsBuilder: (_) => _sidebarInlineActions(displayTask),

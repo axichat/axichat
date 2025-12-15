@@ -346,7 +346,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _loginIfStoredCredentials() async {
-    if (_loginInFlight || _stickyAuthActive) {
+    if (_loginInFlight) {
+      return;
+    }
+
+    if (_stickyAuthActive) {
+      if (_endpointConfig.enableXmpp) {
+        unawaited(_xmppService.triggerImmediateReconnect());
+      }
       return;
     }
 

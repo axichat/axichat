@@ -1209,12 +1209,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         backgroundColor: Colors.transparent,
         showCloseButton: false,
         builder: (sheetContext) {
+          final mediaQuery = MediaQuery.of(sheetContext);
+          final double maxHeight =
+              mediaQuery.size.height - mediaQuery.viewPadding.vertical;
           return BlocProvider.value(
             value: locate<T>(),
             child: Builder(
               builder: (context) => EditTaskDropdown<T>(
                 task: displayTask,
-                maxHeight: double.infinity,
+                maxHeight: maxHeight,
                 isSheet: true,
                 inlineActionsBloc: locate<T>(),
                 inlineActionsBuilder: (state) {
