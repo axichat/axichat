@@ -4887,9 +4887,12 @@ class _ChatState extends State<Chat> {
                                                             null;
                                                         _selectionDismissMoved =
                                                             false;
-                                                        _maybeDismissSelection(
-                                                          event.position,
-                                                        );
+                                                        scheduleMicrotask(() {
+                                                          if (!mounted) return;
+                                                          _maybeDismissSelection(
+                                                            event.position,
+                                                          );
+                                                        });
                                                       },
                                                     ),
                                                   ),
