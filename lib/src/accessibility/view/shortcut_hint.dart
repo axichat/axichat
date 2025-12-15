@@ -235,8 +235,10 @@ List<Widget> _buildKeycaps({
   required ShadColorScheme colors,
   required TextStyle textStyle,
 }) {
-  final topSheen = Color.lerp(colors.card, Colors.white, 0.32)!;
-  final midTone = Color.lerp(colors.card, Colors.white, 0.12)!;
+  final keyBase = colors.card;
+  final topSheen = Color.lerp(keyBase, colors.foreground, 0.08)!;
+  final midTone = Color.lerp(keyBase, colors.foreground, 0.04)!;
+  final keyShadow = Color.lerp(colors.background, Colors.black, 0.65)!;
   final borderWidth = dense ? 1.0 : 1.2;
   const paddingDense = EdgeInsets.symmetric(horizontal: 7, vertical: 4);
   const paddingComfort = EdgeInsets.symmetric(horizontal: 9, vertical: 5);
@@ -255,7 +257,10 @@ List<Widget> _buildKeycaps({
   );
 
   Widget keycap(String label) {
-    final backplateColor = colors.border.withValues(alpha: 0.9);
+    final backplateColor = Color.alphaBlend(
+      keyShadow.withValues(alpha: 0.35),
+      keyBase,
+    );
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -269,7 +274,7 @@ List<Widget> _buildKeycaps({
               borderRadius: radius,
               boxShadow: [
                 BoxShadow(
-                  color: colors.foreground.withValues(alpha: 0.18),
+                  color: keyShadow.withValues(alpha: 0.45),
                   offset: Offset(0, drop / 2),
                   blurRadius: drop * 1.6,
                   spreadRadius: 0.0,
@@ -304,7 +309,7 @@ List<Widget> _buildKeycaps({
             borderRadius: radius,
             boxShadow: [
               BoxShadow(
-                color: colors.foreground.withValues(alpha: 0.18),
+                color: keyShadow.withValues(alpha: 0.3),
                 offset: const Offset(0, 1.2),
                 blurRadius: 3.2,
               ),
@@ -326,9 +331,9 @@ List<Widget> _buildKeycaps({
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.white.withValues(alpha: 0.08),
+                          Colors.white.withValues(alpha: 0.04),
                           Colors.transparent,
-                          colors.foreground.withValues(alpha: 0.04),
+                          keyShadow.withValues(alpha: 0.12),
                         ],
                         stops: const [0, 0.5, 1],
                       ),
