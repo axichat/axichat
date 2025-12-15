@@ -16,7 +16,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
   bool enableDrag = true,
   bool useRootNavigator = false,
   bool isDismissible = true,
-  bool showCloseButton = true,
+  bool showCloseButton = false,
   Color? backgroundColor,
   Color? barrierColor,
   EdgeInsets? dialogInsetPadding,

@@ -14,16 +14,12 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
     showDragHandle: true,
     builder: (sheetContext) {
       final colors = ShadTheme.of(sheetContext).colorScheme;
-      final textTheme = ShadTheme.of(sheetContext).textTheme;
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      return AxiSheetScaffold.scroll(
+        header: AxiSheetHeader(
+          title: Text(title),
+          onClose: () => Navigator.of(sheetContext).maybePop(),
+        ),
         children: [
-          Text(
-            title,
-            style: textTheme.lead.copyWith(color: colors.foreground),
-          ),
-          const SizedBox(height: 12),
           _CalendarTransferOption(
             icon: LucideIcons.calendarCheck2,
             label: sheetContext.l10n.calendarExportFormatIcsTitle,

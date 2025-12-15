@@ -732,7 +732,7 @@ mixin MucService on XmppBase, BaseStreamService {
     );
 
     final itemId = _mucRoomsItemId(roomJid);
-    final publishOptions = mox.PubSubPublishOptions(
+    const publishOptions = mox.PubSubPublishOptions(
       accessModel: _mucRoomsAccessModel,
       maxItems: _mucRoomsMaxItems,
       persistItems: true,
