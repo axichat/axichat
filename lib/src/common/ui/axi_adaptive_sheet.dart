@@ -31,7 +31,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: isScrollControlled,
-      useSafeArea: useSafeArea,
+      useSafeArea: false,
       showDragHandle: showDragHandle,
       enableDrag: enableDrag,
       isDismissible: isDismissible,
@@ -53,8 +53,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
           width: double.infinity,
           child: AxiModalSurface(
             backgroundColor: resolvedBackground,
-            borderColor:
-                transparentSurface ? Colors.transparent : scheme.border,
+            borderColor: Colors.transparent,
             padding: transparentSurface ? EdgeInsets.zero : surfacePadding,
             borderRadius: sheetRadius,
             shadows: transparentSurface ? const <BoxShadow>[] : null,

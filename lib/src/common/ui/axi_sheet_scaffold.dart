@@ -80,7 +80,9 @@ class AxiSheetScaffold extends StatelessWidget {
     required this.body,
     this.footer,
     super.key,
-  });
+  })  : _scrollChildren = null,
+        bodyPadding = null,
+        scrollPhysics = null;
 
   const AxiSheetScaffold.scroll({
     required this.header,
@@ -132,21 +134,18 @@ class AxiSheetScaffold extends StatelessWidget {
         header,
         Flexible(
           fit: FlexFit.loose,
-          child: SingleChildScrollView(
+          child: ListView(
             padding: padding,
+            shrinkWrap: true,
             physics: scrollPhysics,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ...?scrollChildren,
-                if (footer != null) ...[
-                  const SizedBox(height: 12),
-                  footer!,
-                ],
+            children: [
+              ...?scrollChildren,
+              if (footer != null) ...[
+                const SizedBox(height: 12),
+                footer!,
               ],
-            ),
+            ],
           ),
         ),
       ],

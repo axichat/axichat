@@ -1006,23 +1006,16 @@ class _DateLabelState extends State<_DateLabel> {
     await showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         var sheetMonth = _visibleMonth;
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final spec = ResponsiveHelper.spec(sheetContext);
-            final EdgeInsets modalMargin = spec.modalMargin;
-            final double fixedBottomPadding =
-                math.max(12.0, modalMargin.bottom * 0.6);
-            return Padding(
-              padding: EdgeInsets.only(
-                left: modalMargin.left,
-                right: modalMargin.right,
-                top: modalMargin.top,
-                bottom: fixedBottomPadding,
-              ),
+            return SafeArea(
+              top: true,
+              bottom: true,
               child: _CalendarDropdown(
+                useSurface: false,
                 margin: EdgeInsets.zero,
                 month: sheetMonth,
                 selectedWeekStart: widget.state.weekStart,
@@ -1086,6 +1079,7 @@ class _CalendarDropdown extends StatelessWidget {
     required this.onMonthChanged,
     required this.onDateSelected,
     this.margin = const EdgeInsets.only(top: calendarGutterSm),
+    this.useSurface = true,
   });
 
   final DateTime month;
@@ -1095,6 +1089,7 @@ class _CalendarDropdown extends StatelessWidget {
   final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onDateSelected;
   final EdgeInsetsGeometry margin;
+  final bool useSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -1106,16 +1101,8 @@ class _CalendarDropdown extends StatelessWidget {
         spec.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
     final double width = fillWidth ? double.infinity : dropdownWidth;
 
-    return Container(
-      width: width,
+    final Widget content = Padding(
       padding: spec.contentPadding,
-      margin: margin,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(color: calendarBorderColor),
-        boxShadow: calendarMediumShadow,
-      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1135,6 +1122,18 @@ class _CalendarDropdown extends StatelessWidget {
               _navIconButton(
                 icon: Icons.chevron_right,
                 onPressed: () => onMonthChanged(_addMonths(month, 1)),
+              ),
+              const SizedBox(width: calendarGutterSm),
+              AxiIconButton(
+                iconData: LucideIcons.x,
+                tooltip: context.l10n.commonClose,
+                onPressed: onClose,
+                iconSize: 16,
+                buttonSize: 34,
+                tapTargetSize: 40,
+                backgroundColor: Colors.transparent,
+                borderColor: Colors.transparent,
+                color: calendarSubtitleColor,
               ),
             ],
           ),
@@ -1212,20 +1211,24 @@ class _CalendarDropdown extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: calendarGutterMd),
-          SizedBox(
-            width: double.infinity,
-            child: TaskSecondaryButton(
-              label: context.l10n.commonClose,
-              onPressed: onClose,
-              foregroundColor: calendarSubtitleColor,
-              hoverForegroundColor: calendarPrimaryColor,
-              hoverBackgroundColor:
-                  calendarPrimaryColor.withValues(alpha: 0.08),
-            ),
-          ),
         ],
       ),
+    );
+
+    if (!useSurface) {
+      return SizedBox(width: width, child: content);
+    }
+
+    return Container(
+      width: width,
+      margin: margin,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        border: Border.all(color: calendarBorderColor),
+        boxShadow: calendarMediumShadow,
+      ),
+      child: content,
     );
   }
 

@@ -968,7 +968,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final DateTime? picked = await showAdaptiveBottomSheet<DateTime>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         return _SplitTaskPickerSheet(
           initialValue: initialCandidate,
@@ -3974,74 +3974,60 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return SafeArea(
-      top: false,
-      child: Material(
-        color: scheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            calendarGutterLg,
-            calendarGutterLg,
-            calendarGutterLg,
-            calendarGutterLg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: scheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: calendarGutterLg),
-              const TaskSectionHeader(title: 'Split task at'),
-              const SizedBox(height: calendarInsetMd),
-              DeadlinePickerField(
-                value: _selected,
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _selected = _clamp(value);
-                  });
-                },
-                placeholder: 'Select split time',
-                showStatusColors: false,
-                minDate: widget.minTime,
-                maxDate: widget.maxTime,
-              ),
-              const SizedBox(height: calendarGutterLg),
-              TaskFormActionsRow(
-                padding: EdgeInsets.zero,
-                gap: 12,
-                children: [
-                  Expanded(
-                    child: TaskSecondaryButton(
-                      label: 'Cancel',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    ),
-                  ),
-                  Expanded(
-                    child: TaskPrimaryButton(
-                      label: 'Split Task',
-                      onPressed: _handleSubmit,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+    const EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
+      calendarGutterLg,
+      0,
+      calendarGutterLg,
+      calendarGutterLg,
+    );
+    return AxiSheetScaffold.scroll(
+      header: AxiSheetHeader(
+        title: const Text('Split task at'),
+        onClose: () => Navigator.of(context).maybePop(),
+        padding: const EdgeInsets.fromLTRB(
+          calendarGutterLg,
+          calendarGutterLg,
+          calendarGutterLg,
+          calendarInsetMd,
         ),
       ),
+      bodyPadding: sheetPadding,
+      children: [
+        DeadlinePickerField(
+          value: _selected,
+          onChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            setState(() {
+              _selected = _clamp(value);
+            });
+          },
+          placeholder: 'Select split time',
+          showStatusColors: false,
+          minDate: widget.minTime,
+          maxDate: widget.maxTime,
+        ),
+        const SizedBox(height: calendarGutterLg),
+        TaskFormActionsRow(
+          padding: EdgeInsets.zero,
+          gap: 12,
+          children: [
+            Expanded(
+              child: TaskSecondaryButton(
+                label: 'Cancel',
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+            Expanded(
+              child: TaskPrimaryButton(
+                label: 'Split Task',
+                onPressed: _handleSubmit,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
