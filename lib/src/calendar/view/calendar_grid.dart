@@ -194,6 +194,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _suppressNextEmptySlotTap = false;
   bool _hideCompletedScheduled = false;
   int _dateSlideDirection = 0;
+  int? _surfacePointerTrackingId;
+  Offset? _surfacePointerTrackingOrigin;
+  bool _surfacePointerTrackingMoved = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -1522,13 +1525,46 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_shouldTrackTouchHighlight(event.kind)) {
       return;
     }
+    _surfacePointerTrackingId = event.pointer;
+    _surfacePointerTrackingOrigin = event.position;
+    _surfacePointerTrackingMoved = false;
     final DateTime? slot = _slotForGlobalPosition(event.position);
     _updateHoveredSlot(slot);
+  }
+
+  void _handleSurfacePointerMove(PointerMoveEvent event) {
+    if (!_shouldTrackTouchHighlight(event.kind)) {
+      return;
+    }
+    if (_surfacePointerTrackingId != event.pointer) {
+      return;
+    }
+    final Offset? origin = _surfacePointerTrackingOrigin;
+    if (origin == null || _surfacePointerTrackingMoved) {
+      return;
+    }
+    final double distance = (event.position - origin).distance;
+    if (distance > kTouchSlop) {
+      _surfacePointerTrackingMoved = true;
+    }
   }
 
   void _handleSurfacePointerUp(PointerUpEvent event) {
     if (!_shouldTrackTouchHighlight(event.kind)) {
       return;
+    }
+    final bool moved = _surfacePointerTrackingId == event.pointer &&
+        _surfacePointerTrackingMoved;
+    _surfacePointerTrackingId = null;
+    _surfacePointerTrackingOrigin = null;
+    _surfacePointerTrackingMoved = false;
+    if (moved) {
+      _suppressNextEmptySlotTap = true;
+      _taskInteractionController.suppressSurfaceTapOnce();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _suppressNextEmptySlotTap = false;
+      });
     }
     _clearSurfaceHover();
   }
@@ -1537,6 +1573,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_shouldTrackTouchHighlight(event.kind)) {
       return;
     }
+    _surfacePointerTrackingId = null;
+    _surfacePointerTrackingOrigin = null;
+    _surfacePointerTrackingMoved = false;
     _clearSurfaceHover();
   }
 
@@ -3041,7 +3080,7 @@ class _CalendarWeekView extends StatelessWidget {
                       enableHorizontalScroll || needsScroll;
                 }
 
-                return Container(
+                final Widget content = Container(
                   decoration: BoxDecoration(
                     color: calendarBackgroundColor,
                     borderRadius: BorderRadius.zero,
@@ -3062,27 +3101,17 @@ class _CalendarWeekView extends StatelessWidget {
                         padding: EdgeInsets.symmetric(
                           horizontal: horizontalPadding,
                         ),
-                        child: AnimatedBuilder(
-                          animation: gridState._viewTransitionAnimation,
-                          child: _CalendarDayHeaderRow(
-                            gridState: gridState,
-                            weekDates: headerDates,
-                            compact: compact,
-                            isWeekView: isWeekView,
-                            showNavigationControls: showHeaderNavigation,
-                            compactWeekDayWidth: compactWeekDayWidth,
-                            enableHorizontalScroll: enableHorizontalScroll,
-                            horizontalScrollController: enableHorizontalScroll
-                                ? gridState._horizontalHeaderController
-                                : null,
-                          ),
-                          builder: (context, child) {
-                            return _CalendarDateSlideTransition(
-                              animation: gridState._viewTransitionAnimation,
-                              direction: gridState._dateSlideDirection,
-                              child: child ?? const SizedBox.shrink(),
-                            );
-                          },
+                        child: _CalendarDayHeaderRow(
+                          gridState: gridState,
+                          weekDates: headerDates,
+                          compact: compact,
+                          isWeekView: isWeekView,
+                          showNavigationControls: showHeaderNavigation,
+                          compactWeekDayWidth: compactWeekDayWidth,
+                          enableHorizontalScroll: enableHorizontalScroll,
+                          horizontalScrollController: enableHorizontalScroll
+                              ? gridState._horizontalHeaderController
+                              : null,
                         ),
                       ),
                       AnimatedSwitcher(
@@ -3144,24 +3173,15 @@ class _CalendarWeekView extends StatelessWidget {
                             horizontalPadding,
                             0,
                           ),
-                          child: AnimatedBuilder(
-                            animation: gridState._viewTransitionAnimation,
-                            child: DayEventsStrip(
-                              events: selectedDayEvents,
-                              onAdd: () => gridState._openDayEventEditor(
-                                date: gridState.widget.state.selectedDate,
-                              ),
-                              onEdit: (DayEvent event) =>
-                                  gridState._openDayEventEditor(
-                                date: event.normalizedStart,
-                                existing: event,
-                              ),
+                          child: DayEventsStrip(
+                            events: selectedDayEvents,
+                            onAdd: () => gridState._openDayEventEditor(
+                              date: gridState.widget.state.selectedDate,
                             ),
-                            builder: (context, child) =>
-                                _CalendarDateSlideTransition(
-                              animation: gridState._viewTransitionAnimation,
-                              direction: gridState._dateSlideDirection,
-                              child: child ?? const SizedBox.shrink(),
+                            onEdit: (DayEvent event) =>
+                                gridState._openDayEventEditor(
+                              date: event.normalizedStart,
+                              existing: event,
                             ),
                           ),
                         ),
@@ -3186,31 +3206,19 @@ class _CalendarWeekView extends StatelessWidget {
                               child: SingleChildScrollView(
                                 key: gridState._scrollableKey,
                                 controller: gridState._verticalController,
-                                child: AnimatedBuilder(
-                                  animation: gridState._viewTransitionAnimation,
-                                  builder: (context, child) {
-                                    return _CalendarDateSlideTransition(
-                                      animation:
-                                          gridState._viewTransitionAnimation,
-                                      direction: gridState._dateSlideDirection,
-                                      child: _CalendarGridContent(
-                                        gridState: gridState,
-                                        isWeekView: isWeekView,
-                                        weekDates: weekDates,
-                                        compact: compact,
-                                        compactWeekDayWidth:
-                                            compactWeekDayWidth,
-                                        enableHorizontalScroll:
-                                            enableHorizontalScroll,
-                                        horizontalScrollController:
-                                            enableHorizontalScroll
-                                                ? gridState
-                                                    ._horizontalGridController
-                                                : null,
-                                        hoveredSlot: gridState._hoveredSlot,
-                                      ),
-                                    );
-                                  },
+                                child: _CalendarGridContent(
+                                  gridState: gridState,
+                                  isWeekView: isWeekView,
+                                  weekDates: weekDates,
+                                  compact: compact,
+                                  compactWeekDayWidth: compactWeekDayWidth,
+                                  enableHorizontalScroll:
+                                      enableHorizontalScroll,
+                                  horizontalScrollController:
+                                      enableHorizontalScroll
+                                          ? gridState._horizontalGridController
+                                          : null,
+                                  hoveredSlot: gridState._hoveredSlot,
                                 ),
                               ),
                             );
@@ -3219,6 +3227,12 @@ class _CalendarWeekView extends StatelessWidget {
                       ),
                     ],
                   ),
+                );
+
+                return _CalendarDateSlideTransition(
+                  animation: gridState._viewTransitionAnimation,
+                  direction: gridState._dateSlideDirection,
+                  child: content,
                 );
               },
             );
@@ -3601,6 +3615,7 @@ class _CalendarGridContent extends StatelessWidget {
 
     final Widget highlightSurface = Listener(
       onPointerDown: gridState._handleSurfacePointerDown,
+      onPointerMove: gridState._handleSurfacePointerMove,
       onPointerUp: gridState._handleSurfacePointerUp,
       onPointerCancel: gridState._handleSurfacePointerCancel,
       child: menuSurface,
