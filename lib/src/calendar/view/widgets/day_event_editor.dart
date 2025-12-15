@@ -108,160 +108,179 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final colors = context.colorScheme;
     final TextStyle titleStyle = calendarTitleTextStyle.copyWith(fontSize: 18);
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final bool keyboardOpen = keyboardInset > safeBottom;
     final double scrollBottomPadding = calendarGutterMd + keyboardInset;
+    final Widget actions = ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _titleController,
+      builder: (context, value, _) {
+        final bool canSubmit = value.text.trim().isNotEmpty;
+        return TaskFormActionsRow(
+          includeTopBorder: true,
+          gap: calendarGutterSm,
+          padding: const EdgeInsets.fromLTRB(
+            calendarGutterLg,
+            calendarGutterMd,
+            calendarGutterLg,
+            calendarGutterMd,
+          ),
+          children: [
+            const Spacer(),
+            if (isEditing)
+              TaskDestructiveButton(
+                label: 'Delete',
+                icon: Icons.delete_outline,
+                onPressed: () => Navigator.of(context).pop(
+                  const DayEventEditorResult.deleted(),
+                ),
+              ),
+            TaskSecondaryButton(
+              label: context.l10n.commonCancel,
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            TaskPrimaryButton(
+              label: isEditing ? 'Save' : 'Add',
+              onPressed: canSubmit ? _submit : null,
+            ),
+          ],
+        );
+      },
+    );
 
-    return Form(
-      key: _formKey,
-      autovalidateMode: AutovalidateMode.disabled,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarInsetSm,
-            ),
-            child: Row(
-              children: [
-                Text(
-                  isEditing ? 'Edit day event' : 'New day event',
-                  style: titleStyle,
-                ),
-                const Spacer(),
-                AxiIconButton(
-                  iconData: Icons.close,
-                  iconSize: 16,
-                  buttonSize: 34,
-                  tapTargetSize: 40,
-                  color: colors.mutedForeground,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.transparent,
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
-              ],
-            ),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                calendarGutterMd,
-                calendarInsetLg,
-                calendarGutterMd,
-                scrollBottomPadding,
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.disabled,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterMd,
+                vertical: calendarInsetSm,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  TaskTitleField(
-                    controller: _titleController,
-                    autofocus: true,
-                    labelText: 'Title',
-                    hintText: 'Birthday, holiday, or note',
-                    focusNode: _titleFocusNode,
-                    onChanged: _handleTitleChanged,
-                    validator: (value) => (value?.trim().isEmpty ?? true)
-                        ? context.l10n.calendarErrorTitleEmptyFriendly
-                        : null,
-                    autovalidateMode: AutovalidateMode.disabled,
+                  Text(
+                    isEditing ? 'Edit day event' : 'New day event',
+                    style: titleStyle,
                   ),
-                  const SizedBox(height: calendarGutterMd),
-                  TaskDescriptionField(
-                    controller: _descriptionController,
-                    hintText: 'Optional details',
-                    borderRadius: calendarBorderRadius,
-                    focusBorderColor: calendarPrimaryColor,
-                    contentPadding: calendarFieldPadding,
-                    minLines: 3,
-                    maxLines: 3,
-                  ),
-                  TaskSectionDivider(
-                    color: colors.border,
-                    verticalPadding: calendarGutterMd,
-                  ),
-                  const TaskSectionHeader(
-                    title: 'Dates',
-                  ),
-                  const SizedBox(height: calendarInsetLg),
-                  ScheduleRangeFields(
-                    start: _startDate,
-                    end: _endDate,
-                    showTimeSelectors: false,
-                    onStartChanged: (DateTime? date) {
-                      if (date == null) {
-                        return;
-                      }
-                      setState(() {
-                        _startDate = date;
-                        if (_endDate.isBefore(date)) {
-                          _endDate = date;
-                        }
-                      });
-                    },
-                    onEndChanged: (DateTime? date) {
-                      if (date == null) {
-                        return;
-                      }
-                      setState(() {
-                        _endDate =
-                            date.isBefore(_startDate) ? _startDate : date;
-                      });
-                    },
-                  ),
-                  TaskSectionDivider(
-                    color: colors.border,
-                    verticalPadding: calendarGutterMd,
-                  ),
-                  ReminderPreferencesField(
-                    value: _reminders,
-                    onChanged: (ReminderPreferences next) {
-                      setState(() {
-                        _reminders = next;
-                      });
-                    },
-                    title: 'Reminder',
-                    anchor: ReminderAnchor.start,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _titleController,
-            builder: (context, value, _) {
-              final bool canSubmit = value.text.trim().isNotEmpty;
-              return TaskFormActionsRow(
-                includeTopBorder: true,
-                gap: calendarGutterSm,
-                padding: const EdgeInsets.fromLTRB(
-                  calendarGutterLg,
-                  calendarGutterMd,
-                  calendarGutterLg,
-                  calendarGutterMd,
-                ),
-                children: [
                   const Spacer(),
-                  if (isEditing)
-                    TaskDestructiveButton(
-                      label: 'Delete',
-                      icon: Icons.delete_outline,
-                      onPressed: () => Navigator.of(context).pop(
-                        const DayEventEditorResult.deleted(),
-                      ),
-                    ),
-                  TaskSecondaryButton(
-                    label: context.l10n.commonCancel,
+                  AxiIconButton(
+                    iconData: Icons.close,
+                    iconSize: 16,
+                    buttonSize: 34,
+                    tapTargetSize: 40,
+                    color: colors.mutedForeground,
+                    backgroundColor: Colors.transparent,
+                    borderColor: Colors.transparent,
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
-                  TaskPrimaryButton(
-                    label: isEditing ? 'Save' : 'Add',
-                    onPressed: canSubmit ? _submit : null,
-                  ),
                 ],
-              );
-            },
-          ),
-        ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  calendarGutterMd,
+                  calendarInsetLg,
+                  calendarGutterMd,
+                  scrollBottomPadding,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TaskTitleField(
+                      controller: _titleController,
+                      autofocus: true,
+                      labelText: 'Title',
+                      hintText: 'Birthday, holiday, or note',
+                      focusNode: _titleFocusNode,
+                      onChanged: _handleTitleChanged,
+                      validator: (value) => (value?.trim().isEmpty ?? true)
+                          ? context.l10n.calendarErrorTitleEmptyFriendly
+                          : null,
+                      autovalidateMode: AutovalidateMode.disabled,
+                    ),
+                    const SizedBox(height: calendarGutterMd),
+                    TaskDescriptionField(
+                      controller: _descriptionController,
+                      hintText: 'Optional details',
+                      borderRadius: calendarBorderRadius,
+                      focusBorderColor: calendarPrimaryColor,
+                      contentPadding: calendarFieldPadding,
+                      minLines: 3,
+                      maxLines: 3,
+                    ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    const TaskSectionHeader(
+                      title: 'Dates',
+                    ),
+                    const SizedBox(height: calendarInsetLg),
+                    ScheduleRangeFields(
+                      start: _startDate,
+                      end: _endDate,
+                      showTimeSelectors: false,
+                      onStartChanged: (DateTime? date) {
+                        if (date == null) {
+                          return;
+                        }
+                        setState(() {
+                          _startDate = date;
+                          if (_endDate.isBefore(date)) {
+                            _endDate = date;
+                          }
+                        });
+                      },
+                      onEndChanged: (DateTime? date) {
+                        if (date == null) {
+                          return;
+                        }
+                        setState(() {
+                          _endDate =
+                              date.isBefore(_startDate) ? _startDate : date;
+                        });
+                      },
+                    ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    ReminderPreferencesField(
+                      value: _reminders,
+                      onChanged: (ReminderPreferences next) {
+                        setState(() {
+                          _reminders = next;
+                        });
+                      },
+                      title: 'Reminder',
+                      anchor: ReminderAnchor.start,
+                    ),
+                    if (keyboardOpen) ...[
+                      const SizedBox(height: calendarGutterMd),
+                      actions,
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (!keyboardOpen)
+              SafeArea(
+                top: false,
+                bottom: true,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: safeBottom),
+                  child: actions,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

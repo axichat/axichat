@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -274,6 +275,7 @@ class _InlineSyncControls extends StatelessWidget {
     final statusText = _statusTextFor(state);
     final lastSyncTime = state.lastSyncTime;
     final statusColor = _statusColorFor(context, state);
+    final bool showLabels = !ResponsiveHelper.isCompact(context);
 
     return Wrap(
       spacing: calendarGutterSm,
@@ -307,11 +309,13 @@ class _InlineSyncControls extends StatelessWidget {
         _CompactSyncButton(
           label: 'Request',
           icon: LucideIcons.cloudDownload,
+          showLabel: showLabels,
           onPressed: disabled ? null : onRequestSync,
         ),
         _CompactSyncButton(
           label: 'Push',
           icon: LucideIcons.cloudUpload,
+          showLabel: showLabels,
           onPressed: disabled ? null : onPushSync,
         ),
         CalendarTransferMenuButton(
@@ -323,6 +327,7 @@ class _InlineSyncControls extends StatelessWidget {
           _CompactSyncButton(
             label: 'Retry',
             icon: LucideIcons.refreshCcw,
+            showLabel: showLabels,
             onPressed: onRetrySync,
           ),
       ],
@@ -385,27 +390,42 @@ class _CompactSyncButton extends StatelessWidget {
   const _CompactSyncButton({
     required this.label,
     required this.icon,
+    required this.showLabel,
     this.onPressed,
   });
 
   final String label;
   final IconData icon;
+  final bool showLabel;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final Widget content = showLabel
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16),
+              const SizedBox(width: 6),
+              Text(label),
+            ],
+          )
+        : Icon(icon, size: 16);
     final button = ShadButton.outline(
       onPressed: onPressed,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 6),
-          Text(label),
-        ],
+      child: content,
+    );
+    if (showLabel) {
+      return button.withTapBounce(enabled: onPressed != null);
+    }
+    return AxiTooltip(
+      builder: (_) => Text(label),
+      child: Semantics(
+        label: label,
+        button: true,
+        child: button.withTapBounce(enabled: onPressed != null),
       ),
     );
-    return button.withTapBounce(enabled: onPressed != null);
   }
 }

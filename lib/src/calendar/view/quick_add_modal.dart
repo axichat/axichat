@@ -164,7 +164,8 @@ class _QuickAddModalState extends State<QuickAddModal>
   Widget build(BuildContext context) {
     if (widget.surface == QuickAddModalSurface.bottomSheet) {
       return SafeArea(
-        top: false,
+        top: true,
+        bottom: false,
         child: Form(
           key: _formKey,
           child: _QuickAddModalContent(
@@ -256,14 +257,15 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   double _quickAddActionInset(BuildContext context) {
-    final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final mediaQuery = MediaQuery.of(context);
+    final double keyboardInset = mediaQuery.viewInsets.bottom;
     if (keyboardInset <= 0) {
       return calendarGutterLg;
     }
-    if (widget.surface == QuickAddModalSurface.bottomSheet) {
-      return calendarGutterSm;
-    }
-    return keyboardInset + calendarGutterSm;
+    final double safeBottom = mediaQuery.viewPadding.bottom;
+    final double inset =
+        keyboardInset > safeBottom ? keyboardInset - safeBottom : 0;
+    return calendarGutterSm + inset;
   }
 
   AutovalidateMode get _titleAutovalidateMode => AutovalidateMode.disabled;
@@ -796,7 +798,10 @@ class _QuickAddModalContent extends StatelessWidget {
     final responsive = ResponsiveHelper.spec(context);
     final double maxWidth =
         responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final mediaQuery = MediaQuery.of(context);
+    final double keyboardInset = mediaQuery.viewInsets.bottom;
+    final double safeBottom = mediaQuery.viewPadding.bottom;
+    final bool keyboardOpen = isSheet && keyboardInset > safeBottom;
     final EdgeInsets contentPadding =
         responsive.contentPadding.resolve(Directionality.of(context));
     final EdgeInsets scrollPadding = isSheet
@@ -811,6 +816,19 @@ class _QuickAddModalContent extends StatelessWidget {
         ? Theme.of(context).colorScheme.surface
         : calendarContainerColor;
     final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
+    final Widget actions = ValueListenableBuilder<TextEditingValue>(
+      valueListenable: taskNameController,
+      builder: (context, value, _) {
+        final bool canSubmit = titleValidator(value.text) == null;
+        return _QuickAddActions(
+          formController: formController,
+          onCancel: onClose,
+          onSubmit: onTaskSubmit,
+          canSubmit: canSubmit,
+        );
+      },
+    );
+
     Widget shell = LayoutBuilder(
       builder: (context, constraints) {
         final double resolvedMaxHeight = isSheet && constraints.hasBoundedHeight
@@ -965,33 +983,27 @@ class _QuickAddModalContent extends StatelessWidget {
                           paths: queuedPaths,
                           onRemovePath: onRemoveQueuedPath,
                         ),
+                        if (keyboardOpen) ...[
+                          const SizedBox(height: calendarGutterMd),
+                          actions,
+                        ],
                       ],
                     ),
                   ),
                 ),
-                AnimatedPadding(
-                  duration: baseAnimationDuration,
-                  curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.only(
-                    bottom: actionInsetBuilder(context),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: taskNameController,
-                      builder: (context, value, _) {
-                        final bool canSubmit =
-                            titleValidator(value.text) == null;
-                        return _QuickAddActions(
-                          formController: formController,
-                          onCancel: onClose,
-                          onSubmit: onTaskSubmit,
-                          canSubmit: canSubmit,
-                        );
-                      },
+                if (!keyboardOpen)
+                  AnimatedPadding(
+                    duration: baseAnimationDuration,
+                    curve: Curves.easeOutCubic,
+                    padding: EdgeInsets.only(
+                      bottom: actionInsetBuilder(context),
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      bottom: true,
+                      child: actions,
                     ),
                   ),
-                ),
               ],
             ),
           ),

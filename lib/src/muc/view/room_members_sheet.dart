@@ -703,6 +703,34 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final bool keyboardOpen = keyboardInset > safeBottom;
+    final Widget actions = Row(
+      children: [
+        ShadButton.outline(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.commonCancel),
+        ).withTapBounce(),
+        const SizedBox(width: 8),
+        ShadButton(
+          onPressed: _recipients.isEmpty
+              ? null
+              : () {
+                  final invitees = _recipients
+                      .where((recipient) => recipient.included)
+                      .map(
+                        (recipient) =>
+                            recipient.target.address ??
+                            recipient.target.chat?.jid,
+                      )
+                      .whereType<String>()
+                      .toList();
+                  Navigator.of(context).pop(invitees);
+                },
+          child: Text(l10n.mucSendInvites),
+        ).withTapBounce(),
+      ],
+    );
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.only(
@@ -748,39 +776,25 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                       horizontalPadding: _inviteSheetHorizontalPadding,
                     ),
                     const SizedBox(height: _inviteSheetSectionSpacing),
+                    if (keyboardOpen) ...[
+                      actions,
+                      const SizedBox(height: _inviteSheetSectionSpacing),
+                    ],
                   ],
                 ),
               ),
             ),
-            Padding(
-              padding: _inviteSheetActionsPadding,
-              child: Row(
-                children: [
-                  ShadButton.outline(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(l10n.commonCancel),
-                  ).withTapBounce(),
-                  const SizedBox(width: 8),
-                  ShadButton(
-                    onPressed: _recipients.isEmpty
-                        ? null
-                        : () {
-                            final invitees = _recipients
-                                .where((recipient) => recipient.included)
-                                .map(
-                                  (recipient) =>
-                                      recipient.target.address ??
-                                      recipient.target.chat?.jid,
-                                )
-                                .whereType<String>()
-                                .toList();
-                            Navigator.of(context).pop(invitees);
-                          },
-                    child: Text(l10n.mucSendInvites),
-                  ).withTapBounce(),
-                ],
+            if (!keyboardOpen)
+              SafeArea(
+                top: false,
+                bottom: true,
+                child: Padding(
+                  padding: _inviteSheetActionsPadding.copyWith(
+                    bottom: _inviteSheetActionsPadding.bottom + safeBottom,
+                  ),
+                  child: actions,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -850,6 +864,22 @@ class _NicknameSheetState extends State<_NicknameSheet> {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final bool keyboardOpen = keyboardInset > safeBottom;
+    final Widget actions = Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        ShadButton.outline(
+          onPressed: widget.onCancel,
+          child: Text(l10n.commonCancel),
+        ).withTapBounce(),
+        const SizedBox(width: 8),
+        ShadButton(
+          onPressed: () => widget.onSubmit(widget.controller.text.trim()),
+          child: Text(l10n.mucUpdateNickname),
+        ).withTapBounce(),
+      ],
+    );
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -888,21 +918,20 @@ class _NicknameSheetState extends State<_NicknameSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              ShadButton.outline(
-                onPressed: widget.onCancel,
-                child: Text(l10n.commonCancel),
-              ).withTapBounce(),
-              const SizedBox(width: 8),
-              ShadButton(
-                onPressed: () => widget.onSubmit(widget.controller.text.trim()),
-                child: Text(l10n.mucUpdateNickname),
-              ).withTapBounce(),
-            ],
-          ),
+          if (keyboardOpen) ...[
+            const SizedBox(height: 12),
+            actions,
+          ] else ...[
+            const SizedBox(height: 12),
+            SafeArea(
+              top: false,
+              bottom: true,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: safeBottom),
+                child: actions,
+              ),
+            ),
+          ],
         ],
       ),
     );
