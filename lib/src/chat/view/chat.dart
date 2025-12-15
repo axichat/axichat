@@ -156,7 +156,9 @@ const _reactionManagerPadding = EdgeInsets.symmetric(
 );
 const _reactionManagerShadowGap = 16.0;
 const _selectionHeadroomTolerance = 1.0;
+// ignore: unused_element
 const _selectionDismissMoveAllowance = 36.0;
+// ignore: unused_element
 const _selectionDismissTapAllowance = 48.0;
 final _selectionSpacerTimestamp =
     DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
@@ -666,10 +668,6 @@ class _ChatState extends State<Chat> {
   bool _selectionAutoscrollInProgress = false;
   double _selectionAutoscrollAccumulated = 0.0;
   bool _selectionControlsMeasurementPending = false;
-  int? _dismissPointer;
-  Offset? _dismissPointerDownPosition;
-  bool _dismissPointerMoved = false;
-  double? _dismissPointerScrollOffset;
   var _sendingAttachment = false;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
@@ -1045,56 +1043,13 @@ class _ChatState extends State<Chat> {
     return true;
   }
 
-  void _handlePointerDown(PointerDownEvent event) {
-    if (_selectedMessageId == null) return;
-    _dismissPointer = event.pointer;
-    _dismissPointerDownPosition = event.position;
-    _dismissPointerMoved = false;
-    _dismissPointerScrollOffset =
-        _scrollController.hasClients ? _scrollController.position.pixels : null;
-  }
+  void _handlePointerDown(PointerDownEvent event) {}
 
-  void _handlePointerMove(PointerMoveEvent event) {
-    if (_dismissPointer != event.pointer) return;
-    final origin = _dismissPointerDownPosition;
-    if (origin == null) return;
-    if (!_dismissPointerMoved &&
-        (event.position - origin).distance > _selectionDismissMoveAllowance) {
-      _dismissPointerMoved = true;
-    }
-  }
+  void _handlePointerMove(PointerMoveEvent event) {}
 
-  void _handlePointerUp(PointerUpEvent event) {
-    if (_dismissPointer != event.pointer) return;
-    final origin = _dismissPointerDownPosition;
-    final travel = origin == null ? 0.0 : (event.position - origin).distance;
-    final currentScrollOffset =
-        _scrollController.hasClients ? _scrollController.position.pixels : null;
-    final scrolled = currentScrollOffset != null &&
-        _dismissPointerScrollOffset != null &&
-        (currentScrollOffset - _dismissPointerScrollOffset!).abs() >
-            _selectionDismissScrollAllowance;
-    if (scrolled) {
-      _resetDismissPointer();
-      return;
-    }
-    if (!_dismissPointerMoved || travel <= _selectionDismissTapAllowance) {
-      _maybeDismissSelection(event.position);
-    }
-    _resetDismissPointer();
-  }
+  void _handlePointerUp(PointerUpEvent event) {}
 
-  void _handlePointerCancel(PointerCancelEvent event) {
-    if (_dismissPointer != event.pointer) return;
-    _resetDismissPointer();
-  }
-
-  void _resetDismissPointer() {
-    _dismissPointer = null;
-    _dismissPointerDownPosition = null;
-    _dismissPointerMoved = false;
-    _dismissPointerScrollOffset = null;
-  }
+  void _handlePointerCancel(PointerCancelEvent event) {}
 
   void _ensureRecipientBarHeightCleared() {
     // No-op now that recipient bar height is derived from layout constraints.
@@ -1615,6 +1570,7 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  // ignore: unused_element
   void _maybeDismissSelection(Offset globalPosition) {
     final selectedId = _selectedMessageId;
     if (selectedId == null) return;
@@ -1664,7 +1620,6 @@ class _ChatState extends State<Chat> {
     if (_selectedMessageId == messageId) {
       _clearMessageSelection();
     } else {
-      _resetDismissPointer();
       _selectMessage(messageId);
     }
   }
@@ -2224,12 +2179,9 @@ class _ChatState extends State<Chat> {
           });
         }
         final showToast = ShadToaster.maybeOf(context)?.show;
-        return Listener(
+        return GestureDetector(
           behavior: HitTestBehavior.translucent,
-          onPointerDown: _handlePointerDown,
-          onPointerMove: _handlePointerMove,
-          onPointerUp: _handlePointerUp,
-          onPointerCancel: _handlePointerCancel,
+          onTapUp: (details) => _maybeDismissSelection(details.globalPosition),
           child: MultiBlocListener(
             listeners: [
               BlocListener<ChatBloc, ChatState>(
