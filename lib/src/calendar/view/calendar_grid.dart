@@ -193,6 +193,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _dragSessionNotified = false;
   bool _suppressNextEmptySlotTap = false;
   bool _hideCompletedScheduled = false;
+  int _dateSlideDirection = 0;
 
   @override
   bool get wantKeepAlive => true;
@@ -1112,6 +1113,26 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didUpdateWidget(covariant CalendarGrid<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.state.viewMode != widget.state.viewMode) {
+      _dateSlideDirection = 0;
+    } else if (!_isSameDay(
+      oldWidget.state.selectedDate,
+      widget.state.selectedDate,
+    )) {
+      final DateTime previous = DateTime(
+        oldWidget.state.selectedDate.year,
+        oldWidget.state.selectedDate.month,
+        oldWidget.state.selectedDate.day,
+      );
+      final DateTime next = DateTime(
+        widget.state.selectedDate.year,
+        widget.state.selectedDate.month,
+        widget.state.selectedDate.day,
+      );
+      final int deltaDays = next.difference(previous).inDays;
+      _dateSlideDirection =
+          deltaDays == 0 ? 0 : (deltaDays.isNegative ? -1 : 1);
+    }
     if (_waitingForDayView && widget.state.viewMode == CalendarView.day) {
       _waitingForDayView = false;
     }
@@ -1149,6 +1170,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     _validateActivePopoverTarget(const <String>{});
+  }
+
+  String _slideKeyForState(CalendarState state) {
+    return '${state.viewMode}'
+        '-${state.weekStart.toIso8601String()}'
+        '-${state.weekEnd.toIso8601String()}'
+        '-${state.selectedDate.toIso8601String()}';
   }
 
   double get _timeColumnWidth => _layoutTheme.timeColumnWidth;
@@ -3018,6 +3046,10 @@ class _CalendarWeekView extends StatelessWidget {
                       enableHorizontalScroll || needsScroll;
                 }
 
+                final String dateSlideKey =
+                    gridState._slideKeyForState(gridState.widget.state);
+                final bool shouldAnimateDateShift = !enableHorizontalScroll;
+
                 return Container(
                   decoration: BoxDecoration(
                     color: calendarBackgroundColor,
@@ -3039,17 +3071,23 @@ class _CalendarWeekView extends StatelessWidget {
                         padding: EdgeInsets.symmetric(
                           horizontal: horizontalPadding,
                         ),
-                        child: _CalendarDayHeaderRow(
-                          gridState: gridState,
-                          weekDates: headerDates,
-                          compact: compact,
-                          isWeekView: isWeekView,
-                          showNavigationControls: showHeaderNavigation,
-                          compactWeekDayWidth: compactWeekDayWidth,
-                          enableHorizontalScroll: enableHorizontalScroll,
-                          horizontalScrollController: enableHorizontalScroll
-                              ? gridState._horizontalHeaderController
-                              : null,
+                        child: _CalendarDateSlideSwitcher(
+                          enabled: shouldAnimateDateShift,
+                          direction: gridState._dateSlideDirection,
+                          childKey:
+                              ValueKey<String>('calendar.header-$dateSlideKey'),
+                          child: _CalendarDayHeaderRow(
+                            gridState: gridState,
+                            weekDates: headerDates,
+                            compact: compact,
+                            isWeekView: isWeekView,
+                            showNavigationControls: showHeaderNavigation,
+                            compactWeekDayWidth: compactWeekDayWidth,
+                            enableHorizontalScroll: enableHorizontalScroll,
+                            horizontalScrollController: enableHorizontalScroll
+                                ? gridState._horizontalHeaderController
+                                : null,
+                          ),
                         ),
                       ),
                       AnimatedSwitcher(
@@ -3150,21 +3188,29 @@ class _CalendarWeekView extends StatelessWidget {
                                     return FadeTransition(
                                       opacity:
                                           gridState._viewTransitionAnimation,
-                                      child: _CalendarGridContent(
-                                        gridState: gridState,
-                                        isWeekView: isWeekView,
-                                        weekDates: weekDates,
-                                        compact: compact,
-                                        compactWeekDayWidth:
-                                            compactWeekDayWidth,
-                                        enableHorizontalScroll:
-                                            enableHorizontalScroll,
-                                        horizontalScrollController:
-                                            enableHorizontalScroll
-                                                ? gridState
-                                                    ._horizontalGridController
-                                                : null,
-                                        hoveredSlot: gridState._hoveredSlot,
+                                      child: _CalendarDateSlideSwitcher(
+                                        enabled: shouldAnimateDateShift,
+                                        direction:
+                                            gridState._dateSlideDirection,
+                                        childKey: ValueKey<String>(
+                                          'calendar.grid-$dateSlideKey',
+                                        ),
+                                        child: _CalendarGridContent(
+                                          gridState: gridState,
+                                          isWeekView: isWeekView,
+                                          weekDates: weekDates,
+                                          compact: compact,
+                                          compactWeekDayWidth:
+                                              compactWeekDayWidth,
+                                          enableHorizontalScroll:
+                                              enableHorizontalScroll,
+                                          horizontalScrollController:
+                                              enableHorizontalScroll
+                                                  ? gridState
+                                                      ._horizontalGridController
+                                                  : null,
+                                          hoveredSlot: gridState._hoveredSlot,
+                                        ),
                                       ),
                                     );
                                   },
@@ -3353,6 +3399,75 @@ class _DayEventBulletRow extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+      ),
+    );
+  }
+}
+
+class _CalendarDateSlideSwitcher extends StatelessWidget {
+  const _CalendarDateSlideSwitcher({
+    required this.enabled,
+    required this.direction,
+    required this.childKey,
+    required this.child,
+  });
+
+  final bool enabled;
+  final int direction;
+  final ValueKey<String> childKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget keyedChild = KeyedSubtree(
+      key: childKey,
+      child: child,
+    );
+
+    if (!enabled || direction == 0) {
+      return keyedChild;
+    }
+
+    final Offset incomingOffset =
+        Offset(direction.isNegative ? -1.0 : 1.0, 0.0);
+    final Offset outgoingOffset =
+        Offset(direction.isNegative ? 1.0 : -1.0, 0.0);
+
+    return ClipRect(
+      child: AnimatedSwitcher(
+        duration: baseAnimationDuration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeOutCubic,
+        layoutBuilder: (currentChild, previousChildren) {
+          return Stack(
+            fit: StackFit.passthrough,
+            children: [
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          );
+        },
+        transitionBuilder: (child, animation) {
+          final bool incoming = child.key == childKey;
+          final Offset begin = incoming ? incomingOffset : outgoingOffset;
+          final Animation<Offset> offsetAnimation = Tween<Offset>(
+            begin: begin,
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            ),
+          );
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: offsetAnimation,
+              child: child,
+            ),
+          );
+        },
+        child: keyedChild,
       ),
     );
   }
