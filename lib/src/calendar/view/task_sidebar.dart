@@ -2336,11 +2336,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final bool shouldUpdateOccurrence =
         storedTask == null && occurrenceTask != null;
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-    final MediaQueryData hostMediaQuery = MediaQuery.of(context);
-    final MediaQueryData viewMedia = MediaQueryData.fromView(View.of(context));
-    final double safeTopInset = viewMedia.viewPadding.top;
-    final double safeBottomInset = viewMedia.viewPadding.bottom;
-
     try {
       await showAdaptiveBottomSheet<void>(
         context: context,
@@ -2348,11 +2343,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         backgroundColor: Colors.transparent,
         showCloseButton: false,
         builder: (sheetContext) {
-          final double availableHeight =
-              hostMediaQuery.size.height - safeTopInset - safeBottomInset;
-          final double maxHeight = availableHeight > 0
-              ? availableHeight
-              : hostMediaQuery.size.height - safeTopInset;
           void closeSheet() {
             _sidebarController.setActivePopoverTaskId(null);
             TaskEditSessionTracker.instance.end(task.id, this);
@@ -2364,7 +2354,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
             child: Builder(
               builder: (context) => EditTaskDropdown<B>(
                 task: displayTask,
-                maxHeight: maxHeight,
+                maxHeight: double.infinity,
                 isSheet: true,
                 inlineActionsBloc: locate<B>(),
                 inlineActionsBuilder: (_) => _sidebarInlineActions(displayTask),

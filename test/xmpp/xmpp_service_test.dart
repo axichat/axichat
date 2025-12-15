@@ -40,7 +40,7 @@ void main() {
       passphrase: '',
       executor: NativeDatabase.memory(),
     );
-    eventStreamController = StreamController<mox.XmppEvent>();
+    eventStreamController = StreamController<mox.XmppEvent>.broadcast();
 
     prepareMockConnection();
 
@@ -190,13 +190,16 @@ void main() {
 
         await pumpEventQueue();
 
-        verify(() => mockNotificationService.sendNotification(
-              title: messageEvent.from.toBare().toString(),
-              body: messageEvent.text,
-              extraConditions: any(named: 'extraConditions'),
-              allowForeground: any(named: 'allowForeground'),
-              payload: any(named: 'payload'),
-            )).called(1);
+        verify(
+          () => mockNotificationService.sendMessageNotification(
+            title: any(named: 'title'),
+            body: messageEvent.text,
+            extraConditions: any(named: 'extraConditions'),
+            allowForeground: any(named: 'allowForeground'),
+            payload: messageEvent.from.toBare().toString(),
+            threadKey: messageEvent.from.toBare().toString(),
+          ),
+        ).called(1);
       },
     );
 
@@ -399,6 +402,13 @@ void main() {
       'Attempting to connect when already connected throws an XmppAlreadyConnectedException.',
       () async {
         await connectSuccessfully(xmppService);
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
 
         await expectLater(
           () => xmppService.connect(

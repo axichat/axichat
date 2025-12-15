@@ -1200,10 +1200,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final bool shouldUpdateOccurrence =
         storedTask == null && occurrenceTask != null;
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-    final MediaQueryData hostMediaQuery = MediaQuery.of(context);
-    final MediaQueryData viewMedia = MediaQueryData.fromView(View.of(context));
-    final double safeTopInset = viewMedia.viewPadding.top;
-    final double safeBottomInset = viewMedia.viewPadding.bottom;
     final locate = context.read;
 
     try {
@@ -1213,17 +1209,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         backgroundColor: Colors.transparent,
         showCloseButton: false,
         builder: (sheetContext) {
-          final double availableHeight =
-              hostMediaQuery.size.height - safeTopInset - safeBottomInset;
-          final double maxHeight = availableHeight > 0
-              ? availableHeight
-              : hostMediaQuery.size.height - safeTopInset;
           return BlocProvider.value(
             value: locate<T>(),
             child: Builder(
               builder: (context) => EditTaskDropdown<T>(
                 task: displayTask,
-                maxHeight: maxHeight,
+                maxHeight: double.infinity,
                 isSheet: true,
                 inlineActionsBloc: locate<T>(),
                 inlineActionsBuilder: (state) {

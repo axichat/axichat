@@ -148,11 +148,11 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
         final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
         final String query = _queryController.text.trim();
         final List<CalendarTask> results = _search(state, query);
-        return ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
-          ),
+        return SafeArea(
+          top: true,
+          bottom: false,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
@@ -204,7 +204,8 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                 onFilterToggled: _toggleFilter,
               ),
               const SizedBox(height: calendarInsetSm),
-              Expanded(
+              Flexible(
+                fit: FlexFit.loose,
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 180),
                   child: results.isEmpty

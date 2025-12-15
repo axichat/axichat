@@ -564,7 +564,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     final mapping = serverLookup[domain];
     if (mapping == null) {
       _log.severe(
-        'No static server mapping for $domain and no host override provided. DNS lookups are disabled.',
+        'No static server mapping and no host override provided. DNS lookups are disabled.',
       );
       return null;
     }
