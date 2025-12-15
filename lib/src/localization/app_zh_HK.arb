@@ -608,8 +608,6 @@
   "commonRemove": "移除",
   "commonSend": "傳送",
   "commonDismiss": "關閉",
-  "commonSend": "傳送",
-  "commonDismiss": "關閉",
   "settingsSectionImportant": "重要",
   "settingsSectionAppearance": "外觀",
   "settingsLanguage": "語言",
@@ -928,5 +926,84 @@
   "sessionCapabilityStatusError": "錯誤",
   "sessionCapabilityStatusOffline": "離線",
   "sessionCapabilityStatusOff": "關閉",
-  "sessionCapabilityStatusSyncing": "同步中"
+  "sessionCapabilityStatusSyncing": "同步中",
+  "authChangePasswordPending": "正在更新密碼...",
+  "authEndpointAdvancedHint": "進階選項",
+  "authEndpointApiPortPlaceholder": "API 埠",
+  "authEndpointDescription": "為此帳戶設定 XMPP/SMTP 端點。",
+  "authEndpointDomainPlaceholder": "網域",
+  "authEndpointPortPlaceholder": "埠",
+  "authEndpointRequireDnssecLabel": "需要 DNSSEC",
+  "authEndpointReset": "重設",
+  "authEndpointSmtpHostPlaceholder": "SMTP 主機",
+  "authEndpointSmtpLabel": "SMTP",
+  "authEndpointTitle": "端點設定",
+  "authEndpointUseDnsLabel": "使用 DNS",
+  "authEndpointUseSrvLabel": "使用 SRV",
+  "authEndpointXmppHostPlaceholder": "XMPP 主機",
+  "authEndpointXmppLabel": "XMPP",
+  "authUnregisterPending": "正在取消註冊...",
+  "calendarAddTaskError": "無法新增任務：{details}",
+  "@calendarAddTaskError": {
+    "placeholders": {
+      "details": {}
+    }
+  },
+  "calendarBackToCalendar": "返回日曆",
+  "calendarCriticalPathAddTask": "新增任務",
+  "calendarCriticalPathAddToTitle": "加入關鍵路徑",
+  "calendarCriticalPathCreatePrompt": "建立關鍵路徑以開始",
+  "calendarCriticalPathDragHint": "拖曳任務以重新排序",
+  "calendarCriticalPathEmptyTasks": "此路徑中暫時沒有任務",
+  "calendarCriticalPathNameEmptyError": "請輸入名稱",
+  "calendarCriticalPathNamePlaceholder": "關鍵路徑名稱",
+  "calendarCriticalPathNamePrompt": "名稱",
+  "calendarCriticalPathTaskOrderTitle": "排列任務",
+  "calendarCriticalPathsAll": "所有路徑",
+  "calendarCriticalPathsEmpty": "暫時沒有關鍵路徑",
+  "calendarCriticalPathsNew": "新增關鍵路徑",
+  "calendarCriticalPathsTitle": "關鍵路徑",
+  "calendarDeleteTaskConfirm": "刪除「{title}」？",
+  "@calendarDeleteTaskConfirm": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarErrorTitleEmptyFriendly": "標題不能為空",
+  "calendarExportFormatIcsSubtitle": "供日曆用戶端使用",
+  "calendarExportFormatIcsTitle": "匯出 .ics",
+  "calendarExportFormatJsonSubtitle": "用於備份或腳本",
+  "calendarExportFormatJsonTitle": "匯出 JSON",
+  "calendarRemovePathConfirm": "要將此任務從「{name}」移除？",
+  "@calendarRemovePathConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarSandboxHint": "先在此規劃任務，再分配到路徑。",
+  "chatAlertHide": "隱藏",
+  "chatAlertIgnore": "忽略",
+  "chatAttachmentTapToLoad": "點擊載入",
+  "chatMessageAddRecipientSuccess": "已新增 {recipient}",
+  "@chatMessageAddRecipientSuccess": {
+    "placeholders": {
+      "recipient": {}
+    }
+  },
+  "chatMessageAddRecipients": "新增收件人",
+  "chatMessageCreateChat": "建立聊天",
+  "chatMessageCreateChatFailure": "無法建立聊天：{reason}",
+  "@chatMessageCreateChatFailure": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "chatMessageInfoDevice": "裝置",
+  "chatMessageInfoError": "錯誤",
+  "chatMessageInfoProtocol": "通訊協定",
+  "chatMessageInfoTimestamp": "時間戳記",
+  "chatMessageOpenChat": "開啟聊天",
+  "chatMessageStatusDisplayed": "已讀",
+  "chatMessageStatusReceived": "已接收",
+  "chatMessageStatusSent": "已傳送"
 }

@@ -2327,4 +2327,184 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get sessionCapabilityStatusSyncing => 'Sincronizando';
+
+  @override
+  String get authChangePasswordPending => 'Actualizando contraseña...';
+
+  @override
+  String get authEndpointAdvancedHint => 'Opciones avanzadas';
+
+  @override
+  String get authEndpointApiPortPlaceholder => 'Puerto de API';
+
+  @override
+  String get authEndpointDescription =>
+      'Configura los endpoints XMPP/SMTP para esta cuenta.';
+
+  @override
+  String get authEndpointDomainPlaceholder => 'Dominio';
+
+  @override
+  String get authEndpointPortPlaceholder => 'Puerto';
+
+  @override
+  String get authEndpointRequireDnssecLabel => 'Requerir DNSSEC';
+
+  @override
+  String get authEndpointReset => 'Restablecer';
+
+  @override
+  String get authEndpointSmtpHostPlaceholder => 'Host SMTP';
+
+  @override
+  String get authEndpointSmtpLabel => 'SMTP';
+
+  @override
+  String get authEndpointTitle => 'Configuración de endpoint';
+
+  @override
+  String get authEndpointUseDnsLabel => 'Usar DNS';
+
+  @override
+  String get authEndpointUseSrvLabel => 'Usar SRV';
+
+  @override
+  String get authEndpointXmppHostPlaceholder => 'Host XMPP';
+
+  @override
+  String get authEndpointXmppLabel => 'XMPP';
+
+  @override
+  String get authUnregisterPending => 'Cancelando registro...';
+
+  @override
+  String calendarAddTaskError(Object details) {
+    return 'No se pudo agregar la tarea: $details';
+  }
+
+  @override
+  String get calendarBackToCalendar => 'Volver al calendario';
+
+  @override
+  String get calendarCriticalPathAddTask => 'Agregar tarea';
+
+  @override
+  String get calendarCriticalPathAddToTitle => 'Agregar a ruta crítica';
+
+  @override
+  String get calendarCriticalPathCreatePrompt =>
+      'Crea una ruta crítica para comenzar';
+
+  @override
+  String get calendarCriticalPathDragHint =>
+      'Arrastra las tareas para reordenar';
+
+  @override
+  String get calendarCriticalPathEmptyTasks =>
+      'No hay tareas en esta ruta todavía';
+
+  @override
+  String get calendarCriticalPathNameEmptyError => 'Ingresa un nombre';
+
+  @override
+  String get calendarCriticalPathNamePlaceholder => 'Nombre de la ruta crítica';
+
+  @override
+  String get calendarCriticalPathNamePrompt => 'Nombre';
+
+  @override
+  String get calendarCriticalPathTaskOrderTitle => 'Ordenar tareas';
+
+  @override
+  String get calendarCriticalPathsAll => 'Todas las rutas';
+
+  @override
+  String get calendarCriticalPathsEmpty => 'Aún no hay rutas críticas';
+
+  @override
+  String get calendarCriticalPathsNew => 'Nueva ruta crítica';
+
+  @override
+  String get calendarCriticalPathsTitle => 'Rutas críticas';
+
+  @override
+  String calendarDeleteTaskConfirm(Object title) {
+    return '¿Eliminar \"$title\"?';
+  }
+
+  @override
+  String get calendarErrorTitleEmptyFriendly =>
+      'El título no puede estar vacío';
+
+  @override
+  String get calendarExportFormatIcsSubtitle =>
+      'Úsalo con clientes de calendario';
+
+  @override
+  String get calendarExportFormatIcsTitle => 'Exportar .ics';
+
+  @override
+  String get calendarExportFormatJsonSubtitle =>
+      'Úsalo para copias de seguridad o scripts';
+
+  @override
+  String get calendarExportFormatJsonTitle => 'Exportar JSON';
+
+  @override
+  String calendarRemovePathConfirm(Object name) {
+    return '¿Quitar esta tarea de \"$name\"?';
+  }
+
+  @override
+  String get calendarSandboxHint =>
+      'Planifica tareas aquí antes de asignarlas a una ruta.';
+
+  @override
+  String get chatAlertHide => 'Ocultar';
+
+  @override
+  String get chatAlertIgnore => 'Ignorar';
+
+  @override
+  String get chatAttachmentTapToLoad => 'Toca para cargar';
+
+  @override
+  String chatMessageAddRecipientSuccess(Object recipient) {
+    return 'Se agregó $recipient';
+  }
+
+  @override
+  String get chatMessageAddRecipients => 'Agregar destinatarios';
+
+  @override
+  String get chatMessageCreateChat => 'Crear chat';
+
+  @override
+  String chatMessageCreateChatFailure(Object reason) {
+    return 'No se pudo crear el chat: $reason';
+  }
+
+  @override
+  String get chatMessageInfoDevice => 'Dispositivo';
+
+  @override
+  String get chatMessageInfoError => 'Error';
+
+  @override
+  String get chatMessageInfoProtocol => 'Protocolo';
+
+  @override
+  String get chatMessageInfoTimestamp => 'Marca de tiempo';
+
+  @override
+  String get chatMessageOpenChat => 'Abrir chat';
+
+  @override
+  String get chatMessageStatusDisplayed => 'Leído';
+
+  @override
+  String get chatMessageStatusReceived => 'Recibido';
+
+  @override
+  String get chatMessageStatusSent => 'Enviado';
 }

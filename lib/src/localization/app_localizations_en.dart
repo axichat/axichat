@@ -2303,4 +2303,179 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionCapabilityStatusSyncing => 'Syncing';
+
+  @override
+  String get authChangePasswordPending => 'Updating password...';
+
+  @override
+  String get authEndpointAdvancedHint => 'Advanced options';
+
+  @override
+  String get authEndpointApiPortPlaceholder => 'API port';
+
+  @override
+  String get authEndpointDescription =>
+      'Configure XMPP/SMTP endpoints for this account.';
+
+  @override
+  String get authEndpointDomainPlaceholder => 'Domain';
+
+  @override
+  String get authEndpointPortPlaceholder => 'Port';
+
+  @override
+  String get authEndpointRequireDnssecLabel => 'Require DNSSEC';
+
+  @override
+  String get authEndpointReset => 'Reset';
+
+  @override
+  String get authEndpointSmtpHostPlaceholder => 'SMTP host';
+
+  @override
+  String get authEndpointSmtpLabel => 'SMTP';
+
+  @override
+  String get authEndpointTitle => 'Endpoint configuration';
+
+  @override
+  String get authEndpointUseDnsLabel => 'Use DNS';
+
+  @override
+  String get authEndpointUseSrvLabel => 'Use SRV';
+
+  @override
+  String get authEndpointXmppHostPlaceholder => 'XMPP host';
+
+  @override
+  String get authEndpointXmppLabel => 'XMPP';
+
+  @override
+  String get authUnregisterPending => 'Unregistering...';
+
+  @override
+  String calendarAddTaskError(Object details) {
+    return 'Could not add task: $details';
+  }
+
+  @override
+  String get calendarBackToCalendar => 'Back to calendar';
+
+  @override
+  String get calendarCriticalPathAddTask => 'Add task';
+
+  @override
+  String get calendarCriticalPathAddToTitle => 'Add to critical path';
+
+  @override
+  String get calendarCriticalPathCreatePrompt =>
+      'Create a critical path to get started';
+
+  @override
+  String get calendarCriticalPathDragHint => 'Drag tasks to reorder';
+
+  @override
+  String get calendarCriticalPathEmptyTasks => 'No tasks in this path yet';
+
+  @override
+  String get calendarCriticalPathNameEmptyError => 'Enter a name';
+
+  @override
+  String get calendarCriticalPathNamePlaceholder => 'Critical path name';
+
+  @override
+  String get calendarCriticalPathNamePrompt => 'Name';
+
+  @override
+  String get calendarCriticalPathTaskOrderTitle => 'Order tasks';
+
+  @override
+  String get calendarCriticalPathsAll => 'All paths';
+
+  @override
+  String get calendarCriticalPathsEmpty => 'No critical paths yet';
+
+  @override
+  String get calendarCriticalPathsNew => 'New critical path';
+
+  @override
+  String get calendarCriticalPathsTitle => 'Critical paths';
+
+  @override
+  String calendarDeleteTaskConfirm(Object title) {
+    return 'Delete \"$title\"?';
+  }
+
+  @override
+  String get calendarErrorTitleEmptyFriendly => 'Title cannot be empty';
+
+  @override
+  String get calendarExportFormatIcsSubtitle => 'Use for calendar clients';
+
+  @override
+  String get calendarExportFormatIcsTitle => 'Export .ics';
+
+  @override
+  String get calendarExportFormatJsonSubtitle => 'Use for backups or scripts';
+
+  @override
+  String get calendarExportFormatJsonTitle => 'Export JSON';
+
+  @override
+  String calendarRemovePathConfirm(Object name) {
+    return 'Remove this task from \"$name\"?';
+  }
+
+  @override
+  String get calendarSandboxHint =>
+      'Plan tasks here before assigning them to a path.';
+
+  @override
+  String get chatAlertHide => 'Hide';
+
+  @override
+  String get chatAlertIgnore => 'Ignore';
+
+  @override
+  String get chatAttachmentTapToLoad => 'Tap to load';
+
+  @override
+  String chatMessageAddRecipientSuccess(Object recipient) {
+    return 'Added $recipient';
+  }
+
+  @override
+  String get chatMessageAddRecipients => 'Add recipients';
+
+  @override
+  String get chatMessageCreateChat => 'Create chat';
+
+  @override
+  String chatMessageCreateChatFailure(Object reason) {
+    return 'Could not create chat: $reason';
+  }
+
+  @override
+  String get chatMessageInfoDevice => 'Device';
+
+  @override
+  String get chatMessageInfoError => 'Error';
+
+  @override
+  String get chatMessageInfoProtocol => 'Protocol';
+
+  @override
+  String get chatMessageInfoTimestamp => 'Timestamp';
+
+  @override
+  String get chatMessageOpenChat => 'Open chat';
+
+  @override
+  String get chatMessageStatusDisplayed => 'Read';
+
+  @override
+  String get chatMessageStatusReceived => 'Received';
+
+  @override
+  String get chatMessageStatusSent => 'Sent';
 }

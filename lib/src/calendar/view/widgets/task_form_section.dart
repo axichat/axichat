@@ -21,7 +21,7 @@ class TaskSectionHeader extends StatelessWidget {
     this.uppercase = true,
   });
 
-    final String title;
+  final String title;
   final EdgeInsetsGeometry padding;
   final TextStyle? textStyle;
   final Widget? trailing;

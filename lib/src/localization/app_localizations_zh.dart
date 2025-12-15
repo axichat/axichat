@@ -2242,6 +2242,178 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sessionCapabilityStatusSyncing => '同步中';
+
+  @override
+  String get authChangePasswordPending => '正在更新密码...';
+
+  @override
+  String get authEndpointAdvancedHint => '高级选项';
+
+  @override
+  String get authEndpointApiPortPlaceholder => 'API 端口';
+
+  @override
+  String get authEndpointDescription => '为此账户配置 XMPP/SMTP 端点。';
+
+  @override
+  String get authEndpointDomainPlaceholder => '域名';
+
+  @override
+  String get authEndpointPortPlaceholder => '端口';
+
+  @override
+  String get authEndpointRequireDnssecLabel => '需要 DNSSEC';
+
+  @override
+  String get authEndpointReset => '重置';
+
+  @override
+  String get authEndpointSmtpHostPlaceholder => 'SMTP 主机';
+
+  @override
+  String get authEndpointSmtpLabel => 'SMTP';
+
+  @override
+  String get authEndpointTitle => '端点配置';
+
+  @override
+  String get authEndpointUseDnsLabel => '使用 DNS';
+
+  @override
+  String get authEndpointUseSrvLabel => '使用 SRV';
+
+  @override
+  String get authEndpointXmppHostPlaceholder => 'XMPP 主机';
+
+  @override
+  String get authEndpointXmppLabel => 'XMPP';
+
+  @override
+  String get authUnregisterPending => '正在注销...';
+
+  @override
+  String calendarAddTaskError(Object details) {
+    return '无法添加任务：$details';
+  }
+
+  @override
+  String get calendarBackToCalendar => '返回日历';
+
+  @override
+  String get calendarCriticalPathAddTask => '添加任务';
+
+  @override
+  String get calendarCriticalPathAddToTitle => '添加到关键路径';
+
+  @override
+  String get calendarCriticalPathCreatePrompt => '创建关键路径以开始';
+
+  @override
+  String get calendarCriticalPathDragHint => '拖动任务以重新排序';
+
+  @override
+  String get calendarCriticalPathEmptyTasks => '此路径中暂时没有任务';
+
+  @override
+  String get calendarCriticalPathNameEmptyError => '请输入名称';
+
+  @override
+  String get calendarCriticalPathNamePlaceholder => '关键路径名称';
+
+  @override
+  String get calendarCriticalPathNamePrompt => '名称';
+
+  @override
+  String get calendarCriticalPathTaskOrderTitle => '排序任务';
+
+  @override
+  String get calendarCriticalPathsAll => '所有路径';
+
+  @override
+  String get calendarCriticalPathsEmpty => '还没有关键路径';
+
+  @override
+  String get calendarCriticalPathsNew => '新建关键路径';
+
+  @override
+  String get calendarCriticalPathsTitle => '关键路径';
+
+  @override
+  String calendarDeleteTaskConfirm(Object title) {
+    return '删除“$title”？';
+  }
+
+  @override
+  String get calendarErrorTitleEmptyFriendly => '标题不能为空';
+
+  @override
+  String get calendarExportFormatIcsSubtitle => '用于日历客户端';
+
+  @override
+  String get calendarExportFormatIcsTitle => '导出 .ics';
+
+  @override
+  String get calendarExportFormatJsonSubtitle => '用于备份或脚本';
+
+  @override
+  String get calendarExportFormatJsonTitle => '导出 JSON';
+
+  @override
+  String calendarRemovePathConfirm(Object name) {
+    return '将此任务从“$name”中移除？';
+  }
+
+  @override
+  String get calendarSandboxHint => '先在此规划任务，再分配到路径。';
+
+  @override
+  String get chatAlertHide => '隐藏';
+
+  @override
+  String get chatAlertIgnore => '忽略';
+
+  @override
+  String get chatAttachmentTapToLoad => '点击加载';
+
+  @override
+  String chatMessageAddRecipientSuccess(Object recipient) {
+    return '已添加 $recipient';
+  }
+
+  @override
+  String get chatMessageAddRecipients => '添加收件人';
+
+  @override
+  String get chatMessageCreateChat => '创建聊天';
+
+  @override
+  String chatMessageCreateChatFailure(Object reason) {
+    return '无法创建聊天：$reason';
+  }
+
+  @override
+  String get chatMessageInfoDevice => '设备';
+
+  @override
+  String get chatMessageInfoError => '错误';
+
+  @override
+  String get chatMessageInfoProtocol => '协议';
+
+  @override
+  String get chatMessageInfoTimestamp => '时间戳';
+
+  @override
+  String get chatMessageOpenChat => '打开聊天';
+
+  @override
+  String get chatMessageStatusDisplayed => '已读';
+
+  @override
+  String get chatMessageStatusReceived => '已接收';
+
+  @override
+  String get chatMessageStatusSent => '已发送';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -4482,4 +4654,176 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get sessionCapabilityStatusSyncing => '同步中';
+
+  @override
+  String get authChangePasswordPending => '正在更新密碼...';
+
+  @override
+  String get authEndpointAdvancedHint => '進階選項';
+
+  @override
+  String get authEndpointApiPortPlaceholder => 'API 埠';
+
+  @override
+  String get authEndpointDescription => '為此帳戶設定 XMPP/SMTP 端點。';
+
+  @override
+  String get authEndpointDomainPlaceholder => '網域';
+
+  @override
+  String get authEndpointPortPlaceholder => '埠';
+
+  @override
+  String get authEndpointRequireDnssecLabel => '需要 DNSSEC';
+
+  @override
+  String get authEndpointReset => '重設';
+
+  @override
+  String get authEndpointSmtpHostPlaceholder => 'SMTP 主機';
+
+  @override
+  String get authEndpointSmtpLabel => 'SMTP';
+
+  @override
+  String get authEndpointTitle => '端點設定';
+
+  @override
+  String get authEndpointUseDnsLabel => '使用 DNS';
+
+  @override
+  String get authEndpointUseSrvLabel => '使用 SRV';
+
+  @override
+  String get authEndpointXmppHostPlaceholder => 'XMPP 主機';
+
+  @override
+  String get authEndpointXmppLabel => 'XMPP';
+
+  @override
+  String get authUnregisterPending => '正在取消註冊...';
+
+  @override
+  String calendarAddTaskError(Object details) {
+    return '無法新增任務：$details';
+  }
+
+  @override
+  String get calendarBackToCalendar => '返回日曆';
+
+  @override
+  String get calendarCriticalPathAddTask => '新增任務';
+
+  @override
+  String get calendarCriticalPathAddToTitle => '加入關鍵路徑';
+
+  @override
+  String get calendarCriticalPathCreatePrompt => '建立關鍵路徑以開始';
+
+  @override
+  String get calendarCriticalPathDragHint => '拖曳任務以重新排序';
+
+  @override
+  String get calendarCriticalPathEmptyTasks => '此路徑中暫時沒有任務';
+
+  @override
+  String get calendarCriticalPathNameEmptyError => '請輸入名稱';
+
+  @override
+  String get calendarCriticalPathNamePlaceholder => '關鍵路徑名稱';
+
+  @override
+  String get calendarCriticalPathNamePrompt => '名稱';
+
+  @override
+  String get calendarCriticalPathTaskOrderTitle => '排列任務';
+
+  @override
+  String get calendarCriticalPathsAll => '所有路徑';
+
+  @override
+  String get calendarCriticalPathsEmpty => '暫時沒有關鍵路徑';
+
+  @override
+  String get calendarCriticalPathsNew => '新增關鍵路徑';
+
+  @override
+  String get calendarCriticalPathsTitle => '關鍵路徑';
+
+  @override
+  String calendarDeleteTaskConfirm(Object title) {
+    return '刪除「$title」？';
+  }
+
+  @override
+  String get calendarErrorTitleEmptyFriendly => '標題不能為空';
+
+  @override
+  String get calendarExportFormatIcsSubtitle => '供日曆用戶端使用';
+
+  @override
+  String get calendarExportFormatIcsTitle => '匯出 .ics';
+
+  @override
+  String get calendarExportFormatJsonSubtitle => '用於備份或腳本';
+
+  @override
+  String get calendarExportFormatJsonTitle => '匯出 JSON';
+
+  @override
+  String calendarRemovePathConfirm(Object name) {
+    return '要將此任務從「$name」移除？';
+  }
+
+  @override
+  String get calendarSandboxHint => '先在此規劃任務，再分配到路徑。';
+
+  @override
+  String get chatAlertHide => '隱藏';
+
+  @override
+  String get chatAlertIgnore => '忽略';
+
+  @override
+  String get chatAttachmentTapToLoad => '點擊載入';
+
+  @override
+  String chatMessageAddRecipientSuccess(Object recipient) {
+    return '已新增 $recipient';
+  }
+
+  @override
+  String get chatMessageAddRecipients => '新增收件人';
+
+  @override
+  String get chatMessageCreateChat => '建立聊天';
+
+  @override
+  String chatMessageCreateChatFailure(Object reason) {
+    return '無法建立聊天：$reason';
+  }
+
+  @override
+  String get chatMessageInfoDevice => '裝置';
+
+  @override
+  String get chatMessageInfoError => '錯誤';
+
+  @override
+  String get chatMessageInfoProtocol => '通訊協定';
+
+  @override
+  String get chatMessageInfoTimestamp => '時間戳記';
+
+  @override
+  String get chatMessageOpenChat => '開啟聊天';
+
+  @override
+  String get chatMessageStatusDisplayed => '已讀';
+
+  @override
+  String get chatMessageStatusReceived => '已接收';
+
+  @override
+  String get chatMessageStatusSent => '已傳送';
 }

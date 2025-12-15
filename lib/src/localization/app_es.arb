@@ -926,5 +926,84 @@
   "sessionCapabilityStatusError": "Error",
   "sessionCapabilityStatusOffline": "Sin conexión",
   "sessionCapabilityStatusOff": "Desactivado",
-  "sessionCapabilityStatusSyncing": "Sincronizando"
+  "sessionCapabilityStatusSyncing": "Sincronizando",
+  "authChangePasswordPending": "Actualizando contraseña...",
+  "authEndpointAdvancedHint": "Opciones avanzadas",
+  "authEndpointApiPortPlaceholder": "Puerto de API",
+  "authEndpointDescription": "Configura los endpoints XMPP/SMTP para esta cuenta.",
+  "authEndpointDomainPlaceholder": "Dominio",
+  "authEndpointPortPlaceholder": "Puerto",
+  "authEndpointRequireDnssecLabel": "Requerir DNSSEC",
+  "authEndpointReset": "Restablecer",
+  "authEndpointSmtpHostPlaceholder": "Host SMTP",
+  "authEndpointSmtpLabel": "SMTP",
+  "authEndpointTitle": "Configuración de endpoint",
+  "authEndpointUseDnsLabel": "Usar DNS",
+  "authEndpointUseSrvLabel": "Usar SRV",
+  "authEndpointXmppHostPlaceholder": "Host XMPP",
+  "authEndpointXmppLabel": "XMPP",
+  "authUnregisterPending": "Cancelando registro...",
+  "calendarAddTaskError": "No se pudo agregar la tarea: {details}",
+  "@calendarAddTaskError": {
+    "placeholders": {
+      "details": {}
+    }
+  },
+  "calendarBackToCalendar": "Volver al calendario",
+  "calendarCriticalPathAddTask": "Agregar tarea",
+  "calendarCriticalPathAddToTitle": "Agregar a ruta crítica",
+  "calendarCriticalPathCreatePrompt": "Crea una ruta crítica para comenzar",
+  "calendarCriticalPathDragHint": "Arrastra las tareas para reordenar",
+  "calendarCriticalPathEmptyTasks": "No hay tareas en esta ruta todavía",
+  "calendarCriticalPathNameEmptyError": "Ingresa un nombre",
+  "calendarCriticalPathNamePlaceholder": "Nombre de la ruta crítica",
+  "calendarCriticalPathNamePrompt": "Nombre",
+  "calendarCriticalPathTaskOrderTitle": "Ordenar tareas",
+  "calendarCriticalPathsAll": "Todas las rutas",
+  "calendarCriticalPathsEmpty": "Aún no hay rutas críticas",
+  "calendarCriticalPathsNew": "Nueva ruta crítica",
+  "calendarCriticalPathsTitle": "Rutas críticas",
+  "calendarDeleteTaskConfirm": "¿Eliminar \"{title}\"?",
+  "@calendarDeleteTaskConfirm": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarErrorTitleEmptyFriendly": "El título no puede estar vacío",
+  "calendarExportFormatIcsSubtitle": "Úsalo con clientes de calendario",
+  "calendarExportFormatIcsTitle": "Exportar .ics",
+  "calendarExportFormatJsonSubtitle": "Úsalo para copias de seguridad o scripts",
+  "calendarExportFormatJsonTitle": "Exportar JSON",
+  "calendarRemovePathConfirm": "¿Quitar esta tarea de \"{name}\"?",
+  "@calendarRemovePathConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarSandboxHint": "Planifica tareas aquí antes de asignarlas a una ruta.",
+  "chatAlertHide": "Ocultar",
+  "chatAlertIgnore": "Ignorar",
+  "chatAttachmentTapToLoad": "Toca para cargar",
+  "chatMessageAddRecipientSuccess": "Se agregó {recipient}",
+  "@chatMessageAddRecipientSuccess": {
+    "placeholders": {
+      "recipient": {}
+    }
+  },
+  "chatMessageAddRecipients": "Agregar destinatarios",
+  "chatMessageCreateChat": "Crear chat",
+  "chatMessageCreateChatFailure": "No se pudo crear el chat: {reason}",
+  "@chatMessageCreateChatFailure": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "chatMessageInfoDevice": "Dispositivo",
+  "chatMessageInfoError": "Error",
+  "chatMessageInfoProtocol": "Protocolo",
+  "chatMessageInfoTimestamp": "Marca de tiempo",
+  "chatMessageOpenChat": "Abrir chat",
+  "chatMessageStatusDisplayed": "Leído",
+  "chatMessageStatusReceived": "Recibido",
+  "chatMessageStatusSent": "Enviado"
 }
