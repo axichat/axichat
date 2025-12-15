@@ -2,6 +2,20 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models.dart';
 
+class DemoAttachmentAsset {
+  const DemoAttachmentAsset({
+    required this.id,
+    required this.assetPath,
+    required this.fileName,
+    required this.mimeType,
+  });
+
+  final String id;
+  final String assetPath;
+  final String fileName;
+  final String mimeType;
+}
+
 class DemoContactAvatar {
   const DemoContactAvatar({
     required this.assetPath,
@@ -17,11 +31,13 @@ class DemoChatScript {
     required this.chat,
     required List<Message> messages,
     this.roomState,
+    this.attachments = const <DemoAttachmentAsset>[],
   }) : messages = List<Message>.of(messages);
 
   final Chat chat;
   final List<Message> messages;
   final RoomState? roomState;
+  final List<DemoAttachmentAsset> attachments;
 }
 
 class DemoChats {
@@ -67,6 +83,22 @@ class DemoChats {
   static Map<String, DemoContactAvatar> avatarAssets() =>
       Map<String, DemoContactAvatar>.unmodifiable(_avatars);
 
+  static const DemoAttachmentAsset groupAttachment = DemoAttachmentAsset(
+    id: 'demo-abstract18',
+    assetPath: 'assets/images/avatars/abstract/abstract18.png',
+    fileName: 'abstract18.png',
+    mimeType: 'image/png',
+  );
+
+  static const DemoAttachmentAsset composerAttachment = DemoAttachmentAsset(
+    id: 'demo-abstract14',
+    assetPath: 'assets/images/avatars/abstract/abstract14.png',
+    fileName: 'abstract14.png',
+    mimeType: 'image/png',
+  );
+
+  static String get groupJid => _groupJid;
+
   static final List<DemoChatScript> _scripts = _buildScripts();
 
   static List<DemoChatScript> scripts({String? openJid}) => _scripts
@@ -75,6 +107,7 @@ class DemoChats {
           chat: script.chat.copyWith(open: script.chat.jid == openJid),
           messages: script.messages,
           roomState: script.roomState,
+          attachments: List<DemoAttachmentAsset>.of(script.attachments),
         ),
       )
       .toList();
@@ -345,6 +378,18 @@ class DemoChats {
     };
 
     final groupMessages = [
+      Message(
+        stanzaID: 'demo-group-7',
+        senderJid: '$groupJid/Franklin',
+        chatJid: groupJid,
+        body: '',
+        timestamp: now.subtract(const Duration(minutes: 2)),
+        occupantID: '$groupJid/Franklin',
+        acked: true,
+        received: true,
+        displayed: true,
+        fileMetadataID: groupAttachment.id,
+      ),
       message(
         stanzaId: 'demo-group-6',
         senderJid: '$groupJid/Hamilton',
@@ -460,6 +505,7 @@ class DemoChats {
       DemoChatScript(
         chat: groupChat,
         messages: groupMessages,
+        attachments: const [groupAttachment],
         roomState: RoomState(
           roomJid: groupJid,
           occupants: roomOccupants,

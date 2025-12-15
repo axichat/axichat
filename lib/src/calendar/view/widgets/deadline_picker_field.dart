@@ -13,8 +13,6 @@ typedef DeadlineChanged = void Function(DateTime? value);
 
 const double _deadlinePickerOverlayWidth = 320.0;
 const double _deadlinePickerDropdownMinWidth = 320.0;
-const double _deadlinePickerSheetMaxWidth = 560.0;
-const double _deadlinePickerSheetMinWidth = 0.0;
 
 class _AttachAwareScrollController extends ScrollController {
   _AttachAwareScrollController({
@@ -276,7 +274,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       await showAdaptiveBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        backgroundColor: Colors.transparent,
         surfacePadding: EdgeInsets.zero,
         builder: (sheetContext) {
           return StatefulBuilder(
@@ -411,6 +408,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 onCancel: handleCancel,
                 onClear: _currentValue != null ? handleClear : null,
                 onDone: closeSheet,
+                includeBottomSafeArea: true,
               );
 
               return LayoutBuilder(
@@ -422,26 +420,15 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                       availableHeight.isFinite && availableHeight > 0
                           ? math.min(desiredHeight, availableHeight)
                           : desiredHeight;
-                  return Align(
-                    alignment: Alignment.bottomCenter,
-                    heightFactor: 1,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: _deadlinePickerSheetMaxWidth,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(calendarGutterLg),
-                        child: _DeadlineDropdownSurface(
-                          maxHeight: maxHeight,
-                          dropdownKey: _dropdownKey,
-                          minWidth: _deadlinePickerSheetMinWidth,
-                          showTimeSelectors: widget.showTimeSelectors,
-                          monthHeader: header,
-                          calendarGrid: calendarGrid,
-                          timeSelectors: timeSelectors,
-                          actions: actions,
-                        ),
-                      ),
+                  return Padding(
+                    padding: const EdgeInsets.all(calendarGutterLg),
+                    child: _DeadlineSheetContent(
+                      maxHeight: maxHeight,
+                      showTimeSelectors: widget.showTimeSelectors,
+                      monthHeader: header,
+                      calendarGrid: calendarGrid,
+                      timeSelectors: timeSelectors,
+                      actions: actions,
                     ),
                   );
                 },
@@ -1087,6 +1074,91 @@ class _DeadlineDropdownSurface extends StatelessWidget {
   }
 }
 
+class _DeadlineSheetContent extends StatelessWidget {
+  const _DeadlineSheetContent({
+    required this.maxHeight,
+    required this.showTimeSelectors,
+    required this.monthHeader,
+    required this.calendarGrid,
+    required this.timeSelectors,
+    required this.actions,
+  });
+
+  final double maxHeight;
+  final bool showTimeSelectors;
+  final Widget monthHeader;
+  final Widget calendarGrid;
+  final Widget timeSelectors;
+  final Widget actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double desiredHeight = showTimeSelectors
+              ? _DeadlinePickerFieldState._timePickerDesiredHeight
+              : _DeadlinePickerFieldState._datePickerExpandedHeight;
+          final bool needsScroll = constraints.maxHeight < desiredHeight;
+
+          if (!needsScroll) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: showTimeSelectors
+                  ? [
+                      monthHeader,
+                      calendarGrid,
+                      timeSelectors,
+                      actions,
+                    ]
+                  : [monthHeader, calendarGrid, actions],
+            );
+          }
+
+          if (showTimeSelectors) {
+            return Column(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                monthHeader,
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    physics: const ClampingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        calendarGrid,
+                        timeSelectors,
+                      ],
+                    ),
+                  ),
+                ),
+                actions,
+              ],
+            );
+          }
+
+          return Column(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              monthHeader,
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.zero,
+                  physics: const ClampingScrollPhysics(),
+                  child: calendarGrid,
+                ),
+              ),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _DeadlineFieldContent extends StatelessWidget {
   const _DeadlineFieldContent({
     required this.placeholder,
@@ -1576,6 +1648,7 @@ class _DeadlinePickerActions extends StatelessWidget {
     required this.onCancel,
     this.onClear,
     required this.onDone,
+    this.includeBottomSafeArea = false,
   });
 
   final bool showTimeSelectors;
@@ -1583,12 +1656,13 @@ class _DeadlinePickerActions extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback? onClear;
   final VoidCallback onDone;
+  final bool includeBottomSafeArea;
 
   @override
   Widget build(BuildContext context) {
     final verticalPadding = showTimeSelectors ? 10.0 : 8.0;
     final horizontalPadding = showTimeSelectors ? 12.0 : 16.0;
-    return Container(
+    final Widget content = Container(
       padding: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
         vertical: verticalPadding,
@@ -1625,6 +1699,15 @@ class _DeadlinePickerActions extends StatelessWidget {
           ),
         ],
       ),
+    );
+    if (!includeBottomSafeArea) {
+      return content;
+    }
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: content,
     );
   }
 }

@@ -704,7 +704,8 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final l10n = context.l10n;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    final bool keyboardOpen = keyboardInset > safeBottom;
+    final double bottomInset =
+        keyboardInset > safeBottom ? keyboardInset : safeBottom;
     final Widget actions = Row(
       children: [
         ShadButton.outline(
@@ -743,7 +744,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
             Flexible(
               fit: FlexFit.loose,
               child: SingleChildScrollView(
-                padding: EdgeInsets.only(bottom: keyboardInset),
+                padding: EdgeInsets.only(bottom: bottomInset),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -776,25 +777,15 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                       horizontalPadding: _inviteSheetHorizontalPadding,
                     ),
                     const SizedBox(height: _inviteSheetSectionSpacing),
-                    if (keyboardOpen) ...[
-                      actions,
-                      const SizedBox(height: _inviteSheetSectionSpacing),
-                    ],
+                    Padding(
+                      padding: _inviteSheetActionsPadding,
+                      child: actions,
+                    ),
+                    const SizedBox(height: _inviteSheetSectionSpacing),
                   ],
                 ),
               ),
             ),
-            if (!keyboardOpen)
-              SafeArea(
-                top: false,
-                bottom: true,
-                child: Padding(
-                  padding: _inviteSheetActionsPadding.copyWith(
-                    bottom: _inviteSheetActionsPadding.bottom + safeBottom,
-                  ),
-                  child: actions,
-                ),
-              ),
           ],
         ),
       ),
@@ -865,7 +856,8 @@ class _NicknameSheetState extends State<_NicknameSheet> {
     final l10n = context.l10n;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    final bool keyboardOpen = keyboardInset > safeBottom;
+    final double bottomInset =
+        keyboardInset > safeBottom ? keyboardInset : safeBottom;
     final Widget actions = Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -888,7 +880,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
           Flexible(
             fit: FlexFit.loose,
             child: SingleChildScrollView(
-              padding: EdgeInsets.only(bottom: keyboardInset),
+              padding: EdgeInsets.only(bottom: bottomInset),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -914,24 +906,12 @@ class _NicknameSheetState extends State<_NicknameSheet> {
                     placeholder: Text(l10n.mucEnterNicknamePlaceholder),
                     onSubmitted: widget.onSubmit,
                   ),
+                  const SizedBox(height: 12),
+                  actions,
                 ],
               ),
             ),
           ),
-          if (keyboardOpen) ...[
-            const SizedBox(height: 12),
-            actions,
-          ] else ...[
-            const SizedBox(height: 12),
-            SafeArea(
-              top: false,
-              bottom: true,
-              child: Padding(
-                padding: EdgeInsets.only(bottom: safeBottom),
-                child: actions,
-              ),
-            ),
-          ],
         ],
       ),
     );
