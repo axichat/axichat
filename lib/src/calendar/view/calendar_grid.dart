@@ -3140,19 +3140,28 @@ class _CalendarWeekView extends StatelessWidget {
                         Padding(
                           padding: EdgeInsets.fromLTRB(
                             horizontalPadding,
-                            calendarInsetMd,
+                            0,
                             horizontalPadding,
-                            calendarInsetMd,
+                            0,
                           ),
-                          child: DayEventsStrip(
-                            events: selectedDayEvents,
-                            onAdd: () => gridState._openDayEventEditor(
-                              date: gridState.widget.state.selectedDate,
+                          child: AnimatedBuilder(
+                            animation: gridState._viewTransitionAnimation,
+                            child: DayEventsStrip(
+                              events: selectedDayEvents,
+                              onAdd: () => gridState._openDayEventEditor(
+                                date: gridState.widget.state.selectedDate,
+                              ),
+                              onEdit: (DayEvent event) =>
+                                  gridState._openDayEventEditor(
+                                date: event.normalizedStart,
+                                existing: event,
+                              ),
                             ),
-                            onEdit: (DayEvent event) =>
-                                gridState._openDayEventEditor(
-                              date: event.normalizedStart,
-                              existing: event,
+                            builder: (context, child) =>
+                                _CalendarDateSlideTransition(
+                              animation: gridState._viewTransitionAnimation,
+                              direction: gridState._dateSlideDirection,
+                              child: child ?? const SizedBox.shrink(),
                             ),
                           ),
                         ),
@@ -3283,9 +3292,11 @@ class DayEventsStrip extends StatelessWidget {
     final bool hasEvents = events.isNotEmpty;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterMd,
-        vertical: calendarInsetSm,
+      padding: const EdgeInsets.fromLTRB(
+        calendarGutterMd,
+        calendarInsetSm,
+        calendarGutterMd,
+        calendarInsetLg,
       ),
       color: colors.card,
       child: Column(
@@ -3757,8 +3768,8 @@ class _CalendarDayHeaderRow extends StatelessWidget {
                 ),
               ),
             ),
+            child: leadingNav,
           ),
-          if (leadingNav != null) leadingNav,
           if (useScrollableWeekHeader)
             Expanded(
               child: SingleChildScrollView(

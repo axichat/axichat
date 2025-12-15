@@ -10,7 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 /// visual design.
 class CalendarLayoutTheme {
   const CalendarLayoutTheme({
-    this.timeColumnWidth = 41.0,
+    this.timeColumnWidth = 44.0,
     this.popoverGap = 12.0,
     this.edgeScrollFastBandHeight = 60.0,
     this.edgeScrollSlowBandHeight = 44.0,
