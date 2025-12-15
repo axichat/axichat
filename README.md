@@ -1,13 +1,20 @@
-<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0 0;">
-  <img src="assets/icons/generated/app_icon_android_foreground.png" width="96" alt="Axichat icon" style="margin:0;" />
-  <span style="font-size:52px;font-weight:700;line-height:1;">Axichat</span>
-  </div>
+<table align="center" border="0" cellpadding="0" cellspacing="0">
+  <tr>
+    <td valign="middle">
+      <img src="assets/icons/generated/app_icon_android_foreground.png" width="96" alt="Axichat icon" />
+    </td>
+    <td width="12"></td>
+    <td valign="middle">
+      <big><big><big><strong>Axichat</strong></big></big></big>
+    </td>
+  </tr>
+</table>
 
-<hr style="max-width:960px;margin:16px auto;border:0;border-top:1px solid #e0e0e0;" />
+<hr />
 
-<p align="center" style="font-size:26px;margin:4px 12px 14px;"><strong>The best of instant messaging, email, and calendar—lovable because of what it has and what it <em><strong>doesn't</strong></em> have.</strong></p>
+<h2 align="center">The best of instant messaging, email, and calendar—lovable because of what it has and what it <em><strong>doesn't</strong></em> have.</h2>
 
-<p align="center" style="margin:0 0 18px;">
+<p align="center">
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
     <img alt="Download the Android APK" src="https://img.shields.io/badge/Download%20the%20APK-1BA5FF?style=for-the-badge&logo=android&logoColor=white" />
   </a>
@@ -21,23 +28,60 @@
 
 ## Screenshots
 
-<div style="width:100%;max-width:1200px;margin:0 auto;display:flex;gap:16px;align-items:stretch;justify-content:center;flex-wrap:nowrap;overflow-x:auto;padding:0 8px;">
-  <div style="flex:1 1 520px;min-width:320px;height:clamp(360px, 60vw, 520px);display:flex;">
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,1fr);gap:12px;width:100%;height:100%;">
-      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" alt="Axichat mobile chat screenshot" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" />
-      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" alt="Axichat mobile email screenshot" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" />
-      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" alt="Axichat mobile calendar screenshot" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" />
-      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" alt="Axichat mobile calendar alt screenshot" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" />
-    </div>
-  </div>
-  <div style="flex:1 1 520px;min-width:320px;height:clamp(360px, 60vw, 520px);display:flex;">
-    <div style="display:flex;flex-direction:column;gap:12px;width:100%;height:100%;">
-      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" alt="Axichat desktop screenshot 1" style="display:block;width:100%;height:33.333%;object-fit:cover;border-radius:12px;" />
-      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" alt="Axichat desktop screenshot 2" style="display:block;width:100%;height:33.333%;object-fit:cover;border-radius:12px;" />
-      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" alt="Axichat calendar screenshot" style="display:block;width:100%;height:33.333%;object-fit:cover;border-radius:12px;" />
-    </div>
-  </div>
-</div>
+<table width="100%" border="0" cellpadding="0" cellspacing="0">
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <table border="0" cellpadding="0" cellspacing="0">
+        <tr>
+          <td>
+            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" height="276" alt="Axichat mobile chat screenshot" />
+          </td>
+          <td width="12"></td>
+          <td>
+            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" height="276" alt="Axichat mobile email screenshot" />
+          </td>
+        </tr>
+        <tr>
+          <td height="12" colspan="3"></td>
+        </tr>
+        <tr>
+          <td>
+            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" height="276" alt="Axichat mobile calendar screenshot" />
+          </td>
+          <td width="12"></td>
+          <td>
+            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" height="276" alt="Axichat mobile calendar alt screenshot" />
+          </td>
+        </tr>
+      </table>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <table border="0" cellpadding="0" cellspacing="0">
+        <tr>
+          <td>
+            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" height="180" alt="Axichat desktop screenshot 1" />
+          </td>
+        </tr>
+        <tr>
+          <td height="12"></td>
+        </tr>
+        <tr>
+          <td>
+            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" height="180" alt="Axichat desktop screenshot 2" />
+          </td>
+        </tr>
+        <tr>
+          <td height="12"></td>
+        </tr>
+        <tr>
+          <td>
+            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" height="180" alt="Axichat calendar screenshot" />
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 
 <p align="center"><strong>If you're proactive and busy, you'll love Axichat both because of what it has and what it <em><strong>doesn't</strong></em> have.</strong></p>
 
@@ -71,7 +115,7 @@
   </tr>
 </table>
 
-<hr style="max-width:960px;margin:24px auto;border:0;border-top:1px solid #e0e0e0;" />
+<hr />
 
 ## Why?
 
@@ -86,7 +130,7 @@
   nothing to hide is no different than saying you don't care about free speech because you have
   nothing to say.” ― Edward Snowden
 
-<hr style="max-width:960px;margin:24px auto;border:0;border-top:1px solid #e0e0e0;" />
+<hr />
 
 ## What?
 
@@ -114,26 +158,26 @@
 - Scheduling, task management, and reminders all in one place with natural language processing (no
   AI) for frictionless use.
 
-<hr style="max-width:960px;margin:24px auto;border:0;border-top:1px solid #e0e0e0;" />
+<hr />
 
 ## When?
 
 - Built in 2025
 
-<hr style="max-width:960px;margin:24px auto;border:0;border-top:1px solid #e0e0e0;" />
+<hr />
 
 ## Where?
 
 - Built in New Zealand
 
-<hr style="max-width:960px;margin:24px auto;border:0;border-top:1px solid #e0e0e0;" />
+<hr />
 
 ## Who?
 
 - For people with a lot to get done
 - For people who want to take control of their communications and time
 
-<hr style="max-width:960px;margin:24px auto;border:0;border-top:1px solid #e0e0e0;" />
+<hr />
 
 ## How?
 
