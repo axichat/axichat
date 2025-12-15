@@ -1047,8 +1047,8 @@ class _ChatState extends State<Chat> {
     // No-op now that recipient bar height is derived from layout constraints.
   }
 
-  Stream<FileMetadataData?> _metadataStreamFor(String id) {
-    final entry = _fileMetadataStreamEntries.putIfAbsent(
+  _FileMetadataStreamEntry _metadataEntryFor(String id) {
+    return _fileMetadataStreamEntries.putIfAbsent(
       id,
       () {
         final entry = _FileMetadataStreamEntry();
@@ -1056,7 +1056,14 @@ class _ChatState extends State<Chat> {
         return entry;
       },
     );
-    return entry.stream;
+  }
+
+  Stream<FileMetadataData?> _metadataStreamFor(String id) {
+    return _metadataEntryFor(id).stream;
+  }
+
+  FileMetadataData? _metadataInitialFor(String id) {
+    return _metadataEntryFor(id).latestOrNull;
   }
 
   bool _shouldAllowAttachment({
@@ -1589,6 +1596,7 @@ class _ChatState extends State<Chat> {
     collect(_reactionManagerKey, padding: 4);
 
     if (hitRegions.isEmpty) {
+      _clearMessageSelection();
       return;
     }
     final tappedInside =
@@ -3809,6 +3817,10 @@ class _ChatState extends State<Chat> {
                                                                   _metadataStreamFor(
                                                                 metadataId,
                                                               ),
+                                                              initialMetadata:
+                                                                  _metadataInitialFor(
+                                                                metadataId,
+                                                              ),
                                                               allowed:
                                                                   allowAttachment,
                                                               onAllowPressed:
@@ -5478,21 +5490,23 @@ final class _FileMetadataStreamEntry {
   Object? _lastError;
   StackTrace? _lastStackTrace;
 
-  Stream<FileMetadataData?> get stream => Stream.multi(
-        (multi) {
-          if (_lastError != null) {
-            multi.addError(_lastError!, _lastStackTrace);
-          } else if (_hasValue) {
-            multi.add(_latest);
-          }
-          final subscription = _controller.stream.listen(
-            multi.add,
-            onError: (Object error, StackTrace stackTrace) =>
-                multi.addError(error, stackTrace),
-          );
-          multi.onCancel = subscription.cancel;
-        },
+  late final Stream<FileMetadataData?> stream = Stream.multi(
+    (multi) {
+      if (_lastError != null) {
+        multi.addError(_lastError!, _lastStackTrace);
+      } else if (_hasValue) {
+        multi.add(_latest);
+      }
+      final subscription = _controller.stream.listen(
+        multi.add,
+        onError: (Object error, StackTrace stackTrace) =>
+            multi.addError(error, stackTrace),
       );
+      multi.onCancel = subscription.cancel;
+    },
+  );
+
+  FileMetadataData? get latestOrNull => _hasValue ? _latest : null;
 
   void attach(Stream<FileMetadataData?> source) {
     if (_subscription != null) return;

@@ -18,59 +18,66 @@ class ChatAttachmentPreview extends StatelessWidget {
     super.key,
     required this.stanzaId,
     required this.metadataStream,
+    this.initialMetadata,
     required this.allowed,
     this.onAllowPressed,
   });
 
   final String stanzaId;
   final Stream<FileMetadataData?> metadataStream;
+  final FileMetadataData? initialMetadata;
   final bool allowed;
   final VoidCallback? onAllowPressed;
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<FileMetadataData?>(
-      stream: metadataStream,
-      builder: (context, snapshot) {
-        final l10n = context.l10n;
-        if (snapshot.connectionState != ConnectionState.active &&
-            snapshot.connectionState != ConnectionState.done) {
-          return const _AttachmentSurface(
-            child: Center(
-              child: SizedBox(
-                height: 32,
-                width: 32,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          );
-        }
-        if (snapshot.hasError) {
-          return _AttachmentError(message: snapshot.error.toString());
-        }
-        final metadata = snapshot.data;
-        if (metadata == null) {
-          return _AttachmentError(
-            message: l10n.chatAttachmentUnavailable,
-          );
-        }
-        if (!allowed) {
-          return _BlockedAttachment(
-            metadata: metadata,
-            onAllowPressed: onAllowPressed,
-          );
-        }
-        if (_isImage(metadata)) {
-          return _ImageAttachment(
+    return RepaintBoundary(
+      child: StreamBuilder<FileMetadataData?>(
+        stream: metadataStream,
+        initialData: initialMetadata,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return _AttachmentError(message: snapshot.error.toString());
+          }
+
+          final l10n = context.l10n;
+          final metadata = snapshot.data;
+          if (metadata == null) {
+            if (snapshot.connectionState != ConnectionState.active &&
+                snapshot.connectionState != ConnectionState.done) {
+              return const _AttachmentSurface(
+                child: Center(
+                  child: SizedBox(
+                    height: 32,
+                    width: 32,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              );
+            }
+            return _AttachmentError(
+              message: l10n.chatAttachmentUnavailable,
+            );
+          }
+
+          if (!allowed) {
+            return _BlockedAttachment(
+              metadata: metadata,
+              onAllowPressed: onAllowPressed,
+            );
+          }
+          if (_isImage(metadata)) {
+            return _ImageAttachment(
+              metadata: metadata,
+              stanzaId: stanzaId,
+            );
+          }
+          return _FileAttachment(
             metadata: metadata,
             stanzaId: stanzaId,
           );
-        }
-        return _FileAttachment(
-          metadata: metadata,
-          stanzaId: stanzaId,
-        );
-      },
+        },
+      ),
     );
   }
 }
