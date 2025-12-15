@@ -24,7 +24,8 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
       return;
     }
 
-    final metadata = payload.findTags('info').map(mox.UserAvatarMetadata.fromXML);
+    final metadata =
+        payload.findTags('info').map(mox.UserAvatarMetadata.fromXML);
     getAttributes().sendEvent(
       mox.UserAvatarUpdatedEvent(
         mox.JID.fromString(event.from),
@@ -50,4 +51,3 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     return const moxlib.Result(true);
   }
 }
-

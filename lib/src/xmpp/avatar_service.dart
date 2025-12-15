@@ -66,7 +66,7 @@ mixin AvatarService on XmppBase {
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
-      mox.UserAvatarManager(),
+      SafeUserAvatarManager(),
       SafeVCardManager(),
     ]);
 

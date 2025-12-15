@@ -9,6 +9,26 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 class SafePubSubManager extends mox.PubSubManager {
   SafePubSubManager();
 
+  Future<moxlib.Result<mox.PubSubError, bool>> publishRaw(
+    mox.JID jid,
+    String node,
+    mox.XMLNode payload, {
+    String? id,
+    mox.PubSubPublishOptions? options,
+    bool autoCreate = false,
+    mox.NodeConfig? createNodeConfig,
+  }) async {
+    return super.publish(
+      jid,
+      node,
+      payload,
+      id: id,
+      options: options,
+      autoCreate: autoCreate,
+      createNodeConfig: createNodeConfig,
+    );
+  }
+
   @override
   Future<moxlib.Result<mox.PubSubError, bool>> publish(
     mox.JID jid,
@@ -19,7 +39,7 @@ class SafePubSubManager extends mox.PubSubManager {
     bool autoCreate = false,
     mox.NodeConfig? createNodeConfig,
   }) async {
-    final result = await super.publish(
+    final result = await publishRaw(
       jid,
       node,
       payload,
@@ -35,4 +55,3 @@ class SafePubSubManager extends mox.PubSubManager {
     return result;
   }
 }
-
