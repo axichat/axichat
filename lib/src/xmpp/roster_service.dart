@@ -1,6 +1,6 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin RosterService on XmppBase, BaseStreamService {
+mixin RosterService on XmppBase, BaseStreamService, MessageService {
   Stream<List<RosterItem>> rosterStream({
     int start = 0,
     int end = basePageItemLimit,
@@ -19,7 +19,7 @@ mixin RosterService on XmppBase, BaseStreamService {
         getFunction: (db) => db.getInvites(start: start, end: end),
       );
 
-  final _log = Logger('RosterService');
+  final _rosterLog = Logger('RosterService');
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -27,21 +27,21 @@ mixin RosterService on XmppBase, BaseStreamService {
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
-        _log.info('Fetching roster...');
+        _rosterLog.info('Fetching roster...');
         await requestRoster();
       })
       ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
         final requester = event.from.toBare().toString();
-        _log.info('Subscription request received');
+        _rosterLog.info('Subscription request received');
         await _dbOp<XmppDatabase>(
           (db) async {
             final item = await db.getRosterItem(requester);
             if (item != null) {
-              _log.info('Accepting subscription request...');
+              _rosterLog.info('Accepting subscription request...');
               try {
                 await _acceptSubscriptionRequest(item);
               } on XmppRosterException catch (error, stackTrace) {
-                _log.severe(
+                _rosterLog.severe(
                   'Failed to auto-accept subscription request',
                   error,
                   stackTrace,
@@ -75,11 +75,13 @@ mixin RosterService on XmppBase, BaseStreamService {
 
     await _dbOp<XmppDatabase>(
       (db) => db.saveRosterItems(items),
+      awaitDatabase: true,
     );
     if (this is AvatarService) {
       (this as AvatarService)
           .scheduleAvatarRefresh(items.map((item) => item.jid));
     }
+    unawaited(syncMessageArchiveOnLogin());
 
     final version = rosterResult.ver;
     if (version != null && version.isNotEmpty) {
@@ -94,15 +96,15 @@ mixin RosterService on XmppBase, BaseStreamService {
   }
 
   Future<void> addToRoster({required String jid, String? title}) async {
-    _log.info('Requesting to add roster entry...');
+    _rosterLog.info('Requesting to add roster entry...');
     if (!await _connection.addToRoster(jid, title: title)) {
       throw XmppRosterException();
     }
 
-    _log.info('Requesting roster subscription...');
+    _rosterLog.info('Requesting roster subscription...');
     if (!await _connection.preApproveSubscription(jid)) {
       if (await _connection.requestSubscription(jid)) return;
-      _log.severe('Failed to request roster subscription.');
+      _rosterLog.severe('Failed to request roster subscription.');
       throw XmppRosterException();
     }
     if (this is AvatarService) {
@@ -111,7 +113,7 @@ mixin RosterService on XmppBase, BaseStreamService {
   }
 
   Future<void> removeFromRoster({required String jid}) async {
-    _log.info('Requesting to remove roster entry...');
+    _rosterLog.info('Requesting to remove roster entry...');
     switch (await _connection.removeFromRoster(jid)) {
       case mox.RosterRemovalResult.okay:
         return;
@@ -151,7 +153,7 @@ mixin RosterService on XmppBase, BaseStreamService {
 
       final requested = await _connection.requestSubscription(item.jid);
       if (!requested) {
-        _log.warning(
+        _rosterLog.warning(
           'Subscription request failed; roster remains ${item.subscription.name}.',
         );
         return;
@@ -161,7 +163,7 @@ mixin RosterService on XmppBase, BaseStreamService {
         (db) => db.updateRosterAsk(jid: item.jid, ask: Ask.subscribe),
       );
     } catch (error, stackTrace) {
-      _log.severe(
+      _rosterLog.severe(
         'Failed to accept subscription request.',
         error,
         stackTrace,
@@ -171,7 +173,7 @@ mixin RosterService on XmppBase, BaseStreamService {
   }
 
   Future<void> rejectSubscriptionRequest(String jid) async {
-    _log.info('Requesting to reject subscription...');
+    _rosterLog.info('Requesting to reject subscription...');
     try {
       final rejected = await _connection.rejectSubscriptionRequest(jid);
 
@@ -184,7 +186,7 @@ mixin RosterService on XmppBase, BaseStreamService {
 
       throw XmppRosterException();
     } catch (error, stackTrace) {
-      _log.severe(
+      _rosterLog.severe(
         'Failed to reject subscription.',
         error,
         stackTrace,
@@ -229,6 +231,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
           updatedJids.add(item.jid);
         }
       },
+      awaitDatabase: true,
     );
     if (owner is AvatarService && updatedJids.isNotEmpty) {
       (owner as AvatarService).scheduleAvatarRefresh(updatedJids);

@@ -138,8 +138,10 @@ class RoomMembersSheet extends StatelessWidget {
       useRootNavigator: false,
       surfacePadding: EdgeInsets.zero,
       dialogMaxWidth: 520,
-      builder: (context) => const _InviteChipsSheet(
-        initialRecipients: [],
+      showCloseButton: false,
+      builder: (context) => _InviteChipsSheet(
+        initialRecipients: const [],
+        onClose: () => Navigator.of(context).maybePop(),
       ),
     );
   }
@@ -160,6 +162,7 @@ class RoomMembersSheet extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       useRootNavigator: false,
+      showCloseButton: false,
       builder: (sheetContext) {
         final pop = Navigator.of(sheetContext).pop;
         return _NicknameSheet(
@@ -664,9 +667,11 @@ String _avatarKey(Occupant occupant) {
 class _InviteChipsSheet extends StatefulWidget {
   const _InviteChipsSheet({
     required this.initialRecipients,
+    required this.onClose,
   });
 
   final List<ComposerRecipient> initialRecipients;
+  final VoidCallback onClose;
 
   @override
   State<_InviteChipsSheet> createState() => _InviteChipsSheetState();
@@ -716,7 +721,21 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                   children: [
                     Padding(
                       padding: _inviteSheetHeaderPadding,
-                      child: Text(l10n.mucInviteUsers, style: titleStyle),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              l10n.mucInviteUsers,
+                              style: titleStyle,
+                            ),
+                          ),
+                          AxiIconButton(
+                            iconData: LucideIcons.x,
+                            tooltip: l10n.commonClose,
+                            onPressed: widget.onClose,
+                          ),
+                        ],
+                      ),
                     ),
                     RecipientChipsBar(
                       recipients: _recipients,
@@ -843,9 +862,20 @@ class _NicknameSheetState extends State<_NicknameSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    l10n.mucChangeNicknameTitle,
-                    style: titleStyle,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.mucChangeNicknameTitle,
+                          style: titleStyle,
+                        ),
+                      ),
+                      AxiIconButton(
+                        iconData: LucideIcons.x,
+                        tooltip: l10n.commonClose,
+                        onPressed: widget.onCancel,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   AxiTextFormField(

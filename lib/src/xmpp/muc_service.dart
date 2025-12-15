@@ -689,6 +689,7 @@ mixin MucService on XmppBase, BaseStreamService {
 
   Future<void> seedDummyRoomData(String roomJid) async {
     final key = _roomKey(roomJid);
+    if (!demoOfflineMode) return;
     if (_leftRooms.contains(key)) return;
     if (_seededDummyRooms.contains(key)) return;
     final messageCount = await _dbOpReturning<XmppDatabase, int>(

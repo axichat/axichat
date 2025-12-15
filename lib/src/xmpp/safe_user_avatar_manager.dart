@@ -8,6 +8,10 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 class SafeUserAvatarManager extends mox.UserAvatarManager {
   SafeUserAvatarManager();
 
+  static const String _metadataTag = 'metadata';
+  static const String _infoTag = 'info';
+  static const int _maxMetadataItems = 1;
+
   @override
   Future<void> onXmppEvent(mox.XmppEvent event) async {
     if (event is! mox.PubSubNotificationEvent) {
@@ -16,22 +20,93 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
 
     if (event.item.node != mox.userAvatarMetadataXmlns) return;
 
-    final payload = event.item.payload;
-    if (payload == null ||
-        payload.tag != 'metadata' ||
-        payload.attributes['xmlns'] != mox.userAvatarMetadataXmlns) {
-      logger.warning('Received invalid user avatar metadata payload.');
+    final fromRaw = event.from.trim();
+    if (fromRaw.isEmpty) return;
+
+    late final mox.JID from;
+    try {
+      from = mox.JID.fromString(fromRaw);
+    } on Exception {
       return;
     }
 
-    final metadata =
-        payload.findTags('info').map(mox.UserAvatarMetadata.fromXML);
-    getAttributes().sendEvent(
-      mox.UserAvatarUpdatedEvent(
-        mox.JID.fromString(event.from),
-        metadata.toList(),
-      ),
+    Future<void> emitFromPayload(mox.XMLNode payload) async {
+      if (payload.tag != _metadataTag ||
+          payload.attributes['xmlns'] != mox.userAvatarMetadataXmlns) {
+        logger.warning('Received invalid user avatar metadata payload.');
+        return;
+      }
+
+      final metadata = payload
+          .findTags(_infoTag)
+          .map(mox.UserAvatarMetadata.fromXML)
+          .toList();
+      getAttributes().sendEvent(
+        mox.UserAvatarUpdatedEvent(
+          from,
+          metadata,
+        ),
+      );
+    }
+
+    if (event.item.payload case final payload?) {
+      await emitFromPayload(payload);
+      return;
+    }
+
+    final pubsub =
+        getAttributes().getManagerById<mox.PubSubManager>(mox.pubsubManager);
+    if (pubsub == null) return;
+
+    final bareFrom = from.toBare();
+    final itemId = event.item.id.trim();
+    if (itemId.isNotEmpty) {
+      final itemResult = await pubsub.getItem(
+        bareFrom,
+        mox.userAvatarMetadataXmlns,
+        itemId,
+      );
+      if (!itemResult.isType<mox.PubSubError>()) {
+        final fetchedPayload = itemResult.get<mox.PubSubItem>().payload;
+        if (fetchedPayload != null) {
+          await emitFromPayload(fetchedPayload);
+          return;
+        }
+      }
+    }
+
+    var itemsResult = await pubsub.getItems(
+      bareFrom,
+      mox.userAvatarMetadataXmlns,
+      maxItems: _maxMetadataItems,
     );
+    if (itemsResult.isType<mox.PubSubError>()) {
+      final error = itemsResult.get<mox.PubSubError>();
+      final shouldRetry = error is mox.EjabberdMaxItemsError ||
+          error is mox.MalformedResponseError ||
+          error is mox.UnknownPubSubError;
+      if (!shouldRetry) return;
+      itemsResult = await pubsub.getItems(
+        bareFrom,
+        mox.userAvatarMetadataXmlns,
+      );
+      if (itemsResult.isType<mox.PubSubError>()) return;
+    }
+
+    final items = itemsResult.get<List<mox.PubSubItem>>();
+    if (items.isEmpty) {
+      getAttributes().sendEvent(
+        mox.UserAvatarUpdatedEvent(
+          from,
+          const <mox.UserAvatarMetadata>[],
+        ),
+      );
+      return;
+    }
+
+    final payload = items.first.payload;
+    if (payload == null) return;
+    await emitFromPayload(payload);
   }
 
   @override

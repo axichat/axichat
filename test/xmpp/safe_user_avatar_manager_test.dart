@@ -82,6 +82,83 @@ void main() {
   );
 
   test(
+    'SafeUserAvatarManager fetches metadata when notification payload is missing',
+    () async {
+      final manager = SafeUserAvatarManager();
+      final sentEvents = <mox.XmppEvent>[];
+      final pubsub = _MockPubSubManager();
+
+      const avatarId = 'avatar-hash';
+      final from = mox.JID.fromString('contact@example.com');
+
+      final payload =
+          (mox.XmlBuilder.withNamespace('metadata', mox.userAvatarMetadataXmlns)
+                ..child(
+                  (mox.XmlBuilder('info')
+                        ..attr('id', avatarId)
+                        ..attr('bytes', '1337')
+                        ..attr('type', 'image/png')
+                        ..attr('width', '128')
+                        ..attr('height', '128'))
+                      .build(),
+                ))
+              .build();
+
+      when(() => pubsub.getItem(from, mox.userAvatarMetadataXmlns, avatarId))
+          .thenAnswer(
+        (_) async => moxlib.Result(
+          mox.PubSubItem(
+            id: avatarId,
+            node: mox.userAvatarMetadataXmlns,
+            payload: payload,
+          ),
+        ),
+      );
+
+      final attributes = mox.XmppManagerAttributes(
+        sendStanza: (_) async => null,
+        sendNonza: (_) {},
+        getManagerById: <T extends mox.XmppManagerBase>(String id) {
+          if (id == mox.pubsubManager) return pubsub as T;
+          return null;
+        },
+        sendEvent: sentEvents.add,
+        getConnectionSettings: () => mox.ConnectionSettings(
+          jid: mox.JID.fromString('user@example.com'),
+          password: 'password',
+        ),
+        getFullJID: () => mox.JID.fromString('user@example.com/resource'),
+        getSocket: () => throw UnimplementedError(),
+        getConnection: () => throw UnimplementedError(),
+        getNegotiatorById:
+            <T extends mox.XmppFeatureNegotiatorBase>(String _) => null,
+      );
+
+      manager.register(attributes);
+
+      const item = mox.PubSubItem(
+        id: avatarId,
+        node: mox.userAvatarMetadataXmlns,
+        payload: null,
+      );
+      final event = mox.PubSubNotificationEvent(
+        item: item,
+        from: from.toString(),
+      );
+
+      await manager.onXmppEvent(event);
+
+      verify(() => pubsub.getItem(from, mox.userAvatarMetadataXmlns, avatarId))
+          .called(1);
+      expect(sentEvents, hasLength(1));
+      expect(sentEvents.single, isA<mox.UserAvatarUpdatedEvent>());
+      final avatarEvent = sentEvents.single as mox.UserAvatarUpdatedEvent;
+      expect(avatarEvent.metadata, hasLength(1));
+      expect(avatarEvent.metadata.single.id, equals(avatarId));
+    },
+  );
+
+  test(
     'SafeUserAvatarManager unsubscribe calls PubSubManager.unsubscribe',
     () async {
       final manager = SafeUserAvatarManager();
