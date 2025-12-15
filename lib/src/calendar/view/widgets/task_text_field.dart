@@ -68,7 +68,7 @@ class TaskTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final double radius = borderRadius ?? 8;
     final Color focusedColor = focusBorderColor ?? calendarPrimaryColor;
-    final Color effectiveFill = fillColor ?? Colors.white;
+    final Color effectiveFill = fillColor ?? calendarContainerColor;
 
     return TextField(
       controller: controller,
@@ -83,30 +83,30 @@ class TaskTextField extends StatelessWidget {
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       style: textStyle ??
-          const TextStyle(
+          TextStyle(
             color: calendarTitleColor,
             fontSize: 14,
           ),
       decoration: InputDecoration(
         labelText: labelText,
         labelStyle: labelStyle ??
-            const TextStyle(
+            TextStyle(
               color: calendarSubtitleColor,
               fontSize: 14,
             ),
         hintText: hintText,
         hintStyle: hintStyle ??
-            const TextStyle(
+            TextStyle(
               color: calendarTimeLabelColor,
               fontSize: 14,
             ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: const BorderSide(color: calendarBorderColor),
+          borderSide: BorderSide(color: calendarBorderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: const BorderSide(color: calendarBorderColor),
+          borderSide: BorderSide(color: calendarBorderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),

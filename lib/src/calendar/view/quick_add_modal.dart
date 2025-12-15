@@ -886,7 +886,7 @@ class _QuickAddModalContent extends StatelessWidget {
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(
+                                      Icon(
                                         Icons.error_outline,
                                         color: calendarDangerColor,
                                         size: 18,
@@ -895,7 +895,7 @@ class _QuickAddModalContent extends StatelessWidget {
                                       Expanded(
                                         child: Text(
                                           formError!,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             color: calendarDangerColor,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -1035,14 +1035,14 @@ class _QuickAddHeader extends StatelessWidget {
         horizontal: calendarGutterLg,
         vertical: calendarGutterMd,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: calendarBorderColor, width: 1),
         ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.add_task,
             color: calendarTitleColor,
             size: 20,
@@ -1058,8 +1058,8 @@ class _QuickAddHeader extends StatelessWidget {
             child: InkWell(
               onTap: onClose,
               borderRadius: BorderRadius.circular(4),
-              child: const Padding(
-                padding: EdgeInsets.all(4),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
                 child: Icon(
                   Icons.close,
                   color: calendarSubtitleColor,
@@ -1124,11 +1124,6 @@ class _QuickAddTaskNameField extends StatelessWidget {
       controller: controller,
       helper: helper,
       contentPadding: padding,
-      textStyle: const TextStyle(
-        fontSize: 14,
-        color: calendarTitleColor,
-      ),
-      suggestionColor: calendarSubtitleColor,
       child: field,
     );
 

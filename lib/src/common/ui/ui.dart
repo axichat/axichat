@@ -96,50 +96,154 @@ const axiGreen = Color(0xff80ffa0);
 class CalendarPalette {
   CalendarPalette._();
 
+  static const double _primaryHoverMix = 0.12;
+  static const double _borderDarkMix = 0.12;
+  static const double _borderLightMix = 0.55;
+  static const double _selectedDayMix = 0.08;
+  static const double _slotHoverMix = 0.12;
+  static const double _sidebarDarkenAlpha = 0.08;
+  static const double _stripedSlotDarkMix = 0.12;
+  static const double _mutedTextAlpha = 0.7;
+
   static Color _primary = const Color(0xFF0969DA);
   static Color _primaryHover = const Color(0xFF0860CA);
 
+  static Color _background = const Color(0xFFFFFFFF);
+  static Color _container = const Color(0xFFFFFFFF);
+  static Color _sidebarBackground = const Color(0xFFF7F8FA);
+  static Color _border = const Color(0xFFE1E4E8);
+  static Color _borderDark = const Color(0xFFD1D5DA);
+  static Color _borderLight = const Color(0xFFF0F0F0);
+  static Color _selectedDay = const Color(0xFFF6F8FA);
+  static Color _slotHover = const Color(0xFFE8F1FF);
+  static Color _stripedSlot = const Color(0xFFFAFBFC);
+
+  static Color _title = const Color(0xFF24292E);
+  static Color _subtitle = const Color(0xFF6A737D);
+  static Color _textLight = const Color(0xFF959DA5);
+  static Color _timeLabel = const Color(0xFF6A737D);
+
+  static Color _success = const Color(0xFF28A745);
+  static Color _danger = const Color(0xFFDC3545);
+  static Color _warning = const Color(0xFFFD7E14);
+  static Color _yellow = const Color(0xFFFFC107);
+  static Color _neutral = const Color(0xFF9CA3AF);
+
   static Color get primary => _primary;
   static Color get primaryHover => _primaryHover;
+
+  static Color get background => _background;
+  static Color get container => _container;
+  static Color get sidebarBackground => _sidebarBackground;
+  static Color get border => _border;
+  static Color get borderDark => _borderDark;
+  static Color get borderLight => _borderLight;
+  static Color get selectedDay => _selectedDay;
+  static Color get slotHover => _slotHover;
+  static Color get stripedSlot => _stripedSlot;
+
+  static Color get title => _title;
+  static Color get subtitle => _subtitle;
+  static Color get textLight => _textLight;
+  static Color get timeLabel => _timeLabel;
+
+  static Color get success => _success;
+  static Color get danger => _danger;
+  static Color get warning => _warning;
+  static Color get yellow => _yellow;
+  static Color get neutral => _neutral;
 
   static void update({
     required ShadColorScheme scheme,
     required Brightness brightness,
   }) {
+    if (brightness == Brightness.light) {
+      _primary = const Color(0xFF0969DA);
+      _primaryHover = const Color(0xFF0860CA);
+
+      _background = const Color(0xFFFFFFFF);
+      _container = const Color(0xFFFFFFFF);
+      _sidebarBackground = const Color(0xFFF7F8FA);
+      _border = const Color(0xFFE1E4E8);
+      _borderDark = const Color(0xFFD1D5DA);
+      _borderLight = const Color(0xFFF0F0F0);
+      _selectedDay = const Color(0xFFF6F8FA);
+      _slotHover = const Color(0xFFE8F1FF);
+      _stripedSlot = const Color(0xFFFAFBFC);
+
+      _title = const Color(0xFF24292E);
+      _subtitle = const Color(0xFF6A737D);
+      _textLight = const Color(0xFF959DA5);
+      _timeLabel = const Color(0xFF6A737D);
+
+      _success = const Color(0xFF28A745);
+      _danger = const Color(0xFFDC3545);
+      _warning = const Color(0xFFFD7E14);
+      _yellow = const Color(0xFFFFC107);
+      _neutral = const Color(0xFF9CA3AF);
+      return;
+    }
+
     _primary = scheme.primary;
-    final mixTarget =
-        brightness == Brightness.dark ? Colors.white : Colors.black;
-    _primaryHover = Color.lerp(_primary, mixTarget, 0.12) ?? _primary;
+    const mixTarget = Colors.white;
+    _primaryHover =
+        Color.lerp(_primary, mixTarget, _primaryHoverMix) ?? _primary;
+
+    _background = scheme.background;
+    _container = scheme.card;
+    _sidebarBackground = Color.alphaBlend(
+      Colors.black.withValues(alpha: _sidebarDarkenAlpha),
+      _background,
+    );
+    _border = scheme.border;
+    _borderDark =
+        Color.lerp(_border, scheme.foreground, _borderDarkMix) ?? _border;
+    _borderLight =
+        Color.lerp(_border, scheme.background, _borderLightMix) ?? _border;
+    _selectedDay =
+        Color.lerp(_container, scheme.primary, _selectedDayMix) ?? _container;
+    _slotHover =
+        Color.lerp(_container, scheme.primary, _slotHoverMix) ?? _container;
+    _stripedSlot =
+        Color.lerp(_background, _container, _stripedSlotDarkMix) ?? _background;
+
+    _title = scheme.foreground;
+    _subtitle = scheme.mutedForeground;
+    _textLight = scheme.mutedForeground.withValues(alpha: _mutedTextAlpha);
+    _timeLabel = scheme.mutedForeground;
+
+    _success = const Color(0xFF28A745);
+    _danger = scheme.destructive;
+    _warning = const Color(0xFFFD7E14);
+    _yellow = const Color(0xFFFFC107);
+    _neutral = scheme.mutedForeground;
   }
 }
 
 Color get calendarPrimaryColor => CalendarPalette.primary;
 Color get calendarPrimaryHoverColor => CalendarPalette.primaryHover;
-// Ultrathink calendar color palette
-const calendarBackgroundColor = Color(0xFFFFFFFF);
-const calendarContainerColor = Color(0xFFFFFFFF);
-const calendarSidebarBackgroundColor = Color(0xFFF7F8FA);
-const calendarBorderColor = Color(0xFFE1E4E8);
-const calendarBorderDarkColor = Color(0xFFD1D5DA);
-const calendarBorderLightColor = Color(0xFFF0F0F0);
-const calendarSelectedDayColor = Color(0xFFF6F8FA);
-const calendarSlotHoverColor = Color(0xFFE8F1FF);
+Color get calendarBackgroundColor => CalendarPalette.background;
+Color get calendarContainerColor => CalendarPalette.container;
+Color get calendarSidebarBackgroundColor => CalendarPalette.sidebarBackground;
+Color get calendarBorderColor => CalendarPalette.border;
+Color get calendarBorderDarkColor => CalendarPalette.borderDark;
+Color get calendarBorderLightColor => CalendarPalette.borderLight;
+Color get calendarSelectedDayColor => CalendarPalette.selectedDay;
+Color get calendarSlotHoverColor => CalendarPalette.slotHover;
+Color get calendarStripedSlotColor => CalendarPalette.stripedSlot;
 
-// Typography colors
-const calendarTitleColor = Color(0xFF24292E);
-const calendarSubtitleColor = Color(0xFF6A737D);
-const calendarTextLightColor = Color(0xFF959DA5);
-const calendarTimeLabelColor = Color(0xFF6A737D);
+Color get calendarTitleColor => CalendarPalette.title;
+Color get calendarSubtitleColor => CalendarPalette.subtitle;
+Color get calendarTextLightColor => CalendarPalette.textLight;
+Color get calendarTimeLabelColor => CalendarPalette.timeLabel;
 
-// Status colors for task priorities
-const calendarSuccessColor = Color(0xFF28A745);
-const calendarDangerColor = Color(0xFFDC3545);
-const calendarWarningColor = Color(0xFFFD7E14);
-const calendarYellowColor = Color(0xFFFFC107);
-const calendarNeutralColor = Color(0xFF9CA3AF);
+Color get calendarSuccessColor => CalendarPalette.success;
+Color get calendarDangerColor => CalendarPalette.danger;
+Color get calendarWarningColor => CalendarPalette.warning;
+Color get calendarYellowColor => CalendarPalette.yellow;
+Color get calendarNeutralColor => CalendarPalette.neutral;
 
-// Sidebar specific colors
-const sidebarBackgroundColor = Color(0xFFF7F8FA);
+Color get sidebarBackgroundColor => CalendarPalette.sidebarBackground;
 
 // Complete shadow system for visual hierarchy
 const calendarLightShadow = [
@@ -192,7 +296,6 @@ const calendarTimeDividerOpacity = 0.3;
 const calendarTodayColumnHighlightOpacity = 0.03;
 const calendarTodaySlotLightOpacity = 0.01;
 const calendarTodaySlotDarkOpacity = 0.02;
-const calendarStripedSlotColor = Color(0xFFFAFBFC);
 const calendarDayHeaderLetterSpacing = 0.5;
 
 // Standard spacing values
@@ -324,53 +427,53 @@ const calendarZoomLabelTextStyle = TextStyle(
 );
 
 // Typography constants - Complete hierarchy system
-const calendarTitleTextStyle = TextStyle(
-  fontSize: 22,
-  fontWeight: FontWeight.w600,
-  color: calendarTitleColor,
-  letterSpacing: -0.4,
-);
+TextStyle get calendarTitleTextStyle => TextStyle(
+      fontSize: 22,
+      fontWeight: FontWeight.w600,
+      color: calendarTitleColor,
+      letterSpacing: -0.4,
+    );
 
-const calendarSubtitleTextStyle = TextStyle(
-  fontSize: 13,
-  fontWeight: FontWeight.w400,
-  color: calendarSubtitleColor,
-  letterSpacing: -0.1,
-);
+TextStyle get calendarSubtitleTextStyle => TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w400,
+      color: calendarSubtitleColor,
+      letterSpacing: -0.1,
+    );
 
-const calendarTimeLabelTextStyle = TextStyle(
-  fontSize: 11,
-  fontWeight: FontWeight.w400,
-  color: calendarTimeLabelColor,
-);
+TextStyle get calendarTimeLabelTextStyle => TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w400,
+      color: calendarTimeLabelColor,
+    );
 
-const calendarMinorTimeLabelTextStyle = TextStyle(
-  fontSize: 9,
-  fontWeight: FontWeight.w500,
-  color: calendarTimeLabelColor,
-);
+TextStyle get calendarMinorTimeLabelTextStyle => TextStyle(
+      fontSize: 9,
+      fontWeight: FontWeight.w500,
+      color: calendarTimeLabelColor,
+    );
 
 // Additional typography hierarchy
-const calendarHeaderTextStyle = TextStyle(
-  fontSize: 16,
-  fontWeight: FontWeight.w600,
-  color: calendarTitleColor,
-  letterSpacing: -0.2,
-);
+TextStyle get calendarHeaderTextStyle => TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: calendarTitleColor,
+      letterSpacing: -0.2,
+    );
 
-const calendarBodyTextStyle = TextStyle(
-  fontSize: 14,
-  fontWeight: FontWeight.w400,
-  color: calendarTitleColor,
-  letterSpacing: -0.1,
-);
+TextStyle get calendarBodyTextStyle => TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w400,
+      color: calendarTitleColor,
+      letterSpacing: -0.1,
+    );
 
-const calendarCaptionTextStyle = TextStyle(
-  fontSize: 12,
-  fontWeight: FontWeight.w500,
-  color: calendarSubtitleColor,
-  letterSpacing: 0.0,
-);
+TextStyle get calendarCaptionTextStyle => TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      color: calendarSubtitleColor,
+      letterSpacing: 0.0,
+    );
 
 // Task-specific typography - updated to match target design
 const taskTitleTextStyle = TextStyle(
@@ -387,27 +490,27 @@ const taskTitleCompactTextStyle = TextStyle(
   letterSpacing: 0.1,
 );
 
-const taskDescriptionTextStyle = TextStyle(
-  fontSize: 13,
-  fontWeight: FontWeight.w400,
-  color: calendarSubtitleColor,
-  letterSpacing: -0.1,
-);
+TextStyle get taskDescriptionTextStyle => TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w400,
+      color: calendarSubtitleColor,
+      letterSpacing: -0.1,
+    );
 
-const taskMetadataTextStyle = TextStyle(
-  fontSize: 11,
-  fontWeight: FontWeight.w400,
-  color: calendarTimeLabelColor,
-  letterSpacing: 0.0,
-);
+TextStyle get taskMetadataTextStyle => TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w400,
+      color: calendarTimeLabelColor,
+      letterSpacing: 0.0,
+    );
 
 // Section headers - uppercase with proper letter-spacing
-const sectionHeaderTextStyle = TextStyle(
-  fontSize: 13,
-  fontWeight: FontWeight.w600,
-  color: calendarTitleColor,
-  letterSpacing: 0.5,
-);
+TextStyle get sectionHeaderTextStyle => TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: calendarTitleColor,
+      letterSpacing: 0.5,
+    );
 
 // Legacy gradient definitions (to be removed in favor of clean design)
 const calendarPrimaryGradient = LinearGradient(

@@ -494,6 +494,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   void _subscribeToMessages({
     required int limit,
     required MessageTimelineFilter filter,
+    bool forceXmppFallback = false,
   }) {
     final targetJid = state.chat?.jid ?? _chatLookupJid ?? jid;
     if (targetJid == null) return;
@@ -501,7 +502,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _currentMessageLimit = limit;
     final chat = state.chat;
     final emailService = _emailService;
-    if (chat?.defaultTransport.isEmail == true && emailService != null) {
+    final useEmailService =
+        !forceXmppFallback && chat?.defaultTransport.isEmail == true;
+    if (useEmailService && emailService != null) {
       _messageSubscription = emailService
           .messageStreamForChat(
         targetJid,
@@ -512,6 +515,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         (items) => add(_ChatMessagesUpdated(items)),
         onError: (Object error, StackTrace stackTrace) {
           _log.fine('Email message stream failed', error, stackTrace);
+          _subscribeToMessages(
+            limit: limit,
+            filter: filter,
+            forceXmppFallback: true,
+          );
         },
       );
       return;

@@ -87,7 +87,7 @@ class CalendarLoadingIndicator extends StatelessWidget {
                       color: colors.foreground,
                       fontWeight: FontWeight.w600,
                     ) ??
-                const TextStyle(
+                TextStyle(
                   fontSize: 16,
                   color: calendarTitleColor,
                   fontWeight: FontWeight.w600,

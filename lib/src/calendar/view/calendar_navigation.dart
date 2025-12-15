@@ -1158,7 +1158,7 @@ class _CalendarDropdown extends StatelessWidget {
               final isSelectedDay = _isSameDay(date, selectedDate);
 
               Color textColor = calendarTitleColor;
-              Color backgroundColor = Colors.white;
+              Color backgroundColor = calendarContainerColor;
               BorderSide border = BorderSide.none;
 
               if (isOtherMonth) {
@@ -1173,7 +1173,7 @@ class _CalendarDropdown extends StatelessWidget {
               }
               if (isSelectedDay) {
                 backgroundColor = calendarPrimaryColor;
-                textColor = Colors.white;
+                textColor = context.colorScheme.primaryForeground;
                 border = BorderSide.none;
               }
 
@@ -1223,7 +1223,7 @@ class _CalendarDropdown extends StatelessWidget {
       width: width,
       margin: margin,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: calendarContainerColor,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
         border: Border.all(color: calendarBorderColor),
         boxShadow: calendarMediumShadow,
@@ -1275,7 +1275,7 @@ class _CalendarDropdown extends StatelessWidget {
             padding: EdgeInsets.zero,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-            side: const BorderSide(color: calendarBorderColor),
+            side: BorderSide(color: calendarBorderColor),
             foregroundColor: calendarSubtitleColor,
           ),
           child: Icon(icon, size: 18),

@@ -3019,7 +3019,7 @@ class _CalendarWeekView extends StatelessWidget {
                 }
 
                 return Container(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: calendarBackgroundColor,
                     borderRadius: BorderRadius.zero,
                     border: Border(
@@ -3082,7 +3082,7 @@ class _CalendarWeekView extends StatelessWidget {
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(
+                                      Icon(
                                         Icons.error_outline,
                                         size: 16,
                                         color: calendarDangerColor,
@@ -3137,7 +3137,7 @@ class _CalendarWeekView extends StatelessWidget {
                             );
                             gridState._processViewportRequests();
                             return Container(
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: calendarStripedSlotColor,
                                 borderRadius: BorderRadius.zero,
                               ),
@@ -3662,7 +3662,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
 
     return Container(
       height: calendarWeekHeaderHeight,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: calendarBackgroundColor,
         border: Border(
           bottom: BorderSide(
@@ -3677,7 +3677,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
           Container(
             width: gridState._timeColumnWidth,
             height: double.infinity,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: calendarBackgroundColor,
               border: Border(
                 right: BorderSide(
@@ -3840,6 +3840,7 @@ class DayEventBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -3848,8 +3849,8 @@ class DayEventBadge extends StatelessWidget {
       ),
       child: Text(
         count.toString(),
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: colors.primaryForeground,
           fontSize: 10,
           fontWeight: FontWeight.bold,
         ),
@@ -3867,6 +3868,10 @@ class _CalendarZoomControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = ShadTheme.of(context);
     final colors = theme.colorScheme;
+    const double zoomControlsShadowAlpha = 0.12;
+    final Color zoomControlsShadowColor = Theme.of(context)
+        .shadowColor
+        .withValues(alpha: zoomControlsShadowAlpha);
     final labelStyle = calendarZoomLabelTextStyle.copyWith(
       color: colors.foreground,
       fontFamily: theme.textTheme.small.fontFamily,
@@ -3895,7 +3900,7 @@ class _CalendarZoomControls extends StatelessWidget {
     return Material(
       elevation: gridState._zoomControlsElevation + 1,
       color: colors.card,
-      shadowColor: Colors.black.withValues(alpha: 0.12),
+      shadowColor: zoomControlsShadowColor,
       shape: SquircleBorder(
         cornerRadius: 26,
         side: BorderSide(color: colors.border),

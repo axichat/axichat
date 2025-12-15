@@ -385,22 +385,24 @@ class _RecurrenceFrequencyChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     return ShadButton.raw(
       variant:
           isSelected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
       size: ShadButtonSize.sm,
       padding: padding,
-      backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
+      backgroundColor:
+          isSelected ? calendarPrimaryColor : calendarContainerColor,
       hoverBackgroundColor: isSelected
           ? calendarPrimaryHoverColor
           : calendarPrimaryColor.withValues(alpha: enabled ? 0.08 : 0.04),
       foregroundColor: isSelected
-          ? Colors.white
+          ? colors.primaryForeground
           : enabled
               ? calendarPrimaryColor
               : calendarSubtitleColor,
       hoverForegroundColor:
-          isSelected ? Colors.white : calendarPrimaryHoverColor,
+          isSelected ? colors.primaryForeground : calendarPrimaryHoverColor,
       onPressed: enabled ? onPressed : null,
       child: Text(
         label,
@@ -509,7 +511,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
 
     return Row(
       children: [
-        const Text(
+        Text(
           'Repeat every',
           style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
         ),
@@ -526,7 +528,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
             options: options,
             selectedOptionBuilder: (context, selected) => Text('$selected'),
             decoration: ShadDecoration(
-              color: Colors.white,
+              color: calendarContainerColor,
               border: ShadBorder.all(
                 color: calendarBorderColor,
                 radius: BorderRadius.circular(10),
@@ -537,7 +539,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
               horizontal: calendarGutterMd,
               vertical: calendarGutterSm,
             ),
-            trailing: const Icon(
+            trailing: Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 16,
               color: calendarSubtitleColor,
@@ -547,7 +549,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
         SizedBox(width: fieldGap),
         Text(
           unitLabel,
-          style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
+          style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
         ),
       ],
     );
@@ -574,7 +576,7 @@ class _RecurrenceEndControls extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'END DATE',
           style: TextStyle(
             fontSize: 10,
@@ -592,7 +594,7 @@ class _RecurrenceEndControls extends StatelessWidget {
           onChanged: enabled ? onUntilChanged : (_) {},
         ),
         const SizedBox(height: calendarGutterLg),
-        const Text(
+        Text(
           'COUNT',
           style: TextStyle(
             fontSize: 10,
@@ -619,18 +621,18 @@ class _RecurrenceEndControls extends StatelessWidget {
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(calendarBorderRadius),
-              borderSide: const BorderSide(color: calendarBorderColor),
+              borderSide: BorderSide(color: calendarBorderColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(calendarBorderRadius),
-              borderSide: const BorderSide(color: calendarBorderColor),
+              borderSide: BorderSide(color: calendarBorderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(calendarBorderRadius),
               borderSide: BorderSide(color: calendarPrimaryColor, width: 2),
             ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: calendarContainerColor,
           ),
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,

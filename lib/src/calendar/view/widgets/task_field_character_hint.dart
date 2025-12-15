@@ -4,6 +4,9 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 
+const double _taskTitleLimitWarningBottomPadding = 4;
+const double _taskTitleLimitWarningFontSize = 12;
+
 /// Displays a live-updating character count for title fields and surfaces a
 /// warning when the task title exceeds the configured limit.
 class TaskFieldCharacterHint extends StatelessWidget {
@@ -37,26 +40,37 @@ class TaskFieldCharacterHint extends StatelessWidget {
             children: [
               if (showWarningText && overLimit)
                 const Padding(
-                  padding: EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    calendarTaskTitleLimitWarning,
-                    style: TextStyle(
-                      color: calendarDangerColor,
-                      fontSize: 12,
-                    ),
+                  padding: EdgeInsets.only(
+                    bottom: _taskTitleLimitWarningBottomPadding,
                   ),
+                  child: _TaskTitleLimitWarningText(),
                 ),
               Text(
                 '$length / $limit characters',
                 style: TextStyle(
                   color: counterColor,
-                  fontSize: 12,
+                  fontSize: _taskTitleLimitWarningFontSize,
                 ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _TaskTitleLimitWarningText extends StatelessWidget {
+  const _TaskTitleLimitWarningText();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      calendarTaskTitleLimitWarning,
+      style: TextStyle(
+        color: calendarDangerColor,
+        fontSize: _taskTitleLimitWarningFontSize,
+      ),
     );
   }
 }

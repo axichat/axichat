@@ -208,8 +208,12 @@ class _GuestCalendarWidgetState
 
   @override
   Widget buildLoadingOverlay(BuildContext context) {
+    const double guestLoadingScrimAlpha = 0.3;
     return CalendarLoadingOverlay(
-      color: Colors.black.withValues(alpha: 0.3),
+      color: Theme.of(context)
+          .colorScheme
+          .scrim
+          .withValues(alpha: guestLoadingScrimAlpha),
     );
   }
 
@@ -277,7 +281,7 @@ class _GuestBanner extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.04),
-        border: const Border(
+        border: Border(
           bottom: BorderSide(color: calendarBorderColor, width: 1),
         ),
       ),

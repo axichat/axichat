@@ -372,7 +372,7 @@ class _ResizableTaskBody extends StatelessWidget {
             ? calendarLightShadow
             : const <BoxShadow>[];
     final titleColor = isCompleted ? calendarSubtitleColor : calendarTitleColor;
-    const secondaryColor = calendarSubtitleColor;
+    final Color secondaryColor = calendarSubtitleColor;
     final stripeColor = highlightSelection
         ? accentColor
         : accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
@@ -509,7 +509,7 @@ class _ResizableTaskBody extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
-                style: const TextStyle(
+                style: TextStyle(
                   color: secondaryColor,
                   fontSize: 11,
                   fontWeight: FontWeight.w400,
@@ -539,7 +539,7 @@ class _ResizableTaskBody extends StatelessWidget {
           timeLabel,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             color: secondaryColor,
             fontSize: 11,
             fontWeight: FontWeight.w400,
@@ -558,7 +558,7 @@ class _ResizableTaskBody extends StatelessWidget {
           maxLines: descriptionLines,
           overflow: descriptionOverflow,
           softWrap: true,
-          style: const TextStyle(
+          style: TextStyle(
             color: secondaryColor,
             fontSize: 10,
             height: 1.2,
@@ -701,7 +701,7 @@ class _TaskLocationRow extends StatelessWidget {
             location,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               color: calendarSubtitleColor,
             ),

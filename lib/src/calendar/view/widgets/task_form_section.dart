@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/priority_checkbox_tile.dart';
@@ -20,7 +21,7 @@ class TaskSectionHeader extends StatelessWidget {
     this.uppercase = true,
   });
 
-  final String title;
+    final String title;
   final EdgeInsetsGeometry padding;
   final TextStyle? textStyle;
   final Widget? trailing;
@@ -29,7 +30,7 @@ class TaskSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = textStyle ??
-        const TextStyle(
+        TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: calendarSubtitleColor,
@@ -230,7 +231,7 @@ class TaskTextFormField extends StatelessWidget {
   Widget build(BuildContext context) {
     final double radius = borderRadius ?? 8;
     final Color focusedColor = focusBorderColor ?? calendarPrimaryColor;
-    final Color effectiveFill = fillColor ?? Colors.white;
+    final Color effectiveFill = fillColor ?? calendarContainerColor;
 
     return TextFormField(
       controller: controller,
@@ -248,30 +249,30 @@ class TaskTextFormField extends StatelessWidget {
       onSaved: onSaved,
       validator: validator,
       style: textStyle ??
-          const TextStyle(
+          TextStyle(
             color: calendarTitleColor,
             fontSize: 14,
           ),
       decoration: InputDecoration(
         labelText: labelText,
         labelStyle: labelStyle ??
-            const TextStyle(
+            TextStyle(
               color: calendarSubtitleColor,
               fontSize: 14,
             ),
         hintText: hintText,
         hintStyle: hintStyle ??
-            const TextStyle(
+            TextStyle(
               color: calendarTimeLabelColor,
               fontSize: 14,
             ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: const BorderSide(color: calendarBorderColor),
+          borderSide: BorderSide(color: calendarBorderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: const BorderSide(color: calendarBorderColor),
+          borderSide: BorderSide(color: calendarBorderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
@@ -821,20 +822,22 @@ class TaskPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
+    final colors = context.colorScheme;
+    final foreground = colors.primaryForeground;
     return ShadButton(
       size: size,
       backgroundColor: calendarPrimaryColor,
       hoverBackgroundColor: calendarPrimaryHoverColor,
-      foregroundColor: Colors.white,
-      hoverForegroundColor: Colors.white,
+      foregroundColor: foreground,
+      hoverForegroundColor: foreground,
       onPressed: disabled ? null : onPressed,
       child: isBusy
-          ? const SizedBox(
+          ? SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                valueColor: AlwaysStoppedAnimation<Color>(foreground),
               ),
             )
           : Row(
@@ -862,7 +865,7 @@ class TaskSecondaryButton extends StatelessWidget {
     this.isBusy = false,
     this.icon,
     this.size = ShadButtonSize.sm,
-    this.foregroundColor = calendarSubtitleColor,
+    this.foregroundColor,
     this.hoverForegroundColor,
     this.hoverBackgroundColor,
   });
@@ -872,17 +875,18 @@ class TaskSecondaryButton extends StatelessWidget {
   final bool isBusy;
   final IconData? icon;
   final ShadButtonSize size;
-  final Color foregroundColor;
+  final Color? foregroundColor;
   final Color? hoverForegroundColor;
   final Color? hoverBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
+    final Color resolvedForeground = foregroundColor ?? calendarSubtitleColor;
     return ShadButton.outline(
       size: size,
       onPressed: disabled ? null : onPressed,
-      foregroundColor: foregroundColor,
+      foregroundColor: resolvedForeground,
       hoverForegroundColor: hoverForegroundColor ?? calendarPrimaryColor,
       hoverBackgroundColor:
           hoverBackgroundColor ?? calendarPrimaryColor.withValues(alpha: 0.08),
@@ -1134,21 +1138,21 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                     },
                     title: Text(
                       suggestion.label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         color: calendarTitleColor,
                       ),
                     ),
                     subtitle: Text(
                       suggestion.isHistory ? 'From your tasks' : 'Suggested',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: calendarSubtitleColor,
                       ),
                     ),
                   );
                 },
-                separatorBuilder: (_, __) => const Divider(
+                separatorBuilder: (_, __) => Divider(
                   height: 1,
                   color: calendarBorderColor,
                 ),
@@ -1228,7 +1232,7 @@ class TaskFormActionsRow extends StatelessWidget {
     required this.children,
     this.padding = calendarPaddingLg,
     this.includeTopBorder = false,
-    this.borderColor = calendarBorderColor,
+    this.borderColor,
     this.backgroundColor = Colors.transparent,
     this.gap,
   });
@@ -1236,17 +1240,18 @@ class TaskFormActionsRow extends StatelessWidget {
   final List<Widget> children;
   final EdgeInsetsGeometry padding;
   final bool includeTopBorder;
-  final Color borderColor;
+  final Color? borderColor;
   final Color backgroundColor;
   final double? gap;
 
   @override
   Widget build(BuildContext context) {
+    final Color resolvedBorderColor = borderColor ?? calendarBorderColor;
     final decoration = includeTopBorder
         ? BoxDecoration(
             color: backgroundColor,
             border: Border(
-              top: BorderSide(color: borderColor, width: 1),
+              top: BorderSide(color: resolvedBorderColor, width: 1),
             ),
           )
         : BoxDecoration(color: backgroundColor);
