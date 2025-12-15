@@ -116,6 +116,7 @@ const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
+const _selectionExtrasMaxWidth = 500.0;
 const _messageAvatarSize = 36.0;
 const _messageRowAvatarReservation = 32.0;
 const _messageAvatarCutoutDepth = _messageAvatarSize / 2;
@@ -2823,8 +2824,10 @@ class _ChatState extends State<Chat> {
                                           _selectionOuterInset,
                                     );
                                     final messageRowMaxWidth = rawContentWidth;
-                                    final selectionExtrasMaxWidth =
-                                        rawContentWidth;
+                                    final selectionExtrasMaxWidth = math.min(
+                                      rawContentWidth,
+                                      _selectionExtrasMaxWidth,
+                                    );
                                     final dashMessages = <ChatMessage>[];
                                     final shownSubjectShares = <String>{};
                                     final revokedInviteTokens = <String>{
