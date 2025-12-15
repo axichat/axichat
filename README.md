@@ -1,13 +1,13 @@
-<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px;">
-  <img src="assets/icons/generated/app_icon_android_foreground.png" width="96" alt="Axichat icon" />
-  <h1 style="font-size:52px;margin:0;">Axichat</h1>
-</div>
+<p align="center" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0 0;">
+  <img src="assets/icons/generated/app_icon_android_foreground.png" width="96" alt="Axichat icon" style="margin:0;" />
+  <span style="font-size:52px;font-weight:700;line-height:1;">Axichat</span>
+</p>
 
 <hr style="max-width:960px;margin:16px auto;border:0;border-top:1px solid #e0e0e0;" />
 
-<p align="center" style="font-size:24px;margin:0 12px 12px;"><strong>The best of instant messaging, email, and calendar—lovable because of what it has and what it <em><strong>doesn't</strong></em> have.</strong></p>
+<p align="center" style="font-size:26px;margin:4px 12px 14px;"><strong>The best of instant messaging, email, and calendar—lovable because of what it has and what it <em><strong>doesn't</strong></em> have.</strong></p>
 
-<div align="center" style="margin-bottom:16px;">
+<p align="center" style="margin:0 0 18px;">
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
     <img alt="Download the Android APK" src="https://img.shields.io/badge/Download%20the%20APK-1BA5FF?style=for-the-badge&logo=android&logoColor=white" />
   </a>
@@ -17,24 +17,24 @@
   <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-linux.tar.gz">
     <img alt="Download the Linux build" src="https://img.shields.io/badge/Download%20Linux-2CA5E0?style=for-the-badge&logo=linux&logoColor=white" />
   </a>
-</div>
+</p>
 
 ## Screenshots
 
-<div style="max-width:1100px;margin:0 auto;display:flex;gap:16px;align-items:stretch;justify-content:center;flex-wrap:wrap;">
-  <div style="flex:1 1 500px;min-width:340px;">
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;height:420px;">
-      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" alt="Axichat mobile chat screenshot" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" />
-      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" alt="Axichat mobile email screenshot" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" />
-      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" alt="Axichat mobile calendar screenshot" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" />
-      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" alt="Axichat mobile calendar alt screenshot" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" />
+<div style="max-width:1200px;margin:0 auto;display:flex;gap:16px;align-items:stretch;justify-content:center;flex-wrap:wrap;">
+  <div style="flex:1 1 520px;min-width:320px;">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;grid-auto-rows:1fr;">
+      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" alt="Axichat mobile chat screenshot" style="width:100%;aspect-ratio:9/18;object-fit:contain;border-radius:12px;" />
+      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" alt="Axichat mobile email screenshot" style="width:100%;aspect-ratio:9/18;object-fit:contain;border-radius:12px;" />
+      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" alt="Axichat mobile calendar screenshot" style="width:100%;aspect-ratio:9/18;object-fit:contain;border-radius:12px;" />
+      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" alt="Axichat mobile calendar alt screenshot" style="width:100%;aspect-ratio:9/18;object-fit:contain;border-radius:12px;" />
     </div>
   </div>
-  <div style="flex:1 1 500px;min-width:340px;">
-    <div style="display:flex;flex-direction:column;gap:12px;height:420px;">
-      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" alt="Axichat desktop screenshot 1" style="display:block;width:100%;flex:1 1 0;object-fit:cover;border-radius:12px;" />
-      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" alt="Axichat desktop screenshot 2" style="display:block;width:100%;flex:1 1 0;object-fit:cover;border-radius:12px;" />
-      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" alt="Axichat calendar screenshot" style="display:block;width:100%;flex:1 1 0;object-fit:cover;border-radius:12px;" />
+  <div style="flex:1 1 520px;min-width:320px;">
+    <div style="display:flex;flex-direction:column;gap:12px;height:100%;">
+      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" alt="Axichat desktop screenshot 1" style="display:block;width:100%;aspect-ratio:16/5;object-fit:cover;border-radius:12px;" />
+      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" alt="Axichat desktop screenshot 2" style="display:block;width:100%;aspect-ratio:16/5;object-fit:cover;border-radius:12px;" />
+      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" alt="Axichat calendar screenshot" style="display:block;width:100%;aspect-ratio:16/5;object-fit:cover;border-radius:12px;" />
     </div>
   </div>
 </div>
