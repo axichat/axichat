@@ -42,6 +42,7 @@ class _AxiMoreState extends State<AxiMore> {
       context: context,
       showDragHandle: true,
       dialogMaxWidth: 420,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final colors = ShadTheme.of(sheetContext).colorScheme;
         final textTheme = ShadTheme.of(sheetContext).textTheme;

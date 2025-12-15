@@ -35,14 +35,8 @@ class MamPageResult {
 
 final _capabilityCacheKey =
     XmppStateStore.registerKey('message_peer_capabilities');
-final _mamAccountDiscoveryVersionKey =
-    XmppStateStore.registerKey('mam_account_discovery_version');
-final _mamAccountDiscoveryLatestIdKey =
-    XmppStateStore.registerKey('mam_account_discovery_latest_id');
-final _mamAccountDiscoveryBeforeIdKey =
-    XmppStateStore.registerKey('mam_account_discovery_before_id');
-final _mamAccountDiscoveryCompleteKey =
-    XmppStateStore.registerKey('mam_account_discovery_complete');
+const String _mamDiscoveryQueryIdPrefix = 'axi-mam-discovery-';
+const String _legacyMamDiscoveryQueryIdPrefix = 'axi-mam-disco-';
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
 const Duration _httpAttachmentGetTimeout = Duration(minutes: 2);
@@ -54,6 +48,7 @@ const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
 const int _mamAccountDiscoveryVersion = 1;
 const int _mamAccountDiscoveryPageSize = 100;
+const int _mamAccountDiscoveryMaxPagesPerRun = 20;
 const Set<String> _safeHttpUploadLogHeaders = {
   HttpHeaders.contentLengthHeader,
   HttpHeaders.contentTypeHeader,
@@ -62,10 +57,12 @@ const Set<String> _safeHttpUploadLogHeaders = {
 class _MamAccountDiscoveryPage {
   const _MamAccountDiscoveryPage({
     required this.pageResult,
+    required this.receivedCount,
     required this.discoveredPeers,
   });
 
   final MamPageResult pageResult;
+  final int receivedCount;
   final Map<String, bool> discoveredPeers;
 }
 
@@ -508,7 +505,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
         final metadata = _extractFileMetadata(event);
 
-        var message = Message.fromMox(event);
+        var message = Message.fromMox(event, accountJid: myJid);
         final isGroupChat = event.type == 'groupchat';
         final stableKey = _stableKeyForEvent(event);
 
@@ -641,16 +638,25 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     if (!event.isFromMAM) return false;
     final queryId = event.get<mox.MAMContextData>()?.queryId;
     if (queryId == null) return false;
-    final discoveredPeers = _mamDiscoveryPeersByQueryId[queryId];
-    if (discoveredPeers == null) return false;
+    final isDiscoveryQuery = queryId.startsWith(_mamDiscoveryQueryIdPrefix) ||
+        queryId.startsWith(_legacyMamDiscoveryQueryIdPrefix);
+    if (!isDiscoveryQuery) return false;
 
     final isGroupChat = event.type == 'groupchat';
+    final selfJid = myJid;
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
-    final chatJid = event.isCarbon ? to : from;
+    final chatJid = isGroupChat
+        ? from
+        : (selfJid != null && selfJid.isNotEmpty && from == selfJid
+            ? to
+            : from);
     if (chatJid.isNotEmpty && chatJid.contains('@')) {
-      discoveredPeers[chatJid] =
-          discoveredPeers[chatJid] == true || isGroupChat;
+      final discoveredPeers = _mamDiscoveryPeersByQueryId[queryId];
+      if (discoveredPeers != null) {
+        discoveredPeers[chatJid] =
+            discoveredPeers[chatJid] == true || isGroupChat;
+      }
     }
 
     return true;
@@ -666,7 +672,15 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       await _resolveMamSupportForAccount();
       if (!_mamSupported) return;
 
-      await _discoverChatPeersFromAccountArchive();
+      try {
+        await _discoverChatPeersFromAccountArchive();
+      } on Exception catch (error, stackTrace) {
+        _log.fine(
+          'Failed to discover chat peers from account MAM archive; continuing login sync.',
+          error,
+          stackTrace,
+        );
+      }
 
       final chats = await _loadChatsForMamSync();
 
@@ -768,6 +782,19 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
   }
 
+  String? _mamAccountDiscoveryNamespace() {
+    final selfJid = myJid;
+    if (selfJid == null || selfJid.isEmpty) return null;
+    final digest = sha256.convert(utf8.encode(selfJid)).toString();
+    return digest;
+  }
+
+  RegisteredStateKey _mamAccountDiscoveryKey({
+    required String namespace,
+    required String suffix,
+  }) =>
+      XmppStateStore.registerKey('mam_account_discovery_${namespace}_$suffix');
+
   Future<void> _discoverChatPeersFromAccountArchive() async {
     final mamManager = _connection.getManager<mox.MAMManager>();
     if (mamManager == null) {
@@ -775,17 +802,41 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       return;
     }
 
+    final namespace = _mamAccountDiscoveryNamespace();
+    if (namespace == null) return;
+    final versionKey = _mamAccountDiscoveryKey(
+      namespace: namespace,
+      suffix: 'version',
+    );
+    final latestIdKey = _mamAccountDiscoveryKey(
+      namespace: namespace,
+      suffix: 'latest_id',
+    );
+    final beforeIdKey = _mamAccountDiscoveryKey(
+      namespace: namespace,
+      suffix: 'before_id',
+    );
+    final completeKey = _mamAccountDiscoveryKey(
+      namespace: namespace,
+      suffix: 'complete',
+    );
+    final stalledAtKey = _mamAccountDiscoveryKey(
+      namespace: namespace,
+      suffix: 'stalled_at_ms',
+    );
+
     final storedVersion = await _dbOpReturning<XmppStateStore, int?>(
-      (ss) => ss.read(key: _mamAccountDiscoveryVersionKey) as int?,
+      (ss) => ss.read(key: versionKey) as int?,
     );
     if (storedVersion != _mamAccountDiscoveryVersion) {
       await _dbOp<XmppStateStore>(
         (ss) => ss.writeAll(
           data: {
-            _mamAccountDiscoveryVersionKey: _mamAccountDiscoveryVersion,
-            _mamAccountDiscoveryLatestIdKey: null,
-            _mamAccountDiscoveryBeforeIdKey: null,
-            _mamAccountDiscoveryCompleteKey: false,
+            versionKey: _mamAccountDiscoveryVersion,
+            latestIdKey: null,
+            beforeIdKey: null,
+            completeKey: false,
+            stalledAtKey: null,
           },
         ),
         awaitDatabase: true,
@@ -793,19 +844,21 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
 
     var latestId = await _dbOpReturning<XmppStateStore, String?>(
-      (ss) => ss.read(key: _mamAccountDiscoveryLatestIdKey) as String?,
+      (ss) => ss.read(key: latestIdKey) as String?,
     );
     var beforeId = await _dbOpReturning<XmppStateStore, String?>(
-      (ss) => ss.read(key: _mamAccountDiscoveryBeforeIdKey) as String?,
+      (ss) => ss.read(key: beforeIdKey) as String?,
     );
     var complete = await _dbOpReturning<XmppStateStore, bool>(
-      (ss) => ss.read(key: _mamAccountDiscoveryCompleteKey) as bool? ?? false,
+      (ss) => ss.read(key: completeKey) as bool? ?? false,
     );
 
     final discoveredPeers = <String, bool>{};
 
     if (latestId != null && latestId.isNotEmpty) {
       var afterId = latestId;
+      final visited = <String>{afterId};
+      var pages = 0;
       while (true) {
         if (connectionState != ConnectionState.connected) return;
 
@@ -821,29 +874,50 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           latestId = nextLatest;
         }
 
+        await _syncDiscoveredMamPeers(discoveredPeers);
+        discoveredPeers.clear();
+
+        final isEmpty = forwardPage.receivedCount == 0;
+        if (forwardPage.pageResult.complete || isEmpty) break;
+        if (nextLatest == null || nextLatest.isEmpty || nextLatest == afterId) {
+          break;
+        }
+        if (!visited.add(nextLatest)) break;
+        if (++pages >= _mamAccountDiscoveryMaxPagesPerRun) break;
+
         await _dbOp<XmppStateStore>(
           (ss) => ss.writeAll(
             data: {
-              _mamAccountDiscoveryVersionKey: _mamAccountDiscoveryVersion,
-              _mamAccountDiscoveryLatestIdKey: latestId,
-              _mamAccountDiscoveryBeforeIdKey: complete ? null : beforeId,
-              _mamAccountDiscoveryCompleteKey: complete,
+              versionKey: _mamAccountDiscoveryVersion,
+              latestIdKey: latestId,
+              beforeIdKey: complete ? null : beforeId,
+              completeKey: complete,
+              stalledAtKey: null,
             },
           ),
           awaitDatabase: true,
         );
 
-        await _syncDiscoveredMamPeers(discoveredPeers);
-        discoveredPeers.clear();
-
-        if (forwardPage.pageResult.complete) break;
-        if (nextLatest == null || nextLatest.isEmpty || nextLatest == afterId) {
-          break;
-        }
         afterId = nextLatest;
       }
     }
 
+    {
+      await _dbOp<XmppStateStore>(
+        (ss) => ss.writeAll(
+          data: {
+            versionKey: _mamAccountDiscoveryVersion,
+            latestIdKey: latestId,
+            beforeIdKey: complete ? null : beforeId,
+            completeKey: complete,
+          },
+        ),
+        awaitDatabase: true,
+      );
+    }
+
+    var pages = 0;
+    final visited = <String>{if (beforeId != null) beforeId};
     while (!complete) {
       if (connectionState != ConnectionState.connected) return;
 
@@ -855,30 +929,54 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       _mergeDiscoveredPeers(discoveredPeers, page.discoveredPeers);
 
       latestId ??= page.pageResult.lastId;
-      complete = page.pageResult.complete;
+      complete = page.pageResult.complete || page.receivedCount == 0;
       final nextBefore = page.pageResult.firstId;
-
-      await _dbOp<XmppStateStore>(
-        (ss) => ss.writeAll(
-          data: {
-            _mamAccountDiscoveryVersionKey: _mamAccountDiscoveryVersion,
-            _mamAccountDiscoveryLatestIdKey: latestId,
-            _mamAccountDiscoveryBeforeIdKey: complete ? null : nextBefore,
-            _mamAccountDiscoveryCompleteKey: complete,
-          },
-        ),
-        awaitDatabase: true,
-      );
 
       await _syncDiscoveredMamPeers(discoveredPeers);
       discoveredPeers.clear();
 
       if (complete) break;
-      if (nextBefore == null || nextBefore.isEmpty || nextBefore == beforeId) {
+      if (nextBefore == null || nextBefore.isEmpty) break;
+      if (nextBefore == beforeId || !visited.add(nextBefore)) {
+        await _dbOp<XmppStateStore>(
+          (ss) => ss.writeAll(
+            data: {
+              stalledAtKey: DateTime.timestamp().millisecondsSinceEpoch,
+            },
+          ),
+          awaitDatabase: true,
+        );
         break;
       }
+      if (++pages >= _mamAccountDiscoveryMaxPagesPerRun) break;
+
+      await _dbOp<XmppStateStore>(
+        (ss) => ss.writeAll(
+          data: {
+            versionKey: _mamAccountDiscoveryVersion,
+            latestIdKey: latestId,
+            beforeIdKey: complete ? null : nextBefore,
+            completeKey: complete,
+            stalledAtKey: null,
+          },
+        ),
+        awaitDatabase: true,
+      );
+
       beforeId = nextBefore;
     }
+
+    await _dbOp<XmppStateStore>(
+      (ss) => ss.writeAll(
+        data: {
+          versionKey: _mamAccountDiscoveryVersion,
+          latestIdKey: latestId,
+          beforeIdKey: complete ? null : beforeId,
+          completeKey: complete,
+        },
+      ),
+      awaitDatabase: true,
+    );
   }
 
   Future<_MamAccountDiscoveryPage> _fetchMamAccountDiscoveryPage(
@@ -887,7 +985,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     String? after,
     required int pageSize,
   }) async {
-    final queryId = 'axi-mam-disco-${uuid.v4()}';
+    final queryId = '$_mamDiscoveryQueryIdPrefix${uuid.v4()}';
     _mamDiscoveryPeersByQueryId[queryId] = <String, bool>{};
     try {
       final result = await mamManager.queryArchive(
@@ -912,6 +1010,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           lastId: rsm?.last,
           count: rsm?.count,
         ),
+        receivedCount: result?.messages.length ?? 0,
         discoveredPeers: Map<String, bool>.unmodifiable(discovered),
       );
     } finally {

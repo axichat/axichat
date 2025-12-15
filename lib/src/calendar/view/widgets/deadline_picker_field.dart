@@ -1093,30 +1093,55 @@ class _DeadlineSheetContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxHeight),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final double desiredHeight = showTimeSelectors
-              ? _DeadlinePickerFieldState._timePickerDesiredHeight
-              : _DeadlinePickerFieldState._datePickerExpandedHeight;
-          final bool needsScroll = constraints.maxHeight < desiredHeight;
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double desiredHeight = showTimeSelectors
+                ? _DeadlinePickerFieldState._timePickerDesiredHeight
+                : _DeadlinePickerFieldState._datePickerExpandedHeight;
+            final bool needsScroll = constraints.maxHeight < desiredHeight;
 
-          if (!needsScroll) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: showTimeSelectors
-                  ? [
-                      monthHeader,
-                      calendarGrid,
-                      timeSelectors,
-                      actions,
-                    ]
-                  : [monthHeader, calendarGrid, actions],
-            );
-          }
+            if (!needsScroll) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: showTimeSelectors
+                    ? [
+                        monthHeader,
+                        calendarGrid,
+                        timeSelectors,
+                        actions,
+                      ]
+                    : [monthHeader, calendarGrid, actions],
+              );
+            }
 
-          if (showTimeSelectors) {
+            if (showTimeSelectors) {
+              return Column(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  monthHeader,
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.zero,
+                      physics: const ClampingScrollPhysics(),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          calendarGrid,
+                          timeSelectors,
+                        ],
+                      ),
+                    ),
+                  ),
+                  actions,
+                ],
+              );
+            }
+
             return Column(
               mainAxisSize: MainAxisSize.max,
               children: [
@@ -1125,35 +1150,14 @@ class _DeadlineSheetContent extends StatelessWidget {
                   child: SingleChildScrollView(
                     padding: EdgeInsets.zero,
                     physics: const ClampingScrollPhysics(),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        calendarGrid,
-                        timeSelectors,
-                      ],
-                    ),
+                    child: calendarGrid,
                   ),
                 ),
                 actions,
               ],
             );
-          }
-
-          return Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              monthHeader,
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.zero,
-                  physics: const ClampingScrollPhysics(),
-                  child: calendarGrid,
-                ),
-              ),
-              actions,
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }

@@ -1190,6 +1190,7 @@ class _ChatState extends State<Chat> {
       context: context,
       showDragHandle: true,
       dialogMaxWidth: 420,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final colors = sheetContext.colorScheme;
         return AxiSheetScaffold.scroll(
@@ -1533,6 +1534,7 @@ class _ChatState extends State<Chat> {
       context: context,
       showDragHandle: true,
       dialogMaxWidth: 520,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes);
@@ -5038,6 +5040,7 @@ class _ChatState extends State<Chat> {
     return showAdaptiveBottomSheet<String>(
       context: context,
       dialogMaxWidth: 420,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final picker = SizedBox(
           height: 320,

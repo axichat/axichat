@@ -2221,54 +2221,60 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       surfacePadding: const EdgeInsets.all(calendarGutterLg),
       showCloseButton: false,
       builder: (sheetContext) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Delete critical path',
-                    style: textTheme.h3.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+        return SafeArea(
+          top: true,
+          bottom: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Delete critical path',
+                      style: textTheme.h3.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                AxiIconButton(
-                  iconData: Icons.close,
-                  iconSize: 16,
-                  buttonSize: 34,
-                  tapTargetSize: 40,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.transparent,
-                  color: colors.mutedForeground,
-                  onPressed: () => Navigator.of(sheetContext).maybePop(false),
-                ),
-              ],
-            ),
-            const SizedBox(height: calendarGutterSm),
-            Text(
-              context.l10n.calendarRemovePathConfirm(path.name),
-              style: textTheme.muted,
-            ),
-            const SizedBox(height: calendarGutterMd),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ShadButton.ghost(
-                  onPressed: () => Navigator.of(sheetContext).maybePop(false),
-                  child: Text(context.l10n.commonCancel),
-                ).withTapBounce(),
-                const SizedBox(width: calendarInsetSm),
-                ShadButton.destructive(
-                  onPressed: () => Navigator.of(sheetContext).pop(true),
-                  child: const Text('Delete'),
-                ).withTapBounce(),
-              ],
-            ),
-          ],
+                  AxiIconButton(
+                    iconData: LucideIcons.x,
+                    tooltip: MaterialLocalizations.of(sheetContext)
+                        .closeButtonTooltip,
+                    iconSize: 16,
+                    buttonSize: 34,
+                    tapTargetSize: 40,
+                    backgroundColor: Colors.transparent,
+                    borderColor: Colors.transparent,
+                    color: colors.mutedForeground,
+                    onPressed: () => Navigator.of(sheetContext).maybePop(false),
+                  ),
+                ],
+              ),
+              const SizedBox(height: calendarGutterSm),
+              Text(
+                context.l10n.calendarRemovePathConfirm(path.name),
+                style: textTheme.muted,
+              ),
+              const SizedBox(height: calendarGutterMd),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ShadButton.ghost(
+                    onPressed: () => Navigator.of(sheetContext).maybePop(false),
+                    child: Text(context.l10n.commonCancel),
+                  ).withTapBounce(),
+                  const SizedBox(width: calendarInsetSm),
+                  ShadButton.destructive(
+                    onPressed: () => Navigator.of(sheetContext).pop(true),
+                    child: const Text('Delete'),
+                  ).withTapBounce(),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );

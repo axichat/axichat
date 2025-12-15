@@ -272,12 +272,19 @@ class Message with _$Message implements Insertable<Message> {
     required int? deltaMsgId,
   }) = _MessageFromDb;
 
-  factory Message.fromMox(mox.MessageEvent event) {
+  factory Message.fromMox(
+    mox.MessageEvent event, {
+    String? accountJid,
+  }) {
     final get = event.extensions.get;
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
     final isGroupChat = event.type == 'groupchat';
-    final chatJid = event.isCarbon ? to : from;
+    final chatJid = isGroupChat
+        ? from
+        : (accountJid != null && accountJid.isNotEmpty && from == accountJid
+            ? to
+            : from);
     final senderJid = isGroupChat ? event.from.toString() : from;
     final invite = _ParsedInvite.fromBody(event.text, to: to);
 

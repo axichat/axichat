@@ -151,9 +151,6 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
           builder: (context, constraints) {
             final mediaQuery = MediaQuery.of(context);
             final double keyboardInset = mediaQuery.viewInsets.bottom;
-            final double safeBottom = mediaQuery.viewPadding.bottom;
-            final double bottomInset =
-                keyboardInset > safeBottom ? keyboardInset - safeBottom : 0;
             final double maxHeight = constraints.hasBoundedHeight
                 ? constraints.maxHeight
                 : mediaQuery.size.height;
@@ -181,7 +178,9 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                                 ),
                               ),
                               AxiIconButton(
-                                iconData: Icons.close,
+                                iconData: LucideIcons.x,
+                                tooltip: MaterialLocalizations.of(context)
+                                    .closeButtonTooltip,
                                 iconSize: 16,
                                 buttonSize: 34,
                                 tapTargetSize: 40,
@@ -237,7 +236,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                       SliverPadding(
                         padding: EdgeInsets.only(
                           top: calendarInsetSm,
-                          bottom: calendarInsetMd + bottomInset,
+                          bottom: calendarInsetMd + keyboardInset,
                         ),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(

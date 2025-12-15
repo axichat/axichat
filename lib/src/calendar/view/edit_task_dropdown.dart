@@ -207,7 +207,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         );
       }
 
-      return Form(
+      final Widget form = Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.disabled,
         child: Column(
@@ -329,6 +329,16 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               ),
           ],
         ),
+      );
+
+      if (!isSheet) {
+        return form;
+      }
+
+      return SafeArea(
+        top: true,
+        bottom: false,
+        child: form,
       );
     }
 
