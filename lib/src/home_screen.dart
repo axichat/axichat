@@ -753,6 +753,7 @@ class _NexusState extends State<Nexus> {
           physics: tabViewPhysics,
           children: widget.tabs.map((tab) {
             return Scaffold(
+              resizeToAvoidBottomInset: false,
               extendBodyBehindAppBar: true,
               body: tab.body,
               floatingActionButtonAnimator: const _ScaleOnlyFabAnimator(),
