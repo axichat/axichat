@@ -1,0 +1,2 @@
+Demo attachment: document2.txt
+Second sample text bundled for the Gmail demo chat.
