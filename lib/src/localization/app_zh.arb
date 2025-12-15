@@ -926,5 +926,84 @@
   "sessionCapabilityStatusError": "错误",
   "sessionCapabilityStatusOffline": "离线",
   "sessionCapabilityStatusOff": "关闭",
-  "sessionCapabilityStatusSyncing": "同步中"
+  "sessionCapabilityStatusSyncing": "同步中",
+  "authChangePasswordPending": "正在更新密码...",
+  "authEndpointAdvancedHint": "高级选项",
+  "authEndpointApiPortPlaceholder": "API 端口",
+  "authEndpointDescription": "为此账户配置 XMPP/SMTP 端点。",
+  "authEndpointDomainPlaceholder": "域名",
+  "authEndpointPortPlaceholder": "端口",
+  "authEndpointRequireDnssecLabel": "需要 DNSSEC",
+  "authEndpointReset": "重置",
+  "authEndpointSmtpHostPlaceholder": "SMTP 主机",
+  "authEndpointSmtpLabel": "SMTP",
+  "authEndpointTitle": "端点配置",
+  "authEndpointUseDnsLabel": "使用 DNS",
+  "authEndpointUseSrvLabel": "使用 SRV",
+  "authEndpointXmppHostPlaceholder": "XMPP 主机",
+  "authEndpointXmppLabel": "XMPP",
+  "authUnregisterPending": "正在注销...",
+  "calendarAddTaskError": "无法添加任务：{details}",
+  "@calendarAddTaskError": {
+    "placeholders": {
+      "details": {}
+    }
+  },
+  "calendarBackToCalendar": "返回日历",
+  "calendarCriticalPathAddTask": "添加任务",
+  "calendarCriticalPathAddToTitle": "添加到关键路径",
+  "calendarCriticalPathCreatePrompt": "创建关键路径以开始",
+  "calendarCriticalPathDragHint": "拖动任务以重新排序",
+  "calendarCriticalPathEmptyTasks": "此路径中暂时没有任务",
+  "calendarCriticalPathNameEmptyError": "请输入名称",
+  "calendarCriticalPathNamePlaceholder": "关键路径名称",
+  "calendarCriticalPathNamePrompt": "名称",
+  "calendarCriticalPathTaskOrderTitle": "排序任务",
+  "calendarCriticalPathsAll": "所有路径",
+  "calendarCriticalPathsEmpty": "还没有关键路径",
+  "calendarCriticalPathsNew": "新建关键路径",
+  "calendarCriticalPathsTitle": "关键路径",
+  "calendarDeleteTaskConfirm": "删除“{title}”？",
+  "@calendarDeleteTaskConfirm": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarErrorTitleEmptyFriendly": "标题不能为空",
+  "calendarExportFormatIcsSubtitle": "用于日历客户端",
+  "calendarExportFormatIcsTitle": "导出 .ics",
+  "calendarExportFormatJsonSubtitle": "用于备份或脚本",
+  "calendarExportFormatJsonTitle": "导出 JSON",
+  "calendarRemovePathConfirm": "将此任务从“{name}”中移除？",
+  "@calendarRemovePathConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarSandboxHint": "先在此规划任务，再分配到路径。",
+  "chatAlertHide": "隐藏",
+  "chatAlertIgnore": "忽略",
+  "chatAttachmentTapToLoad": "点击加载",
+  "chatMessageAddRecipientSuccess": "已添加 {recipient}",
+  "@chatMessageAddRecipientSuccess": {
+    "placeholders": {
+      "recipient": {}
+    }
+  },
+  "chatMessageAddRecipients": "添加收件人",
+  "chatMessageCreateChat": "创建聊天",
+  "chatMessageCreateChatFailure": "无法创建聊天：{reason}",
+  "@chatMessageCreateChatFailure": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "chatMessageInfoDevice": "设备",
+  "chatMessageInfoError": "错误",
+  "chatMessageInfoProtocol": "协议",
+  "chatMessageInfoTimestamp": "时间戳",
+  "chatMessageOpenChat": "打开聊天",
+  "chatMessageStatusDisplayed": "已读",
+  "chatMessageStatusReceived": "已接收",
+  "chatMessageStatusSent": "已发送"
 }

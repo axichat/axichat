@@ -2336,4 +2336,182 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get sessionCapabilityStatusSyncing => 'Synchronisieren';
+
+  @override
+  String get authChangePasswordPending => 'Passwort wird aktualisiert...';
+
+  @override
+  String get authEndpointAdvancedHint => 'Erweiterte Optionen';
+
+  @override
+  String get authEndpointApiPortPlaceholder => 'API-Port';
+
+  @override
+  String get authEndpointDescription =>
+      'XMPP-/SMTP-Endpunkte für dieses Konto konfigurieren.';
+
+  @override
+  String get authEndpointDomainPlaceholder => 'Domain';
+
+  @override
+  String get authEndpointPortPlaceholder => 'Port';
+
+  @override
+  String get authEndpointRequireDnssecLabel => 'DNSSEC erforderlich';
+
+  @override
+  String get authEndpointReset => 'Zurücksetzen';
+
+  @override
+  String get authEndpointSmtpHostPlaceholder => 'SMTP-Host';
+
+  @override
+  String get authEndpointSmtpLabel => 'SMTP';
+
+  @override
+  String get authEndpointTitle => 'Endpoint-Konfiguration';
+
+  @override
+  String get authEndpointUseDnsLabel => 'DNS verwenden';
+
+  @override
+  String get authEndpointUseSrvLabel => 'SRV verwenden';
+
+  @override
+  String get authEndpointXmppHostPlaceholder => 'XMPP-Host';
+
+  @override
+  String get authEndpointXmppLabel => 'XMPP';
+
+  @override
+  String get authUnregisterPending => 'Abmeldung läuft...';
+
+  @override
+  String calendarAddTaskError(Object details) {
+    return 'Aufgabe konnte nicht hinzugefügt werden: $details';
+  }
+
+  @override
+  String get calendarBackToCalendar => 'Zurück zum Kalender';
+
+  @override
+  String get calendarCriticalPathAddTask => 'Aufgabe hinzufügen';
+
+  @override
+  String get calendarCriticalPathAddToTitle => 'Zum kritischen Pfad hinzufügen';
+
+  @override
+  String get calendarCriticalPathCreatePrompt =>
+      'Erstelle einen kritischen Pfad, um zu beginnen';
+
+  @override
+  String get calendarCriticalPathDragHint =>
+      'Aufgaben ziehen, um sie neu anzuordnen';
+
+  @override
+  String get calendarCriticalPathEmptyTasks => 'Keine Aufgaben in diesem Pfad';
+
+  @override
+  String get calendarCriticalPathNameEmptyError => 'Name eingeben';
+
+  @override
+  String get calendarCriticalPathNamePlaceholder => 'Name des kritischen Pfads';
+
+  @override
+  String get calendarCriticalPathNamePrompt => 'Name';
+
+  @override
+  String get calendarCriticalPathTaskOrderTitle => 'Aufgaben anordnen';
+
+  @override
+  String get calendarCriticalPathsAll => 'Alle Pfade';
+
+  @override
+  String get calendarCriticalPathsEmpty => 'Noch keine kritischen Pfade';
+
+  @override
+  String get calendarCriticalPathsNew => 'Neuer kritischer Pfad';
+
+  @override
+  String get calendarCriticalPathsTitle => 'Kritische Pfade';
+
+  @override
+  String calendarDeleteTaskConfirm(Object title) {
+    return '\"$title\" löschen?';
+  }
+
+  @override
+  String get calendarErrorTitleEmptyFriendly => 'Titel darf nicht leer sein';
+
+  @override
+  String get calendarExportFormatIcsSubtitle =>
+      'Für Kalender-Clients verwenden';
+
+  @override
+  String get calendarExportFormatIcsTitle => 'ICS exportieren';
+
+  @override
+  String get calendarExportFormatJsonSubtitle =>
+      'Für Backups oder Skripte verwenden';
+
+  @override
+  String get calendarExportFormatJsonTitle => 'JSON exportieren';
+
+  @override
+  String calendarRemovePathConfirm(Object name) {
+    return 'Diese Aufgabe aus \"$name\" entfernen?';
+  }
+
+  @override
+  String get calendarSandboxHint =>
+      'Plane Aufgaben hier, bevor du sie einem Pfad zuweist.';
+
+  @override
+  String get chatAlertHide => 'Ausblenden';
+
+  @override
+  String get chatAlertIgnore => 'Ignorieren';
+
+  @override
+  String get chatAttachmentTapToLoad => 'Zum Laden tippen';
+
+  @override
+  String chatMessageAddRecipientSuccess(Object recipient) {
+    return '$recipient hinzugefügt';
+  }
+
+  @override
+  String get chatMessageAddRecipients => 'Empfänger hinzufügen';
+
+  @override
+  String get chatMessageCreateChat => 'Chat erstellen';
+
+  @override
+  String chatMessageCreateChatFailure(Object reason) {
+    return 'Chat konnte nicht erstellt werden: $reason';
+  }
+
+  @override
+  String get chatMessageInfoDevice => 'Gerät';
+
+  @override
+  String get chatMessageInfoError => 'Fehler';
+
+  @override
+  String get chatMessageInfoProtocol => 'Protokoll';
+
+  @override
+  String get chatMessageInfoTimestamp => 'Zeitstempel';
+
+  @override
+  String get chatMessageOpenChat => 'Chat öffnen';
+
+  @override
+  String get chatMessageStatusDisplayed => 'Gelesen';
+
+  @override
+  String get chatMessageStatusReceived => 'Empfangen';
+
+  @override
+  String get chatMessageStatusSent => 'Gesendet';
 }

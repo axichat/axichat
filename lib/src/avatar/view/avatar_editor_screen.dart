@@ -394,37 +394,26 @@ class _CropCard extends StatelessWidget {
                     minCropSide: AvatarEditorCubit.minCropSide,
                   ),
                 ),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Use the handles on the grid to resize or drag the square.',
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    spacing: 4.0,
+                    children: [
+                      Text(
+                        '${cropRect.width.round()} px crop',
+                        style: context.textTheme.small
+                            .copyWith(color: colors.foreground),
+                      ),
+                      Text(
+                        'Saved at 256×256 • < 64 KB',
                         style: context.textTheme.small.copyWith(
                           color: colors.mutedForeground,
                         ),
+                        textAlign: TextAlign.end,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      spacing: 4.0,
-                      children: [
-                        Text(
-                          '${cropRect.width.round()} px crop',
-                          style: context.textTheme.small
-                              .copyWith(color: colors.foreground),
-                        ),
-                        Text(
-                          'Saved at 256×256 • < 64 KB',
-                          style: context.textTheme.small.copyWith(
-                            color: colors.mutedForeground,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -816,7 +805,7 @@ class _TemplatePreviewCard extends StatelessWidget {
           duration: _avatarTemplateCardAnimationDuration,
           width: _avatarTemplateCardWidth,
           decoration: BoxDecoration(
-            color: colors.card,
+            color: Colors.transparent,
             borderRadius: context.radius,
             border: border,
           ),

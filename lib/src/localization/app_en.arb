@@ -997,5 +997,84 @@
   "sessionCapabilityStatusError": "Error",
   "sessionCapabilityStatusOffline": "Offline",
   "sessionCapabilityStatusOff": "Off",
-  "sessionCapabilityStatusSyncing": "Syncing"
+  "sessionCapabilityStatusSyncing": "Syncing",
+  "authChangePasswordPending": "Updating password...",
+  "authEndpointAdvancedHint": "Advanced options",
+  "authEndpointApiPortPlaceholder": "API port",
+  "authEndpointDescription": "Configure XMPP/SMTP endpoints for this account.",
+  "authEndpointDomainPlaceholder": "Domain",
+  "authEndpointPortPlaceholder": "Port",
+  "authEndpointRequireDnssecLabel": "Require DNSSEC",
+  "authEndpointReset": "Reset",
+  "authEndpointSmtpHostPlaceholder": "SMTP host",
+  "authEndpointSmtpLabel": "SMTP",
+  "authEndpointTitle": "Endpoint configuration",
+  "authEndpointUseDnsLabel": "Use DNS",
+  "authEndpointUseSrvLabel": "Use SRV",
+  "authEndpointXmppHostPlaceholder": "XMPP host",
+  "authEndpointXmppLabel": "XMPP",
+  "authUnregisterPending": "Unregistering...",
+  "calendarAddTaskError": "Could not add task: {details}",
+  "@calendarAddTaskError": {
+    "placeholders": {
+      "details": {}
+    }
+  },
+  "calendarBackToCalendar": "Back to calendar",
+  "calendarCriticalPathAddTask": "Add task",
+  "calendarCriticalPathAddToTitle": "Add to critical path",
+  "calendarCriticalPathCreatePrompt": "Create a critical path to get started",
+  "calendarCriticalPathDragHint": "Drag tasks to reorder",
+  "calendarCriticalPathEmptyTasks": "No tasks in this path yet",
+  "calendarCriticalPathNameEmptyError": "Enter a name",
+  "calendarCriticalPathNamePlaceholder": "Critical path name",
+  "calendarCriticalPathNamePrompt": "Name",
+  "calendarCriticalPathTaskOrderTitle": "Order tasks",
+  "calendarCriticalPathsAll": "All paths",
+  "calendarCriticalPathsEmpty": "No critical paths yet",
+  "calendarCriticalPathsNew": "New critical path",
+  "calendarCriticalPathsTitle": "Critical paths",
+  "calendarDeleteTaskConfirm": "Delete \"{title}\"?",
+  "@calendarDeleteTaskConfirm": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarErrorTitleEmptyFriendly": "Title cannot be empty",
+  "calendarExportFormatIcsSubtitle": "Use for calendar clients",
+  "calendarExportFormatIcsTitle": "Export .ics",
+  "calendarExportFormatJsonSubtitle": "Use for backups or scripts",
+  "calendarExportFormatJsonTitle": "Export JSON",
+  "calendarRemovePathConfirm": "Remove this task from \"{name}\"?",
+  "@calendarRemovePathConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarSandboxHint": "Plan tasks here before assigning them to a path.",
+  "chatAlertHide": "Hide",
+  "chatAlertIgnore": "Ignore",
+  "chatAttachmentTapToLoad": "Tap to load",
+  "chatMessageAddRecipientSuccess": "Added {recipient}",
+  "@chatMessageAddRecipientSuccess": {
+    "placeholders": {
+      "recipient": {}
+    }
+  },
+  "chatMessageAddRecipients": "Add recipients",
+  "chatMessageCreateChat": "Create chat",
+  "chatMessageCreateChatFailure": "Could not create chat: {reason}",
+  "@chatMessageCreateChatFailure": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "chatMessageInfoDevice": "Device",
+  "chatMessageInfoError": "Error",
+  "chatMessageInfoProtocol": "Protocol",
+  "chatMessageInfoTimestamp": "Timestamp",
+  "chatMessageOpenChat": "Open chat",
+  "chatMessageStatusDisplayed": "Read",
+  "chatMessageStatusReceived": "Received",
+  "chatMessageStatusSent": "Sent"
 }
