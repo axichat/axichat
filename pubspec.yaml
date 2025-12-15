@@ -1,5 +1,5 @@
 name: axichat
-description: "Free and open-source XMPP chat client."
+description: "Free and open-source chat + email client."
 
 # Prevent accidental publishing to pub.dev.
 publish_to: 'none'
