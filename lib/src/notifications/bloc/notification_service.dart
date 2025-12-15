@@ -133,10 +133,6 @@ class NotificationService {
         if (!await Permission.ignoreBatteryOptimizations.isGranted) {
           return false;
         }
-
-        if (!await Permission.systemAlertWindow.isGranted) {
-          return false;
-        }
       }
       return true;
     } on MissingPluginException catch (error, stackTrace) {
@@ -168,13 +164,6 @@ class NotificationService {
             asAnotherTask: true,
           );
           if (!await Permission.ignoreBatteryOptimizations.isGranted) {
-            return false;
-          }
-        }
-
-        if (!await Permission.systemAlertWindow.request().isGranted) {
-          await FlutterForegroundTask.openSystemAlertWindowSettings();
-          if (!await Permission.systemAlertWindow.isGranted) {
             return false;
           }
         }

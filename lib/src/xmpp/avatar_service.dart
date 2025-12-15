@@ -55,6 +55,11 @@ mixin AvatarService on XmppBase {
   static const int _maxAvatarBase64Length = ((_maxAvatarBytes + 2) ~/ 3) * 4;
   static const int _avatarBytesCacheLimit = 64;
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
+  static const int _avatarPublishVerificationAttempts = 2;
+  static const Duration _avatarPublishVerificationDelay =
+      Duration(milliseconds: 350);
+  static const Duration _avatarPublishVerificationTimeout =
+      Duration(seconds: 5);
   final LinkedHashMap<String, Uint8List> _avatarBytesCache = LinkedHashMap();
 
   Uint8List? cachedAvatarBytes(String path) {
@@ -153,6 +158,9 @@ mixin AvatarService on XmppBase {
         await _clearAvatarForJid(bareJid);
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        if (avatarEncryptionKey != null) {
+          unawaited(refreshSelfAvatarIfNeeded());
+        }
         if (event.resumed) return;
         await _refreshRosterAvatarsFromCache();
       });
@@ -170,27 +178,7 @@ mixin AvatarService on XmppBase {
   Future<void> refreshSelfAvatarIfNeeded({bool force = false}) async {
     final bareJid = _myJid?.toBare().toString();
     if (bareJid == null || bareJid.isEmpty) return;
-
-    if (!force) {
-      try {
-        final path = await _dbOpReturning<XmppStateStore, String?>(
-          (ss) => ss.read(key: selfAvatarPathKey) as String?,
-        );
-        final normalizedPath = path?.trim();
-        if (normalizedPath != null && normalizedPath.isNotEmpty) {
-          final bytes = await loadAvatarBytes(normalizedPath);
-          if (bytes != null && bytes.isNotEmpty) {
-            return;
-          }
-        }
-      } on XmppAbortedException {
-        return;
-      }
-    }
-
-    final existingHash = await _storedAvatarHash(bareJid);
-    final shouldForce = force || existingHash?.trim().isNotEmpty == true;
-    await _refreshAvatarForJid(bareJid, force: shouldForce);
+    await _refreshAvatarForJid(bareJid, force: force);
   }
 
   Future<void> _refreshRosterAvatarsFromCache() async {
@@ -338,12 +326,29 @@ mixin AvatarService on XmppBase {
   Future<_AvatarMetadataLoadResult> _loadMetadata(String jid) async {
     final pubsub = _connection.getManager<mox.PubSubManager>();
     if (pubsub == null) return const _AvatarMetadataLoadFailed();
+    const maxMetadataItems = 1;
+    const metadataInfoTag = 'info';
 
-    final result = await pubsub.getItems(
-      mox.JID.fromString(jid),
-      mox.userAvatarMetadataXmlns,
-      maxItems: 1,
-    );
+    Future<moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>> getItems(
+      int? maxItems,
+    ) async =>
+        pubsub.getItems(
+          mox.JID.fromString(jid),
+          mox.userAvatarMetadataXmlns,
+          maxItems: maxItems,
+        );
+
+    var result = await getItems(maxMetadataItems);
+    if (result.isType<mox.PubSubError>()) {
+      final error = result.get<mox.PubSubError>();
+      final shouldRetry = error is mox.EjabberdMaxItemsError ||
+          error is mox.MalformedResponseError ||
+          error is mox.UnknownPubSubError;
+      if (shouldRetry) {
+        result = await getItems(null);
+      }
+    }
+
     if (result.isType<mox.PubSubError>()) {
       final error = result.get<mox.PubSubError>();
       if (error is mox.ItemNotFoundError || error is mox.NoItemReturnedError) {
@@ -358,8 +363,10 @@ mixin AvatarService on XmppBase {
     final payload = items.first.payload;
     if (payload == null) return const _AvatarMetadataLoadFailed();
 
-    final metadata =
-        payload.findTags('info').map(mox.UserAvatarMetadata.fromXML).toList();
+    final metadata = payload
+        .findTags(metadataInfoTag)
+        .map(mox.UserAvatarMetadata.fromXML)
+        .toList();
     if (metadata.isEmpty) return const _AvatarMetadataMissing();
 
     final selected = _selectMetadata(metadata);
@@ -600,15 +607,29 @@ mixin AvatarService on XmppBase {
   }) async {
     const openAccessModel = 'open';
     const rosterAccessModel = 'roster';
+    const avatarDataTag = 'data';
+    const avatarMetadataTag = 'metadata';
+    const avatarMetadataInfoTag = 'info';
     const maxPublishedAvatarItems = '1';
     const sendLastPublishedItemOnSubscribe = 'on_subscribe';
+    const publishNotRetrievableMessage =
+        'Avatar publish succeeded but is not retrievable';
     final pubsub = _connection.getManager<mox.PubSubManager>();
     if (pubsub == null) {
       throw XmppAvatarException('PubSub is unavailable');
     }
     final host = mox.JID.fromString(targetJid);
     final accessModel = public ? openAccessModel : rosterAccessModel;
-    final publishOptions = mox.PubSubPublishOptions(accessModel: accessModel);
+    final dataPublishOptions = mox.PubSubPublishOptions(
+      accessModel: accessModel,
+      maxItems: maxPublishedAvatarItems,
+      persistItems: true,
+    );
+    final metadataPublishOptions = mox.PubSubPublishOptions(
+      accessModel: accessModel,
+      maxItems: maxPublishedAvatarItems,
+      persistItems: true,
+    );
     final createNodeAccessModel =
         public ? mox.AccessModel.open : mox.AccessModel.roster;
     final dataNodeConfig = mox.NodeConfig(
@@ -630,21 +651,6 @@ mixin AvatarService on XmppBase {
         (mox.XmlBuilder.withNamespace('data', mox.userAvatarDataXmlns)
               ..text(base64Encode(payload.bytes)))
             .build();
-    final dataResult = await pubsub
-        .publish(
-          host,
-          mox.userAvatarDataXmlns,
-          dataPayload,
-          id: payload.hash,
-          options: publishOptions,
-          autoCreate: true,
-          createNodeConfig: dataNodeConfig,
-        )
-        .timeout(_avatarPublishTimeout);
-    if (dataResult.isType<mox.PubSubError>()) {
-      throw XmppAvatarException(dataResult.get<mox.PubSubError>());
-    }
-
     final metadataPayload =
         (mox.XmlBuilder.withNamespace('metadata', mox.userAvatarMetadataXmlns)
               ..child(
@@ -657,19 +663,120 @@ mixin AvatarService on XmppBase {
                     .build(),
               ))
             .build();
-    final metadataResult = await pubsub
-        .publish(
-          host,
-          mox.userAvatarMetadataXmlns,
-          metadataPayload,
-          id: payload.hash,
-          options: publishOptions,
-          autoCreate: true,
-          createNodeConfig: metadataNodeConfig,
-        )
-        .timeout(_avatarPublishTimeout);
-    if (metadataResult.isType<mox.PubSubError>()) {
-      throw XmppAvatarException(metadataResult.get<mox.PubSubError>());
+
+    Future<void> publishData() async {
+      final result = await pubsub
+          .publish(
+            host,
+            mox.userAvatarDataXmlns,
+            dataPayload,
+            id: payload.hash,
+            options: dataPublishOptions,
+            autoCreate: true,
+            createNodeConfig: dataNodeConfig,
+          )
+          .timeout(_avatarPublishTimeout);
+      if (result.isType<mox.PubSubError>()) {
+        throw XmppAvatarException(result.get<mox.PubSubError>());
+      }
+    }
+
+    Future<void> publishMetadata() async {
+      final result = await pubsub
+          .publish(
+            host,
+            mox.userAvatarMetadataXmlns,
+            metadataPayload,
+            id: payload.hash,
+            options: metadataPublishOptions,
+            autoCreate: true,
+            createNodeConfig: metadataNodeConfig,
+          )
+          .timeout(_avatarPublishTimeout);
+      if (result.isType<mox.PubSubError>()) {
+        throw XmppAvatarException(result.get<mox.PubSubError>());
+      }
+    }
+
+    Future<void> configureNode(String node, mox.NodeConfig config) async {
+      final result = await pubsub
+          .configure(host, node, config)
+          .timeout(_avatarPublishTimeout);
+      if (result.isType<mox.PubSubError>()) return;
+    }
+
+    bool isRetriableVerificationError(mox.PubSubError error) =>
+        error is mox.ItemNotFoundError ||
+        error is mox.NoItemReturnedError ||
+        error is mox.MalformedResponseError ||
+        error is mox.UnknownPubSubError;
+
+    Future<bool> waitForStoredItem({
+      required String node,
+      required String expectedTag,
+    }) async {
+      for (var attempt = 0;
+          attempt < _avatarPublishVerificationAttempts;
+          attempt++) {
+        final result = await pubsub
+            .getItem(host, node, payload.hash)
+            .timeout(_avatarPublishVerificationTimeout);
+        if (result.isType<mox.PubSubError>()) {
+          final error = result.get<mox.PubSubError>();
+          final shouldRetry = isRetriableVerificationError(error) &&
+              attempt + 1 < _avatarPublishVerificationAttempts;
+          if (!shouldRetry) {
+            return false;
+          }
+          await Future<void>.delayed(_avatarPublishVerificationDelay);
+          continue;
+        }
+
+        final item = result.get<mox.PubSubItem>();
+        final storedPayload = item.payload;
+        final isValid = storedPayload != null &&
+            storedPayload.tag == expectedTag &&
+            storedPayload.attributes['xmlns'] == node &&
+            (storedPayload.innerText().trim().isNotEmpty ||
+                storedPayload.findTags(avatarMetadataInfoTag).isNotEmpty);
+        if (isValid) {
+          return true;
+        }
+        if (attempt + 1 >= _avatarPublishVerificationAttempts) {
+          return false;
+        }
+        await Future<void>.delayed(_avatarPublishVerificationDelay);
+      }
+      return false;
+    }
+
+    await publishData();
+    await publishMetadata();
+
+    final metadataStored = await waitForStoredItem(
+      node: mox.userAvatarMetadataXmlns,
+      expectedTag: avatarMetadataTag,
+    );
+    final dataStored = await waitForStoredItem(
+      node: mox.userAvatarDataXmlns,
+      expectedTag: avatarDataTag,
+    );
+    if (!metadataStored || !dataStored) {
+      await configureNode(mox.userAvatarDataXmlns, dataNodeConfig);
+      await configureNode(mox.userAvatarMetadataXmlns, metadataNodeConfig);
+      await publishData();
+      await publishMetadata();
+      final repairedMetadataStored = await waitForStoredItem(
+        node: mox.userAvatarMetadataXmlns,
+        expectedTag: avatarMetadataTag,
+      );
+      final repairedDataStored = await waitForStoredItem(
+        node: mox.userAvatarDataXmlns,
+        expectedTag: avatarDataTag,
+      );
+      if (!repairedMetadataStored || !repairedDataStored) {
+        throw XmppAvatarException(publishNotRetrievableMessage);
+      }
     }
 
     final path = await _writeAvatarFile(

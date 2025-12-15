@@ -322,7 +322,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         child: Container(
           width: isSheet ? double.infinity : calendarTaskPopoverWidth,
           constraints: BoxConstraints(
-            maxHeight: widget.maxHeight,
+            maxHeight: isSheet ? double.infinity : widget.maxHeight,
             minWidth: 320,
           ),
           decoration: BoxDecoration(

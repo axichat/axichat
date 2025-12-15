@@ -1,21 +1,51 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
+final class _ConnectionDomainProvider {
+  String? _domain;
+
+  String? provide() => _domain;
+
+  void updateFromJid(mox.JID jid) {
+    final domain = jid.domain.trim();
+    _domain = domain.isEmpty ? null : domain;
+  }
+}
+
 class XmppConnection extends mox.XmppConnection {
   XmppConnection({
     XmppReconnectionPolicy? reconnectionPolicy,
     XmppConnectivityManager? connectivityManager,
     XmppClientNegotiator? negotiationsHandler,
-    this.socketWrapper,
-  }) : super(
+    XmppSocketWrapper? socketWrapper,
+  }) : this._internal(
           reconnectionPolicy:
               reconnectionPolicy ?? XmppReconnectionPolicy.exponential(),
-          connectivityManager:
-              connectivityManager ?? XmppConnectivityManager.pingDns(),
+          connectivityManager: connectivityManager,
           negotiationsHandler: negotiationsHandler ?? XmppClientNegotiator(),
-          socket: socketWrapper ?? XmppSocketWrapper(),
+          socketWrapper: socketWrapper ?? XmppSocketWrapper(),
+          domainProvider: _ConnectionDomainProvider(),
         );
 
-  final XmppSocketWrapper? socketWrapper;
+  XmppConnection._internal({
+    required XmppReconnectionPolicy reconnectionPolicy,
+    required XmppConnectivityManager? connectivityManager,
+    required XmppClientNegotiator negotiationsHandler,
+    required this.socketWrapper,
+    required _ConnectionDomainProvider domainProvider,
+  })  : _domainProvider = domainProvider,
+        super(
+          reconnectionPolicy: reconnectionPolicy,
+          connectivityManager: connectivityManager ??
+              XmppConnectivityManager.forXmppConnection(
+                domainProvider: domainProvider.provide,
+                shouldContinue: reconnectionPolicy.getShouldReconnect,
+              ),
+          negotiationsHandler: negotiationsHandler,
+          socket: socketWrapper,
+        );
+
+  final _ConnectionDomainProvider _domainProvider;
+  final XmppSocketWrapper socketWrapper;
 
   // Check if we have a connectionSettings as it is marked [late] in mox.
   bool get hasConnectionSettings => _hasConnectionSettings;
@@ -28,6 +58,7 @@ class XmppConnection extends mox.XmppConnection {
   @override
   set connectionSettings(covariant XmppConnectionSettings connectionSettings) {
     _hasConnectionSettings = true;
+    _domainProvider.updateFromJid(connectionSettings.jid);
     super.connectionSettings = connectionSettings;
   }
 
@@ -297,8 +328,6 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   int _reconnectionAttempts = 0;
 
-  bool get reachedMaxAttempts => _reconnectionAttempts >= strategy.maxAttempts;
-
   @override
   mox.PerformReconnectFunction? performReconnect;
 
@@ -312,8 +341,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   // Have to do Future based API to match mox implementation.
   @override
-  Future<bool> canTryReconnecting() async =>
-      !_reconnectionInProgress && !reachedMaxAttempts;
+  Future<bool> canTryReconnecting() async => !_reconnectionInProgress;
 
   // Have to do Future based API to match mox implementation.
   @override
@@ -325,14 +353,21 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   @override
   Future<bool> canTriggerFailure() async =>
-      await canTryReconnecting() && await getShouldReconnect();
+      await canTryReconnecting() &&
+      await getShouldReconnect() &&
+      _markReconnecting();
+
+  bool _markReconnecting() {
+    _reconnectionInProgress = true;
+    return true;
+  }
 
   @override
   Future<void> onFailure() async {
-    if (!await canTriggerFailure()) return;
-    _reconnectionInProgress = true;
+    if (!await getIsReconnecting()) return;
     try {
       await Future.delayed(strategy.delay(_reconnectionAttempts));
+      if (!await getShouldReconnect()) return;
       await _reconnect();
     } finally {
       _reconnectionInProgress = false;
@@ -347,13 +382,15 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   }
 
   @override
-  Future<void> onSuccess() => reset();
+  Future<void> onSuccess() async {
+    _reconnectionAttempts = 0;
+    await reset();
+  }
 
   @override
   Future<void> reset() async {
     _reconnectionInProgress = false;
     // _shouldReconnect = false;
-    _reconnectionAttempts = 0;
   }
 }
 
@@ -366,50 +403,101 @@ class IOEndpoint {
 
 class XmppConnectivityManager extends mox.ConnectivityManager {
   XmppConnectivityManager._(
-    this.endpoints, {
+    this._endpoints, {
+    required String? Function() domainProvider,
     Duration? pollInterval,
     Duration? waitTimeout,
-  })  : _pollInterval = pollInterval ?? timeoutDuration,
+    this.shouldContinue,
+  })  : _domainProvider = domainProvider,
+        _pollInterval = pollInterval ?? timeoutDuration,
         _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
 
-  final List<IOEndpoint> endpoints;
+  final List<IOEndpoint> _endpoints;
+  final String? Function() _domainProvider;
+  final Future<bool> Function()? shouldContinue;
 
   final Duration _pollInterval;
   final Duration? _waitTimeout;
 
   static final _log = Logger('XmppConnectivityManager');
 
-  // fdns1.dismail.de, fdns2.dismail.de, 1.1.1.1
-  XmppConnectivityManager.pingDns()
-      : this._(const [
-          IOEndpoint('116.203.32.217', 853),
-          IOEndpoint('159.69.114.157', 853),
-          IOEndpoint('1.1.1.1', 853),
-        ]);
+  XmppConnectivityManager.forXmppConnection({
+    required String? Function() domainProvider,
+    required Future<bool> Function() shouldContinue,
+    Duration? pollInterval,
+    Duration? waitTimeout,
+  }) : this._(
+          const [],
+          domainProvider: domainProvider,
+          pollInterval: pollInterval,
+          waitTimeout: waitTimeout,
+          shouldContinue: shouldContinue,
+        );
 
   static const timeoutDuration = Duration(seconds: 5);
+  static const _offlineErrnos = <int>{
+    50, // ENETDOWN (macOS)
+    51, // ENETUNREACH (macOS)
+    64, // EHOSTDOWN (macOS)
+    65, // EHOSTUNREACH (macOS)
+    101, // ENETUNREACH (Linux)
+    113, // EHOSTUNREACH (Linux)
+    10050, // WSAENETDOWN (Windows)
+    10051, // WSAENETUNREACH (Windows)
+    10065, // WSAEHOSTUNREACH (Windows)
+  };
 
   @override
-  Future<bool> hasConnection() => _pingEndpoints();
+  Future<bool> hasConnection() {
+    final endpoints = _resolveEndpoints();
+    if (endpoints.isEmpty) {
+      return Future.value(true);
+    }
+    return _pingEndpoints(endpoints);
+  }
 
   @override
   Future<void> waitForConnection() async {
+    if (shouldContinue != null && !await shouldContinue!()) return;
+
     final stopwatch = Stopwatch()..start();
-    var connected = await hasConnection();
-    while (!connected) {
+    var hasWarned = false;
+    while (!await hasConnection()) {
+      if (shouldContinue != null && !await shouldContinue!()) return;
+
       final timeout = _waitTimeout;
-      if (timeout != null && stopwatch.elapsed >= timeout) {
+      if (timeout != null && stopwatch.elapsed >= timeout && !hasWarned) {
         _log.warning(
-          'Gave up waiting for connectivity after ${timeout.inSeconds} seconds.',
+          'Connectivity still unavailable after ${timeout.inSeconds} seconds. Holding reconnection until connectivity resumes.',
         );
-        break;
+        hasWarned = true;
       }
       await Future.delayed(_pollInterval);
-      connected = await hasConnection();
     }
   }
 
-  Future<bool> _pingEndpoints() async {
+  List<IOEndpoint> _resolveEndpoints() {
+    final rawDomain = _domainProvider();
+    if (rawDomain == null) return _endpoints;
+    final domain = rawDomain.trim().toLowerCase();
+    if (domain.isEmpty) return _endpoints;
+    final endpoint = serverLookup[domain];
+    if (endpoint == null) return _endpoints;
+    return [endpoint];
+  }
+
+  bool _isOfflineSocketError(SocketException error) {
+    final code = error.osError?.errorCode;
+    if (code != null && _offlineErrnos.contains(code)) {
+      return true;
+    }
+    final message = error.message.toLowerCase();
+    return message.contains('network is unreachable') ||
+        message.contains('no route to host') ||
+        message.contains('not connected');
+  }
+
+  Future<bool> _pingEndpoints(List<IOEndpoint> endpoints) async {
     for (final endpoint in endpoints) {
       Socket? socket;
       try {
@@ -420,8 +508,11 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
         );
         socket.destroy();
         return true;
-      } on SocketException catch (_) {
+      } on SocketException catch (error) {
         socket?.destroy();
+        if (!_isOfflineSocketError(error)) {
+          return true;
+        }
       }
     }
     return false;

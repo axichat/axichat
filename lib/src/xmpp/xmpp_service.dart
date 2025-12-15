@@ -1708,7 +1708,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   Future<bool> _hostPortConnect(String host, int port) async {
     try {
-      _log.finest('Attempting fallback connection to $host:$port...');
+      _log.finest('Attempting direct socket connection...');
       _socket = await Socket.connect(
         host,
         port,
@@ -1717,7 +1717,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       _log.finest('Success!');
       return true;
     } on Exception catch (error) {
-      _log.finest('Failure! $error');
+      _log.finest('Socket connection failed: $error');
       return false;
     }
   }
@@ -1744,7 +1744,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       final target = endpoint;
       if (target == null) {
         _log.severe(
-          'No static server mapping for $domain and no host override provided. DNS lookups are disabled.',
+          'No static server mapping and no host override provided. DNS lookups are disabled.',
         );
         return false;
       }
@@ -1752,9 +1752,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       resolvedPort = port ?? target.port;
     }
 
-    _log.fine(
-      'Connecting to $domain via direct endpoint $resolvedHost:$resolvedPort',
-    );
+    _log.fine('Connecting via direct endpoint...');
 
     final connected = await _hostPortConnect(resolvedHost, resolvedPort);
     if (connected) {
@@ -1762,9 +1760,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       return true;
     }
 
-    _log.warning(
-      'Failed to connect to $resolvedHost:$resolvedPort. DNS/SRV fallbacks are disabled.',
-    );
+    _log.warning('Socket connection failed. DNS/SRV fallbacks are disabled.');
     return false;
   }
 
