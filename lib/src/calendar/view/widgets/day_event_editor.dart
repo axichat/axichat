@@ -107,6 +107,8 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final bool isEditing = widget.existing != null;
     final colors = context.colorScheme;
     final TextStyle titleStyle = calendarTitleTextStyle.copyWith(fontSize: 18);
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final double scrollBottomPadding = calendarGutterMd + keyboardInset;
 
     return Form(
       key: _formKey,
@@ -142,11 +144,11 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
           ),
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 calendarGutterMd,
                 calendarInsetLg,
                 calendarGutterMd,
-                calendarGutterMd,
+                scrollBottomPadding,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

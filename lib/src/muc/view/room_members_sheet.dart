@@ -697,6 +697,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   Widget build(BuildContext context) {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.only(
@@ -706,21 +707,32 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: _inviteSheetHeaderPadding,
-              child: Text(l10n.mucInviteUsers, style: titleStyle),
+            Flexible(
+              fit: FlexFit.loose,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(bottom: keyboardInset),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: _inviteSheetHeaderPadding,
+                      child: Text(l10n.mucInviteUsers, style: titleStyle),
+                    ),
+                    RecipientChipsBar(
+                      recipients: _recipients,
+                      availableChats: const <chat_models.Chat>[],
+                      latestStatuses: const {},
+                      onRecipientAdded: _addRecipient,
+                      onRecipientRemoved: _removeRecipient,
+                      onRecipientToggled: _toggleRecipient,
+                      collapsedByDefault: false,
+                      horizontalPadding: _inviteSheetHorizontalPadding,
+                    ),
+                    const SizedBox(height: _inviteSheetSectionSpacing),
+                  ],
+                ),
+              ),
             ),
-            RecipientChipsBar(
-              recipients: _recipients,
-              availableChats: const <chat_models.Chat>[],
-              latestStatuses: const {},
-              onRecipientAdded: _addRecipient,
-              onRecipientRemoved: _removeRecipient,
-              onRecipientToggled: _toggleRecipient,
-              collapsedByDefault: false,
-              horizontalPadding: _inviteSheetHorizontalPadding,
-            ),
-            const SizedBox(height: _inviteSheetSectionSpacing),
             Padding(
               padding: _inviteSheetActionsPadding,
               child: Row(
@@ -818,21 +830,33 @@ class _NicknameSheetState extends State<_NicknameSheet> {
   Widget build(BuildContext context) {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.mucChangeNicknameTitle,
-            style: titleStyle,
-          ),
-          const SizedBox(height: 12),
-          AxiTextFormField(
-            controller: widget.controller,
-            focusNode: widget.focusNode,
-            placeholder: Text(l10n.mucEnterNicknamePlaceholder),
-            onSubmitted: widget.onSubmit,
+          Flexible(
+            fit: FlexFit.loose,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: keyboardInset),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.mucChangeNicknameTitle,
+                    style: titleStyle,
+                  ),
+                  const SizedBox(height: 12),
+                  AxiTextFormField(
+                    controller: widget.controller,
+                    focusNode: widget.focusNode,
+                    placeholder: Text(l10n.mucEnterNicknamePlaceholder),
+                    onSubmitted: widget.onSubmit,
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           Row(

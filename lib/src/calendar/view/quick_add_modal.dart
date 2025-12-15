@@ -797,6 +797,14 @@ class _QuickAddModalContent extends StatelessWidget {
     final double maxWidth =
         responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
     final double maxHeight = responsive.quickAddMaxHeight;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final EdgeInsets contentPadding =
+        responsive.contentPadding.resolve(Directionality.of(context));
+    final EdgeInsets scrollPadding = isSheet
+        ? contentPadding.copyWith(
+            bottom: contentPadding.bottom + keyboardInset,
+          )
+        : contentPadding;
     final BorderRadius borderRadius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(calendarBorderRadius);
@@ -824,7 +832,7 @@ class _QuickAddModalContent extends StatelessWidget {
             _QuickAddHeader(onClose: onClose),
             Flexible(
               child: SingleChildScrollView(
-                padding: responsive.contentPadding,
+                padding: scrollPadding,
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.manual,
                 child: Column(
