@@ -315,11 +315,11 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                 top: false,
                 bottom: true,
                 child: Padding(
-                  padding: EdgeInsets.only(
-                    left: calendarGutterLg,
-                    right: calendarGutterLg,
-                    bottom: calendarGutterMd + safeBottom,
-                    top: calendarGutterMd,
+                  padding: const EdgeInsets.fromLTRB(
+                    calendarGutterLg,
+                    calendarGutterMd,
+                    calendarGutterLg,
+                    calendarGutterMd,
                   ),
                   child: actionRow,
                 ),

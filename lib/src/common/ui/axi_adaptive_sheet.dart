@@ -39,16 +39,27 @@ Future<T?> showAdaptiveBottomSheet<T>({
       barrierColor: barrierColor,
       useRootNavigator: useRootNavigator,
       builder: (sheetContext) {
+        final Color resolvedBackground = backgroundColor ?? scheme.card;
+        final bool transparentSurface = resolvedBackground.a == 0;
+        const BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
+          top: Radius.circular(18),
+        );
         final Widget child = _AxiSheetChrome(
           showCloseButton: showCloseButton,
           onClose: () => Navigator.of(sheetContext).maybePop(),
           child: builder(sheetContext),
         );
-        return AxiModalSurface(
-          backgroundColor: backgroundColor ?? scheme.card,
-          borderColor: scheme.border,
-          padding: surfacePadding,
-          child: child,
+        return SizedBox(
+          width: double.infinity,
+          child: AxiModalSurface(
+            backgroundColor: resolvedBackground,
+            borderColor:
+                transparentSurface ? Colors.transparent : scheme.border,
+            padding: transparentSurface ? EdgeInsets.zero : surfacePadding,
+            borderRadius: sheetRadius,
+            shadows: transparentSurface ? const <BoxShadow>[] : null,
+            child: child,
+          ),
         );
       },
     );
@@ -171,6 +182,8 @@ class AxiModalSurface extends StatelessWidget {
     this.backgroundColor,
     this.borderColor,
     this.cornerRadius = 18,
+    this.borderRadius,
+    this.shadows,
     super.key,
   });
 
@@ -179,12 +192,15 @@ class AxiModalSurface extends StatelessWidget {
   final Color? backgroundColor;
   final Color? borderColor;
   final double cornerRadius;
+  final BorderRadiusGeometry? borderRadius;
+  final List<BoxShadow>? shadows;
 
   @override
   Widget build(BuildContext context) {
     final scheme = ShadTheme.of(context).colorScheme;
     final shape = SquircleBorder(
       cornerRadius: cornerRadius,
+      borderRadius: borderRadius,
       side: BorderSide(color: borderColor ?? scheme.border),
     );
     return ClipPath(
@@ -193,13 +209,14 @@ class AxiModalSurface extends StatelessWidget {
         decoration: ShapeDecoration(
           color: backgroundColor ?? scheme.card,
           shape: shape,
-          shadows: const [
-            BoxShadow(
-              color: Color(0x1A000000),
-              blurRadius: 18,
-              offset: Offset(0, 10),
-            ),
-          ],
+          shadows: shadows ??
+              const [
+                BoxShadow(
+                  color: Color(0x1A000000),
+                  blurRadius: 18,
+                  offset: Offset(0, 10),
+                ),
+              ],
         ),
         child: Padding(
           padding: padding,

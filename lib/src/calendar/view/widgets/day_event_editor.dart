@@ -274,10 +274,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
               SafeArea(
                 top: false,
                 bottom: true,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: safeBottom),
-                  child: actions,
-                ),
+                child: actions,
               ),
           ],
         ),
