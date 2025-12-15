@@ -980,65 +980,75 @@ class XmppService extends XmppBase
       }
     }
     try {
-      List<DemoChatScript>? scripts;
+      final scripts = DemoChats.scripts(
+        openJid: DemoChats.defaultOpenJid,
+      );
       await _dbOp<XmppDatabase>((db) async {
-        final existingChats = await db.getChats(start: 0, end: 1);
-        if (existingChats.isNotEmpty) {
-          scripts = DemoChats.scripts(
-            openJid: DemoChats.defaultOpenJid,
-          );
-          return;
-        }
-        scripts = DemoChats.scripts(
-          openJid: DemoChats.defaultOpenJid,
-        );
-        for (final script in scripts!) {
-          final messages = script.messages;
-          final chat = script.chat;
-          await db.createChat(chat);
-          for (final attachment in script.attachments) {
-            final seeded = await _seedDemoAttachment(attachment);
-            if (seeded != null) {
-              await db.saveFileMetadata(seeded);
-            }
-          }
-          if (messages.isEmpty) continue;
-          for (final message in messages) {
-            await db.saveMessage(message, chatType: chat.type);
-          }
-          final latestMessage = messages.first;
-          await db.updateChat(
-            chat.copyWith(
-              unreadCount: 0,
-              lastChangeTimestamp:
-                  latestMessage.timestamp ?? chat.lastChangeTimestamp,
-              lastMessage: latestMessage.body,
-            ),
-          );
-          final roomState = script.roomState;
-          if (chat.type == ChatType.groupChat && roomState != null) {
-            for (final occupant in roomState.occupants.values) {
-              updateOccupantFromPresence(
-                roomJid: chat.jid,
-                occupantId: occupant.occupantId,
-                nick: occupant.nick,
-                realJid: occupant.realJid,
-                affiliation: occupant.affiliation,
-                role: occupant.role,
-                isPresent: occupant.isPresent,
+        for (final script in scripts) {
+          final existingChat = await db.getChat(script.chat.jid);
+          if (existingChat != null) {
+            if (existingChat.jid == 'eliot@gmail.com') {
+              final updated = existingChat.copyWith(
+                title: script.chat.title,
+                contactDisplayName: script.chat.contactDisplayName,
+                emailAddress: script.chat.emailAddress,
               );
+              await db.updateChat(updated);
             }
+            continue;
           }
+          await _seedDemoChat(db: db, script: script);
         }
       }, awaitDatabase: true);
-      if (scripts != null) {
-        _seedDemoRoomOccupants(scripts!);
-        await _seedDemoReactions(scripts!);
-        await _seedDemoAvatars(scripts!);
-        await _seedDemoAttachmentMessages(scripts!);
-      }
+      _seedDemoRoomOccupants(scripts);
+      await _seedDemoReactions(scripts);
+      await _seedDemoAvatars(scripts);
+      await _seedDemoAttachmentMessages(scripts);
     } on Exception catch (error, stackTrace) {
       _xmppLogger.fine('Skipping demo chat seed', error, stackTrace);
+    }
+  }
+
+  Future<void> _seedDemoChat({
+    required XmppDatabase db,
+    required DemoChatScript script,
+  }) async {
+    final messages = script.messages;
+    final chat = script.chat;
+    await db.createChat(chat);
+    for (final attachment in script.attachments) {
+      final seeded = await _seedDemoAttachment(attachment);
+      if (seeded != null) {
+        await db.saveFileMetadata(seeded);
+      }
+    }
+    if (messages.isNotEmpty) {
+      for (final message in messages) {
+        await db.saveMessage(message, chatType: chat.type);
+      }
+      final latestMessage = messages.first;
+      await db.updateChat(
+        chat.copyWith(
+          unreadCount: 0,
+          lastChangeTimestamp:
+              latestMessage.timestamp ?? chat.lastChangeTimestamp,
+          lastMessage: latestMessage.body,
+        ),
+      );
+    }
+    final roomState = script.roomState;
+    if (chat.type == ChatType.groupChat && roomState != null) {
+      for (final occupant in roomState.occupants.values) {
+        updateOccupantFromPresence(
+          roomJid: chat.jid,
+          occupantId: occupant.occupantId,
+          nick: occupant.nick,
+          realJid: occupant.realJid,
+          affiliation: occupant.affiliation,
+          role: occupant.role,
+          isPresent: occupant.isPresent,
+        );
+      }
     }
   }
 
@@ -1108,6 +1118,23 @@ class XmppService extends XmppBase
         for (final script in scripts) {
           final chat = script.chat;
           final messages = script.messages;
+
+          if (chat.defaultTransport.isEmail) {
+            for (final message in messages) {
+              await db.replaceReactions(
+                messageId: message.stanzaID,
+                senderJid: kDemoSelfJid,
+                emojis: const [],
+              );
+              await db.replaceReactions(
+                messageId: message.stanzaID,
+                senderJid: chat.jid,
+                emojis: const [],
+              );
+            }
+            continue;
+          }
+
           if (messages.length < 2) continue;
 
           final existingReactions = await db.getReactionsForChat(chat.jid);

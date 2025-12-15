@@ -597,7 +597,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         );
         return Container(
           width: uiState.width,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: sidebarBackgroundColor,
             border: Border(
               top: BorderSide(
@@ -2997,8 +2997,8 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
             horizontal: calendarGutterLg,
             vertical: calendarGutterLg,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: calendarContainerColor,
             border: Border(
               bottom: BorderSide(
                 color: calendarBorderColor,
@@ -3285,9 +3285,8 @@ class _SelectionTextField extends StatelessWidget {
           style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
             letterSpacing: 0.6,
-          ),
+          ).copyWith(color: calendarSubtitleColor),
         ),
         const SizedBox(height: calendarInsetMd),
         TaskTextField(
@@ -3334,9 +3333,8 @@ class _SelectionLocationField extends StatelessWidget {
           style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
             letterSpacing: 0.6,
-          ),
+          ).copyWith(color: calendarSubtitleColor),
         ),
         const SizedBox(height: calendarInsetMd),
         TaskLocationField(
@@ -3508,7 +3506,7 @@ class _SelectionReminderSection extends StatelessWidget {
     if (!hasTasks) {
       return Text(
         context.l10n.calendarSelectionNoneShort,
-        style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
       );
     }
 
@@ -3556,7 +3554,7 @@ class _SelectionRecurrenceSection extends StatelessWidget {
     if (!hasTasks) {
       return Text(
         context.l10n.calendarSelectionNoneShort,
-        style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
       );
     }
 
@@ -3586,8 +3584,7 @@ class _SelectionRecurrenceSection extends StatelessWidget {
                     context.l10n.calendarSelectionMixedRecurrence,
                     style: const TextStyle(
                       fontSize: 12,
-                      color: calendarSubtitleColor,
-                    ),
+                    ).copyWith(color: calendarSubtitleColor),
                   ),
                 ),
               );
@@ -3638,13 +3635,13 @@ class _SelectedTaskList extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.all(calendarGutterLg),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: calendarContainerColor,
           borderRadius: BorderRadius.circular(calendarBorderRadius + 2),
           border: Border.all(color: calendarBorderColor),
         ),
         child: Text(
           context.l10n.calendarSelectionNoTasksHint,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             color: calendarSubtitleColor,
           ),
@@ -3704,13 +3701,14 @@ class _SelectionTaskTile extends StatelessWidget {
               onTap: () => onFocusTask(task),
               child: Container(
                 decoration: BoxDecoration(
-                  color:
-                      isActive ? calendarSidebarBackgroundColor : Colors.white,
+                  color: isActive
+                      ? calendarSidebarBackgroundColor
+                      : calendarContainerColor,
                   border: Border(
                     left: BorderSide(color: borderColor, width: 3),
-                    top: const BorderSide(color: calendarBorderColor),
-                    right: const BorderSide(color: calendarBorderColor),
-                    bottom: const BorderSide(color: calendarBorderColor),
+                    top: BorderSide(color: calendarBorderColor),
+                    right: BorderSide(color: calendarBorderColor),
+                    bottom: BorderSide(color: calendarBorderColor),
                   ),
                 ),
                 child: _SidebarTaskTileBody(
@@ -3722,7 +3720,7 @@ class _SelectionTaskTile extends StatelessWidget {
                     builder: (_) => Text(context.l10n.calendarSelectionRemove),
                     child: ShadIconButton.ghost(
                       onPressed: () => onRemoveTask(task),
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.close,
                         size: 16,
                         color: calendarSubtitleColor,
@@ -3818,8 +3816,7 @@ class _SidebarTaskTileBody extends StatelessWidget {
                     : task.description!,
                 style: const TextStyle(
                   fontSize: 11,
-                  color: calendarSubtitleColor,
-                ),
+                ).copyWith(color: calendarSubtitleColor),
               ),
             ],
             if (task.hasChecklist) ...[
@@ -3873,8 +3870,7 @@ class _SidebarTaskTileBody extends StatelessWidget {
                       task.location!,
                       style: const TextStyle(
                         fontSize: 11,
-                        color: calendarSubtitleColor,
-                      ),
+                      ).copyWith(color: calendarSubtitleColor),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -3912,12 +3908,11 @@ String _sidebarDeadlineLabel(DateTime deadline) {
   return TimeFormatter.formatFriendlyDateTime(deadline);
 }
 
-const TextStyle _sidebarSectionHeaderStyle = TextStyle(
+final TextStyle _sidebarSectionHeaderStyle = const TextStyle(
   fontSize: 12,
   fontWeight: FontWeight.w700,
-  color: calendarSubtitleColor,
   letterSpacing: 0.6,
-);
+).copyWith(color: calendarSubtitleColor);
 
 class _AddTaskSection extends StatelessWidget {
   const _AddTaskSection({
@@ -3989,8 +3984,8 @@ class _AddTaskSection extends StatelessWidget {
     final l10n = context.l10n;
     return Container(
       padding: calendarSidebarSectionPadding,
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: calendarContainerColor,
         border: Border(
           bottom: BorderSide(
             color: calendarBorderColor,
@@ -4504,7 +4499,7 @@ class _SidebarAccordionSection extends StatelessWidget {
             color: sidebarBackgroundColor,
             border: Border(
               bottom: section == CalendarSidebarSection.unscheduled
-                  ? const BorderSide(
+                  ? BorderSide(
                       color: calendarBorderColor,
                       width: calendarBorderStroke,
                     )
@@ -4688,7 +4683,7 @@ class _CollapsedTaskPreview extends StatelessWidget {
     if (tasks.isEmpty) {
       return Text(
         context.l10n.calendarNothingHere,
-        style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
       );
     }
 
@@ -4701,7 +4696,7 @@ class _CollapsedTaskPreview extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: calendarInsetSm),
               child: Text(
                 '• ${task.title}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   color: calendarSubtitleColor,
                 ),
@@ -4864,7 +4859,7 @@ class _SidebarEmptyState extends StatelessWidget {
               const SizedBox(height: calendarInsetSm),
               Text(
                 hint!,
-                style: const TextStyle(
+                style: TextStyle(
                   color: calendarSubtitleColor,
                   fontSize: 13,
                 ),
@@ -4941,7 +4936,9 @@ class _SectionCountBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: isExpanded ? Colors.white : calendarPrimaryColor,
+          color: isExpanded
+              ? context.colorScheme.primaryForeground
+              : calendarPrimaryColor,
         ),
       ),
     );
@@ -5095,12 +5092,14 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
         borderRadius: BorderRadius.circular(calendarBorderRadius),
         child: Container(
           decoration: BoxDecoration(
-            color: isActive ? calendarSidebarBackgroundColor : Colors.white,
+            color: isActive
+                ? calendarSidebarBackgroundColor
+                : calendarContainerColor,
             border: Border(
               left: BorderSide(color: borderColor, width: 3),
-              top: const BorderSide(color: calendarBorderColor),
-              right: const BorderSide(color: calendarBorderColor),
-              bottom: const BorderSide(color: calendarBorderColor),
+              top: BorderSide(color: calendarBorderColor),
+              right: BorderSide(color: calendarBorderColor),
+              bottom: BorderSide(color: calendarBorderColor),
             ),
           ),
           child: Material(
@@ -5493,11 +5492,6 @@ class _QuickTaskInput extends StatelessWidget {
       controller: controller,
       helper: helper,
       contentPadding: padding,
-      textStyle: const TextStyle(
-        fontSize: 14,
-        color: calendarTitleColor,
-      ),
-      suggestionColor: calendarSubtitleColor,
       child: field,
     );
 

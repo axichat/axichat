@@ -106,7 +106,7 @@ class _ScheduleField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
             color: calendarSubtitleColor,

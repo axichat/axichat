@@ -65,7 +65,7 @@ class CriticalPathPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    const TextStyle headerStyle = TextStyle(
+    final TextStyle headerStyle = TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,

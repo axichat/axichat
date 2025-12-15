@@ -21,12 +21,21 @@ class ErrorDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final scheme = ShadTheme.of(context).colorScheme;
+    const double errorBackgroundMix = 0.12;
+    const double errorBorderMix = 0.35;
+    final Color background =
+        Color.lerp(scheme.background, scheme.destructive, errorBackgroundMix) ??
+            scheme.background;
+    final Color border =
+        Color.lerp(scheme.border, scheme.destructive, errorBorderMix) ??
+            scheme.border;
     return Container(
       margin: calendarPaddingXl,
       padding: calendarPaddingXl,
       decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        border: Border.all(color: Colors.red.shade200),
+        color: background,
+        border: Border.all(color: border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -37,14 +46,14 @@ class ErrorDisplay extends StatelessWidget {
             children: [
               Icon(
                 Icons.error_outline,
-                color: Colors.red.shade700,
+                color: scheme.destructive,
                 size: 20,
               ),
               const SizedBox(width: calendarGutterSm),
               Text(
                 l10n.calendarErrorTitle,
                 style: TextStyle(
-                  color: Colors.red.shade700,
+                  color: scheme.destructive,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -54,7 +63,7 @@ class ErrorDisplay extends StatelessWidget {
                   onTap: onDismiss,
                   child: Icon(
                     Icons.close,
-                    color: Colors.red.shade700,
+                    color: scheme.mutedForeground,
                     size: 16,
                   ),
                 ),
@@ -64,7 +73,7 @@ class ErrorDisplay extends StatelessWidget {
           Text(
             _getFriendlyErrorMessage(l10n, error),
             style: TextStyle(
-              color: Colors.red.shade800,
+              color: scheme.foreground,
               fontSize: 14,
             ),
           ),
@@ -124,24 +133,30 @@ class ErrorDisplay extends StatelessWidget {
 class ErrorSnackBar {
   static void show(BuildContext context, String error,
       {VoidCallback? onRetry}) {
+    final scheme = ShadTheme.of(context).colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.error_outline, color: Colors.white, size: 18),
+            Icon(
+              Icons.error_outline,
+              color: scheme.destructiveForeground,
+              size: 18,
+            ),
             const SizedBox(width: calendarGutterSm),
             Expanded(
               child: Text(
                 ErrorDisplay._getFriendlyErrorMessage(context.l10n, error),
+                style: TextStyle(color: scheme.destructiveForeground),
               ),
             ),
           ],
         ),
-        backgroundColor: Colors.red.shade700,
+        backgroundColor: scheme.destructive,
         action: onRetry != null
             ? SnackBarAction(
                 label: context.l10n.commonRetry,
-                textColor: Colors.white,
+                textColor: scheme.destructiveForeground,
                 onPressed: onRetry,
               )
             : null,

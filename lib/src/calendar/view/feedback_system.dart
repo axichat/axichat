@@ -136,7 +136,7 @@ class FeedbackSystem {
     BuildContext context,
     FeedbackMessage feedback,
   ) {
-    final colors = _getColorsForTone(context, feedback.tone);
+    final colorsForTone = _getColorsForTone(context, feedback.tone);
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) {
@@ -154,20 +154,20 @@ class FeedbackSystem {
             children: [
               Icon(
                 _getIconForTone(feedback.tone),
-                color: Colors.white,
+                color: colorsForTone.foreground,
                 size: 18,
               ),
               const SizedBox(width: calendarGutterSm),
               Expanded(
                 child: Text(
                   feedback.message,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: colorsForTone.foreground),
                 ),
               ),
             ],
           ),
         ),
-        backgroundColor: colors.background,
+        backgroundColor: colorsForTone.background,
         duration: feedback.duration ?? const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -177,7 +177,7 @@ class FeedbackSystem {
             ? SnackBarAction(
                 label: feedback.actionLabel!,
                 onPressed: feedback.onAction!,
-                textColor: colors.foreground,
+                textColor: colorsForTone.foreground,
               )
             : null,
         margin: calendarPaddingXl,

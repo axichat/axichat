@@ -540,10 +540,10 @@ class DemoChats {
       DemoChatScript(
         chat: Chat(
           jid: gmailJid,
-          title: 'Eliot (Gmail)',
+          title: gmailJid,
           type: ChatType.chat,
           contactJid: gmailJid,
-          contactDisplayName: 'Eliot (Gmail)',
+          contactDisplayName: gmailJid,
           emailAddress: gmailJid,
           lastChangeTimestamp: now.subtract(const Duration(minutes: 1)),
           lastMessage: 'Hello, Gmail user',

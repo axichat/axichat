@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 class LocationInlineSuggestion extends StatefulWidget {
   const LocationInlineSuggestion({
@@ -11,19 +12,16 @@ class LocationInlineSuggestion extends StatefulWidget {
     required this.helper,
     required this.child,
     this.contentPadding = EdgeInsets.zero,
-    this.textStyle = const TextStyle(
-      fontSize: 14,
-      color: Colors.black,
-    ),
-    this.suggestionColor = const Color(0xFF6A737D),
+    this.textStyle,
+    this.suggestionColor,
   });
 
   final TextEditingController controller;
   final LocationAutocompleteHelper? helper;
   final Widget child;
   final EdgeInsetsGeometry contentPadding;
-  final TextStyle textStyle;
-  final Color suggestionColor;
+  final TextStyle? textStyle;
+  final Color? suggestionColor;
 
   @override
   State<LocationInlineSuggestion> createState() =>
@@ -126,6 +124,18 @@ class _LocationInlineSuggestionState extends State<LocationInlineSuggestion> {
     );
   }
 
+  TextStyle _resolvedTextStyle(BuildContext context) {
+    return widget.textStyle ??
+        TextStyle(
+          fontSize: 14,
+          color: calendarTitleColor,
+        );
+  }
+
+  Color _resolvedSuggestionColor(BuildContext context) {
+    return widget.suggestionColor ?? calendarSubtitleColor;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.helper == null) {
@@ -144,8 +154,8 @@ class _LocationInlineSuggestionState extends State<LocationInlineSuggestion> {
                 child: _SuggestionText(
                   prefixText: suggestion.prefixText,
                   remainingText: suggestion.remainingText,
-                  textStyle: widget.textStyle,
-                  color: widget.suggestionColor,
+                  textStyle: _resolvedTextStyle(context),
+                  color: _resolvedSuggestionColor(context),
                   onTap: _applySuggestion,
                 ),
               ),
