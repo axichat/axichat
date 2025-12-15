@@ -282,7 +282,9 @@ class Message with _$Message implements Insertable<Message> {
     final isGroupChat = event.type == 'groupchat';
     final chatJid = isGroupChat
         ? from
-        : (accountJid != null && accountJid.isNotEmpty && from == accountJid
+        : (accountJid != null &&
+                accountJid.isNotEmpty &&
+                from.toLowerCase() == accountJid.toLowerCase()
             ? to
             : from);
     final senderJid = isGroupChat ? event.from.toString() : from;

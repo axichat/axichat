@@ -648,7 +648,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     final from = event.from.toBare().toString();
     final chatJid = isGroupChat
         ? from
-        : (selfJid != null && selfJid.isNotEmpty && from == selfJid
+        : (selfJid != null &&
+                selfJid.isNotEmpty &&
+                from.toLowerCase() == selfJid.toLowerCase()
             ? to
             : from);
     if (chatJid.isNotEmpty && chatJid.contains('@')) {
@@ -785,7 +787,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   String? _mamAccountDiscoveryNamespace() {
     final selfJid = myJid;
     if (selfJid == null || selfJid.isEmpty) return null;
-    final digest = sha256.convert(utf8.encode(selfJid)).toString();
+    final digest =
+        sha256.convert(utf8.encode(selfJid.toLowerCase())).toString();
     return digest;
   }
 
@@ -1000,17 +1003,20 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           max: pageSize,
         ),
       );
+      if (result == null) {
+        throw XmppMessageException();
+      }
       final discovered =
           Map<String, bool>.from(_mamDiscoveryPeersByQueryId[queryId] ?? {});
-      final rsm = result?.rsm;
+      final rsm = result.rsm;
       return _MamAccountDiscoveryPage(
         pageResult: MamPageResult(
-          complete: result?.complete ?? false,
+          complete: result.complete,
           firstId: rsm?.first,
           lastId: rsm?.last,
           count: rsm?.count,
         ),
-        receivedCount: result?.messages.length ?? 0,
+        receivedCount: result.messages.length,
         discoveredPeers: Map<String, bool>.unmodifiable(discovered),
       );
     } finally {
