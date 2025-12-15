@@ -126,6 +126,17 @@ class _AvatarEditorToolsSection extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
+        final isCompact = maxWidth < mediumScreen;
+        if (isCompact) {
+          return Column(
+            spacing: _avatarEditorToolsSpacing,
+            children: [
+              _CropCard(state: state),
+              if (showBackgroundPicker) _BackgroundPicker(state: state),
+            ],
+          );
+        }
+
         final panelCount = showBackgroundPicker ? 2 : 1;
         final panelWidth = (panelCount == 2
                 ? (maxWidth - _avatarEditorToolsSpacing) / panelCount
@@ -776,11 +787,8 @@ class _TemplatePreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final previewBackground = template.hasAlphaBackground
-        ? (backgroundColor == Colors.transparent
-            ? colors.accent
-            : backgroundColor)
-        : colors.card;
+    final previewBackground =
+        template.hasAlphaBackground ? colors.card : colors.card;
     final assetPath = template.assetPath;
     final labelStyle = isSelected
         ? context.textTheme.p.copyWith(
