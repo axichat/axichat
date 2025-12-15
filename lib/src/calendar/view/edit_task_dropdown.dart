@@ -167,6 +167,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   @override
   Widget build(BuildContext context) {
     final bool isSheet = widget.isSheet;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final BorderRadius radius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(8);
@@ -191,8 +192,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           const Divider(height: 1),
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterLg, vertical: calendarGutterMd),
+              padding: EdgeInsets.fromLTRB(
+                calendarGutterLg,
+                calendarGutterMd,
+                calendarGutterLg,
+                calendarGutterMd + (isSheet ? keyboardInset : 0),
+              ),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

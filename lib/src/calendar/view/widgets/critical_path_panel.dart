@@ -1119,6 +1119,7 @@ Future<String?> promptCriticalPathName({
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
   final result = await showAdaptiveBottomSheet<String>(
     context: context,
+    isScrollControlled: true,
     dialogMaxWidth: 420,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
     showCloseButton: false,
@@ -1127,6 +1128,7 @@ Future<String?> promptCriticalPathName({
         builder: (context, setState) {
           final colors = context.colorScheme;
           final textTheme = context.textTheme;
+          final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
           FocusScope.of(dialogContext).requestFocus(focusNode);
           return Form(
             key: formKey,
@@ -1159,29 +1161,41 @@ Future<String?> promptCriticalPathName({
                   ],
                 ),
                 const SizedBox(height: calendarGutterSm),
-                Text(
-                  context.l10n.calendarCriticalPathNamePrompt,
-                  style: textTheme.muted,
-                ),
-                const SizedBox(height: calendarGutterSm),
-                AxiTextFormField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  placeholder: Text(
-                    context.l10n.calendarCriticalPathNamePlaceholder,
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(bottom: keyboardInset),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          context.l10n.calendarCriticalPathNamePrompt,
+                          style: textTheme.muted,
+                        ),
+                        const SizedBox(height: calendarGutterSm),
+                        AxiTextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          placeholder: Text(
+                            context.l10n.calendarCriticalPathNamePlaceholder,
+                          ),
+                          validator: (value) {
+                            final String trimmed = value.trim();
+                            if (trimmed.isEmpty) {
+                              return context
+                                  .l10n.calendarCriticalPathNameEmptyError;
+                            }
+                            return null;
+                          },
+                          onSubmitted: (value) {
+                            if (formKey.currentState?.validate() ?? false) {
+                              Navigator.of(dialogContext).pop(value.trim());
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                  validator: (value) {
-                    final String trimmed = value.trim();
-                    if (trimmed.isEmpty) {
-                      return context.l10n.calendarCriticalPathNameEmptyError;
-                    }
-                    return null;
-                  },
-                  onSubmitted: (value) {
-                    if (formKey.currentState?.validate() ?? false) {
-                      Navigator.of(dialogContext).pop(value.trim());
-                    }
-                  },
                 ),
                 const SizedBox(height: calendarGutterMd),
                 Row(
