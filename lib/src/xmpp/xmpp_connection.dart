@@ -33,6 +33,7 @@ class XmppConnection extends mox.XmppConnection {
     required this.socketWrapper,
     required _ConnectionDomainProvider domainProvider,
   })  : _domainProvider = domainProvider,
+        _reconnectionPolicy = reconnectionPolicy,
         super(
           reconnectionPolicy: reconnectionPolicy,
           connectivityManager: connectivityManager ??
@@ -46,6 +47,7 @@ class XmppConnection extends mox.XmppConnection {
 
   final _ConnectionDomainProvider _domainProvider;
   final XmppSocketWrapper socketWrapper;
+  final XmppReconnectionPolicy _reconnectionPolicy;
 
   // Check if we have a connectionSettings as it is marked [late] in mox.
   bool get hasConnectionSettings => _hasConnectionSettings;
@@ -310,6 +312,9 @@ class XmppConnection extends mox.XmppConnection {
       }
     }
   }
+
+  Future<void> triggerImmediateReconnect() =>
+      _reconnectionPolicy.triggerImmediateReconnect();
 }
 
 class XmppConnectionSettings extends mox.ConnectionSettings {
@@ -327,6 +332,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   bool _shouldReconnect = false;
 
   int _reconnectionAttempts = 0;
+  Timer? _backoffTimer;
 
   @override
   mox.PerformReconnectFunction? performReconnect;
@@ -349,7 +355,13 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   // Have to do Future based API to match mox implementation.
   @override
-  Future<void> setShouldReconnect(bool value) async => _shouldReconnect = value;
+  Future<void> setShouldReconnect(bool value) async {
+    _shouldReconnect = value;
+    if (!value) {
+      _cancelBackoff();
+      _reconnectionInProgress = false;
+    }
+  }
 
   @override
   Future<bool> canTriggerFailure() async =>
@@ -365,9 +377,41 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   @override
   Future<void> onFailure() async {
     if (!await getIsReconnecting()) return;
+    _cancelBackoff();
+    _backoffTimer = Timer(
+      strategy.delay(_reconnectionAttempts),
+      () => unawaited(_fireBackoffReconnect()),
+    );
+  }
+
+  Future<void> triggerImmediateReconnect() async {
+    if (!await getShouldReconnect()) return;
+    final hasBackoff = _backoffTimer != null;
+    _cancelBackoff();
+    if (hasBackoff) {
+      await _fireBackoffReconnect();
+      return;
+    }
+
+    if (!await canTryReconnecting()) return;
+    _reconnectionInProgress = true;
     try {
-      await Future.delayed(strategy.delay(_reconnectionAttempts));
+      await _reconnect();
+    } finally {
+      _reconnectionInProgress = false;
+    }
+  }
+
+  void _cancelBackoff() {
+    _backoffTimer?.cancel();
+    _backoffTimer = null;
+  }
+
+  Future<void> _fireBackoffReconnect() async {
+    _cancelBackoff();
+    try {
       if (!await getShouldReconnect()) return;
+      if (!await getIsReconnecting()) return;
       await _reconnect();
     } finally {
       _reconnectionInProgress = false;
@@ -389,6 +433,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   @override
   Future<void> reset() async {
+    _cancelBackoff();
     _reconnectionInProgress = false;
     // _shouldReconnect = false;
   }

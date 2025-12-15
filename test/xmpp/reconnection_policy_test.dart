@@ -87,4 +87,29 @@ void main() {
       expect(reconnectCalls, 0);
     });
   });
+
+  test('triggerImmediateReconnect bypasses remaining backoff', () {
+    fakeAsync((async) {
+      final policy = XmppReconnectionPolicy.exponential();
+      var reconnectCalls = 0;
+      policy.register(() async {
+        reconnectCalls++;
+      });
+
+      unawaited(policy.setShouldReconnect(true));
+      unawaited(
+        policy.canTriggerFailure().then((value) {
+          if (value) {
+            unawaited(policy.onFailure());
+          }
+        }),
+      );
+      async.flushMicrotasks();
+
+      unawaited(policy.triggerImmediateReconnect());
+      async.flushMicrotasks();
+
+      expect(reconnectCalls, 1);
+    });
+  });
 }

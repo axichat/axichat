@@ -796,7 +796,6 @@ class _QuickAddModalContent extends StatelessWidget {
     final responsive = ResponsiveHelper.spec(context);
     final double maxWidth =
         responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
-    final double maxHeight = responsive.quickAddMaxHeight;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final EdgeInsets contentPadding =
         responsive.contentPadding.resolve(Directionality.of(context));
@@ -812,182 +811,192 @@ class _QuickAddModalContent extends StatelessWidget {
         ? Theme.of(context).colorScheme.surface
         : calendarContainerColor;
     final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
-    Widget shell = Container(
-      margin: isSheet ? EdgeInsets.zero : responsive.modalMargin,
-      constraints: BoxConstraints(
-        maxWidth: isSheet ? double.infinity : maxWidth,
-        maxHeight: maxHeight,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: borderRadius,
-        boxShadow: boxShadow,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: borderRadius,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _QuickAddHeader(onClose: onClose),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: scrollPadding,
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.manual,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AnimatedSwitcher(
-                      duration: baseAnimationDuration,
-                      child: formError == null
-                          ? const SizedBox.shrink()
-                          : Container(
-                              key: const ValueKey('quick-add-error'),
-                              margin: const EdgeInsets.only(
-                                  bottom: calendarGutterSm),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: calendarGutterMd,
-                                vertical: calendarInsetMd,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    calendarDangerColor.withValues(alpha: 0.08),
-                                borderRadius:
-                                    BorderRadius.circular(calendarBorderRadius),
-                                border: Border.all(
-                                  color: calendarDangerColor.withValues(
-                                    alpha: 0.35,
+    Widget shell = LayoutBuilder(
+      builder: (context, constraints) {
+        final double resolvedMaxHeight = isSheet && constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : responsive.quickAddMaxHeight;
+        return Container(
+          margin: isSheet ? EdgeInsets.zero : responsive.modalMargin,
+          constraints: BoxConstraints(
+            maxWidth: isSheet ? double.infinity : maxWidth,
+            maxHeight: resolvedMaxHeight,
+          ),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: borderRadius,
+            boxShadow: boxShadow,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: borderRadius,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _QuickAddHeader(onClose: onClose),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: scrollPadding,
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.manual,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: baseAnimationDuration,
+                          child: formError == null
+                              ? const SizedBox.shrink()
+                              : Container(
+                                  key: const ValueKey('quick-add-error'),
+                                  margin: const EdgeInsets.only(
+                                      bottom: calendarGutterSm),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: calendarGutterMd,
+                                    vertical: calendarInsetMd,
                                   ),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.error_outline,
-                                    color: calendarDangerColor,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: calendarInsetSm),
-                                  Expanded(
-                                    child: Text(
-                                      formError!,
-                                      style: const TextStyle(
-                                        color: calendarDangerColor,
-                                        fontWeight: FontWeight.w600,
+                                  decoration: BoxDecoration(
+                                    color: calendarDangerColor.withValues(
+                                        alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(
+                                      calendarBorderRadius,
+                                    ),
+                                    border: Border.all(
+                                      color: calendarDangerColor.withValues(
+                                        alpha: 0.35,
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline,
+                                        color: calendarDangerColor,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: calendarInsetSm),
+                                      Expanded(
+                                        child: Text(
+                                          formError!,
+                                          style: const TextStyle(
+                                            color: calendarDangerColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                        ),
+                        _QuickAddTaskNameField(
+                          controller: taskNameController,
+                          focusNode: taskNameFocusNode,
+                          helper: locationHelper,
+                          validator: titleValidator,
+                          autovalidateMode: titleAutovalidateMode,
+                          onChanged: onTaskNameChanged,
+                          onSubmit: onTaskSubmit,
+                        ),
+                        const SizedBox(height: calendarGutterMd),
+                        _QuickAddDescriptionField(
+                          controller: descriptionController,
+                        ),
+                        const SizedBox(height: calendarGutterMd),
+                        _QuickAddLocationField(
+                          controller: locationController,
+                          helper: locationHelper,
+                          onChanged: onLocationChanged,
+                        ),
+                        const SizedBox(height: calendarGutterMd),
+                        _QuickAddPriorityToggles(
+                          formController: formController,
+                          onImportantChanged: onImportantChanged,
+                          onUrgentChanged: onUrgentChanged,
+                        ),
+                        const SizedBox(height: calendarGutterMd),
+                        TaskChecklist(controller: checklistController),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        _QuickAddScheduleSection(
+                          formController: formController,
+                          onStartChanged: onStartChanged,
+                          onEndChanged: onEndChanged,
+                          onClear: onScheduleCleared,
+                        ),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        _QuickAddDeadlineSection(
+                          formController: formController,
+                          onChanged: onDeadlineChanged,
+                        ),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        AnimatedBuilder(
+                          animation: formController,
+                          builder: (context, _) {
+                            return _QuickAddReminderSection(
+                              reminders: formController.reminders,
+                              deadline: formController.deadline,
+                              onChanged: onRemindersChanged,
+                            );
+                          },
+                        ),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        _QuickAddRecurrenceSection(
+                          formController: formController,
+                          onChanged: onRecurrenceChanged,
+                          fallbackDate: fallbackDate,
+                        ),
+                        const SizedBox(height: calendarGutterMd),
+                        TaskSecondaryButton(
+                          label: 'Add to critical path',
+                          icon: Icons.route,
+                          onPressed:
+                              formController.isSubmitting || !hasCalendarBloc
+                                  ? null
+                                  : onAddToCriticalPath,
+                        ),
+                        const SizedBox(height: calendarInsetSm),
+                        CriticalPathMembershipList(
+                          paths: queuedPaths,
+                          onRemovePath: onRemoveQueuedPath,
+                        ),
+                      ],
                     ),
-                    _QuickAddTaskNameField(
-                      controller: taskNameController,
-                      focusNode: taskNameFocusNode,
-                      helper: locationHelper,
-                      validator: titleValidator,
-                      autovalidateMode: titleAutovalidateMode,
-                      onChanged: onTaskNameChanged,
-                      onSubmit: onTaskSubmit,
-                    ),
-                    const SizedBox(height: calendarGutterMd),
-                    _QuickAddDescriptionField(
-                      controller: descriptionController,
-                    ),
-                    const SizedBox(height: calendarGutterMd),
-                    _QuickAddLocationField(
-                      controller: locationController,
-                      helper: locationHelper,
-                      onChanged: onLocationChanged,
-                    ),
-                    const SizedBox(height: calendarGutterMd),
-                    _QuickAddPriorityToggles(
-                      formController: formController,
-                      onImportantChanged: onImportantChanged,
-                      onUrgentChanged: onUrgentChanged,
-                    ),
-                    const SizedBox(height: calendarGutterMd),
-                    TaskChecklist(controller: checklistController),
-                    const TaskSectionDivider(
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    _QuickAddScheduleSection(
-                      formController: formController,
-                      onStartChanged: onStartChanged,
-                      onEndChanged: onEndChanged,
-                      onClear: onScheduleCleared,
-                    ),
-                    const TaskSectionDivider(
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    _QuickAddDeadlineSection(
-                      formController: formController,
-                      onChanged: onDeadlineChanged,
-                    ),
-                    const TaskSectionDivider(
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    AnimatedBuilder(
-                      animation: formController,
-                      builder: (context, _) {
-                        return _QuickAddReminderSection(
-                          reminders: formController.reminders,
-                          deadline: formController.deadline,
-                          onChanged: onRemindersChanged,
+                  ),
+                ),
+                AnimatedPadding(
+                  duration: baseAnimationDuration,
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.only(
+                    bottom: actionInsetBuilder(context),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: taskNameController,
+                      builder: (context, value, _) {
+                        final bool canSubmit =
+                            titleValidator(value.text) == null;
+                        return _QuickAddActions(
+                          formController: formController,
+                          onCancel: onClose,
+                          onSubmit: onTaskSubmit,
+                          canSubmit: canSubmit,
                         );
                       },
                     ),
-                    const TaskSectionDivider(
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    _QuickAddRecurrenceSection(
-                      formController: formController,
-                      onChanged: onRecurrenceChanged,
-                      fallbackDate: fallbackDate,
-                    ),
-                    const SizedBox(height: calendarGutterMd),
-                    TaskSecondaryButton(
-                      label: 'Add to critical path',
-                      icon: Icons.route,
-                      onPressed: formController.isSubmitting || !hasCalendarBloc
-                          ? null
-                          : onAddToCriticalPath,
-                    ),
-                    const SizedBox(height: calendarInsetSm),
-                    CriticalPathMembershipList(
-                      paths: queuedPaths,
-                      onRemovePath: onRemoveQueuedPath,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-            AnimatedPadding(
-              duration: baseAnimationDuration,
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(
-                bottom: actionInsetBuilder(context),
-              ),
-              child: SafeArea(
-                top: false,
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: taskNameController,
-                  builder: (context, value, _) {
-                    final bool canSubmit = titleValidator(value.text) == null;
-                    return _QuickAddActions(
-                      formController: formController,
-                      onCancel: onClose,
-                      onSubmit: onTaskSubmit,
-                      canSubmit: canSubmit,
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
     if (isSheet) {
       return ClipRRect(

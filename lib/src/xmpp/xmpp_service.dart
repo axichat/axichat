@@ -1352,6 +1352,12 @@ class XmppService extends XmppBase
     }
   }
 
+  Future<void> triggerImmediateReconnect() async {
+    if (!_synchronousConnection.isCompleted) return;
+    if (connected) return;
+    await _connection.triggerImmediateReconnect();
+  }
+
   @override
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
