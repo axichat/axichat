@@ -73,6 +73,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
 
   await showAdaptiveBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     dialogMaxWidth: 760,
     surfacePadding: const EdgeInsets.all(calendarGutterLg),
     showCloseButton: false,
@@ -144,6 +145,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
     return BlocBuilder<B, CalendarState>(
       bloc: widget.bloc,
       builder: (context, state) {
+        final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
         final String query = _queryController.text.trim();
         final List<CalendarTask> results = _search(state, query);
         return ConstrainedBox(
@@ -214,9 +216,9 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                       : Scrollbar(
                           key: const ValueKey('results'),
                           child: ListView.separated(
-                            padding: const EdgeInsets.only(
+                            padding: EdgeInsets.only(
                               top: calendarInsetSm,
-                              bottom: calendarInsetMd,
+                              bottom: calendarInsetMd + keyboardInset,
                             ),
                             itemCount: results.length,
                             separatorBuilder: (_, __) =>

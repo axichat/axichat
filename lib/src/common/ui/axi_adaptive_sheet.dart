@@ -26,7 +26,6 @@ Future<T?> showAdaptiveBottomSheet<T>({
 }) {
   final commandSurface = resolveCommandSurface(context);
   final scheme = ShadTheme.of(context).colorScheme;
-  const Duration keyboardInsetAnimationDuration = Duration(milliseconds: 220);
 
   if (commandSurface == CommandSurface.sheet) {
     return showModalBottomSheet<T>(
@@ -40,22 +39,16 @@ Future<T?> showAdaptiveBottomSheet<T>({
       barrierColor: barrierColor,
       useRootNavigator: useRootNavigator,
       builder: (sheetContext) {
-        final double bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
         final Widget child = _AxiSheetChrome(
           showCloseButton: showCloseButton,
           onClose: () => Navigator.of(sheetContext).maybePop(),
           child: builder(sheetContext),
         );
-        return AnimatedPadding(
-          duration: keyboardInsetAnimationDuration,
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: AxiModalSurface(
-            backgroundColor: backgroundColor ?? scheme.card,
-            borderColor: scheme.border,
-            padding: surfacePadding,
-            child: child,
-          ),
+        return AxiModalSurface(
+          backgroundColor: backgroundColor ?? scheme.card,
+          borderColor: scheme.border,
+          padding: surfacePadding,
+          child: child,
         );
       },
     );

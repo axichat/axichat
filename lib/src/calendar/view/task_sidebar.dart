@@ -2348,11 +2348,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         backgroundColor: Colors.transparent,
         showCloseButton: false,
         builder: (sheetContext) {
-          final mediaQuery = MediaQuery.of(sheetContext);
-          final double keyboardInset = mediaQuery.viewInsets.bottom;
-          final double bottomInset = math.max(safeBottomInset, keyboardInset);
           final double availableHeight =
-              hostMediaQuery.size.height - safeTopInset - bottomInset;
+              hostMediaQuery.size.height - safeTopInset - safeBottomInset;
           final double maxHeight = availableHeight > 0
               ? availableHeight
               : hostMediaQuery.size.height - safeTopInset;

@@ -139,6 +139,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final l10n = context.l10n;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final titleStyle = textTheme.h4.copyWith(color: colors.foreground);
     final placeholderStyle =
         textTheme.muted.copyWith(color: colors.mutedForeground);
@@ -347,12 +348,15 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: widget.compact ? 12 : 24,
-          right: widget.compact ? 12 : 24,
-          top: widget.compact ? 12 : 24,
-          bottom: widget.compact ? 12 : 24,
-        ),
+        padding: () {
+          final double basePadding = widget.compact ? 12 : 24;
+          return EdgeInsets.only(
+            left: basePadding,
+            right: basePadding,
+            top: basePadding,
+            bottom: basePadding + keyboardInset,
+          );
+        }(),
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(

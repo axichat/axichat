@@ -1213,11 +1213,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         backgroundColor: Colors.transparent,
         showCloseButton: false,
         builder: (sheetContext) {
-          final double keyboardInset =
-              MediaQuery.of(sheetContext).viewInsets.bottom;
-          final double bottomInset = math.max(safeBottomInset, keyboardInset);
           final double availableHeight =
-              hostMediaQuery.size.height - safeTopInset - bottomInset;
+              hostMediaQuery.size.height - safeTopInset - safeBottomInset;
           final double maxHeight = availableHeight > 0
               ? availableHeight
               : hostMediaQuery.size.height - safeTopInset;

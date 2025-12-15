@@ -28,6 +28,24 @@ class AvatarUploadResult {
   final String hash;
 }
 
+sealed class _AvatarMetadataLoadResult {
+  const _AvatarMetadataLoadResult();
+}
+
+final class _AvatarMetadataLoaded extends _AvatarMetadataLoadResult {
+  const _AvatarMetadataLoaded(this.metadata);
+
+  final mox.UserAvatarMetadata metadata;
+}
+
+final class _AvatarMetadataMissing extends _AvatarMetadataLoadResult {
+  const _AvatarMetadataMissing();
+}
+
+final class _AvatarMetadataLoadFailed extends _AvatarMetadataLoadResult {
+  const _AvatarMetadataLoadFailed();
+}
+
 mixin AvatarService on XmppBase {
   final _avatarLog = Logger('AvatarService');
   final Set<String> _avatarRefreshInProgress = {};
@@ -75,8 +93,14 @@ mixin AvatarService on XmppBase {
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<mox.UserAvatarUpdatedEvent>((event) async {
+        final bareJid = event.jid.toBare().toString();
+        if (event.metadata.isEmpty) {
+          await _clearAvatarForJid(bareJid);
+          return;
+        }
+
         await _refreshAvatarForJid(
-          event.jid.toBare().toString(),
+          bareJid,
           metadata: event.metadata,
         );
       })
@@ -87,6 +111,46 @@ mixin AvatarService on XmppBase {
           return;
         }
         await _refreshAvatarFromVCard(bareJid, event.hash);
+      })
+      ..registerHandler<mox.PubSubItemsRetractedEvent>((event) async {
+        final node = event.node;
+        if (node != mox.userAvatarMetadataXmlns &&
+            node != mox.userAvatarDataXmlns) {
+          return;
+        }
+
+        final bareJid = _avatarSafeBareJid(event.from);
+        if (bareJid == null) return;
+
+        final existingHash = await _storedAvatarHash(bareJid);
+        if (existingHash == null || existingHash.trim().isEmpty) return;
+        if (!event.itemIds.contains(existingHash)) return;
+
+        await _clearAvatarForJid(bareJid);
+      })
+      ..registerHandler<mox.PubSubNodeDeletedEvent>((event) async {
+        final node = event.node;
+        if (node != mox.userAvatarMetadataXmlns &&
+            node != mox.userAvatarDataXmlns) {
+          return;
+        }
+
+        final bareJid = _avatarSafeBareJid(event.from);
+        if (bareJid == null) return;
+
+        await _clearAvatarForJid(bareJid);
+      })
+      ..registerHandler<mox.PubSubNodePurgedEvent>((event) async {
+        final node = event.node;
+        if (node != mox.userAvatarMetadataXmlns &&
+            node != mox.userAvatarDataXmlns) {
+          return;
+        }
+
+        final bareJid = _avatarSafeBareJid(event.from);
+        if (bareJid == null) return;
+
+        await _clearAvatarForJid(bareJid);
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
@@ -156,9 +220,27 @@ mixin AvatarService on XmppBase {
       if (manager == null) return;
 
       final existingHash = await _storedAvatarHash(bareJid);
-      final selectedMetadata = metadata != null && metadata.isNotEmpty
-          ? _selectMetadata(metadata)
-          : await _loadMetadata(manager, bareJid);
+      if (metadata != null && metadata.isEmpty) {
+        await _clearAvatarForJid(bareJid);
+        return;
+      }
+
+      mox.UserAvatarMetadata? selectedMetadata;
+      if (metadata != null) {
+        selectedMetadata = _selectMetadata(metadata);
+      } else {
+        switch (await _loadMetadata(bareJid)) {
+          case final _AvatarMetadataLoaded loaded:
+            selectedMetadata = loaded.metadata;
+          case _AvatarMetadataMissing():
+            if (existingHash != null && existingHash.trim().isNotEmpty) {
+              await _clearAvatarForJid(bareJid);
+            }
+            return;
+          case _AvatarMetadataLoadFailed():
+            return;
+        }
+      }
       if (selectedMetadata == null) return;
       if (!force &&
           existingHash != null &&
@@ -175,7 +257,13 @@ mixin AvatarService on XmppBase {
       );
       if (avatarDataResult.isType<mox.AvatarError>()) return;
       final avatarData = avatarDataResult.get<mox.UserAvatarData>();
-      final bytes = avatarData.data;
+      Uint8List bytes;
+      try {
+        final normalized = avatarData.base64.replaceAll(RegExp(r'\s+'), '');
+        bytes = base64Decode(normalized);
+      } on FormatException {
+        return;
+      }
       if (bytes.isEmpty) return;
       if (bytes.length > _maxAvatarBytes) return;
 
@@ -247,16 +335,37 @@ mixin AvatarService on XmppBase {
     }
   }
 
-  Future<mox.UserAvatarMetadata?> _loadMetadata(
-    mox.UserAvatarManager manager,
-    String jid,
-  ) async {
-    final metadataResult =
-        await manager.getLatestMetadata(mox.JID.fromString(jid));
-    if (metadataResult.isType<mox.AvatarError>()) return null;
-    final items = metadataResult.get<List<mox.UserAvatarMetadata>>();
-    if (items.isEmpty) return null;
-    return _selectMetadata(items);
+  Future<_AvatarMetadataLoadResult> _loadMetadata(String jid) async {
+    final pubsub = _connection.getManager<mox.PubSubManager>();
+    if (pubsub == null) return const _AvatarMetadataLoadFailed();
+
+    final result = await pubsub.getItems(
+      mox.JID.fromString(jid),
+      mox.userAvatarMetadataXmlns,
+      maxItems: 1,
+    );
+    if (result.isType<mox.PubSubError>()) {
+      final error = result.get<mox.PubSubError>();
+      if (error is mox.ItemNotFoundError || error is mox.NoItemReturnedError) {
+        return const _AvatarMetadataMissing();
+      }
+      return const _AvatarMetadataLoadFailed();
+    }
+
+    final items = result.get<List<mox.PubSubItem>>();
+    if (items.isEmpty) return const _AvatarMetadataMissing();
+
+    final payload = items.first.payload;
+    if (payload == null) return const _AvatarMetadataLoadFailed();
+
+    final metadata =
+        payload.findTags('info').map(mox.UserAvatarMetadata.fromXML).toList();
+    if (metadata.isEmpty) return const _AvatarMetadataMissing();
+
+    final selected = _selectMetadata(metadata);
+    if (selected == null) return const _AvatarMetadataLoadFailed();
+
+    return _AvatarMetadataLoaded(selected);
   }
 
   mox.UserAvatarMetadata? _selectMetadata(
@@ -491,6 +600,8 @@ mixin AvatarService on XmppBase {
   }) async {
     const openAccessModel = 'open';
     const rosterAccessModel = 'roster';
+    const maxPublishedAvatarItems = '1';
+    const sendLastPublishedItemOnSubscribe = 'on_subscribe';
     final pubsub = _connection.getManager<mox.PubSubManager>();
     if (pubsub == null) {
       throw XmppAvatarException('PubSub is unavailable');
@@ -498,6 +609,22 @@ mixin AvatarService on XmppBase {
     final host = mox.JID.fromString(targetJid);
     final accessModel = public ? openAccessModel : rosterAccessModel;
     final publishOptions = mox.PubSubPublishOptions(accessModel: accessModel);
+    final createNodeAccessModel =
+        public ? mox.AccessModel.open : mox.AccessModel.roster;
+    final dataNodeConfig = mox.NodeConfig(
+      accessModel: createNodeAccessModel,
+      maxItems: maxPublishedAvatarItems,
+      persistItems: true,
+    );
+    final metadataNodeConfig = mox.NodeConfig(
+      accessModel: createNodeAccessModel,
+      deliverNotifications: true,
+      deliverPayloads: true,
+      maxItems: maxPublishedAvatarItems,
+      notifyRetract: true,
+      persistItems: true,
+      sendLastPublishedItem: sendLastPublishedItemOnSubscribe,
+    );
 
     final dataPayload =
         (mox.XmlBuilder.withNamespace('data', mox.userAvatarDataXmlns)
@@ -511,6 +638,7 @@ mixin AvatarService on XmppBase {
           id: payload.hash,
           options: publishOptions,
           autoCreate: true,
+          createNodeConfig: dataNodeConfig,
         )
         .timeout(_avatarPublishTimeout);
     if (dataResult.isType<mox.PubSubError>()) {
@@ -537,6 +665,7 @@ mixin AvatarService on XmppBase {
           id: payload.hash,
           options: publishOptions,
           autoCreate: true,
+          createNodeConfig: metadataNodeConfig,
         )
         .timeout(_avatarPublishTimeout);
     if (metadataResult.isType<mox.PubSubError>()) {

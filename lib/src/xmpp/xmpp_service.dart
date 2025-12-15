@@ -310,6 +310,7 @@ class XmppService extends XmppBase
 
   static XmppService? _instance;
   static const bool _enableStreamManagement = true;
+  static const String _capabilityHashBase = 'https://axichat.im/caps';
 
   factory XmppService({
     required FutureOr<XmppConnection> Function() buildConnection,
@@ -498,7 +499,7 @@ class XmppService extends XmppBase
           ),
         ]),
         mox.PingManager(const Duration(minutes: 3)),
-        // mox.EntityCapabilitiesManager(),
+        mox.EntityCapabilitiesManager(_capabilityHashBase),
         SafePubSubManager(),
         mox.CSIManager(),
         mox.StableIdManager(),
