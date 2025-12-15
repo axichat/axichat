@@ -217,6 +217,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                       : Scrollbar(
                           key: const ValueKey('results'),
                           child: ListView.separated(
+                            shrinkWrap: true,
                             padding: EdgeInsets.only(
                               top: calendarInsetSm,
                               bottom: calendarInsetMd + keyboardInset,
