@@ -642,7 +642,7 @@ class _ChatState extends State<Chat> {
   bool _composerHasText = false;
   String _lastSubjectValue = '';
   final _approvedAttachmentSenders = <String>{};
-  final _fileMetadataStreams = <String, Stream<FileMetadataData?>>{};
+  final _fileMetadataStreamEntries = <String, _FileMetadataStreamEntry>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   var _chatOpenedAt = DateTime.now();
@@ -1048,10 +1048,15 @@ class _ChatState extends State<Chat> {
   }
 
   Stream<FileMetadataData?> _metadataStreamFor(String id) {
-    return _fileMetadataStreams.putIfAbsent(
+    final entry = _fileMetadataStreamEntries.putIfAbsent(
       id,
-      () => context.read<XmppService>().fileMetadataStream(id),
+      () {
+        final entry = _FileMetadataStreamEntry();
+        entry.attach(context.read<XmppService>().fileMetadataStream(id));
+        return entry;
+      },
     );
+    return entry.stream;
   }
 
   bool _shouldAllowAttachment({
@@ -2140,6 +2145,9 @@ class _ChatState extends State<Chat> {
   @override
   void dispose() {
     _persistScrollOffset(key: _lastScrollStorageKey, skipPageStorage: true);
+    for (final entry in _fileMetadataStreamEntries.values) {
+      entry.dispose();
+    }
     _scrollController.dispose();
     _focusNode.dispose();
     _textController.removeListener(_typingListener);
@@ -5458,6 +5466,56 @@ class _ChatState extends State<Chat> {
       }
     }
     return null;
+  }
+}
+
+final class _FileMetadataStreamEntry {
+  final StreamController<FileMetadataData?> _controller =
+      StreamController<FileMetadataData?>.broadcast();
+  StreamSubscription<FileMetadataData?>? _subscription;
+  var _hasValue = false;
+  FileMetadataData? _latest;
+  Object? _lastError;
+  StackTrace? _lastStackTrace;
+
+  Stream<FileMetadataData?> get stream => Stream.multi(
+        (multi) {
+          if (_lastError != null) {
+            multi.addError(_lastError!, _lastStackTrace);
+          } else if (_hasValue) {
+            multi.add(_latest);
+          }
+          final subscription = _controller.stream.listen(
+            multi.add,
+            onError: (Object error, StackTrace stackTrace) =>
+                multi.addError(error, stackTrace),
+          );
+          multi.onCancel = subscription.cancel;
+        },
+      );
+
+  void attach(Stream<FileMetadataData?> source) {
+    if (_subscription != null) return;
+    _subscription = source.listen(
+      (value) {
+        _latest = value;
+        _hasValue = true;
+        _controller.add(value);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        _lastError = error;
+        _lastStackTrace = stackTrace;
+        _controller.addError(error, stackTrace);
+      },
+    );
+  }
+
+  void dispose() {
+    final subscription = _subscription;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
+    unawaited(_controller.close());
   }
 }
 
