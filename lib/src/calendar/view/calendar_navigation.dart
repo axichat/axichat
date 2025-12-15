@@ -102,7 +102,7 @@ class CalendarNavigation extends StatelessWidget {
         context: context,
         label: l10n.calendarToday,
         icon: null,
-        highlighted: _isToday(state.selectedDate),
+        highlighted: !_isToday(state.selectedDate),
         tooltip: l10n.calendarToday,
         compact: isCompact,
         showLabelInCompact: true,
