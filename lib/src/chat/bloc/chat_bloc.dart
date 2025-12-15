@@ -657,30 +657,44 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     if (!kEnableDemoChats) return;
     if (_bareJid(chat.jid) != DemoChats.groupJid) return;
-    if (state.pendingAttachments.isNotEmpty) return;
     final service = _messageService;
     if (service is! XmppService) {
       return;
     }
-    final materialized = await service.materializeDemoAsset(
-      assetPath: DemoChats.composerAttachment.assetPath,
-      fileName: DemoChats.composerAttachment.fileName,
-    );
-    if (materialized == null) return;
-    final pending = PendingAttachment(
-      id: 'demo-pending-${DemoChats.composerAttachment.fileName}',
-      attachment: EmailAttachment(
-        path: materialized.path,
-        fileName: DemoChats.composerAttachment.fileName,
-        sizeBytes: materialized.sizeBytes,
-        mimeType: DemoChats.composerAttachment.mimeType,
-        width: materialized.width,
-        height: materialized.height,
-      ),
-    );
+    final existingFileNames = state.pendingAttachments
+        .map((pending) => pending.attachment.fileName)
+        .toSet();
+    final pendingToAdd = <PendingAttachment>[];
+    for (final asset in DemoChats.composerAttachments) {
+      if (existingFileNames.contains(asset.fileName)) {
+        continue;
+      }
+      final materialized = await service.materializeDemoAsset(
+        assetPath: asset.assetPath,
+        fileName: asset.fileName,
+      );
+      if (materialized == null) {
+        continue;
+      }
+      pendingToAdd.add(
+        PendingAttachment(
+          id: 'demo-pending-${asset.fileName}',
+          attachment: EmailAttachment(
+            path: materialized.path,
+            fileName: asset.fileName,
+            sizeBytes: materialized.sizeBytes,
+            mimeType: asset.mimeType,
+            width: materialized.width,
+            height: materialized.height,
+          ),
+        ),
+      );
+      existingFileNames.add(asset.fileName);
+    }
+    if (pendingToAdd.isEmpty) return;
     emit(
       state.copyWith(
-        pendingAttachments: [...state.pendingAttachments, pending],
+        pendingAttachments: [...state.pendingAttachments, ...pendingToAdd],
       ),
     );
   }
