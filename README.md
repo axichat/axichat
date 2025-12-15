@@ -5,14 +5,14 @@
     </td>
     <td width="12"></td>
     <td valign="middle">
-      <big><big><big><strong>Axichat</strong></big></big></big>
+      <font size="7"><strong>Axichat</strong></font>
     </td>
   </tr>
 </table>
 
 <hr />
 
-<h2 align="center">The best of instant messaging, email, and calendar—lovable because of what it has and what it <em><strong>doesn't</strong></em> have.</h2>
+<h2 align="center"><strong>The best of instant messaging, email, and calendar all in one.</h2>
 
 <p align="center">
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
@@ -30,52 +30,44 @@
 
 <table width="100%" border="0" cellpadding="0" cellspacing="0">
   <tr>
-    <td width="50%" align="center" valign="top">
-      <table border="0" cellpadding="0" cellspacing="0">
+    <td width="47%" align="center" valign="top">
+      <table width="100%" border="0" cellpadding="0" cellspacing="0">
         <tr>
-          <td>
-            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" height="276" alt="Axichat mobile chat screenshot" />
+          <td width="48%" valign="top">
+            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="100%" alt="Axichat mobile chat screenshot" />
           </td>
-          <td width="12"></td>
-          <td>
-            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" height="276" alt="Axichat mobile email screenshot" />
+          <td width="4%"></td>
+          <td width="48%" valign="top">
+            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="100%" alt="Axichat mobile email screenshot" />
           </td>
         </tr>
         <tr>
-          <td height="12" colspan="3"></td>
-        </tr>
-        <tr>
-          <td>
-            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" height="276" alt="Axichat mobile calendar screenshot" />
+          <td width="48%" valign="top">
+            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="100%" alt="Axichat mobile calendar screenshot" />
           </td>
-          <td width="12"></td>
-          <td>
-            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" height="276" alt="Axichat mobile calendar alt screenshot" />
+          <td width="4%"></td>
+          <td width="48%" valign="top">
+            <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="100%" alt="Axichat mobile calendar alt screenshot" />
           </td>
         </tr>
       </table>
     </td>
-    <td width="50%" align="center" valign="top">
-      <table border="0" cellpadding="0" cellspacing="0">
+    <td width="2%"></td>
+    <td width="51%" align="center" valign="top">
+      <table width="100%" border="0" cellpadding="0" cellspacing="0">
         <tr>
-          <td>
-            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" height="180" alt="Axichat desktop screenshot 1" />
+          <td valign="top">
+            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="100%" alt="Axichat desktop screenshot 1" />
           </td>
         </tr>
         <tr>
-          <td height="12"></td>
-        </tr>
-        <tr>
-          <td>
-            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" height="180" alt="Axichat desktop screenshot 2" />
+          <td valign="top">
+            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="100%" alt="Axichat desktop screenshot 2" />
           </td>
         </tr>
         <tr>
-          <td height="12"></td>
-        </tr>
-        <tr>
-          <td>
-            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" height="180" alt="Axichat calendar screenshot" />
+          <td valign="top">
+            <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="100%" alt="Axichat calendar screenshot" />
           </td>
         </tr>
       </table>
