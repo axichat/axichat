@@ -45,47 +45,54 @@ class _AxiMoreState extends State<AxiMore> {
       builder: (sheetContext) {
         final colors = ShadTheme.of(sheetContext).colorScheme;
         final textTheme = ShadTheme.of(sheetContext).textTheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: sheetPadding,
-              vertical: sheetPadding,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final action in actions) ...[
-                  ListTile(
-                    enabled: action.enabled,
-                    leading: action.icon == null
-                        ? null
-                        : Icon(
-                            action.icon,
-                            color: action.destructive
-                                ? colors.destructive
-                                : colors.primary,
-                          ),
-                    title: Text(
-                      action.label,
-                      style: action.destructive
-                          ? textTheme.small.copyWith(
-                              color: colors.destructive,
-                              fontWeight: FontWeight.w700,
-                            )
-                          : null,
-                    ),
-                    onTap: action.enabled
-                        ? () {
-                            Navigator.of(sheetContext).pop();
-                            action.onPressed?.call();
-                          }
-                        : null,
-                  ),
-                  const SizedBox(height: sheetItemSpacing),
-                ],
-              ],
+        return AxiSheetScaffold.scroll(
+          header: AxiSheetHeader(
+            title: Text(widget.tooltip),
+            onClose: () => Navigator.of(sheetContext).maybePop(),
+            padding: const EdgeInsets.fromLTRB(
+              sheetPadding,
+              sheetPadding,
+              sheetPadding,
+              sheetPadding,
             ),
           ),
+          bodyPadding: const EdgeInsets.fromLTRB(
+            sheetPadding,
+            0,
+            sheetPadding,
+            sheetPadding,
+          ),
+          children: [
+            for (final action in actions) ...[
+              ListTile(
+                enabled: action.enabled,
+                leading: action.icon == null
+                    ? null
+                    : Icon(
+                        action.icon,
+                        color: action.destructive
+                            ? colors.destructive
+                            : colors.primary,
+                      ),
+                title: Text(
+                  action.label,
+                  style: action.destructive
+                      ? textTheme.small.copyWith(
+                          color: colors.destructive,
+                          fontWeight: FontWeight.w700,
+                        )
+                      : null,
+                ),
+                onTap: action.enabled
+                    ? () {
+                        Navigator.of(sheetContext).pop();
+                        action.onPressed?.call();
+                      }
+                    : null,
+              ),
+              const SizedBox(height: sheetItemSpacing),
+            ],
+          ],
         );
       },
     );

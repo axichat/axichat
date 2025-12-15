@@ -1003,41 +1003,41 @@ class _DraftFormState extends State<DraftForm> {
       builder: (sheetContext) {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes);
-        final colors = Theme.of(context).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(
-                    attachmentIcon(attachment),
-                    color: colors.primary,
-                  ),
-                  title: Text(attachment.fileName),
-                  subtitle: Text(sizeLabel),
-                ),
-                if (attachment.isImage)
-                  ListTile(
-                    leading: const Icon(LucideIcons.image),
-                    title: Text(l10n.draftAttachmentPreview),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      _showAttachmentPreview(pending);
-                    },
-                  ),
-                ListTile(
-                  leading: const Icon(LucideIcons.trash2),
-                  title: Text(l10n.draftRemoveAttachment),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _handlePendingAttachmentRemoved(pending.id);
-                  },
-                ),
-              ],
-            ),
+        final colors = Theme.of(sheetContext).colorScheme;
+        return AxiSheetScaffold.scroll(
+          header: AxiSheetHeader(
+            title: Text(l10n.chatAttachmentTooltip),
+            onClose: () => Navigator.of(sheetContext).maybePop(),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           ),
+          bodyPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          children: [
+            ListTile(
+              leading: Icon(
+                attachmentIcon(attachment),
+                color: colors.primary,
+              ),
+              title: Text(attachment.fileName),
+              subtitle: Text(sizeLabel),
+            ),
+            if (attachment.isImage)
+              ListTile(
+                leading: const Icon(LucideIcons.image),
+                title: Text(l10n.draftAttachmentPreview),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showAttachmentPreview(pending);
+                },
+              ),
+            ListTile(
+              leading: const Icon(LucideIcons.trash2),
+              title: Text(l10n.draftRemoveAttachment),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _handlePendingAttachmentRemoved(pending.id);
+              },
+            ),
+          ],
         );
       },
     );

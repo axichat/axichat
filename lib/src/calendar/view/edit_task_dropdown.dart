@@ -186,22 +186,27 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       required double safeBottom,
     }) {
       final bool keyboardOpen = keyboardInset > safeBottom;
-      final Widget actionRow = ValueListenableBuilder<TextEditingValue>(
-        valueListenable: _titleController,
-        builder: (context, value, _) {
-          final bool canSave = TaskTitleValidation.validate(value.text) == null;
-          return _EditTaskActionsRow(
-            task: widget.task,
-            onDelete: () {
-              widget.onTaskDeleted(widget.task.id);
-              widget.onClose();
-            },
-            onCancel: widget.onClose,
-            onSave: _handleSave,
-            canSave: canSave,
-          );
-        },
-      );
+      Widget actionRow({required bool includeTopBorder}) {
+        return ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _titleController,
+          builder: (context, value, _) {
+            final bool canSave =
+                TaskTitleValidation.validate(value.text) == null;
+            return _EditTaskActionsRow(
+              task: widget.task,
+              onDelete: () {
+                widget.onTaskDeleted(widget.task.id);
+                widget.onClose();
+              },
+              onCancel: widget.onClose,
+              onSave: _handleSave,
+              canSave: canSave,
+              includeTopBorder: includeTopBorder,
+            );
+          },
+        );
+      }
+
       return Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.disabled,
@@ -305,24 +310,22 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       blocOverride: widget.inlineActionsBloc,
                     ),
                     const SizedBox(height: calendarFormGap),
-                    if (keyboardOpen) actionRow,
+                    if (keyboardOpen) actionRow(includeTopBorder: true),
                   ],
                 ),
               ),
             ),
             if (!keyboardOpen)
-              SafeArea(
-                top: false,
-                bottom: true,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    calendarGutterLg,
-                    calendarGutterMd,
-                    calendarGutterLg,
-                    calendarGutterMd,
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Divider(height: 1),
+                  SafeArea(
+                    top: false,
+                    bottom: true,
+                    child: actionRow(includeTopBorder: false),
                   ),
-                  child: actionRow,
-                ),
+                ],
               ),
           ],
         ),
@@ -924,6 +927,7 @@ class _EditTaskActionsRow extends StatelessWidget {
     required this.onCancel,
     required this.onSave,
     required this.canSave,
+    required this.includeTopBorder,
   });
 
   final CalendarTask task;
@@ -931,11 +935,12 @@ class _EditTaskActionsRow extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onSave;
   final bool canSave;
+  final bool includeTopBorder;
 
   @override
   Widget build(BuildContext context) {
     return TaskFormActionsRow(
-      includeTopBorder: true,
+      includeTopBorder: includeTopBorder,
       padding: calendarPaddingLg,
       gap: 8,
       children: [

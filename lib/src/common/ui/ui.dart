@@ -40,6 +40,7 @@ export 'presence_indicator.dart';
 export 'string_to_color.dart';
 export 'squircle_border.dart';
 export 'axi_adaptive_sheet.dart';
+export 'axi_sheet_scaffold.dart';
 
 const appDisplayName = 'axichat';
 const androidIconPath = 'app_icon';
