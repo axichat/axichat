@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -624,11 +625,13 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   Color _backgroundColor(DateTime? value) {
+    const double statusTintMix = 0.05;
+    final base = calendarContainerColor;
     if (!widget.showStatusColors || value == null) {
-      return Colors.white;
+      return base;
     }
     final border = _borderColor(value);
-    return Color.lerp(Colors.white, border, 0.05) ?? Colors.white;
+    return Color.lerp(base, border, statusTintMix) ?? base;
   }
 
   Color _iconColor(DateTime? value) {
@@ -998,7 +1001,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
         ),
         child: Material(
           borderRadius: BorderRadius.circular(12),
-          color: Colors.white,
+          color: calendarContainerColor,
           elevation: 12,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
@@ -1185,7 +1188,7 @@ class _DeadlineFieldContent extends StatelessWidget {
       if (!showStatusLabel) {
         return Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             color: calendarTitleColor,
             fontWeight: FontWeight.w500,
@@ -1209,7 +1212,7 @@ class _DeadlineFieldContent extends StatelessWidget {
           const SizedBox(height: calendarInsetSm),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               color: calendarTitleColor,
               fontWeight: FontWeight.w500,
@@ -1221,7 +1224,7 @@ class _DeadlineFieldContent extends StatelessWidget {
 
     return Text(
       placeholder,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
         color: calendarTimeLabelColor,
         fontWeight: FontWeight.w400,
@@ -1248,7 +1251,7 @@ class _DeadlineMonthHeader extends StatelessWidget {
         horizontal: calendarGutterMd,
         vertical: calendarGutterSm,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: calendarBorderColor, width: 1),
         ),
@@ -1263,7 +1266,7 @@ class _DeadlineMonthHeader extends StatelessWidget {
             child: Center(
               child: Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: calendarTitleColor,
@@ -1354,7 +1357,7 @@ class _DeadlineCalendarGrid extends StatelessWidget {
                     child: Center(
                       child: Text(
                         label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: calendarTimeLabelColor,
@@ -1392,19 +1395,19 @@ class _DeadlineCalendarGrid extends StatelessWidget {
                       ? calendarPrimaryColor
                       : isDisabled
                           ? calendarBorderColor.withValues(alpha: 0.2)
-                          : Colors.white,
+                          : calendarContainerColor,
                   hoverBackgroundColor: isSelected
                       ? calendarPrimaryHoverColor
                       : isDisabled
                           ? calendarBorderColor.withValues(alpha: 0.2)
                           : calendarPrimaryColor.withValues(alpha: 0.12),
                   foregroundColor: isSelected
-                      ? Colors.white
+                      ? context.colorScheme.primaryForeground
                       : isDisabled
                           ? calendarSubtitleColor.withValues(alpha: 0.6)
                           : calendarTitleColor,
                   hoverForegroundColor: isSelected
-                      ? Colors.white
+                      ? context.colorScheme.primaryForeground
                       : isDisabled
                           ? calendarSubtitleColor.withValues(alpha: 0.6)
                           : calendarPrimaryColor,
@@ -1419,7 +1422,7 @@ class _DeadlineCalendarGrid extends StatelessWidget {
                               ? FontWeight.w400
                               : FontWeight.w500,
                       color: isSelected
-                          ? Colors.white
+                          ? context.colorScheme.primaryForeground
                           : isToday
                               ? calendarPrimaryColor
                               : isDisabled
@@ -1475,7 +1478,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
         horizontal: calendarGutterMd,
         vertical: 10,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: calendarBorderColor, width: 1),
         ),
@@ -1483,7 +1486,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Time',
             style: TextStyle(
               fontSize: 11,
@@ -1553,7 +1556,7 @@ class _DeadlineTimeColumn extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
             color: calendarSubtitleColor,
@@ -1564,7 +1567,7 @@ class _DeadlineTimeColumn extends StatelessWidget {
         Expanded(
           child: DecoratedBox(
             decoration: showRightDivider
-                ? const BoxDecoration(
+                ? BoxDecoration(
                     border: Border(
                       right: BorderSide(color: calendarBorderColor, width: 1),
                     ),
@@ -1577,7 +1580,7 @@ class _DeadlineTimeColumn extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 physics: const ClampingScrollPhysics(),
                 itemCount: values.length,
-                separatorBuilder: (_, __) => const Divider(
+                separatorBuilder: (_, __) => Divider(
                   height: 1,
                   thickness: 1,
                   color: calendarBorderColor,
@@ -1664,6 +1667,7 @@ class _DeadlinePickerActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     final verticalPadding = showTimeSelectors ? 10.0 : 8.0;
     final horizontalPadding = showTimeSelectors ? 12.0 : 16.0;
     final Widget content = Container(
@@ -1671,7 +1675,7 @@ class _DeadlinePickerActions extends StatelessWidget {
         horizontal: horizontalPadding,
         vertical: verticalPadding,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: calendarBorderColor, width: 1),
         ),
@@ -1696,8 +1700,8 @@ class _DeadlinePickerActions extends StatelessWidget {
             size: ShadButtonSize.sm,
             backgroundColor: calendarPrimaryColor,
             hoverBackgroundColor: calendarPrimaryHoverColor,
-            foregroundColor: Colors.white,
-            hoverForegroundColor: Colors.white,
+            foregroundColor: colors.primaryForeground,
+            hoverForegroundColor: colors.primaryForeground,
             onPressed: onDone,
             child: const Text('Done'),
           ),

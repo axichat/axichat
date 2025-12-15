@@ -276,9 +276,9 @@ class _CompactTaskTile extends StatelessWidget {
         boxShadow: calendarLightShadow,
         border: Border(
           left: BorderSide(color: indicatorColor, width: 4),
-          top: const BorderSide(color: calendarBorderColor, width: 1),
-          right: const BorderSide(color: calendarBorderColor, width: 1),
-          bottom: const BorderSide(color: calendarBorderColor, width: 1),
+          top: BorderSide(color: calendarBorderColor, width: 1),
+          right: BorderSide(color: calendarBorderColor, width: 1),
+          bottom: BorderSide(color: calendarBorderColor, width: 1),
         ),
       ),
       child: Material(
@@ -538,7 +538,7 @@ class _FullTaskTile extends StatelessWidget {
                             task.description!,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: calendarSubtitleColor,
                               fontSize: 13,
                             ),
@@ -557,7 +557,7 @@ class _FullTaskTile extends StatelessWidget {
                         const SizedBox(height: calendarGutterSm),
                         Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.access_time,
                               size: 16,
                               color: calendarTimeLabelColor,
@@ -571,7 +571,7 @@ class _FullTaskTile extends StatelessWidget {
                             ),
                             if (durationLabel != null) ...[
                               const SizedBox(width: calendarGutterLg),
-                              const Icon(
+                              Icon(
                                 Icons.timer,
                                 size: 16,
                                 color: calendarTimeLabelColor,
@@ -579,7 +579,7 @@ class _FullTaskTile extends StatelessWidget {
                               const SizedBox(width: calendarInsetLg),
                               Text(
                                 durationLabel!,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: calendarTimeLabelColor,
                                   fontSize: 14,
                                 ),

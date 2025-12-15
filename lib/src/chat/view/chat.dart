@@ -1043,14 +1043,6 @@ class _ChatState extends State<Chat> {
     return true;
   }
 
-  void _handlePointerDown(PointerDownEvent event) {}
-
-  void _handlePointerMove(PointerMoveEvent event) {}
-
-  void _handlePointerUp(PointerUpEvent event) {}
-
-  void _handlePointerCancel(PointerCancelEvent event) {}
-
   void _ensureRecipientBarHeightCleared() {
     // No-op now that recipient bar height is derived from layout constraints.
   }
@@ -2742,6 +2734,9 @@ class _ChatState extends State<Chat> {
                                                   true,
                                         )
                                         .toList();
+                                    final isEmailChat =
+                                        state.chat?.defaultTransport.isEmail ==
+                                            true;
                                     final loadingMessages =
                                         !state.messagesLoaded;
                                     final selectedMessages =
@@ -2913,6 +2908,27 @@ class _ChatState extends State<Chat> {
                                       final displayedBody =
                                           isSubjectOnlyBody ? '' : bodyText;
                                       final errorLabel = e.error.asString;
+                                      MessageStatus statusFor(Message e) {
+                                        if (e.error.isNotNone) {
+                                          return MessageStatus.failed;
+                                        }
+                                        if (isEmailChat) {
+                                          if (e.received || e.displayed) {
+                                            return MessageStatus.received;
+                                          }
+                                          if (e.acked)
+                                            return MessageStatus.sent;
+                                          return MessageStatus.pending;
+                                        }
+                                        if (e.displayed)
+                                          return MessageStatus.read;
+                                        if (e.received) {
+                                          return MessageStatus.received;
+                                        }
+                                        if (e.acked) return MessageStatus.sent;
+                                        return MessageStatus.pending;
+                                      }
+
                                       final renderedText = e.error.isNotNone
                                           ? '$errorLabel${bodyText.isNotEmpty ? ': "$bodyTextTrimmed"' : ''}'
                                           : displayedBody;
@@ -2921,16 +2937,7 @@ class _ChatState extends State<Chat> {
                                           user: author,
                                           createdAt: e.timestamp!.toLocal(),
                                           text: renderedText,
-                                          status: e.error.isNotNone
-                                              ? MessageStatus.failed
-                                              : e.displayed
-                                                  ? MessageStatus.read
-                                                  : e.received
-                                                      ? MessageStatus.received
-                                                      : e.acked
-                                                          ? MessageStatus.sent
-                                                          : MessageStatus
-                                                              .pending,
+                                          status: statusFor(e),
                                           customProperties: {
                                             'id': e.stanzaID,
                                             'body': bodyText,

@@ -214,7 +214,7 @@ class _CalendarGuestBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: calendarSelectedDayColor,
         border: Border(
           bottom: BorderSide(color: calendarBorderColor, width: 1),
@@ -223,7 +223,7 @@ class _CalendarGuestBanner extends StatelessWidget {
       padding: calendarMarginMedium,
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.info_outline,
             size: 20,
             color: calendarSubtitleColor,
@@ -267,17 +267,22 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    const double appBarShadowAlpha = 0.06;
+    const double appBarShadowBlurRadius = 18;
+    const Offset appBarShadowOffset = Offset(0, 6);
+    final Color appBarShadowColor =
+        Theme.of(context).shadowColor.withValues(alpha: appBarShadowAlpha);
     return Container(
       decoration: BoxDecoration(
         color: colors.background,
         border: Border(
           bottom: BorderSide(color: colors.border),
         ),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x0F000000),
-            blurRadius: 18,
-            offset: Offset(0, 6),
+            color: appBarShadowColor,
+            blurRadius: appBarShadowBlurRadius,
+            offset: appBarShadowOffset,
           ),
         ],
       ),
@@ -358,7 +363,7 @@ class _CalendarViewModeSelector extends StatelessWidget {
 
     final selectorShape = SquircleBorder(
       cornerRadius: calendarBorderRadius * 2,
-      side: const BorderSide(color: calendarBorderColor),
+      side: BorderSide(color: calendarBorderColor),
     );
 
     return DecoratedBox(
@@ -686,7 +691,7 @@ class _CalendarTaskList extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.task_alt,
               size: 64,
               color: calendarTimeLabelColor,

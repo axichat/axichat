@@ -24,10 +24,10 @@ class PriorityCheckboxTile extends StatelessWidget {
     final bool isEnabled = onChanged != null;
     final bool isActive = value || isIndeterminate;
     final backgroundColor =
-        isActive ? color.withValues(alpha: 0.08) : Colors.white;
+        isActive ? color.withValues(alpha: 0.08) : calendarContainerColor;
     final borderColor = isActive ? color : calendarBorderColor;
     final Color textColor = isActive ? color : calendarTitleColor;
-    const Color disabledColor = calendarSubtitleColor;
+    final Color disabledColor = calendarSubtitleColor;
     final bool showShadow = isActive && isEnabled;
     final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1);
     final bool? checkboxValue = isIndeterminate ? null : value;

@@ -170,15 +170,21 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     final BorderRadius radius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(8);
-    final Color background =
-        isSheet ? Theme.of(context).colorScheme.surface : Colors.white;
+    final Color background = isSheet
+        ? Theme.of(context).colorScheme.surface
+        : calendarContainerColor;
+    const double dropdownShadowAlpha = 0.12;
+    const double dropdownShadowBlurRadius = 24;
+    const Offset dropdownShadowOffset = Offset(0, 8);
+    final Color dropdownShadowColor =
+        Theme.of(context).shadowColor.withValues(alpha: dropdownShadowAlpha);
     final List<BoxShadow>? boxShadow = isSheet
         ? null
-        : const [
+        : [
             BoxShadow(
-              color: Color(0x1F000000),
-              blurRadius: 24,
-              offset: Offset(0, 8),
+              color: dropdownShadowColor,
+              blurRadius: dropdownShadowBlurRadius,
+              offset: dropdownShadowOffset,
             ),
           ];
     Widget buildBody({

@@ -231,11 +231,12 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
       ),
       builder: (context, value, _) {
         final borderRadius = BorderRadius.circular(999);
-        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final colors = context.colorScheme;
+        const double trackMix = 0.08;
         final Color trackColor = Color.lerp(
           widget.backgroundColor,
-          isDark ? Colors.white : Colors.black,
-          0.08,
+          colors.foreground,
+          trackMix,
         )!;
         return ClipRRect(
           borderRadius: borderRadius,

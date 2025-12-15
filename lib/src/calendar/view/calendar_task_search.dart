@@ -206,7 +206,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                             textInputAction: TextInputAction.search,
                             onSubmitted: _handleSubmitted,
                             onChanged: (_) => setState(() {}),
-                            prefix: const Icon(
+                            prefix: Icon(
                               Icons.search,
                               color: calendarSubtitleColor,
                             ),

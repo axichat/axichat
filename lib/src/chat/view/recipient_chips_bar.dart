@@ -35,7 +35,6 @@ const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
 );
 const EdgeInsets _recipientChipLabelPadding =
     EdgeInsets.symmetric(horizontal: 2);
-const TextInputType _recipientKeyboardType = TextInputType.emailAddress;
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -1135,14 +1134,15 @@ class _RecipientAutocompleteField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
-      child: RawAutocomplete<FanOutTarget>(
-        textEditingController: controller,
-        focusNode: focusNode,
-        optionsBuilder: (value) {
-          final query = value.text.trim();
-          if (query.isEmpty) {
+    return AutofillGroup(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
+        child: RawAutocomplete<FanOutTarget>(
+          textEditingController: controller,
+          focusNode: focusNode,
+          optionsBuilder: (value) {
+            final query = value.text.trim();
+            if (query.isEmpty) {
             onOptionsChanged(const <FanOutTarget>[]);
             return const Iterable<FanOutTarget>.empty();
           }
@@ -1190,16 +1190,14 @@ class _RecipientAutocompleteField extends StatelessWidget {
                           focusNode: fieldFocusNode,
                           cursorColor: colors.primary,
                           maxLines: 1,
-                          keyboardType: _recipientKeyboardType,
+                          keyboardType: TextInputType.emailAddress,
                           textCapitalization: TextCapitalization.none,
                           autocorrect: false,
                           smartDashesType: SmartDashesType.disabled,
                           smartQuotesType: SmartQuotesType.disabled,
-                          enableSuggestions: false,
-                          autofillHints: const [
-                            AutofillHints.email,
-                            AutofillHints.username,
-                            AutofillHints.newUsername,
+                          autofillHints: const [AutofillHints.email],
+                          inputFormatters: const [
+                            FilteringTextInputFormatter.deny(RegExp(r'\s')),
                           ],
                           decoration: InputDecoration(
                             hintText: context.l10n.recipientsAddHint,
