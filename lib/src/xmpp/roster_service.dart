@@ -1,6 +1,6 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin RosterService on XmppBase, BaseStreamService, MessageService {
+mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
   Stream<List<RosterItem>> rosterStream({
     int start = 0,
     int end = basePageItemLimit,
@@ -81,7 +81,16 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService {
       (this as AvatarService)
           .scheduleAvatarRefresh(items.map((item) => item.jid));
     }
-    unawaited(syncMessageArchiveOnLogin());
+    unawaited(() async {
+      try {
+        await syncMucRoomsFromPubSubOnLogin();
+      } on XmppAbortedException {
+        return;
+      } on Exception catch (error, stackTrace) {
+        _rosterLog.fine('Failed to sync room list.', error, stackTrace);
+      }
+      await syncMessageArchiveOnLogin();
+    }());
 
     final version = rosterResult.ver;
     if (version != null && version.isNotEmpty) {

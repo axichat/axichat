@@ -8,6 +8,8 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/demo/demo_chats.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -549,7 +551,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return super.close();
   }
 
-  void _onChatUpdated(_ChatUpdated event, Emitter<ChatState> emit) {
+  Future<void> _onChatUpdated(
+    _ChatUpdated event,
+    Emitter<ChatState> emit,
+  ) async {
     final previousChat = state.chat;
     final resetContext = previousChat?.jid != event.chat.jid;
     final typingContextChanged = resetContext ||
@@ -608,6 +613,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } else {
       emit(state.copyWith(roomState: null));
     }
+    await _primeDemoPendingAttachment(event.chat, emit);
   }
 
   void _onRoomStateUpdated(
@@ -643,6 +649,40 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
       }
     }());
+  }
+
+  Future<void> _primeDemoPendingAttachment(
+    Chat chat,
+    Emitter<ChatState> emit,
+  ) async {
+    if (!kEnableDemoChats) return;
+    if (_bareJid(chat.jid) != DemoChats.groupJid) return;
+    if (state.pendingAttachments.isNotEmpty) return;
+    final service = _messageService;
+    if (service is! XmppService) {
+      return;
+    }
+    final materialized = await service.materializeDemoAsset(
+      assetPath: DemoChats.composerAttachment.assetPath,
+      fileName: DemoChats.composerAttachment.fileName,
+    );
+    if (materialized == null) return;
+    final pending = PendingAttachment(
+      id: 'demo-pending-${DemoChats.composerAttachment.fileName}',
+      attachment: EmailAttachment(
+        path: materialized.path,
+        fileName: DemoChats.composerAttachment.fileName,
+        sizeBytes: materialized.sizeBytes,
+        mimeType: DemoChats.composerAttachment.mimeType,
+        width: materialized.width,
+        height: materialized.height,
+      ),
+    );
+    emit(
+      state.copyWith(
+        pendingAttachments: [...state.pendingAttachments, pending],
+      ),
+    );
   }
 
   Future<void> _onChatMessagesUpdated(

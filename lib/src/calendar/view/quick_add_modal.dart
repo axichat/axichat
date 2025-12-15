@@ -259,10 +259,10 @@ class _QuickAddModalState extends State<QuickAddModal>
   double _quickAddActionInset(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final double keyboardInset = mediaQuery.viewInsets.bottom;
-    if (keyboardInset <= 0) {
-      return calendarGutterLg;
-    }
     final double safeBottom = mediaQuery.viewPadding.bottom;
+    if (keyboardInset <= safeBottom) {
+      return 0;
+    }
     final double inset =
         keyboardInset > safeBottom ? keyboardInset - safeBottom : 0;
     return calendarGutterSm + inset;

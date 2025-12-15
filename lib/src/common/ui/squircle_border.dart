@@ -7,9 +7,9 @@ class SquircleBorder extends ContinuousRectangleBorder {
   SquircleBorder({
     super.side = BorderSide.none,
     double cornerRadius = 16.0,
+    BorderRadiusGeometry? borderRadius,
   }) : super(
-          borderRadius: BorderRadius.all(
-            Radius.circular(cornerRadius),
-          ),
+          borderRadius:
+              borderRadius ?? BorderRadius.all(Radius.circular(cornerRadius)),
         );
 }

@@ -998,6 +998,12 @@ class XmppService extends XmppBase
           final messages = script.messages;
           final chat = script.chat;
           await db.createChat(chat);
+          for (final attachment in script.attachments) {
+            final seeded = await _seedDemoAttachment(attachment);
+            if (seeded != null) {
+              await db.saveFileMetadata(seeded);
+            }
+          }
           if (messages.isEmpty) continue;
           for (final message in messages) {
             await db.saveMessage(message, chatType: chat.type);
@@ -1031,10 +1037,30 @@ class XmppService extends XmppBase
         _seedDemoRoomOccupants(scripts!);
         await _seedDemoReactions(scripts!);
         await _seedDemoAvatars(scripts!);
+        await _seedDemoAttachmentMessages(scripts!);
       }
     } on Exception catch (error, stackTrace) {
       _xmppLogger.fine('Skipping demo chat seed', error, stackTrace);
     }
+  }
+
+  Future<FileMetadataData?> _seedDemoAttachment(
+    DemoAttachmentAsset attachment,
+  ) async {
+    final materialized = await materializeDemoAsset(
+      assetPath: attachment.assetPath,
+      fileName: attachment.fileName,
+    );
+    if (materialized == null) return null;
+    return FileMetadataData(
+      id: attachment.id,
+      filename: attachment.fileName,
+      path: materialized.path,
+      mimeType: attachment.mimeType,
+      sizeBytes: materialized.sizeBytes,
+      width: materialized.width,
+      height: materialized.height,
+    );
   }
 
   void _seedDemoRoomOccupants(List<DemoChatScript> scripts) {
@@ -1242,6 +1268,85 @@ class XmppService extends XmppBase
   static const ui.Color _demoMadisonBackground = ui.Color(0xFF34C759);
   static const ui.Color _demoHamiltonBackground = ui.Color(0xFFAF52DE);
   static const ui.Color _demoFranklinBackground = ui.Color(0xFFFFFFFF);
+
+  Future<({String path, int sizeBytes, int? width, int? height})?>
+      materializeDemoAsset({
+    required String assetPath,
+    required String fileName,
+  }) async {
+    if (!kEnableDemoChats) return null;
+    try {
+      final baseDir = await getApplicationSupportDirectory();
+      final demoDir = Directory(p.join(baseDir.path, 'demo_attachments'));
+      if (!await demoDir.exists()) {
+        await demoDir.create(recursive: true);
+      }
+      final filePath = p.join(demoDir.path, fileName);
+      final file = File(filePath);
+      Uint8List data;
+      if (await file.exists()) {
+        data = await file.readAsBytes();
+      } else {
+        final bytes = await rootBundle.load(assetPath);
+        data = bytes.buffer.asUint8List();
+        await file.writeAsBytes(data, flush: true);
+      }
+      if (data.isEmpty) return null;
+      img.Image? decoded;
+      try {
+        decoded = img.decodeImage(data);
+      } on Exception catch (_) {
+        decoded = null;
+      }
+      return (
+        path: filePath,
+        sizeBytes: data.length,
+        width: decoded?.width,
+        height: decoded?.height
+      );
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to materialize demo asset $assetPath',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _seedDemoAttachmentMessages(
+    List<DemoChatScript> scripts,
+  ) async {
+    if (!_demoOfflineMode) return;
+    await _dbOp<XmppDatabase>((db) async {
+      for (final script in scripts) {
+        if (script.attachments.isEmpty) continue;
+        for (final attachment in script.attachments) {
+          FileMetadataData? metadata = await db.getFileMetadata(attachment.id);
+          metadata ??= await _seedDemoAttachment(attachment);
+          if (metadata != null) {
+            await db.saveFileMetadata(metadata);
+          }
+          final messageWithAttachment = script.messages.firstWhere(
+            (message) => message.fileMetadataID == attachment.id,
+            orElse: () => const Message(
+              stanzaID: '',
+              senderJid: '',
+              chatJid: '',
+            ),
+          );
+          if (messageWithAttachment.stanzaID.isEmpty) continue;
+          final existing =
+              await db.getMessageByStanzaID(messageWithAttachment.stanzaID);
+          if (existing != null) continue;
+          await db.saveMessage(
+            messageWithAttachment,
+            chatType: script.chat.type,
+          );
+        }
+      }
+    }, awaitDatabase: true);
+  }
 
   ui.Color? _demoAvatarBackgroundForJid(String jid) {
     final normalized = jid.trim().toLowerCase();

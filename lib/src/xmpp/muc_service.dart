@@ -3,6 +3,18 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 const _mucUserXmlns = 'http://jabber.org/protocol/muc#user';
 const _mucAdminXmlns = 'http://jabber.org/protocol/muc#admin';
 const _occupantIdXmlns = 'urn:xmpp:occupant-id:0';
+const _mucRoomsNodeId = 'urn:axichat:muc-rooms';
+const _mucRoomsPayloadXmlns = 'urn:axichat:muc-rooms:1';
+const _mucRoomsPayloadTag = 'room';
+const _mucRoomsPayloadJidAttr = 'jid';
+const _mucRoomsPayloadNickAttr = 'nick';
+const _mucRoomsPayloadTitleAttr = 'title';
+const _mucRoomsPayloadAutojoinAttr = 'autojoin';
+const _mucRoomsPayloadEncodingAttr = 'enc';
+const _mucRoomsPayloadEncodingBase64 = 'b64';
+const _mucRoomsAccessModel = 'whitelist';
+const _mucRoomsMaxItems = '512';
+const _mucRoomsPublishModel = 'publishers';
 
 mixin MucService on XmppBase, BaseStreamService {
   final _mucLog = Logger('MucService');
@@ -13,6 +25,9 @@ mixin MucService on XmppBase, BaseStreamService {
   final _createdRooms = <String>{};
   final _seededDummyRooms = <String>{};
   String? _mucServiceHost;
+  bool _mucRoomsSyncInFlight = false;
+  mox.JID? _mucRoomsPubSubHost;
+  final Map<String, RegisteredStateKey> _pendingMucRoomRetractKeys = {};
 
   String get mucServiceHost =>
       _mucServiceHost ?? 'conference.${_myJid?.domain ?? 'example.com'}';
@@ -110,6 +125,12 @@ mixin MucService on XmppBase, BaseStreamService {
         ),
       ),
     );
+    await _upsertMucRoomListing(
+      roomJid: roomJid,
+      title: name.trim().isEmpty ? slug : name.trim(),
+      nickname: nick,
+      autojoin: true,
+    );
     return roomJid;
   }
 
@@ -184,7 +205,7 @@ mixin MucService on XmppBase, BaseStreamService {
           inviteeJid: inviteeJid,
           reason: reason,
         );
-        _mucLog.info('Sent mediated invite for $inviteeJid to $roomJid');
+        _mucLog.info('Sent mediated room invite.');
         return;
       }
     }
@@ -277,6 +298,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (_connection.getManager<mox.MUCManager>() case final manager?) {
       await manager.leaveRoom(mox.JID.fromString(roomJid));
       _markRoomLeft(roomJid);
+      await _queueMucRoomListingRemoval(roomJid);
       return;
     }
     throw XmppMessageException();
@@ -293,6 +315,15 @@ mixin MucService on XmppBase, BaseStreamService {
       roomJid: roomJid,
       nickname: trimmed,
       maxHistoryStanzas: 0,
+    );
+    final title = await _dbOpReturning<XmppDatabase, String?>(
+      (db) async => (await db.getChat(roomJid))?.title,
+    );
+    await _upsertMucRoomListing(
+      roomJid: roomJid,
+      title: title,
+      nickname: trimmed,
+      autojoin: true,
     );
   }
 
@@ -311,6 +342,7 @@ mixin MucService on XmppBase, BaseStreamService {
     final title = roomName?.trim().isNotEmpty == true
         ? roomName!.trim()
         : existing?.title ?? mox.JID.fromString(roomJid).local;
+    final resolvedNickname = _nickForRoom(nickname);
     if (existing == null) {
       await _dbOp<XmppDatabase>(
         (db) => db.createChat(
@@ -318,7 +350,7 @@ mixin MucService on XmppBase, BaseStreamService {
             jid: roomJid,
             title: title,
             type: ChatType.groupChat,
-            myNickname: nickname ?? _nickForRoom(null),
+            myNickname: resolvedNickname,
             lastChangeTimestamp: DateTime.timestamp(),
             contactJid: roomJid,
           ),
@@ -327,9 +359,426 @@ mixin MucService on XmppBase, BaseStreamService {
     }
     await joinRoom(
       roomJid: roomJid,
-      nickname: nickname ?? _nickForRoom(null),
+      nickname: resolvedNickname,
       maxHistoryStanzas: 0,
     );
+    await _upsertMucRoomListing(
+      roomJid: roomJid,
+      title: title,
+      nickname: resolvedNickname,
+      autojoin: true,
+    );
+  }
+
+  Future<void> syncMucRoomsFromPubSubOnLogin() async {
+    if (_mucRoomsSyncInFlight) return;
+    if (connectionState != ConnectionState.connected) return;
+    _mucRoomsSyncInFlight = true;
+    try {
+      await database;
+      if (connectionState != ConnectionState.connected) return;
+
+      await _flushPendingMucRoomListingRemovals();
+
+      final rooms = await _fetchMucRoomListings();
+      if (rooms.isEmpty) return;
+
+      await _upsertMucChatsFromListings(rooms);
+
+      for (final room in rooms) {
+        if (!room.autojoin) continue;
+        if (connectionState != ConnectionState.connected) return;
+        try {
+          await ensureJoined(
+            roomJid: room.roomJid,
+            nickname: room.nickname,
+            maxHistoryStanzas: mamLoginBackfillMessageLimit,
+          );
+        } on XmppAbortedException {
+          return;
+        } on Exception catch (error, stackTrace) {
+          _mucLog.fine(
+            'Failed to auto-join one or more chat rooms during login.',
+            error,
+            stackTrace,
+          );
+        }
+      }
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _mucRoomsSyncInFlight = false;
+    }
+  }
+
+  String? _mucRoomsAccountId() {
+    final myJid = _myJid;
+    if (myJid == null) return null;
+    final digest = sha256.convert(utf8.encode(myJid.toBare().toString())).bytes;
+    return base64Url.encode(digest).replaceAll('=', '');
+  }
+
+  RegisteredStateKey _pendingMucRoomRetractKeyForAccount(String accountId) =>
+      _pendingMucRoomRetractKeys.putIfAbsent(
+        accountId,
+        () =>
+            XmppStateStore.registerKey('muc_rooms_pending_retract_$accountId'),
+      );
+
+  Future<Set<String>> _loadPendingMucRoomListingRemovals({
+    required String accountId,
+  }) async {
+    final key = _pendingMucRoomRetractKeyForAccount(accountId);
+    final stored = await _dbOpReturning<XmppStateStore, Object?>(
+      (ss) => ss.read(key: key),
+    );
+    if (stored is List) {
+      return stored.whereType<String>().toSet();
+    }
+    return <String>{};
+  }
+
+  Future<void> _savePendingMucRoomListingRemovals({
+    required String accountId,
+    required Set<String> removals,
+  }) async {
+    final key = _pendingMucRoomRetractKeyForAccount(accountId);
+    await _dbOp<XmppStateStore>(
+      (ss) => ss.write(
+        key: key,
+        value: removals.toList(growable: false),
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  Future<void> _queueMucRoomListingRemoval(String roomJid) async {
+    final accountId = _mucRoomsAccountId();
+    if (accountId == null) return;
+
+    final itemId = _mucRoomsItemId(roomJid);
+    final pending = await _loadPendingMucRoomListingRemovals(
+      accountId: accountId,
+    );
+    if (!pending.add(itemId)) return;
+
+    await _savePendingMucRoomListingRemovals(
+      accountId: accountId,
+      removals: pending,
+    );
+
+    unawaited(_flushPendingMucRoomListingRemovals());
+  }
+
+  Future<void> _flushPendingMucRoomListingRemovals() async {
+    final pubsub = _connection.getManager<mox.PubSubManager>();
+    if (pubsub == null) return;
+    if (connectionState != ConnectionState.connected) return;
+
+    final accountId = _mucRoomsAccountId();
+    if (accountId == null) return;
+
+    final host = await _resolveMucRoomsPubSubHost();
+    if (host == null) return;
+
+    final pending = await _loadPendingMucRoomListingRemovals(
+      accountId: accountId,
+    );
+    if (pending.isEmpty) return;
+
+    final remaining = <String>{};
+    for (final itemId in pending) {
+      if (connectionState != ConnectionState.connected) return;
+      try {
+        final result = await pubsub.retract(
+          host,
+          _mucRoomsNodeId,
+          itemId,
+        );
+        if (result.isType<mox.PubSubError>()) {
+          final error = result.get<mox.PubSubError>();
+          final alreadyGone = error is mox.ItemNotFoundError ||
+              error is mox.NoItemReturnedError;
+          if (!alreadyGone) {
+            remaining.add(itemId);
+          }
+        }
+      } on XmppAbortedException {
+        return;
+      } on Exception catch (error, stackTrace) {
+        _mucLog.fine(
+          'Failed to flush one or more room list removals.',
+          error,
+          stackTrace,
+        );
+        remaining.add(itemId);
+      }
+    }
+
+    if (remaining.length == pending.length) return;
+    await _savePendingMucRoomListingRemovals(
+      accountId: accountId,
+      removals: remaining,
+    );
+  }
+
+  Future<void> _upsertMucChatsFromListings(
+    List<_MucRoomListing> rooms,
+  ) async {
+    for (final room in rooms) {
+      if (room.roomJid.isEmpty) continue;
+      try {
+        await _dbOp<XmppDatabase>(
+          (db) async {
+            final existing = await db.getChat(room.roomJid);
+            final nickname = room.nickname ?? existing?.myNickname;
+            if (existing == null) {
+              final fallbackTitle = mox.JID.fromString(room.roomJid).local;
+              await db.createChat(
+                Chat(
+                  jid: room.roomJid,
+                  title: room.title ??
+                      (fallbackTitle.isNotEmpty ? fallbackTitle : room.roomJid),
+                  type: ChatType.groupChat,
+                  myNickname: nickname ?? _nickForRoom(null),
+                  lastChangeTimestamp: DateTime.timestamp(),
+                  contactJid: room.roomJid,
+                ),
+              );
+              return;
+            }
+
+            final trimmedTitle = room.title?.trim();
+            final trimmedNickname = room.nickname?.trim();
+
+            final shouldUpdateTitle = trimmedTitle != null &&
+                trimmedTitle.isNotEmpty &&
+                trimmedTitle != existing.title;
+            final shouldUpdateNickname = trimmedNickname != null &&
+                trimmedNickname.isNotEmpty &&
+                trimmedNickname != existing.myNickname;
+            if (!shouldUpdateTitle && !shouldUpdateNickname) return;
+
+            await db.updateChat(
+              existing.copyWith(
+                title: shouldUpdateTitle ? trimmedTitle : existing.title,
+                myNickname: shouldUpdateNickname
+                    ? trimmedNickname
+                    : existing.myNickname,
+              ),
+            );
+          },
+          awaitDatabase: true,
+        );
+      } on XmppAbortedException {
+        return;
+      } on Exception catch (error, stackTrace) {
+        _mucLog.fine(
+          'Failed to upsert one or more chat rooms.',
+          error,
+          stackTrace,
+        );
+      }
+    }
+  }
+
+  Future<List<_MucRoomListing>> _fetchMucRoomListings() async {
+    final pubsub = _connection.getManager<mox.PubSubManager>();
+    if (pubsub == null) return const [];
+
+    final host = await _resolveMucRoomsPubSubHost();
+    if (host == null) return const [];
+
+    final primary = await _fetchMucRoomListingsFromHost(
+      pubsub: pubsub,
+      host: host,
+    );
+    if (primary.isNotEmpty) {
+      return primary;
+    }
+
+    final migrated = await _migrateLegacyMucRoomListings(pubsub: pubsub);
+    if (migrated.isNotEmpty) {
+      return migrated;
+    }
+
+    return primary;
+  }
+
+  Future<List<_MucRoomListing>> _fetchMucRoomListingsFromHost({
+    required mox.PubSubManager pubsub,
+    required mox.JID host,
+  }) async {
+    try {
+      final result = await pubsub.getItems(host, _mucRoomsNodeId);
+      if (result.isType<mox.PubSubError>()) {
+        final error = result.get<mox.PubSubError>();
+        if (error is mox.ItemNotFoundError ||
+            error is mox.NoItemReturnedError) {
+          return const [];
+        }
+        return const [];
+      }
+
+      final items = result.get<List<mox.PubSubItem>>();
+      final listings = <_MucRoomListing>[];
+      for (final item in items) {
+        final payload = item.payload;
+        if (payload == null) continue;
+        final listing = _MucRoomListing.fromXml(payload);
+        if (listing == null) continue;
+        listings.add(listing);
+      }
+      return List<_MucRoomListing>.unmodifiable(listings);
+    } on XmppAbortedException {
+      rethrow;
+    } on Exception catch (error, stackTrace) {
+      _mucLog.fine('Failed to fetch room list.', error, stackTrace);
+      return const [];
+    }
+  }
+
+  Future<List<_MucRoomListing>> _migrateLegacyMucRoomListings({
+    required mox.PubSubManager pubsub,
+  }) async {
+    try {
+      if (connectionState != ConnectionState.connected) return const [];
+      final myJid = _myJid;
+      if (myJid == null) return const [];
+      final domain = myJid.domain;
+      if (domain.isEmpty) return const [];
+
+      final bareJid = myJid.toBare().toString();
+      final legacyHosts = <mox.JID>[
+        mox.JID.fromString('pubsub.$domain'),
+        mox.JID.fromString(domain),
+      ];
+
+      for (final legacyHost in legacyHosts) {
+        if (connectionState != ConnectionState.connected) return const [];
+        final affiliations =
+            await pubsub.getNodeAffiliations(legacyHost, _mucRoomsNodeId);
+        if (affiliations == null) continue;
+        if (affiliations[bareJid] != mox.PubSubAffiliation.owner) {
+          continue;
+        }
+
+        final hasOtherPublishers = affiliations.entries.any((entry) {
+          final affiliation = entry.value;
+          if (affiliation != mox.PubSubAffiliation.owner &&
+              affiliation != mox.PubSubAffiliation.publisher) {
+            return false;
+          }
+          return entry.key != bareJid;
+        });
+        if (hasOtherPublishers) continue;
+
+        final listings = await _fetchMucRoomListingsFromHost(
+          pubsub: pubsub,
+          host: legacyHost,
+        );
+        if (listings.isEmpty) continue;
+
+        for (final listing in listings) {
+          if (connectionState != ConnectionState.connected) break;
+          await _upsertMucRoomListing(
+            roomJid: listing.roomJid,
+            title: listing.title,
+            nickname: listing.nickname,
+            autojoin: listing.autojoin,
+          );
+        }
+
+        return listings;
+      }
+
+      return const [];
+    } on XmppAbortedException {
+      rethrow;
+    } on Exception {
+      return const [];
+    }
+  }
+
+  Future<void> _upsertMucRoomListing({
+    required String roomJid,
+    required String? title,
+    required String? nickname,
+    required bool autojoin,
+  }) async {
+    final pubsub = _connection.getManager<mox.PubSubManager>();
+    if (pubsub == null) return;
+    if (connectionState != ConnectionState.connected) return;
+
+    final host = await _resolveMucRoomsPubSubHost();
+    if (host == null) return;
+
+    final trimmedTitle = title?.trim();
+    final trimmedNickname = nickname?.trim();
+    final encodedRoomJid = _encodeMucRoomsPayloadValue(roomJid);
+    final payload = mox.XMLNode.xmlns(
+      tag: _mucRoomsPayloadTag,
+      xmlns: _mucRoomsPayloadXmlns,
+      attributes: {
+        _mucRoomsPayloadJidAttr: encodedRoomJid,
+        _mucRoomsPayloadEncodingAttr: _mucRoomsPayloadEncodingBase64,
+        if (trimmedTitle != null && trimmedTitle.isNotEmpty)
+          _mucRoomsPayloadTitleAttr: _encodeMucRoomsPayloadValue(trimmedTitle),
+        if (trimmedNickname != null && trimmedNickname.isNotEmpty)
+          _mucRoomsPayloadNickAttr:
+              _encodeMucRoomsPayloadValue(trimmedNickname),
+        _mucRoomsPayloadAutojoinAttr: autojoin.toString(),
+      },
+    );
+
+    final itemId = _mucRoomsItemId(roomJid);
+    final publishOptions = mox.PubSubPublishOptions(
+      accessModel: _mucRoomsAccessModel,
+      maxItems: _mucRoomsMaxItems,
+      persistItems: true,
+    );
+    final createConfig = mox.NodeConfig(
+      accessModel: mox.AccessModel.whitelist,
+      publishModel: _mucRoomsPublishModel,
+      maxItems: _mucRoomsMaxItems,
+      persistItems: true,
+      deliverPayloads: true,
+    );
+
+    try {
+      final result = await pubsub.publish(
+        host,
+        _mucRoomsNodeId,
+        payload,
+        id: itemId,
+        options: publishOptions,
+        autoCreate: true,
+        createNodeConfig: createConfig,
+      );
+      if (result.isType<mox.PubSubError>()) {
+        _mucLog.fine('Failed to publish room list update.');
+      }
+    } on XmppAbortedException {
+      rethrow;
+    } on Exception catch (error, stackTrace) {
+      _mucLog.fine('Failed to publish room list update.', error, stackTrace);
+    }
+  }
+
+  Future<mox.JID?> _resolveMucRoomsPubSubHost() async {
+    final cached = _mucRoomsPubSubHost;
+    if (cached != null) return cached;
+
+    final myJid = _myJid;
+    if (myJid == null) return null;
+    final host = myJid.toBare();
+    _mucRoomsPubSubHost = host;
+    return host;
+  }
+
+  String _mucRoomsItemId(String roomJid) {
+    final digest = sha256.convert(utf8.encode(roomJid)).bytes;
+    return base64Url.encode(digest).replaceAll('=', '');
   }
 
   void trackOccupantsFromMessages(String roomJid, Iterable<Message> messages) {
@@ -785,5 +1234,94 @@ mixin MucService on XmppBase, BaseStreamService {
     }
 
     _seededDummyRooms.add(key);
+  }
+}
+
+String _encodeMucRoomsPayloadValue(String value) =>
+    base64Url.encode(utf8.encode(value)).replaceAll('=', '');
+
+String? _decodeMucRoomsPayloadValue(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) return null;
+  final padded = normalized.padRight(
+    normalized.length + ((4 - normalized.length % 4) % 4),
+    '=',
+  );
+  try {
+    return utf8.decode(base64Url.decode(padded));
+  } on FormatException {
+    return null;
+  }
+}
+
+class _MucRoomListing {
+  const _MucRoomListing({
+    required this.roomJid,
+    required this.autojoin,
+    this.nickname,
+    this.title,
+  });
+
+  final String roomJid;
+  final bool autojoin;
+  final String? nickname;
+  final String? title;
+
+  static _MucRoomListing? fromXml(mox.XMLNode node) {
+    if (node.tag != _mucRoomsPayloadTag) return null;
+    final xmlns = node.attributes['xmlns']?.toString();
+    if (xmlns != _mucRoomsPayloadXmlns) return null;
+
+    final encoding =
+        node.attributes[_mucRoomsPayloadEncodingAttr]?.toString().trim();
+    final usesBase64 = encoding == _mucRoomsPayloadEncodingBase64;
+
+    final rawJidValue =
+        node.attributes[_mucRoomsPayloadJidAttr]?.toString().trim();
+    if (rawJidValue == null || rawJidValue.isEmpty) return null;
+
+    final decodedRoomJid =
+        usesBase64 ? _decodeMucRoomsPayloadValue(rawJidValue) : rawJidValue;
+    if (decodedRoomJid == null || decodedRoomJid.isEmpty) return null;
+    if (!decodedRoomJid.contains('@')) return null;
+    try {
+      mox.JID.fromString(decodedRoomJid);
+    } on Exception {
+      return null;
+    }
+
+    final rawNicknameValue =
+        node.attributes[_mucRoomsPayloadNickAttr]?.toString().trim();
+    final rawTitleValue =
+        node.attributes[_mucRoomsPayloadTitleAttr]?.toString().trim();
+    final rawAutojoin =
+        node.attributes[_mucRoomsPayloadAutojoinAttr]?.toString().trim();
+
+    final decodedNickname = rawNicknameValue == null
+        ? null
+        : usesBase64
+            ? _decodeMucRoomsPayloadValue(rawNicknameValue)
+            : rawNicknameValue;
+    final decodedTitle = rawTitleValue == null
+        ? null
+        : usesBase64
+            ? _decodeMucRoomsPayloadValue(rawTitleValue)
+            : rawTitleValue;
+
+    return _MucRoomListing(
+      roomJid: decodedRoomJid,
+      nickname: decodedNickname?.isNotEmpty == true ? decodedNickname : null,
+      title: decodedTitle?.isNotEmpty == true ? decodedTitle : null,
+      autojoin: _parseBool(rawAutojoin, defaultValue: true),
+    );
+  }
+
+  static bool _parseBool(String? value, {required bool defaultValue}) {
+    final normalized = value?.toLowerCase();
+    return switch (normalized) {
+      'true' || '1' || 'yes' => true,
+      'false' || '0' || 'no' => false,
+      _ => defaultValue,
+    };
   }
 }
