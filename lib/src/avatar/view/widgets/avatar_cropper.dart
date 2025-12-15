@@ -122,127 +122,125 @@ class _AvatarCropperState extends State<AvatarCropper> {
 
     return SizedBox.square(
       dimension: _maxDimension,
-      child: ClipRRect(
-        borderRadius: widget.borderRadius,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.card,
-            borderRadius: widget.borderRadius,
-            border: Border.all(color: colors.border),
-          ),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Crop(
-                      controller: _controller,
-                      image: widget.bytes,
-                      onCropped: (_) {},
-                      aspectRatio: 1,
-                      withCircleUi: true,
-                      baseColor: colors.card,
-                      maskColor: colors.background.withValues(alpha: 0.55),
-                      radius: widget.borderRadius.topLeft.x,
-                      initialRectBuilder:
-                          InitialRectBuilder.withArea(initialArea),
-                      willUpdateScale: (_) => false,
-                      scrollZoomSensitivity: 0,
-                      overlayBuilder: (context, rect) {
-                        if (!_isValidRect(rect)) {
-                          return const SizedBox.shrink();
-                        }
-                        return IgnorePointer(
-                          ignoring: true,
-                          child: CustomPaint(
-                            size: rect.size,
-                            painter: _CropGridPainter(
-                              borderColor: colors.primary,
-                              gridColor: colors.border,
-                              radius: widget.borderRadius,
-                            ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: widget.borderRadius,
+          border: Border.all(color: colors.border),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Crop(
+                    controller: _controller,
+                    image: widget.bytes,
+                    onCropped: (_) {},
+                    aspectRatio: 1,
+                    withCircleUi: true,
+                    baseColor: colors.card,
+                    maskColor: colors.background.withValues(alpha: 0.55),
+                    radius: widget.borderRadius.topLeft.x,
+                    initialRectBuilder:
+                        InitialRectBuilder.withArea(initialArea),
+                    willUpdateScale: (_) => false,
+                    scrollZoomSensitivity: 0,
+                    overlayBuilder: (context, rect) {
+                      if (!_isValidRect(rect)) {
+                        return const SizedBox.shrink();
+                      }
+                      return IgnorePointer(
+                        ignoring: true,
+                        child: CustomPaint(
+                          size: rect.size,
+                          painter: _CropGridPainter(
+                            borderColor: colors.primary,
+                            gridColor: colors.border,
+                            radius: widget.borderRadius,
                           ),
-                        );
-                      },
-                      onMoved: (_, imageRect) {
-                        if (!_isValidRect(imageRect)) return;
-                        final clamped = _clampToImage(imageRect);
-                        final snapped = _snapToCenter(clamped);
-                        final previous = _lastArea;
-                        if (previous != null &&
-                            previous.left == snapped.left &&
-                            previous.top == snapped.top &&
-                            previous.width == snapped.width &&
-                            previous.height == snapped.height) {
-                          return;
-                        }
-                        if (_ready && snapped != imageRect) {
-                          _controller.area = snapped;
-                        }
-                        _lastArea = snapped;
-                        widget.onCropChanged(snapped);
-                      },
-                      onStatusChanged: (status) {
-                        if (status == CropStatus.ready) {
-                          _ready = true;
-                          final targetArea =
-                              _pendingArea ?? _lastArea ?? initialArea;
-                          final safeTarget = _isValidRect(targetArea)
-                              ? targetArea
-                              : AvatarCropper.fallbackCropRect(
-                                  imageWidth: widget.imageWidth,
-                                  imageHeight: widget.imageHeight,
-                                  minCropSide: widget.minCropSide,
-                                );
-                          _pendingArea = null;
-                          _controller
-                            ..withCircleUi = true
-                            ..aspectRatio = 1
-                            ..area = safeTarget;
-                          _lastArea = safeTarget;
-                        }
-                      },
-                      cornerDotBuilder: (size, alignment) => DotControl(
-                        color: colors.primary,
-                        padding: 7,
-                      ),
-                      progressIndicator: Center(
-                        child: SizedBox.square(
-                          dimension: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colors.primary,
-                            backgroundColor:
-                                colors.primary.withValues(alpha: 0.2),
-                          ),
+                        ),
+                      );
+                    },
+                    onMoved: (_, imageRect) {
+                      if (!_isValidRect(imageRect)) return;
+                      final clamped = _clampToImage(imageRect);
+                      final snapped = _snapToCenter(clamped);
+                      final previous = _lastArea;
+                      if (previous != null &&
+                          previous.left == snapped.left &&
+                          previous.top == snapped.top &&
+                          previous.width == snapped.width &&
+                          previous.height == snapped.height) {
+                        return;
+                      }
+                      if (_ready && snapped != imageRect) {
+                        _controller.area = snapped;
+                      }
+                      _lastArea = snapped;
+                      widget.onCropChanged(snapped);
+                    },
+                    onStatusChanged: (status) {
+                      if (status == CropStatus.ready) {
+                        _ready = true;
+                        final targetArea =
+                            _pendingArea ?? _lastArea ?? initialArea;
+                        final safeTarget = _isValidRect(targetArea)
+                            ? targetArea
+                            : AvatarCropper.fallbackCropRect(
+                                imageWidth: widget.imageWidth,
+                                imageHeight: widget.imageHeight,
+                                minCropSide: widget.minCropSide,
+                              );
+                        _pendingArea = null;
+                        _controller
+                          ..withCircleUi = true
+                          ..aspectRatio = 1
+                          ..area = safeTarget;
+                        _lastArea = safeTarget;
+                      }
+                    },
+                    cornerDotBuilder: (size, alignment) => DotControl(
+                      color: colors.primary,
+                      padding: 7,
+                    ),
+                    progressIndicator: Center(
+                      child: SizedBox.square(
+                        dimension: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colors.primary,
+                          backgroundColor:
+                              colors.primary.withValues(alpha: 0.2),
                         ),
                       ),
                     ),
-                    const _CropScrollSignalForwarder(),
-                  ],
-                ),
+                  ),
+                  const _CropScrollSignalForwarder(),
+                ],
               ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: () {
-                    widget.onCropReset();
-                    _lastArea = initialArea;
-                    if (_ready) {
-                      _controller.area = initialArea;
-                      _pendingArea = null;
-                    } else {
-                      _pendingArea = initialArea;
-                    }
-                  },
-                  child: const Icon(LucideIcons.refreshCcw, size: 16),
-                ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: ShadButton.ghost(
+                size: ShadButtonSize.sm,
+                onPressed: () {
+                  widget.onCropReset();
+                  _lastArea = initialArea;
+                  if (_ready) {
+                    _controller.area = initialArea;
+                    _pendingArea = null;
+                  } else {
+                    _pendingArea = initialArea;
+                  }
+                },
+                child: const Icon(LucideIcons.refreshCcw, size: 16),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
