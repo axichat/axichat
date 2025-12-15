@@ -670,6 +670,7 @@ class _ChatState extends State<Chat> {
   Offset? _dismissPointerDownPosition;
   bool _dismissPointerMoved = false;
   var _sendingAttachment = false;
+
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
   bool get _anySelectionActive =>
@@ -2825,7 +2826,7 @@ class _ChatState extends State<Chat> {
                                     );
                                     final messageRowMaxWidth = rawContentWidth;
                                     final selectionExtrasMaxWidth = math.min(
-                                      rawContentWidth,
+                                      availableWidth,
                                       _selectionExtrasMaxWidth,
                                     );
                                     final dashMessages = <ChatMessage>[];
@@ -4114,14 +4115,12 @@ class _ChatState extends State<Chat> {
                                                           top: 2,
                                                           bottom: baseOuterBottom +
                                                               extraOuterBottom,
-                                                          left: self
-                                                              ? 0
-                                                              : _messageListHorizontalPadding +
+                                                          left:
+                                                              _messageListHorizontalPadding +
                                                                   extraOuterLeft,
-                                                          right: self
-                                                              ? _messageListHorizontalPadding +
-                                                                  extraOuterRight
-                                                              : 0,
+                                                          right:
+                                                              _messageListHorizontalPadding +
+                                                                  extraOuterRight,
                                                         );
                                                         final bubble =
                                                             TweenAnimationBuilder<
@@ -4598,6 +4597,22 @@ class _ChatState extends State<Chat> {
                                                           child:
                                                               selectionExtras,
                                                         );
+                                                        final messageRowAlignment =
+                                                            self
+                                                                ? Alignment
+                                                                    .centerRight
+                                                                : Alignment
+                                                                    .centerLeft;
+                                                        final attachmentsAligned =
+                                                            SizedBox(
+                                                          width:
+                                                              messageRowMaxWidth,
+                                                          child: Align(
+                                                            alignment:
+                                                                messageRowAlignment,
+                                                            child: attachments,
+                                                          ),
+                                                        );
                                                         final messageKey =
                                                             _messageKeys
                                                                 .putIfAbsent(
@@ -4760,12 +4775,6 @@ class _ChatState extends State<Chat> {
                                                           child:
                                                               bubbleWithSlack,
                                                         );
-                                                        final messageRowAlignment =
-                                                            self
-                                                                ? Alignment
-                                                                    .centerRight
-                                                                : Alignment
-                                                                    .centerLeft;
                                                         final messageBody =
                                                             Column(
                                                           mainAxisSize:
@@ -4775,7 +4784,7 @@ class _ChatState extends State<Chat> {
                                                                   .center,
                                                           children: [
                                                             bubbleWithSlack,
-                                                            attachments,
+                                                            attachmentsAligned,
                                                           ],
                                                         );
                                                         final shouldAnimateSize =
@@ -6231,6 +6240,7 @@ class _RenderMessageBubbleRegion extends RenderProxyBox {
         _registry = registry;
 
   String _messageId;
+
   set messageId(String value) {
     if (value == _messageId) return;
     _registry.unregister(_messageId, this);
@@ -6239,6 +6249,7 @@ class _RenderMessageBubbleRegion extends RenderProxyBox {
   }
 
   _BubbleRegionRegistry _registry;
+
   set registry(_BubbleRegionRegistry value) {
     if (identical(value, _registry)) return;
     _registry.unregister(_messageId, this);
@@ -7988,6 +7999,7 @@ class _QuoteBanner extends StatelessWidget {
     required this.isSelf,
     required this.onClear,
   });
+
   final Message message;
   final bool isSelf;
   final VoidCallback onClear;

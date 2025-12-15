@@ -152,6 +152,8 @@ flutter:
     - assets/licenses/inter_ofl.txt
     - assets/licenses/dmsans_ofl.txt
     - assets/licenses/gabarito_ofl.txt
+    - assets/licenses/document.txt
+    - assets/licenses/document2.txt
     - shorebird.yaml
   fonts:
     - family: Inter

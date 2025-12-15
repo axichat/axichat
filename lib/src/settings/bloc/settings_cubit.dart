@@ -84,10 +84,30 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   @override
   SettingsState? fromJson(Map<String, dynamic> json) {
     try {
-      final hasColor = json['shadColor'] != null;
-      final parsed = SettingsState.fromJson(json);
-      // Force blue as the default palette on fresh boots or malformed payloads.
-      return hasColor ? parsed : parsed.copyWith(shadColor: ShadColor.blue);
+      final migrated = Map<String, dynamic>.from(json);
+      const keyMap = <String, String>{
+        'themeMode': 'theme_mode',
+        'shadColor': 'shad_color',
+        'notificationPreviewsEnabled': 'notification_previews_enabled',
+        'readReceipts': 'read_receipts',
+        'indicateTyping': 'indicate_typing',
+        'lowMotion': 'low_motion',
+        'colorfulAvatars': 'colorful_avatars',
+        'messageStorageMode': 'message_storage_mode',
+        'shareTokenSignatureEnabled': 'share_token_signature_enabled',
+        'hideCompletedScheduled': 'hide_completed_scheduled',
+        'hideCompletedUnscheduled': 'hide_completed_unscheduled',
+        'hideCompletedReminders': 'hide_completed_reminders',
+        'unscheduledSidebarOrder': 'unscheduled_sidebar_order',
+        'reminderSidebarOrder': 'reminder_sidebar_order',
+      };
+      for (final entry in keyMap.entries) {
+        if (migrated.containsKey(entry.key) &&
+            !migrated.containsKey(entry.value)) {
+          migrated[entry.value] = migrated[entry.key];
+        }
+      }
+      return SettingsState.fromJson(migrated);
     } catch (_) {
       return const SettingsState(shadColor: ShadColor.blue);
     }
