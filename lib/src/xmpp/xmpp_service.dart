@@ -984,11 +984,9 @@ class XmppService extends XmppBase
       await _dbOp<XmppDatabase>((db) async {
         final existingChats = await db.getChats(start: 0, end: 1);
         if (existingChats.isNotEmpty) {
-          if (_demoOfflineMode) {
-            scripts = DemoChats.scripts(
-              openJid: DemoChats.defaultOpenJid,
-            );
-          }
+          scripts = DemoChats.scripts(
+            openJid: DemoChats.defaultOpenJid,
+          );
           return;
         }
         scripts = DemoChats.scripts(
@@ -1317,7 +1315,7 @@ class XmppService extends XmppBase
   Future<void> _seedDemoAttachmentMessages(
     List<DemoChatScript> scripts,
   ) async {
-    if (!_demoOfflineMode) return;
+    if (!kEnableDemoChats) return;
     await _dbOp<XmppDatabase>((db) async {
       for (final script in scripts) {
         if (script.attachments.isEmpty) continue;

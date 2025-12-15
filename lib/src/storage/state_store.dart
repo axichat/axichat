@@ -26,6 +26,13 @@ class RegisteredStateKey {
   final String value;
 
   static final _registeredKeys = <RegisteredStateKey>{};
+
+  @override
+  bool operator ==(Object other) =>
+      other is RegisteredStateKey && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
 }
 
 class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
@@ -41,8 +48,10 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
 
   bool get initialized => Hive.isBoxOpen(boxName);
 
+  static final Map<String, RegisteredStateKey> _keyCache = {};
+
   static RegisteredStateKey registerKey(String key) =>
-      RegisteredStateKey._(key);
+      _keyCache.putIfAbsent(key, () => RegisteredStateKey._(key));
 
   Stream<S>? watch<S>({required RegisteredStateKey key}) {
     if (!initialized) return null;

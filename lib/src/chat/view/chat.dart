@@ -1190,20 +1190,20 @@ class _ChatState extends State<Chat> {
       context: context,
       showDragHandle: true,
       dialogMaxWidth: 420,
-      builder: (context) {
-        final colors = context.colorScheme;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(LucideIcons.save, color: colors.primary),
-                title: Text(context.l10n.chatSaveAsDraft),
-                onTap: () => Navigator.of(context).pop('save'),
-              ),
-              const SizedBox(height: 8),
-            ],
+      builder: (sheetContext) {
+        final colors = sheetContext.colorScheme;
+        return AxiSheetScaffold.scroll(
+          header: AxiSheetHeader(
+            title: const Text('Actions'),
+            onClose: () => Navigator.of(sheetContext).maybePop(),
           ),
+          children: [
+            ListTile(
+              leading: Icon(LucideIcons.save, color: colors.primary),
+              title: Text(sheetContext.l10n.chatSaveAsDraft),
+              onTap: () => Navigator.of(sheetContext).pop('save'),
+            ),
+          ],
         );
       },
     );
@@ -1541,54 +1541,53 @@ class _ChatState extends State<Chat> {
           value: locate<ChatBloc>(),
           child: Builder(
             builder: (context) {
-              return SafeArea(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: Icon(
-                          attachmentIcon(attachment),
-                          color: colors.primary,
-                        ),
-                        title: Text(attachment.fileName),
-                        subtitle: Text(sizeLabel),
-                      ),
-                      if (attachment.isImage)
-                        ListTile(
-                          leading: const Icon(LucideIcons.eye),
-                          title: Text(l10n.chatAttachmentView),
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            _showAttachmentPreview(pending);
-                          },
-                        ),
-                      if (pending.status == PendingAttachmentStatus.failed)
-                        ListTile(
-                          leading: const Icon(LucideIcons.refreshCw),
-                          title: Text(l10n.chatAttachmentRetry),
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            context.read<ChatBloc>().add(
-                                  ChatAttachmentRetryRequested(pending.id),
-                                );
-                          },
-                        ),
-                      ListTile(
-                        leading: const Icon(LucideIcons.trash),
-                        title: Text(l10n.chatAttachmentRemove),
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          context.read<ChatBloc>().add(
-                                ChatPendingAttachmentRemoved(pending.id),
-                              );
-                        },
-                      ),
-                    ],
-                  ),
+              return AxiSheetScaffold.scroll(
+                header: AxiSheetHeader(
+                  title: Text(l10n.chatAttachmentTooltip),
+                  onClose: () => Navigator.of(sheetContext).maybePop(),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                 ),
+                bodyPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      attachmentIcon(attachment),
+                      color: colors.primary,
+                    ),
+                    title: Text(attachment.fileName),
+                    subtitle: Text(sizeLabel),
+                  ),
+                  if (attachment.isImage)
+                    ListTile(
+                      leading: const Icon(LucideIcons.eye),
+                      title: Text(l10n.chatAttachmentView),
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        _showAttachmentPreview(pending);
+                      },
+                    ),
+                  if (pending.status == PendingAttachmentStatus.failed)
+                    ListTile(
+                      leading: const Icon(LucideIcons.refreshCw),
+                      title: Text(l10n.chatAttachmentRetry),
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        context.read<ChatBloc>().add(
+                              ChatAttachmentRetryRequested(pending.id),
+                            );
+                      },
+                    ),
+                  ListTile(
+                    leading: const Icon(LucideIcons.trash),
+                    title: Text(l10n.chatAttachmentRemove),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      context.read<ChatBloc>().add(
+                            ChatPendingAttachmentRemoved(pending.id),
+                          );
+                    },
+                  ),
+                ],
               );
             },
           ),
@@ -5039,17 +5038,27 @@ class _ChatState extends State<Chat> {
     return showAdaptiveBottomSheet<String>(
       context: context,
       dialogMaxWidth: 420,
-      builder: (context) => SizedBox(
-        height: 320,
-        child: EmojiPicker(
-          config: Config(
-            emojiViewConfig: EmojiViewConfig(
-              emojiSizeMax: context.read<Policy>().getMaxEmojiSize(),
+      builder: (sheetContext) {
+        final picker = SizedBox(
+          height: 320,
+          child: EmojiPicker(
+            config: Config(
+              emojiViewConfig: EmojiViewConfig(
+                emojiSizeMax: sheetContext.read<Policy>().getMaxEmojiSize(),
+              ),
             ),
+            onEmojiSelected: (_, emoji) =>
+                Navigator.of(sheetContext).pop(emoji.emoji),
           ),
-          onEmojiSelected: (_, emoji) => Navigator.of(context).pop(emoji.emoji),
-        ),
-      ),
+        );
+        return AxiSheetScaffold(
+          header: AxiSheetHeader(
+            title: Text(sheetContext.l10n.chatReactionsPick),
+            onClose: () => Navigator.of(sheetContext).maybePop(),
+          ),
+          body: picker,
+        );
+      },
     );
   }
 

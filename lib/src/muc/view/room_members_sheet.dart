@@ -703,9 +703,6 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    final double bottomInset =
-        keyboardInset > safeBottom ? keyboardInset : safeBottom;
     final Widget actions = Row(
       children: [
         ShadButton.outline(
@@ -734,9 +731,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     );
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.only(
-          bottom: _inviteSheetHorizontalPadding,
-        ),
+        padding: EdgeInsets.only(bottom: keyboardInset),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -744,7 +739,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
             Flexible(
               fit: FlexFit.loose,
               child: SingleChildScrollView(
-                padding: EdgeInsets.only(bottom: bottomInset),
+                padding: EdgeInsets.zero,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -777,13 +772,19 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                       horizontalPadding: _inviteSheetHorizontalPadding,
                     ),
                     const SizedBox(height: _inviteSheetSectionSpacing),
-                    Padding(
-                      padding: _inviteSheetActionsPadding,
-                      child: actions,
-                    ),
-                    const SizedBox(height: _inviteSheetSectionSpacing),
                   ],
                 ),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              bottom: true,
+              child: Padding(
+                padding: _inviteSheetActionsPadding.copyWith(
+                  bottom: _inviteSheetActionsPadding.bottom +
+                      _inviteSheetHorizontalPadding,
+                ),
+                child: actions,
               ),
             ),
           ],
@@ -855,9 +856,6 @@ class _NicknameSheetState extends State<_NicknameSheet> {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    final double bottomInset =
-        keyboardInset > safeBottom ? keyboardInset : safeBottom;
     final Widget actions = Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -873,46 +871,53 @@ class _NicknameSheetState extends State<_NicknameSheet> {
       ],
     );
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Flexible(
-            fit: FlexFit.loose,
-            child: SingleChildScrollView(
-              padding: EdgeInsets.only(bottom: bottomInset),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.mucChangeNicknameTitle,
-                          style: titleStyle,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              fit: FlexFit.loose,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            l10n.mucChangeNicknameTitle,
+                            style: titleStyle,
+                          ),
                         ),
-                      ),
-                      AxiIconButton(
-                        iconData: LucideIcons.x,
-                        tooltip: l10n.commonClose,
-                        onPressed: widget.onCancel,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  AxiTextFormField(
-                    controller: widget.controller,
-                    focusNode: widget.focusNode,
-                    placeholder: Text(l10n.mucEnterNicknamePlaceholder),
-                    onSubmitted: widget.onSubmit,
-                  ),
-                  const SizedBox(height: 12),
-                  actions,
-                ],
+                        AxiIconButton(
+                          iconData: LucideIcons.x,
+                          tooltip: l10n.commonClose,
+                          onPressed: widget.onCancel,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    AxiTextFormField(
+                      controller: widget.controller,
+                      focusNode: widget.focusNode,
+                      placeholder: Text(l10n.mucEnterNicknamePlaceholder),
+                      onSubmitted: widget.onSubmit,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            SafeArea(
+              top: false,
+              bottom: true,
+              child: actions,
+            ),
+          ],
+        ),
       ),
     );
   }
