@@ -50,8 +50,29 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
 
   static final Map<String, RegisteredStateKey> _keyCache = {};
 
-  static RegisteredStateKey registerKey(String key) =>
-      _keyCache.putIfAbsent(key, () => RegisteredStateKey._(key));
+  static RegisteredStateKey registerKey(String key) {
+    final cached = _keyCache[key];
+    if (cached != null) return cached;
+
+    for (final existing in RegisteredStateKey._registeredKeys) {
+      if (existing.value != key) continue;
+      _keyCache[key] = existing;
+      return existing;
+    }
+
+    final created = RegisteredStateKey._(key);
+    _keyCache[key] = created;
+
+    final uniqueByValue = <String, RegisteredStateKey>{};
+    for (final existing in RegisteredStateKey._registeredKeys.toList()) {
+      uniqueByValue.putIfAbsent(existing.value, () => existing);
+    }
+    RegisteredStateKey._registeredKeys
+      ..clear()
+      ..addAll(uniqueByValue.values);
+
+    return created;
+  }
 
   Stream<S>? watch<S>({required RegisteredStateKey key}) {
     if (!initialized) return null;
