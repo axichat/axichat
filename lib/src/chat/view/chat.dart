@@ -669,6 +669,7 @@ class _ChatState extends State<Chat> {
   int? _dismissPointer;
   Offset? _dismissPointerDownPosition;
   bool _dismissPointerMoved = false;
+  double? _dismissPointerScrollOffset;
   var _sendingAttachment = false;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
@@ -1049,6 +1050,8 @@ class _ChatState extends State<Chat> {
     _dismissPointer = event.pointer;
     _dismissPointerDownPosition = event.position;
     _dismissPointerMoved = false;
+    _dismissPointerScrollOffset =
+        _scrollController.hasClients ? _scrollController.position.pixels : null;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
@@ -1065,6 +1068,16 @@ class _ChatState extends State<Chat> {
     if (_dismissPointer != event.pointer) return;
     final origin = _dismissPointerDownPosition;
     final travel = origin == null ? 0.0 : (event.position - origin).distance;
+    final currentScrollOffset =
+        _scrollController.hasClients ? _scrollController.position.pixels : null;
+    final scrolled = currentScrollOffset != null &&
+        _dismissPointerScrollOffset != null &&
+        (currentScrollOffset - _dismissPointerScrollOffset!).abs() >
+            _selectionDismissScrollAllowance;
+    if (scrolled) {
+      _resetDismissPointer();
+      return;
+    }
     if (!_dismissPointerMoved || travel <= _selectionDismissTapAllowance) {
       _maybeDismissSelection(event.position);
     }
@@ -1080,6 +1093,7 @@ class _ChatState extends State<Chat> {
     _dismissPointer = null;
     _dismissPointerDownPosition = null;
     _dismissPointerMoved = false;
+    _dismissPointerScrollOffset = null;
   }
 
   void _ensureRecipientBarHeightCleared() {
