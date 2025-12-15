@@ -1143,85 +1143,173 @@ class _RecipientAutocompleteField extends StatelessWidget {
           optionsBuilder: (value) {
             final query = value.text.trim();
             if (query.isEmpty) {
-            onOptionsChanged(const <FanOutTarget>[]);
-            return const Iterable<FanOutTarget>.empty();
-          }
-          final options = optionsBuilder(query).toList(growable: false);
-          onOptionsChanged(options);
-          return options;
-        },
-        displayStringForOption: (option) =>
-            option.chat?.title ?? option.displayName ?? option.address ?? '',
-        fieldViewBuilder: (context, fieldController, fieldFocusNode, _) {
-          final colors = Theme.of(context).colorScheme;
-          final hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
-          final textStyle = Theme.of(context).textTheme.bodyMedium;
-          return TapRegion(
-            groupId: tapRegionGroup,
-            onTapOutside: (_) => fieldFocusNode.unfocus(),
-            child: SizedBox(
-              height: _chipHeight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: backgroundColor,
-                      borderRadius: BorderRadius.circular(_chipHeight / 2),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Theme(
-                        data: Theme.of(context).copyWith(
-                          inputDecorationTheme: const InputDecorationTheme(
-                            isDense: true,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            focusedErrorBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
+              onOptionsChanged(const <FanOutTarget>[]);
+              return const Iterable<FanOutTarget>.empty();
+            }
+            final options = optionsBuilder(query).toList(growable: false);
+            onOptionsChanged(options);
+            return options;
+          },
+          displayStringForOption: (option) =>
+              option.chat?.title ?? option.displayName ?? option.address ?? '',
+          fieldViewBuilder: (context, fieldController, fieldFocusNode, _) {
+            final colors = Theme.of(context).colorScheme;
+            final hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
+            final textStyle = Theme.of(context).textTheme.bodyMedium;
+            return TapRegion(
+              groupId: tapRegionGroup,
+              onTapOutside: (_) => fieldFocusNode.unfocus(),
+              child: SizedBox(
+                height: _chipHeight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: backgroundColor,
+                        borderRadius: BorderRadius.circular(_chipHeight / 2),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            inputDecorationTheme: const InputDecorationTheme(
+                              isDense: true,
+                              filled: false,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              focusedErrorBorder: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          child: TextField(
+                            controller: fieldController,
+                            focusNode: fieldFocusNode,
+                            cursorColor: colors.primary,
+                            maxLines: 1,
+                            keyboardType: TextInputType.emailAddress,
+                            textCapitalization: TextCapitalization.none,
+                            autocorrect: false,
+                            smartDashesType: SmartDashesType.disabled,
+                            smartQuotesType: SmartQuotesType.disabled,
+                            autofillHints: const [AutofillHints.email],
+                            inputFormatters: [
+                              FilteringTextInputFormatter.deny(
+                                RegExp(r'\s'),
+                              ),
+                            ],
+                            decoration: InputDecoration(
+                              hintText: context.l10n.recipientsAddHint,
+                              hintStyle: textStyle?.copyWith(color: hintColor),
+                            ),
+                            style: textStyle,
+                            strutStyle: textStyle == null
+                                ? null
+                                : StrutStyle.fromTextStyle(textStyle),
+                            textInputAction: TextInputAction.done,
+                            onEditingComplete: () =>
+                                fieldFocusNode.requestFocus(),
+                            textAlignVertical: TextAlignVertical.center,
+                            onSubmitted: (_) {
+                              final handled = onSubmitted();
+                              if (!handled) {
+                                final trimmed = fieldController.text.trim();
+                                if (trimmed.isNotEmpty &&
+                                    onManualEntry(trimmed)) {
+                                  fieldController.clear();
+                                  onOptionsChanged(const <FanOutTarget>[]);
+                                }
+                              }
+                              fieldFocusNode.requestFocus();
+                            },
                           ),
                         ),
-                        child: TextField(
-                          controller: fieldController,
-                          focusNode: fieldFocusNode,
-                          cursorColor: colors.primary,
-                          maxLines: 1,
-                          keyboardType: TextInputType.emailAddress,
-                          textCapitalization: TextCapitalization.none,
-                          autocorrect: false,
-                          smartDashesType: SmartDashesType.disabled,
-                          smartQuotesType: SmartQuotesType.disabled,
-                          autofillHints: const [AutofillHints.email],
-                          inputFormatters: const [
-                            FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                          ],
-                          decoration: InputDecoration(
-                            hintText: context.l10n.recipientsAddHint,
-                            hintStyle: textStyle?.copyWith(color: hintColor),
-                          ),
-                          style: textStyle,
-                          strutStyle: textStyle == null
-                              ? null
-                              : StrutStyle.fromTextStyle(textStyle),
-                          textInputAction: TextInputAction.done,
-                          onEditingComplete: () =>
-                              fieldFocusNode.requestFocus(),
-                          textAlignVertical: TextAlignVertical.center,
-                          onSubmitted: (_) {
-                            final handled = onSubmitted();
-                            if (!handled) {
-                              final trimmed = fieldController.text.trim();
-                              if (trimmed.isNotEmpty &&
-                                  onManualEntry(trimmed)) {
-                                fieldController.clear();
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            if (options.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            final colors = context.colorScheme;
+            final theme = Theme.of(context).textTheme;
+            final overlayRadius = BorderRadius.circular(20);
+            final titleStyle = theme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: colors.foreground,
+            );
+            final subtitleStyle = theme.bodySmall?.copyWith(
+              color: colors.mutedForeground,
+            );
+            final dividerColor = colors.border.withValues(alpha: 0.55);
+            final hoverColor = colors.muted.withValues(alpha: 0.08);
+            final highlightColor = colors.primary.withValues(alpha: 0.12);
+            final trailingIconColor = colors.muted.withValues(alpha: 0.9);
+            final optionList = options.toList(growable: false);
+            return TapRegion(
+              groupId: tapRegionGroup,
+              onTapOutside: (_) => focusNode.unfocus(),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 260,
+                    maxWidth: 420,
+                    maxHeight: _suggestionMaxHeight,
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.card,
+                      borderRadius: overlayRadius,
+                      border: Border.all(
+                        color: colors.border.withValues(alpha: 0.9),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 28,
+                          offset: const Offset(0, 18),
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: overlayRadius,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: ValueListenableBuilder<int?>(
+                          valueListenable: highlightedIndexListenable,
+                          builder: (context, highlightedIndex, _) {
+                            return _AutocompleteOptionsList(
+                              options: optionList,
+                              avatarPathsByJid: avatarPathsByJid,
+                              onSelected: (option) {
+                                onSelected(option);
+                                controller.clear();
                                 onOptionsChanged(const <FanOutTarget>[]);
-                              }
-                            }
-                            fieldFocusNode.requestFocus();
+                                focusNode.requestFocus();
+                                onRecipientAdded(option);
+                              },
+                              titleStyle: titleStyle,
+                              subtitleStyle: subtitleStyle,
+                              dividerColor: dividerColor,
+                              trailingIconColor: trailingIconColor,
+                              hoverColor: hoverColor,
+                              highlightColor: highlightColor,
+                              highlightedIndex: highlightedIndex,
+                            );
                           },
                         ),
                       ),
@@ -1229,100 +1317,15 @@ class _RecipientAutocompleteField extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-          );
-        },
-        optionsViewBuilder: (context, onSelected, options) {
-          if (options.isEmpty) {
-            return const SizedBox.shrink();
-          }
-          final colors = context.colorScheme;
-          final theme = Theme.of(context).textTheme;
-          final overlayRadius = BorderRadius.circular(20);
-          final titleStyle = theme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: colors.foreground,
-          );
-          final subtitleStyle = theme.bodySmall?.copyWith(
-            color: colors.mutedForeground,
-          );
-          final dividerColor = colors.border.withValues(alpha: 0.55);
-          final hoverColor = colors.muted.withValues(alpha: 0.08);
-          final highlightColor = colors.primary.withValues(alpha: 0.12);
-          final trailingIconColor = colors.muted.withValues(alpha: 0.9);
-          final optionList = options.toList(growable: false);
-          return TapRegion(
-            groupId: tapRegionGroup,
-            onTapOutside: (_) => focusNode.unfocus(),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: 260,
-                  maxWidth: 420,
-                  maxHeight: _suggestionMaxHeight,
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.card,
-                    borderRadius: overlayRadius,
-                    border: Border.all(
-                      color: colors.border.withValues(alpha: 0.9),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        blurRadius: 28,
-                        offset: const Offset(0, 18),
-                      ),
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: overlayRadius,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: ValueListenableBuilder<int?>(
-                        valueListenable: highlightedIndexListenable,
-                        builder: (context, highlightedIndex, _) {
-                          return _AutocompleteOptionsList(
-                            options: optionList,
-                            avatarPathsByJid: avatarPathsByJid,
-                            onSelected: (option) {
-                              onSelected(option);
-                              controller.clear();
-                              onOptionsChanged(const <FanOutTarget>[]);
-                              focusNode.requestFocus();
-                              onRecipientAdded(option);
-                            },
-                            titleStyle: titleStyle,
-                            subtitleStyle: subtitleStyle,
-                            dividerColor: dividerColor,
-                            trailingIconColor: trailingIconColor,
-                            hoverColor: hoverColor,
-                            highlightColor: highlightColor,
-                            highlightedIndex: highlightedIndex,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-        onSelected: (selection) {
-          onRecipientAdded(selection);
-          controller.clear();
-          onOptionsChanged(const <FanOutTarget>[]);
-          focusNode.requestFocus();
-        },
+            );
+          },
+          onSelected: (selection) {
+            onRecipientAdded(selection);
+            controller.clear();
+            onOptionsChanged(const <FanOutTarget>[]);
+            focusNode.requestFocus();
+          },
+        ),
       ),
     );
   }

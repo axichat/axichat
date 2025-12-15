@@ -2266,7 +2266,6 @@ class _ChatState extends State<Chat> {
                 final emailSelfJid = emailService?.selfSenderJid;
                 final chatEntity = state.chat;
                 final jid = chatEntity?.jid;
-                final isEmailChat = chatEntity?.deltaChatId != null;
                 final isDefaultEmail =
                     chatEntity?.defaultTransport.isEmail ?? false;
                 final currentUserId = isDefaultEmail
@@ -2916,12 +2915,14 @@ class _ChatState extends State<Chat> {
                                           if (e.received || e.displayed) {
                                             return MessageStatus.received;
                                           }
-                                          if (e.acked)
+                                          if (e.acked) {
                                             return MessageStatus.sent;
+                                          }
                                           return MessageStatus.pending;
                                         }
-                                        if (e.displayed)
+                                        if (e.displayed) {
                                           return MessageStatus.read;
+                                        }
                                         if (e.received) {
                                           return MessageStatus.received;
                                         }
