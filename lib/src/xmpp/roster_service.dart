@@ -86,8 +86,8 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
         await syncMucRoomsFromPubSubOnLogin();
       } on XmppAbortedException {
         return;
-      } on Exception catch (error, stackTrace) {
-        _rosterLog.fine('Failed to sync room list.', error, stackTrace);
+      } on Exception {
+        _rosterLog.fine('Failed to sync room list.');
       }
       await syncMessageArchiveOnLogin();
     }());

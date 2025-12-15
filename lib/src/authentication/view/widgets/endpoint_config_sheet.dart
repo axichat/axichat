@@ -22,8 +22,8 @@ class EndpointConfigSheet extends StatefulWidget {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: compact,
-      backgroundColor: Colors.transparent,
       dialogMaxWidth: compact ? 560 : 720,
+      surfacePadding: EdgeInsets.zero,
       builder: (_) => EndpointConfigSheet(compact: compact),
     );
   }
@@ -139,25 +139,21 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final l10n = context.l10n;
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final titleStyle = textTheme.h4.copyWith(color: colors.foreground);
     final placeholderStyle =
         textTheme.muted.copyWith(color: colors.mutedForeground);
     final inputStyle = TextStyle(color: colors.foreground);
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final EdgeInsets sheetPadding = EdgeInsets.symmetric(
+      horizontal: widget.compact ? 12 : 24,
+    );
+    return AxiSheetScaffold.scroll(
+      header: AxiSheetHeader(
+        title: Text(l10n.authCustomServerTitle),
+        subtitle: Text(l10n.authCustomServerDescription),
+        onClose: () => Navigator.of(context).maybePop(),
+        padding: sheetPadding.copyWith(top: 16, bottom: 12),
+      ),
+      bodyPadding: sheetPadding.copyWith(bottom: 16),
       children: [
-        Text(
-          l10n.authCustomServerTitle,
-          style: titleStyle,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          l10n.authCustomServerDescription,
-          style: textTheme.muted.copyWith(color: colors.mutedForeground),
-        ),
-        const SizedBox(height: 16),
         AxiTextFormField(
           autocorrect: false,
           keyboardType: TextInputType.url,
@@ -344,50 +340,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           style: textTheme.muted.copyWith(color: colors.mutedForeground),
         ),
       ],
-    );
-
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: () {
-          final double basePadding = widget.compact ? 12 : 24;
-          return EdgeInsets.only(
-            left: basePadding,
-            right: basePadding,
-            top: basePadding,
-            bottom: basePadding + keyboardInset,
-          );
-        }(),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: widget.compact ? 560 : 680,
-            ),
-            child: DecoratedBox(
-              decoration: ShapeDecoration(
-                color: colors.card,
-                shadows: const [
-                  BoxShadow(
-                    color: Color(0x1A000000),
-                    blurRadius: 16,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-                shape: SquircleBorder(
-                  cornerRadius: 18,
-                  side: const BorderSide(color: Colors.transparent),
-                ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: widget.compact ? 16 : 20,
-                  vertical: widget.compact ? 16 : 20,
-                ),
-                child: content,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

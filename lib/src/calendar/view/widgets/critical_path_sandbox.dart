@@ -887,141 +887,147 @@ extension on _CriticalPathSandboxState {
       builder: (sheetContext) {
         final ShadTextTheme textTheme = sheetContext.textTheme;
         final ShadColorScheme colors = sheetContext.colorScheme;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Add task to path',
-                    style: textTheme.h3.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+        return SafeArea(
+          top: true,
+          bottom: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Add task to path',
+                      style: textTheme.h3.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                AxiIconButton(
-                  iconData: Icons.close,
-                  iconSize: 16,
-                  buttonSize: 34,
-                  tapTargetSize: 40,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.transparent,
-                  color: colors.mutedForeground,
-                  onPressed: () => Navigator.of(sheetContext).maybePop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: calendarGutterSm),
-            if (available.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(calendarGutterMd),
-                decoration: BoxDecoration(
-                  color: colors.muted.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(calendarBorderRadius),
-                  border: Border.all(color: colors.border),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'All tasks are placed already',
-                      style: textTheme.h4,
-                    ),
-                    const SizedBox(height: calendarInsetMd),
-                    Text(
-                      'Drag a task off a slot first, then try again.',
-                      style: textTheme.muted,
-                    ),
-                  ],
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 420),
-                child: Scrollbar(
-                  child: ListView.separated(
-                    padding: EdgeInsets.zero,
-                    itemBuilder: (context, index) {
-                      final CalendarTask task = available[index];
-                      final DateTime? deadline = task.deadline?.toLocal();
-                      final String? deadlineLabel = deadline != null
-                          ? 'Deadline: ${deadline.toIso8601String().split('T').first}'
-                          : null;
-                      return CalendarTaskTitleHoverReporter(
-                        title: task.title,
-                        child: InkWell(
-                          onTap: () => Navigator.of(sheetContext).pop(task),
-                          borderRadius:
-                              BorderRadius.circular(calendarBorderRadius),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: calendarGutterMd,
-                              vertical: calendarInsetMd,
-                            ),
-                            decoration: BoxDecoration(
-                              color: colors.card,
-                              borderRadius: BorderRadius.circular(
-                                calendarBorderRadius,
+                  AxiIconButton(
+                    iconData: LucideIcons.x,
+                    tooltip: MaterialLocalizations.of(sheetContext)
+                        .closeButtonTooltip,
+                    iconSize: 16,
+                    buttonSize: 34,
+                    tapTargetSize: 40,
+                    backgroundColor: Colors.transparent,
+                    borderColor: Colors.transparent,
+                    color: colors.mutedForeground,
+                    onPressed: () => Navigator.of(sheetContext).maybePop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: calendarGutterSm),
+              if (available.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(calendarGutterMd),
+                  decoration: BoxDecoration(
+                    color: colors.muted.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(calendarBorderRadius),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'All tasks are placed already',
+                        style: textTheme.h4,
+                      ),
+                      const SizedBox(height: calendarInsetMd),
+                      Text(
+                        'Drag a task off a slot first, then try again.',
+                        style: textTheme.muted,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 420),
+                  child: Scrollbar(
+                    child: ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemBuilder: (context, index) {
+                        final CalendarTask task = available[index];
+                        final DateTime? deadline = task.deadline?.toLocal();
+                        final String? deadlineLabel = deadline != null
+                            ? 'Deadline: ${deadline.toIso8601String().split('T').first}'
+                            : null;
+                        return CalendarTaskTitleHoverReporter(
+                          title: task.title,
+                          child: InkWell(
+                            onTap: () => Navigator.of(sheetContext).pop(task),
+                            borderRadius:
+                                BorderRadius.circular(calendarBorderRadius),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: calendarGutterMd,
+                                vertical: calendarInsetMd,
                               ),
-                              border: Border.all(color: colors.border),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  task.isCompleted
-                                      ? Icons.check_circle
-                                      : Icons.circle_outlined,
-                                  size: 20,
-                                  color: task.isCompleted
-                                      ? colors.primary
-                                      : colors.mutedForeground,
+                              decoration: BoxDecoration(
+                                color: colors.card,
+                                borderRadius: BorderRadius.circular(
+                                  calendarBorderRadius,
                                 ),
-                                const SizedBox(width: calendarGutterSm),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        task.title,
-                                        style: textTheme.small.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      if (deadlineLabel != null) ...[
-                                        const SizedBox(
-                                          height: calendarInsetSm,
-                                        ),
-                                        Text(
-                                          deadlineLabel,
-                                          style: textTheme.muted,
-                                        ),
-                                      ],
-                                    ],
+                                border: Border.all(color: colors.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    task.isCompleted
+                                        ? Icons.check_circle
+                                        : Icons.circle_outlined,
+                                    size: 20,
+                                    color: task.isCompleted
+                                        ? colors.primary
+                                        : colors.mutedForeground,
                                   ),
-                                ),
-                                Icon(
-                                  Icons.add,
-                                  size: 18,
-                                  color: colors.mutedForeground,
-                                ),
-                              ],
+                                  const SizedBox(width: calendarGutterSm),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          task.title,
+                                          style: textTheme.small.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        if (deadlineLabel != null) ...[
+                                          const SizedBox(
+                                            height: calendarInsetSm,
+                                          ),
+                                          Text(
+                                            deadlineLabel,
+                                            style: textTheme.muted,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.add,
+                                    size: 18,
+                                    color: colors.mutedForeground,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: calendarInsetSm),
-                    itemCount: available.length,
+                        );
+                      },
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: calendarInsetSm),
+                      itemCount: available.length,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -1036,51 +1042,57 @@ extension on _CriticalPathSandboxState {
       builder: (sheetContext) {
         final ShadTextTheme textTheme = sheetContext.textTheme;
         final ShadColorScheme colors = sheetContext.colorScheme;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Slot options',
-                    style: textTheme.h3.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+        return SafeArea(
+          top: true,
+          bottom: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Slot options',
+                      style: textTheme.h3.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                AxiIconButton(
-                  iconData: Icons.close,
-                  iconSize: 16,
-                  buttonSize: 34,
-                  tapTargetSize: 40,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.transparent,
-                  color: colors.mutedForeground,
-                  onPressed: () => Navigator.of(sheetContext).maybePop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: calendarGutterSm),
-            _SlotActionTile(
-              icon: Icons.swap_horiz,
-              title: 'Replace task',
-              subtitle: 'Pick a different task for this slot',
-              onTap: () => Navigator.of(sheetContext).pop(
-                _SlotTapAction.replace,
+                  AxiIconButton(
+                    iconData: LucideIcons.x,
+                    tooltip: MaterialLocalizations.of(sheetContext)
+                        .closeButtonTooltip,
+                    iconSize: 16,
+                    buttonSize: 34,
+                    tapTargetSize: 40,
+                    backgroundColor: Colors.transparent,
+                    borderColor: Colors.transparent,
+                    color: colors.mutedForeground,
+                    onPressed: () => Navigator.of(sheetContext).maybePop(),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: calendarInsetSm),
-            _SlotActionTile(
-              icon: Icons.remove_circle_outline,
-              title: 'Remove from path',
-              onTap: () => Navigator.of(sheetContext).pop(
-                _SlotTapAction.remove,
+              const SizedBox(height: calendarGutterSm),
+              _SlotActionTile(
+                icon: Icons.swap_horiz,
+                title: 'Replace task',
+                subtitle: 'Pick a different task for this slot',
+                onTap: () => Navigator.of(sheetContext).pop(
+                  _SlotTapAction.replace,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: calendarInsetSm),
+              _SlotActionTile(
+                icon: Icons.remove_circle_outline,
+                title: 'Remove from path',
+                onTap: () => Navigator.of(sheetContext).pop(
+                  _SlotTapAction.remove,
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

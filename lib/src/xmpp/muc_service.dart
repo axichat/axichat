@@ -14,6 +14,7 @@ const _mucRoomsPayloadEncodingAttr = 'enc';
 const _mucRoomsPayloadEncodingBase64 = 'b64';
 const _mucRoomsAccessModel = 'whitelist';
 const _mucRoomsMaxItems = '512';
+const _mucRoomsSendLastPublishedItemOnSubscribe = 'on_subscribe';
 const _mucRoomsPublishModel = 'publishers';
 
 mixin MucService on XmppBase, BaseStreamService {
@@ -34,6 +35,35 @@ mixin MucService on XmppBase, BaseStreamService {
 
   void setMucServiceHost(String? host) {
     _mucServiceHost = host;
+  }
+
+  @override
+  void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
+        if (connectionState != ConnectionState.connected) return;
+        unawaited(_ensureMucRoomsPubSubSubscription());
+        unawaited(_flushPendingMucRoomListingRemovals());
+      })
+      ..registerHandler<mox.PubSubNotificationEvent>((event) async {
+        await _handleMucRoomsPubSubNotification(event);
+      })
+      ..registerHandler<mox.PubSubItemsRetractedEvent>((event) async {
+        await _handleMucRoomsPubSubItemsRetracted(event);
+      })
+      ..registerHandler<mox.PubSubNodeDeletedEvent>((event) async {
+        await _handleMucRoomsPubSubReset(
+          node: event.node,
+          from: event.from,
+        );
+      })
+      ..registerHandler<mox.PubSubNodePurgedEvent>((event) async {
+        await _handleMucRoomsPubSubReset(
+          node: event.node,
+          from: event.from,
+        );
+      });
   }
 
   Stream<RoomState> roomStateStream(String roomJid) {
@@ -370,6 +400,120 @@ mixin MucService on XmppBase, BaseStreamService {
     );
   }
 
+  String? _mucRoomsSafeBareJid(String? jid) {
+    if (jid == null || jid.isEmpty) return null;
+    try {
+      return mox.JID.fromString(jid).toBare().toString();
+    } on Exception {
+      return null;
+    }
+  }
+
+  Future<bool> _isMucRoomsPubSubEventFromSelf(String? from) async {
+    final fromBare = _mucRoomsSafeBareJid(from);
+    if (fromBare == null) return false;
+
+    final host = await _resolveMucRoomsPubSubHost();
+    if (host == null) return false;
+
+    return fromBare == host.toString();
+  }
+
+  Future<void> _ensureMucRoomsPubSubSubscription() async {
+    final pubsub = _connection.getManager<mox.PubSubManager>();
+    if (pubsub == null) return;
+    if (connectionState != ConnectionState.connected) return;
+
+    final host = await _resolveMucRoomsPubSubHost();
+    if (host == null) return;
+
+    try {
+      final result = await pubsub.subscribe(host, _mucRoomsNodeId);
+      if (result.isType<mox.PubSubError>()) return;
+    } on XmppAbortedException {
+      return;
+    } on Exception {
+      _mucLog.fine('Failed to subscribe to room list updates.');
+    }
+  }
+
+  Future<void> _handleMucRoomsPubSubNotification(
+    mox.PubSubNotificationEvent event,
+  ) async {
+    if (event.item.node != _mucRoomsNodeId) return;
+    if (connectionState != ConnectionState.connected) return;
+    if (!await _isMucRoomsPubSubEventFromSelf(event.from)) return;
+
+    final payload = event.item.payload;
+    if (payload == null) {
+      unawaited(syncMucRoomsFromPubSubOnLogin());
+      return;
+    }
+
+    final listing = _MucRoomListing.fromXml(payload);
+    if (listing == null) return;
+
+    try {
+      await database;
+      if (connectionState != ConnectionState.connected) return;
+
+      await _upsertMucChatsFromListings([listing]);
+
+      if (!listing.autojoin) return;
+      if (connectionState != ConnectionState.connected) return;
+
+      _markRoomJoined(listing.roomJid);
+      await ensureJoined(
+        roomJid: listing.roomJid,
+        nickname: listing.nickname,
+        maxHistoryStanzas: mamLoginBackfillMessageLimit,
+      );
+    } on XmppAbortedException {
+      return;
+    } on Exception {
+      _mucLog.fine('Failed to apply a room list update.');
+    }
+  }
+
+  Future<void> _handleMucRoomsPubSubItemsRetracted(
+    mox.PubSubItemsRetractedEvent event,
+  ) async {
+    if (event.node != _mucRoomsNodeId) return;
+    if (event.itemIds.isEmpty) return;
+    if (connectionState != ConnectionState.connected) return;
+    if (!await _isMucRoomsPubSubEventFromSelf(event.from)) return;
+
+    final knownRooms = List<String>.from(_roomStates.keys);
+    for (final roomJid in knownRooms) {
+      if (connectionState != ConnectionState.connected) return;
+      if (hasLeftRoom(roomJid)) continue;
+
+      final itemId = _mucRoomsItemId(roomJid);
+      if (!event.itemIds.contains(itemId)) continue;
+
+      try {
+        await leaveRoom(roomJid);
+      } on XmppAbortedException {
+        return;
+      } on Exception {
+        _mucLog.fine(
+          'Failed to leave one or more chat rooms after a room list update.',
+        );
+      }
+    }
+  }
+
+  Future<void> _handleMucRoomsPubSubReset({
+    required String node,
+    required String from,
+  }) async {
+    if (node != _mucRoomsNodeId) return;
+    if (connectionState != ConnectionState.connected) return;
+    if (!await _isMucRoomsPubSubEventFromSelf(from)) return;
+
+    unawaited(syncMucRoomsFromPubSubOnLogin());
+  }
+
   Future<void> syncMucRoomsFromPubSubOnLogin() async {
     if (_mucRoomsSyncInFlight) return;
     if (connectionState != ConnectionState.connected) return;
@@ -396,11 +540,9 @@ mixin MucService on XmppBase, BaseStreamService {
           );
         } on XmppAbortedException {
           return;
-        } on Exception catch (error, stackTrace) {
+        } on Exception {
           _mucLog.fine(
             'Failed to auto-join one or more chat rooms during login.',
-            error,
-            stackTrace,
           );
         }
       }
@@ -505,11 +647,9 @@ mixin MucService on XmppBase, BaseStreamService {
         }
       } on XmppAbortedException {
         return;
-      } on Exception catch (error, stackTrace) {
+      } on Exception {
         _mucLog.fine(
           'Failed to flush one or more room list removals.',
-          error,
-          stackTrace,
         );
         remaining.add(itemId);
       }
@@ -572,11 +712,9 @@ mixin MucService on XmppBase, BaseStreamService {
         );
       } on XmppAbortedException {
         return;
-      } on Exception catch (error, stackTrace) {
+      } on Exception {
         _mucLog.fine(
           'Failed to upsert one or more chat rooms.',
-          error,
-          stackTrace,
         );
       }
     }
@@ -632,8 +770,8 @@ mixin MucService on XmppBase, BaseStreamService {
       return List<_MucRoomListing>.unmodifiable(listings);
     } on XmppAbortedException {
       rethrow;
-    } on Exception catch (error, stackTrace) {
-      _mucLog.fine('Failed to fetch room list.', error, stackTrace);
+    } on Exception {
+      _mucLog.fine('Failed to fetch room list.');
       return const [];
     }
   }
@@ -740,9 +878,12 @@ mixin MucService on XmppBase, BaseStreamService {
     final createConfig = mox.NodeConfig(
       accessModel: mox.AccessModel.whitelist,
       publishModel: _mucRoomsPublishModel,
+      deliverNotifications: true,
       maxItems: _mucRoomsMaxItems,
+      notifyRetract: true,
       persistItems: true,
       deliverPayloads: true,
+      sendLastPublishedItem: _mucRoomsSendLastPublishedItemOnSubscribe,
     );
 
     try {
@@ -760,9 +901,11 @@ mixin MucService on XmppBase, BaseStreamService {
       }
     } on XmppAbortedException {
       rethrow;
-    } on Exception catch (error, stackTrace) {
-      _mucLog.fine('Failed to publish room list update.', error, stackTrace);
+    } on Exception {
+      _mucLog.fine('Failed to publish room list update.');
     }
+
+    unawaited(_ensureMucRoomsPubSubSubscription());
   }
 
   Future<mox.JID?> _resolveMucRoomsPubSubHost() async {

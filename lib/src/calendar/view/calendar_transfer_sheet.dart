@@ -12,8 +12,8 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
     context: context,
     useSafeArea: true,
     showDragHandle: true,
+    surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) {
-      final colors = ShadTheme.of(sheetContext).colorScheme;
       return AxiSheetScaffold.scroll(
         header: AxiSheetHeader(
           title: Text(title),

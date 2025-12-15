@@ -1000,6 +1000,7 @@ class _DraftFormState extends State<DraftForm> {
       context: context,
       showDragHandle: true,
       dialogMaxWidth: 520,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes);
