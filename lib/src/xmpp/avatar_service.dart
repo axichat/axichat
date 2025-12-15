@@ -60,7 +60,23 @@ mixin AvatarService on XmppBase {
       Duration(milliseconds: 350);
   static const Duration _avatarPublishVerificationTimeout =
       Duration(seconds: 5);
+  static const Duration _selfAvatarRefreshInterval = Duration(minutes: 1);
+  static const String _mimePng = 'image/png';
+  static const String _mimeJpeg = 'image/jpeg';
+  static const List<int> _pngMagicBytes = <int>[
+    0x89,
+    0x50,
+    0x4E,
+    0x47,
+    0x0D,
+    0x0A,
+    0x1A,
+    0x0A,
+  ];
+  static const List<int> _jpegMagicBytes = <int>[0xFF, 0xD8, 0xFF];
   final LinkedHashMap<String, Uint8List> _avatarBytesCache = LinkedHashMap();
+  Timer? _selfAvatarRefreshTimer;
+  bool _selfAvatarRepairAttempted = false;
 
   Uint8List? cachedAvatarBytes(String path) {
     final normalizedPath = path.trim();
@@ -158,12 +174,36 @@ mixin AvatarService on XmppBase {
         await _clearAvatarForJid(bareJid);
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        _startSelfAvatarRefreshTimer();
         if (avatarEncryptionKey != null) {
           unawaited(refreshSelfAvatarIfNeeded());
         }
         if (event.resumed) return;
         await _refreshRosterAvatarsFromCache();
       });
+  }
+
+  @override
+  Future<void> _reset() async {
+    _avatarRefreshInProgress.clear();
+    _avatarBytesCache.clear();
+    _avatarDirectory = null;
+    _selfAvatarRepairAttempted = false;
+    _selfAvatarRefreshTimer?.cancel();
+    _selfAvatarRefreshTimer = null;
+    await super._reset();
+  }
+
+  void _startSelfAvatarRefreshTimer() {
+    _selfAvatarRefreshTimer?.cancel();
+    _selfAvatarRefreshTimer = Timer.periodic(
+      _selfAvatarRefreshInterval,
+      (_) {
+        if (connectionState != ConnectionState.connected) return;
+        if (avatarEncryptionKey == null) return;
+        unawaited(refreshSelfAvatarIfNeeded());
+      },
+    );
   }
 
   void scheduleAvatarRefresh(
@@ -207,6 +247,8 @@ mixin AvatarService on XmppBase {
       final manager = _connection.getManager<mox.UserAvatarManager>();
       if (manager == null) return;
 
+      final myBareJid = _myJid?.toBare().toString();
+      final isSelf = myBareJid != null && myBareJid == bareJid;
       final existingHash = await _storedAvatarHash(bareJid);
       if (metadata != null && metadata.isEmpty) {
         await _clearAvatarForJid(bareJid);
@@ -221,6 +263,10 @@ mixin AvatarService on XmppBase {
           case final _AvatarMetadataLoaded loaded:
             selectedMetadata = loaded.metadata;
           case _AvatarMetadataMissing():
+            if (isSelf) {
+              await _maybeRepairSelfAvatar(bareJid);
+              return;
+            }
             if (existingHash != null && existingHash.trim().isNotEmpty) {
               await _clearAvatarForJid(bareJid);
             }
@@ -606,7 +652,7 @@ mixin AvatarService on XmppBase {
     required bool public,
   }) async {
     const openAccessModel = 'open';
-    const rosterAccessModel = 'roster';
+    const presenceAccessModel = 'presence';
     const avatarDataTag = 'data';
     const avatarMetadataTag = 'metadata';
     const avatarMetadataInfoTag = 'info';
@@ -619,7 +665,7 @@ mixin AvatarService on XmppBase {
       throw XmppAvatarException('PubSub is unavailable');
     }
     final host = mox.JID.fromString(targetJid);
-    final accessModel = public ? openAccessModel : rosterAccessModel;
+    final accessModel = public ? openAccessModel : presenceAccessModel;
     final dataPublishOptions = mox.PubSubPublishOptions(
       accessModel: accessModel,
       maxItems: maxPublishedAvatarItems,
@@ -631,7 +677,7 @@ mixin AvatarService on XmppBase {
       persistItems: true,
     );
     final createNodeAccessModel =
-        public ? mox.AccessModel.open : mox.AccessModel.roster;
+        public ? mox.AccessModel.open : mox.AccessModel.presence;
     final dataNodeConfig = mox.NodeConfig(
       accessModel: createNodeAccessModel,
       maxItems: maxPublishedAvatarItems,
@@ -787,6 +833,56 @@ mixin AvatarService on XmppBase {
     vCardManager?.setLastHash(targetJid, payload.hash);
 
     return AvatarUploadResult(path: path, hash: payload.hash);
+  }
+
+  Future<void> _maybeRepairSelfAvatar(String bareJid) async {
+    if (_selfAvatarRepairAttempted) return;
+    _selfAvatarRepairAttempted = true;
+
+    final existingPath = await _storedAvatarPath(bareJid);
+    if (existingPath == null || existingPath.trim().isEmpty) return;
+    final bytes = await loadAvatarBytes(existingPath);
+    if (bytes == null || bytes.isEmpty) return;
+    if (bytes.length > _maxAvatarBytes) return;
+
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return;
+
+    final mimeType = _detectAvatarMimeType(bytes);
+    final hash = sha1.convert(bytes).toString();
+
+    final payload = AvatarUploadPayload(
+      bytes: bytes,
+      mimeType: mimeType,
+      width: decoded.width,
+      height: decoded.height,
+      hash: hash,
+      jid: bareJid,
+    );
+    try {
+      await _publishAvatarOnce(
+        payload: payload,
+        targetJid: bareJid,
+        public: false,
+      );
+    } catch (error, stackTrace) {
+      _avatarLog.warning('Failed to repair missing server avatar.', error);
+      _avatarLog.fine('Repair failure details', error, stackTrace);
+    }
+  }
+
+  String _detectAvatarMimeType(Uint8List bytes) {
+    bool matchesSignature(List<int> signature) {
+      if (bytes.length < signature.length) return false;
+      for (var i = 0; i < signature.length; i++) {
+        if (bytes[i] != signature[i]) return false;
+      }
+      return true;
+    }
+
+    if (matchesSignature(_pngMagicBytes)) return _mimePng;
+    if (matchesSignature(_jpegMagicBytes)) return _mimeJpeg;
+    return _mimePng;
   }
 
   Future<Uint8List?> loadAvatarBytes(String path) async {

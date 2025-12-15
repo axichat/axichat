@@ -68,11 +68,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
           bottom: false,
           left: false,
           right: false,
-          child: MediaQuery.removePadding(
-            context: sheetContext,
-            removeTop: true,
-            child: surface,
-          ),
+          child: surface,
         );
       },
     );

@@ -33,7 +33,7 @@ import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
 import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
-import 'package:crypto/crypto.dart' show sha256;
+import 'package:crypto/crypto.dart' show sha1, sha256;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
