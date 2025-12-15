@@ -365,8 +365,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         );
 
+                    final bool demoOffline =
+                        context.read<XmppService?>()?.demoOfflineMode ?? false;
+
                     return SafeArea(
-                      top: state is ConnectivityConnected,
+                      top: state is ConnectivityConnected || demoOffline,
                       child: openCalendar ? calendarLayout() : chatLayout(),
                     );
                   },

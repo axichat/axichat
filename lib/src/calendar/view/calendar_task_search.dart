@@ -145,88 +145,107 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
     return BlocBuilder<B, CalendarState>(
       bloc: widget.bloc,
       builder: (context, state) {
-        final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
         final String query = _queryController.text.trim();
         final List<CalendarTask> results = _search(state, query);
-        return SafeArea(
-          top: true,
-          bottom: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: context.textTheme.h3.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final mediaQuery = MediaQuery.of(context);
+            final double keyboardInset = mediaQuery.viewInsets.bottom;
+            final double safeBottom = mediaQuery.viewPadding.bottom;
+            final double bottomInset =
+                keyboardInset > safeBottom ? keyboardInset - safeBottom : 0;
+            final double maxHeight = constraints.hasBoundedHeight
+                ? constraints.maxHeight
+                : mediaQuery.size.height;
+            return SafeArea(
+              top: true,
+              bottom: true,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: CustomScrollView(
+                  shrinkWrap: true,
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: context.textTheme.h3.copyWith(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              AxiIconButton(
+                                iconData: Icons.close,
+                                iconSize: 16,
+                                buttonSize: 34,
+                                tapTargetSize: 40,
+                                backgroundColor: Colors.transparent,
+                                borderColor: Colors.transparent,
+                                color: context.colorScheme.mutedForeground,
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: calendarInsetSm),
+                          Text(
+                            subtitle,
+                            style: context.textTheme.muted,
+                          ),
+                          const SizedBox(height: calendarGutterSm),
+                          TaskTextField(
+                            controller: _queryController,
+                            focusNode: _queryFocusNode,
+                            hintText:
+                                'title:, desc:, location:, priority:urgent, status:done',
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: _handleSubmitted,
+                            onChanged: (_) => setState(() {}),
+                            prefix: const Icon(
+                              Icons.search,
+                              color: calendarSubtitleColor,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: calendarGutterMd,
+                              vertical: 10,
+                            ),
+                          ),
+                          const SizedBox(height: calendarInsetSm),
+                          _FilterRow(
+                            filters: _filters,
+                            onFilterToggled: _toggleFilter,
+                          ),
+                          const SizedBox(height: calendarInsetSm),
+                        ],
                       ),
                     ),
-                  ),
-                  AxiIconButton(
-                    iconData: Icons.close,
-                    iconSize: 16,
-                    buttonSize: 34,
-                    tapTargetSize: 40,
-                    backgroundColor: Colors.transparent,
-                    borderColor: Colors.transparent,
-                    color: context.colorScheme.mutedForeground,
-                    onPressed: () => Navigator.of(context).maybePop(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: calendarInsetSm),
-              Text(
-                subtitle,
-                style: context.textTheme.muted,
-              ),
-              const SizedBox(height: calendarGutterSm),
-              TaskTextField(
-                controller: _queryController,
-                focusNode: _queryFocusNode,
-                hintText:
-                    'title:, desc:, location:, priority:urgent, status:done',
-                textInputAction: TextInputAction.search,
-                onSubmitted: _handleSubmitted,
-                onChanged: (_) => setState(() {}),
-                prefix: const Icon(Icons.search, color: calendarSubtitleColor),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterMd,
-                  vertical: 10,
-                ),
-              ),
-              const SizedBox(height: calendarInsetSm),
-              _FilterRow(
-                filters: _filters,
-                onFilterToggled: _toggleFilter,
-              ),
-              const SizedBox(height: calendarInsetSm),
-              Flexible(
-                fit: FlexFit.loose,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: results.isEmpty
-                      ? _EmptySearchState(
+                    if (results.isEmpty)
+                      SliverToBoxAdapter(
+                        child: _EmptySearchState(
                           key: const ValueKey('empty-search'),
                           showHint: query.isEmpty,
                           isCompact: isCompact,
-                        )
-                      : Scrollbar(
-                          key: const ValueKey('results'),
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            padding: EdgeInsets.only(
-                              top: calendarInsetSm,
-                              bottom: calendarInsetMd + keyboardInset,
-                            ),
-                            itemCount: results.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: calendarInsetSm),
-                            itemBuilder: (context, index) {
-                              final CalendarTask task = results[index];
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.only(
+                          top: calendarInsetSm,
+                          bottom: calendarInsetMd + bottomInset,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              if (index.isOdd) {
+                                return const SizedBox(height: calendarInsetSm);
+                              }
+                              final CalendarTask task = results[index ~/ 2];
                               final Widget trailing = _ResultMetadata(task);
                               final bool useCustomTile =
                                   widget.taskTileBuilder != null;
@@ -247,12 +266,15 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                                     );
                               return tile;
                             },
+                            childCount: (results.length * 2) - 1,
                           ),
                         ),
+                      ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
