@@ -101,6 +101,8 @@ class ChatToast extends Equatable {
 enum MamPageDirection { before, after }
 
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
+  static final Set<String> _seededDemoPendingAttachmentJids = <String>{};
+
   ChatBloc({
     required this.jid,
     required MessageService messageService,
@@ -656,7 +658,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     if (!kEnableDemoChats) return;
-    if (_bareJid(chat.jid) != DemoChats.groupJid) return;
+    final chatJid = _bareJid(chat.jid);
+    if (chatJid == null || chatJid != DemoChats.groupJid) return;
+    if (_seededDemoPendingAttachmentJids.contains(chatJid)) return;
     final service = _messageService;
     if (service is! XmppService) {
       return;
@@ -697,6 +701,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pendingAttachments: [...state.pendingAttachments, ...pendingToAdd],
       ),
     );
+    _seededDemoPendingAttachmentJids.add(chatJid);
   }
 
   Future<void> _onChatMessagesUpdated(
