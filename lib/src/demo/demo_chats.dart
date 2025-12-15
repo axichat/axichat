@@ -111,6 +111,20 @@ class DemoChats {
     mimeType: 'image/png',
   );
 
+  static const DemoAttachmentAsset gmailDocAttachment = DemoAttachmentAsset(
+    id: 'demo-gmail-doc1',
+    assetPath: 'assets/licenses/document.txt',
+    fileName: 'document.txt',
+    mimeType: 'text/plain',
+  );
+
+  static const DemoAttachmentAsset gmailDocAttachment2 = DemoAttachmentAsset(
+    id: 'demo-gmail-doc2',
+    assetPath: 'assets/licenses/document2.txt',
+    fileName: 'document2.txt',
+    mimeType: 'text/plain',
+  );
+
   static const List<DemoAttachmentAsset> composerAttachments = [
     composerAttachment,
     composerAttachmentAltA,
@@ -155,6 +169,7 @@ class DemoChats {
     const madisonJid = _madisonJid;
     const hamiltonJid = _hamiltonJid;
     const groupJid = _groupJid;
+    const gmailJid = 'eliot@gmail.com';
 
     Chat directChat(String jid, String title, List<Message> messages) => Chat(
           jid: jid,
@@ -521,6 +536,47 @@ class DemoChats {
           hamiltonMessages,
         ),
         messages: hamiltonMessages,
+      ),
+      DemoChatScript(
+        chat: Chat(
+          jid: gmailJid,
+          title: 'Eliot (Gmail)',
+          type: ChatType.chat,
+          contactJid: gmailJid,
+          contactDisplayName: 'Eliot (Gmail)',
+          emailAddress: gmailJid,
+          lastChangeTimestamp: now.subtract(const Duration(minutes: 1)),
+          lastMessage: 'Hello, Gmail user',
+        ),
+        messages: [
+          message(
+            stanzaId: 'demo-gmail-3',
+            senderJid: kDemoSelfJid,
+            chatJid: gmailJid,
+            body: 'Hello, Gmail user',
+            timestamp: now.subtract(const Duration(minutes: 1)),
+          ),
+          message(
+            stanzaId: 'demo-gmail-2',
+            senderJid: gmailJid,
+            chatJid: gmailJid,
+            body: 'Adding one more file.',
+            timestamp: now.subtract(const Duration(minutes: 3)),
+            occupantId: gmailJid,
+          ).copyWith(fileMetadataID: gmailDocAttachment2.id),
+          message(
+            stanzaId: 'demo-gmail-1',
+            senderJid: gmailJid,
+            chatJid: gmailJid,
+            body: 'Here are two documents for you.',
+            timestamp: now.subtract(const Duration(minutes: 5)),
+            occupantId: gmailJid,
+          ).copyWith(fileMetadataID: gmailDocAttachment.id),
+        ],
+        attachments: const [
+          gmailDocAttachment,
+          gmailDocAttachment2,
+        ],
       ),
       DemoChatScript(
         chat: groupChat,
