@@ -799,12 +799,6 @@ class EmailService {
     if (trimmedBody?.isNotEmpty == true) {
       return trimmedBody!;
     }
-
-    final trimmedSubject = subject?.trim();
-    if (trimmedSubject?.isNotEmpty == true) {
-      return trimmedSubject!;
-    }
-
     return '';
   }
 

@@ -162,6 +162,11 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     _startCompleter = completer;
     initForegroundService();
     try {
+      if (await FlutterForegroundTask.isRunningService) {
+        completer.complete();
+        return completer.future;
+      }
+      await _waitForResume();
       final result = await FlutterForegroundTask.startService(
         serviceId: _foregroundServiceId,
         notificationTitle: config.notificationTitle,
@@ -209,6 +214,42 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     if (_callbackRegistered && _listeners.isEmpty) {
       FlutterForegroundTask.removeTaskDataCallback(_handleTaskData);
       _callbackRegistered = false;
+    }
+  }
+}
+
+Future<void> _waitForResume() async {
+  final binding = WidgetsBinding.instance;
+  final state = binding.lifecycleState;
+  if (state == AppLifecycleState.resumed) {
+    return;
+  }
+  final completer = Completer<void>();
+  late final WidgetsBindingObserver observer;
+  observer = _LifecycleResumeObserver(() {
+    binding.removeObserver(observer);
+    if (!completer.isCompleted) {
+      completer.complete();
+    }
+  });
+  binding.addObserver(observer);
+  await completer.future.timeout(
+    const Duration(seconds: 5),
+    onTimeout: () {
+      binding.removeObserver(observer);
+    },
+  );
+}
+
+class _LifecycleResumeObserver with WidgetsBindingObserver {
+  _LifecycleResumeObserver(this.onResume);
+
+  final VoidCallback onResume;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      onResume();
     }
   }
 }

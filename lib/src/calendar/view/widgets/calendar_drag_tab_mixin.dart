@@ -9,14 +9,23 @@ import 'package:flutter/services.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 
+enum _CalendarDragSwitchSource {
+  edge,
+  tabBar,
+}
+
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
   static const double _leftEdgeHotZoneWidth = 66.0;
   static const double _rightEdgeHotZoneWidth = _leftEdgeHotZoneWidth;
   static const Duration _switchDelay = Duration(milliseconds: 320);
+  static const Duration _dayShiftDelay = Duration(milliseconds: 1500);
   static const double _edgeActivationSlop = 12.0;
   Timer? _switchTimer;
   int? _pendingSwitchIndex;
+  _CalendarDragSwitchSource? _pendingSwitchSource;
+  Timer? _dayShiftTimer;
+  int? _dayShiftDelta;
   bool _evaluatingSwitch = false;
   Offset? _lastGlobalPosition;
   Offset? _dragStartGlobalPosition;
@@ -28,6 +37,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   bool _edgeDragActive = false;
   bool _showLeftEdgeCue = false;
   bool _showRightEdgeCue = false;
+  bool _showScheduleTabCue = false;
+  bool _showTasksTabCue = false;
   bool _cancelBucketHovering = false;
   final GlobalKey _cancelBucketKey =
       GlobalKey(debugLabel: 'calendarDragCancelBucket');
@@ -42,6 +53,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   bool get isAnyDragActive => _isAnyDragActive;
 
   bool get _isAnyDragActive => _gridDragActive || _edgeDragActive;
+
+  void onDragDayShiftRequested(int deltaDays);
 
   void _setGridDragActive(bool isActive) {
     if (_gridDragActive == isActive) {
@@ -76,6 +89,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   void disposeCalendarDragTabMixin() {
     mobileTabController.removeListener(_handleTabControllerChanged);
     _cancelSwitchTimer();
+    _cancelDayShiftTimer();
     _cancelBucketFocusNode.dispose();
   }
 
@@ -87,13 +101,15 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     _dragStartInLeftZone = false;
     _dragStartInRightZone = false;
     _edgeActivationUnlocked = false;
+    _setScheduleTabCue(false);
+    _setTasksTabCue(false);
+    _cancelDayShiftTimer();
     _evaluateEdgeAutoSwitch();
   }
 
   void handleGridDragPositionChanged(Offset globalPosition) {
     _recordPointerUpdate(globalPosition);
     _evaluateEdgeAutoSwitch();
-    _tryPerformPendingSwitch();
   }
 
   void handleGridDragSessionEnded() {
@@ -107,7 +123,10 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     _dragStartInRightZone = false;
     _edgeActivationUnlocked = false;
     _updateEdgeCue(null);
+    _setScheduleTabCue(false);
+    _setTasksTabCue(false);
     _cancelSwitchTimer();
+    _cancelDayShiftTimer();
   }
 
   Widget buildDragEdgeTargets() {
@@ -162,8 +181,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     required Widget tasksTabLabel,
   }) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final bool scheduleCueActive = _showLeftEdgeCue && _isAnyDragActive;
-    final bool tasksCueActive = _showRightEdgeCue && _isAnyDragActive;
+    final bool scheduleCueActive = _showScheduleTabCue && _isAnyDragActive;
+    final bool tasksCueActive = _showTasksTabCue && _isAnyDragActive;
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
     final double height = _tabBarHeight + safeInset;
     final Color backgroundColor = context.colorScheme.background;
@@ -179,17 +198,37 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         indicatorSize: TabBarIndicatorSize.label,
         tabs: <Widget>[
           Tab(
-            child: _DragTabLabel(
-              label: scheduleTabLabel,
-              scheme: scheme,
-              showCue: scheduleCueActive,
+            child: DragTarget<CalendarDragPayload>(
+              hitTestBehavior: HitTestBehavior.translucent,
+              onWillAcceptWithDetails: _handleScheduleTabDragEvent,
+              onMove: _handleScheduleTabDragMove,
+              onLeave: (_) => _handleScheduleTabDragLeave(),
+              onAcceptWithDetails: (details) {
+                _handleScheduleTabDragLeave();
+                onDragCancelRequested(details.data);
+              },
+              builder: (context, _, __) => _DragTabLabel(
+                label: scheduleTabLabel,
+                scheme: scheme,
+                showCue: scheduleCueActive,
+              ),
             ),
           ),
           Tab(
-            child: _DragTabLabel(
-              label: tasksTabLabel,
-              scheme: scheme,
-              showCue: tasksCueActive,
+            child: DragTarget<CalendarDragPayload>(
+              hitTestBehavior: HitTestBehavior.translucent,
+              onWillAcceptWithDetails: _handleTasksTabDragEvent,
+              onMove: _handleTasksTabDragMove,
+              onLeave: (_) => _handleTasksTabDragLeave(),
+              onAcceptWithDetails: (details) {
+                _handleTasksTabDragLeave();
+                onDragCancelRequested(details.data);
+              },
+              builder: (context, _, __) => _DragTabLabel(
+                label: tasksTabLabel,
+                scheme: scheme,
+                showCue: tasksCueActive,
+              ),
             ),
           ),
         ],
@@ -410,7 +449,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       return;
     }
     _evaluateEdgeAutoSwitch();
-    _tryPerformPendingSwitch();
   }
 
   void _handleEdgeDragLeave() {
@@ -420,12 +458,65 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     }
     _updateEdgeCue(null);
     _cancelSwitchTimer();
+    _cancelDayShiftTimer();
+  }
+
+  bool _handleScheduleTabDragEvent(
+    DragTargetDetails<CalendarDragPayload> details,
+  ) {
+    final bool canSwitch = _canSwitchTo(0);
+    if (!canSwitch) {
+      _handleScheduleTabDragLeave();
+      return false;
+    }
+    _setScheduleTabCue(true);
+    _scheduleSwitch(0, source: _CalendarDragSwitchSource.tabBar);
+    return true;
+  }
+
+  void _handleScheduleTabDragMove(
+    DragTargetDetails<CalendarDragPayload> details,
+  ) {
+    _handleScheduleTabDragEvent(details);
+  }
+
+  void _handleScheduleTabDragLeave() {
+    _setScheduleTabCue(false);
+    if (_pendingSwitchIndex == 0 &&
+        _pendingSwitchSource == _CalendarDragSwitchSource.tabBar) {
+      _cancelSwitchTimer();
+    }
+  }
+
+  bool _handleTasksTabDragEvent(
+      DragTargetDetails<CalendarDragPayload> details) {
+    final bool canSwitch = _canSwitchTo(1);
+    if (!canSwitch) {
+      _handleTasksTabDragLeave();
+      return false;
+    }
+    _setTasksTabCue(true);
+    _scheduleSwitch(1, source: _CalendarDragSwitchSource.tabBar);
+    return true;
+  }
+
+  void _handleTasksTabDragMove(DragTargetDetails<CalendarDragPayload> details) {
+    _handleTasksTabDragEvent(details);
+  }
+
+  void _handleTasksTabDragLeave() {
+    _setTasksTabCue(false);
+    if (_pendingSwitchIndex == 1 &&
+        _pendingSwitchSource == _CalendarDragSwitchSource.tabBar) {
+      _cancelSwitchTimer();
+    }
   }
 
   void _evaluateEdgeAutoSwitch() {
     if (!mounted || !isDragSwitcherEnabled || !_isAnyDragActive) {
       _updateEdgeCue(null);
       _cancelSwitchTimer();
+      _cancelDayShiftTimer();
       return;
     }
     final RenderBox? box = context.findRenderObject() as RenderBox?;
@@ -433,6 +524,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     if (box == null || !box.hasSize || globalPosition == null) {
       _updateEdgeCue(null);
       _cancelSwitchTimer();
+      _cancelDayShiftTimer();
       return;
     }
     final Offset localPosition = box.globalToLocal(globalPosition);
@@ -458,7 +550,10 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
     if (!_edgeDragActive) {
       _updateEdgeCue(null);
-      _cancelSwitchTimer();
+      if (_pendingSwitchSource == _CalendarDragSwitchSource.edge) {
+        _cancelSwitchTimer();
+      }
+      _cancelDayShiftTimer();
       return;
     }
 
@@ -481,32 +576,78 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       cueIndex = 1;
     }
     _updateEdgeCue(cueIndex);
-    if (cueIndex == null || mobileTabController.index == cueIndex) {
-      if (cueIndex == null) {
-        _cancelSwitchTimer();
+
+    final int tabIndex = mobileTabController.index;
+    if (tabIndex == 1) {
+      _cancelDayShiftTimer();
+      if (!pointerInLeftZone) {
+        if (_pendingSwitchSource == _CalendarDragSwitchSource.edge) {
+          _cancelSwitchTimer();
+        }
+        return;
       }
+      _scheduleSwitch(0, source: _CalendarDragSwitchSource.edge);
       return;
     }
-    _scheduleSwitch(cueIndex);
+
+    if (_pendingSwitchSource == _CalendarDragSwitchSource.edge) {
+      _cancelSwitchTimer();
+    }
+
+    if (pointerInLeftZone) {
+      _scheduleDayShift(-1);
+    } else if (pointerInRightZone) {
+      _scheduleDayShift(1);
+    } else {
+      _cancelDayShiftTimer();
+    }
   }
 
-  void _scheduleSwitch(int index) {
-    if (_pendingSwitchIndex == index && _switchTimer?.isActive == true) {
-      _tryPerformPendingSwitch();
+  void _scheduleSwitch(
+    int index, {
+    required _CalendarDragSwitchSource source,
+  }) {
+    if (_pendingSwitchIndex == index &&
+        _pendingSwitchSource == source &&
+        _switchTimer?.isActive == true) {
       return;
     }
     _switchTimer?.cancel();
     _pendingSwitchIndex = index;
-    _switchTimer = Timer(_switchDelay, () {
-      _tryPerformPendingSwitch();
+    _pendingSwitchSource = source;
+    _switchTimer = Timer(_switchDelay, _tryPerformPendingSwitch);
+  }
+
+  void _scheduleDayShift(int deltaDays) {
+    if (_dayShiftDelta == deltaDays && _dayShiftTimer?.isActive == true) {
+      return;
+    }
+    _cancelDayShiftTimer();
+    _dayShiftDelta = deltaDays;
+    _dayShiftTimer = Timer.periodic(_dayShiftDelay, (_) {
+      if (!mounted || !_isAnyDragActive || !isDragSwitcherEnabled) {
+        _cancelDayShiftTimer();
+        return;
+      }
+      if (mobileTabController.index != 0) {
+        _cancelDayShiftTimer();
+        return;
+      }
+      onDragDayShiftRequested(deltaDays);
     });
-    _tryPerformPendingSwitch();
   }
 
   void _cancelSwitchTimer() {
     _switchTimer?.cancel();
     _switchTimer = null;
     _pendingSwitchIndex = null;
+    _pendingSwitchSource = null;
+  }
+
+  void _cancelDayShiftTimer() {
+    _dayShiftTimer?.cancel();
+    _dayShiftTimer = null;
+    _dayShiftDelta = null;
   }
 
   void _updateEdgeCue(int? cueIndex) {
@@ -522,6 +663,26 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     });
   }
 
+  void _setScheduleTabCue(bool showCue) {
+    if (!mounted || _showScheduleTabCue == showCue) {
+      _showScheduleTabCue = showCue;
+      return;
+    }
+    setState(() {
+      _showScheduleTabCue = showCue;
+    });
+  }
+
+  void _setTasksTabCue(bool showCue) {
+    if (!mounted || _showTasksTabCue == showCue) {
+      _showTasksTabCue = showCue;
+      return;
+    }
+    setState(() {
+      _showTasksTabCue = showCue;
+    });
+  }
+
   void _handleTabControllerChanged() {
     if (!_isAnyDragActive) {
       return;
@@ -529,8 +690,11 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     _switchTimer?.cancel();
     _switchTimer = null;
     _pendingSwitchIndex = null;
+    _pendingSwitchSource = null;
+    _cancelDayShiftTimer();
+    _handleScheduleTabDragLeave();
+    _handleTasksTabDragLeave();
     _evaluateEdgeAutoSwitch();
-    _tryPerformPendingSwitch();
   }
 
   Offset? _pointerPositionForDetails(
