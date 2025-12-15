@@ -19,7 +19,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _leftEdgeHotZoneWidth = 66.0;
   static const double _rightEdgeHotZoneWidth = _leftEdgeHotZoneWidth;
   static const Duration _switchDelay = Duration(milliseconds: 320);
-  static const Duration _dayShiftDelay = Duration(milliseconds: 1500);
+  static const Duration _dayShiftDelay = Duration(milliseconds: 1000);
   static const double _edgeActivationSlop = 12.0;
   Timer? _switchTimer;
   int? _pendingSwitchIndex;
