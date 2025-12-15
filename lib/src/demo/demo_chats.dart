@@ -97,6 +97,26 @@ class DemoChats {
     mimeType: 'image/png',
   );
 
+  static const DemoAttachmentAsset composerAttachmentAltA = DemoAttachmentAsset(
+    id: 'demo-abstract18-composer',
+    assetPath: 'assets/images/avatars/abstract/abstract18.png',
+    fileName: 'abstract18.png',
+    mimeType: 'image/png',
+  );
+
+  static const DemoAttachmentAsset composerAttachmentAltB = DemoAttachmentAsset(
+    id: 'demo-abstract5-composer',
+    assetPath: 'assets/images/avatars/abstract/abstract5.png',
+    fileName: 'abstract5.png',
+    mimeType: 'image/png',
+  );
+
+  static const List<DemoAttachmentAsset> composerAttachments = [
+    composerAttachment,
+    composerAttachmentAltA,
+    composerAttachmentAltB,
+  ];
+
   static String get groupJid => _groupJid;
 
   static final List<DemoChatScript> _scripts = _buildScripts();

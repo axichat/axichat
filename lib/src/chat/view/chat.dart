@@ -621,6 +621,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
           onLeaveRoom: onLeaveRoom,
           currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
           onClose: onClose,
+          useSurface: false,
         );
       },
     );
@@ -2821,11 +2822,9 @@ class _ChatState extends State<Chat> {
                                       outboundClampedBubbleWidth +
                                           _selectionOuterInset,
                                     );
-                                    final messageRowConstraintWidth = math.min(
-                                      rawContentWidth,
-                                      baseBubbleMaxWidth +
-                                          (_messageListHorizontalPadding * 2),
-                                    );
+                                    final messageRowMaxWidth = rawContentWidth;
+                                    final selectionExtrasMaxWidth =
+                                        rawContentWidth;
                                     final dashMessages = <ChatMessage>[];
                                     final shownSubjectShares = <String>{};
                                     final revokedInviteTokens = <String>{
@@ -3167,7 +3166,7 @@ class _ChatState extends State<Chat> {
                                                       showOtherUsersName: false,
                                                       borderRadius: 0,
                                                       maxWidth:
-                                                          messageRowConstraintWidth,
+                                                          messageRowMaxWidth,
                                                       messagePadding:
                                                           EdgeInsets.zero,
                                                       spaceWhenAvatarIsHidden:
@@ -4490,26 +4489,29 @@ class _ChatState extends State<Chat> {
                                                                       key:
                                                                           attachmentsKey,
                                                                       child:
-                                                                          Padding(
-                                                                        padding:
-                                                                            attachmentPadding,
+                                                                          SizedBox(
+                                                                        width:
+                                                                            selectionExtrasMaxWidth,
                                                                         child:
-                                                                            Column(
-                                                                          mainAxisSize:
-                                                                              MainAxisSize.min,
-                                                                          crossAxisAlignment:
-                                                                              CrossAxisAlignment.center,
-                                                                          children: [
-                                                                            actionBar,
-                                                                            if (reactionManager !=
-                                                                                null)
-                                                                              const SizedBox(
-                                                                                height: 20,
-                                                                              ),
-                                                                            if (reactionManager !=
-                                                                                null)
-                                                                              reactionManager,
-                                                                          ],
+                                                                            Padding(
+                                                                          padding:
+                                                                              attachmentPadding,
+                                                                          child:
+                                                                              Column(
+                                                                            mainAxisSize:
+                                                                                MainAxisSize.min,
+                                                                            crossAxisAlignment:
+                                                                                CrossAxisAlignment.center,
+                                                                            children: [
+                                                                              actionBar,
+                                                                              if (reactionManager != null)
+                                                                                const SizedBox(
+                                                                                  height: 20,
+                                                                                ),
+                                                                              if (reactionManager != null)
+                                                                                reactionManager,
+                                                                            ],
+                                                                          ),
                                                                         ),
                                                                       ),
                                                                     ),
@@ -4746,15 +4748,21 @@ class _ChatState extends State<Chat> {
                                                           child:
                                                               bubbleWithSlack,
                                                         );
+                                                        bubbleWithSlack = Align(
+                                                          alignment: self
+                                                              ? Alignment
+                                                                  .centerRight
+                                                              : Alignment
+                                                                  .centerLeft,
+                                                          child:
+                                                              bubbleWithSlack,
+                                                        );
                                                         final messageRowAlignment =
-                                                            isSingleSelection
+                                                            self
                                                                 ? Alignment
-                                                                    .center
-                                                                : self
-                                                                    ? Alignment
-                                                                        .centerRight
-                                                                    : Alignment
-                                                                        .centerLeft;
+                                                                    .centerRight
+                                                                : Alignment
+                                                                    .centerLeft;
                                                         final messageBody =
                                                             Column(
                                                           mainAxisSize:
@@ -4789,7 +4797,7 @@ class _ChatState extends State<Chat> {
                                                         final alignedMessage =
                                                             SizedBox(
                                                           width:
-                                                              messageRowConstraintWidth,
+                                                              messageRowMaxWidth,
                                                           child: AnimatedAlign(
                                                             duration:
                                                                 _bubbleFocusDuration,
