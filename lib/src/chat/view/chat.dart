@@ -56,6 +56,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
@@ -669,6 +670,9 @@ class _ChatState extends State<Chat> {
   double _selectionAutoscrollAccumulated = 0.0;
   bool _selectionControlsMeasurementPending = false;
   var _sendingAttachment = false;
+  Offset? _selectionDismissOrigin;
+  int? _selectionDismissPointer;
+  var _selectionDismissMoved = false;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
@@ -4831,6 +4835,64 @@ class _ChatState extends State<Chat> {
                                                     readOnly: true,
                                                   ),
                                                 ),
+                                                if (_selectedMessageId != null)
+                                                  Positioned.fill(
+                                                    child: Listener(
+                                                      behavior: HitTestBehavior
+                                                          .translucent,
+                                                      onPointerDown: (event) {
+                                                        _selectionDismissPointer =
+                                                            event.pointer;
+                                                        _selectionDismissOrigin =
+                                                            event.position;
+                                                        _selectionDismissMoved =
+                                                            false;
+                                                      },
+                                                      onPointerMove: (event) {
+                                                        final origin =
+                                                            _selectionDismissOrigin;
+                                                        if (origin == null ||
+                                                            _selectionDismissMoved) {
+                                                          return;
+                                                        }
+                                                        final delta =
+                                                            (event.position -
+                                                                    origin)
+                                                                .distance;
+                                                        if (delta >
+                                                            kTouchSlop) {
+                                                          _selectionDismissMoved =
+                                                              true;
+                                                        }
+                                                      },
+                                                      onPointerCancel: (event) {
+                                                        _selectionDismissPointer =
+                                                            null;
+                                                        _selectionDismissOrigin =
+                                                            null;
+                                                        _selectionDismissMoved =
+                                                            false;
+                                                      },
+                                                      onPointerUp: (event) {
+                                                        final active =
+                                                            _selectionDismissPointer;
+                                                        if (active !=
+                                                                event.pointer ||
+                                                            _selectionDismissMoved) {
+                                                          return;
+                                                        }
+                                                        _selectionDismissPointer =
+                                                            null;
+                                                        _selectionDismissOrigin =
+                                                            null;
+                                                        _selectionDismissMoved =
+                                                            false;
+                                                        _maybeDismissSelection(
+                                                          event.position,
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
                                                 if (loadingMessages)
                                                   IgnorePointer(
                                                     child: Align(

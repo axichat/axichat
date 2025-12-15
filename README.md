@@ -18,6 +18,40 @@
   </a>
 </p>
 
+## Screenshots
+
+<div align="center">
+  <table>
+    <tr>
+      <td valign="top" style="padding-right:12px;">
+        <table>
+          <tr>
+            <td valign="top" style="padding-right:8px;">
+              <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" alt="Axichat mobile chat screenshot" style="display:block;width:100%;max-width:320px;height:210px;object-fit:contain;margin:0 auto 12px;border-radius:12px;" />
+            </td>
+            <td valign="top" style="padding-left:8px;">
+              <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" alt="Axichat mobile email screenshot" style="display:block;width:100%;max-width:320px;height:210px;object-fit:contain;margin:0 auto 12px;border-radius:12px;" />
+            </td>
+          </tr>
+          <tr>
+            <td valign="top" style="padding-right:8px;">
+              <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" alt="Axichat mobile calendar screenshot" style="display:block;width:100%;max-width:320px;height:210px;object-fit:contain;margin:0 auto;border-radius:12px;" />
+            </td>
+            <td valign="top" style="padding-left:8px;">
+              <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" alt="Axichat mobile calendar alt screenshot" style="display:block;width:100%;max-width:320px;height:210px;object-fit:contain;margin:0 auto;border-radius:12px;" />
+            </td>
+          </tr>
+        </table>
+      </td>
+      <td valign="top" style="padding-left:12px;">
+        <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" alt="Axichat desktop screenshot 1" style="display:block;width:100%;max-width:620px;height:136px;object-fit:cover;margin:0 auto 12px;border-radius:12px;" />
+        <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" alt="Axichat desktop screenshot 2" style="display:block;width:100%;max-width:620px;height:136px;object-fit:cover;margin:0 auto 12px;border-radius:12px;" />
+        <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" alt="Axichat calendar screenshot" style="display:block;width:100%;max-width:620px;height:136px;object-fit:cover;margin:0 auto;border-radius:12px;" />
+      </td>
+    </tr>
+  </table>
+</div>
+
 <p align="center"><strong>If you're proactive, if you're busy, you'll love Axichat both because of what it has and what it doesn't have.</strong></p>
 
 <table>
@@ -93,20 +127,6 @@
 - With Moxxmpp
 - With DeltaChat Core Rust
 - With Drift
-
-## Screenshots
-
-<p align="center">
-  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="100%" alt="Axichat desktop screenshot 1" />
-</p>
-
-<p align="center">
-  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="100%" alt="Axichat desktop screenshot 2" />
-</p>
-
-<p align="center">
-  <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="100%" alt="Axichat calendar screenshot" />
-</p>
 
 ## Downloading & Installing
 
