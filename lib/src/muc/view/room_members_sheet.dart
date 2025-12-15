@@ -25,6 +25,7 @@ class RoomMembersSheet extends StatelessWidget {
     this.onLeaveRoom,
     this.currentNickname,
     this.onClose,
+    this.useSurface = true,
     super.key,
   });
 
@@ -36,6 +37,7 @@ class RoomMembersSheet extends StatelessWidget {
   final VoidCallback? onLeaveRoom;
   final String? currentNickname;
   final VoidCallback? onClose;
+  final bool useSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -43,92 +45,98 @@ class RoomMembersSheet extends StatelessWidget {
     final groups = _sections(l10n);
     final theme = context.textTheme;
     final colors = context.colorScheme;
-    return SafeArea(
-      child: AxiModalSurface(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: colors.border)),
-              ),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: _HeaderRow(
-                canInvite: canInvite,
-                onInviteTap: () => _handleInvite(context),
-                onClose: onClose,
-                l10n: l10n,
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (onChangeNickname != null || onLeaveRoom != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (onChangeNickname != null)
-                      ShadButton.outline(
-                        size: ShadButtonSize.sm,
-                        onPressed: () async {
-                          final next = await _promptNickname(context);
-                          if (next?.isNotEmpty == true) {
-                            onChangeNickname!(next!);
-                          }
-                        },
-                        child: Text(
-                          currentNickname == null
-                              ? l10n.mucChangeNickname
-                              : l10n.mucChangeNicknameWithCurrent(
-                                  currentNickname!,
-                                ),
-                        ),
-                      ),
-                    if (onLeaveRoom != null)
-                      ShadButton.destructive(
-                        size: ShadButtonSize.sm,
-                        onPressed: onLeaveRoom,
-                        child: Text(l10n.mucLeaveRoom),
-                      ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: groups.isEmpty
-                    ? Center(
-                        child: Text(
-                          l10n.mucNoMembers,
-                          style: theme.muted
-                              .copyWith(color: colors.mutedForeground),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemBuilder: (context, index) {
-                          final group = groups[index];
-                          return _MemberSection(
-                            title: group.title,
-                            occupants: group.members,
-                            buildActions: _actionsFor,
-                            onAction: onAction,
-                            myOccupantId: roomState.myOccupantId,
-                            l10n: l10n,
-                          );
-                        },
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemCount: groups.length,
-                      ),
-              ),
-            ),
-          ],
+    final Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: colors.border)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: _HeaderRow(
+            canInvite: canInvite,
+            onInviteTap: () => _handleInvite(context),
+            onClose: onClose,
+            l10n: l10n,
+          ),
         ),
-      ),
+        const SizedBox(height: 12),
+        if (onChangeNickname != null || onLeaveRoom != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (onChangeNickname != null)
+                  ShadButton.outline(
+                    size: ShadButtonSize.sm,
+                    onPressed: () async {
+                      final next = await _promptNickname(context);
+                      if (next?.isNotEmpty == true) {
+                        onChangeNickname!(next!);
+                      }
+                    },
+                    child: Text(
+                      currentNickname == null
+                          ? l10n.mucChangeNickname
+                          : l10n.mucChangeNicknameWithCurrent(
+                              currentNickname!,
+                            ),
+                    ),
+                  ),
+                if (onLeaveRoom != null)
+                  ShadButton.destructive(
+                    size: ShadButtonSize.sm,
+                    onPressed: onLeaveRoom,
+                    child: Text(l10n.mucLeaveRoom),
+                  ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: groups.isEmpty
+                ? Center(
+                    child: Text(
+                      l10n.mucNoMembers,
+                      style:
+                          theme.muted.copyWith(color: colors.mutedForeground),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemBuilder: (context, index) {
+                      final group = groups[index];
+                      return _MemberSection(
+                        title: group.title,
+                        occupants: group.members,
+                        buildActions: _actionsFor,
+                        onAction: onAction,
+                        myOccupantId: roomState.myOccupantId,
+                        l10n: l10n,
+                      );
+                    },
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemCount: groups.length,
+                  ),
+          ),
+        ),
+      ],
     );
+
+    final Widget wrappedContent = useSurface
+        ? AxiModalSurface(
+            padding: EdgeInsets.zero,
+            borderColor: Colors.transparent,
+            shadows: const <BoxShadow>[],
+            child: content,
+          )
+        : content;
+
+    return SafeArea(child: wrappedContent);
   }
 
   Future<List<String>?> _promptInvite(BuildContext context) async {
