@@ -4201,6 +4201,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Syncing'**
   String get sessionCapabilityStatusSyncing;
+
+  /// No description provided for @authChangePasswordPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating password...'**
+  String get authChangePasswordPending;
+
+  /// No description provided for @authEndpointAdvancedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced options'**
+  String get authEndpointAdvancedHint;
+
+  /// No description provided for @authEndpointApiPortPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'API port'**
+  String get authEndpointApiPortPlaceholder;
+
+  /// No description provided for @authEndpointDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure XMPP/SMTP endpoints for this account.'**
+  String get authEndpointDescription;
+
+  /// No description provided for @authEndpointDomainPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Domain'**
+  String get authEndpointDomainPlaceholder;
+
+  /// No description provided for @authEndpointPortPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get authEndpointPortPlaceholder;
+
+  /// No description provided for @authEndpointRequireDnssecLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Require DNSSEC'**
+  String get authEndpointRequireDnssecLabel;
+
+  /// No description provided for @authEndpointReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get authEndpointReset;
+
+  /// No description provided for @authEndpointSmtpHostPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'SMTP host'**
+  String get authEndpointSmtpHostPlaceholder;
+
+  /// No description provided for @authEndpointSmtpLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'SMTP'**
+  String get authEndpointSmtpLabel;
+
+  /// No description provided for @authEndpointTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint configuration'**
+  String get authEndpointTitle;
+
+  /// No description provided for @authEndpointUseDnsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Use DNS'**
+  String get authEndpointUseDnsLabel;
+
+  /// No description provided for @authEndpointUseSrvLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Use SRV'**
+  String get authEndpointUseSrvLabel;
+
+  /// No description provided for @authEndpointXmppHostPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'XMPP host'**
+  String get authEndpointXmppHostPlaceholder;
+
+  /// No description provided for @authEndpointXmppLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'XMPP'**
+  String get authEndpointXmppLabel;
+
+  /// No description provided for @authUnregisterPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Unregistering...'**
+  String get authUnregisterPending;
+
+  /// No description provided for @calendarAddTaskError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not add task: {details}'**
+  String calendarAddTaskError(Object details);
+
+  /// No description provided for @calendarBackToCalendar.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to calendar'**
+  String get calendarBackToCalendar;
+
+  /// No description provided for @calendarCriticalPathAddTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Add task'**
+  String get calendarCriticalPathAddTask;
+
+  /// No description provided for @calendarCriticalPathAddToTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to critical path'**
+  String get calendarCriticalPathAddToTitle;
+
+  /// No description provided for @calendarCriticalPathCreatePrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a critical path to get started'**
+  String get calendarCriticalPathCreatePrompt;
+
+  /// No description provided for @calendarCriticalPathDragHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag tasks to reorder'**
+  String get calendarCriticalPathDragHint;
+
+  /// No description provided for @calendarCriticalPathEmptyTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'No tasks in this path yet'**
+  String get calendarCriticalPathEmptyTasks;
+
+  /// No description provided for @calendarCriticalPathNameEmptyError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a name'**
+  String get calendarCriticalPathNameEmptyError;
+
+  /// No description provided for @calendarCriticalPathNamePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical path name'**
+  String get calendarCriticalPathNamePlaceholder;
+
+  /// No description provided for @calendarCriticalPathNamePrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get calendarCriticalPathNamePrompt;
+
+  /// No description provided for @calendarCriticalPathTaskOrderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Order tasks'**
+  String get calendarCriticalPathTaskOrderTitle;
+
+  /// No description provided for @calendarCriticalPathsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All paths'**
+  String get calendarCriticalPathsAll;
+
+  /// No description provided for @calendarCriticalPathsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No critical paths yet'**
+  String get calendarCriticalPathsEmpty;
+
+  /// No description provided for @calendarCriticalPathsNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New critical path'**
+  String get calendarCriticalPathsNew;
+
+  /// No description provided for @calendarCriticalPathsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical paths'**
+  String get calendarCriticalPathsTitle;
+
+  /// No description provided for @calendarDeleteTaskConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{title}\"?'**
+  String calendarDeleteTaskConfirm(Object title);
+
+  /// No description provided for @calendarErrorTitleEmptyFriendly.
+  ///
+  /// In en, this message translates to:
+  /// **'Title cannot be empty'**
+  String get calendarErrorTitleEmptyFriendly;
+
+  /// No description provided for @calendarExportFormatIcsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use for calendar clients'**
+  String get calendarExportFormatIcsSubtitle;
+
+  /// No description provided for @calendarExportFormatIcsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export .ics'**
+  String get calendarExportFormatIcsTitle;
+
+  /// No description provided for @calendarExportFormatJsonSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use for backups or scripts'**
+  String get calendarExportFormatJsonSubtitle;
+
+  /// No description provided for @calendarExportFormatJsonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export JSON'**
+  String get calendarExportFormatJsonTitle;
+
+  /// No description provided for @calendarRemovePathConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this task from \"{name}\"?'**
+  String calendarRemovePathConfirm(Object name);
+
+  /// No description provided for @calendarSandboxHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan tasks here before assigning them to a path.'**
+  String get calendarSandboxHint;
+
+  /// No description provided for @chatAlertHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get chatAlertHide;
+
+  /// No description provided for @chatAlertIgnore.
+  ///
+  /// In en, this message translates to:
+  /// **'Ignore'**
+  String get chatAlertIgnore;
+
+  /// No description provided for @chatAttachmentTapToLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to load'**
+  String get chatAttachmentTapToLoad;
+
+  /// No description provided for @chatMessageAddRecipientSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {recipient}'**
+  String chatMessageAddRecipientSuccess(Object recipient);
+
+  /// No description provided for @chatMessageAddRecipients.
+  ///
+  /// In en, this message translates to:
+  /// **'Add recipients'**
+  String get chatMessageAddRecipients;
+
+  /// No description provided for @chatMessageCreateChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Create chat'**
+  String get chatMessageCreateChat;
+
+  /// No description provided for @chatMessageCreateChatFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create chat: {reason}'**
+  String chatMessageCreateChatFailure(Object reason);
+
+  /// No description provided for @chatMessageInfoDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get chatMessageInfoDevice;
+
+  /// No description provided for @chatMessageInfoError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get chatMessageInfoError;
+
+  /// No description provided for @chatMessageInfoProtocol.
+  ///
+  /// In en, this message translates to:
+  /// **'Protocol'**
+  String get chatMessageInfoProtocol;
+
+  /// No description provided for @chatMessageInfoTimestamp.
+  ///
+  /// In en, this message translates to:
+  /// **'Timestamp'**
+  String get chatMessageInfoTimestamp;
+
+  /// No description provided for @chatMessageOpenChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Open chat'**
+  String get chatMessageOpenChat;
+
+  /// No description provided for @chatMessageStatusDisplayed.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get chatMessageStatusDisplayed;
+
+  /// No description provided for @chatMessageStatusReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get chatMessageStatusReceived;
+
+  /// No description provided for @chatMessageStatusSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get chatMessageStatusSent;
 }
 
 class _AppLocalizationsDelegate

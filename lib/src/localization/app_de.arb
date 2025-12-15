@@ -926,5 +926,84 @@
   "sessionCapabilityStatusError": "Fehler",
   "sessionCapabilityStatusOffline": "Offline",
   "sessionCapabilityStatusOff": "Aus",
-  "sessionCapabilityStatusSyncing": "Synchronisieren"
+  "sessionCapabilityStatusSyncing": "Synchronisieren",
+  "authChangePasswordPending": "Passwort wird aktualisiert...",
+  "authEndpointAdvancedHint": "Erweiterte Optionen",
+  "authEndpointApiPortPlaceholder": "API-Port",
+  "authEndpointDescription": "XMPP-/SMTP-Endpunkte für dieses Konto konfigurieren.",
+  "authEndpointDomainPlaceholder": "Domain",
+  "authEndpointPortPlaceholder": "Port",
+  "authEndpointRequireDnssecLabel": "DNSSEC erforderlich",
+  "authEndpointReset": "Zurücksetzen",
+  "authEndpointSmtpHostPlaceholder": "SMTP-Host",
+  "authEndpointSmtpLabel": "SMTP",
+  "authEndpointTitle": "Endpoint-Konfiguration",
+  "authEndpointUseDnsLabel": "DNS verwenden",
+  "authEndpointUseSrvLabel": "SRV verwenden",
+  "authEndpointXmppHostPlaceholder": "XMPP-Host",
+  "authEndpointXmppLabel": "XMPP",
+  "authUnregisterPending": "Abmeldung läuft...",
+  "calendarAddTaskError": "Aufgabe konnte nicht hinzugefügt werden: {details}",
+  "@calendarAddTaskError": {
+    "placeholders": {
+      "details": {}
+    }
+  },
+  "calendarBackToCalendar": "Zurück zum Kalender",
+  "calendarCriticalPathAddTask": "Aufgabe hinzufügen",
+  "calendarCriticalPathAddToTitle": "Zum kritischen Pfad hinzufügen",
+  "calendarCriticalPathCreatePrompt": "Erstelle einen kritischen Pfad, um zu beginnen",
+  "calendarCriticalPathDragHint": "Aufgaben ziehen, um sie neu anzuordnen",
+  "calendarCriticalPathEmptyTasks": "Keine Aufgaben in diesem Pfad",
+  "calendarCriticalPathNameEmptyError": "Name eingeben",
+  "calendarCriticalPathNamePlaceholder": "Name des kritischen Pfads",
+  "calendarCriticalPathNamePrompt": "Name",
+  "calendarCriticalPathTaskOrderTitle": "Aufgaben anordnen",
+  "calendarCriticalPathsAll": "Alle Pfade",
+  "calendarCriticalPathsEmpty": "Noch keine kritischen Pfade",
+  "calendarCriticalPathsNew": "Neuer kritischer Pfad",
+  "calendarCriticalPathsTitle": "Kritische Pfade",
+  "calendarDeleteTaskConfirm": "\"{title}\" löschen?",
+  "@calendarDeleteTaskConfirm": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "calendarErrorTitleEmptyFriendly": "Titel darf nicht leer sein",
+  "calendarExportFormatIcsSubtitle": "Für Kalender-Clients verwenden",
+  "calendarExportFormatIcsTitle": "ICS exportieren",
+  "calendarExportFormatJsonSubtitle": "Für Backups oder Skripte verwenden",
+  "calendarExportFormatJsonTitle": "JSON exportieren",
+  "calendarRemovePathConfirm": "Diese Aufgabe aus \"{name}\" entfernen?",
+  "@calendarRemovePathConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarSandboxHint": "Plane Aufgaben hier, bevor du sie einem Pfad zuweist.",
+  "chatAlertHide": "Ausblenden",
+  "chatAlertIgnore": "Ignorieren",
+  "chatAttachmentTapToLoad": "Zum Laden tippen",
+  "chatMessageAddRecipientSuccess": "{recipient} hinzugefügt",
+  "@chatMessageAddRecipientSuccess": {
+    "placeholders": {
+      "recipient": {}
+    }
+  },
+  "chatMessageAddRecipients": "Empfänger hinzufügen",
+  "chatMessageCreateChat": "Chat erstellen",
+  "chatMessageCreateChatFailure": "Chat konnte nicht erstellt werden: {reason}",
+  "@chatMessageCreateChatFailure": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "chatMessageInfoDevice": "Gerät",
+  "chatMessageInfoError": "Fehler",
+  "chatMessageInfoProtocol": "Protokoll",
+  "chatMessageInfoTimestamp": "Zeitstempel",
+  "chatMessageOpenChat": "Chat öffnen",
+  "chatMessageStatusDisplayed": "Gelesen",
+  "chatMessageStatusReceived": "Empfangen",
+  "chatMessageStatusSent": "Gesendet"
 }
