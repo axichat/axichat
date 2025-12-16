@@ -272,6 +272,7 @@ mixin AvatarService on XmppBase {
       }
       if (bytes.isEmpty) return;
       if (bytes.length > _maxAvatarBytes) return;
+      if (!_isSupportedAvatarBytes(bytes)) return;
 
       final hash = sha1.convert(bytes).toString();
       if (!force) {
@@ -291,6 +292,18 @@ mixin AvatarService on XmppBase {
     } finally {
       _avatarRefreshInProgress.remove(normalizedJid);
     }
+  }
+
+  bool _isSupportedAvatarBytes(Uint8List bytes) =>
+      _matchesSignature(bytes, _pngMagicBytes) ||
+      _matchesSignature(bytes, _jpegMagicBytes);
+
+  bool _matchesSignature(Uint8List bytes, List<int> signature) {
+    if (bytes.length < signature.length) return false;
+    for (var i = 0; i < signature.length; i++) {
+      if (bytes[i] != signature[i]) return false;
+    }
+    return true;
   }
 
   Future<void> _refreshRosterAvatarsFromCache() async {
@@ -972,16 +985,8 @@ mixin AvatarService on XmppBase {
   }
 
   String _detectAvatarMimeType(Uint8List bytes) {
-    bool matchesSignature(List<int> signature) {
-      if (bytes.length < signature.length) return false;
-      for (var i = 0; i < signature.length; i++) {
-        if (bytes[i] != signature[i]) return false;
-      }
-      return true;
-    }
-
-    if (matchesSignature(_pngMagicBytes)) return _mimePng;
-    if (matchesSignature(_jpegMagicBytes)) return _mimeJpeg;
+    if (_matchesSignature(bytes, _pngMagicBytes)) return _mimePng;
+    if (_matchesSignature(bytes, _jpegMagicBytes)) return _mimeJpeg;
     return _mimePng;
   }
 

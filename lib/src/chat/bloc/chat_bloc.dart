@@ -194,6 +194,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             final chat = state.chat;
             if (chat != null && _xmppAllowedForChat(chat)) {
               unawaited(_catchUpFromMam());
+              unawaited(_prefetchPeerAvatar(chat));
             }
           }
         },
