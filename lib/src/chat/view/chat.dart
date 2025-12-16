@@ -4540,28 +4540,31 @@ class _ChatState extends State<Chat> {
                                                                       key:
                                                                           attachmentsKey,
                                                                       child:
-                                                                          SizedBox(
-                                                                        width:
-                                                                            selectionExtrasMaxWidth,
+                                                                          Align(
+                                                                        alignment: self
+                                                                            ? Alignment.centerRight
+                                                                            : Alignment.centerLeft,
                                                                         child:
-                                                                            Padding(
-                                                                          padding:
-                                                                              attachmentPadding,
+                                                                            SizedBox(
+                                                                          width:
+                                                                              selectionExtrasMaxWidth,
                                                                           child:
-                                                                              Column(
-                                                                            mainAxisSize:
-                                                                                MainAxisSize.min,
-                                                                            crossAxisAlignment:
-                                                                                CrossAxisAlignment.center,
-                                                                            children: [
-                                                                              actionBar,
-                                                                              if (reactionManager != null)
-                                                                                const SizedBox(
-                                                                                  height: 20,
-                                                                                ),
-                                                                              if (reactionManager != null)
-                                                                                reactionManager,
-                                                                            ],
+                                                                              Padding(
+                                                                            padding:
+                                                                                attachmentPadding,
+                                                                            child:
+                                                                                Column(
+                                                                              mainAxisSize: MainAxisSize.min,
+                                                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                                                              children: [
+                                                                                actionBar,
+                                                                                if (reactionManager != null)
+                                                                                  const SizedBox(
+                                                                                    height: 20,
+                                                                                  ),
+                                                                                if (reactionManager != null) reactionManager,
+                                                                              ],
+                                                                            ),
                                                                           ),
                                                                         ),
                                                                       ),
@@ -4699,12 +4702,7 @@ class _ChatState extends State<Chat> {
                                                             if (_multiSelectActive) {
                                                               return;
                                                             }
-                                                            if (isInviteMessage &&
-                                                                !inviteRevoked) {
-                                                              _handleInviteTap(
-                                                                messageModel,
-                                                              );
-                                                            } else if (isSingleSelection) {
+                                                            if (isSingleSelection) {
                                                               _clearMessageSelection();
                                                             }
                                                           },
@@ -6353,8 +6351,8 @@ class _InviteActionCard extends StatelessWidget {
     const verticalPadding = 8.0;
     const leadingSize = 34.0;
     const leadingIconSize = 18.0;
-    const gap = 4.0;
-    const actionGap = 24.0;
+    const gap = 0.0;
+    const actionGap = 32.0;
     const cornerRadius = 20.0;
     final resolvedTextColor = enabled ? foregroundColor : mutedForegroundColor;
     final actionBackground = Color.alphaBlend(
