@@ -1,6 +1,6 @@
 <h1>
-  <img src="assets/icons/generated/app_icon_android_foreground.png" width="72" alt="Axichat icon" align="absmiddle" />&nbsp;
-  <big><big>Axichat</big></big>
+  <img src="assets/icons/generated/app_icon_android_foreground.png" width="84" alt="Axichat icon" align="absmiddle" />&nbsp;
+  <big><big><big>Axichat</big></big></big>
 </h1>
 
 <hr />
@@ -25,27 +25,27 @@
 
 <p>
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="570" align="right" alt="Axichat desktop screenshot 1" hspace="6" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="570" align="right" alt="Axichat desktop screenshot 1" hspace="30" />
   </a>
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="570" align="right" alt="Axichat desktop screenshot 2" hspace="6" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="570" align="right" alt="Axichat desktop screenshot 2" hspace="30" />
   </a>
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="570" align="right" alt="Axichat calendar screenshot" hspace="6" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="570" align="right" alt="Axichat calendar screenshot" hspace="30" />
   </a>
 
   <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
     <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="273" alt="Axichat mobile chat screenshot" />
-  </a>
-  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
+  </a><!--
+  --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
     <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="273" alt="Axichat mobile email screenshot" />
   </a>
 
   <br />
   <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png">
     <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="273" alt="Axichat mobile calendar screenshot" />
-  </a>
-  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
+  </a><!--
+  --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
     <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="273" alt="Axichat mobile calendar alt screenshot" />
   </a>
 </p>
