@@ -1186,17 +1186,18 @@ mixin MucService on XmppBase, BaseStreamService {
       if (roomName?.isNotEmpty == true) 'roomName': roomName,
     };
     final marker = 'axc-invite:${jsonEncode(payload)}';
-    final displayLine = roomName?.isNotEmpty == true
-        ? 'Join $roomName ($roomJid)'
-        : 'Join $roomJid';
-    final body = reason?.isNotEmpty == true
+    final displayLine =
+        roomName?.isNotEmpty == true ? 'Join $roomName' : 'Join room';
+    final displayBody =
+        reason?.isNotEmpty == true ? '$displayLine\n$reason' : displayLine;
+    final wireBody = reason?.isNotEmpty == true
         ? '$displayLine\n$reason\n$marker'
         : '$displayLine\n$marker';
     final message = Message(
       stanzaID: _connection.generateId(),
       senderJid: myBare,
       chatJid: inviteeJid,
-      body: body,
+      body: displayBody,
       timestamp: DateTime.timestamp(),
       pseudoMessageType: PseudoMessageType.mucInvite,
       pseudoMessageData: payload,
@@ -1209,7 +1210,7 @@ mixin MucService on XmppBase, BaseStreamService {
       mox.JID.fromString(inviteeJid),
       false,
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageBodyData(body),
+        mox.MessageBodyData(wireBody),
         mox.MessageIdData(message.stanzaID),
         const mox.MarkableData(true),
         mox.ChatState.active,
@@ -1227,20 +1228,29 @@ mixin MucService on XmppBase, BaseStreamService {
   }) async {
     final myBare = _myJid?.toBare().toString();
     if (myBare == null) throw XmppMessageException();
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(roomJid),
+    );
+    final roomName = chat?.title;
     final payload = <String, dynamic>{
       'roomJid': roomJid,
       'token': token,
       'inviter': myBare,
       'invitee': inviteeJid,
       'revoked': true,
+      if (roomName?.isNotEmpty == true) 'roomName': roomName,
     };
     final marker = 'axc-invite-revoke:${jsonEncode(payload)}';
-    final body = 'Invite revoked for $roomJid\n$marker';
+    final displayLine = roomName?.isNotEmpty == true
+        ? 'Invite revoked for $roomName'
+        : 'Invite revoked';
+    final displayBody = displayLine;
+    final wireBody = '$displayLine\n$marker';
     final message = Message(
       stanzaID: _connection.generateId(),
       senderJid: myBare,
       chatJid: inviteeJid,
-      body: body,
+      body: displayBody,
       timestamp: DateTime.timestamp(),
       pseudoMessageType: PseudoMessageType.mucInviteRevocation,
       pseudoMessageData: payload,
@@ -1253,7 +1263,7 @@ mixin MucService on XmppBase, BaseStreamService {
       mox.JID.fromString(inviteeJid),
       false,
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageBodyData(body),
+        mox.MessageBodyData(wireBody),
         mox.MessageIdData(message.stanzaID),
         const mox.MarkableData(true),
         mox.ChatState.active,
