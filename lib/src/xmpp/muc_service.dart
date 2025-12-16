@@ -1186,8 +1186,7 @@ mixin MucService on XmppBase, BaseStreamService {
       if (roomName?.isNotEmpty == true) 'roomName': roomName,
     };
     final marker = 'axc-invite:${jsonEncode(payload)}';
-    final displayLine =
-        roomName?.isNotEmpty == true ? 'Join $roomName' : 'Join room';
+    const displayLine = 'You have been invited to a group chat';
     final displayBody =
         reason?.isNotEmpty == true ? '$displayLine\n$reason' : displayLine;
     final wireBody = reason?.isNotEmpty == true
