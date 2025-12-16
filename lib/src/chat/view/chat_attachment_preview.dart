@@ -283,6 +283,7 @@ Future<void> _openImagePreview(
   required FileMetadataData metadata,
 }) async {
   if (!await file.exists()) return;
+  if (!context.mounted) return;
   await showShadDialog<void>(
     context: context,
     barrierDismissible: true,
