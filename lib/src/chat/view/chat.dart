@@ -4,52 +4,52 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
-import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chat/view/chat_bubble_surface.dart';
 import 'package:axichat/src/chat/view/chat_cutout_composer.dart';
-import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/chat/view/chat_message_details.dart';
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
-import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
-import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/muc/view/room_members_sheet.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/muc/muc_models.dart';
-import 'package:axichat/src/muc/view/room_members_sheet.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -60,11 +60,11 @@ import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mime/mime.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 extension on MessageStatus {
@@ -6353,12 +6353,12 @@ class _InviteActionCard extends StatelessWidget {
     const verticalPadding = 8.0;
     const leadingSize = 34.0;
     const leadingIconSize = 18.0;
-    const gap = 8.0;
-    const actionGap = 12.0;
+    const gap = 4.0;
+    const actionGap = 24.0;
     const cornerRadius = 20.0;
     final resolvedTextColor = enabled ? foregroundColor : mutedForegroundColor;
     final actionBackground = Color.alphaBlend(
-      Colors.white.withValues(alpha: 0.08),
+      Colors.white.withValues(alpha: 0.1),
       backgroundColor,
     );
     return IntrinsicWidth(
