@@ -218,10 +218,79 @@ mixin AvatarService on XmppBase {
     }
   }
 
+  Future<void> prefetchAvatarForJid(String jid) async {
+    final bareJid = _avatarSafeBareJid(jid);
+    if (bareJid == null) return;
+
+    switch (await _loadMetadata(bareJid)) {
+      case final _AvatarMetadataLoaded loaded:
+        await _refreshAvatarForJid(
+          bareJid,
+          metadata: [loaded.metadata],
+        );
+      case _AvatarMetadataMissing():
+        await _refreshAvatarFromVCardRequest(bareJid);
+      case _AvatarMetadataLoadFailed():
+        await _refreshAvatarFromVCardRequest(bareJid);
+    }
+  }
+
   Future<void> refreshSelfAvatarIfNeeded({bool force = false}) async {
     final bareJid = _myJid?.toBare().toString();
     if (bareJid == null || bareJid.isEmpty) return;
     await _refreshAvatarForJid(bareJid, force: force);
+  }
+
+  Future<void> _refreshAvatarFromVCardRequest(
+    String bareJid, {
+    bool force = false,
+  }) async {
+    final normalizedJid = bareJid.trim();
+    if (normalizedJid.isEmpty) return;
+    final added = _avatarRefreshInProgress.add(normalizedJid);
+    if (!force && !added) return;
+    try {
+      final manager = _connection.getManager<mox.VCardManager>();
+      if (manager == null) return;
+
+      final vcardResult =
+          await manager.requestVCard(mox.JID.fromString(normalizedJid));
+      if (vcardResult.isType<mox.VCardError>()) return;
+      final vcard = vcardResult.get<mox.VCard>();
+      final rawEncoded = vcard.photo?.binval?.trim();
+      if (rawEncoded == null || rawEncoded.isEmpty) return;
+      if (rawEncoded.length > _maxAvatarBase64Length * 2) return;
+      final encoded = rawEncoded.replaceAll(RegExp(r'\s+'), '');
+      if (encoded.isEmpty) return;
+      if (encoded.length > _maxAvatarBase64Length) return;
+
+      Uint8List bytes;
+      try {
+        bytes = base64Decode(encoded);
+      } on FormatException {
+        return;
+      }
+      if (bytes.isEmpty) return;
+      if (bytes.length > _maxAvatarBytes) return;
+
+      final hash = sha1.convert(bytes).toString();
+      if (!force) {
+        final existingHash = await _storedAvatarHash(normalizedJid);
+        if (existingHash != null && existingHash == hash) {
+          final existingPath = await _storedAvatarPath(normalizedJid);
+          if (await _hasCachedAvatarFile(existingPath)) {
+            return;
+          }
+        }
+      }
+
+      final path = await _writeAvatarFile(bytes: bytes);
+      await _storeAvatar(jid: normalizedJid, path: path, hash: hash);
+    } catch (error, stackTrace) {
+      _avatarLog.warning('Failed to refresh vCard avatar.', error, stackTrace);
+    } finally {
+      _avatarRefreshInProgress.remove(normalizedJid);
+    }
   }
 
   Future<void> _refreshRosterAvatarsFromCache() async {
@@ -600,7 +669,7 @@ mixin AvatarService on XmppBase {
 
   Future<AvatarUploadResult> publishAvatar(
     AvatarUploadPayload payload, {
-    bool public = false,
+    bool public = true,
   }) async {
     final targetJid = _avatarSafeBareJid(payload.jid ?? myJid);
     if (targetJid == null) {
@@ -894,7 +963,7 @@ mixin AvatarService on XmppBase {
       await _publishAvatarOnce(
         payload: payload,
         targetJid: bareJid,
-        public: false,
+        public: true,
       );
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to repair missing server avatar.', error);

@@ -1479,6 +1479,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonSave => '保存';
 
   @override
+  String get avatarSaveAvatar => '保存头像';
+
+  @override
   String get commonRetry => '重试';
 
   @override
@@ -3889,6 +3892,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get commonSave => '儲存';
+
+  @override
+  String get avatarSaveAvatar => '儲存頭像';
 
   @override
   String get commonRetry => '重試';

@@ -2,6 +2,76 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 final RegExp _crlfPattern = RegExp(r'[\r\n]');
 
+const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
+const int _messageStatusSyncEnvelopeVersion = 1;
+const String _messageStatusSyncEnvelopeIdKey = 'id';
+const String _messageStatusSyncEnvelopeVersionKey = 'v';
+const String _messageStatusSyncEnvelopeAckedKey = 'acked';
+const String _messageStatusSyncEnvelopeReceivedKey = 'received';
+const String _messageStatusSyncEnvelopeDisplayedKey = 'displayed';
+
+final class _MessageStatusSyncEnvelope {
+  const _MessageStatusSyncEnvelope({
+    required this.id,
+    required this.acked,
+    required this.received,
+    required this.displayed,
+  });
+
+  final String id;
+  final bool acked;
+  final bool received;
+  final bool displayed;
+
+  Map<String, dynamic> toJson() => {
+        _messageStatusSyncEnvelopeVersionKey: _messageStatusSyncEnvelopeVersion,
+        _messageStatusSyncEnvelopeIdKey: id,
+        _messageStatusSyncEnvelopeAckedKey: acked,
+        _messageStatusSyncEnvelopeReceivedKey: received,
+        _messageStatusSyncEnvelopeDisplayedKey: displayed,
+      };
+
+  static _MessageStatusSyncEnvelope? tryParseEnvelope(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      final payload = decoded[_messageStatusSyncEnvelopeKey];
+      if (payload is! Map<String, dynamic>) {
+        return null;
+      }
+      final version = payload[_messageStatusSyncEnvelopeVersionKey] as int?;
+      if (version != _messageStatusSyncEnvelopeVersion) {
+        return null;
+      }
+      final id = payload[_messageStatusSyncEnvelopeIdKey] as String?;
+      if (id == null || id.isEmpty) {
+        return null;
+      }
+      final acked =
+          payload[_messageStatusSyncEnvelopeAckedKey] as bool? ?? false;
+      final received =
+          payload[_messageStatusSyncEnvelopeReceivedKey] as bool? ?? false;
+      final displayed =
+          payload[_messageStatusSyncEnvelopeDisplayedKey] as bool? ?? false;
+      final normalizedDisplayed = displayed;
+      final normalizedReceived = normalizedDisplayed || received;
+      final normalizedAcked = normalizedReceived || acked;
+      return _MessageStatusSyncEnvelope(
+        id: id,
+        acked: normalizedAcked,
+        received: normalizedReceived,
+        displayed: normalizedDisplayed,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool isEnvelope(String raw) => tryParseEnvelope(raw) != null;
+}
+
 extension MessageEvent on mox.MessageEvent {
   String get text =>
       get<mox.ReplyData>()?.withoutFallback ??
@@ -122,7 +192,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       final filtered = messages.where((message) {
         final body = message.body;
         if (body == null || body.isEmpty) return true;
-        return !CalendarSyncMessage.isCalendarSyncEnvelope(body);
+        return !CalendarSyncMessage.isCalendarSyncEnvelope(body) &&
+            !_MessageStatusSyncEnvelope.isEnvelope(body);
       }).toList(growable: false);
 
       return List<Message>.unmodifiable(filtered);
@@ -370,8 +441,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     String? body,
   }) async {
     final hasText = body?.trim().isNotEmpty == true;
-    if (metadata == null && !hasText) return;
-
     await _dbOp<XmppDatabase>((db) async {
       Message? existing;
       if (incoming.originID?.isNotEmpty == true) {
@@ -380,17 +449,39 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       existing ??= await db.getMessageByStanzaID(incoming.stanzaID);
       if (existing == null) return;
 
+      final shouldUpdateDisplayed = incoming.displayed && !existing.displayed;
+      final shouldUpdateReceived =
+          (incoming.received || shouldUpdateDisplayed) && !existing.received;
+      final shouldUpdateAcked =
+          (incoming.acked || shouldUpdateReceived) && !existing.acked;
+
       final needsMetadata = metadata != null &&
           (existing.fileMetadataID == null || existing.fileMetadataID!.isEmpty);
       final needsBody =
           hasText && (existing.body == null || existing.body!.isEmpty);
-      if (!needsMetadata && !needsBody) return;
+      if (!needsMetadata &&
+          !needsBody &&
+          !shouldUpdateAcked &&
+          !shouldUpdateReceived &&
+          !shouldUpdateDisplayed) {
+        return;
+      }
 
       await db.updateMessageAttachment(
         stanzaID: existing.stanzaID,
         metadata: needsMetadata ? metadata : null,
         body: needsBody ? body : null,
       );
+
+      if (shouldUpdateDisplayed) {
+        await db.markMessageDisplayed(incoming.originID ?? incoming.stanzaID);
+      }
+      if (shouldUpdateReceived) {
+        await db.markMessageReceived(incoming.originID ?? incoming.stanzaID);
+      }
+      if (shouldUpdateAcked) {
+        await db.markMessageAcked(incoming.originID ?? incoming.stanzaID);
+      }
     });
   }
 
@@ -512,6 +603,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         message = message.copyWith(
           timestamp: message.timestamp ?? DateTime.timestamp(),
         );
+        final accountJid = myJid;
+        if (accountJid != null &&
+            !isGroupChat &&
+            message.senderJid.toLowerCase() == accountJid.toLowerCase() &&
+            (event.isCarbon || event.isFromMAM)) {
+          message = message.copyWith(acked: true);
+        }
         if (metadata != null) {
           message = message.copyWith(fileMetadataID: metadata.id);
         }
@@ -537,6 +635,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         if (await _handleCorrection(event, message.senderJid)) return;
         if (await _handleRetraction(event, message.senderJid)) return;
 
+        if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event)) return;
 
         if (!event.displayable && event.encryptionError == null) return;
@@ -611,6 +710,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       ..registerHandler<mox.ChatMarkerEvent>((event) async {
         _log.info('Received chat marker');
 
+        final isDisplayed = event.type == mox.ChatMarker.displayed;
+        final isReceived = isDisplayed || event.type == mox.ChatMarker.received;
+        const bool isAcked = true;
         await _dbOp<XmppDatabase>(
           (db) async {
             switch (event.type) {
@@ -626,10 +728,27 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
             }
           },
         );
+
+        await _broadcastMessageStatusSync(
+          id: event.id,
+          acked: isAcked,
+          received: isReceived,
+          displayed: isDisplayed,
+        );
       })
       ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
         await _dbOp<XmppDatabase>(
-          (db) => db.markMessageReceived(event.id),
+          (db) async {
+            db.markMessageReceived(event.id);
+            db.markMessageAcked(event.id);
+          },
+        );
+
+        await _broadcastMessageStatusSync(
+          id: event.id,
+          acked: true,
+          received: true,
+          displayed: false,
         );
       });
   }
@@ -2152,6 +2271,12 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
   Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
     if (event.isCarbon) return;
+    final body = event.get<mox.MessageBodyData>()?.body?.trim();
+    if (body != null &&
+        body.isNotEmpty &&
+        _MessageStatusSyncEnvelope.isEnvelope(body)) {
+      return;
+    }
 
     final markable =
         event.extensions.get<mox.MarkableData>()?.isMarkable ?? false;
@@ -2207,6 +2332,99 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           db.markMessageAcked(id);
         },
       );
+    }
+  }
+
+  Future<bool> _handleMessageStatusSync(mox.MessageEvent event) async {
+    final raw = event.get<mox.MessageBodyData>()?.body?.trim();
+    if (raw == null || raw.isEmpty) {
+      return false;
+    }
+    final from = event.from.toBare().toString().toLowerCase();
+    final to = event.to.toBare().toString().toLowerCase();
+    final accountJid = myJid;
+    final self = accountJid?.toLowerCase();
+    if (self == null || self.isEmpty) {
+      return false;
+    }
+    if (from != self || to != self) {
+      return false;
+    }
+
+    final envelope = _MessageStatusSyncEnvelope.tryParseEnvelope(raw);
+    if (envelope == null) {
+      if (raw.contains(_messageStatusSyncEnvelopeKey)) {
+        _log.fine('Dropped malformed message status sync envelope from self');
+        return true;
+      }
+      return false;
+    }
+
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        if (envelope.displayed) {
+          db.markMessageDisplayed(envelope.id);
+        }
+        if (envelope.received) {
+          db.markMessageReceived(envelope.id);
+        }
+        if (envelope.acked) {
+          db.markMessageAcked(envelope.id);
+        }
+      },
+    );
+    return true;
+  }
+
+  Future<void> _broadcastMessageStatusSync({
+    required String id,
+    required bool acked,
+    required bool received,
+    required bool displayed,
+  }) async {
+    final accountJid = myJid;
+    if (accountJid == null || accountJid.isEmpty) {
+      return;
+    }
+
+    final normalizedDisplayed = displayed;
+    final normalizedReceived = normalizedDisplayed || received;
+    final normalizedAcked = normalizedReceived || acked;
+
+    final db = await database;
+    final message =
+        await db.getMessageByStanzaID(id) ?? await db.getMessageByOriginID(id);
+    if (message == null) {
+      return;
+    }
+    if (message.senderJid.toLowerCase() != accountJid.toLowerCase()) {
+      return;
+    }
+    final body = message.body;
+    if (body != null &&
+        body.isNotEmpty &&
+        (CalendarSyncMessage.isCalendarSyncEnvelope(body) ||
+            _MessageStatusSyncEnvelope.isEnvelope(body))) {
+      return;
+    }
+
+    final envelopeJson = jsonEncode({
+      _messageStatusSyncEnvelopeKey: _MessageStatusSyncEnvelope(
+        id: id,
+        acked: normalizedAcked,
+        received: normalizedReceived,
+        displayed: normalizedDisplayed,
+      ).toJson(),
+    });
+
+    try {
+      await sendMessage(
+        jid: accountJid,
+        text: envelopeJson,
+        storeLocally: false,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.finer('Failed to broadcast message status sync', error, stackTrace);
     }
   }
 

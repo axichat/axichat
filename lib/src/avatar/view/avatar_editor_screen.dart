@@ -312,7 +312,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                           )
                         else
                           const Icon(LucideIcons.save, size: 18),
-                        Text(l10n.commonSave),
+                        Text(l10n.avatarSaveAvatar),
                       ],
                     ),
                   ),

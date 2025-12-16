@@ -1548,6 +1548,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get commonSave => 'Enregistrer';
 
   @override
+  String get avatarSaveAvatar => 'Enregistrer l’avatar';
+
+  @override
   String get commonRetry => 'Réessayer';
 
   @override

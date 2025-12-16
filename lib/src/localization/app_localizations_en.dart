@@ -1523,6 +1523,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonSave => 'Save';
 
   @override
+  String get avatarSaveAvatar => 'Save avatar';
+
+  @override
   String get commonRetry => 'Retry';
 
   @override
