@@ -1193,6 +1193,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       _lastEmailProvisioningError = null;
       await _markSmtpProvisioned();
+      try {
+        await emailService.start();
+        unawaited(emailService.handleNetworkAvailable());
+      } on Exception catch (error, stackTrace) {
+        _log.finer('Failed to start email sync', error, stackTrace);
+      }
       return _ProvisioningStatus.ready;
     } on EmailProvisioningException catch (error) {
       if (!enforceProvisioning && allowOfflineOnRecoverable) {

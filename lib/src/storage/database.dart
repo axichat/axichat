@@ -1690,28 +1690,46 @@ WHERE subject_token IS NOT NULL
   @override
   Future<void> markMessageAcked(String stanzaID) async {
     _log.info('Marking message acked');
-    await messagesAccessor.updateOne(MessagesCompanion(
-      stanzaID: Value(stanzaID),
-      acked: const Value(true),
-    ));
+    await (update(messages)
+          ..where(
+            (tbl) =>
+                tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
+          ))
+        .write(
+      const MessagesCompanion(
+        acked: Value(true),
+      ),
+    );
   }
 
   @override
   Future<void> markMessageReceived(String stanzaID) async {
     _log.info('Marking message received');
-    await messagesAccessor.updateOne(MessagesCompanion(
-      stanzaID: Value(stanzaID),
-      received: const Value(true),
-    ));
+    await (update(messages)
+          ..where(
+            (tbl) =>
+                tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
+          ))
+        .write(
+      const MessagesCompanion(
+        received: Value(true),
+      ),
+    );
   }
 
   @override
   Future<void> markMessageDisplayed(String stanzaID) async {
     _log.info('Marking message displayed');
-    await messagesAccessor.updateOne(MessagesCompanion(
-      stanzaID: Value(stanzaID),
-      displayed: const Value(true),
-    ));
+    await (update(messages)
+          ..where(
+            (tbl) =>
+                tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
+          ))
+        .write(
+      const MessagesCompanion(
+        displayed: Value(true),
+      ),
+    );
   }
 
   @override

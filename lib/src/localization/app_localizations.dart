@@ -2780,6 +2780,12 @@ abstract class AppLocalizations {
   /// **'Save'**
   String get commonSave;
 
+  /// No description provided for @avatarSaveAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Save avatar'**
+  String get avatarSaveAvatar;
+
   /// No description provided for @commonRetry.
   ///
   /// In en, this message translates to:

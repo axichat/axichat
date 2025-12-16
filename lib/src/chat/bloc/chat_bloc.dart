@@ -185,6 +185,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       add(_EmailSyncStateChanged(initialSyncState));
     }
     if (messageService case final XmppService xmppService) {
+      _xmppService = xmppService;
       add(_XmppConnectionStateChanged(xmppService.connectionState));
       _connectivitySubscription = xmppService.connectivityStream.listen(
         (connectionState) {
@@ -234,6 +235,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ? jid!.trim().toLowerCase()
           : jid;
   final MessageService _messageService;
+  XmppService? _xmppService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
   final EmailService? _emailService;
@@ -288,6 +290,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat.defaultTransport.isEmail) return false;
     final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     return _isAxiDomainJid(candidate);
+  }
+
+  Future<void> _prefetchPeerAvatar(Chat chat) async {
+    if (chat.type == ChatType.groupChat) return;
+    if (!_xmppAllowedForChat(chat)) return;
+    final xmppService = _xmppService;
+    if (xmppService == null) return;
+    if (xmppService.connectionState != ConnectionState.connected) return;
+    final peerJid = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
+    await xmppService.prefetchAvatarForJid(peerJid);
   }
 
   Future<int> _archivedMessageCount(Chat chat) {
@@ -600,6 +612,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         limit: _currentMessageLimit,
         filter: state.viewFilter,
       );
+      unawaited(_prefetchPeerAvatar(event.chat));
     }
     if (typingContextChanged) {
       _subscribeToTypingParticipants(event.chat);
