@@ -1549,6 +1549,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get commonSave => 'Speichern';
 
   @override
+  String get avatarSaveAvatar => 'Avatar speichern';
+
+  @override
   String get commonRetry => 'Erneut versuchen';
 
   @override

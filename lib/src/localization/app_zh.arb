@@ -369,6 +369,7 @@
   "signupAvatarUpload": "上传",
   "signupAvatarShuffle": "随机默认头像",
   "signupAvatarMenuDescription": "创建 XMPP 账号后才会发布头像。",
+  "avatarSaveAvatar": "保存头像",
   "signupAvatarBackgroundColor": "背景颜色",
   "signupAvatarDefaultsTitle": "默认头像",
   "signupAvatarCategoryAbstract": "抽象",
