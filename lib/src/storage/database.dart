@@ -1596,19 +1596,9 @@ WHERE subject_token IS NOT NULL
     const inviteRevokePrefix = 'axc-invite-revoke:';
     if (pseudoMessageType == PseudoMessageType.mucInvite ||
         pseudoMessageType == PseudoMessageType.mucInviteRevocation) {
-      final roomName = (pseudoMessageData?['roomName'] as String?)?.trim();
-      final roomJid = (pseudoMessageData?['roomJid'] as String?)?.trim();
-      final storedRoomName = roomJid?.isNotEmpty == true
-          ? (await getChat(roomJid!))?.title.trim()
-          : null;
-      final resolvedRoomName = roomName?.isNotEmpty == true
-          ? roomName!
-          : storedRoomName?.isNotEmpty == true
-              ? storedRoomName!
-              : 'group chat';
       return pseudoMessageType == PseudoMessageType.mucInvite
-          ? 'Invite: $resolvedRoomName'
-          : 'Invite revoked: $resolvedRoomName';
+          ? 'You have been invited to a group chat'
+          : 'Invite revoked';
     }
 
     if (trimmedBody?.isNotEmpty == true) {

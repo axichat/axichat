@@ -206,7 +206,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
   Size _layout(double maxWidth) {
     _debugAssertNoWidgetSpans();
     final plainText = text.toPlainText();
-    if (plainText.isEmpty) return Size.zero;
+    final hasBodyText = plainText.isNotEmpty;
     assert(maxWidth > 0);
 
     _maxLineWidth = 0;
@@ -230,7 +230,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _detailPainters = [];
     _detailLineMetrics = [];
     if (_details.isNotEmpty) {
-      _detailsWidth = _detailStartGap;
+      _detailsWidth = hasBodyText ? _detailStartGap : 0.0;
     }
 
     for (var index = 0; index < _details.length; index++) {
@@ -261,17 +261,21 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
     final messageSize = Size(_maxLineWidth, _textPainter.height);
 
-    _finalLineWidth = textLines.last.width;
+    _finalLineWidth = textLines.isEmpty ? 0.0 : textLines.last.width;
 
     final combinedWidth =
         _detailsWidth == 0 ? _finalLineWidth : _finalLineWidth + _detailsWidth;
     _canInlineDetails = _detailsWidth > 0 &&
         combinedWidth <
-            (textLines.length == 1 ? maxWidth : min(_maxLineWidth, maxWidth));
+            (textLines.length <= 1 ? maxWidth : min(_maxLineWidth, maxWidth));
+
+    if (!hasBodyText && _detailPainters.isEmpty) {
+      return Size.zero;
+    }
 
     return _canInlineDetails
         ? Size(
-            textLines.length == 1
+            textLines.length <= 1
                 ? combinedWidth
                 : max(_maxLineWidth, combinedWidth),
             messageSize.height,
@@ -284,15 +288,17 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (_textPainter.text?.toPlainText() == '') return;
-
-    _textPainter.paint(context.canvas, offset);
+    final hasBodyText = _textPainter.text?.toPlainText().isNotEmpty == true;
+    if (hasBodyText) {
+      _textPainter.paint(context.canvas, offset);
+    }
 
     if (_detailPainters.isEmpty) return;
 
     final lastLine = _textLineMetrics.isNotEmpty ? _textLineMetrics.last : null;
+    final detailStartGap = hasBodyText ? _detailStartGap : 0.0;
     var dx = _canInlineDetails
-        ? offset.dx + _finalLineWidth + _detailStartGap
+        ? offset.dx + _finalLineWidth + detailStartGap
         : offset.dx + size.width - _detailsWidth;
     for (var i = 0; i < _detailPainters.length; i++) {
       final painter = _detailPainters[i];

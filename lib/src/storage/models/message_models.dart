@@ -493,13 +493,15 @@ class _ParsedInvite {
       return null;
     }
     payload['invitee'] ??= to;
-    final cleanedBody = (lines..remove(metaLine)).join('\n').trim();
+    const inviteBodyLabel = 'You have been invited to a group chat';
+    const inviteRevokedBodyLabel = 'Invite revoked';
+    final displayBody = isRevoke ? inviteRevokedBodyLabel : inviteBodyLabel;
     return _ParsedInvite(
       type: isRevoke
           ? PseudoMessageType.mucInviteRevocation
           : PseudoMessageType.mucInvite,
       data: payload,
-      displayBody: cleanedBody.isEmpty ? 'Group invite' : cleanedBody,
+      displayBody: displayBody,
     );
   }
 }
