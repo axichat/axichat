@@ -30,11 +30,10 @@
 
 <div align="center">
   <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="320" alt="Axichat mobile chat screenshot" />
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="320" hspace="10" alt="Axichat mobile chat screenshot" />
   </a><!--
-  --><img src="assets/readme/spacer.png" width="40" height="1" alt="" /><!--
   --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="320" alt="Axichat mobile email screenshot" />
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="320" hspace="10" alt="Axichat mobile email screenshot" />
   </a>
 </div>
 
@@ -46,11 +45,10 @@
 
 <div align="center">
   <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="320" alt="Axichat mobile calendar screenshot" />
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="320" hspace="10" alt="Axichat mobile calendar screenshot" />
   </a><!--
-  --><img src="assets/readme/spacer.png" width="40" height="1" alt="" /><!--
   --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="320" alt="Axichat mobile calendar alt screenshot" />
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="320" hspace="10" alt="Axichat mobile calendar alt screenshot" />
   </a>
 </div>
 
