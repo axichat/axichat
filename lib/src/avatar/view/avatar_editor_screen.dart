@@ -185,6 +185,11 @@ class _AvatarSummaryCard extends StatelessWidget {
     final cubit = context.read<AvatarEditorCubit>();
     final size = isWide ? 104.0 : 88.0;
     final previewBytes = state.previewBytes ?? state.sourceBytes;
+    const avatarSavedMessage = 'Avatar saved.';
+    final showSuccessMessage = !state.publishing &&
+        state.error == null &&
+        state.lastSavedHash != null &&
+        state.draft?.hash == state.lastSavedHash;
 
     return ShadCard(
       padding: const EdgeInsets.all(12.0),
@@ -283,8 +288,12 @@ class _AvatarSummaryCard extends StatelessWidget {
                             state.publishing
                         ? null
                         : cubit.publish,
-                    child: state.publishing
-                        ? SizedBox(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 8.0,
+                      children: [
+                        if (state.publishing)
+                          SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
@@ -298,7 +307,11 @@ class _AvatarSummaryCard extends StatelessWidget {
                               ),
                             ),
                           )
-                        : Text(l10n.commonSave),
+                        else
+                          const Icon(LucideIcons.save, size: 18),
+                        Text(l10n.commonSave),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -317,6 +330,20 @@ class _AvatarSummaryCard extends StatelessWidget {
                 state.error!,
                 style:
                     context.textTheme.small.copyWith(color: colors.destructive),
+              ),
+            ),
+          if (showSuccessMessage)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.10),
+                borderRadius: context.radius,
+                border: Border.all(color: colors.primary),
+              ),
+              child: Text(
+                avatarSavedMessage,
+                style: context.textTheme.small.copyWith(color: colors.primary),
               ),
             ),
         ],

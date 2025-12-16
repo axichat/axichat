@@ -54,5 +54,28 @@ void main() {
       expect(sanitized, isNot(contains(secretHex)));
       expect(sanitized, isNot(contains('@')));
     });
+
+    test('Summarizes XMPP traffic logs quickly', () {
+      final payload = List.filled(5000, 'A').join();
+      final message =
+          "==> <iq type='set'><pubsub node='urn:xmpp:avatar:data'>$payload</pubsub></iq>";
+
+      final sanitized = SafeLogging.sanitizeMessage(message);
+      expect(sanitized, startsWith('==> ('));
+      expect(sanitized, contains('<iq>'));
+      expect(sanitized, contains('type=set'));
+      expect(sanitized, contains('urn:xmpp:avatar:data'));
+      expect(sanitized, isNot(contains(payload)));
+    });
+
+    test('Omits large non-XMPP logs', () {
+      final payload = List.filled(5000, 'x').join();
+      final message = 'Logged in as alice@example.com $payload';
+
+      final sanitized = SafeLogging.sanitizeMessage(message);
+      expect(sanitized, startsWith(SafeLogging.redactedSecret));
+      expect(sanitized, contains('log omitted'));
+      expect(sanitized, isNot(contains('@')));
+    });
   });
 }
