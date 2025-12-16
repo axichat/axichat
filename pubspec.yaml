@@ -5,7 +5,7 @@ description: "Free and open-source chat + email client."
 publish_to: 'none'
 
 # TODO: Bump the version + build number together before every store submission.
-version: 0.4.0
+version: 0.4.0+1
 
 # TODO: Update homepage/repository URLs if the canonical Git remote changes.
 homepage: https://gitlab.com/axichat/axichat
