@@ -121,8 +121,11 @@ class _AvatarEditorToolsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showBackgroundPicker = state.template?.hasAlphaBackground == true ||
-        state.source == AvatarSource.upload;
+    final template = state.template;
+    final showBackgroundPicker = state.source == AvatarSource.template &&
+        template != null &&
+        template.category != AvatarTemplateCategory.abstract &&
+        template.hasAlphaBackground;
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
@@ -470,7 +473,9 @@ class _BackgroundPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final cubit = context.read<AvatarEditorCubit>();
     final colors = context.colorScheme;
+    final template = state.template;
     final presets = [
+      Colors.transparent,
       colors.accent,
       colors.primary,
       colors.secondary,
@@ -478,8 +483,10 @@ class _BackgroundPicker extends StatelessWidget {
       colors.background,
       colors.foreground.withAlpha((0.65 * 255).round()),
     ];
-    final needsPicker = state.template?.hasAlphaBackground == true ||
-        state.source == AvatarSource.upload;
+    final needsPicker = state.source == AvatarSource.template &&
+        template != null &&
+        template.category != AvatarTemplateCategory.abstract &&
+        template.hasAlphaBackground;
     if (!needsPicker) return const SizedBox.shrink();
     return ShadCard(
       padding: const EdgeInsets.all(16.0),
@@ -548,6 +555,16 @@ class _BackgroundPicker extends StatelessWidget {
                   editFieldCopyButton: true,
                 ),
               ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ShadButton.outline(
+              size: ShadButtonSize.sm,
+              onPressed: state.backgroundColor == Colors.transparent
+                  ? null
+                  : () => cubit.setBackgroundColor(Colors.transparent, colors),
+              child: const Text('Transparent'),
             ),
           ),
           Wrap(
