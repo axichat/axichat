@@ -153,9 +153,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   static const minCropSide = 48.0;
-  // All non-abstract templates ship with transparent backgrounds, so keep a single inset.
   static const avatarInsetFraction = 0.10;
-  static const transparentAvatarInsetFraction = 0.10;
   static const _targetSize = 256;
   static const _maxBytes = 64 * 1024;
   static const _minQuality = 55;
@@ -262,10 +260,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     );
     try {
       final selectedBackground = background ?? state.backgroundColor;
+      final generatorBackground =
+          template.hasAlphaBackground ? Colors.transparent : selectedBackground;
       final generated = await template.generator(
-        selectedBackground == Colors.transparent
-            ? colors.background
-            : selectedBackground,
+        generatorBackground,
         colors,
       );
       if (isClosed) return;
@@ -300,15 +298,12 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     ShadColorScheme colors,
   ) async {
     _emitIfOpen(state.copyWith(backgroundColor: color));
-    if (state.template != null) {
-      await selectTemplate(
-        state.template!,
-        colors,
-        background: color,
-      );
-      return;
-    }
-    await _rebuildDraft();
+    final template = state.template;
+    final shouldRebuild = template != null &&
+        template.category != AvatarTemplateCategory.abstract &&
+        template.hasAlphaBackground;
+    if (!shouldRebuild) return;
+    _scheduleRebuild();
   }
 
   Future<void> shuffleTemplate(ShadColorScheme colors) async {
@@ -489,18 +484,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
           imageHeight,
         );
         final template = state.template;
-        final useTemplateInset = template != null &&
-            template.category != AvatarTemplateCategory.abstract;
-        final padAlphaTemplate =
-            template?.hasAlphaBackground == true && useTemplateInset;
-        final insetFraction = useTemplateInset
-            ? (padAlphaTemplate
-                ? transparentAvatarInsetFraction
-                : avatarInsetFraction)
-            : 0.0;
-        final shouldInset = insetFraction > 0;
-        final paddingColor = state.backgroundColor;
-        final shouldFlatten = shouldInset || paddingColor.a > 0;
+        final applyTint = template != null &&
+            template.category != AvatarTemplateCategory.abstract &&
+            template.hasAlphaBackground;
+        final insetFraction = applyTint ? avatarInsetFraction : 0.0;
+        final shouldInset = applyTint;
+        final paddingColor =
+            applyTint ? state.backgroundColor : Colors.transparent;
+        final shouldFlatten = applyTint && paddingColor.a > 0;
 
         _emitIfOpen(state.copyWith(processing: true, clearError: true));
         await Future<void>.delayed(Duration.zero);
