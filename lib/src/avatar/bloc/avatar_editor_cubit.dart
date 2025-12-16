@@ -36,6 +36,7 @@ class AvatarEditorState extends Equatable {
     this.publishing = false,
     this.error,
     this.lastSavedPath,
+    this.lastSavedHash,
     this.estimatedBytes,
   });
 
@@ -53,6 +54,7 @@ class AvatarEditorState extends Equatable {
   final int? imageHeight;
   final Color backgroundColor;
   final String? lastSavedPath;
+  final String? lastSavedHash;
   final int? estimatedBytes;
 
   AvatarEditorState copyWith({
@@ -70,6 +72,7 @@ class AvatarEditorState extends Equatable {
     int? imageHeight,
     Color? backgroundColor,
     String? lastSavedPath,
+    String? lastSavedHash,
     int? estimatedBytes,
     bool clearError = false,
     bool clearSourceBytes = false,
@@ -78,6 +81,7 @@ class AvatarEditorState extends Equatable {
     bool clearDraft = false,
     bool clearEstimatedBytes = false,
     bool clearLastSavedPath = false,
+    bool clearLastSavedHash = false,
   }) {
     return AvatarEditorState(
       source: source ?? this.source,
@@ -96,6 +100,8 @@ class AvatarEditorState extends Equatable {
       backgroundColor: backgroundColor ?? this.backgroundColor,
       lastSavedPath:
           clearLastSavedPath ? null : lastSavedPath ?? this.lastSavedPath,
+      lastSavedHash:
+          clearLastSavedHash ? null : lastSavedHash ?? this.lastSavedHash,
       estimatedBytes:
           clearEstimatedBytes ? null : estimatedBytes ?? this.estimatedBytes,
     );
@@ -117,6 +123,7 @@ class AvatarEditorState extends Equatable {
         imageHeight,
         backgroundColor,
         lastSavedPath,
+        lastSavedHash,
         estimatedBytes,
       ];
 }
@@ -401,6 +408,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         state.copyWith(
           publishing: false,
           lastSavedPath: result.path,
+          lastSavedHash: result.hash,
           clearError: true,
         ),
       );
