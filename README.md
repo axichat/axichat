@@ -129,7 +129,7 @@
 
 - Natural language parsing (without any AI) so you can just type in what, when, how long, how often,
   due by, and more in any way you want and the calendar will automatically schedule it into the grid
-  for you. Don't worry about fiddling with 30 different inputs to plan a basic task.
+  for you. Don't worry about tweaking 30 different inputs to plan a basic task.
 - If you don't know when it needs to get done, that's fine; we just put it in the unscheduled list
   so you can quickly and easily dump your stream-of-consciousness.
 - If it has a deadline then we will notify you when it is getting close.
@@ -140,6 +140,34 @@
 - Available in Guest Mode so you don't even need an account or internet to use it.
 - Scheduling, task management, and reminders all in one place with natural language processing (no
   AI) for frictionless use.
+
+### Feature highlights:
+
+- 🌓 Dark and light modes with brand color schemes
+- 🧭 Unified inbox for chat + email side by side
+- 👥 Group chats and per-conversation settings
+- 🔁 Quick quote-reply
+- 😀 Emoji reactions
+- ✅ Delivery and read receipts with typing indicators
+- 🔄 Stream management with automatic reconnect to stop messages dropping
+- 🧑‍🎨 Upload your own avatar or use one of our cool defaults
+- 📌 Message drafts, starred items, and pinning
+- 📎 Rich attachments and inline previews
+- 🔍 Fast search across chats, mail, and calendar
+- 🗂️ Multiple accounts with secure credential storage (SQLCipher + secure storage)
+- 🔒 On-device and in-transit encryption, no trackers
+- 🚀 1st-party push notifications and offline sync
+- 📅 Natural-language scheduling with drag+drop calendar editing
+- ➕ One-tap add-to-calendar from simple text messages
+- 🗓️ Tasks, reminders, and calendar in one view
+- 📤📥 Calendar export/import for backups and migrations
+- ⚡ Critical paths and agenda focus to surface what’s next
+- 🦾 Accessibility-friendly modals and flows (keyboard/touch/reader aware)
+- 🌍 Translated UI (English, Spanish, German, French, Chinese)
+- 🔄 Sync across all your devices (Android, Linux, Windows)
+- 🖥️ Desktop + mobile parity with keyboard shortcuts and touch affordances
+- 🔔 Smart notifications (muting, per-chat overrides, do-not-disturb)
+- 🌐 Works without Google/Firebase; pure XMPP + SMTP/IMAP core
 
 <hr />
 
