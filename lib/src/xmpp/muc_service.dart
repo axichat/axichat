@@ -19,6 +19,7 @@ const _mucRoomsPublishModel = 'publishers';
 
 mixin MucService on XmppBase, BaseStreamService {
   final _mucLog = Logger('MucService');
+  static const Duration _mucJoinTimeout = Duration(seconds: 10);
   final _roomStates = <String, RoomState>{};
   final _roomStreams = <String, StreamController<RoomState>>{};
   final _roomNicknames = <String, String>{};
@@ -41,6 +42,9 @@ mixin MucService on XmppBase, BaseStreamService {
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
+      ..registerHandler<MucPresenceMirrorEvent>((event) async {
+        _handleMirroredPresence(event);
+      })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
         if (connectionState != ConnectionState.connected) return;
         unawaited(_ensureMucRoomsPubSubSubscription());
@@ -171,44 +175,23 @@ mixin MucService on XmppBase, BaseStreamService {
   }) async {
     _markRoomJoined(roomJid);
     _roomNicknames[_roomKey(roomJid)] = nickname;
-    if (_connection.getManager<mox.MUCManager>() case final manager?) {
-      if (manager is MUCManager) {
-        await manager.joinRoomWithStrings(
-          jid: roomJid,
-          nickname: nickname,
-          maxHistoryStanzas: maxHistoryStanzas,
-        );
-        _seedSelfOccupant(roomJid: roomJid, nickname: nickname);
-        return;
-      }
-      await manager.joinRoom(
-        mox.JID.fromString(roomJid),
-        nickname,
-        maxHistoryStanzas: maxHistoryStanzas,
-      );
-      _seedSelfOccupant(roomJid: roomJid, nickname: nickname);
-      return;
-    }
-    throw XmppMessageException();
-  }
+    final manager = _connection.getManager<mox.MUCManager>();
+    if (manager == null) throw XmppMessageException();
 
-  void _seedSelfOccupant({
-    required String roomJid,
-    required String nickname,
-  }) {
-    final bareRoomJid = _roomKey(roomJid);
-    final occupantId = _resolveOccupantId(
-      occupantId: null,
-      roomJid: bareRoomJid,
-      nick: nickname,
-    );
-    if (occupantId == null) return;
-    _upsertOccupant(
-      roomJid: bareRoomJid,
-      occupantId: occupantId,
-      nick: nickname,
-      isPresent: true,
-    );
+    try {
+      final result = await manager
+          .joinRoom(
+            mox.JID.fromString(roomJid),
+            nickname,
+            maxHistoryStanzas: maxHistoryStanzas,
+          )
+          .timeout(_mucJoinTimeout);
+      if (result.isType<mox.MUCError>()) {
+        throw XmppMessageException();
+      }
+    } on TimeoutException {
+      _mucLog.fine('Timed out waiting for room join to complete.');
+    }
   }
 
   Future<void> ensureJoined({
@@ -236,7 +219,6 @@ mixin MucService on XmppBase, BaseStreamService {
       nickname: resolvedNick,
       maxHistoryStanzas: maxHistoryStanzas,
     );
-    await _applyLocalNickname(roomJid: roomJid, nickname: resolvedNick);
   }
 
   Future<void> inviteUserToRoom({
@@ -1070,11 +1052,83 @@ mixin MucService on XmppBase, BaseStreamService {
   }
 
   String? _nickFromSender(String sender) {
-    final jid = mox.JID.fromString(sender);
-    final resource = jid.resource;
-    if (resource.isEmpty) return null;
-    if (jid.toBare().toString() == jid.toString()) return null;
-    return resource;
+    if (sender.isEmpty) return null;
+    try {
+      final jid = mox.JID.fromString(sender);
+      final resource = jid.resource;
+      if (resource.isEmpty) return null;
+      if (jid.toBare().toString() == jid.toString()) return null;
+      return resource;
+    } on Exception {
+      return null;
+    }
+  }
+
+  void _handleMirroredPresence(MucPresenceMirrorEvent event) {
+    final roomJid = _roomKey(event.roomJid);
+    if (_leftRooms.contains(roomJid)) return;
+
+    if (event.isNickChange && event.newNick != null) {
+      final existing = _roomStates[roomJid];
+      final occupant = existing?.occupants[event.occupantId];
+      final nextNick = event.newNick!;
+      if (occupant != null) {
+        _upsertOccupant(
+          roomJid: roomJid,
+          occupantId: event.occupantId,
+          nick: nextNick,
+          realJid: occupant.realJid,
+          affiliation: occupant.affiliation,
+          role: occupant.role,
+          isPresent: true,
+        );
+      } else {
+        _upsertOccupant(
+          roomJid: roomJid,
+          occupantId: event.occupantId,
+          nick: nextNick,
+          realJid: event.realJid,
+          affiliation: OccupantAffiliation.fromString(event.affiliation),
+          role: OccupantRole.fromString(event.role),
+          isPresent: true,
+        );
+      }
+      return;
+    }
+
+    if (!event.isPresent) {
+      removeOccupant(roomJid: roomJid, occupantId: event.occupantId);
+      return;
+    }
+
+    final realJid = event.isSelfPresence
+        ? (_myJid?.toBare().toString() ?? event.realJid)
+        : event.realJid;
+
+    updateOccupantFromPresence(
+      roomJid: roomJid,
+      occupantId: event.occupantId,
+      nick: event.nick,
+      realJid: realJid,
+      affiliation: OccupantAffiliation.fromString(event.affiliation),
+      role: OccupantRole.fromString(event.role),
+      isPresent: true,
+    );
+
+    if (!event.isSelfPresence) return;
+
+    final trimmedNick = event.nick.trim();
+    if (trimmedNick.isEmpty) return;
+    _roomNicknames[roomJid] = trimmedNick;
+    unawaited(_dbOp<XmppDatabase>(
+      (db) async {
+        final chat = await db.getChat(roomJid);
+        if (chat != null && chat.myNickname != trimmedNick) {
+          await db.updateChat(chat.copyWith(myNickname: trimmedNick));
+        }
+      },
+      awaitDatabase: true,
+    ));
   }
 
   RoomState _upsertOccupant({

@@ -887,6 +887,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final roomName = data['roomName'] as String?;
     final invitee = data['invitee'] as String?;
     if (roomJid == null) return;
+    final trimmedRoomName = roomName?.trim();
+    const fallbackRoomName = 'group chat';
+    final resolvedRoomName = trimmedRoomName?.isNotEmpty == true
+        ? trimmedRoomName!
+        : fallbackRoomName;
     if (invitee != null &&
         _chatsService.myJid != null &&
         mox.JID.fromString(invitee).toBare().toString() !=
@@ -900,12 +905,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       emit(
         state.copyWith(
-          toast: ChatToast(message: 'Joined $roomJid'),
+          toast: ChatToast(message: "Joined '$resolvedRoomName'"),
           toastId: state.toastId + 1,
         ),
       );
     } catch (error, stackTrace) {
-      _log.warning('Failed to join invited room $roomJid', error, stackTrace);
+      _log.warning('Failed to join invited room', error, stackTrace);
       emit(
         state.copyWith(
           toast: const ChatToast(

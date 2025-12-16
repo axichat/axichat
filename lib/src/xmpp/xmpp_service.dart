@@ -58,6 +58,7 @@ part 'blocking_service.dart';
 part 'chats_service.dart';
 part 'avatar_service.dart';
 part 'muc_service.dart';
+part 'muc_presence_mirror_manager.dart';
 part 'message_service.dart';
 part 'message_sanitizer.dart';
 part 'mam_sm_guard.dart';
@@ -506,6 +507,7 @@ class XmppService extends XmppBase
         mox.StableIdManager(),
         mox.CryptographicHashManager(),
         mox.OccupantIdManager(),
+        MucPresenceMirrorManager(),
       ]);
 
     return managers;
