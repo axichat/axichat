@@ -2900,9 +2900,15 @@ class _ChatState extends State<Chat> {
                                           inviteRoomName?.isNotEmpty == true
                                               ? inviteRoomName!
                                               : unknownRoomFallbackLabel;
+                                      const inviteBodyLabel =
+                                          'You have been invited to a group chat';
+                                      const inviteRevokedBodyLabel =
+                                          'Invite revoked';
                                       final inviteLabel = isInvite
-                                          ? 'You have been invited to $resolvedInviteRoomName'
-                                          : 'Invite revoked for $resolvedInviteRoomName';
+                                          ? inviteBodyLabel
+                                          : inviteRevokedBodyLabel;
+                                      final inviteActionLabel =
+                                          "Join '$resolvedInviteRoomName'";
                                       final inviteRevoked =
                                           inviteToken != null &&
                                               revokedInviteTokens
@@ -3007,6 +3013,8 @@ class _ChatState extends State<Chat> {
                                             'isInviteRevocation':
                                                 isInviteRevocation,
                                             'inviteLabel': inviteLabel,
+                                            'inviteActionLabel':
+                                                inviteActionLabel,
                                           },
                                         ),
                                       );
@@ -3672,6 +3680,18 @@ class _ChatState extends State<Chat> {
                                                               enabled:
                                                                   !inviteRevoked &&
                                                                       !isInviteRevocationMessage,
+                                                              backgroundColor:
+                                                                  bubbleColor,
+                                                              borderColor:
+                                                                  colors.border,
+                                                              foregroundColor:
+                                                                  textColor,
+                                                              mutedForegroundColor:
+                                                                  timestampColor,
+                                                              label: (message.customProperties?[
+                                                                          'inviteActionLabel']
+                                                                      as String?) ??
+                                                                  'Join',
                                                               onPressed: () =>
                                                                   _handleInviteTap(
                                                                 messageModel,
@@ -5233,7 +5253,7 @@ class _ChatState extends State<Chat> {
     final resolvedRoomName =
         roomName?.isNotEmpty == true ? roomName! : unknownRoomFallbackLabel;
     const inviteConfirmTitle = 'Accept invite?';
-    final inviteConfirmMessage = 'Join $resolvedRoomName?';
+    final inviteConfirmMessage = "Join '$resolvedRoomName'?";
     const inviteConfirmLabel = 'Accept';
     final accepted = await confirm(
       context,
@@ -6310,57 +6330,89 @@ class _TypingAvatar extends StatelessWidget {
 class _InviteActionCard extends StatelessWidget {
   const _InviteActionCard({
     required this.enabled,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.foregroundColor,
+    required this.mutedForegroundColor,
+    required this.label,
     required this.onPressed,
   });
 
   final bool enabled;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color foregroundColor;
+  final Color mutedForegroundColor;
+  final String label;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    const inviteActionLabel = 'Accept invite';
     const inviteActionTooltip = 'Accept invite';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: context.radius,
-        border: Border.all(color: colors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 42,
-              height: 46,
-              child: Center(
-                child: Icon(
-                  LucideIcons.userPlus,
-                  size: 20,
-                  color: colors.mutedForeground,
+    const horizontalPadding = 10.0;
+    const verticalPadding = 8.0;
+    const leadingSize = 34.0;
+    const leadingIconSize = 18.0;
+    const gap = 8.0;
+    const actionGap = 12.0;
+    const cornerRadius = 20.0;
+    final resolvedTextColor = enabled ? foregroundColor : mutedForegroundColor;
+    final actionBackground = Color.alphaBlend(
+      Colors.white.withValues(alpha: 0.08),
+      backgroundColor,
+    );
+    return IntrinsicWidth(
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
+          color: actionBackground,
+          shape: ContinuousRectangleBorder(
+            borderRadius: BorderRadius.circular(cornerRadius),
+            side: BorderSide(color: borderColor),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: leadingSize,
+                height: leadingSize,
+                child: Center(
+                  child: Icon(
+                    LucideIcons.userPlus,
+                    size: leadingIconSize,
+                    color: resolvedTextColor,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                inviteActionLabel,
+              const SizedBox(width: gap),
+              Text(
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.textTheme.small.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: enabled ? colors.foreground : colors.mutedForeground,
+                  color: resolvedTextColor,
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            AxiIconButton(
-              iconData: LucideIcons.check,
-              tooltip: inviteActionTooltip,
-              onPressed: enabled ? onPressed : null,
-            ),
-          ],
+              const SizedBox(width: actionGap),
+              AxiIconButton(
+                iconData: LucideIcons.check,
+                tooltip: inviteActionTooltip,
+                onPressed: enabled ? onPressed : null,
+                color: resolvedTextColor,
+                backgroundColor: actionBackground,
+                borderColor: borderColor,
+                buttonSize: 34,
+                tapTargetSize: 34,
+                cornerRadius: 14,
+              ),
+            ],
+          ),
         ),
       ),
     );
