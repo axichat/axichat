@@ -1,56 +1,47 @@
-<center>
-  <h1 align="center">
-    <img src="assets/icons/generated/app_icon_android_foreground.png" width="56" alt="Axichat icon" align="absmiddle" />
-    Axichat
-  </h1>
-</center>
+# <img src="assets/icons/generated/app_icon_android_foreground.png" width="36" alt="Axichat icon" align="absmiddle" /> Axichat
 
 <hr />
 
-<center>
-  <h2 align="center">The best of instant messaging, email, and calendar</h2>
-</center>
+## The best of instant messaging, email, and calendar
 
-<center>
-  <p align="center">
-    <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
-      <img alt="Download the Android APK" src="https://img.shields.io/badge/Download%20the%20APK-1BA5FF?style=for-the-badge&logo=android&logoColor=white" />
-    </a>
-    <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-windows.zip">
-      <img alt="Download the Windows build" src="https://img.shields.io/badge/Download%20Windows-4178D4?style=for-the-badge&logo=windows&logoColor=white" />
-    </a>
-    <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-linux.tar.gz">
-      <img alt="Download the Linux build" src="https://img.shields.io/badge/Download%20Linux-2CA5E0?style=for-the-badge&logo=linux&logoColor=white" />
-    </a>
-  </p>
-</center>
+<p align="center">
+  <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
+    <img alt="Download the Android APK" src="https://img.shields.io/badge/Download%20the%20APK-1BA5FF?style=for-the-badge&logo=android&logoColor=white" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-windows.zip">
+    <img alt="Download the Windows build" src="https://img.shields.io/badge/Download%20Windows-4178D4?style=for-the-badge&logo=windows&logoColor=white" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-linux.tar.gz">
+    <img alt="Download the Linux build" src="https://img.shields.io/badge/Download%20Linux-2CA5E0?style=for-the-badge&logo=linux&logoColor=white" />
+  </a>
+</p>
 
 ## Screenshots
 
 <p>
-  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="220" alt="Axichat mobile chat screenshot" />
-  </a>
-  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="220" alt="Axichat mobile email screenshot" />
-  </a>
-
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="492" align="right" alt="Axichat desktop screenshot 1" hspace="12" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="560" align="right" alt="Axichat desktop screenshot 1" hspace="12" />
   </a>
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="492" align="right" alt="Axichat desktop screenshot 2" hspace="12" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="560" align="right" alt="Axichat desktop screenshot 2" hspace="12" />
   </a>
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="492" align="right" alt="Axichat calendar screenshot" hspace="12" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="560" align="right" alt="Axichat calendar screenshot" hspace="12" />
+  </a>
+
+  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="251" alt="Axichat mobile chat screenshot" />
+  </a>
+  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="251" alt="Axichat mobile email screenshot" />
   </a>
 
   <br />
   <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="220" alt="Axichat mobile calendar screenshot" />
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="251" alt="Axichat mobile calendar screenshot" />
   </a>
   <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="220" alt="Axichat mobile calendar alt screenshot" />
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="251" alt="Axichat mobile calendar alt screenshot" />
   </a>
 </p>
 <br clear="all" />
