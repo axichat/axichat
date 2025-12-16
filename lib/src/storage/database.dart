@@ -1533,6 +1533,8 @@ WHERE subject_token IS NOT NULL
       trimmedBody: trimmedBody,
       fileMetadataId: message.fileMetadataID,
       hasAttachment: hasAttachment,
+      pseudoMessageType: message.pseudoMessageType,
+      pseudoMessageData: message.pseudoMessageData,
     );
     final chatTitle = _chatTitleForIdentifier(message.chatJid);
     await transaction(() async {
@@ -1587,9 +1589,50 @@ WHERE subject_token IS NOT NULL
     required String? trimmedBody,
     required String? fileMetadataId,
     required bool hasAttachment,
+    required PseudoMessageType? pseudoMessageType,
+    required Map<String, dynamic>? pseudoMessageData,
   }) async {
+    const invitePrefix = 'axc-invite:';
+    const inviteRevokePrefix = 'axc-invite-revoke:';
+    if (pseudoMessageType == PseudoMessageType.mucInvite ||
+        pseudoMessageType == PseudoMessageType.mucInviteRevocation) {
+      final roomName = (pseudoMessageData?['roomName'] as String?)?.trim();
+      final roomJid = (pseudoMessageData?['roomJid'] as String?)?.trim();
+      final storedRoomName = roomJid?.isNotEmpty == true
+          ? (await getChat(roomJid!))?.title.trim()
+          : null;
+      final resolvedRoomName = roomName?.isNotEmpty == true
+          ? roomName!
+          : storedRoomName?.isNotEmpty == true
+              ? storedRoomName!
+              : 'group chat';
+      return pseudoMessageType == PseudoMessageType.mucInvite
+          ? 'Invite: $resolvedRoomName'
+          : 'Invite revoked: $resolvedRoomName';
+    }
+
     if (trimmedBody?.isNotEmpty == true) {
-      return trimmedBody;
+      final lines = trimmedBody!.split('\n');
+      final filtered = lines
+          .where(
+            (line) =>
+                !line.trim().startsWith(invitePrefix) &&
+                !line.trim().startsWith(inviteRevokePrefix),
+          )
+          .toList();
+      final cleaned = filtered.join('\n').trim();
+      if (cleaned.startsWith('Join ')) {
+        final joinLine = cleaned.split('\n').first.trim();
+        final withoutPrefix = joinLine.substring('Join '.length);
+        final cutoffIndex = withoutPrefix.indexOf(' (');
+        final extractedName = cutoffIndex == -1
+            ? withoutPrefix.trim()
+            : withoutPrefix.substring(0, cutoffIndex).trim();
+        if (extractedName.isNotEmpty) {
+          return extractedName;
+        }
+      }
+      if (cleaned.isNotEmpty) return cleaned;
     }
     if (!hasAttachment) {
       return null;
