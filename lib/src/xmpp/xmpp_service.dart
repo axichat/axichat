@@ -478,7 +478,7 @@ class XmppService extends XmppBase
           final sm = _connection.getManager<XmppStreamManagementManager>();
           await sm?.resetState();
           await sm?.clearPersistedState();
-          await _connection.setShouldReconnect(false);
+          await _connection.setShouldReconnect(true);
           if (await _connection.reconnectionPolicy.canTriggerFailure()) {
             await _connection.reconnectionPolicy.onFailure();
           }
