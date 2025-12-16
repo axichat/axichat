@@ -3,8 +3,8 @@
 [Desktop Entry]
 Type=Application
 Name=Axichat
-Comment=Free XMPP chat client
+Comment=Free chat+email client
 Exec=axichat
 Icon=im.axi.axichat
-Categories=Network;Chat;InstantMessaging;
+Categories=Network;Chat;InstantMessaging;Email
 StartupWMClass=axichat
