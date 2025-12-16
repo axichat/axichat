@@ -30,21 +30,13 @@
 </div>
 
 <div align="center">
-  <table align="center" border="0" cellpadding="0" cellspacing="0">
-    <tr>
-      <td>
-        <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
-          <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="320" alt="Axichat mobile chat screenshot" />
-        </a>
-      </td>
-      <td width="40"></td>
-      <td>
-        <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
-          <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="320" alt="Axichat mobile email screenshot" />
-        </a>
-      </td>
-    </tr>
-  </table>
+  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="320" alt="Axichat mobile chat screenshot" />
+  </a><!--
+  --><img src="assets/readme/spacer.png" width="40" height="1" alt="" /><!--
+  --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="320" alt="Axichat mobile email screenshot" />
+  </a>
 </div>
 
 <div align="center">
@@ -54,21 +46,13 @@
 </div>
 
 <div align="center">
-  <table align="center" border="0" cellpadding="0" cellspacing="0">
-    <tr>
-      <td>
-        <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png">
-          <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="320" alt="Axichat mobile calendar screenshot" />
-        </a>
-      </td>
-      <td width="40"></td>
-      <td>
-        <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
-          <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="320" alt="Axichat mobile calendar alt screenshot" />
-        </a>
-      </td>
-    </tr>
-  </table>
+  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png">
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="320" alt="Axichat mobile calendar screenshot" />
+  </a><!--
+  --><img src="assets/readme/spacer.png" width="40" height="1" alt="" /><!--
+  --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
+    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="320" alt="Axichat mobile calendar alt screenshot" />
+  </a>
 </div>
 
 <div align="center">
