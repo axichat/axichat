@@ -1,3 +1,4 @@
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ class AxiInputDialog extends StatelessWidget {
     required this.content,
     this.callback,
     this.callbackText,
+    this.loading = false,
     this.actions = const [],
   });
 
@@ -18,6 +20,7 @@ class AxiInputDialog extends StatelessWidget {
   final Widget content;
   final void Function()? callback;
   final String? callbackText;
+  final bool loading;
   final List<Widget> actions;
 
   @override
@@ -27,6 +30,7 @@ class AxiInputDialog extends StatelessWidget {
       child: title,
     );
     final resolvedCallbackText = callbackText ?? context.l10n.commonContinue;
+    const loadingSemanticsLabel = 'Loading';
     return ShadDialog(
       title: resolvedTitle,
       actions: [
@@ -36,9 +40,20 @@ class AxiInputDialog extends StatelessWidget {
         ).withTapBounce(),
         ...actions,
         ShadButton(
-          onPressed: callback,
+          enabled: callback != null && !loading,
+          onPressed: loading ? null : callback,
+          leading: AnimatedCrossFade(
+            crossFadeState:
+                loading ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+            firstChild: const SizedBox(),
+            secondChild: AxiProgressIndicator(
+              color: context.colorScheme.primaryForeground,
+              semanticsLabel: loadingSemanticsLabel,
+            ),
+          ),
           child: Text(resolvedCallbackText),
-        ).withTapBounce(enabled: callback != null),
+        ).withTapBounce(enabled: callback != null && !loading),
       ],
       child: content,
     );

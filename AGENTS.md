@@ -1,10 +1,5 @@
 # Axichat Development Guide
 
-**git is OFF LIMITS**
-**NEVER use the git command**
-**DO NOT use git**
-**NEVER EVER use git or 'git' or "git" or `git`**
-
 ## 🎯 PROJECT CONTEXT
 
 **Modular XMPP + SMTP messenger with NO big tech dependencies**
@@ -313,9 +308,4 @@ Examples:
 - All new popovers, dialogs, and bottom sheets must use the existing Shad/Axi styling (colors, padding, borders) and never ship with the default Material look.
 
 **After model changes:** `dart run build_runner build --delete-conflicting-outputs`
-
-**git is OFF LIMITS**
-**NEVER use the git command**
-**DO NOT use git**
-**NEVER EVER use git or 'git' or "git" or `git`**
 

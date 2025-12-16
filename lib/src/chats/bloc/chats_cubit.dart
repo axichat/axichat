@@ -207,10 +207,6 @@ class ChatsCubit extends Cubit<ChatsState> {
     required String title,
     String? nickname,
   }) async {
-    if (title.contains('+')) {
-      emit(state.copyWith(creationStatus: RequestStatus.failure));
-      return;
-    }
     emit(state.copyWith(creationStatus: RequestStatus.loading));
     final mucService = _chatsService as MucService;
     try {
@@ -223,6 +219,11 @@ class ChatsCubit extends Cubit<ChatsState> {
     } on Exception {
       emit(state.copyWith(creationStatus: RequestStatus.failure));
     }
+  }
+
+  void clearCreationStatus() {
+    if (state.creationStatus.isNone) return;
+    emit(state.copyWith(creationStatus: RequestStatus.none));
   }
 
   Future<void> deleteChat({required String jid}) async {

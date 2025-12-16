@@ -178,6 +178,7 @@ mixin MucService on XmppBase, BaseStreamService {
           nickname: nickname,
           maxHistoryStanzas: maxHistoryStanzas,
         );
+        _seedSelfOccupant(roomJid: roomJid, nickname: nickname);
         return;
       }
       await manager.joinRoom(
@@ -185,9 +186,29 @@ mixin MucService on XmppBase, BaseStreamService {
         nickname,
         maxHistoryStanzas: maxHistoryStanzas,
       );
+      _seedSelfOccupant(roomJid: roomJid, nickname: nickname);
       return;
     }
     throw XmppMessageException();
+  }
+
+  void _seedSelfOccupant({
+    required String roomJid,
+    required String nickname,
+  }) {
+    final bareRoomJid = _roomKey(roomJid);
+    final occupantId = _resolveOccupantId(
+      occupantId: null,
+      roomJid: bareRoomJid,
+      nick: nickname,
+    );
+    if (occupantId == null) return;
+    _upsertOccupant(
+      roomJid: bareRoomJid,
+      occupantId: occupantId,
+      nick: nickname,
+      isPresent: true,
+    );
   }
 
   Future<void> ensureJoined({

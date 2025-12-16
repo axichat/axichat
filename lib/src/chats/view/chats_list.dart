@@ -12,7 +12,9 @@ import 'package:axichat/src/chats/view/calendar_tile.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
@@ -40,142 +42,165 @@ class ChatsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
-      selector: (state) {
-        final items = state.items;
-        if (items == null) return null;
-        return items.where((chat) => !chat.archived && !chat.spam).toList();
-      },
-      builder: (context, items) {
-        Widget child;
-        if (items == null) {
-          child = KeyedSubtree(
-            key: const ValueKey('chats-loading'),
-            child: Center(
-              child: AxiProgressIndicator(
-                color: context.colorScheme.foreground,
-              ),
-            ),
+    final showToast = ShadToaster.maybeOf(context)?.show;
+    const creationSuccessMessage = 'Group chat created.';
+    const creationFailureMessage = 'Could not create group chat.';
+    return BlocListener<ChatsCubit, ChatsState>(
+      listenWhen: (previous, current) =>
+          previous.creationStatus != current.creationStatus,
+      listener: (context, state) {
+        if (showToast == null) return;
+        if (state.creationStatus.isSuccess) {
+          showToast(
+            FeedbackToast.success(message: creationSuccessMessage),
           );
-        } else {
-          child = BlocBuilder<HomeSearchCubit, HomeSearchState>(
-            builder: (context, searchState) {
-              final tabState = searchState.stateFor(HomeTab.chats);
-              final query =
-                  searchState.active ? tabState.query.trim().toLowerCase() : '';
-              final filterId = tabState.filterId;
-              final sortOrder = tabState.sort;
-              return BlocBuilder<RosterCubit, RosterState>(
-                builder: (context, rosterState) {
-                  final rosterContacts = rosterState is RosterAvailable
-                      ? (rosterState.items ?? const <RosterItem>[])
-                          .map((item) => item.jid)
-                          .toSet()
-                      : const <String>{};
-                  final includeCalendarShortcut =
-                      showCalendarShortcut && calendarAvailable;
-
-                  var visibleItems = items
-                      .where(
-                        (chat) => _chatMatchesFilter(
-                          chat,
-                          filterId,
-                          rosterContacts,
-                        ),
-                      )
-                      .toList();
-
-                  if (query.isNotEmpty) {
-                    visibleItems = visibleItems
-                        .where((chat) => _chatMatchesQuery(chat, query))
-                        .toList();
-                  }
-
-                  visibleItems.sort(
-                    (a, b) => sortOrder.isNewestFirst
-                        ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
-                        : a.lastChangeTimestamp
-                            .compareTo(b.lastChangeTimestamp),
-                  );
-
-                  Widget body;
-                  if (visibleItems.isEmpty) {
-                    body = Center(
-                      child: Text(
-                        l10n.chatsEmptyList,
-                        style: context.textTheme.muted,
-                      ),
-                    );
-                  } else {
-                    body = ColoredBox(
-                      color: context.colorScheme.background,
-                      child: ListView.builder(
-                        itemCount: visibleItems.length +
-                            (includeCalendarShortcut ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (includeCalendarShortcut && index == 0) {
-                            return ListItemPadding(
-                              child: BlocBuilder<CalendarBloc, CalendarState>(
-                                builder: (context, state) {
-                                  final currentTask =
-                                      state.currentTaskAt(DateTime.now());
-                                  return CalendarTile(
-                                    onTap: () => context
-                                        .read<ChatsCubit>()
-                                        .toggleCalendar(),
-                                    currentTask: currentTask,
-                                    nextTask: state.nextTask,
-                                    dueReminderCount:
-                                        state.dueReminders?.length ?? 0,
-                                  );
-                                },
-                              ),
-                            );
-                          }
-
-                          final offset = includeCalendarShortcut ? 1 : 0;
-                          final item = visibleItems[index - offset];
-                          return ListItemPadding(
-                            child: ChatListTile(item: item),
-                          );
-                        },
-                      ),
-                    );
-                  }
-
-                  return KeyedSubtree(
-                    key: const ValueKey('chats-loaded'),
-                    child: body,
-                  );
-                },
-              );
-            },
+          context.read<ChatsCubit>().clearCreationStatus();
+        } else if (state.creationStatus.isFailure) {
+          showToast(
+            FeedbackToast.error(message: creationFailureMessage),
           );
+          context.read<ChatsCubit>().clearCreationStatus();
         }
-
-        return AnimatedSwitcher(
-          duration: context.watch<SettingsCubit>().animationDuration,
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (widget, animation) {
-            final offsetAnimation = Tween<Offset>(
-              begin: const Offset(0, 0.08),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            ));
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: offsetAnimation,
-                child: widget,
+      },
+      child: BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
+        selector: (state) {
+          final items = state.items;
+          if (items == null) return null;
+          return items.where((chat) => !chat.archived && !chat.spam).toList();
+        },
+        builder: (context, items) {
+          Widget child;
+          if (items == null) {
+            child = KeyedSubtree(
+              key: const ValueKey('chats-loading'),
+              child: Center(
+                child: AxiProgressIndicator(
+                  color: context.colorScheme.foreground,
+                ),
               ),
             );
-          },
-          child: child,
-        );
-      },
+          } else {
+            child = BlocBuilder<HomeSearchCubit, HomeSearchState>(
+              builder: (context, searchState) {
+                final tabState = searchState.stateFor(HomeTab.chats);
+                final query = searchState.active
+                    ? tabState.query.trim().toLowerCase()
+                    : '';
+                final filterId = tabState.filterId;
+                final sortOrder = tabState.sort;
+                return BlocBuilder<RosterCubit, RosterState>(
+                  builder: (context, rosterState) {
+                    final rosterContacts = rosterState is RosterAvailable
+                        ? (rosterState.items ?? const <RosterItem>[])
+                            .map((item) => item.jid)
+                            .toSet()
+                        : const <String>{};
+                    final includeCalendarShortcut =
+                        showCalendarShortcut && calendarAvailable;
+
+                    var visibleItems = items
+                        .where(
+                          (chat) => _chatMatchesFilter(
+                            chat,
+                            filterId,
+                            rosterContacts,
+                          ),
+                        )
+                        .toList();
+
+                    if (query.isNotEmpty) {
+                      visibleItems = visibleItems
+                          .where((chat) => _chatMatchesQuery(chat, query))
+                          .toList();
+                    }
+
+                    visibleItems.sort(
+                      (a, b) => sortOrder.isNewestFirst
+                          ? b.lastChangeTimestamp
+                              .compareTo(a.lastChangeTimestamp)
+                          : a.lastChangeTimestamp
+                              .compareTo(b.lastChangeTimestamp),
+                    );
+
+                    Widget body;
+                    if (visibleItems.isEmpty) {
+                      body = Center(
+                        child: Text(
+                          l10n.chatsEmptyList,
+                          style: context.textTheme.muted,
+                        ),
+                      );
+                    } else {
+                      body = ColoredBox(
+                        color: context.colorScheme.background,
+                        child: ListView.builder(
+                          itemCount: visibleItems.length +
+                              (includeCalendarShortcut ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (includeCalendarShortcut && index == 0) {
+                              return ListItemPadding(
+                                child: BlocBuilder<CalendarBloc, CalendarState>(
+                                  builder: (context, state) {
+                                    final currentTask =
+                                        state.currentTaskAt(DateTime.now());
+                                    return CalendarTile(
+                                      onTap: () => context
+                                          .read<ChatsCubit>()
+                                          .toggleCalendar(),
+                                      currentTask: currentTask,
+                                      nextTask: state.nextTask,
+                                      dueReminderCount:
+                                          state.dueReminders?.length ?? 0,
+                                    );
+                                  },
+                                ),
+                              );
+                            }
+
+                            final offset = includeCalendarShortcut ? 1 : 0;
+                            final item = visibleItems[index - offset];
+                            return ListItemPadding(
+                              child: ChatListTile(item: item),
+                            );
+                          },
+                        ),
+                      );
+                    }
+
+                    return KeyedSubtree(
+                      key: const ValueKey('chats-loaded'),
+                      child: body,
+                    );
+                  },
+                );
+              },
+            );
+          }
+
+          return AnimatedSwitcher(
+            duration: context.watch<SettingsCubit>().animationDuration,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (widget, animation) {
+              final offsetAnimation = Tween<Offset>(
+                begin: const Offset(0, 0.08),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ));
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: offsetAnimation,
+                  child: widget,
+                ),
+              );
+            },
+            child: child,
+          );
+        },
+      ),
     );
   }
 }
