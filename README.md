@@ -23,36 +23,44 @@
 
 ## Screenshots
 
-<p align="center">
-  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="320" alt="Axichat mobile chat screenshot" />
-  </a><!--
-  --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="320" alt="Axichat mobile email screenshot" />
-  </a>
-  <br />
-  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="320" alt="Axichat mobile calendar screenshot" />
-  </a><!--
-  --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="320" alt="Axichat mobile calendar alt screenshot" />
-  </a>
-</p>
+<div align="center">
+  <div>
+    <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
+      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="320" alt="Axichat mobile chat screenshot" />
+    </a>&nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
+      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="320" alt="Axichat mobile email screenshot" />
+    </a>
+  </div>
+  <div>
+    <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png">
+      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="320" alt="Axichat mobile calendar screenshot" />
+    </a>&nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
+      <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="320" alt="Axichat mobile calendar alt screenshot" />
+    </a>
+  </div>
+</div>
 
-<p align="center">
-  <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="980" alt="Axichat desktop screenshot 1" />
-  </a>
-  <br />
-  <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="980" alt="Axichat desktop screenshot 2" />
-  </a>
-  <br />
-  <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="980" alt="Axichat calendar screenshot" />
-  </a>
-</p>
-<br clear="all" />
+<br />
+
+<div align="center">
+  <div>
+    <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png">
+      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="680" alt="Axichat desktop screenshot 1" />
+    </a>
+  </div>
+  <div>
+    <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png">
+      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="680" alt="Axichat desktop screenshot 2" />
+    </a>
+  </div>
+  <div>
+    <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png">
+      <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="680" alt="Axichat calendar screenshot" />
+    </a>
+  </div>
+</div>
 <br />
 <hr />
 <br />
