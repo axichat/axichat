@@ -2882,6 +2882,10 @@ class _ChatState extends State<Chat> {
                                       final inviteRoom =
                                           e.pseudoMessageData?['roomJid']
                                               as String?;
+                                      final inviteRoomName =
+                                          (e.pseudoMessageData?['roomName']
+                                                  as String?)
+                                              ?.trim();
                                       final invitee =
                                           e.pseudoMessageData?['invitee']
                                               as String?;
@@ -2890,6 +2894,15 @@ class _ChatState extends State<Chat> {
                                       final isInviteRevocation = e
                                               .pseudoMessageType ==
                                           PseudoMessageType.mucInviteRevocation;
+                                      const unknownRoomFallbackLabel =
+                                          'group chat';
+                                      final resolvedInviteRoomName =
+                                          inviteRoomName?.isNotEmpty == true
+                                              ? inviteRoomName!
+                                              : unknownRoomFallbackLabel;
+                                      final inviteLabel = isInvite
+                                          ? 'You have been invited to $resolvedInviteRoomName'
+                                          : 'Invite revoked for $resolvedInviteRoomName';
                                       final inviteRevoked =
                                           inviteToken != null &&
                                               revokedInviteTokens
@@ -2950,10 +2963,10 @@ class _ChatState extends State<Chat> {
                                         return MessageStatus.pending;
                                       }
 
-                                      final shouldHideInviteBody =
+                                      final shouldReplaceInviteBody =
                                           isInvite || isInviteRevocation;
-                                      final renderedText = shouldHideInviteBody
-                                          ? ''
+                                      final renderedText = shouldReplaceInviteBody
+                                          ? inviteLabel
                                           : e.error.isNotNone
                                               ? '$errorLabel${bodyText.isNotEmpty ? ': "$bodyTextTrimmed"' : ''}'
                                               : displayedBody;
@@ -2986,12 +2999,14 @@ class _ChatState extends State<Chat> {
                                             'subjectLabel': subjectLabel,
                                             'isEmailMessage': isEmailMessage,
                                             'inviteRoom': inviteRoom,
+                                            'inviteRoomName': inviteRoomName,
                                             'inviteToken': inviteToken,
                                             'inviteRevoked': inviteRevoked,
                                             'invitee': invitee,
                                             'isInvite': isInvite,
                                             'isInviteRevocation':
                                                 isInviteRevocation,
+                                            'inviteLabel': inviteLabel,
                                           },
                                         ),
                                       );
@@ -3626,37 +3641,11 @@ class _ChatState extends State<Chat> {
                                                           ]);
                                                         } else if (isInviteMessage ||
                                                             isInviteRevocationMessage) {
-                                                          final inviteRoomJid = (message
-                                                                          .customProperties?[
-                                                                      'inviteRoom']
-                                                                  as String?) ??
-                                                              (messageModel
-                                                                          .pseudoMessageData?[
-                                                                      'roomJid']
-                                                                  as String?);
-                                                          final inviteRoomName =
-                                                              (messageModel.pseudoMessageData?[
-                                                                          'roomName']
-                                                                      as String?)
-                                                                  ?.trim();
-                                                          final resolvedRoomName = (inviteRoomName
-                                                                      ?.isNotEmpty ==
-                                                                  true)
-                                                              ? inviteRoomName!
-                                                              : inviteRoomJid ==
-                                                                          null ||
-                                                                      inviteRoomJid
-                                                                          .trim()
-                                                                          .isEmpty
-                                                                  ? context.l10n
-                                                                      .chatInvite
-                                                                  : mox.JID
-                                                                      .fromString(
-                                                                        inviteRoomJid,
-                                                                      )
-                                                                      .local;
                                                           final inviteLabel =
-                                                              'You have been invited to $resolvedRoomName';
+                                                              (message.customProperties?[
+                                                                          'inviteLabel']
+                                                                      as String?) ??
+                                                                  message.text;
                                                           bubbleChildren.add(
                                                             DynamicInlineText(
                                                               key: ValueKey(
@@ -5240,9 +5229,9 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatInviteWrongAccount);
       return;
     }
-    final resolvedRoomName = roomName?.isNotEmpty == true
-        ? roomName!
-        : mox.JID.fromString(roomJid).local;
+    const unknownRoomFallbackLabel = 'group chat';
+    final resolvedRoomName =
+        roomName?.isNotEmpty == true ? roomName! : unknownRoomFallbackLabel;
     const inviteConfirmTitle = 'Accept invite?';
     final inviteConfirmMessage = 'Join $resolvedRoomName?';
     const inviteConfirmLabel = 'Accept';
