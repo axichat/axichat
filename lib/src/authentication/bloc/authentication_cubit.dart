@@ -371,6 +371,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!_endpointConfig.enableXmpp) {
       return;
     }
+    if (withForeground && foregroundServiceActive.value) {
+      try {
+        await _xmppService.ensureForegroundSocketIfActive();
+      } on Exception {
+        // Ignore: fallback reconnect logic below handles ensuring online state.
+      }
+    }
     if (_xmppService.connected) {
       return;
     }
