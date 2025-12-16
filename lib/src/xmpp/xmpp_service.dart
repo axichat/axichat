@@ -569,6 +569,7 @@ class XmppService extends XmppBase
   var _streamResumptionAttempted = false;
   var _connectionPasswordPreHashed = false;
   DateTime? _lastForegroundSocketMigrationAttempt;
+  Timer? _foregroundSocketMigrationTimer;
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
   SecretKey? _avatarEncryptionKey;
@@ -631,7 +632,7 @@ class XmppService extends XmppBase
             _foregroundServiceNotificationSent = true;
           }
 
-          return await _establishConnection(
+          final saltedPassword = await _establishConnection(
             connectionOverride: XmppConnection(),
             jid: jid,
             password: password,
@@ -640,7 +641,31 @@ class XmppService extends XmppBase
             preHashed: preHashed,
             endpoint: endpoint,
           );
+          _scheduleForegroundSocketMigration();
+          return saltedPassword;
         }
+      },
+    );
+  }
+
+  static const _foregroundSocketMigrationDelay = Duration(seconds: 3);
+  static const _foregroundSocketMigrationCooldown = Duration(seconds: 30);
+  static const _foregroundSocketWarmupClientId =
+      '${foregroundClientXmpp}_warmup';
+
+  void _scheduleForegroundSocketMigration() {
+    if (!withForeground) {
+      return;
+    }
+    if (!foregroundServiceActive.value) {
+      return;
+    }
+    _foregroundSocketMigrationTimer?.cancel();
+    _foregroundSocketMigrationTimer = Timer(
+      _foregroundSocketMigrationDelay,
+      () {
+        _foregroundSocketMigrationTimer = null;
+        unawaited(ensureForegroundSocketIfActive());
       },
     );
   }
@@ -1508,10 +1533,10 @@ class XmppService extends XmppBase
       return;
     }
 
-    const cooldown = Duration(seconds: 30);
     final lastAttempt = _lastForegroundSocketMigrationAttempt;
     final now = DateTime.now();
-    if (lastAttempt != null && now.difference(lastAttempt) < cooldown) {
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _foregroundSocketMigrationCooldown) {
       return;
     }
     _lastForegroundSocketMigrationAttempt = now;
@@ -1520,10 +1545,25 @@ class XmppService extends XmppBase
     final existingJid = existingSettings.jid.toBare();
     final existingPassword = existingSettings.password;
 
-    _xmppLogger.info('Migrating XMPP connection to foreground socket.');
+    var warmupAcquired = false;
+    try {
+      await foregroundTaskBridge.acquire(
+        clientId: _foregroundSocketWarmupClientId,
+        config: buildForegroundServiceConfig(
+          notificationText: toBeginningOfSentenceCase(
+                ConnectionState.connecting.name,
+              ) ??
+              ConnectionState.connecting.name,
+        ),
+      );
+      warmupAcquired = true;
+    } on Exception {
+      return;
+    }
 
     final XmppConnection oldConnection = _connection;
     try {
+      _xmppLogger.info('Migrating XMPP connection to foreground socket.');
       await _eventSubscription?.cancel();
       _eventSubscription = null;
 
@@ -1587,6 +1627,8 @@ class XmppService extends XmppBase
 
       await _connection.setShouldReconnect(true);
       _xmppLogger.info('Foreground socket migration completed.');
+      _foregroundSocketMigrationTimer?.cancel();
+      _foregroundSocketMigrationTimer = null;
     } on Exception catch (error, stackTrace) {
       _xmppLogger.warning(
         'Foreground socket migration failed; reconnecting on direct socket.',
@@ -1621,6 +1663,18 @@ class XmppService extends XmppBase
         throw XmppAuthenticationException();
       }
       await _connection.setShouldReconnect(true);
+    } finally {
+      if (warmupAcquired) {
+        try {
+          await foregroundTaskBridge.release(_foregroundSocketWarmupClientId);
+        } on Exception catch (error, stackTrace) {
+          _xmppLogger.finer(
+            'Failed to release foreground warmup lease.',
+            error,
+            stackTrace,
+          );
+        }
+      }
     }
   }
 
@@ -1629,6 +1683,8 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
+    _foregroundSocketMigrationTimer?.cancel();
+    _foregroundSocketMigrationTimer = null;
     _demoSeedAttempted = false;
     _demoOfflineMode = false;
     _resetStableKeyCache();
