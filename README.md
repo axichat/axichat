@@ -1,7 +1,6 @@
-<h1>
-  <img src="assets/icons/generated/app_icon_android_foreground.png" width="88" alt="Axichat icon" align="absmiddle" />&nbsp;
-  <big><big><big><big>Axichat</big></big></big></big>
-</h1>
+<div align="center">
+  <img src="/metadata/en-US/images/axichat_banner.png" width="800" alt="Axichat banner" />
+</div>
 
 <hr />
 
