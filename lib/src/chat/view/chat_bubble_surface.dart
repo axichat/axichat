@@ -613,14 +613,20 @@ class RenderChatBubbleSurface extends RenderBox
       canvas.drawPath(path, strokePaint);
     }
 
-    canvas.save();
-    canvas.clipPath(path);
     final body = _bodyChild;
     if (body != null) {
       final bodyParentData = body.parentData as _ChatBubbleParentData;
-      context.paintChild(body, offset + bodyParentData.offset);
+      context.pushClipPath(
+        needsCompositing,
+        offset,
+        Offset.zero & size,
+        localPath,
+        (context, clipOffset) {
+          context.paintChild(body, clipOffset + bodyParentData.offset);
+        },
+        clipBehavior: Clip.antiAlias,
+      );
     }
-    canvas.restore();
 
     _paintAttachments(context, offset);
   }
