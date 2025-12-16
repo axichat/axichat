@@ -389,6 +389,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       return;
     }
     _emitIfOpen(state.copyWith(publishing: true, clearError: true));
+    await Future<void>.delayed(Duration.zero);
+    if (isClosed) return;
     try {
       final result = await _xmppService.publishAvatar(draft);
       _profileCubit?.updateAvatar(
