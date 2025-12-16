@@ -417,12 +417,29 @@ class ScheduleParser {
 
     tz.TZDateTime? start;
     bool allDay = false;
+    var inferredTimeFromDateOnly = false;
 
     if (best != null) {
       final parsed = best.date(); // UTC
       var local = tz.TZDateTime.from(parsed, opts.tzLocation);
       final hasTime = best.start.isCertain(Component.hour);
       allDay = !hasTime;
+      if (!hasTime) {
+        local = tz.TZDateTime(
+          opts.tzLocation,
+          local.year,
+          local.month,
+          local.day,
+          opts.policy.defaultMorningHour,
+        );
+        allDay = false;
+        inferredTimeFromDateOnly = true;
+        flags.add(AmbiguityFlag.noTimeGiven);
+        assumptions.add(
+          'No explicit time; defaulted to ${_hhmm(opts.policy.defaultMorningHour)}.',
+        );
+        confidence -= 0.1;
+      }
 
       // Strict "next <weekday>"
       if (opts.policy.strictNextWeekday &&
@@ -768,6 +785,8 @@ class ScheduleParser {
     } else if (allDay) {
       flags.add(AmbiguityFlag.noTimeGiven);
       confidence -= 0.1;
+    } else if (inferredTimeFromDateOnly) {
+      flags.add(AmbiguityFlag.noTimeGiven);
     }
     if (normal.correctedTypos) {
       flags.add(AmbiguityFlag.typosCorrected);
