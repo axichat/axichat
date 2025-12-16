@@ -111,6 +111,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           lifeCycleState == AppLifecycleState.resumed ||
               lifeCycleState == AppLifecycleState.inactive,
         );
+        if (_stickyAuthActive &&
+            _endpointConfig.enableXmpp &&
+            foregroundServiceActive.value) {
+          unawaited(_xmppService.ensureForegroundSocketIfActive());
+        }
       },
     );
     _connectivitySubscription =
@@ -123,9 +128,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         unawaited(_emailService?.handleNetworkLost());
       }
     });
+    _foregroundListener = _handleForegroundServiceActiveChanged;
+    foregroundServiceActive.addListener(_foregroundListener!);
     if (_emailService != null) {
-      _foregroundListener = _updateEmailForegroundKeepalive;
-      foregroundServiceActive.addListener(_foregroundListener!);
       _emailAuthFailureSubscription =
           _emailService.authFailureStream.listen(_handleEmailAuthFailure);
     }
@@ -403,6 +408,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     await login(rememberMe: remember);
+  }
+
+  void _handleForegroundServiceActiveChanged() {
+    _updateEmailForegroundKeepalive();
+    if (!_endpointConfig.enableXmpp || !_stickyAuthActive) {
+      return;
+    }
+    if (!withForeground || !foregroundServiceActive.value) {
+      return;
+    }
+    unawaited(_xmppService.ensureForegroundSocketIfActive());
   }
 
   Future<bool> hasStoredLoginCredentials() async {
