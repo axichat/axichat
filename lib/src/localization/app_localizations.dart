@@ -1973,6 +1973,12 @@ abstract class AppLocalizations {
   /// **'We publish the avatar when your XMPP account is created.'**
   String get signupAvatarMenuDescription;
 
+  /// No description provided for @avatarSaveAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Save avatar'**
+  String get avatarSaveAvatar;
+
   /// No description provided for @signupAvatarBackgroundColor.
   ///
   /// In en, this message translates to:
@@ -2779,12 +2785,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Save'**
   String get commonSave;
-
-  /// No description provided for @avatarSaveAvatar.
-  ///
-  /// In en, this message translates to:
-  /// **'Save avatar'**
-  String get avatarSaveAvatar;
 
   /// No description provided for @commonRetry.
   ///

@@ -2950,9 +2950,13 @@ class _ChatState extends State<Chat> {
                                         return MessageStatus.pending;
                                       }
 
-                                      final renderedText = e.error.isNotNone
-                                          ? '$errorLabel${bodyText.isNotEmpty ? ': "$bodyTextTrimmed"' : ''}'
-                                          : displayedBody;
+                                      final shouldHideInviteBody =
+                                          isInvite || isInviteRevocation;
+                                      final renderedText = shouldHideInviteBody
+                                          ? ''
+                                          : e.error.isNotNone
+                                              ? '$errorLabel${bodyText.isNotEmpty ? ': "$bodyTextTrimmed"' : ''}'
+                                              : displayedBody;
                                       dashMessages.add(
                                         ChatMessage(
                                           user: author,
@@ -3485,9 +3489,6 @@ class _ChatState extends State<Chat> {
                                                                         'inviteRevoked']
                                                                     as bool?) ??
                                                                 false;
-                                                        final hasInviteBadge =
-                                                            isInviteMessage ||
-                                                                isInviteRevocationMessage;
                                                         final showRecipientCutout =
                                                             !showCompactReactions &&
                                                                 isEmailChat &&
@@ -3507,31 +3508,7 @@ class _ChatState extends State<Chat> {
                                                         var avatarAnchor =
                                                             ChatBubbleCutoutAnchor
                                                                 .left;
-                                                        if (hasInviteBadge &&
-                                                            !showCompactReactions) {
-                                                          recipientOverlay =
-                                                              _InviteBadge(
-                                                            text: inviteRevoked ||
-                                                                    isInviteRevocationMessage
-                                                                ? context.l10n
-                                                                    .chatInviteRevoked
-                                                                : context.l10n
-                                                                    .chatInvite,
-                                                          );
-                                                          recipientStyle =
-                                                              const CutoutStyle(
-                                                            depth:
-                                                                _recipientCutoutDepth,
-                                                            cornerRadius:
-                                                                _recipientCutoutRadius,
-                                                            padding:
-                                                                _recipientCutoutPadding,
-                                                            offset:
-                                                                _recipientCutoutOffset,
-                                                            minThickness:
-                                                                _recipientCutoutMinThickness,
-                                                          );
-                                                        } else if (showRecipientCutout) {
+                                                        if (showRecipientCutout) {
                                                           recipientOverlay =
                                                               _RecipientCutoutStrip(
                                                             recipients:
@@ -3647,6 +3624,71 @@ class _ChatState extends State<Chat> {
                                                                   _handleLinkTap,
                                                             ),
                                                           ]);
+                                                        } else if (isInviteMessage ||
+                                                            isInviteRevocationMessage) {
+                                                          final inviteRoomJid = (message
+                                                                          .customProperties?[
+                                                                      'inviteRoom']
+                                                                  as String?) ??
+                                                              (messageModel
+                                                                          .pseudoMessageData?[
+                                                                      'roomJid']
+                                                                  as String?);
+                                                          final inviteRoomName =
+                                                              (messageModel.pseudoMessageData?[
+                                                                          'roomName']
+                                                                      as String?)
+                                                                  ?.trim();
+                                                          final resolvedRoomName = (inviteRoomName
+                                                                      ?.isNotEmpty ==
+                                                                  true)
+                                                              ? inviteRoomName!
+                                                              : inviteRoomJid ==
+                                                                          null ||
+                                                                      inviteRoomJid
+                                                                          .trim()
+                                                                          .isEmpty
+                                                                  ? context.l10n
+                                                                      .chatInvite
+                                                                  : mox.JID
+                                                                      .fromString(
+                                                                        inviteRoomJid,
+                                                                      )
+                                                                      .local;
+                                                          final inviteLabel =
+                                                              'You have been invited to $resolvedRoomName';
+                                                          bubbleChildren.add(
+                                                            DynamicInlineText(
+                                                              key: ValueKey(
+                                                                bubbleContentKey,
+                                                              ),
+                                                              text: TextSpan(
+                                                                text:
+                                                                    inviteLabel,
+                                                                style:
+                                                                    baseTextStyle,
+                                                              ),
+                                                              details: [time],
+                                                              onLinkTap:
+                                                                  _handleLinkTap,
+                                                            ),
+                                                          );
+                                                          bubbleChildren.add(
+                                                            const SizedBox(
+                                                              height: 8,
+                                                            ),
+                                                          );
+                                                          bubbleChildren.add(
+                                                            _InviteActionCard(
+                                                              enabled:
+                                                                  !inviteRevoked &&
+                                                                      !isInviteRevocationMessage,
+                                                              onPressed: () =>
+                                                                  _handleInviteTap(
+                                                                messageModel,
+                                                              ),
+                                                            ),
+                                                          );
                                                         } else {
                                                           final subjectLabel =
                                                               (message.customProperties?[
@@ -5182,6 +5224,7 @@ class _ChatState extends State<Chat> {
     final l10n = context.l10n;
     final data = message.pseudoMessageData ?? const {};
     final roomJid = data['roomJid'] as String?;
+    final roomName = (data['roomName'] as String?)?.trim();
     final invitee = data['invitee'] as String?;
     if (roomJid == null) return;
     final myJid = context.read<XmppService>().myJid;
@@ -5197,6 +5240,20 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatInviteWrongAccount);
       return;
     }
+    final resolvedRoomName = roomName?.isNotEmpty == true
+        ? roomName!
+        : mox.JID.fromString(roomJid).local;
+    const inviteConfirmTitle = 'Accept invite?';
+    final inviteConfirmMessage = 'Join $resolvedRoomName?';
+    const inviteConfirmLabel = 'Accept';
+    final accepted = await confirm(
+      context,
+      title: inviteConfirmTitle,
+      message: inviteConfirmMessage,
+      confirmLabel: inviteConfirmLabel,
+      destructiveConfirm: false,
+    );
+    if (!mounted || accepted != true) return;
     context.read<ChatBloc>().add(ChatInviteJoinRequested(message));
     if (context.read<ChatsCubit?>() != null) {
       await context.read<ChatsCubit>().openChat(jid: roomJid);
@@ -6261,26 +6318,60 @@ class _TypingAvatar extends StatelessWidget {
   }
 }
 
-class _InviteBadge extends StatelessWidget {
-  const _InviteBadge({required this.text});
+class _InviteActionCard extends StatelessWidget {
+  const _InviteActionCard({
+    required this.enabled,
+    required this.onPressed,
+  });
 
-  final String text;
+  final bool enabled;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    const inviteActionLabel = 'Accept invite';
+    const inviteActionTooltip = 'Accept invite';
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.primary,
-        borderRadius: BorderRadius.circular(999),
+        color: colors.card,
+        borderRadius: context.radius,
+        border: Border.all(color: colors.border),
       ),
-      child: Text(
-        text,
-        style: context.textTheme.small.copyWith(
-          color: colors.primaryForeground,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 42,
+              height: 46,
+              child: Center(
+                child: Icon(
+                  LucideIcons.userPlus,
+                  size: 20,
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                inviteActionLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.small.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: enabled ? colors.foreground : colors.mutedForeground,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            AxiIconButton(
+              iconData: LucideIcons.check,
+              tooltip: inviteActionTooltip,
+              onPressed: enabled ? onPressed : null,
+            ),
+          ],
         ),
       ),
     );
