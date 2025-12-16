@@ -25,7 +25,7 @@
 
 <div align="center">
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="720" alt="Axichat desktop screenshot 1" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="740" alt="Axichat desktop screenshot 1" />
   </a>
 </div>
 
@@ -41,7 +41,7 @@
 
 <div align="center">
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="720" alt="Axichat desktop screenshot 2" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="740" alt="Axichat desktop screenshot 2" />
   </a>
 </div>
 
@@ -57,7 +57,7 @@
 
 <div align="center">
   <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="720" alt="Axichat calendar screenshot" />
+    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="740" alt="Axichat calendar screenshot" />
   </a>
 </div>
 <br />
