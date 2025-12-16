@@ -38,6 +38,7 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
