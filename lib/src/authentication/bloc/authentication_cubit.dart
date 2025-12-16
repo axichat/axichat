@@ -351,9 +351,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     if (_stickyAuthActive) {
-      if (_endpointConfig.enableXmpp) {
-        unawaited(_xmppService.triggerImmediateReconnect());
-      }
+      unawaited(_reconnectXmppForStickySession());
       return;
     }
 
@@ -367,6 +365,32 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     await login();
+  }
+
+  Future<void> _reconnectXmppForStickySession() async {
+    if (!_endpointConfig.enableXmpp) {
+      return;
+    }
+    if (_xmppService.connected) {
+      return;
+    }
+
+    await _xmppService.triggerImmediateReconnect();
+    if (_xmppService.connected) {
+      return;
+    }
+
+    final remember = await loadRememberMeChoice();
+    if (!remember) {
+      return;
+    }
+
+    final storedLogin = await _readStoredLoginCredentials();
+    if (!storedLogin.hasUsableCredentials) {
+      return;
+    }
+
+    await login(rememberMe: remember);
   }
 
   Future<bool> hasStoredLoginCredentials() async {

@@ -755,6 +755,8 @@ class XmppService extends XmppBase
       throw XmppAuthenticationException();
     }
 
+    await _connection.setShouldReconnect(true);
+
     await _messageSubscription?.cancel();
     _messageSubscription = _messageStream.stream.listen(
       (message) async {
