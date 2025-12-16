@@ -54,3 +54,4 @@ app.*.map.json
 chatmail/core/.git/
 chatmail/core/build/
 chatmail/core/target/
+/dist/
