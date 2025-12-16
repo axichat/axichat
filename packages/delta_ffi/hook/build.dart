@@ -134,6 +134,10 @@ Map<String, String> _cargoEnvForTarget({
     if (codeConfig.targetOS == OS.android) {
       final androidConfig = codeConfig.android;
       final ndkApi = androidConfig.targetNdkApi;
+      // TODO: check this conditional depending on the OS you're building ON, not FOR.
+      if (triple == _rustTargetTriple(OS.android, Architecture.arm)) {
+        triple = 'armv7a-linux-androideabi';
+      }
       final targetPrefix = '$triple$ndkApi';
       final targetClang = _toolchainBinary(toolchainDir, '$targetPrefix-clang');
       final targetClangxx =
