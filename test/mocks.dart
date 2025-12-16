@@ -158,6 +158,7 @@ void prepareMockConnection() {
   when(() => mockConnection.registerManagers(any())).thenAnswer((_) async {});
 
   when(() => mockConnection.loadStreamState()).thenAnswer((_) async {});
+  when(() => mockConnection.setShouldReconnect(any())).thenAnswer((_) async {});
   when(() => mockConnection.setUserAgent(any())).thenAnswer((_) {});
   when(() => mockConnection.setFastToken(any())).thenAnswer((_) {});
 
