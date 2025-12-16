@@ -1,5 +1,8 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
+String _base64EncodeAvatarPublishPayload(Uint8List bytes) =>
+    base64Encode(bytes);
+
 class AvatarUploadPayload {
   const AvatarUploadPayload({
     required this.bytes,
@@ -693,9 +696,13 @@ mixin AvatarService on XmppBase {
       sendLastPublishedItem: sendLastPublishedItemOnSubscribe,
     );
 
+    final encodedData = await compute(
+      _base64EncodeAvatarPublishPayload,
+      payload.bytes,
+    );
     final dataPayload =
         (mox.XmlBuilder.withNamespace('data', mox.userAvatarDataXmlns)
-              ..text(base64Encode(payload.bytes)))
+              ..text(encodedData))
             .build();
     final metadataPayload =
         (mox.XmlBuilder.withNamespace('metadata', mox.userAvatarMetadataXmlns)
@@ -796,8 +803,32 @@ mixin AvatarService on XmppBase {
       return false;
     }
 
-    await publishData();
-    await publishMetadata();
+    Future<void> publishOrVerifyOnTimeout({
+      required Future<void> Function() publish,
+      required String node,
+      required String expectedTag,
+    }) async {
+      try {
+        await publish();
+      } on TimeoutException {
+        final stored = await waitForStoredItem(
+          node: node,
+          expectedTag: expectedTag,
+        );
+        if (!stored) rethrow;
+      }
+    }
+
+    await publishOrVerifyOnTimeout(
+      publish: publishData,
+      node: mox.userAvatarDataXmlns,
+      expectedTag: avatarDataTag,
+    );
+    await publishOrVerifyOnTimeout(
+      publish: publishMetadata,
+      node: mox.userAvatarMetadataXmlns,
+      expectedTag: avatarMetadataTag,
+    );
 
     final metadataStored = await waitForStoredItem(
       node: mox.userAvatarMetadataXmlns,

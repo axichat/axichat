@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart' show compute;
 import 'package:image/image.dart' as img;
@@ -16,6 +17,11 @@ Future<AvatarPreparedSource> prepareAvatarSource(
     compute(_prepareAvatarSource, request);
 
 ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
+  const pngCompressionLevel = 6;
+  const jpegStartQuality = 90;
+  const minDownscale = 48;
+  const downscaleFactor = 0.85;
+
   final image = img.decodeImage(request.bytes);
   if (image == null) {
     throw StateError('Invalid image bytes.');
@@ -89,40 +95,65 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
     interpolation: img.Interpolation.cubic,
   );
 
-  Uint8List? encodedBytes;
-  String? mimeType;
-
-  if (resized.numChannels == 4) {
-    final pngBytes = Uint8List.fromList(img.encodePng(resized, level: 4));
-    if (pngBytes.length <= request.maxBytes) {
-      encodedBytes = pngBytes;
-      mimeType = 'image/png';
+  ProcessedAvatar encode(img.Image candidate) {
+    if (candidate.numChannels == 4) {
+      final pngBytes = Uint8List.fromList(
+        img.encodePng(candidate, level: pngCompressionLevel),
+      );
+      if (pngBytes.length <= request.maxBytes) {
+        return ProcessedAvatar(
+          bytes: pngBytes,
+          mimeType: 'image/png',
+          width: candidate.width,
+          height: candidate.height,
+        );
+      }
     }
-  }
 
-  if (encodedBytes == null) {
-    var quality = 90;
+    var quality = jpegStartQuality;
     Uint8List jpgBytes = Uint8List.fromList(
-      img.encodeJpg(resized, quality: quality),
+      img.encodeJpg(candidate, quality: quality),
     );
     while (jpgBytes.length > request.maxBytes &&
         quality > request.minJpegQuality) {
-      quality =
-          (quality - request.qualityStep).clamp(request.minJpegQuality, 90);
+      quality = (quality - request.qualityStep).clamp(
+        request.minJpegQuality,
+        jpegStartQuality,
+      );
       jpgBytes = Uint8List.fromList(
-        img.encodeJpg(resized, quality: quality),
+        img.encodeJpg(candidate, quality: quality),
       );
     }
-    encodedBytes = jpgBytes;
-    mimeType = 'image/jpeg';
+    return ProcessedAvatar(
+      bytes: jpgBytes,
+      mimeType: 'image/jpeg',
+      width: candidate.width,
+      height: candidate.height,
+    );
   }
 
-  return ProcessedAvatar(
-    bytes: encodedBytes,
-    mimeType: mimeType!,
-    width: resized.width,
-    height: resized.height,
-  );
+  var candidate = resized;
+  var encoded = encode(candidate);
+  var targetSize = request.targetSize;
+  final minimumSize = min(minDownscale, targetSize);
+
+  while (encoded.bytes.length > request.maxBytes && targetSize > minimumSize) {
+    final nextSize = max(
+      minimumSize,
+      (targetSize * downscaleFactor).round(),
+    );
+    if (nextSize >= targetSize) break;
+    targetSize = nextSize;
+    candidate = img.copyResize(
+      cropped,
+      width: targetSize,
+      height: targetSize,
+      interpolation: img.Interpolation.cubic,
+    );
+    encoded = encode(candidate);
+  }
+
+  return encoded;
 }
 
 AvatarPreparedSource _prepareAvatarSource(AvatarSourcePrepareRequest request) {
