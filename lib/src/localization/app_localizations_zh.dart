@@ -1033,6 +1033,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get signupAvatarMenuDescription => '创建 XMPP 账号后才会发布头像。';
 
   @override
+  String get avatarSaveAvatar => '保存头像';
+
+  @override
   String get signupAvatarBackgroundColor => '背景颜色';
 
   @override
@@ -1477,9 +1480,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonSave => '保存';
-
-  @override
-  String get avatarSaveAvatar => '保存头像';
 
   @override
   String get commonRetry => '重试';
@@ -3448,6 +3448,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get signupAvatarMenuDescription => '我們會在建立 XMPP 帳戶後發布你的頭像。';
 
   @override
+  String get avatarSaveAvatar => '儲存頭像';
+
+  @override
   String get signupAvatarBackgroundColor => '背景顏色';
 
   @override
@@ -3892,9 +3895,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get commonSave => '儲存';
-
-  @override
-  String get avatarSaveAvatar => '儲存頭像';
 
   @override
   String get commonRetry => '重試';

@@ -1076,6 +1076,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'Publicaremos el avatar cuando se cree tu cuenta XMPP.';
 
   @override
+  String get avatarSaveAvatar => 'Guardar avatar';
+
+  @override
   String get signupAvatarBackgroundColor => 'Color de fondo';
 
   @override
@@ -1540,9 +1543,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get commonSave => 'Guardar';
-
-  @override
-  String get avatarSaveAvatar => 'Guardar avatar';
 
   @override
   String get commonRetry => 'Reintentar';
