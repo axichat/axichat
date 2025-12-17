@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
-const _defaultProvisioningBaseUrl = 'https://axi.im:8787';
+const _defaultProvisioningBaseUrl = 'https://axi.im:8443';
 const _baseUrlDefineKey = 'EMAIL_PROVISIONING_BASE_URL';
 const _publicTokenDefineKey = 'EMAIL_PUBLIC_TOKEN';
 const _publicTokenPlaceholder = 'set-email-public-token';
