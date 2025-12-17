@@ -9,6 +9,8 @@ class ChatsState with _$ChatsState {
     required bool openCalendar,
     required List<Chat>? items,
     required RequestStatus creationStatus,
+    @Default(RequestStatus.none) RequestStatus refreshStatus,
+    DateTime? lastSyncedAt,
     @Default(<String>{}) Set<String> selectedJids,
   }) = _ChatsState;
 }
