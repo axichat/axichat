@@ -2989,6 +2989,7 @@ class _ChatState extends State<Chat> {
                                           customProperties: {
                                             'id': e.stanzaID,
                                             'body': bodyText,
+                                            'fileMetadataID': e.fileMetadataID,
                                             'edited': e.edited,
                                             'retracted': e.retracted,
                                             'error': e.error,
@@ -3373,11 +3374,13 @@ class _ChatState extends State<Chat> {
                                                                         .customProperties?[
                                                                     'isEmailMessage']
                                                                 as bool?) ??
-                                                            ((message.customProperties?[
-                                                                            'model']
-                                                                        as Message?)
-                                                                    ?.deltaMsgId !=
-                                                                null);
+                                                            ((message.customProperties?['id']
+                                                                            as String?)
+                                                                        case final id?
+                                                                    ? messageById[id]
+                                                                            ?.deltaMsgId !=
+                                                                        null
+                                                                    : false);
                                                         final transportIconData =
                                                             isEmailMessage
                                                                 ? LucideIcons
@@ -3429,14 +3432,78 @@ class _ChatState extends State<Chat> {
                                                         final trusted = message
                                                                 .customProperties![
                                                             'trusted'] as bool?;
-                                                        final messageModel =
-                                                            message.customProperties?[
-                                                                    'model']
-                                                                as Message?;
-                                                        if (messageModel ==
-                                                            null) {
-                                                          return const SizedBox
-                                                              .shrink();
+                                                        final messageId = message
+                                                            .customProperties?['id']
+                                                            as String?;
+                                                        final messageModel = (message
+                                                                    .customProperties?[
+                                                                'model'] as Message?) ??
+                                                            (messageId == null
+                                                                ? null
+                                                                : messageById[
+                                                                    messageId]);
+                                                        if (messageModel == null) {
+                                                          final fallbackText =
+                                                              message.text.trim();
+                                                          final resolvedFallback =
+                                                              fallbackText.isNotEmpty
+                                                                  ? fallbackText
+                                                                  : l10n
+                                                                      .chatAttachmentUnavailable;
+                                                          return Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal:
+                                                                  _chatHorizontalPadding,
+                                                              vertical: 4,
+                                                            ),
+                                                            child: Align(
+                                                              alignment: Alignment
+                                                                  .centerLeft,
+                                                              child: ConstrainedBox(
+                                                                constraints:
+                                                                    BoxConstraints(
+                                                                  maxWidth:
+                                                                      inboundMessageRowMaxWidth,
+                                                                ),
+                                                                child:
+                                                                    DecoratedBox(
+                                                                  decoration:
+                                                                      BoxDecoration(
+                                                                    color: colors
+                                                                        .card,
+                                                                    borderRadius:
+                                                                        BorderRadius
+                                                                            .circular(
+                                                                      18,
+                                                                    ),
+                                                                    border: Border
+                                                                        .all(
+                                                                      color: chatTokens
+                                                                          .recvEdge,
+                                                                    ),
+                                                                  ),
+                                                                  child: Padding(
+                                                                    padding:
+                                                                        const EdgeInsets
+                                                                            .symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          8,
+                                                                    ),
+                                                                    child: Text(
+                                                                      resolvedFallback,
+                                                                      style: context
+                                                                          .textTheme
+                                                                          .small,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
                                                         }
                                                         final verification =
                                                             trusted == null
@@ -3450,9 +3517,15 @@ class _ChatState extends State<Chat> {
                                                                             .destructive,
                                                                   );
                                                         final quotedModel =
-                                                            message.customProperties?[
+                                                            (message.customProperties?[
                                                                     'quoted']
-                                                                as Message?;
+                                                                as Message?) ??
+                                                            (messageModel.quoting ==
+                                                                    null
+                                                                ? null
+                                                                : messageById[
+                                                                    messageModel
+                                                                        .quoting!]);
                                                         final reactions = (message
                                                                         .customProperties?[
                                                                     'reactions']

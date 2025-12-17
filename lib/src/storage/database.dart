@@ -1609,10 +1609,13 @@ WHERE subject_token IS NOT NULL
         return;
       }
 
-      await (update(messages)..where((tbl) => tbl.stanzaID.equals(message.stanzaID)))
+      await (update(messages)
+            ..where((tbl) => tbl.stanzaID.equals(message.stanzaID)))
           .write(
         MessagesCompanion(
-          body: shouldMergeBody ? Value(messageToSave.body) : const Value.absent(),
+          body: shouldMergeBody
+              ? Value(messageToSave.body)
+              : const Value.absent(),
           fileMetadataID: shouldMergeMetadataId
               ? Value(incomingMetadataId)
               : const Value.absent(),
