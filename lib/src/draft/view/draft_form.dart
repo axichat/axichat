@@ -571,13 +571,13 @@ class _DraftFormState extends State<DraftForm> {
         _showToast(l10n.draftAttachmentInaccessible);
         return;
       }
-      final size = file.size > 0 ? file.size : await File(path).length();
       final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
       final pendingId = _nextPendingAttachmentId();
+      final fileName = file.name.isNotEmpty ? file.name : path.split('/').last;
       var attachment = EmailAttachment(
         path: path,
-        fileName: file.name.isNotEmpty ? file.name : path.split('/').last,
-        sizeBytes: size,
+        fileName: fileName,
+        sizeBytes: file.size > 0 ? file.size : 0,
         mimeType: mimeType,
       );
       setState(() {
@@ -590,6 +590,15 @@ class _DraftFormState extends State<DraftForm> {
           ),
         ];
       });
+
+      if (attachment.sizeBytes <= 0) {
+        try {
+          final resolvedSize = await File(path).length();
+          attachment = attachment.copyWith(sizeBytes: resolvedSize);
+        } on Exception {
+          // Best-effort. Keep placeholder size until optimization completes.
+        }
+      }
       attachment = await EmailAttachmentOptimizer.optimize(attachment);
       if (!mounted) return;
       setState(() {

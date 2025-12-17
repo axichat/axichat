@@ -1734,6 +1734,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         quoting: null,
       ),
     );
+
+    if (preparedAttachment.sizeBytes <= 0) {
+      try {
+        final resolvedSize = await File(preparedAttachment.path).length();
+        if (resolvedSize > 0) {
+          preparedAttachment =
+              preparedAttachment.copyWith(sizeBytes: resolvedSize);
+        }
+      } on Exception catch (error, stackTrace) {
+        _log.fine('Failed to resolve attachment size', error, stackTrace);
+      }
+    }
     try {
       preparedAttachment =
           await EmailAttachmentOptimizer.optimize(preparedAttachment);
