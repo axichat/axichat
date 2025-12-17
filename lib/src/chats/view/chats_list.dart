@@ -17,11 +17,14 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -45,6 +48,9 @@ class ChatsList extends StatelessWidget {
     final showToast = ShadToaster.maybeOf(context)?.show;
     const creationSuccessMessage = 'Group chat created.';
     const creationFailureMessage = 'Could not create group chat.';
+    const refreshSuccessPrefix = 'Last synced at ';
+    const refreshFailureMessage = 'Sync failed.';
+    const refreshSpinnerExtent = 56.0;
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
           previous.creationStatus != current.creationStatus,
@@ -177,7 +183,7 @@ class ChatsList extends StatelessWidget {
             );
           }
 
-          return AnimatedSwitcher(
+          final animated = AnimatedSwitcher(
             duration: context.watch<SettingsCubit>().animationDuration,
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
@@ -198,6 +204,69 @@ class ChatsList extends StatelessWidget {
               );
             },
             child: child,
+          );
+          final env = EnvScope.of(context);
+          final enableRefresh = env.navPlacement == NavPlacement.bottom;
+          if (!enableRefresh) return animated;
+
+          Future<void> handleRefresh() async {
+            final xmppService = context.read<XmppService>();
+            try {
+              final syncedAt =
+                  await HomeRefreshSyncService(xmppService: xmppService)
+                      .refresh();
+              if (!context.mounted) return;
+              final formatted =
+                  MaterialLocalizations.of(context).formatTimeOfDay(
+                TimeOfDay.fromDateTime(syncedAt.toLocal()),
+              );
+              showToast?.call(
+                FeedbackToast.success(
+                  message: '$refreshSuccessPrefix$formatted',
+                ),
+              );
+            } on Exception {
+              if (!context.mounted) return;
+              showToast?.call(
+                FeedbackToast.error(message: refreshFailureMessage),
+              );
+            }
+          }
+
+          return CustomRefreshIndicator(
+            onRefresh: handleRefresh,
+            builder: (context, child, controller) {
+              final progress = controller.value.clamp(0.0, 1.0);
+              final isLoading = controller.isLoading;
+              return Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  child,
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SizedBox(
+                      height: refreshSpinnerExtent,
+                      child: Opacity(
+                        opacity: isLoading ? 1.0 : progress,
+                        child: Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: context.colorScheme.foreground,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+            child: animated,
           );
         },
       ),

@@ -111,6 +111,10 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.userAvatarManager);
       case == mox.VCardManager:
         return getManagerById(mox.vcardManager);
+      case == BookmarksManager:
+        return getManagerById(BookmarksManager.managerId);
+      case == ConversationIndexManager:
+        return getManagerById(ConversationIndexManager.managerId);
       default:
         return null;
     }

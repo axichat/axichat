@@ -81,16 +81,6 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       (this as AvatarService)
           .scheduleAvatarRefresh(items.map((item) => item.jid));
     }
-    unawaited(() async {
-      try {
-        await syncMucRoomsFromPubSubOnLogin();
-      } on XmppAbortedException {
-        return;
-      } on Exception {
-        _rosterLog.fine('Failed to sync room list.');
-      }
-      await syncMessageArchiveOnLogin();
-    }());
 
     final version = rosterResult.ver;
     if (version != null && version.isNotEmpty) {
