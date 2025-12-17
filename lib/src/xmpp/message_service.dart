@@ -1673,6 +1673,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         isMuc: isMuc,
       );
 
+  Future<bool> resolveMamSupport() async {
+    await _resolveMamSupportForAccount();
+    return _mamSupported;
+  }
+
   Future<MamPageResult> fetchBeforeFromArchive({
     required String jid,
     required String before,
