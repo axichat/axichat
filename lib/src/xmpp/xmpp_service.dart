@@ -431,21 +431,20 @@ class XmppService extends XmppBase
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) {
-        _connectionState = event.state;
-        _connectivityStream.add(event.state);
-        if (event.state != ConnectionState.connected) {
-          _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
-        }
-        if (withForeground) {
-          _connection.updateConnectivityNotification(event.state);
-        }
+        _setConnectionState(event.state);
       })
       ..registerHandler<mox.StanzaAckedEvent>((event) async {
+        _repairConnectionStateFromTraffic(
+          reason: _connectivityRepairReasonStanzaAcked,
+        );
         if (event.stanza.id == null) return;
         await _dbOp<XmppDatabase>(
             (db) => db.markMessageAcked(event.stanza.id!));
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        _repairConnectionStateFromTraffic(
+          reason: _connectivityRepairReasonStreamNegotiationsDone,
+        );
         if (_connection.carbonsEnabled != true) {
           _xmppLogger.info('Enabling carbons...');
           if (!await _connection.enableCarbons()) {
@@ -458,6 +457,21 @@ class XmppService extends XmppBase
           await sm?.handleFailedResumption();
         }
         _streamResumptionAttempted = false;
+        if (!event.resumed) {
+          unawaited(() async {
+            try {
+              await _connection
+                  .getManager<XmppPresenceManager>()
+                  ?.sendInitialPresence();
+            } catch (error, stackTrace) {
+              _xmppLogger.warning(
+                'Failed to send initial presence.',
+                error,
+                stackTrace,
+              );
+            }
+          }());
+        }
         if (event.resumed) return;
         unawaited(_refreshHttpUploadSupport());
         // Connection handling is automatic in moxxmpp v0.5.0.
@@ -566,6 +580,47 @@ class XmppService extends XmppBase
   @override
   Stream<ConnectionState> get connectivityStream => _connectivityStream.stream;
   final _connectivityStream = StreamController<ConnectionState>.broadcast();
+
+  static const _connectivityRepairReasonStanzaAcked = 'stanza acked';
+  static const _connectivityRepairReasonStreamNegotiationsDone =
+      'stream negotiations done';
+
+  void _setConnectionState(ConnectionState state) {
+    if (_connectionState == state) {
+      return;
+    }
+
+    _connectionState = state;
+    if (!_connectivityStream.isClosed) {
+      _connectivityStream.add(state);
+    }
+
+    if (state != ConnectionState.connected) {
+      _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+    }
+
+    if (withForeground) {
+      unawaited(_connection.updateConnectivityNotification(state));
+    }
+  }
+
+  void _repairConnectionStateFromTraffic({required String reason}) {
+    if (_connectionState == ConnectionState.connected) {
+      return;
+    }
+    _xmppLogger.finer('Repairing connection state to connected ($reason).');
+    _setConnectionState(ConnectionState.connected);
+  }
+
+  Future<void> _handleXmppEvent(mox.XmppEvent event) async {
+    try {
+      await _eventManager.executeHandlers(event);
+    } catch (error) {
+      _xmppLogger.warning(
+        'Unhandled XMPP event handler error for ${event.runtimeType}: ${error.runtimeType}.',
+      );
+    }
+  }
 
   var _synchronousConnection = Completer<void>();
   var _foregroundServiceNotificationSent = false;
@@ -714,8 +769,7 @@ class XmppService extends XmppBase
     if (_demoOfflineMode) {
       updateMessageStorageMode(MessageStorageMode.local);
     }
-    _connectionState = ConnectionState.notConnected;
-    _connectivityStream.add(_connectionState);
+    _setConnectionState(ConnectionState.notConnected);
     await _seedDemoChatsIfNeeded();
   }
 
@@ -756,7 +810,7 @@ class XmppService extends XmppBase
 
     await _eventSubscription?.cancel();
     _eventSubscription =
-        _connection.asBroadcastStream().listen(_eventManager.executeHandlers);
+        _connection.asBroadcastStream().listen(_handleXmppEvent);
 
     _connection.connectionSettings = XmppConnectionSettings(
       jid: _myJid!.toBare(),
@@ -1605,7 +1659,7 @@ class XmppService extends XmppBase
           _connection.omemoActivityStream.listen(_omemoActivityController.add);
       await _initConnection(preHashed: _connectionPasswordPreHashed);
       _eventSubscription =
-          _connection.asBroadcastStream().listen(_eventManager.executeHandlers);
+          _connection.asBroadcastStream().listen(_handleXmppEvent);
       _myJid = existingJid;
       _connection.connectionSettings = XmppConnectionSettings(
         jid: existingJid,
@@ -1644,7 +1698,7 @@ class XmppService extends XmppBase
           _connection.omemoActivityStream.listen(_omemoActivityController.add);
       await _initConnection(preHashed: _connectionPasswordPreHashed);
       _eventSubscription =
-          _connection.asBroadcastStream().listen(_eventManager.executeHandlers);
+          _connection.asBroadcastStream().listen(_handleXmppEvent);
       _myJid = existingJid;
       _connection.connectionSettings = XmppConnectionSettings(
         jid: existingJid,

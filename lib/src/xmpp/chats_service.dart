@@ -18,6 +18,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   final Logger _chatLog = Logger('ChatsService');
   static const _typingParticipantLinger = Duration(seconds: 6);
   static const _typingParticipantMaxCount = 7;
+  static const _recipientAddressSuggestionLimit = 50000;
   final Map<String, Set<String>> _typingParticipants = {};
   final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
   final Map<String, StreamController<List<String>>> _typingParticipantStreams =
@@ -181,6 +182,13 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
             db.watchChats(start: start, end: end).map(sortChats),
         getFunction: (db) async =>
             sortChats(await db.getChats(start: start, end: end)),
+      );
+
+  Stream<List<String>> recipientAddressSuggestionsStream() =>
+      createSingleItemStream<List<String>, XmppDatabase>(
+        watchFunction: (db) async => db.watchRecipientAddressSuggestions(
+          limit: _recipientAddressSuggestionLimit,
+        ),
       );
 
   Stream<Chat?> chatStream(String jid) =>
