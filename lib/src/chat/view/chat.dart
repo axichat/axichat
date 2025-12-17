@@ -140,6 +140,7 @@ const _recipientBubbleInset = _recipientCutoutDepth;
 const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
 const _bubbleFocusCurve = Curves.easeOutCubic;
+const _bubbleSizeSnapDuration = Duration(milliseconds: 1);
 const _messageArrivalDuration = Duration(milliseconds: 420);
 const _messageArrivalCurve = Curves.easeOutCubic;
 const _chatHorizontalPadding = 16.0;
@@ -4834,19 +4835,23 @@ class _ChatState extends State<Chat> {
                                                             attachmentsAligned,
                                                           ],
                                                         );
-                                                        final shouldAnimateSize =
-                                                            isSingleSelection;
+                                                        final bubbleResizeDuration =
+                                                            isSingleSelection
+                                                                ? _bubbleFocusDuration
+                                                                : _bubbleSizeSnapDuration;
+                                                        final bubbleResizeCurve =
+                                                            isSingleSelection
+                                                                ? _bubbleFocusCurve
+                                                                : Curves.linear;
                                                         final Widget
                                                             animatedMessage =
                                                             AxiAnimatedSize(
                                                           duration:
-                                                              shouldAnimateSize
-                                                                  ? _bubbleFocusDuration
-                                                                  : Duration
-                                                                      .zero,
-                                                          curve: shouldAnimateSize
-                                                              ? _bubbleFocusCurve
-                                                              : Curves.linear,
+                                                              bubbleResizeDuration,
+                                                          reverseDuration:
+                                                              bubbleResizeDuration,
+                                                          curve:
+                                                              bubbleResizeCurve,
                                                           alignment: Alignment
                                                               .topCenter,
                                                           clipBehavior:

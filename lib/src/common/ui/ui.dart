@@ -2,48 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 export 'axi_adaptive_layout.dart';
+export 'axi_adaptive_sheet.dart';
+export 'axi_animated_size.dart';
 export 'axi_app_bar.dart';
-export 'axi_context_menu_region.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
-export 'axi_navigation_rail.dart';
-export 'axi_confirm.dart';
 export 'axi_checkbox_form_field.dart';
+export 'axi_confirm.dart';
+export 'axi_context_menu_region.dart';
 export 'axi_cutout.dart';
-export 'axi_dialog_fab.dart';
 export 'axi_delete_menu_item.dart';
+export 'axi_dialog_fab.dart';
 export 'axi_fab.dart';
 export 'axi_icon_button.dart';
 export 'axi_input_dialog.dart';
 export 'axi_link.dart';
 export 'axi_list_divider.dart';
 export 'axi_list_tile.dart';
-export 'axi_more.dart';
 export 'axi_menu.dart';
+export 'axi_more.dart';
+export 'axi_navigation_rail.dart';
 export 'axi_progress_indicator.dart';
+export 'axi_sheet_scaffold.dart';
+export 'axi_tab_bar.dart';
+export 'axi_tap_bounce.dart';
 export 'axi_text_form_field.dart';
 export 'axi_tooltip.dart';
 export 'axi_transport_chip.dart';
-export 'axi_tap_bounce.dart';
-export 'axi_animated_size.dart';
 export 'axi_version.dart';
 export 'cutout.dart';
-export 'selection_indicator.dart';
 export 'display_fingerprint.dart';
 export 'display_time_since.dart';
-export 'axi_tab_bar.dart';
 export 'dynamic_inline_text.dart';
 export 'jid_input.dart';
 export 'list_item_padding.dart';
 export 'password_input.dart';
 export 'presence_indicator.dart';
-export 'string_to_color.dart';
+export 'selection_indicator.dart';
 export 'squircle_border.dart';
-export 'axi_adaptive_sheet.dart';
-export 'axi_sheet_scaffold.dart';
+export 'string_to_color.dart';
 
 const appDisplayName = 'axichat';
-const androidIconPath = 'app_icon';
+const androidIconPath = '@mipmap/ic_launcher';
 
 const emojiFontFamily = 'NotoColorEmoji';
 const emojiFontFallback = <String>[emojiFontFamily];
@@ -130,27 +130,43 @@ class CalendarPalette {
   static Color _neutral = const Color(0xFF9CA3AF);
 
   static Color get primary => _primary;
+
   static Color get primaryHover => _primaryHover;
 
   static Color get background => _background;
+
   static Color get container => _container;
+
   static Color get sidebarBackground => _sidebarBackground;
+
   static Color get border => _border;
+
   static Color get borderDark => _borderDark;
+
   static Color get borderLight => _borderLight;
+
   static Color get selectedDay => _selectedDay;
+
   static Color get slotHover => _slotHover;
+
   static Color get stripedSlot => _stripedSlot;
 
   static Color get title => _title;
+
   static Color get subtitle => _subtitle;
+
   static Color get textLight => _textLight;
+
   static Color get timeLabel => _timeLabel;
 
   static Color get success => _success;
+
   static Color get danger => _danger;
+
   static Color get warning => _warning;
+
   static Color get yellow => _yellow;
+
   static Color get neutral => _neutral;
 
   static void update({
@@ -221,26 +237,43 @@ class CalendarPalette {
 }
 
 Color get calendarPrimaryColor => CalendarPalette.primary;
+
 Color get calendarPrimaryHoverColor => CalendarPalette.primaryHover;
+
 Color get calendarBackgroundColor => CalendarPalette.background;
+
 Color get calendarContainerColor => CalendarPalette.container;
+
 Color get calendarSidebarBackgroundColor => CalendarPalette.sidebarBackground;
+
 Color get calendarBorderColor => CalendarPalette.border;
+
 Color get calendarBorderDarkColor => CalendarPalette.borderDark;
+
 Color get calendarBorderLightColor => CalendarPalette.borderLight;
+
 Color get calendarSelectedDayColor => CalendarPalette.selectedDay;
+
 Color get calendarSlotHoverColor => CalendarPalette.slotHover;
+
 Color get calendarStripedSlotColor => CalendarPalette.stripedSlot;
 
 Color get calendarTitleColor => CalendarPalette.title;
+
 Color get calendarSubtitleColor => CalendarPalette.subtitle;
+
 Color get calendarTextLightColor => CalendarPalette.textLight;
+
 Color get calendarTimeLabelColor => CalendarPalette.timeLabel;
 
 Color get calendarSuccessColor => CalendarPalette.success;
+
 Color get calendarDangerColor => CalendarPalette.danger;
+
 Color get calendarWarningColor => CalendarPalette.warning;
+
 Color get calendarYellowColor => CalendarPalette.yellow;
+
 Color get calendarNeutralColor => CalendarPalette.neutral;
 
 Color get sidebarBackgroundColor => CalendarPalette.sidebarBackground;
