@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -11,8 +12,10 @@ part 'chats_cubit.freezed.dart';
 part 'chats_state.dart';
 
 class ChatsCubit extends Cubit<ChatsState> {
-  ChatsCubit({required ChatsService chatsService})
-      : _chatsService = chatsService,
+  ChatsCubit({required XmppService xmppService})
+      : _chatsService = xmppService,
+        _homeRefreshSyncService =
+            HomeRefreshSyncService(xmppService: xmppService),
         super(
           const ChatsState(
             openJid: null,
@@ -28,6 +31,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   final ChatsService _chatsService;
+  final HomeRefreshSyncService _homeRefreshSyncService;
 
   late final StreamSubscription<List<Chat>> _chatsSubscription;
 
@@ -224,6 +228,27 @@ class ChatsCubit extends Cubit<ChatsState> {
   void clearCreationStatus() {
     if (state.creationStatus.isNone) return;
     emit(state.copyWith(creationStatus: RequestStatus.none));
+  }
+
+  Future<void> refreshHomeSync() async {
+    if (state.refreshStatus.isLoading) return;
+    emit(state.copyWith(refreshStatus: RequestStatus.loading));
+    try {
+      final syncedAt = await _homeRefreshSyncService.refresh();
+      emit(
+        state.copyWith(
+          refreshStatus: RequestStatus.success,
+          lastSyncedAt: syncedAt,
+        ),
+      );
+    } on Exception {
+      emit(state.copyWith(refreshStatus: RequestStatus.failure));
+    }
+  }
+
+  void clearRefreshStatus() {
+    if (state.refreshStatus.isNone) return;
+    emit(state.copyWith(refreshStatus: RequestStatus.none));
   }
 
   Future<void> deleteChat({required String jid}) async {
