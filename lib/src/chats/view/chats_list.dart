@@ -159,6 +159,7 @@ class ChatsList extends StatelessWidget {
                       body = ColoredBox(
                         color: context.colorScheme.background,
                         child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           itemCount: visibleItems.length +
                               (includeCalendarShortcut ? 1 : 0),
                           itemBuilder: (context, index) {
@@ -194,7 +195,25 @@ class ChatsList extends StatelessWidget {
 
                     return KeyedSubtree(
                       key: const ValueKey('chats-loaded'),
-                      child: body,
+                      child: visibleItems.isEmpty
+                          ? ColoredBox(
+                              color: context.colorScheme.background,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return ListView(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    children: [
+                                      SizedBox(
+                                        height: constraints.maxHeight,
+                                        child: body,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            )
+                          : body,
                     );
                   },
                 );
