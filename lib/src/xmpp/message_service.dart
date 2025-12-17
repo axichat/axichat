@@ -1246,8 +1246,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
     ChatType chatType = ChatType.chat,
   }) async {
-    final senderJid = myJid;
-    if (senderJid == null) {
+    final accountJid = myJid;
+    if (accountJid == null) {
       _log.warning('Attempted to send a message before a JID was bound.');
       throw XmppMessageException();
     }
@@ -1255,6 +1255,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       _log.warning('Blocked XMPP send to foreign domain: $jid');
       throw XmppForeignDomainException();
     }
+    final senderJid = chatType == ChatType.groupChat
+        ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
+        : accountJid;
     final offlineDemo = demoOfflineMode;
     final storePreference = storeLocally ?? true;
     final shouldStore = storePreference && !noStore;
