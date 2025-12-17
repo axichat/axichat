@@ -514,6 +514,19 @@ class XmppService extends XmppBase
     if (!_connection.hasConnectionSettings) {
       return;
     }
+    if (!await _connection.reconnectionPolicy.getShouldReconnect()) {
+      if (!_sessionReconnectEnabled) {
+        return;
+      }
+      try {
+        await _connection.setShouldReconnect(true);
+      } catch (error) {
+        _xmppLogger.finer(
+          'Failed to enable reconnection before triggering immediate reconnect: ${error.runtimeType}.',
+        );
+        return;
+      }
+    }
 
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
     final appVisible = lifecycleState == null ||
@@ -646,14 +659,17 @@ class XmppService extends XmppBase
   Future<void> _handleXmppEvent(mox.XmppEvent event) async {
     try {
       await _eventManager.executeHandlers(event);
-    } catch (error) {
+    } catch (error, stackTrace) {
       _xmppLogger.warning(
         'Unhandled XMPP event handler error for ${event.runtimeType}: ${error.runtimeType}.',
+        error.runtimeType,
+        stackTrace,
       );
     }
   }
 
   var _synchronousConnection = Completer<void>();
+  var _sessionReconnectEnabled = false;
   var _foregroundServiceNotificationSent = false;
   var _streamResumptionAttempted = false;
   var _connectionPasswordPreHashed = false;
@@ -870,6 +886,7 @@ class XmppService extends XmppBase
     }
 
     await _connection.setShouldReconnect(true);
+    _sessionReconnectEnabled = true;
 
     await _messageSubscription?.cancel();
     _messageSubscription = _messageStream.stream.listen(
@@ -1722,40 +1739,61 @@ class XmppService extends XmppBase
       _xmppLogger.info('Foreground socket migration completed.');
       _foregroundSocketMigrationTimer?.cancel();
       _foregroundSocketMigrationTimer = null;
-    } on Exception catch (error, stackTrace) {
+    } catch (error, stackTrace) {
       _xmppLogger.warning(
         'Foreground socket migration failed; reconnecting on direct socket.',
-        error,
+        error.runtimeType,
         stackTrace,
       );
-      final XmppConnection fallbackConnection = XmppConnection();
-      _connection = fallbackConnection;
-      _omemoActivitySubscription =
-          _connection.omemoActivityStream.listen(_omemoActivityController.add);
-      await _initConnection(preHashed: _connectionPasswordPreHashed);
-      _eventSubscription =
-          _connection.asBroadcastStream().listen(_handleXmppEvent);
-      _myJid = existingJid;
-      _connection.connectionSettings = XmppConnectionSettings(
-        jid: existingJid,
-        password: existingPassword,
-      );
-      final result = await _connection.connect(
-        shouldReconnect: false,
-        waitForConnection: true,
-        waitUntilLogin: true,
-      );
-      if (result.isType<mox.XmppError>()) {
-        final error = result.get<mox.XmppError>();
-        if (_isAuthenticationError(error)) {
-          throw XmppAuthenticationException(error is Exception ? error : null);
+      try {
+        final XmppConnection fallbackConnection = XmppConnection();
+        _connection = fallbackConnection;
+        _omemoActivitySubscription = _connection.omemoActivityStream
+            .listen(_omemoActivityController.add);
+        await _initConnection(preHashed: _connectionPasswordPreHashed);
+        _eventSubscription =
+            _connection.asBroadcastStream().listen(_handleXmppEvent);
+        _myJid = existingJid;
+        _connection.connectionSettings = XmppConnectionSettings(
+          jid: existingJid,
+          password: existingPassword,
+        );
+        final result = await _connection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        );
+        if (result.isType<mox.XmppError>()) {
+          final error = result.get<mox.XmppError>();
+          if (_isAuthenticationError(error)) {
+            throw XmppAuthenticationException(
+                error is Exception ? error : null);
+          }
+          throw XmppNetworkException(error is Exception ? error : null);
         }
-        throw XmppNetworkException(error is Exception ? error : null);
+        if (!result.get<bool>()) {
+          throw XmppAuthenticationException();
+        }
+        await _connection.setShouldReconnect(true);
+      } catch (fallbackError, fallbackStackTrace) {
+        _xmppLogger.warning(
+          'Direct socket reconnect failed during foreground migration: ${fallbackError.runtimeType}.',
+          fallbackError.runtimeType,
+          fallbackStackTrace,
+        );
+        if (fallbackError is XmppAuthenticationException) {
+          _setConnectionState(ConnectionState.error);
+          return;
+        }
+        try {
+          await _connection.setShouldReconnect(true);
+        } catch (error) {
+          _xmppLogger.finer(
+            'Failed to enable reconnection after foreground migration failure: ${error.runtimeType}.',
+          );
+        }
+        unawaited(_triggerImmediateReconnectIfAppropriate());
       }
-      if (!result.get<bool>()) {
-        throw XmppAuthenticationException();
-      }
-      await _connection.setShouldReconnect(true);
     } finally {
       if (warmupAcquired) {
         try {
@@ -1776,7 +1814,10 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _setConnectionState(ConnectionState.notConnected);
-    _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
+    _sessionReconnectEnabled = false;
+    _xmppLogger.info(
+      'Resetting${e == null ? '' : ' due to ${e.runtimeType}'}...',
+    );
     _foregroundSocketMigrationTimer?.cancel();
     _foregroundSocketMigrationTimer = null;
     _demoSeedAttempted = false;
