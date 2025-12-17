@@ -60,7 +60,8 @@ final class HomeRefreshSyncService {
     required List<MucBookmark> bookmarks,
     required List<ConvItem> conversations,
   }) async {
-    if (!_xmppService.mamSupported) return;
+    final supportsMam = await _xmppService.resolveMamSupport();
+    if (!supportsMam) return;
 
     final now = DateTime.timestamp();
     final cutoff = now.add(_historySyncTimeBudget);
