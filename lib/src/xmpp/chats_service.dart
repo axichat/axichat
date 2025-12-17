@@ -24,17 +24,46 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
   final Map<String, StreamController<List<String>>> _typingParticipantStreams =
       {};
+  bool _conversationIndexLoginSyncInFlight = false;
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        if (event.resumed) return;
+        if (connectionState != ConnectionState.connected) return;
+        unawaited(syncConversationIndexOnLogin());
+      })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
         await applyConversationIndexItems([event.item]);
       })
       ..registerHandler<ConversationIndexItemRetractedEvent>((event) async {
         await _applyConversationIndexRetraction(event.peerBare);
       });
+  }
+
+  Future<void> syncConversationIndexOnLogin() async {
+    if (_conversationIndexLoginSyncInFlight) return;
+    if (connectionState != ConnectionState.connected) return;
+    _conversationIndexLoginSyncInFlight = true;
+    try {
+      await database;
+      if (connectionState != ConnectionState.connected) return;
+
+      final manager = _connection.getManager<ConversationIndexManager>();
+      if (manager == null) return;
+
+      await manager.ensureNode();
+      await manager.subscribe();
+      final items = await manager.fetchAll();
+      if (items.isEmpty) return;
+      await applyConversationIndexItems(items);
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _conversationIndexLoginSyncInFlight = false;
+    }
   }
 
   bool _isMucChatJid(String jid) {
