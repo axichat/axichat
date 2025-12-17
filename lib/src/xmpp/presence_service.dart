@@ -278,7 +278,6 @@ class XmppPresenceManager extends mox.PresenceManager {
             }
 
             if (_handleMucPresence(stanza)) {
-              state.done = true;
               return state;
             }
 
@@ -521,14 +520,8 @@ class XmppPresenceManager extends mox.PresenceManager {
     required String? realJid,
     required mox.JID occupantJid,
   }) {
-    if (rawOccupantId != null && rawOccupantId.isNotEmpty) {
-      return rawOccupantId;
-    }
-    if (realJid != null && realJid.isNotEmpty) {
-      return mox.JID.fromString(realJid).toBare().toString();
-    }
     if (occupantJid.resource.isNotEmpty) {
-      return '${occupantJid.toBare()}/${occupantJid.resource}';
+      return occupantJid.toString();
     }
     return occupantJid.toBare().toString();
   }
