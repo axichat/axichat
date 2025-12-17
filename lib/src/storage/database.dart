@@ -1585,7 +1585,39 @@ WHERE subject_token IS NOT NULL
           'Message insert ignored; retrying with upsert',
         );
         await into(messages).insertOnConflictUpdate(messageToSave);
+        return;
       }
+
+      if (persisted.retracted) {
+        return;
+      }
+
+      final incomingBody = messageToSave.body?.trim();
+      final hasIncomingBody = incomingBody?.isNotEmpty == true;
+      final persistedBody = persisted.body?.trim();
+      final hasPersistedBody = persistedBody?.isNotEmpty == true;
+
+      final incomingMetadataId = messageToSave.fileMetadataID?.trim();
+      final hasIncomingMetadataId = incomingMetadataId?.isNotEmpty == true;
+      final persistedMetadataId = persisted.fileMetadataID?.trim();
+      final hasPersistedMetadataId = persistedMetadataId?.isNotEmpty == true;
+
+      final shouldMergeBody = hasIncomingBody && !hasPersistedBody;
+      final shouldMergeMetadataId =
+          hasIncomingMetadataId && !hasPersistedMetadataId;
+      if (!shouldMergeBody && !shouldMergeMetadataId) {
+        return;
+      }
+
+      await (update(messages)..where((tbl) => tbl.stanzaID.equals(message.stanzaID)))
+          .write(
+        MessagesCompanion(
+          body: shouldMergeBody ? Value(messageToSave.body) : const Value.absent(),
+          fileMetadataID: shouldMergeMetadataId
+              ? Value(incomingMetadataId)
+              : const Value.absent(),
+        ),
+      );
     });
   }
 

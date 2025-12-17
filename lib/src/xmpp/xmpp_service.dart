@@ -36,6 +36,7 @@ import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
 import 'package:crypto/crypto.dart' show sha1, sha256;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:intl/intl.dart';
@@ -430,8 +431,12 @@ class XmppService extends XmppBase
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
-      ..registerHandler<mox.ConnectionStateChangedEvent>((event) {
+      ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         _setConnectionState(event.state);
+        if (event.state == ConnectionState.error ||
+            event.state == ConnectionState.notConnected) {
+          unawaited(_triggerImmediateReconnectIfAppropriate());
+        }
       })
       ..registerHandler<mox.StanzaAckedEvent>((event) async {
         _repairConnectionStateFromTraffic(
@@ -500,6 +505,32 @@ class XmppService extends XmppBase
           }
         }
       });
+  }
+
+  Future<void> _triggerImmediateReconnectIfAppropriate() async {
+    if (!_synchronousConnection.isCompleted) {
+      return;
+    }
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+
+    final lifecycleState = SchedulerBinding.instance.lifecycleState;
+    final appVisible = lifecycleState == null ||
+        lifecycleState == AppLifecycleState.resumed ||
+        lifecycleState == AppLifecycleState.inactive;
+    if (!appVisible && !(withForeground && foregroundServiceActive.value)) {
+      return;
+    }
+
+    try {
+      _setConnectionState(ConnectionState.connecting);
+      await _connection.triggerImmediateReconnect();
+    } catch (error) {
+      _xmppLogger.finer(
+        'Immediate reconnect trigger failed: ${error.runtimeType}.',
+      );
+    }
   }
 
   @override
@@ -1580,7 +1611,11 @@ class XmppService extends XmppBase
     if (!foregroundServiceActive.value) {
       return;
     }
-    if (!connected) {
+    final lifecycleState = SchedulerBinding.instance.lifecycleState;
+    if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    if (connectionState == ConnectionState.connecting) {
       return;
     }
     if (_connection.socketWrapper is ForegroundSocketWrapper) {
@@ -1620,6 +1655,7 @@ class XmppService extends XmppBase
 
     final XmppConnection oldConnection = _connection;
     try {
+      _setConnectionState(ConnectionState.connecting);
       _xmppLogger.info('Migrating XMPP connection to foreground socket.');
       await _eventSubscription?.cancel();
       _eventSubscription = null;
@@ -1739,6 +1775,7 @@ class XmppService extends XmppBase
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
 
+    _setConnectionState(ConnectionState.notConnected);
     _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
     _foregroundSocketMigrationTimer?.cancel();
     _foregroundSocketMigrationTimer = null;

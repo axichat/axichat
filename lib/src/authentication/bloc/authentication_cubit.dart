@@ -111,11 +111,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           lifeCycleState == AppLifecycleState.resumed ||
               lifeCycleState == AppLifecycleState.inactive,
         );
-        if (_stickyAuthActive &&
-            _endpointConfig.enableXmpp &&
-            foregroundServiceActive.value) {
-          unawaited(_xmppService.ensureForegroundSocketIfActive());
-        }
       },
     );
     _connectivitySubscription =
