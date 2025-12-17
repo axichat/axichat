@@ -595,6 +595,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         if (reactionOnly) return;
 
         final metadata = _extractFileMetadata(event);
+        final hasAttachmentMetadata = metadata != null;
 
         var message = Message.fromMox(event, accountJid: myJid);
         final isGroupChat = event.type == 'groupchat';
@@ -638,7 +639,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event)) return;
 
-        if (!event.displayable && event.encryptionError == null) return;
+        if (!event.displayable &&
+            event.encryptionError == null &&
+            !hasAttachmentMetadata) {
+          return;
+        }
         if (event.encryptionError is omemo.InvalidKeyExchangeSignatureError) {
           return;
         }
@@ -2758,11 +2763,15 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   FileMetadataData? _extractFileMetadata(mox.MessageEvent event) {
     final fun = event.extensions.get<mox.FileUploadNotificationData>();
     final statelessData = event.extensions.get<mox.StatelessFileSharingData>();
-    final oobUrl = event.extensions.get<mox.OOBData>()?.url;
+    final oob = event.extensions.get<mox.OOBData>();
+    final oobUrl = oob?.url;
+    final oobDesc = oob?.desc?.trim();
+    final oobName = oobDesc?.isNotEmpty == true ? oobDesc : null;
     if (statelessData == null || statelessData.sources.isEmpty) {
       if (fun != null) {
         final name = fun.metadata.name;
-        final fallbackName = oobUrl == null ? null : _filenameFromUrl(oobUrl);
+        final fallbackName =
+            oobName ?? (oobUrl == null ? null : _filenameFromUrl(oobUrl));
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: oobUrl == null ? null : [oobUrl],
@@ -2778,7 +2787,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: [oobUrl],
-          filename: _filenameFromUrl(oobUrl),
+          filename: oobName ?? _filenameFromUrl(oobUrl),
         );
       }
       return null;
@@ -2809,7 +2818,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           return FileMetadataData(
             id: uuid.v4(),
             sourceUrls: [oobUrl],
-            filename: _filenameFromUrl(oobUrl),
+            filename: oobName ?? _filenameFromUrl(oobUrl),
           );
         }
         return null;
