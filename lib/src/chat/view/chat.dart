@@ -3370,17 +3370,24 @@ class _ChatState extends State<Chat> {
                                                               TextBaseline
                                                                   .alphabetic,
                                                         );
-                                                        final isEmailMessage = (message
-                                                                        .customProperties?[
-                                                                    'isEmailMessage']
-                                                                as bool?) ??
-                                                            ((message.customProperties?['id']
-                                                                            as String?)
-                                                                        case final id?
-                                                                    ? messageById[id]
-                                                                            ?.deltaMsgId !=
-                                                                        null
-                                                                    : false);
+                                                        final isEmailMessage =
+                                                            (message.customProperties?[
+                                                                        'isEmailMessage']
+                                                                    as bool?) ??
+                                                                (() {
+                                                                  final id = message
+                                                                              .customProperties?[
+                                                                          'id']
+                                                                      as String?;
+                                                                  if (id ==
+                                                                      null) {
+                                                                    return false;
+                                                                  }
+                                                                  return messageById[
+                                                                              id]
+                                                                          ?.deltaMsgId !=
+                                                                      null;
+                                                                }());
                                                         final transportIconData =
                                                             isEmailMessage
                                                                 ? LucideIcons
@@ -3433,20 +3440,24 @@ class _ChatState extends State<Chat> {
                                                                 .customProperties![
                                                             'trusted'] as bool?;
                                                         final messageId = message
-                                                            .customProperties?['id']
-                                                            as String?;
+                                                                .customProperties?[
+                                                            'id'] as String?;
                                                         final messageModel = (message
-                                                                    .customProperties?[
-                                                                'model'] as Message?) ??
+                                                                        .customProperties?[
+                                                                    'model']
+                                                                as Message?) ??
                                                             (messageId == null
                                                                 ? null
                                                                 : messageById[
                                                                     messageId]);
-                                                        if (messageModel == null) {
+                                                        if (messageModel ==
+                                                            null) {
                                                           final fallbackText =
-                                                              message.text.trim();
+                                                              message.text
+                                                                  .trim();
                                                           final resolvedFallback =
-                                                              fallbackText.isNotEmpty
+                                                              fallbackText
+                                                                      .isNotEmpty
                                                                   ? fallbackText
                                                                   : l10n
                                                                       .chatAttachmentUnavailable;
@@ -3461,7 +3472,8 @@ class _ChatState extends State<Chat> {
                                                             child: Align(
                                                               alignment: Alignment
                                                                   .centerLeft,
-                                                              child: ConstrainedBox(
+                                                              child:
+                                                                  ConstrainedBox(
                                                                 constraints:
                                                                     BoxConstraints(
                                                                   maxWidth:
@@ -3478,13 +3490,15 @@ class _ChatState extends State<Chat> {
                                                                             .circular(
                                                                       18,
                                                                     ),
-                                                                    border: Border
-                                                                        .all(
+                                                                    border:
+                                                                        Border
+                                                                            .all(
                                                                       color: chatTokens
                                                                           .recvEdge,
                                                                     ),
                                                                   ),
-                                                                  child: Padding(
+                                                                  child:
+                                                                      Padding(
                                                                     padding:
                                                                         const EdgeInsets
                                                                             .symmetric(
@@ -3516,11 +3530,12 @@ class _ChatState extends State<Chat> {
                                                                         : colors
                                                                             .destructive,
                                                                   );
-                                                        final quotedModel =
-                                                            (message.customProperties?[
+                                                        final quotedModel = (message
+                                                                        .customProperties?[
                                                                     'quoted']
                                                                 as Message?) ??
-                                                            (messageModel.quoting ==
+                                                            (messageModel
+                                                                        .quoting ==
                                                                     null
                                                                 ? null
                                                                 : messageById[

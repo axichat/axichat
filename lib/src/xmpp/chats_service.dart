@@ -19,10 +19,23 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const _typingParticipantLinger = Duration(seconds: 6);
   static const _typingParticipantMaxCount = 7;
   static const _recipientAddressSuggestionLimit = 50000;
+  static const Duration _mutedForeverDuration = Duration(days: 3650);
   final Map<String, Set<String>> _typingParticipants = {};
   final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
   final Map<String, StreamController<List<String>>> _typingParticipantStreams =
       {};
+
+  @override
+  void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
+        await applyConversationIndexItems([event.item]);
+      })
+      ..registerHandler<ConversationIndexItemRetractedEvent>((event) async {
+        await _applyConversationIndexRetraction(event.peerBare);
+      });
+  }
 
   bool _isMucChatJid(String jid) {
     try {
@@ -373,6 +386,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     await _dbOp<XmppDatabase>(
       (db) => db.markChatMuted(jid: jid, muted: muted),
     );
+    await _syncConversationIndexMeta(jid: jid);
   }
 
   Future<void> toggleChatShareSignature({
@@ -391,6 +405,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     await _dbOp<XmppDatabase>(
       (db) => db.markChatFavorited(jid: jid, favorited: favorited),
     );
+    await _syncConversationIndexMeta(jid: jid);
   }
 
   Future<void> toggleChatArchived({
@@ -400,6 +415,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     await _dbOp<XmppDatabase>(
       (db) => db.markChatArchived(jid: jid, archived: archived),
     );
+    await _syncConversationIndexMeta(jid: jid);
   }
 
   Future<void> toggleChatHidden({
@@ -518,6 +534,126 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         throw XmppRosterException();
       }
     }
+  }
+
+  Future<void> applyConversationIndexItems(List<ConvItem> items) async {
+    if (items.isEmpty) return;
+    final now = DateTime.timestamp();
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        for (final item in items) {
+          final peerJid = item.peerBare.toBare().toString();
+          if (peerJid.isEmpty) continue;
+          if (peerJid == myJid) continue;
+          if (_isMucChatJid(peerJid)) continue;
+
+          final archived = item.archived;
+          final pinned = item.pinned;
+          final muted = item.mutedUntil?.toLocal().isAfter(now) ?? false;
+          final lastChangeCandidate = item.lastTimestamp.toLocal();
+
+          final existing = await db.getChat(peerJid);
+          if (existing == null) {
+            await db.createChat(
+              Chat(
+                jid: peerJid,
+                title: mox.JID.fromString(peerJid).local,
+                type: ChatType.chat,
+                lastChangeTimestamp: lastChangeCandidate,
+                muted: muted,
+                favorited: pinned,
+                archived: archived,
+                contactJid: peerJid,
+              ),
+            );
+            continue;
+          }
+
+          if (existing.type != ChatType.chat) continue;
+
+          final effectiveLastChange =
+              lastChangeCandidate.isAfter(existing.lastChangeTimestamp)
+                  ? lastChangeCandidate
+                  : existing.lastChangeTimestamp;
+
+          final shouldUpdateMuted = existing.muted != muted;
+          final shouldUpdatePinned = existing.favorited != pinned;
+          final shouldUpdateArchived = existing.archived != archived;
+          final shouldUpdateTimestamp =
+              effectiveLastChange != existing.lastChangeTimestamp;
+          final shouldUpdateContactJid = existing.contactJid != peerJid;
+
+          if (!shouldUpdateMuted &&
+              !shouldUpdatePinned &&
+              !shouldUpdateArchived &&
+              !shouldUpdateTimestamp &&
+              !shouldUpdateContactJid) {
+            continue;
+          }
+
+          await db.updateChat(
+            existing.copyWith(
+              lastChangeTimestamp: effectiveLastChange,
+              muted: muted,
+              favorited: pinned,
+              archived: archived,
+              contactJid: peerJid,
+            ),
+          );
+        }
+      },
+      awaitDatabase: true,
+    );
+  }
+
+  Future<void> _applyConversationIndexRetraction(mox.JID peerBare) async {
+    final peer = peerBare.toBare().toString();
+    if (peer.isEmpty) return;
+    if (peer == myJid) return;
+    if (_isMucChatJid(peer)) return;
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        final existing = await db.getChat(peer);
+        if (existing == null || existing.type != ChatType.chat) return;
+        if (existing.archived) return;
+        await db.updateChat(existing.copyWith(archived: true));
+      },
+      awaitDatabase: true,
+    );
+  }
+
+  Future<void> _syncConversationIndexMeta({required String jid}) async {
+    if (connectionState != ConnectionState.connected) return;
+    if (jid.isEmpty || jid == myJid) return;
+    if (_isMucChatJid(jid)) return;
+
+    final manager = _connection.getManager<ConversationIndexManager>();
+    if (manager == null) return;
+
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(jid),
+    );
+    if (chat == null || chat.type != ChatType.chat) return;
+    if (!chat.transport.isXmpp) return;
+
+    final peer = mox.JID.fromString(jid).toBare();
+    final cached = manager.cachedForPeer(peer);
+    final lastTimestamp =
+        cached?.lastTimestamp ?? chat.lastChangeTimestamp.toUtc();
+    final mutedUntil = chat.muted
+        ? DateTime.timestamp().add(_mutedForeverDuration).toUtc()
+        : null;
+
+    await manager.upsert(
+      ConvItem(
+        peerBare: peer,
+        lastTimestamp: lastTimestamp,
+        lastId: cached?.lastId,
+        pinned: chat.favorited,
+        archived: chat.archived,
+        mutedUntil: mutedUntil,
+      ),
+    );
   }
 }
 
