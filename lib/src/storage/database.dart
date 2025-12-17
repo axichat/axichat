@@ -236,6 +236,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Chat>> getChats({required int start, required int end});
 
+  Stream<List<String>> watchRecipientAddressSuggestions({int? limit});
+
+  Future<List<String>> getRecipientAddressSuggestions({int? limit});
+
   Future<Chat?> getChat(String jid);
 
   Future<Chat?> getChatByDeltaChatId(int deltaChatId);
@@ -2212,6 +2216,54 @@ WHERE subject_token IS NOT NULL
   Future<List<Chat>> getChats({required int start, required int end}) {
     return chatsAccessor.selectAll();
   }
+
+  Selectable<String> _recipientAddressSuggestionsQuery({int? limit}) {
+    const addressColumn = 'address';
+    final limitClause = limit == null ? '' : 'LIMIT ?';
+    final query = customSelect(
+      '''
+WITH candidates($addressColumn, ts) AS (
+  SELECT lower(trim(jid)) AS $addressColumn, last_change_timestamp AS ts
+  FROM chats
+  WHERE jid IS NOT NULL AND jid != '' AND instr(jid, '@') > 0
+  UNION ALL
+  SELECT lower(trim(contact_jid)) AS $addressColumn, last_change_timestamp AS ts
+  FROM chats
+  WHERE contact_jid IS NOT NULL AND contact_jid != '' AND instr(contact_jid, '@') > 0
+  UNION ALL
+  SELECT lower(trim(email_address)) AS $addressColumn, last_change_timestamp AS ts
+  FROM chats
+  WHERE email_address IS NOT NULL AND email_address != '' AND instr(email_address, '@') > 0
+  UNION ALL
+  SELECT lower(trim(sender_jid)) AS $addressColumn, timestamp AS ts
+  FROM messages
+  WHERE sender_jid IS NOT NULL AND sender_jid != '' AND instr(sender_jid, '@') > 0
+  UNION ALL
+  SELECT lower(trim(chat_jid)) AS $addressColumn, timestamp AS ts
+  FROM messages
+  WHERE chat_jid IS NOT NULL AND chat_jid != '' AND instr(chat_jid, '@') > 0
+)
+SELECT $addressColumn
+FROM candidates
+GROUP BY $addressColumn
+ORDER BY MAX(ts) DESC
+$limitClause
+''',
+      variables: [
+        if (limit != null) Variable<int>(limit),
+      ],
+      readsFrom: {chats, messages},
+    );
+    return query.map((row) => row.read<String>(addressColumn));
+  }
+
+  @override
+  Stream<List<String>> watchRecipientAddressSuggestions({int? limit}) =>
+      _recipientAddressSuggestionsQuery(limit: limit).watch();
+
+  @override
+  Future<List<String>> getRecipientAddressSuggestions({int? limit}) =>
+      _recipientAddressSuggestionsQuery(limit: limit).get();
 
   @override
   Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
