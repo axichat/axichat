@@ -17,13 +17,11 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,23 +47,44 @@ class ChatsList extends StatelessWidget {
     const creationSuccessMessage = 'Group chat created.';
     const creationFailureMessage = 'Could not create group chat.';
     const refreshSuccessPrefix = 'Last synced at ';
+    const refreshSuccessFallback = 'now';
     const refreshFailureMessage = 'Sync failed.';
     const refreshSpinnerExtent = 56.0;
+    const refreshSpinnerDimension = 20.0;
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
-          previous.creationStatus != current.creationStatus,
+          previous.creationStatus != current.creationStatus ||
+          previous.refreshStatus != current.refreshStatus,
       listener: (context, state) {
-        if (showToast == null) return;
         if (state.creationStatus.isSuccess) {
-          showToast(
+          showToast?.call(
             FeedbackToast.success(message: creationSuccessMessage),
           );
           context.read<ChatsCubit>().clearCreationStatus();
         } else if (state.creationStatus.isFailure) {
-          showToast(
+          showToast?.call(
             FeedbackToast.error(message: creationFailureMessage),
           );
           context.read<ChatsCubit>().clearCreationStatus();
+        }
+        if (state.refreshStatus.isSuccess) {
+          final syncedAt = state.lastSyncedAt;
+          final formatted = syncedAt == null
+              ? refreshSuccessFallback
+              : MaterialLocalizations.of(context).formatTimeOfDay(
+                  TimeOfDay.fromDateTime(syncedAt.toLocal()),
+                );
+          showToast?.call(
+            FeedbackToast.success(
+              message: '$refreshSuccessPrefix$formatted',
+            ),
+          );
+          context.read<ChatsCubit>().clearRefreshStatus();
+        } else if (state.refreshStatus.isFailure) {
+          showToast?.call(
+            FeedbackToast.error(message: refreshFailureMessage),
+          );
+          context.read<ChatsCubit>().clearRefreshStatus();
         }
       },
       child: BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
@@ -209,32 +228,8 @@ class ChatsList extends StatelessWidget {
           final enableRefresh = env.navPlacement == NavPlacement.bottom;
           if (!enableRefresh) return animated;
 
-          Future<void> handleRefresh() async {
-            final xmppService = context.read<XmppService>();
-            try {
-              final syncedAt =
-                  await HomeRefreshSyncService(xmppService: xmppService)
-                      .refresh();
-              if (!context.mounted) return;
-              final formatted =
-                  MaterialLocalizations.of(context).formatTimeOfDay(
-                TimeOfDay.fromDateTime(syncedAt.toLocal()),
-              );
-              showToast?.call(
-                FeedbackToast.success(
-                  message: '$refreshSuccessPrefix$formatted',
-                ),
-              );
-            } on Exception {
-              if (!context.mounted) return;
-              showToast?.call(
-                FeedbackToast.error(message: refreshFailureMessage),
-              );
-            }
-          }
-
           return CustomRefreshIndicator(
-            onRefresh: handleRefresh,
+            onRefresh: context.read<ChatsCubit>().refreshHomeSync,
             builder: (context, child, controller) {
               final progress = controller.value.clamp(0.0, 1.0);
               final isLoading = controller.isLoading;
@@ -251,13 +246,9 @@ class ChatsList extends StatelessWidget {
                       child: Opacity(
                         opacity: isLoading ? 1.0 : progress,
                         child: Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: context.colorScheme.foreground,
-                            ),
+                          child: AxiProgressIndicator(
+                            dimension: refreshSpinnerDimension,
+                            color: context.colorScheme.foreground,
                           ),
                         ),
                       ),

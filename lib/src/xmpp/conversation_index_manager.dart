@@ -363,18 +363,50 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     await upsert(next);
   }
 
-  bool _shouldAcceptIncoming(ConvItem incoming) {
+  String? _maxLastId(String? a, String? b) {
+    final aTrimmed = a?.trim();
+    final bTrimmed = b?.trim();
+    if (aTrimmed?.isNotEmpty != true) {
+      return bTrimmed?.isNotEmpty == true ? bTrimmed : null;
+    }
+    if (bTrimmed?.isNotEmpty != true) return aTrimmed;
+    return aTrimmed!.compareTo(bTrimmed!) >= 0 ? aTrimmed : bTrimmed;
+  }
+
+  ConvItem? _mergeIncoming(ConvItem incoming) {
     final cached = _cache[incoming.itemId];
-    if (cached == null) return true;
+    if (cached == null) return incoming;
 
     final incomingTs = incoming.lastTimestamp.toUtc();
     final cachedTs = cached.lastTimestamp.toUtc();
-    if (incomingTs.isAfter(cachedTs)) return true;
-    if (incomingTs.isBefore(cachedTs)) return false;
+    final mergedLastTimestamp =
+        incomingTs.isAfter(cachedTs) ? incomingTs : cachedTs;
 
-    final incomingId = incoming.lastId ?? '';
-    final cachedId = cached.lastId ?? '';
-    return incomingId.compareTo(cachedId) > 0;
+    final String? mergedLastId;
+    if (incomingTs.isAfter(cachedTs)) {
+      mergedLastId = incoming.lastId;
+    } else if (incomingTs.isBefore(cachedTs)) {
+      mergedLastId = cached.lastId;
+    } else {
+      mergedLastId = _maxLastId(cached.lastId, incoming.lastId);
+    }
+
+    final merged = cached.copyWith(
+      lastTimestamp: mergedLastTimestamp,
+      lastId: mergedLastId,
+      pinned: incoming.pinned,
+      archived: incoming.archived,
+      mutedUntil: incoming.mutedUntil,
+    );
+
+    if (merged.lastTimestamp.toUtc() == cached.lastTimestamp.toUtc() &&
+        (merged.lastId ?? '') == (cached.lastId ?? '') &&
+        merged.pinned == cached.pinned &&
+        merged.archived == cached.archived &&
+        (merged.mutedUntil?.toUtc() == cached.mutedUntil?.toUtc())) {
+      return null;
+    }
+    return merged;
   }
 
   Future<void> _handleNotification(mox.PubSubNotificationEvent event) async {
@@ -400,14 +432,15 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     }
 
     if (parsed == null) return;
-    if (!_shouldAcceptIncoming(parsed)) return;
+    final merged = _mergeIncoming(parsed);
+    if (merged == null) return;
 
-    _cache[parsed.itemId] = parsed;
-    final update = ConvItemUpdated(parsed);
+    _cache[merged.itemId] = merged;
+    final update = ConvItemUpdated(merged);
     if (!_updatesController.isClosed) {
       _updatesController.add(update);
     }
-    getAttributes().sendEvent(ConversationIndexItemUpdatedEvent(parsed));
+    getAttributes().sendEvent(ConversationIndexItemUpdatedEvent(merged));
   }
 
   Future<void> _handleRetractions(mox.PubSubItemsRetractedEvent event) async {
