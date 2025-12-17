@@ -697,7 +697,10 @@ mixin AvatarService on XmppBase {
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
       if (cause is mox.AvatarError || cause is mox.PubSubError) {
-        final retryPublic = !public;
+        if (!public) {
+          rethrow;
+        }
+        const retryPublic = false;
         try {
           return await _publishAvatarOnce(
             payload: payload,
