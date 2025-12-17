@@ -1,3 +1,5 @@
+import 'package:path/path.dart' as p;
+
 class EmailAttachment {
   const EmailAttachment({
     required this.path,
@@ -40,10 +42,41 @@ class EmailAttachment {
         metadataId: metadataId ?? this.metadataId,
       );
 
-  bool get isImage =>
-      mimeType != null && mimeType!.toLowerCase().startsWith('image/');
+  static const _imageExtensions = <String>{
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.webp',
+    '.bmp',
+    '.tif',
+    '.tiff',
+    '.heic',
+    '.heif',
+    '.avif',
+    '.gif',
+  };
 
-  bool get isGif => mimeType?.toLowerCase() == 'image/gif';
+  bool get isImage {
+    final normalizedMimeType = mimeType?.toLowerCase();
+    if (normalizedMimeType != null) {
+      return normalizedMimeType.startsWith('image/');
+    }
+    final extension = p.extension(fileName).isNotEmpty
+        ? p.extension(fileName).toLowerCase()
+        : p.extension(path).toLowerCase();
+    return _imageExtensions.contains(extension);
+  }
+
+  bool get isGif {
+    final normalizedMimeType = mimeType?.toLowerCase();
+    if (normalizedMimeType != null) {
+      return normalizedMimeType == 'image/gif';
+    }
+    final extension = p.extension(fileName).isNotEmpty
+        ? p.extension(fileName).toLowerCase()
+        : p.extension(path).toLowerCase();
+    return extension == '.gif';
+  }
 
   bool get isVideo =>
       mimeType != null && mimeType!.toLowerCase().startsWith('video/');
