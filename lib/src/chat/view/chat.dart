@@ -191,9 +191,13 @@ const _typingIndicatorBottomInset = 8.0;
 const _typingIndicatorRadius = 999.0;
 const _typingIndicatorPadding =
     EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+const _messageFallbackOuterPadding =
+    EdgeInsets.symmetric(horizontal: _chatHorizontalPadding, vertical: 4);
+const _messageFallbackInnerPadding = _typingIndicatorPadding;
 const _typingIndicatorMaxAvatars = 7;
 const _typingAvatarBorderWidth = 1.6;
 const _typingAvatarSpacing = 4.0;
+const _dashChatPlaceholderText = ' ';
 
 class _MessageFilterOption {
   const _MessageFilterOption(this.filter, this.label);
@@ -1373,21 +1377,15 @@ class _ChatState extends State<Chat> {
         _showSnackbar(l10n.chatAttachmentInaccessible);
         return;
       }
-      final size = file.size > 0 ? file.size : await File(path).length();
       final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
-      final caption = _textController.text.trim();
       final attachment = EmailAttachment(
         path: path,
         fileName: file.name.isNotEmpty ? file.name : path.split('/').last,
-        sizeBytes: size,
+        sizeBytes: file.size > 0 ? file.size : 0,
         mimeType: mimeType,
-        caption: caption.isEmpty ? null : caption,
       );
       if (!mounted) return;
       context.read<ChatBloc>().add(ChatAttachmentPicked(attachment));
-      if (caption.isNotEmpty) {
-        _textController.clear();
-      }
       _focusNode.requestFocus();
     } on PlatformException catch (error) {
       _showSnackbar(error.message ?? l10n.chatAttachmentFailed);
@@ -2980,15 +2978,29 @@ class _ChatState extends State<Chat> {
                                           : e.error.isNotNone
                                               ? '$errorLabel${bodyText.isNotEmpty ? ': "$bodyTextTrimmed"' : ''}'
                                               : displayedBody;
+                                      final hasAttachment =
+                                          e.fileMetadataID?.isNotEmpty == true;
+                                      final hasRenderableSubjectHeader =
+                                          showSubjectHeader &&
+                                              subjectText.isNotEmpty;
+                                      final shouldForceDashText =
+                                          renderedText.trim().isEmpty &&
+                                              (hasAttachment ||
+                                                  hasRenderableSubjectHeader ||
+                                                  e.retracted ||
+                                                  e.edited);
                                       dashMessages.add(
                                         ChatMessage(
                                           user: author,
                                           createdAt: e.timestamp!.toLocal(),
-                                          text: renderedText,
+                                          text: shouldForceDashText
+                                              ? _dashChatPlaceholderText
+                                              : renderedText,
                                           status: statusFor(e),
                                           customProperties: {
                                             'id': e.stanzaID,
                                             'body': bodyText,
+                                            'renderedText': renderedText,
                                             'fileMetadataID': e.fileMetadataID,
                                             'edited': e.edited,
                                             'retracted': e.retracted,
@@ -3349,7 +3361,10 @@ class _ChatState extends State<Chat> {
                                                         );
                                                         final parsedText =
                                                             parseMessageText(
-                                                          text: message.text,
+                                                          text: (message.customProperties?[
+                                                                      'renderedText']
+                                                                  as String?) ??
+                                                              message.text,
                                                           baseStyle:
                                                               baseTextStyle,
                                                           linkStyle: linkStyle,
@@ -3370,24 +3385,18 @@ class _ChatState extends State<Chat> {
                                                               TextBaseline
                                                                   .alphabetic,
                                                         );
-                                                        final isEmailMessage =
-                                                            (message.customProperties?[
-                                                                        'isEmailMessage']
-                                                                    as bool?) ??
-                                                                (() {
-                                                                  final id = message
-                                                                              .customProperties?[
-                                                                          'id']
-                                                                      as String?;
-                                                                  if (id ==
-                                                                      null) {
-                                                                    return false;
-                                                                  }
-                                                                  return messageById[
-                                                                              id]
-                                                                          ?.deltaMsgId !=
-                                                                      null;
-                                                                }());
+                                                        final messageId = message
+                                                                .customProperties?[
+                                                            'id'] as String?;
+                                                        final isEmailMessage = (message
+                                                                        .customProperties?[
+                                                                    'isEmailMessage']
+                                                                as bool?) ??
+                                                            (messageId !=
+                                                                    null &&
+                                                                messageById[messageId]
+                                                                        ?.deltaMsgId !=
+                                                                    null);
                                                         final transportIconData =
                                                             isEmailMessage
                                                                 ? LucideIcons
@@ -3439,9 +3448,6 @@ class _ChatState extends State<Chat> {
                                                         final trusted = message
                                                                 .customProperties![
                                                             'trusted'] as bool?;
-                                                        final messageId = message
-                                                                .customProperties?[
-                                                            'id'] as String?;
                                                         final messageModel = (message
                                                                         .customProperties?[
                                                                     'model']
@@ -3463,55 +3469,53 @@ class _ChatState extends State<Chat> {
                                                                       .chatAttachmentUnavailable;
                                                           return Padding(
                                                             padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                              horizontal:
-                                                                  _chatHorizontalPadding,
-                                                              vertical: 4,
-                                                            ),
+                                                                _messageFallbackOuterPadding,
                                                             child: Align(
-                                                              alignment: Alignment
-                                                                  .centerLeft,
+                                                              alignment: self
+                                                                  ? Alignment
+                                                                      .centerRight
+                                                                  : Alignment
+                                                                      .centerLeft,
                                                               child:
                                                                   ConstrainedBox(
                                                                 constraints:
                                                                     BoxConstraints(
                                                                   maxWidth:
-                                                                      inboundMessageRowMaxWidth,
+                                                                      bubbleMaxWidth,
                                                                 ),
                                                                 child:
                                                                     DecoratedBox(
                                                                   decoration:
                                                                       BoxDecoration(
-                                                                    color: colors
-                                                                        .card,
+                                                                    color:
+                                                                        bubbleColor,
                                                                     borderRadius:
-                                                                        BorderRadius
-                                                                            .circular(
-                                                                      18,
+                                                                        _bubbleBorderRadius(
+                                                                      isSelf:
+                                                                          self,
+                                                                      chainedPrevious:
+                                                                          chainedPrev,
+                                                                      chainedNext:
+                                                                          chainedNext,
                                                                     ),
-                                                                    border:
-                                                                        Border
+                                                                    border: borderColor ==
+                                                                            Colors
+                                                                                .transparent
+                                                                        ? null
+                                                                        : Border
                                                                             .all(
-                                                                      color: chatTokens
-                                                                          .recvEdge,
-                                                                    ),
+                                                                            color:
+                                                                                borderColor,
+                                                                          ),
                                                                   ),
                                                                   child:
                                                                       Padding(
                                                                     padding:
-                                                                        const EdgeInsets
-                                                                            .symmetric(
-                                                                      horizontal:
-                                                                          12,
-                                                                      vertical:
-                                                                          8,
-                                                                    ),
+                                                                        _messageFallbackInnerPadding,
                                                                     child: Text(
                                                                       resolvedFallback,
-                                                                      style: context
-                                                                          .textTheme
-                                                                          .small,
+                                                                      style:
+                                                                          baseTextStyle,
                                                                     ),
                                                                   ),
                                                                 ),
