@@ -619,7 +619,9 @@ class _RoomMembersDrawerContent extends StatelessWidget {
         }
         return RoomMembersSheet(
           roomState: roomState,
-          canInvite: true,
+          canInvite: roomState.myAffiliation.isOwner ||
+              roomState.myAffiliation.isAdmin ||
+              roomState.myRole.isModerator,
           onInvite: onInvite,
           onAction: onAction,
           onChangeNickname: onChangeNickname,
@@ -844,12 +846,12 @@ class _ChatState extends State<Chat> {
     required String? currentUserId,
   }) {
     if (isGroupChat && myOccupantId != null) {
+      if (quotedMessage.senderJid == myOccupantId) {
+        return true;
+      }
       final quotedOccupantId = quotedMessage.occupantID;
       if (quotedOccupantId != null && quotedOccupantId.isNotEmpty) {
         return quotedOccupantId == myOccupantId;
-      }
-      if (quotedMessage.senderJid == myOccupantId) {
-        return true;
       }
     }
     return _bareJid(quotedMessage.senderJid) == _bareJid(currentUserId);
@@ -2835,18 +2837,19 @@ class _ChatState extends State<Chat> {
                                       final isSelfEmail = senderBare != null &&
                                           emailSelfJid != null &&
                                           senderBare == _bareJid(emailSelfJid);
-                                      final occupantId = e.occupantID;
-                                      final occupant = occupantId == null
-                                          ? null
-                                          : state
-                                              .roomState?.occupants[occupantId];
                                       final isMucSelf = isGroupChat &&
-                                          occupantId != null &&
-                                          occupantId ==
+                                          e.senderJid ==
                                               state.roomState?.myOccupantId;
                                       final isSelf = isSelfXmpp ||
                                           isSelfEmail ||
                                           isMucSelf;
+                                      final occupantId = isGroupChat
+                                          ? (isSelf ? user.id : e.senderJid)
+                                          : null;
+                                      final occupant = !isGroupChat
+                                          ? null
+                                          : state
+                                              .roomState?.occupants[occupantId];
                                       final isEmailMessage =
                                           e.deltaMsgId != null;
                                       final fallbackNick =
@@ -2854,12 +2857,12 @@ class _ChatState extends State<Chat> {
                                               state.chat?.title ??
                                               '';
                                       final author = ChatUser(
-                                        id: isGroupChat && occupantId != null
-                                            ? occupantId
+                                        id: isGroupChat
+                                            ? occupantId!
                                             : (isSelf ? user.id : e.senderJid),
                                         firstName: isSelf
                                             ? user.firstName
-                                            : occupant?.nick ?? fallbackNick,
+                                            : (occupant?.nick ?? fallbackNick),
                                       );
                                       final quotedMessage = e.quoting == null
                                           ? null
