@@ -121,8 +121,7 @@ class RoomState {
 
   OccupantRole get myRole {
     final role = occupants[myOccupantId]?.role;
-    if (role == null || role.isNone) return OccupantRole.participant;
-    return role;
+    return role ?? OccupantRole.none;
   }
 
   List<Occupant> get owners => _sortedByNick(
