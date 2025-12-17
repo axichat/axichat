@@ -90,6 +90,12 @@ final class MucBookmark {
 }
 
 const _privateXmlns = 'jabber:iq:private';
+const _stanzaErrorXmlns = 'urn:ietf:params:xml:ns:xmpp-stanzas';
+const _iqTypeAttr = 'type';
+const _iqResultType = 'result';
+const _iqErrorType = 'error';
+const _errorTag = 'error';
+const _itemNotFoundTag = 'item-not-found';
 const _privateQueryTag = 'query';
 const _bookmarksXmlns = 'storage:bookmarks';
 const _storageTag = 'storage';
@@ -108,6 +114,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
 
   @override
   Future<bool> isSupported() async => true;
+
+  bool _isItemNotFoundResponse(mox.XMLNode stanza) {
+    final error = stanza.firstTag(_errorTag);
+    return error?.firstTag(_itemNotFoundTag, xmlns: _stanzaErrorXmlns) != null;
+  }
 
   Future<List<MucBookmark>> getBookmarks() async {
     final result = await getAttributes().sendStanza(
@@ -128,7 +139,15 @@ final class BookmarksManager extends mox.XmppManagerBase {
       ),
     );
 
-    if (result == null || result.attributes['type'] != 'result') {
+    if (result == null) {
+      throw Exception('bookmark fetch failed');
+    }
+
+    final stanzaType = result.attributes[_iqTypeAttr]?.toString();
+    if (stanzaType != _iqResultType) {
+      if (stanzaType == _iqErrorType && _isItemNotFoundResponse(result)) {
+        return const [];
+      }
       throw Exception('bookmark fetch failed');
     }
 
