@@ -764,6 +764,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null || chat.type != ChatType.groupChat) {
       return;
     }
+    final roomState = state.roomState;
+    if (roomState == null) {
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: 'Room members are still loading.',
+            variant: ChatToastVariant.warning,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      return;
+    }
+    final canInvite = roomState.myAffiliation.isOwner ||
+        roomState.myAffiliation.isAdmin ||
+        roomState.myRole.isModerator;
+    if (!canInvite) {
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: 'You do not have permission to invite users to this room.',
+            variant: ChatToastVariant.warning,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      return;
+    }
     final myDomain = _chatsService.myJid;
     if (myDomain == null) return;
     String? inviteeDomain;
@@ -788,9 +816,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    final roomState = state.roomState;
     final inviteeBareLower = inviteeBare?.toLowerCase();
-    if (roomState != null && inviteeBareLower != null) {
+    if (inviteeBareLower != null) {
       final alreadyMember = roomState.occupants.values.any(
         (occupant) =>
             occupant.realJid != null &&
@@ -819,13 +846,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       emit(
         state.copyWith(
-          toast: ChatToast(message: 'Invited ${event.jid}'),
+          toast: const ChatToast(message: 'Invite sent'),
           toastId: state.toastId + 1,
         ),
       );
     } catch (error, stackTrace) {
       _log.fine(
-        'Failed to invite ${event.jid} to ${chat.jid}',
+        'Failed to send room invite',
         error,
         stackTrace,
       );

@@ -1780,6 +1780,13 @@ WHERE subject_token IS NOT NULL
       final chat = await getChat(existing.chatJid);
       if (chat == null) return;
       final lastMessage = await getLastMessageForChat(chat.jid);
+      final lastMessagePreview = await _messagePreview(
+        trimmedBody: lastMessage?.body?.trim(),
+        fileMetadataId: lastMessage?.fileMetadataID,
+        hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
+        pseudoMessageType: lastMessage?.pseudoMessageType,
+        pseudoMessageData: lastMessage?.pseudoMessageData,
+      );
       final String? trimmedBody = existing.body?.trim();
       final bool hasBody = trimmedBody?.isNotEmpty == true;
       final bool hasAttachment = existing.fileMetadataID?.isNotEmpty == true;
@@ -1791,7 +1798,7 @@ WHERE subject_token IS NOT NULL
               ? chat.unreadCount - 1
               : chat.unreadCount;
       await chatsAccessor.updateOne(chat.copyWith(
-        lastMessage: lastMessage?.body,
+        lastMessage: lastMessagePreview,
         lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
         unreadCount: nextUnreadCount,
       ));
@@ -2283,9 +2290,16 @@ $limitClause
   @override
   Future<void> createChat(Chat chat) async {
     final lastMessage = await getLastMessageForChat(chat.jid);
+    final lastMessagePreview = await _messagePreview(
+      trimmedBody: lastMessage?.body?.trim(),
+      fileMetadataId: lastMessage?.fileMetadataID,
+      hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
+      pseudoMessageType: lastMessage?.pseudoMessageType,
+      pseudoMessageData: lastMessage?.pseudoMessageData,
+    );
 
     return await chatsAccessor.insertOne(chat.copyWith(
-      lastMessage: lastMessage?.body,
+      lastMessage: lastMessagePreview,
       lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
     ));
   }
@@ -2301,6 +2315,13 @@ $limitClause
   @override
   Future<Chat?> openChat(String jid) async {
     final lastMessage = await getLastMessageForChat(jid);
+    final lastMessagePreview = await _messagePreview(
+      trimmedBody: lastMessage?.body?.trim(),
+      fileMetadataId: lastMessage?.fileMetadataID,
+      hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
+      pseudoMessageType: lastMessage?.pseudoMessageType,
+      pseudoMessageData: lastMessage?.pseudoMessageData,
+    );
 
     return await transaction(() async {
       final closed = await closeChat();
@@ -2312,7 +2333,7 @@ $limitClause
           open: const Value(true),
           unreadCount: const Value(0),
           chatState: const Value(mox.ChatState.active),
-          lastMessage: Value(lastMessage?.body),
+          lastMessage: Value(lastMessagePreview),
           lastChangeTimestamp: lastMessage?.timestamp ?? DateTime.timestamp(),
           contactJid: Value(jid),
         ),
