@@ -29,6 +29,8 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
@@ -566,6 +568,8 @@ class XmppService extends XmppBase
         mox.CryptographicHashManager(),
         mox.OccupantIdManager(),
         MucJoinBootstrapManager(),
+        BookmarksManager(),
+        ConversationIndexManager(),
       ]);
 
     return managers;
@@ -587,6 +591,12 @@ class XmppService extends XmppBase
 
   bool get databasesInitialized =>
       _stateStore.isCompleted && _database.isCompleted;
+
+  BookmarksManager? get bookmarksManager =>
+      _connection.getManager<BookmarksManager>();
+
+  ConversationIndexManager? get conversationIndexManager =>
+      _connection.getManager<ConversationIndexManager>();
 
   Future<StoredAvatar?> getOwnAvatar() async {
     if (!_stateStore.isCompleted) return null;

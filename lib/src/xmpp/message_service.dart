@@ -554,6 +554,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
   static const _stableKeyLimit = 500;
   static const _mamDiscoChatLimit = 500;
+  static const Duration _conversationIndexMutedForeverDuration =
+      Duration(days: 3650);
   bool _mamLoginSyncInFlight = false;
 
   final Map<String, Set<String>> _seenStableKeys = {};
@@ -695,6 +697,19 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         }
 
         await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
+        final isPeerChat = !isGroupChat &&
+            message.chatJid.isNotEmpty &&
+            message.chatJid != myJid &&
+            !_isMucChatJid(message.chatJid);
+        if (isPeerChat) {
+          unawaited(
+            _upsertConversationIndexForPeer(
+              peerJid: message.chatJid,
+              lastTimestamp: message.timestamp ?? DateTime.timestamp(),
+              lastId: message.originID ?? message.stanzaID,
+            ),
+          );
+        }
 
         _messageStream.add(message);
       })
@@ -969,6 +984,15 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           (db) => db.markMessageAcked(message.stanzaID),
         );
       }
+      if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != myJid) {
+        unawaited(
+          _upsertConversationIndexForPeer(
+            peerJid: jid,
+            lastTimestamp: message.timestamp ?? DateTime.timestamp(),
+            lastId: message.originID ?? message.stanzaID,
+          ),
+        );
+      }
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to send message ${message.stanzaID}',
@@ -981,6 +1005,59 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       throw XmppMessageException();
     }
     await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
+  }
+
+  Future<void> _upsertConversationIndexForPeer({
+    required String peerJid,
+    required DateTime lastTimestamp,
+    required String? lastId,
+  }) async {
+    if (connectionState != ConnectionState.connected) return;
+    final normalizedPeer = peerJid.trim();
+    if (normalizedPeer.isEmpty) return;
+    if (normalizedPeer == myJid) return;
+    if (_isMucChatJid(normalizedPeer)) return;
+
+    final manager = _connection.getManager<ConversationIndexManager>();
+    if (manager == null) return;
+
+    late final mox.JID peerBare;
+    try {
+      peerBare = mox.JID.fromString(normalizedPeer).toBare();
+    } on Exception {
+      return;
+    }
+
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(peerBare.toString()),
+    );
+    if (chat != null && !chat.transport.isXmpp) return;
+
+    final cached = manager.cachedForPeer(peerBare);
+    final cachedTimestamp = cached?.lastTimestamp;
+    final lastTimestampUtc = lastTimestamp.toUtc();
+    final nextTimestamp =
+        cachedTimestamp != null && cachedTimestamp.isAfter(lastTimestampUtc)
+            ? cachedTimestamp
+            : lastTimestampUtc;
+
+    final mutedUntil = (chat?.muted ?? false)
+        ? DateTime.timestamp()
+            .add(_conversationIndexMutedForeverDuration)
+            .toUtc()
+        : null;
+
+    final trimmedLastId = lastId?.trim();
+    await manager.upsert(
+      ConvItem(
+        peerBare: peerBare,
+        lastTimestamp: nextTimestamp,
+        lastId: trimmedLastId?.isNotEmpty == true ? trimmedLastId : null,
+        pinned: chat?.favorited ?? false,
+        archived: chat?.archived ?? false,
+        mutedUntil: mutedUntil,
+      ),
+    );
   }
 
   Future<void> sendAttachment({
