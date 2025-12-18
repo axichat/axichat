@@ -51,8 +51,8 @@ class ChatsList extends StatelessWidget {
     const refreshFailureMessage = 'Sync failed.';
     const refreshSpinnerExtent = 56.0;
     const refreshSpinnerDimension = 20.0;
-    const refreshOffsetToArmed = 120.0;
-    const refreshRevealThreshold = 0.08;
+    const refreshOffsetToArmed = 96.0;
+    const refreshRevealThreshold = 0.02;
     const refreshIndicatorPadding = 16.0;
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
@@ -262,13 +262,17 @@ class ChatsList extends StatelessWidget {
             onRefresh: context.read<ChatsCubit>().refreshHomeSync,
             offsetToArmed: refreshOffsetToArmed,
             triggerMode: IndicatorTriggerMode.onEdge,
+            leadingScrollIndicatorVisible: true,
             builder: (context, child, controller) {
               final clamped = controller.value.clamp(0.0, 1.0).toDouble();
               final revealFactor = controller.isLoading ? 1.0 : clamped;
-              final showIndicator =
-                  controller.isLoading || clamped > refreshRevealThreshold;
+              final showIndicator = controller.isLoading ||
+                  (controller.hasEdge &&
+                      controller.edge!.isLeading &&
+                      clamped > refreshRevealThreshold);
               if (!showIndicator) return child;
 
+              final revealedExtent = refreshSpinnerExtent * revealFactor;
               final isArmed = controller.state.isArmed;
               final indicatorContent = controller.isLoading
                   ? AxiProgressIndicator(
@@ -288,7 +292,6 @@ class ChatsList extends StatelessWidget {
 
               return Stack(
                 children: [
-                  child,
                   Positioned(
                     top: 0,
                     left: 0,
@@ -321,6 +324,10 @@ class ChatsList extends StatelessWidget {
                         ),
                       ),
                     ),
+                  ),
+                  Transform.translate(
+                    offset: Offset(0, revealedExtent),
+                    child: child,
                   ),
                 ],
               );
