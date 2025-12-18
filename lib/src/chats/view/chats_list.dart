@@ -2,20 +2,20 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/calendar_tile.dart';
-import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
+import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -27,8 +27,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ChatsList extends StatelessWidget {
   const ChatsList({
@@ -139,11 +139,32 @@ class ChatsList extends StatelessWidget {
 
                     Widget body;
                     if (visibleItems.isEmpty) {
-                      body = Center(
-                        child: Text(
-                          l10n.chatsEmptyList,
-                          style: context.textTheme.muted,
-                        ),
+                      body = Column(
+                        children: [
+                          ListItemPadding(
+                            child: BlocBuilder<CalendarBloc, CalendarState>(
+                              builder: (context, state) {
+                                final currentTask =
+                                    state.currentTaskAt(DateTime.now());
+                                return CalendarTile(
+                                  onTap: () => context
+                                      .read<ChatsCubit>()
+                                      .toggleCalendar(),
+                                  currentTask: currentTask,
+                                  nextTask: state.nextTask,
+                                  dueReminderCount:
+                                      state.dueReminders?.length ?? 0,
+                                );
+                              },
+                            ),
+                          ),
+                          Center(
+                            child: Text(
+                              l10n.chatsEmptyList,
+                              style: context.textTheme.muted,
+                            ),
+                          ),
+                        ],
                       );
                     } else {
                       final scrollPhysics = AlwaysScrollableScrollPhysics(
@@ -285,11 +306,11 @@ class ChatsList extends StatelessWidget {
 
               return Stack(
                 children: [
-                  IgnorePointer(
-                    child: Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
                       child: ClipRect(
                         child: Align(
                           alignment: Alignment.bottomCenter,

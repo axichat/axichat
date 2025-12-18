@@ -705,10 +705,6 @@ class _AttachmentApprovalDialogState extends State<_AttachmentApprovalDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 12,
         children: [
-          Text(
-            widget.message,
-            style: context.textTheme.small,
-          ),
           if (widget.showAutoTrustToggle)
             AxiCheckboxFormField(
               initialValue: _autoTrust,
@@ -1197,9 +1193,8 @@ class _ChatState extends State<Chat> {
     final l10n = context.l10n;
     final displaySender =
         senderEmail?.isNotEmpty == true ? senderEmail! : senderJid;
-    const autoTrustLabel = "Automatically download attachments from this user";
-    const autoTrustHint =
-        "Adds them to your contacts so future attachments auto-download. You can turn this off later in chat settings.";
+    const autoTrustLabel = "Automatically download files from this user";
+    const autoTrustHint = "You can turn this off later in chat settings.";
     final senderBare = _bareJid(senderJid) ?? senderJid;
     final isSelf = context.read<XmppService>().myJid?.toLowerCase() ==
         senderBare.toLowerCase();
