@@ -264,6 +264,7 @@ class ChatsList extends StatelessWidget {
             triggerMode: IndicatorTriggerMode.onEdge,
             builder: (context, child, controller) {
               final clamped = controller.value.clamp(0.0, 1.0).toDouble();
+              final revealFactor = controller.isLoading ? 1.0 : clamped;
               final showIndicator =
                   controller.isLoading || clamped > refreshRevealThreshold;
               if (!showIndicator) return child;
@@ -287,6 +288,7 @@ class ChatsList extends StatelessWidget {
 
               return Stack(
                 children: [
+                  child,
                   Positioned(
                     top: 0,
                     left: 0,
@@ -294,7 +296,7 @@ class ChatsList extends StatelessWidget {
                     child: ClipRect(
                       child: Align(
                         alignment: Alignment.bottomCenter,
-                        heightFactor: clamped,
+                        heightFactor: revealFactor,
                         child: SizedBox(
                           height: refreshSpinnerExtent,
                           child: DecoratedBox(
@@ -320,7 +322,6 @@ class ChatsList extends StatelessWidget {
                       ),
                     ),
                   ),
-                  child,
                 ],
               );
             },
