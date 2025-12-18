@@ -10,6 +10,7 @@ class AxiIconButton extends StatelessWidget {
   const AxiIconButton({
     super.key,
     required this.iconData,
+    this.icon,
     this.onPressed,
     this.onLongPress,
     this.tooltip,
@@ -25,6 +26,7 @@ class AxiIconButton extends StatelessWidget {
   });
 
   final IconData iconData;
+  final Widget? icon;
   final void Function()? onPressed;
   final VoidCallback? onLongPress;
   final String? tooltip;
@@ -60,11 +62,12 @@ class AxiIconButton extends StatelessWidget {
         width: resolvedBorderWidth,
       ),
     );
-    final icon = Icon(
-      iconData,
-      size: resolvedIconSize,
-      color: resolvedForeground,
-    );
+    final Widget iconWidget = icon ??
+        Icon(
+          iconData,
+          size: resolvedIconSize,
+          color: resolvedForeground,
+        );
 
     Widget tappable = SizedBox(
       width: resolvedTapTargetSize,
@@ -98,7 +101,7 @@ class AxiIconButton extends StatelessWidget {
               child: SizedBox(
                 width: resolvedButtonSize,
                 height: resolvedButtonSize,
-                child: Center(child: icon),
+                child: Center(child: iconWidget),
               ),
             ),
           ),

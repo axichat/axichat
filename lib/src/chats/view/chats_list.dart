@@ -46,8 +46,6 @@ class ChatsList extends StatelessWidget {
     final showToast = ShadToaster.maybeOf(context)?.show;
     const creationSuccessMessage = 'Group chat created.';
     const creationFailureMessage = 'Could not create group chat.';
-    const refreshSuccessPrefix = 'Last synced at ';
-    const refreshSuccessFallback = 'now';
     const refreshFailureMessage = 'Sync failed.';
     const refreshSpinnerExtent = 56.0;
     const refreshSpinnerDimension = 20.0;
@@ -71,17 +69,6 @@ class ChatsList extends StatelessWidget {
           context.read<ChatsCubit>().clearCreationStatus();
         }
         if (state.refreshStatus.isSuccess) {
-          final syncedAt = state.lastSyncedAt;
-          final formatted = syncedAt == null
-              ? refreshSuccessFallback
-              : MaterialLocalizations.of(context).formatTimeOfDay(
-                  TimeOfDay.fromDateTime(syncedAt.toLocal()),
-                );
-          showToast?.call(
-            FeedbackToast.success(
-              message: '$refreshSuccessPrefix$formatted',
-            ),
-          );
           context.read<ChatsCubit>().clearRefreshStatus();
         } else if (state.refreshStatus.isFailure) {
           showToast?.call(
@@ -261,63 +248,71 @@ class ChatsList extends StatelessWidget {
           return CustomRefreshIndicator(
             onRefresh: context.read<ChatsCubit>().refreshHomeSync,
             offsetToArmed: refreshOffsetToArmed,
-            triggerMode: IndicatorTriggerMode.onEdge,
+            triggerMode: IndicatorTriggerMode.anywhere,
             leadingScrollIndicatorVisible: true,
             builder: (context, child, controller) {
               final clamped = controller.value.clamp(0.0, 1.0).toDouble();
-              final revealFactor = controller.isLoading ? 1.0 : clamped;
-              final showIndicator = controller.isLoading ||
-                  (controller.hasEdge &&
-                      controller.edge!.isLeading &&
-                      clamped > refreshRevealThreshold);
-              if (!showIndicator) return child;
+              final isLeadingPull =
+                  controller.hasEdge && controller.edge!.isLeading;
+              final isActive = controller.isLoading ||
+                  (isLeadingPull && !controller.state.isIdle);
+              final isRevealed =
+                  isActive && (controller.isLoading || clamped > 0.0);
+              final revealFactor =
+                  isRevealed ? (controller.isLoading ? 1.0 : clamped) : 0.0;
 
               final revealedExtent = refreshSpinnerExtent * revealFactor;
               final isArmed = controller.state.isArmed;
-              final indicatorContent = controller.isLoading
-                  ? AxiProgressIndicator(
-                      dimension: refreshSpinnerDimension,
-                      color: context.colorScheme.primary,
-                    )
-                  : AnimatedRotation(
-                      turns: isArmed ? 0.5 : 0.0,
-                      duration: baseAnimationDuration,
-                      curve: Curves.easeOutCubic,
-                      child: Icon(
-                        LucideIcons.arrowDown,
-                        size: refreshSpinnerDimension,
-                        color: context.colorScheme.primary,
-                      ),
-                    );
+              final showIndicator = isLeadingPull &&
+                  (controller.isLoading || clamped > refreshRevealThreshold);
+              final indicatorContent = !showIndicator
+                  ? const SizedBox.shrink()
+                  : controller.isLoading
+                      ? AxiProgressIndicator(
+                          dimension: refreshSpinnerDimension,
+                          color: context.colorScheme.primary,
+                        )
+                      : AnimatedRotation(
+                          turns: isArmed ? 0.5 : 0.0,
+                          duration: baseAnimationDuration,
+                          curve: Curves.easeOutCubic,
+                          child: Icon(
+                            LucideIcons.arrowDown,
+                            size: refreshSpinnerDimension,
+                            color: context.colorScheme.primary,
+                          ),
+                        );
 
               return Stack(
                 children: [
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: ClipRect(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        heightFactor: revealFactor,
-                        child: SizedBox(
-                          height: refreshSpinnerExtent,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: context.colorScheme.card,
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: context.colorScheme.border,
+                  IgnorePointer(
+                    child: Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: ClipRect(
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          heightFactor: revealFactor,
+                          child: SizedBox(
+                            height: refreshSpinnerExtent,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: context.colorScheme.card,
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: context.colorScheme.border,
+                                  ),
                                 ),
                               ),
-                            ),
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: refreshIndicatorPadding,
+                              child: Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: refreshIndicatorPadding,
+                                  ),
+                                  child: indicatorContent,
                                 ),
-                                child: indicatorContent,
                               ),
                             ),
                           ),
