@@ -3,6 +3,7 @@ import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/avatar_cropper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -188,7 +189,7 @@ class _AvatarSummaryCard extends StatelessWidget {
     final cubit = context.read<AvatarEditorCubit>();
     final size = isWide ? 104.0 : 88.0;
     final previewBytes = state.previewBytes ?? state.sourceBytes;
-    const avatarSavedMessage = 'Avatar saved.';
+    final avatarSavedMessage = l10n.avatarSavedMessage;
     final showSuccessMessage = !state.publishing &&
         state.error == null &&
         state.lastSavedHash != null &&
@@ -362,6 +363,7 @@ class _CropCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = context.colorScheme;
     final cubit = context.read<AvatarEditorCubit>();
     final sourceBytes = state.sourceBytes;
@@ -393,11 +395,11 @@ class _CropCard extends StatelessWidget {
         spacing: 12.0,
         children: [
           Text(
-            'Crop & focus',
+            l10n.avatarCropTitle,
             style: context.textTheme.h4.copyWith(color: colors.foreground),
           ),
           Text(
-            'Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.',
+            l10n.avatarCropDescription,
             style:
                 context.textTheme.small.copyWith(color: colors.mutedForeground),
           ),
@@ -411,7 +413,7 @@ class _CropCard extends StatelessWidget {
                 border: Border.all(color: colors.border),
               ),
               child: Text(
-                'Add a photo or pick a default avatar to adjust the framing.',
+                l10n.avatarCropPlaceholder,
                 style: context.textTheme.small.copyWith(
                   color: colors.mutedForeground,
                 ),
@@ -442,12 +444,12 @@ class _CropCard extends StatelessWidget {
                     spacing: 4.0,
                     children: [
                       Text(
-                        '${cropRect.width.round()} px crop',
+                        l10n.avatarCropSizeLabel(cropRect.width.round()),
                         style: context.textTheme.small
                             .copyWith(color: colors.foreground),
                       ),
                       Text(
-                        'Saved at 256×256 • < 64 KB',
+                        l10n.avatarCropSavedSize,
                         style: context.textTheme.small.copyWith(
                           color: colors.mutedForeground,
                         ),
@@ -471,6 +473,7 @@ class _BackgroundPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final cubit = context.read<AvatarEditorCubit>();
     final colors = context.colorScheme;
     final template = state.template;
@@ -495,11 +498,11 @@ class _BackgroundPicker extends StatelessWidget {
         spacing: 12.0,
         children: [
           Text(
-            'Background color',
+            l10n.avatarBackgroundTitle,
             style: context.textTheme.h4.copyWith(color: colors.foreground),
           ),
           Text(
-            'Use the wheel or presets to tint transparent avatars before saving.',
+            l10n.avatarBackgroundDescription,
             style:
                 context.textTheme.small.copyWith(color: colors.mutedForeground),
           ),
@@ -536,12 +539,12 @@ class _BackgroundPicker extends StatelessWidget {
                 colorCodePrefixStyle: context.textTheme.small
                     .copyWith(color: colors.mutedForeground),
                 heading: Text(
-                  'Wheel & hex',
+                  l10n.avatarBackgroundWheelTitle,
                   style: context.textTheme.small
                       .copyWith(color: colors.foreground),
                 ),
                 subheading: Text(
-                  'Drag the wheel or enter a hex value.',
+                  l10n.avatarBackgroundWheelDescription,
                   style: context.textTheme.small
                       .copyWith(color: colors.mutedForeground),
                 ),
@@ -564,7 +567,7 @@ class _BackgroundPicker extends StatelessWidget {
               onPressed: state.backgroundColor == Colors.transparent
                   ? null
                   : () => cubit.setBackgroundColor(Colors.transparent, colors),
-              child: const Text('Transparent'),
+              child: Text(l10n.avatarBackgroundTransparent),
             ),
           ),
           Wrap(
@@ -601,7 +604,7 @@ class _BackgroundPicker extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Preview saved circle tint.',
+                  l10n.avatarBackgroundPreview,
                   style: context.textTheme.small
                       .copyWith(color: colors.mutedForeground),
                 ),
@@ -629,12 +632,13 @@ class _DefaultsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final cubit = context.read<AvatarEditorCubit>();
+    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _avatarDefaultsSectionSpacing,
       children: [
         Text(
-          'Default avatars',
+          l10n.avatarDefaultsTitle,
           style: context.textTheme.h4.copyWith(color: colors.foreground),
         ),
         LayoutBuilder(
@@ -667,7 +671,7 @@ class _DefaultsSection extends StatelessWidget {
                     SizedBox(
                       width: cardWidth,
                       child: _CategoryCarouselCard(
-                        title: entry.key.label,
+                        title: entry.key.label(l10n),
                         templates: entry.value,
                         selectedId: state.template?.id,
                         onSelect: (template) =>
@@ -702,13 +706,106 @@ const _avatarTemplateCarouselItemSpacing = 12.0;
 const _avatarTemplateCarouselMinViewportFraction = 0.28;
 
 extension _AvatarTemplateCategoryLabel on AvatarTemplateCategory {
-  String get label => switch (this) {
-        AvatarTemplateCategory.abstract => 'Abstract',
-        AvatarTemplateCategory.stem => 'STEM',
-        AvatarTemplateCategory.sports => 'Sports',
-        AvatarTemplateCategory.music => 'Music',
-        AvatarTemplateCategory.misc => 'Hobbies & Games',
+  String label(AppLocalizations l10n) => switch (this) {
+        AvatarTemplateCategory.abstract => l10n.avatarCategoryAbstract,
+        AvatarTemplateCategory.stem => l10n.avatarCategoryStem,
+        AvatarTemplateCategory.sports => l10n.avatarCategorySports,
+        AvatarTemplateCategory.music => l10n.avatarCategoryMusic,
+        AvatarTemplateCategory.misc => l10n.avatarCategoryMisc,
       };
+}
+
+extension _AvatarTemplateLocalization on AvatarTemplate {
+  String label(AppLocalizations l10n) {
+    if (id.startsWith('abstract-')) {
+      final number = int.tryParse(id.split('-').last);
+      return l10n.avatarTemplateAbstract(number ?? 0);
+    }
+    switch (id) {
+      case 'stem-atom':
+        return l10n.avatarTemplateAtom;
+      case 'stem-beaker':
+        return l10n.avatarTemplateBeaker;
+      case 'stem-compass':
+        return l10n.avatarTemplateCompass;
+      case 'stem-cpu':
+        return l10n.avatarTemplateCpu;
+      case 'stem-gear':
+        return l10n.avatarTemplateGear;
+      case 'stem-globe':
+        return l10n.avatarTemplateGlobe;
+      case 'stem-laptop':
+        return l10n.avatarTemplateLaptop;
+      case 'stem-microscope':
+        return l10n.avatarTemplateMicroscope;
+      case 'stem-robot':
+        return l10n.avatarTemplateRobot;
+      case 'stem-stethoscope':
+        return l10n.avatarTemplateStethoscope;
+      case 'stem-telescope':
+        return l10n.avatarTemplateTelescope;
+      case 'sports-archery':
+        return l10n.avatarTemplateArchery;
+      case 'sports-baseball':
+        return l10n.avatarTemplateBaseball;
+      case 'sports-basketball':
+        return l10n.avatarTemplateBasketball;
+      case 'sports-boxing':
+        return l10n.avatarTemplateBoxing;
+      case 'sports-cycling':
+        return l10n.avatarTemplateCycling;
+      case 'sports-darts':
+        return l10n.avatarTemplateDarts;
+      case 'sports-football':
+        return l10n.avatarTemplateFootball;
+      case 'sports-golf':
+        return l10n.avatarTemplateGolf;
+      case 'sports-pingpong':
+        return l10n.avatarTemplatePingPong;
+      case 'sports-ski':
+        return l10n.avatarTemplateSkiing;
+      case 'sports-soccer':
+        return l10n.avatarTemplateSoccer;
+      case 'sports-tennis':
+        return l10n.avatarTemplateTennis;
+      case 'sports-volleyball':
+        return l10n.avatarTemplateVolleyball;
+      case 'music-drum':
+        return l10n.avatarTemplateDrums;
+      case 'music-electricguitar':
+        return l10n.avatarTemplateElectricGuitar;
+      case 'music-guitar':
+        return l10n.avatarTemplateGuitar;
+      case 'music-microphone':
+        return l10n.avatarTemplateMicrophone;
+      case 'music-piano':
+        return l10n.avatarTemplatePiano;
+      case 'music-saxophone':
+        return l10n.avatarTemplateSaxophone;
+      case 'music-violin':
+        return l10n.avatarTemplateViolin;
+      case 'misc-cards':
+        return l10n.avatarTemplateCards;
+      case 'misc-chess':
+        return l10n.avatarTemplateChess;
+      case 'misc-chess2':
+        return l10n.avatarTemplateChessAlt;
+      case 'misc-dice':
+        return l10n.avatarTemplateDice;
+      case 'misc-dice2':
+        return l10n.avatarTemplateDiceAlt;
+      case 'misc-esports':
+        return l10n.avatarTemplateEsports;
+      case 'misc-sword':
+        return l10n.avatarTemplateSword;
+      case 'misc-videogames':
+        return l10n.avatarTemplateVideoGames;
+      case 'misc-videogames2':
+        return l10n.avatarTemplateVideoGamesAlt;
+      default:
+        return id;
+    }
+  }
 }
 
 class _CategoryCarouselCard extends StatefulWidget {
@@ -736,6 +833,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = context.colorScheme;
     final templates = widget.templates;
     if (templates.isEmpty) return const SizedBox.shrink();
@@ -758,7 +856,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
               ),
               AxiIconButton(
                 iconData: LucideIcons.chevronLeft,
-                tooltip: 'Previous',
+                tooltip: l10n.commonPrevious,
                 onPressed: canNavigate
                     ? () => _carouselController.previousPage(
                           duration: baseAnimationDuration,
@@ -769,7 +867,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
               const SizedBox(width: _avatarDefaultsCarouselControlSpacing),
               AxiIconButton(
                 iconData: LucideIcons.chevronRight,
-                tooltip: 'Next',
+                tooltip: l10n.commonNext,
                 onPressed: canNavigate
                     ? () => _carouselController.nextPage(
                           duration: baseAnimationDuration,
@@ -830,6 +928,7 @@ class _TemplatePreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = context.colorScheme;
     final previewBackground =
         template.hasAlphaBackground ? colors.card : colors.card;
@@ -894,7 +993,7 @@ class _TemplatePreviewCard extends StatelessWidget {
                   vertical: 8.0,
                 ),
                 child: Text(
-                  template.label,
+                  template.label(l10n),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: labelStyle,

@@ -1223,15 +1223,15 @@ Future<String?> promptCriticalPathName({
                             focusNode.requestFocus();
                             return;
                           }
-                          Navigator.of(dialogContext)
-                              .pop(controller.text.trim());
-                        },
-                        child: const Text('Save'),
-                      ).withTapBounce(),
-                    ],
-                  ),
-                ],
-              ),
+                        Navigator.of(dialogContext)
+                            .pop(controller.text.trim());
+                      },
+                      child: Text(context.l10n.commonSave),
+                    ).withTapBounce(),
+                  ],
+                ),
+              ],
+            ),
             ),
           );
         },

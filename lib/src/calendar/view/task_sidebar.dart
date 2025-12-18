@@ -2269,7 +2269,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                   const SizedBox(width: calendarInsetSm),
                   ShadButton.destructive(
                     onPressed: () => Navigator.of(sheetContext).pop(true),
-                    child: const Text('Delete'),
+                    child: Text(sheetContext.l10n.commonDelete),
                   ).withTapBounce(),
                 ],
               ),
