@@ -1077,5 +1077,144 @@
   "chatMessageOpenChat": "Open chat",
   "chatMessageStatusDisplayed": "Read",
   "chatMessageStatusReceived": "Received",
-  "chatMessageStatusSent": "Sent"
+  "chatMessageStatusSent": "Sent",
+  "commonActions": "Actions",
+  "commonNext": "Next",
+  "commonPrevious": "Previous",
+  "emailDemoAccountLabel": "Account: {account}",
+  "emailDemoDefaultMessage": "Hello from Axichat",
+  "emailDemoDisplayNameSelf": "Self",
+  "emailDemoErrorMissingPassphrase": "Missing database passphrase.",
+  "emailDemoErrorMissingPrefix": "Missing database prefix.",
+  "emailDemoErrorMissingProfile": "No primary profile found. Log in first.",
+  "emailDemoMessageLabel": "Demo message",
+  "emailDemoProvisionButton": "Provision Email",
+  "emailDemoSendButton": "Send Demo Message",
+  "emailDemoStatusIdle": "Idle",
+  "emailDemoStatusLabel": "Status: {status}",
+  "emailDemoStatusLoginToProvision": "Log in to provision email.",
+  "emailDemoStatusNotProvisioned": "Not provisioned",
+  "emailDemoStatusProvisionFailed": "Provisioning failed: {error}",
+  "emailDemoStatusProvisionFirst": "Provision an account first.",
+  "emailDemoStatusProvisioned": "Provisioned {address}",
+  "emailDemoStatusProvisioning": "Provisioning email account…",
+  "emailDemoStatusReady": "Ready",
+  "emailDemoStatusSendFailed": "Send failed: {error}",
+  "emailDemoStatusSending": "Sending demo message…",
+  "emailDemoStatusSent": "Sent demo message (id={id})",
+  "emailDemoTitle": "Email Transport Demo",
+  "verificationAddLabelPlaceholder": "Add label",
+  "verificationCurrentDevice": "Current device",
+  "verificationDeviceIdLabel": "ID: {id}",
+  "verificationNotTrusted": "Not trusted",
+  "verificationRegenerateDevice": "Regenerate device",
+  "verificationRegenerateWarning": "Only do this if you are an expert.",
+  "verificationTrustBlind": "Blind trust",
+  "verificationTrustNone": "No trust",
+  "verificationTrustVerified": "Verified",
+  "verificationTrusted": "Trusted",
+  "avatarSavedMessage": "Avatar saved.",
+  "avatarCropTitle": "Crop & focus",
+  "avatarCropDescription": "Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.",
+  "avatarCropPlaceholder": "Add a photo or pick a default avatar to adjust the framing.",
+  "avatarCropSizeLabel": "{pixels} px crop",
+  "avatarCropSavedSize": "Saved at 256×256 • < 64 KB",
+  "avatarBackgroundTitle": "Background color",
+  "avatarBackgroundDescription": "Use the wheel or presets to tint transparent avatars before saving.",
+  "avatarBackgroundWheelTitle": "Wheel & hex",
+  "avatarBackgroundWheelDescription": "Drag the wheel or enter a hex value.",
+  "avatarBackgroundTransparent": "Transparent",
+  "avatarBackgroundPreview": "Preview saved circle tint.",
+  "avatarDefaultsTitle": "Default avatars",
+  "avatarCategoryAbstract": "Abstract",
+  "avatarCategoryStem": "STEM",
+  "avatarCategorySports": "Sports",
+  "avatarCategoryMusic": "Music",
+  "avatarCategoryMisc": "Hobbies & Games",
+  "avatarTemplateAbstract": "Abstract {index}",
+  "avatarTemplateAtom": "Atom",
+  "avatarTemplateBeaker": "Beaker",
+  "avatarTemplateCompass": "Compass",
+  "avatarTemplateCpu": "CPU",
+  "avatarTemplateGear": "Gear",
+  "avatarTemplateGlobe": "Globe",
+  "avatarTemplateLaptop": "Laptop",
+  "avatarTemplateMicroscope": "Microscope",
+  "avatarTemplateRobot": "Robot",
+  "avatarTemplateStethoscope": "Stethoscope",
+  "avatarTemplateTelescope": "Telescope",
+  "avatarTemplateArchery": "Archery",
+  "avatarTemplateBaseball": "Baseball",
+  "avatarTemplateBasketball": "Basketball",
+  "avatarTemplateBoxing": "Boxing",
+  "avatarTemplateCycling": "Cycling",
+  "avatarTemplateDarts": "Darts",
+  "avatarTemplateFootball": "Football",
+  "avatarTemplateGolf": "Golf",
+  "avatarTemplatePingPong": "Ping Pong",
+  "avatarTemplateSkiing": "Skiing",
+  "avatarTemplateSoccer": "Soccer",
+  "avatarTemplateTennis": "Tennis",
+  "avatarTemplateVolleyball": "Volleyball",
+  "avatarTemplateDrums": "Drums",
+  "avatarTemplateElectricGuitar": "Electric Guitar",
+  "avatarTemplateGuitar": "Guitar",
+  "avatarTemplateMicrophone": "Microphone",
+  "avatarTemplatePiano": "Piano",
+  "avatarTemplateSaxophone": "Saxophone",
+  "avatarTemplateViolin": "Violin",
+  "avatarTemplateCards": "Cards",
+  "avatarTemplateChess": "Chess",
+  "avatarTemplateChessAlt": "Chess Alt",
+  "avatarTemplateDice": "Dice",
+  "avatarTemplateDiceAlt": "Dice Alt",
+  "avatarTemplateEsports": "Esports",
+  "avatarTemplateSword": "Sword",
+  "avatarTemplateVideoGames": "Video Games",
+  "avatarTemplateVideoGamesAlt": "Video Games Alt",
+  "@emailDemoAccountLabel": {
+    "placeholders": {
+      "account": {}
+    }
+  },
+  "@emailDemoStatusLabel": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "@emailDemoStatusProvisioned": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "@emailDemoStatusProvisionFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@emailDemoStatusSent": {
+    "placeholders": {
+      "id": {}
+    }
+  },
+  "@emailDemoStatusSendFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@avatarCropSizeLabel": {
+    "placeholders": {
+      "pixels": {}
+    }
+  },
+  "@avatarTemplateAbstract": {
+    "placeholders": {
+      "index": {}
+    }
+  },
+  "@verificationDeviceIdLabel": {
+    "placeholders": {
+      "id": {}
+    }
+  }
 }

@@ -705,6 +705,14 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
             chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
           );
         }
+        if (metadata != null && !isGroupChat) {
+          unawaited(
+            _autoDownloadTrustedInboundAttachment(
+              message: message,
+              metadataId: metadata.id,
+            ),
+          );
+        }
 
         await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
         final isPeerChat = !isGroupChat &&
@@ -712,6 +720,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
             message.chatJid != myJid &&
             !_isMucChatJid(message.chatJid);
         if (isPeerChat) {
+          if (this is AvatarService) {
+            unawaited(
+              (this as AvatarService).prefetchAvatarForJid(message.chatJid),
+            );
+          }
           unawaited(
             _upsertConversationIndexForPeer(
               peerJid: message.chatJid,
@@ -940,6 +953,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
       _log.warning('Blocked XMPP send to foreign domain: $jid');
       throw XmppForeignDomainException();
+    }
+    if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
+      if (this is AvatarService) {
+        unawaited(
+          (this as AvatarService).prefetchAvatarForJid(jid),
+        );
+      }
     }
     final senderJid = chatType == ChatType.groupChat
         ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
@@ -3099,6 +3119,34 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       result |= left[index] ^ right[index];
     }
     return result == 0;
+  }
+
+  Future<void> _autoDownloadTrustedInboundAttachment({
+    required Message message,
+    required String metadataId,
+  }) async {
+    final trimmedMetadataId = metadataId.trim();
+    if (trimmedMetadataId.isEmpty) return;
+    final stanzaId = message.stanzaID.trim();
+    if (stanzaId.isEmpty) return;
+    try {
+      final accountJid = myJid?.trim();
+      final isSelf = accountJid != null &&
+          message.senderJid.trim().toLowerCase() == accountJid.toLowerCase();
+      var isTrusted = isSelf;
+      if (!isTrusted) {
+        isTrusted = await _dbOpReturning<XmppDatabase, bool>(
+          (db) async => (await db.getRosterItem(message.chatJid)) != null,
+        );
+      }
+      if (!isTrusted) return;
+      await downloadInboundAttachment(
+        metadataId: trimmedMetadataId,
+        stanzaId: stanzaId,
+      );
+    } on Exception {
+      // Best-effort: errors are reflected on the message via fileDownloadFailure.
+    }
   }
 
 // Future<bool> _downloadAllowed(String chatJid) async {

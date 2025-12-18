@@ -409,11 +409,12 @@ mixin AvatarService on XmppBase {
               await _maybeRepairSelfAvatar(bareJid);
               return;
             }
-            if (existingHash != null && existingHash.trim().isNotEmpty) {
-              await _clearAvatarForJid(bareJid);
-            }
+            await _refreshAvatarFromVCardRequest(bareJid, force: true);
             return;
           case _AvatarMetadataLoadFailed():
+            if (!isSelf) {
+              await _refreshAvatarFromVCardRequest(bareJid, force: true);
+            }
             return;
         }
       }

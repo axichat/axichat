@@ -1,6 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/verification/bloc/verification_cubit.dart';
@@ -15,6 +17,7 @@ class VerificationSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return BlocBuilder<ProfileCubit, ProfileState>(builder: (context, state) {
       final self = state.fingerprint?.deviceID == fingerprint.deviceID &&
           state.fingerprint?.jid == fingerprint.jid;
@@ -29,16 +32,20 @@ class VerificationSelector extends StatelessWidget {
           spacing: 8.0,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text('ID: ${fingerprint.deviceID.toString()}'),
+            Text(
+              l10n.verificationDeviceIdLabel(
+                fingerprint.deviceID.toString(),
+              ),
+            ),
             const SizedBox.square(dimension: 8),
             if (self)
-              const Text('Current device')
+              Text(l10n.verificationCurrentDevice)
             else
               SizedBox(
                 width: 200.0,
                 child: AxiTextFormField(
                   initialValue: fingerprint.label,
-                  placeholder: const Text('Add label'),
+                  placeholder: Text(l10n.verificationAddLabelPlaceholder),
                   onSubmitted: (value) =>
                       context.read<VerificationCubit?>()?.labelFingerprint(
                             jid: fingerprint.jid,
@@ -54,7 +61,7 @@ class VerificationSelector extends StatelessWidget {
               ShadButton.secondary(
                 enabled: !state.regenerating,
                 child: Text(
-                  'Regenerate device',
+                  l10n.verificationRegenerateDevice,
                   style: TextStyle(
                     color: context.colorScheme.destructive,
                   ),
@@ -62,7 +69,7 @@ class VerificationSelector extends StatelessWidget {
                 onPressed: () async {
                   if (await confirm(
                         context,
-                        text: 'Only do this if you are an expert.',
+                        text: l10n.verificationRegenerateWarning,
                       ) !=
                       true) {
                     return;
@@ -93,12 +100,12 @@ class VerificationSelector extends StatelessWidget {
                     options: BTBVTrustState.values
                         .map((trust) => ShadOption<BTBVTrustState>(
                               value: trust,
-                              child: Text(trust.asString),
+                              child: Text(trust.label(l10n)),
                             ))
                         .toList(),
                     selectedOptionBuilder:
                         (BuildContext context, BTBVTrustState value) =>
-                            Text(value.asString),
+                            Text(value.label(l10n)),
                   ),
                 ],
               ),
@@ -114,7 +121,11 @@ class VerificationSelector extends StatelessWidget {
                         ? axiGreen
                         : context.colorScheme.destructive,
                   ),
-                  Text(fingerprint.trusted ? 'Trusted' : 'Not trusted'),
+                  Text(
+                    fingerprint.trusted
+                        ? l10n.verificationTrusted
+                        : l10n.verificationNotTrusted,
+                  ),
                 ],
               ),
             ],
@@ -123,4 +134,12 @@ class VerificationSelector extends StatelessWidget {
       );
     });
   }
+}
+
+extension _TrustStateLocalization on BTBVTrustState {
+  String label(AppLocalizations l10n) => switch (this) {
+        BTBVTrustState.notTrusted => l10n.verificationTrustNone,
+        BTBVTrustState.blindTrust => l10n.verificationTrustBlind,
+        BTBVTrustState.verified => l10n.verificationTrustVerified,
+      };
 }

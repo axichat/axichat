@@ -639,6 +639,93 @@ class _RoomMembersDrawerContent extends StatelessWidget {
   }
 }
 
+final class _AttachmentApprovalDecision {
+  const _AttachmentApprovalDecision({
+    required this.approved,
+    required this.autoTrust,
+  });
+
+  final bool approved;
+  final bool autoTrust;
+}
+
+class _AttachmentApprovalDialog extends StatefulWidget {
+  const _AttachmentApprovalDialog({
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+    required this.cancelLabel,
+    required this.showAutoTrustToggle,
+    required this.autoTrustLabel,
+    required this.autoTrustHint,
+  });
+
+  final String title;
+  final String message;
+  final String confirmLabel;
+  final String cancelLabel;
+  final bool showAutoTrustToggle;
+  final String autoTrustLabel;
+  final String autoTrustHint;
+
+  @override
+  State<_AttachmentApprovalDialog> createState() =>
+      _AttachmentApprovalDialogState();
+}
+
+class _AttachmentApprovalDialogState extends State<_AttachmentApprovalDialog> {
+  var _autoTrust = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final pop = Navigator.of(context).pop;
+    return ShadDialog(
+      title: Text(
+        widget.title,
+        style: context.modalHeaderTextStyle,
+      ),
+      actions: [
+        ShadButton.outline(
+          onPressed: () => pop(const _AttachmentApprovalDecision(
+            approved: false,
+            autoTrust: false,
+          )),
+          child: Text(widget.cancelLabel),
+        ).withTapBounce(),
+        ShadButton(
+          onPressed: () => pop(_AttachmentApprovalDecision(
+            approved: true,
+            autoTrust: _autoTrust,
+          )),
+          child: Text(widget.confirmLabel),
+        ).withTapBounce(),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 12,
+        children: [
+          Text(
+            widget.message,
+            style: context.textTheme.small,
+          ),
+          if (widget.showAutoTrustToggle)
+            AxiCheckboxFormField(
+              initialValue: _autoTrust,
+              inputLabel: Text(widget.autoTrustLabel),
+              inputSublabel: Text(widget.autoTrustHint),
+              onChanged: (value) {
+                setState(() {
+                  _autoTrust = value;
+                });
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ChatState extends State<Chat> {
   late final ShadPopoverController _emojiPopoverController;
   late final FocusNode _focusNode;
@@ -649,7 +736,7 @@ class _ChatState extends State<Chat> {
   late final ScrollController _scrollController;
   bool _composerHasText = false;
   String _lastSubjectValue = '';
-  final _approvedAttachmentSenders = <String>{};
+  final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _fileMetadataStreamEntries = <String, _FileMetadataStreamEntry>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
@@ -1085,29 +1172,76 @@ class _ChatState extends State<Chat> {
   }) {
     if (isSelf) return true;
     if (isEmailChat) return true;
-    if (_approvedAttachmentSenders.contains(senderJid)) return true;
-    if (knownContacts.contains(senderJid)) return true;
+    final bareSender = _bareJid(senderJid);
+    final normalizedSender =
+        bareSender?.trim().isNotEmpty == true ? bareSender! : senderJid;
+    if (knownContacts.contains(normalizedSender)) return true;
     return false;
+  }
+
+  bool _isOneTimeAttachmentAllowed(String stanzaId) {
+    final trimmed = stanzaId.trim();
+    if (trimmed.isEmpty) return false;
+    return _oneTimeAllowedAttachmentStanzaIds.contains(trimmed);
   }
 
   Future<void> _approveAttachment({
     required String senderJid,
+    required String stanzaId,
+    required String metadataId,
+    required bool isGroupChat,
+    required bool isEmailChat,
     String? senderEmail,
   }) async {
     if (!mounted) return;
     final l10n = context.l10n;
     final displaySender =
         senderEmail?.isNotEmpty == true ? senderEmail! : senderJid;
-    final confirmed = await confirm(
-      context,
-      title: l10n.chatAttachmentConfirmTitle,
-      message: l10n.chatAttachmentConfirmMessage(displaySender),
-      confirmLabel: l10n.chatAttachmentConfirmButton,
-      destructiveConfirm: false,
+    const autoTrustLabel = "Automatically download attachments from this user";
+    const autoTrustHint =
+        "Adds them to your contacts so future attachments auto-download. You can turn this off later in chat settings.";
+    final senderBare = _bareJid(senderJid) ?? senderJid;
+    final isSelf = context.read<XmppService>().myJid?.toLowerCase() ==
+        senderBare.toLowerCase();
+    final canAddToRoster = !isSelf &&
+        !isEmailChat &&
+        !isGroupChat &&
+        senderBare.isValidJid &&
+        senderBare.isNotEmpty;
+    final decision = await showShadDialog<_AttachmentApprovalDecision>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return _AttachmentApprovalDialog(
+          title: l10n.chatAttachmentConfirmTitle,
+          message: l10n.chatAttachmentConfirmMessage(displaySender),
+          confirmLabel: l10n.chatAttachmentConfirmButton,
+          cancelLabel: l10n.commonCancel,
+          showAutoTrustToggle: canAddToRoster,
+          autoTrustLabel: autoTrustLabel,
+          autoTrustHint: autoTrustHint,
+        );
+      },
     );
-    if (confirmed == true && mounted) {
+    if (!mounted) return;
+    if (decision == null || !decision.approved) return;
+
+    final xmpp = context.read<XmppService>();
+    final showToast = ShadToaster.maybeOf(context)?.show;
+    if (decision.autoTrust && canAddToRoster) {
+      try {
+        await xmpp.addToRoster(jid: senderBare);
+      } on Exception {
+        const title = 'Unable to add contact';
+        const message =
+            'Downloaded this attachment once, but automatic downloads are still disabled.';
+        showToast?.call(FeedbackToast.error(title: title, message: message));
+      }
+    }
+
+    if (mounted) {
       setState(() {
-        _approvedAttachmentSenders.add(senderJid);
+        _oneTimeAllowedAttachmentStanzaIds.add(stanzaId.trim());
       });
     }
   }
@@ -1182,7 +1316,7 @@ class _ChatState extends State<Chat> {
         final colors = sheetContext.colorScheme;
         return AxiSheetScaffold.scroll(
           header: AxiSheetHeader(
-            title: const Text('Actions'),
+            title: Text(sheetContext.l10n.commonActions),
             onClose: () => Navigator.of(sheetContext).maybePop(),
           ),
           children: [
@@ -4034,7 +4168,7 @@ class _ChatState extends State<Chat> {
                                                                   height: 8),
                                                             );
                                                           }
-                                                          final allowAttachment =
+                                                          final allowAttachmentByRoster =
                                                               _shouldAllowAttachment(
                                                             senderJid:
                                                                 messageModel
@@ -4047,6 +4181,14 @@ class _ChatState extends State<Chat> {
                                                             isEmailChat:
                                                                 isEmailChat,
                                                           );
+                                                          final allowAttachmentOnce =
+                                                              _isOneTimeAttachmentAllowed(
+                                                            messageModel
+                                                                .stanzaID,
+                                                          );
+                                                          final allowAttachment =
+                                                              allowAttachmentByRoster ||
+                                                                  allowAttachmentOnce;
                                                           bubbleChildren.add(
                                                             ChatAttachmentPreview(
                                                               stanzaId:
@@ -4062,6 +4204,10 @@ class _ChatState extends State<Chat> {
                                                               ),
                                                               allowed:
                                                                   allowAttachment,
+                                                              autoDownload:
+                                                                  allowAttachment,
+                                                              autoDownloadUserInitiated:
+                                                                  allowAttachmentOnce,
                                                               onAllowPressed:
                                                                   allowAttachment
                                                                       ? null
@@ -4069,6 +4215,14 @@ class _ChatState extends State<Chat> {
                                                                           _approveAttachment(
                                                                             senderJid:
                                                                                 messageModel.senderJid,
+                                                                            stanzaId:
+                                                                                messageModel.stanzaID,
+                                                                            metadataId:
+                                                                                metadataId,
+                                                                            isGroupChat:
+                                                                                isGroupChat,
+                                                                            isEmailChat:
+                                                                                isEmailChat,
                                                                             senderEmail:
                                                                                 state.chat?.emailAddress,
                                                                           ),
@@ -8037,6 +8191,8 @@ class _ChatSettingsButtons extends StatelessWidget {
         ? l10n.chatSignatureHintEnabled
         : l10n.chatSignatureHintDisabled;
     final signatureWarning = l10n.chatSignatureHintWarning;
+    final showAttachmentTrustToggle =
+        chat.type == ChatType.chat && chat.defaultTransport.isXmpp;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -8085,6 +8241,13 @@ class _ChatSettingsButtons extends StatelessWidget {
             ),
           ],
         ),
+        if (showAttachmentTrustToggle) ...[
+          const SizedBox(height: 12),
+          _ChatAttachmentAutoDownloadToggle(
+            jid: chat.jid,
+            displayName: chat.displayName,
+          ),
+        ],
         if (chat.supportsEmail) ...[
           const SizedBox(height: 12),
           ShadSwitch(
@@ -8102,6 +8265,125 @@ class _ChatSettingsButtons extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ChatAttachmentAutoDownloadToggle extends StatefulWidget {
+  const _ChatAttachmentAutoDownloadToggle({
+    required this.jid,
+    required this.displayName,
+  });
+
+  final String jid;
+  final String displayName;
+
+  @override
+  State<_ChatAttachmentAutoDownloadToggle> createState() =>
+      _ChatAttachmentAutoDownloadToggleState();
+}
+
+class _ChatAttachmentAutoDownloadToggleState
+    extends State<_ChatAttachmentAutoDownloadToggle> {
+  bool? _pendingEnabled;
+  var _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const label = 'Automatically download attachments';
+    const hintOn =
+        'This contact is in your contacts list; attachments auto-download.';
+    const hintOff =
+        'Blocked by default. Turn on to add this contact to your contacts list.';
+    const hintSaving = 'Updating…';
+    const toastTitleEnable = 'Automatic downloads enabled';
+    const toastTitleDisable = 'Automatic downloads disabled';
+    const toastTitleError = 'Unable to update contacts';
+    const toastMessageEnable =
+        'Attachments from this contact will be downloaded automatically.';
+    const toastMessageDisable =
+        'Attachments from this contact will be blocked until you approve them.';
+    const toastMessageError = 'Please check your network and try again later.';
+
+    final trimmedJid = widget.jid.trim();
+    if (trimmedJid.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final rosterContacts = context.watch<RosterCubit>().contacts;
+    final inRoster = rosterContacts.contains(trimmedJid);
+    final effectiveEnabled = _pendingEnabled ?? inRoster;
+    if (_pendingEnabled != null && inRoster == _pendingEnabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _pendingEnabled = null;
+        });
+      });
+    }
+
+    Future<void> update(bool enabled) async {
+      if (_saving) return;
+      final xmpp = context.read<XmppService>();
+      final showToast = ShadToaster.maybeOf(context)?.show;
+      setState(() {
+        _saving = true;
+        _pendingEnabled = enabled;
+      });
+      try {
+        if (enabled) {
+          await xmpp.addToRoster(
+            jid: trimmedJid,
+            title:
+                widget.displayName.trim().isEmpty ? null : widget.displayName,
+          );
+        } else {
+          await xmpp.removeFromRoster(jid: trimmedJid);
+        }
+        if (!mounted) return;
+        showToast?.call(
+          enabled
+              ? FeedbackToast.success(
+                  title: toastTitleEnable,
+                  message: toastMessageEnable,
+                )
+              : FeedbackToast.info(
+                  title: toastTitleDisable,
+                  message: toastMessageDisable,
+                ),
+        );
+      } on Exception {
+        if (!mounted) return;
+        showToast?.call(
+          FeedbackToast.error(
+            title: toastTitleError,
+            message: toastMessageError,
+          ),
+        );
+        setState(() {
+          _pendingEnabled = null;
+        });
+      } finally {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+          });
+        }
+      }
+    }
+
+    final hint = _saving
+        ? hintSaving
+        : effectiveEnabled
+            ? hintOn
+            : hintOff;
+    return ShadSwitch(
+      value: effectiveEnabled,
+      onChanged: _saving ? null : update,
+      label: const Text(label),
+      sublabel: Text(
+        hint,
+        style: context.textTheme.muted,
+      ),
     );
   }
 }

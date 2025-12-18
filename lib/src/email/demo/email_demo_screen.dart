@@ -1,6 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -16,11 +17,11 @@ class EmailDemoScreen extends StatefulWidget {
 
 class _EmailDemoScreenState extends State<EmailDemoScreen> {
   final _log = Logger('EmailDemoScreen');
-  final _messageController = TextEditingController(text: 'Hello from Axichat');
+  final _messageController = TextEditingController();
 
   EmailAccount? _account;
   bool _busy = false;
-  String _status = 'Idle';
+  late String _status;
   bool _requestedInitialLoad = false;
 
   @override
@@ -28,10 +29,13 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
     super.didChangeDependencies();
     if (_requestedInitialLoad) return;
     _requestedInitialLoad = true;
+    _status = context.l10n.emailDemoStatusIdle;
+    _messageController.text = context.l10n.emailDemoDefaultMessage;
     _loadAccount();
   }
 
   Future<void> _loadAccount() async {
+    final l10n = context.l10n;
     final emailService = context.read<EmailService>();
     final credentialStore = context.read<CredentialStore>();
     final jidKey = CredentialStore.registerKey('jid');
@@ -40,7 +44,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
       if (!mounted) return;
       setState(() {
         _account = null;
-        _status = 'Log in to provision email.';
+        _status = l10n.emailDemoStatusLoginToProvision;
       });
       return;
     }
@@ -48,14 +52,17 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
     if (!mounted) return;
     setState(() {
       _account = account;
-      _status = account == null ? 'Not provisioned' : 'Ready';
+      _status = account == null
+          ? l10n.emailDemoStatusNotProvisioned
+          : l10n.emailDemoStatusReady;
     });
   }
 
   Future<void> _provision() async {
+    final l10n = context.l10n;
     setState(() {
       _busy = true;
-      _status = 'Provisioning email account…';
+      _status = l10n.emailDemoStatusProvisioning;
     });
 
     try {
@@ -64,18 +71,18 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
       final jidKey = CredentialStore.registerKey('jid');
       final jid = await credentialStore.read(key: jidKey);
       if (jid == null) {
-        throw StateError('No primary profile found. Log in first.');
+        throw StateError(l10n.emailDemoErrorMissingProfile);
       }
       final prefixKey = CredentialStore.registerKey('${jid}_database_prefix');
       final databasePrefix = await credentialStore.read(key: prefixKey);
       if (databasePrefix == null) {
-        throw StateError('Missing database prefix.');
+        throw StateError(l10n.emailDemoErrorMissingPrefix);
       }
       final passphraseKey =
           CredentialStore.registerKey('${databasePrefix}_database_passphrase');
       final passphrase = await credentialStore.read(key: passphraseKey);
       if (passphrase == null) {
-        throw StateError('Missing database passphrase.');
+        throw StateError(l10n.emailDemoErrorMissingPassphrase);
       }
 
       final account = await emailService.ensureProvisioned(
@@ -87,13 +94,13 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
       if (!mounted) return;
       setState(() {
         _account = account;
-        _status = 'Provisioned ${account.address}';
+        _status = l10n.emailDemoStatusProvisioned(account.address);
       });
     } on Exception catch (error, stackTrace) {
       _log.severe('Provisioning failed', error, stackTrace);
       if (!mounted) return;
       setState(() {
-        _status = 'Provisioning failed: $error';
+        _status = l10n.emailDemoStatusProvisionFailed('$error');
       });
     } finally {
       if (mounted) {
@@ -105,30 +112,31 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
   }
 
   Future<void> _sendDemoMessage() async {
+    final l10n = context.l10n;
     if (_account == null) {
-      setState(() => _status = 'Provision an account first.');
+      setState(() => _status = l10n.emailDemoStatusProvisionFirst);
       return;
     }
     setState(() {
       _busy = true;
-      _status = 'Sending demo message…';
+      _status = l10n.emailDemoStatusSending;
     });
     try {
       final emailService = context.read<EmailService>();
       final msgId = await emailService.sendToAddress(
         address: _account!.address,
-        displayName: 'Self',
+        displayName: l10n.emailDemoDisplayNameSelf,
         body: _messageController.text,
       );
       if (!mounted) return;
       setState(() {
-        _status = 'Sent demo message (id=$msgId)';
+        _status = l10n.emailDemoStatusSent('$msgId');
       });
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to send demo message', error, stackTrace);
       if (!mounted) return;
       setState(() {
-        _status = 'Send failed: $error';
+        _status = l10n.emailDemoStatusSendFailed('$error');
       });
     } finally {
       if (mounted) {
@@ -168,7 +176,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                     height: AxiIconButton.kDefaultSize,
                     child: AxiIconButton(
                       iconData: LucideIcons.arrowLeft,
-                      tooltip: 'Back',
+                      tooltip: context.l10n.commonBack,
                       color: context.colorScheme.foreground,
                       borderColor: context.colorScheme.border,
                       onPressed: () => Navigator.maybePop(context),
@@ -177,21 +185,25 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                 ),
               )
             : null,
-        title: const Text('Email Transport Demo'),
+        title: Text(context.l10n.emailDemoTitle),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Status: $_status'),
+            Text(context.l10n.emailDemoStatusLabel(_status)),
             const SizedBox(height: 8),
-            Text('Account: ${account?.address ?? 'Not provisioned'}'),
+            Text(
+              context.l10n.emailDemoAccountLabel(
+                account?.address ?? context.l10n.emailDemoStatusNotProvisioned,
+              ),
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: _messageController,
-              decoration: const InputDecoration(
-                labelText: 'Demo message',
+              decoration: InputDecoration(
+                labelText: context.l10n.emailDemoMessageLabel,
               ),
             ),
             const SizedBox(height: 24),
@@ -201,11 +213,11 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
               children: [
                 ElevatedButton(
                   onPressed: _busy ? null : _provision,
-                  child: const Text('Provision Email'),
+                  child: Text(context.l10n.emailDemoProvisionButton),
                 ),
                 ElevatedButton(
                   onPressed: _busy ? null : _sendDemoMessage,
-                  child: const Text('Send Demo Message'),
+                  child: Text(context.l10n.emailDemoSendButton),
                 ),
               ],
             ),
