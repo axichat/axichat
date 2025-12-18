@@ -25,6 +25,7 @@ import 'package:axichat/src/chats/view/chats_add_button.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -685,6 +686,9 @@ class _NexusState extends State<Nexus> {
         : defaultTargetPlatform.isMobile
             ? null
             : const NeverScrollableScrollPhysics();
+    final env = EnvScope.of(context);
+    final showDesktopRefresh =
+        env.isDesktopPlatform && context.read<ChatsCubit?>() != null;
     final header = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -697,6 +701,10 @@ class _NexusState extends State<Nexus> {
                 _FindActionIconButton(
                   showShortcutHint: showShortcutHints,
                 ),
+                const SizedBox(width: 4),
+              ],
+              if (showDesktopRefresh) ...[
+                const _DesktopHomeRefreshButton(),
                 const SizedBox(width: 4),
               ],
               _SearchToggleButton(
@@ -980,6 +988,77 @@ class _SearchToggleButton extends StatelessWidget {
       iconData: active ? LucideIcons.x : LucideIcons.search,
       tooltip: active ? l10n.chatSearchClose : l10n.commonSearch,
       onPressed: onPressed,
+    );
+  }
+}
+
+class _DesktopHomeRefreshButton extends StatefulWidget {
+  const _DesktopHomeRefreshButton();
+
+  @override
+  State<_DesktopHomeRefreshButton> createState() =>
+      _DesktopHomeRefreshButtonState();
+}
+
+class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
+    with SingleTickerProviderStateMixin {
+  static const _spinDuration = Duration(milliseconds: 900);
+
+  late final AnimationController _spinController;
+  bool _spinning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _spinController = AnimationController(vsync: this, duration: _spinDuration);
+  }
+
+  @override
+  void dispose() {
+    _spinController.dispose();
+    super.dispose();
+  }
+
+  void _setSpinning(bool spinning) {
+    if (_spinning == spinning) return;
+    _spinning = spinning;
+    if (spinning) {
+      _spinController.repeat();
+    } else {
+      _spinController
+        ..stop()
+        ..value = 0.0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const tooltip = 'Sync';
+    return BlocListener<ChatsCubit, ChatsState>(
+      listenWhen: (previous, current) =>
+          previous.refreshStatus != current.refreshStatus,
+      listener: (context, state) => _setSpinning(state.refreshStatus.isLoading),
+      child: BlocSelector<ChatsCubit, ChatsState, RequestStatus>(
+        selector: (state) => state.refreshStatus,
+        builder: (context, status) {
+          final spinning = status.isLoading;
+          return AxiIconButton(
+            iconData: LucideIcons.refreshCw,
+            tooltip: tooltip,
+            onPressed: spinning
+                ? null
+                : () => unawaited(context.read<ChatsCubit>().refreshHomeSync()),
+            icon: RotationTransition(
+              turns: _spinController,
+              child: Icon(
+                LucideIcons.refreshCw,
+                size: context.iconTheme.size,
+                color: context.colorScheme.foreground,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
