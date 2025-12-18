@@ -13,6 +13,30 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+class _AttachmentSpinner extends StatelessWidget {
+  const _AttachmentSpinner({
+    required this.size,
+    required this.color,
+  });
+
+  static const double _strokeWidth = 2;
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CircularProgressIndicator(
+        strokeWidth: _strokeWidth,
+        color: color,
+      ),
+    );
+  }
+}
+
 class ChatAttachmentPreview extends StatelessWidget {
   const ChatAttachmentPreview({
     super.key,
@@ -41,16 +65,16 @@ class ChatAttachmentPreview extends StatelessWidget {
           }
 
           final l10n = context.l10n;
+          final colors = context.colorScheme;
           final metadata = snapshot.data;
           if (metadata == null) {
             if (snapshot.connectionState != ConnectionState.active &&
                 snapshot.connectionState != ConnectionState.done) {
-              return const _AttachmentSurface(
+              return _AttachmentSurface(
                 child: Center(
-                  child: SizedBox(
-                    height: 32,
-                    width: 32,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                  child: _AttachmentSpinner(
+                    size: 32,
+                    color: colors.primary,
                   ),
                 ),
               );
@@ -471,14 +495,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
           ),
           const SizedBox(width: 12),
           if (_downloading)
-            const SizedBox(
+            SizedBox(
               width: 48,
               height: 48,
               child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                child: _AttachmentSpinner(
+                  size: 18,
+                  color: colors.primary,
                 ),
               ),
             )
@@ -603,10 +626,9 @@ class _EncryptedAttachment extends StatelessWidget {
                       onPressed: onPressed,
                       enabled: onPressed != null,
                       leading: downloading
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          ? _AttachmentSpinner(
+                              size: 16,
+                              color: colors.primaryForeground,
                             )
                           : null,
                       child: Text(
@@ -685,10 +707,9 @@ class _RemoteImageAttachment extends StatelessWidget {
                       onPressed: onPressed,
                       enabled: onPressed != null,
                       leading: downloading
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          ? _AttachmentSpinner(
+                              size: 16,
+                              color: colors.primaryForeground,
                             )
                           : null,
                       child: Text(
