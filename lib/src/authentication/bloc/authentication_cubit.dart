@@ -1287,6 +1287,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       databasePassphrase: databasePassphrase,
     );
     _authenticatedJid = jid;
+    final pendingAvatar = _signupAvatarDraft;
+    if (_activeSignupCredentialKey != null && pendingAvatar != null) {
+      await _xmppService.cacheSelfAvatarDraft(pendingAvatar);
+    }
     _emit(const AuthenticationComplete());
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();

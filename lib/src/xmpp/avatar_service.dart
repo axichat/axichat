@@ -179,11 +179,34 @@ mixin AvatarService on XmppBase {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         _startSelfAvatarRefreshTimer();
         if (avatarEncryptionKey != null) {
+          unawaited(_notifyCachedSelfAvatarIfAvailable());
           unawaited(refreshSelfAvatarIfNeeded());
         }
         if (event.resumed) return;
         await _refreshRosterAvatarsFromCache();
       });
+  }
+
+  Future<void> cacheSelfAvatarDraft(AvatarUploadPayload payload) async {
+    final myBareJid = _myJid?.toBare().toString();
+    if (myBareJid == null || myBareJid.isEmpty) return;
+    final targetJid = _avatarSafeBareJid(payload.jid ?? myJid);
+    if (targetJid == null || targetJid != myBareJid) return;
+    if (!isStateStoreReady || avatarEncryptionKey == null) return;
+
+    try {
+      final path = await _writeAvatarFile(bytes: payload.bytes);
+      await _persistOwnAvatar(path, payload.hash);
+      owner._notifySelfAvatarUpdated(
+        StoredAvatar(path: path, hash: payload.hash),
+      );
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine(
+        'Failed to cache pending self avatar for immediate display.',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   @override
@@ -239,6 +262,40 @@ mixin AvatarService on XmppBase {
     final bareJid = _myJid?.toBare().toString();
     if (bareJid == null || bareJid.isEmpty) return;
     await _refreshAvatarForJid(bareJid, force: force);
+  }
+
+  Future<void> _notifyCachedSelfAvatarIfAvailable() async {
+    if (!isStateStoreReady) return;
+    final myBareJid = _myJid?.toBare().toString();
+    if (myBareJid == null || myBareJid.isEmpty) return;
+    if (avatarEncryptionKey == null) return;
+
+    try {
+      final stored = await _dbOpReturning<XmppStateStore, StoredAvatar?>(
+        (ss) async {
+          final path = ss.read(key: selfAvatarPathKey) as String?;
+          final hash = ss.read(key: selfAvatarHashKey) as String?;
+          if (path == null && hash == null) return null;
+          return StoredAvatar(path: path, hash: hash);
+        },
+      );
+      if (stored == null || stored.isEmpty) return;
+      final path = stored.path?.trim();
+      if (path == null || path.isEmpty) return;
+      if (!await _hasCachedAvatarFile(path)) return;
+
+      owner._notifySelfAvatarUpdated(
+        StoredAvatar(path: path, hash: stored.hash),
+      );
+    } on XmppAbortedException {
+      return;
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine(
+        'Failed to load cached self avatar reference.',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   Future<void> _refreshAvatarFromVCardRequest(

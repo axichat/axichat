@@ -45,6 +45,7 @@ class AxiAvatar extends StatefulWidget {
 class _AxiAvatarState extends State<AxiAvatar> {
   late final ShadPopoverController popoverController;
   Uint8List? _resolvedAvatarBytes;
+  String? _resolvedPath;
   String? _loadingPath;
 
   String _displayLabelForJid(String jid) {
@@ -78,14 +79,15 @@ class _AxiAvatarState extends State<AxiAvatar> {
   @override
   void didUpdateWidget(covariant AxiAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final jidChanged = oldWidget.jid != widget.jid;
     if (oldWidget.avatarBytes != widget.avatarBytes ||
         oldWidget.avatarPath != widget.avatarPath ||
-        oldWidget.jid != widget.jid) {
-      _refreshAvatarBytes();
+        jidChanged) {
+      _refreshAvatarBytes(clearStaleBytes: jidChanged);
     }
   }
 
-  Future<void> _refreshAvatarBytes() async {
+  Future<void> _refreshAvatarBytes({bool clearStaleBytes = false}) async {
     final providedBytes =
         widget.avatarBytes != null && widget.avatarBytes!.isNotEmpty
             ? widget.avatarBytes
@@ -93,7 +95,8 @@ class _AxiAvatarState extends State<AxiAvatar> {
     if (providedBytes != null) {
       setState(() {
         _resolvedAvatarBytes = providedBytes;
-        _loadingPath = widget.avatarPath?.trim();
+        _resolvedPath = widget.avatarPath?.trim();
+        _loadingPath = _resolvedPath;
       });
       return;
     }
@@ -102,6 +105,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
     if (path == null || path.isEmpty) {
       setState(() {
         _resolvedAvatarBytes = null;
+        _resolvedPath = null;
         _loadingPath = null;
       });
       return;
@@ -112,17 +116,21 @@ class _AxiAvatarState extends State<AxiAvatar> {
     if (cached != null && cached.isNotEmpty) {
       setState(() {
         _resolvedAvatarBytes = cached;
+        _resolvedPath = path;
         _loadingPath = path;
       });
       return;
     }
 
-    if (_loadingPath == path && _resolvedAvatarBytes != null) {
+    if (_resolvedPath == path && _resolvedAvatarBytes != null) {
       return;
     }
 
     setState(() {
-      _resolvedAvatarBytes = null;
+      if (clearStaleBytes) {
+        _resolvedAvatarBytes = null;
+        _resolvedPath = null;
+      }
       _loadingPath = path;
     });
     try {
@@ -131,7 +139,13 @@ class _AxiAvatarState extends State<AxiAvatar> {
         return;
       }
       setState(() {
-        _resolvedAvatarBytes = bytes;
+        if (bytes != null && bytes.isNotEmpty) {
+          _resolvedAvatarBytes = bytes;
+          _resolvedPath = path;
+        } else if (clearStaleBytes) {
+          _resolvedAvatarBytes = null;
+          _resolvedPath = null;
+        }
         if (bytes == null || bytes.isEmpty) {
           _loadingPath = null;
         }
@@ -139,7 +153,10 @@ class _AxiAvatarState extends State<AxiAvatar> {
     } catch (_) {
       if (!mounted || _loadingPath != path) return;
       setState(() {
-        _resolvedAvatarBytes = null;
+        if (clearStaleBytes) {
+          _resolvedAvatarBytes = null;
+          _resolvedPath = null;
+        }
         _loadingPath = null;
       });
     }
