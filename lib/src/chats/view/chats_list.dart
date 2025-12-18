@@ -51,6 +51,9 @@ class ChatsList extends StatelessWidget {
     const refreshFailureMessage = 'Sync failed.';
     const refreshSpinnerExtent = 56.0;
     const refreshSpinnerDimension = 20.0;
+    const refreshOffsetToArmed = 120.0;
+    const refreshRevealThreshold = 0.08;
+    const refreshIndicatorPadding = 16.0;
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
           previous.creationStatus != current.creationStatus ||
@@ -156,10 +159,14 @@ class ChatsList extends StatelessWidget {
                         ),
                       );
                     } else {
+                      final scrollPhysics = AlwaysScrollableScrollPhysics(
+                        parent: ScrollConfiguration.of(context)
+                            .getScrollPhysics(context),
+                      );
                       body = ColoredBox(
                         color: context.colorScheme.background,
                         child: ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
+                          physics: scrollPhysics,
                           itemCount: visibleItems.length +
                               (includeCalendarShortcut ? 1 : 0),
                           itemBuilder: (context, index) {
@@ -200,9 +207,13 @@ class ChatsList extends StatelessWidget {
                               color: context.colorScheme.background,
                               child: LayoutBuilder(
                                 builder: (context, constraints) {
+                                  final scrollPhysics =
+                                      AlwaysScrollableScrollPhysics(
+                                    parent: ScrollConfiguration.of(context)
+                                        .getScrollPhysics(context),
+                                  );
                                   return ListView(
-                                    physics:
-                                        const AlwaysScrollableScrollPhysics(),
+                                    physics: scrollPhysics,
                                     children: [
                                       SizedBox(
                                         height: constraints.maxHeight,
@@ -249,30 +260,67 @@ class ChatsList extends StatelessWidget {
 
           return CustomRefreshIndicator(
             onRefresh: context.read<ChatsCubit>().refreshHomeSync,
+            offsetToArmed: refreshOffsetToArmed,
+            triggerMode: IndicatorTriggerMode.onEdge,
             builder: (context, child, controller) {
-              final progress = controller.value.clamp(0.0, 1.0);
-              final isLoading = controller.isLoading;
+              final clamped = controller.value.clamp(0.0, 1.0).toDouble();
+              final showIndicator =
+                  controller.isLoading || clamped > refreshRevealThreshold;
+              if (!showIndicator) return child;
+
+              final isArmed = controller.state.isArmed;
+              final indicatorContent = controller.isLoading
+                  ? AxiProgressIndicator(
+                      dimension: refreshSpinnerDimension,
+                      color: context.colorScheme.primary,
+                    )
+                  : AnimatedRotation(
+                      turns: isArmed ? 0.5 : 0.0,
+                      duration: baseAnimationDuration,
+                      curve: Curves.easeOutCubic,
+                      child: Icon(
+                        LucideIcons.arrowDown,
+                        size: refreshSpinnerDimension,
+                        color: context.colorScheme.primary,
+                      ),
+                    );
+
               return Stack(
-                alignment: Alignment.topCenter,
                 children: [
-                  child,
                   Positioned(
                     top: 0,
                     left: 0,
                     right: 0,
-                    child: SizedBox(
-                      height: refreshSpinnerExtent,
-                      child: Opacity(
-                        opacity: isLoading ? 1.0 : progress,
-                        child: Center(
-                          child: AxiProgressIndicator(
-                            dimension: refreshSpinnerDimension,
-                            color: context.colorScheme.foreground,
+                    child: ClipRect(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        heightFactor: clamped,
+                        child: SizedBox(
+                          height: refreshSpinnerExtent,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: context.colorScheme.card,
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: context.colorScheme.border,
+                                ),
+                              ),
+                            ),
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: refreshIndicatorPadding,
+                                ),
+                                child: indicatorContent,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
+                  child,
                 ],
               );
             },
