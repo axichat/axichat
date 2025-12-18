@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
-
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_checklist_controller.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/material.dart';
 
 import 'calendar_completion_checkbox.dart';
 import 'task_form_section.dart';
@@ -12,13 +12,13 @@ class TaskChecklist extends StatefulWidget {
   const TaskChecklist({
     super.key,
     required this.controller,
-    this.label = 'Checklist',
-    this.addPlaceholder = 'Add checklist item',
+    this.label,
+    this.addPlaceholder,
   });
 
   final TaskChecklistController controller;
-  final String label;
-  final String addPlaceholder;
+  final String? label;
+  final String? addPlaceholder;
 
   @override
   State<TaskChecklist> createState() => _TaskChecklistState();
@@ -85,6 +85,10 @@ class _TaskChecklistState extends State<TaskChecklist> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final checklistLabel = widget.label ?? l10n.calendarChecklistLabel;
+    final addPlaceholder =
+        widget.addPlaceholder ?? l10n.calendarChecklistAddItem;
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
@@ -105,7 +109,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
           children: [
             const TaskSectionDivider(),
             TaskSectionHeader(
-              title: widget.label,
+              title: checklistLabel,
               trailing: total > 0
                   ? Text(
                       '$completed / $total',
@@ -170,7 +174,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
               padding: const EdgeInsets.only(top: calendarInsetSm),
               child: _ChecklistAddField(
                 controller: _newItemController,
-                placeholder: widget.addPlaceholder,
+                placeholder: addPlaceholder,
                 focusNode: _newItemFocusNode,
                 onSubmitted: () {
                   widget.controller.addItem(_newItemController.text);
@@ -305,10 +309,10 @@ class _ChecklistItemRow extends StatelessWidget {
               controller: controller,
               onChanged: onLabelChanged,
               style: textTheme.p,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 isCollapsed: true,
-                hintText: 'Checklist item',
+                hintText: context.l10n.calendarChecklistItemHint,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -328,7 +332,7 @@ class _ChecklistItemRow extends StatelessWidget {
             borderWidth: 0,
             color: colors.mutedForeground,
             cornerRadius: 12,
-            tooltip: 'Remove item',
+            tooltip: context.l10n.calendarChecklistRemoveItem,
             onPressed: onRemove,
           ),
           const SizedBox(width: calendarInsetSm),
@@ -381,7 +385,7 @@ class _ChecklistAddField extends StatelessWidget {
           borderWidth: 0,
           color: colors.primary,
           cornerRadius: 10,
-          tooltip: 'Add checklist item',
+          tooltip: context.l10n.calendarChecklistAddItem,
           onPressed: onSubmitted,
         ),
         const SizedBox(width: calendarInsetSm),

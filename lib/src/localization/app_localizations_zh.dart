@@ -2417,6 +2417,312 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatMessageStatusSent => '已发送';
+
+  @override
+  String get commonActions => 'Actions';
+
+  @override
+  String get commonNext => 'Next';
+
+  @override
+  String get commonPrevious => 'Previous';
+
+  @override
+  String emailDemoAccountLabel(Object account) {
+    return 'Account: $account';
+  }
+
+  @override
+  String get emailDemoDefaultMessage => 'Hello from Axichat';
+
+  @override
+  String get emailDemoDisplayNameSelf => 'Self';
+
+  @override
+  String get emailDemoErrorMissingPassphrase => 'Missing database passphrase.';
+
+  @override
+  String get emailDemoErrorMissingPrefix => 'Missing database prefix.';
+
+  @override
+  String get emailDemoErrorMissingProfile =>
+      'No primary profile found. Log in first.';
+
+  @override
+  String get emailDemoMessageLabel => 'Demo message';
+
+  @override
+  String get emailDemoProvisionButton => 'Provision Email';
+
+  @override
+  String get emailDemoSendButton => 'Send Demo Message';
+
+  @override
+  String get emailDemoStatusIdle => 'Idle';
+
+  @override
+  String emailDemoStatusLabel(Object status) {
+    return 'Status: $status';
+  }
+
+  @override
+  String get emailDemoStatusLoginToProvision => 'Log in to provision email.';
+
+  @override
+  String get emailDemoStatusNotProvisioned => 'Not provisioned';
+
+  @override
+  String emailDemoStatusProvisionFailed(Object error) {
+    return 'Provisioning failed: $error';
+  }
+
+  @override
+  String get emailDemoStatusProvisionFirst => 'Provision an account first.';
+
+  @override
+  String emailDemoStatusProvisioned(Object address) {
+    return 'Provisioned $address';
+  }
+
+  @override
+  String get emailDemoStatusProvisioning => 'Provisioning email account…';
+
+  @override
+  String get emailDemoStatusReady => 'Ready';
+
+  @override
+  String emailDemoStatusSendFailed(Object error) {
+    return 'Send failed: $error';
+  }
+
+  @override
+  String get emailDemoStatusSending => 'Sending demo message…';
+
+  @override
+  String emailDemoStatusSent(Object id) {
+    return 'Sent demo message (id=$id)';
+  }
+
+  @override
+  String get emailDemoTitle => 'Email Transport Demo';
+
+  @override
+  String get verificationAddLabelPlaceholder => 'Add label';
+
+  @override
+  String get verificationCurrentDevice => 'Current device';
+
+  @override
+  String verificationDeviceIdLabel(Object id) {
+    return 'ID: $id';
+  }
+
+  @override
+  String get verificationNotTrusted => 'Not trusted';
+
+  @override
+  String get verificationRegenerateDevice => 'Regenerate device';
+
+  @override
+  String get verificationRegenerateWarning =>
+      'Only do this if you are an expert.';
+
+  @override
+  String get verificationTrustBlind => 'Blind trust';
+
+  @override
+  String get verificationTrustNone => 'No trust';
+
+  @override
+  String get verificationTrustVerified => 'Verified';
+
+  @override
+  String get verificationTrusted => 'Trusted';
+
+  @override
+  String get avatarSavedMessage => 'Avatar saved.';
+
+  @override
+  String get avatarCropTitle => 'Crop & focus';
+
+  @override
+  String get avatarCropDescription =>
+      'Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.';
+
+  @override
+  String get avatarCropPlaceholder =>
+      'Add a photo or pick a default avatar to adjust the framing.';
+
+  @override
+  String avatarCropSizeLabel(Object pixels) {
+    return '$pixels px crop';
+  }
+
+  @override
+  String get avatarCropSavedSize => 'Saved at 256×256 • < 64 KB';
+
+  @override
+  String get avatarBackgroundTitle => 'Background color';
+
+  @override
+  String get avatarBackgroundDescription =>
+      'Use the wheel or presets to tint transparent avatars before saving.';
+
+  @override
+  String get avatarBackgroundWheelTitle => 'Wheel & hex';
+
+  @override
+  String get avatarBackgroundWheelDescription =>
+      'Drag the wheel or enter a hex value.';
+
+  @override
+  String get avatarBackgroundTransparent => 'Transparent';
+
+  @override
+  String get avatarBackgroundPreview => 'Preview saved circle tint.';
+
+  @override
+  String get avatarDefaultsTitle => 'Default avatars';
+
+  @override
+  String get avatarCategoryAbstract => 'Abstract';
+
+  @override
+  String get avatarCategoryStem => 'STEM';
+
+  @override
+  String get avatarCategorySports => 'Sports';
+
+  @override
+  String get avatarCategoryMusic => 'Music';
+
+  @override
+  String get avatarCategoryMisc => 'Hobbies & Games';
+
+  @override
+  String avatarTemplateAbstract(Object index) {
+    return 'Abstract $index';
+  }
+
+  @override
+  String get avatarTemplateAtom => 'Atom';
+
+  @override
+  String get avatarTemplateBeaker => 'Beaker';
+
+  @override
+  String get avatarTemplateCompass => 'Compass';
+
+  @override
+  String get avatarTemplateCpu => 'CPU';
+
+  @override
+  String get avatarTemplateGear => 'Gear';
+
+  @override
+  String get avatarTemplateGlobe => 'Globe';
+
+  @override
+  String get avatarTemplateLaptop => 'Laptop';
+
+  @override
+  String get avatarTemplateMicroscope => 'Microscope';
+
+  @override
+  String get avatarTemplateRobot => 'Robot';
+
+  @override
+  String get avatarTemplateStethoscope => 'Stethoscope';
+
+  @override
+  String get avatarTemplateTelescope => 'Telescope';
+
+  @override
+  String get avatarTemplateArchery => 'Archery';
+
+  @override
+  String get avatarTemplateBaseball => 'Baseball';
+
+  @override
+  String get avatarTemplateBasketball => 'Basketball';
+
+  @override
+  String get avatarTemplateBoxing => 'Boxing';
+
+  @override
+  String get avatarTemplateCycling => 'Cycling';
+
+  @override
+  String get avatarTemplateDarts => 'Darts';
+
+  @override
+  String get avatarTemplateFootball => 'Football';
+
+  @override
+  String get avatarTemplateGolf => 'Golf';
+
+  @override
+  String get avatarTemplatePingPong => 'Ping Pong';
+
+  @override
+  String get avatarTemplateSkiing => 'Skiing';
+
+  @override
+  String get avatarTemplateSoccer => 'Soccer';
+
+  @override
+  String get avatarTemplateTennis => 'Tennis';
+
+  @override
+  String get avatarTemplateVolleyball => 'Volleyball';
+
+  @override
+  String get avatarTemplateDrums => 'Drums';
+
+  @override
+  String get avatarTemplateElectricGuitar => 'Electric Guitar';
+
+  @override
+  String get avatarTemplateGuitar => 'Guitar';
+
+  @override
+  String get avatarTemplateMicrophone => 'Microphone';
+
+  @override
+  String get avatarTemplatePiano => 'Piano';
+
+  @override
+  String get avatarTemplateSaxophone => 'Saxophone';
+
+  @override
+  String get avatarTemplateViolin => 'Violin';
+
+  @override
+  String get avatarTemplateCards => 'Cards';
+
+  @override
+  String get avatarTemplateChess => 'Chess';
+
+  @override
+  String get avatarTemplateChessAlt => 'Chess Alt';
+
+  @override
+  String get avatarTemplateDice => 'Dice';
+
+  @override
+  String get avatarTemplateDiceAlt => 'Dice Alt';
+
+  @override
+  String get avatarTemplateEsports => 'Esports';
+
+  @override
+  String get avatarTemplateSword => 'Sword';
+
+  @override
+  String get avatarTemplateVideoGames => 'Video Games';
+
+  @override
+  String get avatarTemplateVideoGamesAlt => 'Video Games Alt';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -4832,4 +5138,310 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatMessageStatusSent => '已傳送';
+
+  @override
+  String get commonActions => 'Actions';
+
+  @override
+  String get commonNext => 'Next';
+
+  @override
+  String get commonPrevious => 'Previous';
+
+  @override
+  String emailDemoAccountLabel(Object account) {
+    return 'Account: $account';
+  }
+
+  @override
+  String get emailDemoDefaultMessage => 'Hello from Axichat';
+
+  @override
+  String get emailDemoDisplayNameSelf => 'Self';
+
+  @override
+  String get emailDemoErrorMissingPassphrase => 'Missing database passphrase.';
+
+  @override
+  String get emailDemoErrorMissingPrefix => 'Missing database prefix.';
+
+  @override
+  String get emailDemoErrorMissingProfile =>
+      'No primary profile found. Log in first.';
+
+  @override
+  String get emailDemoMessageLabel => 'Demo message';
+
+  @override
+  String get emailDemoProvisionButton => 'Provision Email';
+
+  @override
+  String get emailDemoSendButton => 'Send Demo Message';
+
+  @override
+  String get emailDemoStatusIdle => 'Idle';
+
+  @override
+  String emailDemoStatusLabel(Object status) {
+    return 'Status: $status';
+  }
+
+  @override
+  String get emailDemoStatusLoginToProvision => 'Log in to provision email.';
+
+  @override
+  String get emailDemoStatusNotProvisioned => 'Not provisioned';
+
+  @override
+  String emailDemoStatusProvisionFailed(Object error) {
+    return 'Provisioning failed: $error';
+  }
+
+  @override
+  String get emailDemoStatusProvisionFirst => 'Provision an account first.';
+
+  @override
+  String emailDemoStatusProvisioned(Object address) {
+    return 'Provisioned $address';
+  }
+
+  @override
+  String get emailDemoStatusProvisioning => 'Provisioning email account…';
+
+  @override
+  String get emailDemoStatusReady => 'Ready';
+
+  @override
+  String emailDemoStatusSendFailed(Object error) {
+    return 'Send failed: $error';
+  }
+
+  @override
+  String get emailDemoStatusSending => 'Sending demo message…';
+
+  @override
+  String emailDemoStatusSent(Object id) {
+    return 'Sent demo message (id=$id)';
+  }
+
+  @override
+  String get emailDemoTitle => 'Email Transport Demo';
+
+  @override
+  String get verificationAddLabelPlaceholder => 'Add label';
+
+  @override
+  String get verificationCurrentDevice => 'Current device';
+
+  @override
+  String verificationDeviceIdLabel(Object id) {
+    return 'ID: $id';
+  }
+
+  @override
+  String get verificationNotTrusted => 'Not trusted';
+
+  @override
+  String get verificationRegenerateDevice => 'Regenerate device';
+
+  @override
+  String get verificationRegenerateWarning =>
+      'Only do this if you are an expert.';
+
+  @override
+  String get verificationTrustBlind => 'Blind trust';
+
+  @override
+  String get verificationTrustNone => 'No trust';
+
+  @override
+  String get verificationTrustVerified => 'Verified';
+
+  @override
+  String get verificationTrusted => 'Trusted';
+
+  @override
+  String get avatarSavedMessage => 'Avatar saved.';
+
+  @override
+  String get avatarCropTitle => 'Crop & focus';
+
+  @override
+  String get avatarCropDescription =>
+      'Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.';
+
+  @override
+  String get avatarCropPlaceholder =>
+      'Add a photo or pick a default avatar to adjust the framing.';
+
+  @override
+  String avatarCropSizeLabel(Object pixels) {
+    return '$pixels px crop';
+  }
+
+  @override
+  String get avatarCropSavedSize => 'Saved at 256×256 • < 64 KB';
+
+  @override
+  String get avatarBackgroundTitle => 'Background color';
+
+  @override
+  String get avatarBackgroundDescription =>
+      'Use the wheel or presets to tint transparent avatars before saving.';
+
+  @override
+  String get avatarBackgroundWheelTitle => 'Wheel & hex';
+
+  @override
+  String get avatarBackgroundWheelDescription =>
+      'Drag the wheel or enter a hex value.';
+
+  @override
+  String get avatarBackgroundTransparent => 'Transparent';
+
+  @override
+  String get avatarBackgroundPreview => 'Preview saved circle tint.';
+
+  @override
+  String get avatarDefaultsTitle => 'Default avatars';
+
+  @override
+  String get avatarCategoryAbstract => 'Abstract';
+
+  @override
+  String get avatarCategoryStem => 'STEM';
+
+  @override
+  String get avatarCategorySports => 'Sports';
+
+  @override
+  String get avatarCategoryMusic => 'Music';
+
+  @override
+  String get avatarCategoryMisc => 'Hobbies & Games';
+
+  @override
+  String avatarTemplateAbstract(Object index) {
+    return 'Abstract $index';
+  }
+
+  @override
+  String get avatarTemplateAtom => 'Atom';
+
+  @override
+  String get avatarTemplateBeaker => 'Beaker';
+
+  @override
+  String get avatarTemplateCompass => 'Compass';
+
+  @override
+  String get avatarTemplateCpu => 'CPU';
+
+  @override
+  String get avatarTemplateGear => 'Gear';
+
+  @override
+  String get avatarTemplateGlobe => 'Globe';
+
+  @override
+  String get avatarTemplateLaptop => 'Laptop';
+
+  @override
+  String get avatarTemplateMicroscope => 'Microscope';
+
+  @override
+  String get avatarTemplateRobot => 'Robot';
+
+  @override
+  String get avatarTemplateStethoscope => 'Stethoscope';
+
+  @override
+  String get avatarTemplateTelescope => 'Telescope';
+
+  @override
+  String get avatarTemplateArchery => 'Archery';
+
+  @override
+  String get avatarTemplateBaseball => 'Baseball';
+
+  @override
+  String get avatarTemplateBasketball => 'Basketball';
+
+  @override
+  String get avatarTemplateBoxing => 'Boxing';
+
+  @override
+  String get avatarTemplateCycling => 'Cycling';
+
+  @override
+  String get avatarTemplateDarts => 'Darts';
+
+  @override
+  String get avatarTemplateFootball => 'Football';
+
+  @override
+  String get avatarTemplateGolf => 'Golf';
+
+  @override
+  String get avatarTemplatePingPong => 'Ping Pong';
+
+  @override
+  String get avatarTemplateSkiing => 'Skiing';
+
+  @override
+  String get avatarTemplateSoccer => 'Soccer';
+
+  @override
+  String get avatarTemplateTennis => 'Tennis';
+
+  @override
+  String get avatarTemplateVolleyball => 'Volleyball';
+
+  @override
+  String get avatarTemplateDrums => 'Drums';
+
+  @override
+  String get avatarTemplateElectricGuitar => 'Electric Guitar';
+
+  @override
+  String get avatarTemplateGuitar => 'Guitar';
+
+  @override
+  String get avatarTemplateMicrophone => 'Microphone';
+
+  @override
+  String get avatarTemplatePiano => 'Piano';
+
+  @override
+  String get avatarTemplateSaxophone => 'Saxophone';
+
+  @override
+  String get avatarTemplateViolin => 'Violin';
+
+  @override
+  String get avatarTemplateCards => 'Cards';
+
+  @override
+  String get avatarTemplateChess => 'Chess';
+
+  @override
+  String get avatarTemplateChessAlt => 'Chess Alt';
+
+  @override
+  String get avatarTemplateDice => 'Dice';
+
+  @override
+  String get avatarTemplateDiceAlt => 'Dice Alt';
+
+  @override
+  String get avatarTemplateEsports => 'Esports';
+
+  @override
+  String get avatarTemplateSword => 'Sword';
+
+  @override
+  String get avatarTemplateVideoGames => 'Video Games';
+
+  @override
+  String get avatarTemplateVideoGamesAlt => 'Video Games Alt';
 }

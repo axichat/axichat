@@ -4531,6 +4531,570 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sent'**
   String get chatMessageStatusSent;
+
+  /// No description provided for @commonActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get commonActions;
+
+  /// No description provided for @commonNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get commonNext;
+
+  /// No description provided for @commonPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get commonPrevious;
+
+  /// No description provided for @emailDemoAccountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Account: {account}'**
+  String emailDemoAccountLabel(Object account);
+
+  /// No description provided for @emailDemoDefaultMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Hello from Axichat'**
+  String get emailDemoDefaultMessage;
+
+  /// No description provided for @emailDemoDisplayNameSelf.
+  ///
+  /// In en, this message translates to:
+  /// **'Self'**
+  String get emailDemoDisplayNameSelf;
+
+  /// No description provided for @emailDemoErrorMissingPassphrase.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing database passphrase.'**
+  String get emailDemoErrorMissingPassphrase;
+
+  /// No description provided for @emailDemoErrorMissingPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing database prefix.'**
+  String get emailDemoErrorMissingPrefix;
+
+  /// No description provided for @emailDemoErrorMissingProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'No primary profile found. Log in first.'**
+  String get emailDemoErrorMissingProfile;
+
+  /// No description provided for @emailDemoMessageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo message'**
+  String get emailDemoMessageLabel;
+
+  /// No description provided for @emailDemoProvisionButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Provision Email'**
+  String get emailDemoProvisionButton;
+
+  /// No description provided for @emailDemoSendButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Demo Message'**
+  String get emailDemoSendButton;
+
+  /// No description provided for @emailDemoStatusIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get emailDemoStatusIdle;
+
+  /// No description provided for @emailDemoStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status: {status}'**
+  String emailDemoStatusLabel(Object status);
+
+  /// No description provided for @emailDemoStatusLoginToProvision.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to provision email.'**
+  String get emailDemoStatusLoginToProvision;
+
+  /// No description provided for @emailDemoStatusNotProvisioned.
+  ///
+  /// In en, this message translates to:
+  /// **'Not provisioned'**
+  String get emailDemoStatusNotProvisioned;
+
+  /// No description provided for @emailDemoStatusProvisionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Provisioning failed: {error}'**
+  String emailDemoStatusProvisionFailed(Object error);
+
+  /// No description provided for @emailDemoStatusProvisionFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Provision an account first.'**
+  String get emailDemoStatusProvisionFirst;
+
+  /// No description provided for @emailDemoStatusProvisioned.
+  ///
+  /// In en, this message translates to:
+  /// **'Provisioned {address}'**
+  String emailDemoStatusProvisioned(Object address);
+
+  /// No description provided for @emailDemoStatusProvisioning.
+  ///
+  /// In en, this message translates to:
+  /// **'Provisioning email account…'**
+  String get emailDemoStatusProvisioning;
+
+  /// No description provided for @emailDemoStatusReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get emailDemoStatusReady;
+
+  /// No description provided for @emailDemoStatusSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Send failed: {error}'**
+  String emailDemoStatusSendFailed(Object error);
+
+  /// No description provided for @emailDemoStatusSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending demo message…'**
+  String get emailDemoStatusSending;
+
+  /// No description provided for @emailDemoStatusSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent demo message (id={id})'**
+  String emailDemoStatusSent(Object id);
+
+  /// No description provided for @emailDemoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Email Transport Demo'**
+  String get emailDemoTitle;
+
+  /// No description provided for @verificationAddLabelPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Add label'**
+  String get verificationAddLabelPlaceholder;
+
+  /// No description provided for @verificationCurrentDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Current device'**
+  String get verificationCurrentDevice;
+
+  /// No description provided for @verificationDeviceIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'ID: {id}'**
+  String verificationDeviceIdLabel(Object id);
+
+  /// No description provided for @verificationNotTrusted.
+  ///
+  /// In en, this message translates to:
+  /// **'Not trusted'**
+  String get verificationNotTrusted;
+
+  /// No description provided for @verificationRegenerateDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Regenerate device'**
+  String get verificationRegenerateDevice;
+
+  /// No description provided for @verificationRegenerateWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Only do this if you are an expert.'**
+  String get verificationRegenerateWarning;
+
+  /// No description provided for @verificationTrustBlind.
+  ///
+  /// In en, this message translates to:
+  /// **'Blind trust'**
+  String get verificationTrustBlind;
+
+  /// No description provided for @verificationTrustNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No trust'**
+  String get verificationTrustNone;
+
+  /// No description provided for @verificationTrustVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get verificationTrustVerified;
+
+  /// No description provided for @verificationTrusted.
+  ///
+  /// In en, this message translates to:
+  /// **'Trusted'**
+  String get verificationTrusted;
+
+  /// No description provided for @avatarSavedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar saved.'**
+  String get avatarSavedMessage;
+
+  /// No description provided for @avatarCropTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Crop & focus'**
+  String get avatarCropTitle;
+
+  /// No description provided for @avatarCropDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.'**
+  String get avatarCropDescription;
+
+  /// No description provided for @avatarCropPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a photo or pick a default avatar to adjust the framing.'**
+  String get avatarCropPlaceholder;
+
+  /// No description provided for @avatarCropSizeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{pixels} px crop'**
+  String avatarCropSizeLabel(Object pixels);
+
+  /// No description provided for @avatarCropSavedSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved at 256×256 • < 64 KB'**
+  String get avatarCropSavedSize;
+
+  /// No description provided for @avatarBackgroundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Background color'**
+  String get avatarBackgroundTitle;
+
+  /// No description provided for @avatarBackgroundDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the wheel or presets to tint transparent avatars before saving.'**
+  String get avatarBackgroundDescription;
+
+  /// No description provided for @avatarBackgroundWheelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wheel & hex'**
+  String get avatarBackgroundWheelTitle;
+
+  /// No description provided for @avatarBackgroundWheelDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag the wheel or enter a hex value.'**
+  String get avatarBackgroundWheelDescription;
+
+  /// No description provided for @avatarBackgroundTransparent.
+  ///
+  /// In en, this message translates to:
+  /// **'Transparent'**
+  String get avatarBackgroundTransparent;
+
+  /// No description provided for @avatarBackgroundPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview saved circle tint.'**
+  String get avatarBackgroundPreview;
+
+  /// No description provided for @avatarDefaultsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Default avatars'**
+  String get avatarDefaultsTitle;
+
+  /// No description provided for @avatarCategoryAbstract.
+  ///
+  /// In en, this message translates to:
+  /// **'Abstract'**
+  String get avatarCategoryAbstract;
+
+  /// No description provided for @avatarCategoryStem.
+  ///
+  /// In en, this message translates to:
+  /// **'STEM'**
+  String get avatarCategoryStem;
+
+  /// No description provided for @avatarCategorySports.
+  ///
+  /// In en, this message translates to:
+  /// **'Sports'**
+  String get avatarCategorySports;
+
+  /// No description provided for @avatarCategoryMusic.
+  ///
+  /// In en, this message translates to:
+  /// **'Music'**
+  String get avatarCategoryMusic;
+
+  /// No description provided for @avatarCategoryMisc.
+  ///
+  /// In en, this message translates to:
+  /// **'Hobbies & Games'**
+  String get avatarCategoryMisc;
+
+  /// No description provided for @avatarTemplateAbstract.
+  ///
+  /// In en, this message translates to:
+  /// **'Abstract {index}'**
+  String avatarTemplateAbstract(Object index);
+
+  /// No description provided for @avatarTemplateAtom.
+  ///
+  /// In en, this message translates to:
+  /// **'Atom'**
+  String get avatarTemplateAtom;
+
+  /// No description provided for @avatarTemplateBeaker.
+  ///
+  /// In en, this message translates to:
+  /// **'Beaker'**
+  String get avatarTemplateBeaker;
+
+  /// No description provided for @avatarTemplateCompass.
+  ///
+  /// In en, this message translates to:
+  /// **'Compass'**
+  String get avatarTemplateCompass;
+
+  /// No description provided for @avatarTemplateCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get avatarTemplateCpu;
+
+  /// No description provided for @avatarTemplateGear.
+  ///
+  /// In en, this message translates to:
+  /// **'Gear'**
+  String get avatarTemplateGear;
+
+  /// No description provided for @avatarTemplateGlobe.
+  ///
+  /// In en, this message translates to:
+  /// **'Globe'**
+  String get avatarTemplateGlobe;
+
+  /// No description provided for @avatarTemplateLaptop.
+  ///
+  /// In en, this message translates to:
+  /// **'Laptop'**
+  String get avatarTemplateLaptop;
+
+  /// No description provided for @avatarTemplateMicroscope.
+  ///
+  /// In en, this message translates to:
+  /// **'Microscope'**
+  String get avatarTemplateMicroscope;
+
+  /// No description provided for @avatarTemplateRobot.
+  ///
+  /// In en, this message translates to:
+  /// **'Robot'**
+  String get avatarTemplateRobot;
+
+  /// No description provided for @avatarTemplateStethoscope.
+  ///
+  /// In en, this message translates to:
+  /// **'Stethoscope'**
+  String get avatarTemplateStethoscope;
+
+  /// No description provided for @avatarTemplateTelescope.
+  ///
+  /// In en, this message translates to:
+  /// **'Telescope'**
+  String get avatarTemplateTelescope;
+
+  /// No description provided for @avatarTemplateArchery.
+  ///
+  /// In en, this message translates to:
+  /// **'Archery'**
+  String get avatarTemplateArchery;
+
+  /// No description provided for @avatarTemplateBaseball.
+  ///
+  /// In en, this message translates to:
+  /// **'Baseball'**
+  String get avatarTemplateBaseball;
+
+  /// No description provided for @avatarTemplateBasketball.
+  ///
+  /// In en, this message translates to:
+  /// **'Basketball'**
+  String get avatarTemplateBasketball;
+
+  /// No description provided for @avatarTemplateBoxing.
+  ///
+  /// In en, this message translates to:
+  /// **'Boxing'**
+  String get avatarTemplateBoxing;
+
+  /// No description provided for @avatarTemplateCycling.
+  ///
+  /// In en, this message translates to:
+  /// **'Cycling'**
+  String get avatarTemplateCycling;
+
+  /// No description provided for @avatarTemplateDarts.
+  ///
+  /// In en, this message translates to:
+  /// **'Darts'**
+  String get avatarTemplateDarts;
+
+  /// No description provided for @avatarTemplateFootball.
+  ///
+  /// In en, this message translates to:
+  /// **'Football'**
+  String get avatarTemplateFootball;
+
+  /// No description provided for @avatarTemplateGolf.
+  ///
+  /// In en, this message translates to:
+  /// **'Golf'**
+  String get avatarTemplateGolf;
+
+  /// No description provided for @avatarTemplatePingPong.
+  ///
+  /// In en, this message translates to:
+  /// **'Ping Pong'**
+  String get avatarTemplatePingPong;
+
+  /// No description provided for @avatarTemplateSkiing.
+  ///
+  /// In en, this message translates to:
+  /// **'Skiing'**
+  String get avatarTemplateSkiing;
+
+  /// No description provided for @avatarTemplateSoccer.
+  ///
+  /// In en, this message translates to:
+  /// **'Soccer'**
+  String get avatarTemplateSoccer;
+
+  /// No description provided for @avatarTemplateTennis.
+  ///
+  /// In en, this message translates to:
+  /// **'Tennis'**
+  String get avatarTemplateTennis;
+
+  /// No description provided for @avatarTemplateVolleyball.
+  ///
+  /// In en, this message translates to:
+  /// **'Volleyball'**
+  String get avatarTemplateVolleyball;
+
+  /// No description provided for @avatarTemplateDrums.
+  ///
+  /// In en, this message translates to:
+  /// **'Drums'**
+  String get avatarTemplateDrums;
+
+  /// No description provided for @avatarTemplateElectricGuitar.
+  ///
+  /// In en, this message translates to:
+  /// **'Electric Guitar'**
+  String get avatarTemplateElectricGuitar;
+
+  /// No description provided for @avatarTemplateGuitar.
+  ///
+  /// In en, this message translates to:
+  /// **'Guitar'**
+  String get avatarTemplateGuitar;
+
+  /// No description provided for @avatarTemplateMicrophone.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get avatarTemplateMicrophone;
+
+  /// No description provided for @avatarTemplatePiano.
+  ///
+  /// In en, this message translates to:
+  /// **'Piano'**
+  String get avatarTemplatePiano;
+
+  /// No description provided for @avatarTemplateSaxophone.
+  ///
+  /// In en, this message translates to:
+  /// **'Saxophone'**
+  String get avatarTemplateSaxophone;
+
+  /// No description provided for @avatarTemplateViolin.
+  ///
+  /// In en, this message translates to:
+  /// **'Violin'**
+  String get avatarTemplateViolin;
+
+  /// No description provided for @avatarTemplateCards.
+  ///
+  /// In en, this message translates to:
+  /// **'Cards'**
+  String get avatarTemplateCards;
+
+  /// No description provided for @avatarTemplateChess.
+  ///
+  /// In en, this message translates to:
+  /// **'Chess'**
+  String get avatarTemplateChess;
+
+  /// No description provided for @avatarTemplateChessAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'Chess Alt'**
+  String get avatarTemplateChessAlt;
+
+  /// No description provided for @avatarTemplateDice.
+  ///
+  /// In en, this message translates to:
+  /// **'Dice'**
+  String get avatarTemplateDice;
+
+  /// No description provided for @avatarTemplateDiceAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'Dice Alt'**
+  String get avatarTemplateDiceAlt;
+
+  /// No description provided for @avatarTemplateEsports.
+  ///
+  /// In en, this message translates to:
+  /// **'Esports'**
+  String get avatarTemplateEsports;
+
+  /// No description provided for @avatarTemplateSword.
+  ///
+  /// In en, this message translates to:
+  /// **'Sword'**
+  String get avatarTemplateSword;
+
+  /// No description provided for @avatarTemplateVideoGames.
+  ///
+  /// In en, this message translates to:
+  /// **'Video Games'**
+  String get avatarTemplateVideoGames;
+
+  /// No description provided for @avatarTemplateVideoGamesAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'Video Games Alt'**
+  String get avatarTemplateVideoGamesAlt;
 }
 
 class _AppLocalizationsDelegate

@@ -44,6 +44,8 @@ class ChatAttachmentPreview extends StatelessWidget {
     required this.metadataStream,
     this.initialMetadata,
     required this.allowed,
+    this.autoDownload = false,
+    this.autoDownloadUserInitiated = false,
     this.onAllowPressed,
   });
 
@@ -51,6 +53,8 @@ class ChatAttachmentPreview extends StatelessWidget {
   final Stream<FileMetadataData?> metadataStream;
   final FileMetadataData? initialMetadata;
   final bool allowed;
+  final bool autoDownload;
+  final bool autoDownloadUserInitiated;
   final VoidCallback? onAllowPressed;
 
   @override
@@ -84,7 +88,10 @@ class ChatAttachmentPreview extends StatelessWidget {
             );
           }
 
-          if (!allowed) {
+          final path = metadata.path?.trim();
+          final localFile = path == null || path.isEmpty ? null : File(path);
+          final hasLocalFile = localFile?.existsSync() ?? false;
+          if (!allowed && !hasLocalFile) {
             return _BlockedAttachment(
               metadata: metadata,
               onAllowPressed: onAllowPressed,
@@ -94,11 +101,15 @@ class ChatAttachmentPreview extends StatelessWidget {
             return _ImageAttachment(
               metadata: metadata,
               stanzaId: stanzaId,
+              autoDownload: autoDownload,
+              autoDownloadUserInitiated: autoDownloadUserInitiated,
             );
           }
           return _FileAttachment(
             metadata: metadata,
             stanzaId: stanzaId,
+            autoDownload: autoDownload,
+            autoDownloadUserInitiated: autoDownloadUserInitiated,
           );
         },
       ),
@@ -162,10 +173,14 @@ class _ImageAttachment extends StatefulWidget {
   const _ImageAttachment({
     required this.metadata,
     required this.stanzaId,
+    required this.autoDownload,
+    required this.autoDownloadUserInitiated,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
+  final bool autoDownload;
+  final bool autoDownloadUserInitiated;
 
   @override
   State<_ImageAttachment> createState() => _ImageAttachmentState();
@@ -173,6 +188,7 @@ class _ImageAttachment extends StatefulWidget {
 
 class _ImageAttachmentState extends State<_ImageAttachment> {
   var _downloading = false;
+  var _autoDownloadRequested = false;
 
   bool get _encrypted =>
       widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
@@ -189,19 +205,33 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     if (!hasLocalFile && url == null) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
     }
+    if (widget.autoDownload &&
+        !_autoDownloadRequested &&
+        !_downloading &&
+        !hasLocalFile &&
+        url != null) {
+      _autoDownloadRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _downloadAttachment(showFeedback: widget.autoDownloadUserInitiated);
+      });
+    }
     final radius = BorderRadius.circular(18);
     if (!hasLocalFile) {
       if (_encrypted) {
         return _EncryptedAttachment(
           filename: metadata.filename,
           downloading: _downloading,
-          onPressed: _downloading ? null : () => _downloadAttachment(),
+          onPressed: _downloading
+              ? null
+              : () => _downloadAttachment(showFeedback: true),
         );
       }
       return _RemoteImageAttachment(
         filename: metadata.filename,
         downloading: _downloading,
-        onPressed: _downloading ? null : () => _downloadAttachment(),
+        onPressed:
+            _downloading ? null : () => _downloadAttachment(showFeedback: true),
       );
     }
     final image = Image.file(
@@ -241,7 +271,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     );
   }
 
-  Future<void> _downloadAttachment() async {
+  Future<void> _downloadAttachment({required bool showFeedback}) async {
     if (_downloading) return;
     setState(() {
       _downloading = true;
@@ -256,6 +286,18 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
       );
       if (!mounted) return;
       if (downloadedPath == null || downloadedPath.trim().isEmpty) {
+        if (showFeedback) {
+          _showToast(
+            l10n,
+            toaster,
+            l10n.chatAttachmentUnavailable,
+            destructive: true,
+          );
+        }
+      }
+    } on Exception {
+      if (!mounted) return;
+      if (showFeedback) {
         _showToast(
           l10n,
           toaster,
@@ -263,14 +305,6 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
           destructive: true,
         );
       }
-    } on Exception {
-      if (!mounted) return;
-      _showToast(
-        l10n,
-        toaster,
-        l10n.chatAttachmentUnavailable,
-        destructive: true,
-      );
     } finally {
       if (mounted) {
         setState(() {
@@ -429,10 +463,14 @@ class _FileAttachment extends StatefulWidget {
   const _FileAttachment({
     required this.metadata,
     required this.stanzaId,
+    required this.autoDownload,
+    required this.autoDownloadUserInitiated,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
+  final bool autoDownload;
+  final bool autoDownloadUserInitiated;
 
   @override
   State<_FileAttachment> createState() => _FileAttachmentState();
@@ -440,6 +478,7 @@ class _FileAttachment extends StatefulWidget {
 
 class _FileAttachmentState extends State<_FileAttachment> {
   var _downloading = false;
+  var _autoDownloadRequested = false;
 
   @override
   Widget build(BuildContext context) {
@@ -449,6 +488,20 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
+    final path = metadata.path?.trim();
+    final localFile = path == null || path.isEmpty ? null : File(path);
+    final hasLocalFile = localFile?.existsSync() ?? false;
+    if (widget.autoDownload &&
+        !_autoDownloadRequested &&
+        !_downloading &&
+        !hasLocalFile &&
+        url != null) {
+      _autoDownloadRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _downloadOnly(showFeedback: widget.autoDownloadUserInitiated);
+      });
+    }
     return _AttachmentSurface(
       child: Row(
         children: [
@@ -557,6 +610,38 @@ class _FileAttachmentState extends State<_FileAttachment> {
         l10n.chatAttachmentUnavailable,
         destructive: true,
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _downloadOnly({required bool showFeedback}) async {
+    if (_downloading) return;
+    setState(() {
+      _downloading = true;
+    });
+    final l10n = context.l10n;
+    final toaster = ShadToaster.maybeOf(context);
+    try {
+      final xmpp = context.read<XmppService>();
+      await xmpp.downloadInboundAttachment(
+        metadataId: widget.metadata.id,
+        stanzaId: widget.stanzaId,
+      );
+    } on Exception {
+      if (!mounted) return;
+      if (showFeedback) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
