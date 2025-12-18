@@ -1703,7 +1703,7 @@ class _DeadlinePickerActions extends StatelessWidget {
             foregroundColor: colors.primaryForeground,
             hoverForegroundColor: colors.primaryForeground,
             onPressed: onDone,
-            child: Text(context.l10n.commonDone),
+            child: const Text('Done'),
           ),
         ],
       ),
