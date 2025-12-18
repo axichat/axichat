@@ -3886,29 +3886,117 @@ class _ChatState extends State<Chat> {
                                                               ),
                                                             );
                                                           }
-                                                          bubbleChildren.add(
-                                                            DynamicInlineText(
-                                                              key: ValueKey(
-                                                                  bubbleContentKey),
-                                                              text: parsedText
-                                                                  .body,
-                                                              details: [
-                                                                time,
-                                                                transportDetail,
-                                                                if (self &&
-                                                                    status !=
-                                                                        null)
-                                                                  status,
-                                                                if (verification !=
-                                                                    null)
-                                                                  verification,
-                                                              ],
-                                                              links: parsedText
-                                                                  .links,
-                                                              onLinkTap:
-                                                                  _handleLinkTap,
-                                                            ),
-                                                          );
+                                                          final rawRenderedText =
+                                                              (message.customProperties?[
+                                                                          'renderedText']
+                                                                      as String?) ??
+                                                                  message.text;
+                                                          final metadataIdForCaption =
+                                                              messageModel
+                                                                  .fileMetadataID;
+                                                          final showAttachmentCaption =
+                                                              rawRenderedText
+                                                                      .trim()
+                                                                      .isEmpty &&
+                                                                  metadataIdForCaption
+                                                                          ?.isNotEmpty ==
+                                                                      true;
+                                                          if (showAttachmentCaption) {
+                                                            bubbleChildren.add(
+                                                              StreamBuilder<
+                                                                  FileMetadataData?>(
+                                                                stream:
+                                                                    _metadataStreamFor(
+                                                                  metadataIdForCaption!,
+                                                                ),
+                                                                initialData:
+                                                                    _metadataInitialFor(
+                                                                  metadataIdForCaption,
+                                                                ),
+                                                                builder: (context,
+                                                                    snapshot) {
+                                                                  const captionPrefix =
+                                                                      '📎 ';
+                                                                  const fallbackFilename =
+                                                                      'Attachment';
+                                                                  final metadata =
+                                                                      snapshot
+                                                                          .data;
+                                                                  final filename =
+                                                                      metadata?.filename
+                                                                              .trim() ??
+                                                                          '';
+                                                                  final resolvedFilename = filename
+                                                                          .isNotEmpty
+                                                                      ? filename
+                                                                      : fallbackFilename;
+                                                                  final sizeBytes =
+                                                                      metadata
+                                                                          ?.sizeBytes;
+                                                                  final sizeLabel = sizeBytes !=
+                                                                              null &&
+                                                                          sizeBytes >
+                                                                              0
+                                                                      ? formatBytes(
+                                                                          sizeBytes,
+                                                                        )
+                                                                      : l10n
+                                                                          .chatAttachmentUnknownSize;
+                                                                  final caption =
+                                                                      '$captionPrefix$resolvedFilename ($sizeLabel)';
+                                                                  return DynamicInlineText(
+                                                                    key: ValueKey(
+                                                                        bubbleContentKey),
+                                                                    text:
+                                                                        TextSpan(
+                                                                      text:
+                                                                          caption,
+                                                                      style:
+                                                                          baseTextStyle,
+                                                                    ),
+                                                                    details: [
+                                                                      time,
+                                                                      transportDetail,
+                                                                      if (self &&
+                                                                          status !=
+                                                                              null)
+                                                                        status,
+                                                                      if (verification !=
+                                                                          null)
+                                                                        verification,
+                                                                    ],
+                                                                    onLinkTap:
+                                                                        _handleLinkTap,
+                                                                  );
+                                                                },
+                                                              ),
+                                                            );
+                                                          } else {
+                                                            bubbleChildren.add(
+                                                              DynamicInlineText(
+                                                                key: ValueKey(
+                                                                    bubbleContentKey),
+                                                                text: parsedText
+                                                                    .body,
+                                                                details: [
+                                                                  time,
+                                                                  transportDetail,
+                                                                  if (self &&
+                                                                      status !=
+                                                                          null)
+                                                                    status,
+                                                                  if (verification !=
+                                                                      null)
+                                                                    verification,
+                                                                ],
+                                                                links:
+                                                                    parsedText
+                                                                        .links,
+                                                                onLinkTap:
+                                                                    _handleLinkTap,
+                                                              ),
+                                                            );
+                                                          }
                                                           if (message.customProperties?[
                                                                   'retracted'] ??
                                                               false) {

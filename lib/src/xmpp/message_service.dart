@@ -602,6 +602,16 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         if (metadata != null) {
           message = message.copyWith(fileMetadataID: metadata.id);
         }
+        if (metadata != null && (message.body?.trim().isEmpty ?? true)) {
+          const fallbackFilename = 'Attachment';
+          final filename = metadata.filename.trim();
+          final labelFilename =
+              filename.isNotEmpty ? filename : fallbackFilename;
+          final sizeBytes = metadata.sizeBytes ?? 0;
+          message = message.copyWith(
+            body: _attachmentLabel(labelFilename, sizeBytes),
+          );
+        }
 
         if (await _isDuplicate(message, event, stableKey: stableKey)) {
           _log.fine(
