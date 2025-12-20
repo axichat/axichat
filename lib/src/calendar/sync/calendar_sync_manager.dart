@@ -92,13 +92,17 @@ class CalendarSyncManager {
     if (message.data == null || message.taskId == null) return;
 
     try {
-      if (message.entity == 'day_event') {
-        final DayEvent event = DayEvent.fromJson(message.data!);
-        await _mergeDayEvent(event, message.operation ?? 'update');
-        return;
+      switch (message.entity) {
+        case 'day_event':
+          final DayEvent event = DayEvent.fromJson(message.data!);
+          await _mergeDayEvent(event, message.operation ?? 'update');
+        case 'critical_path':
+          final path = CalendarCriticalPath.fromJson(message.data!);
+          await _mergeCriticalPath(path, message.operation ?? 'update');
+        default:
+          final task = CalendarTask.fromJson(message.data!);
+          await _mergeTask(task, message.operation ?? 'update');
       }
-      final task = CalendarTask.fromJson(message.data!);
-      await _mergeTask(task, message.operation ?? 'update');
     } catch (e) {
       developer.log('Error handling calendar update: $e');
     }
@@ -137,6 +141,20 @@ class CalendarSyncManager {
       operation: operation,
       data: event.toJson(),
       entity: 'day_event',
+    );
+  }
+
+  /// Send critical path update to other devices
+  Future<void> sendCriticalPathUpdate(
+    CalendarCriticalPath path,
+    String operation,
+  ) async {
+    await _flushPendingEnvelopes();
+    await _sendUpdate(
+      payloadId: path.id,
+      operation: operation,
+      data: path.toJson(),
+      entity: 'critical_path',
     );
   }
 
@@ -185,6 +203,16 @@ class CalendarSyncManager {
   }
 
   CalendarModel _mergeModels(CalendarModel local, CalendarModel remote) {
+    // Merge tombstones first (keep latest deletion time for each)
+    final mergedDeletedTaskIds =
+        _mergeTombstones(local.deletedTaskIds, remote.deletedTaskIds);
+    final mergedDeletedDayEventIds =
+        _mergeTombstones(local.deletedDayEventIds, remote.deletedDayEventIds);
+    final mergedDeletedCriticalPathIds = _mergeTombstones(
+      local.deletedCriticalPathIds,
+      remote.deletedCriticalPathIds,
+    );
+
     final mergedTasks = <String, CalendarTask>{};
     final allIds = <String>{
       ...local.tasks.keys,
@@ -192,6 +220,11 @@ class CalendarSyncManager {
     };
 
     for (final id in allIds) {
+      // Skip tasks that are in tombstones
+      if (mergedDeletedTaskIds.containsKey(id)) {
+        continue;
+      }
+
       final localTask = local.tasks[id];
       final remoteTask = remote.tasks[id];
 
@@ -201,8 +234,6 @@ class CalendarSyncManager {
       }
 
       if (localTask != null && remoteTask == null) {
-        // Preserve local-only tasks; deletion must be explicit via update ops,
-        // not inferred from wall-clock skew between devices.
         mergedTasks[id] = localTask;
         continue;
       }
@@ -221,6 +252,11 @@ class CalendarSyncManager {
     };
 
     for (final String id in allEventIds) {
+      // Skip day events that are in tombstones
+      if (mergedDeletedDayEventIds.containsKey(id)) {
+        continue;
+      }
+
       final DayEvent? localEvent = local.dayEvents[id];
       final DayEvent? remoteEvent = remote.dayEvents[id];
 
@@ -250,6 +286,11 @@ class CalendarSyncManager {
     };
 
     for (final id in allPathIds) {
+      // Skip critical paths that are in tombstones
+      if (mergedDeletedCriticalPathIds.containsKey(id)) {
+        continue;
+      }
+
       final CalendarCriticalPath? localPath = local.criticalPaths[id];
       final CalendarCriticalPath? remotePath = remote.criticalPaths[id];
 
@@ -274,10 +315,33 @@ class CalendarSyncManager {
       tasks: mergedTasks,
       dayEvents: mergedDayEvents,
       criticalPaths: mergedPaths,
+      deletedTaskIds: mergedDeletedTaskIds,
+      deletedDayEventIds: mergedDeletedDayEventIds,
+      deletedCriticalPathIds: mergedDeletedCriticalPathIds,
       lastModified: DateTime.now(),
       checksum: '',
     );
     return merged.copyWith(checksum: merged.calculateChecksum());
+  }
+
+  Map<String, DateTime> _mergeTombstones(
+    Map<String, DateTime> local,
+    Map<String, DateTime> remote,
+  ) {
+    final merged = <String, DateTime>{};
+    final allIds = <String>{...local.keys, ...remote.keys};
+    for (final id in allIds) {
+      final localTime = local[id];
+      final remoteTime = remote[id];
+      if (localTime == null) {
+        merged[id] = remoteTime!;
+      } else if (remoteTime == null) {
+        merged[id] = localTime;
+      } else {
+        merged[id] = remoteTime.isAfter(localTime) ? remoteTime : localTime;
+      }
+    }
+    return merged;
   }
 
   Future<void> _mergeTask(CalendarTask remoteTask, String operation) async {
@@ -337,6 +401,39 @@ class CalendarSyncManager {
         break;
       default:
         developer.log('Unknown day event operation: $operation');
+        return;
+    }
+
+    await _applyModel(updatedModel);
+  }
+
+  Future<void> _mergeCriticalPath(
+    CalendarCriticalPath remotePath,
+    String operation,
+  ) async {
+    final currentModel = _readModel();
+
+    CalendarModel updatedModel;
+    switch (operation) {
+      case 'add':
+      case 'update':
+        final localPath = currentModel.criticalPaths[remotePath.id];
+        if (localPath == null) {
+          updatedModel = currentModel.addCriticalPath(remotePath);
+        } else if (remotePath.modifiedAt.isAfter(localPath.modifiedAt)) {
+          updatedModel = currentModel.updateCriticalPath(remotePath);
+        } else {
+          return;
+        }
+      case 'delete':
+        final existing = currentModel.criticalPaths[remotePath.id];
+        if (existing != null &&
+            existing.modifiedAt.isAfter(remotePath.modifiedAt)) {
+          return;
+        }
+        updatedModel = currentModel.removeCriticalPath(remotePath.id);
+      default:
+        developer.log('Unknown critical path operation: $operation');
         return;
     }
 

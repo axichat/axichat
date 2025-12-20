@@ -38,7 +38,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -72,7 +71,6 @@ class Axichat extends StatefulWidget {
 }
 
 class _AxichatState extends State<Axichat> {
-  Storage? _authStorage;
   late final CalendarReminderController _reminderController =
       CalendarReminderController(
     notificationService: widget._notificationService,
@@ -89,9 +87,8 @@ class _AxichatState extends State<Axichat> {
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<Storage?>.value(
-          value: _authStorage,
-          key: const Key('calendar_storage'),
+        RepositoryProvider<CalendarStorageManager>.value(
+          value: widget._storageManager,
         ),
         if (widget._xmppService == null)
           RepositoryProvider<XmppService>(
@@ -111,13 +108,9 @@ class _AxichatState extends State<Axichat> {
                   XmppStateStore.boxName,
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
                 );
-                final storage = await widget._storageManager.ensureAuthStorage(
+                await widget._storageManager.ensureAuthStorage(
                   passphrase: passphrase,
                 );
-
-                setState(() {
-                  _authStorage = storage;
-                });
                 return XmppStateStore();
               },
               buildDatabase: (prefix, passphrase) async {
