@@ -541,10 +541,17 @@ class XmppService extends XmppBase
     try {
       _setConnectionState(ConnectionState.connecting);
       await _connection.triggerImmediateReconnect();
+
+      // Ensure state isn't stuck if reconnection didn't actually start.
+      if (connectionState == ConnectionState.connecting &&
+          !await _connection.isReconnecting()) {
+        _setConnectionState(ConnectionState.notConnected);
+      }
     } catch (error) {
       _xmppLogger.finer(
         'Immediate reconnect trigger failed: ${error.runtimeType}.',
       );
+      _setConnectionState(ConnectionState.notConnected);
     }
   }
 
@@ -1824,7 +1831,16 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _setConnectionState(ConnectionState.notConnected);
-    _sessionReconnectEnabled = false;
+
+    // Only disable session reconnect for fatal errors (auth/database).
+    // Network errors should allow reconnection attempts.
+    final isFatalError = e == null ||
+        e is XmppAuthenticationException ||
+        e is XmppDatabaseCreationException;
+    if (isFatalError) {
+      _sessionReconnectEnabled = false;
+    }
+
     _xmppLogger.info(
       'Resetting${e == null ? '' : ' due to ${e.runtimeType}'}...',
     );
