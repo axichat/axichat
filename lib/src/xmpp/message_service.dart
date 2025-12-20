@@ -715,16 +715,16 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         }
 
         await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
-        final isPeerChat = !isGroupChat &&
+        final isDirectChat = !isGroupChat &&
             message.chatJid.isNotEmpty &&
-            message.chatJid != myJid &&
             !_isMucChatJid(message.chatJid);
-        if (isPeerChat) {
-          if (this is AvatarService) {
-            unawaited(
-              (this as AvatarService).prefetchAvatarForJid(message.chatJid),
-            );
-          }
+        final isPeerChat = isDirectChat && message.chatJid != myJid;
+        if (isPeerChat && this is AvatarService) {
+          unawaited(
+            (this as AvatarService).prefetchAvatarForJid(message.chatJid),
+          );
+        }
+        if (isDirectChat) {
           unawaited(
             _upsertConversationIndexForPeer(
               peerJid: message.chatJid,
@@ -1014,7 +1014,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           (db) => db.markMessageAcked(message.stanzaID),
         );
       }
-      if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != myJid) {
+      if (chatType == ChatType.chat && !_isMucChatJid(jid)) {
         unawaited(
           _upsertConversationIndexForPeer(
             peerJid: jid,
@@ -1045,7 +1045,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     if (connectionState != ConnectionState.connected) return;
     final normalizedPeer = peerJid.trim();
     if (normalizedPeer.isEmpty) return;
-    if (normalizedPeer == myJid) return;
     if (_isMucChatJid(normalizedPeer)) return;
 
     final manager = _connection.getManager<ConversationIndexManager>();
