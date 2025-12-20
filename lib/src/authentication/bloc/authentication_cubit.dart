@@ -352,6 +352,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     if (_stickyAuthActive) {
       unawaited(_reconnectXmppForStickySession());
+      unawaited(_triggerEmailReconnect());
       return;
     }
 
@@ -403,6 +404,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     await login(rememberMe: remember);
+  }
+
+  Future<void> _triggerEmailReconnect() async {
+    if (!_endpointConfig.enableSmtp) return;
+    final emailService = _emailService;
+    if (emailService == null) return;
+    if (!emailService.isRunning) return;
+    try {
+      await emailService.handleNetworkAvailable();
+    } on Exception catch (error, stackTrace) {
+      _log.finer('Email reconnect trigger failed', error, stackTrace);
+    }
   }
 
   void _handleForegroundServiceActiveChanged() {

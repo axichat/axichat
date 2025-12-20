@@ -274,7 +274,8 @@ class EmailService {
         await _credentialStore.write(key: provisionedKey, value: 'false');
       }
     }
-    if (!alreadyProvisioned && !shouldForceProvisioning) {
+    // Always verify with transport - credential store may be stale after cold start
+    if (!shouldForceProvisioning) {
       try {
         alreadyProvisioned = await _transport.isConfigured();
       } on Exception {
