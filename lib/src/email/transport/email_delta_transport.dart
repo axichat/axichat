@@ -865,6 +865,32 @@ class EmailDeltaTransport implements ChatTransport {
     }
     await _resetAccountsStorage(prefix);
   }
+
+  /// Blocks an email contact in DeltaChat core.
+  ///
+  /// Returns true if the contact was found and blocked.
+  Future<bool> blockContact(String address) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    final contactId = await context.lookupContactIdByAddress(address);
+    if (contactId == null) return false;
+    await context.blockContact(contactId);
+    return true;
+  }
+
+  /// Unblocks an email contact in DeltaChat core.
+  ///
+  /// Returns true if the contact was found and unblocked.
+  Future<bool> unblockContact(String address) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    final contactId = await context.lookupContactIdByAddress(address);
+    if (contactId == null) return false;
+    await context.unblockContact(contactId);
+    return true;
+  }
 }
 
 String _normalizedAddress(String? raw, int chatId) {

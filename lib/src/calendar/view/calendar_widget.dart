@@ -1,6 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -290,7 +291,7 @@ class _CalendarAppBar extends StatelessWidget {
             children: [
               AxiIconButton(
                 iconData: LucideIcons.arrowLeft,
-                tooltip: 'Back to chats',
+                tooltip: context.l10n.calendarBackToChats,
                 color: colors.foreground,
                 borderColor: colors.border,
                 onPressed: onBackPressed,

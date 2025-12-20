@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
@@ -307,13 +308,13 @@ class _InlineSyncControls extends StatelessWidget {
           ],
         ),
         _CompactSyncButton(
-          label: 'Request',
+          label: context.l10n.calendarSyncRequest,
           icon: LucideIcons.cloudDownload,
           showLabel: showLabels,
           onPressed: disabled ? null : onRequestSync,
         ),
         _CompactSyncButton(
-          label: 'Push',
+          label: context.l10n.calendarSyncPush,
           icon: LucideIcons.cloudUpload,
           showLabel: showLabels,
           onPressed: disabled ? null : onPushSync,
@@ -325,7 +326,7 @@ class _InlineSyncControls extends StatelessWidget {
         ),
         if (state.syncError != null)
           _CompactSyncButton(
-            label: 'Retry',
+            label: context.l10n.commonRetry,
             icon: LucideIcons.refreshCcw,
             showLabel: showLabels,
             onPressed: onRetrySync,

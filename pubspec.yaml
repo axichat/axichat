@@ -74,6 +74,7 @@ dependencies:
   flutter_foreground_task: ^9.1.0
   shorebird_code_push: ^2.0.3
   url_launcher: ^6.3.0
+  flutter_html: ^3.0.0
   flutter_local_notifications: ^19.1.0
   flutter_native_timezone:
     path: third_party/flutter_native_timezone

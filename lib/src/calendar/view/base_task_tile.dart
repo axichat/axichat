@@ -598,7 +598,7 @@ class _FullTaskTile extends StatelessWidget {
                           const Spacer(),
                           AxiIconButton(
                             iconData: Icons.edit,
-                            tooltip: 'Edit task',
+                            tooltip: context.l10n.calendarEditTaskTooltip,
                             onPressed: onEdit,
                             iconSize: 18,
                             buttonSize: 36,
@@ -611,7 +611,7 @@ class _FullTaskTile extends StatelessWidget {
                           const SizedBox(width: calendarGutterSm),
                           AxiIconButton(
                             iconData: Icons.delete,
-                            tooltip: 'Delete task',
+                            tooltip: context.l10n.calendarDeleteTaskTooltip,
                             onPressed: onDelete,
                             iconSize: 18,
                             buttonSize: 36,

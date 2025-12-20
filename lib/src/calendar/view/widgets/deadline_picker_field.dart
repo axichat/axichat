@@ -1502,7 +1502,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
               children: [
                 Expanded(
                   child: _DeadlineTimeColumn(
-                    label: 'Hour',
+                    label: context.l10n.calendarHour,
                     values: hourValues,
                     selectedValue: selectedHour,
                     controller: hourController,
@@ -1513,7 +1513,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
                 ),
                 Expanded(
                   child: _DeadlineTimeColumn(
-                    label: 'Minute',
+                    label: context.l10n.calendarMinute,
                     values: minuteValues,
                     selectedValue: selectedMinute,
                     controller: minuteController,
@@ -1703,7 +1703,7 @@ class _DeadlinePickerActions extends StatelessWidget {
             foregroundColor: colors.primaryForeground,
             hoverForegroundColor: colors.primaryForeground,
             onPressed: onDone,
-            child: const Text('Done'),
+            child: Text(context.l10n.commonDone),
           ),
         ],
       ),
