@@ -573,7 +573,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         for (final item in items) {
           final peerJid = item.peerBare.toBare().toString();
           if (peerJid.isEmpty) continue;
-          if (peerJid == myJid) continue;
           if (_isMucChatJid(peerJid)) continue;
 
           final archived = item.archived;
@@ -583,10 +582,13 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
           final existing = await db.getChat(peerJid);
           if (existing == null) {
+            final isSelfChat = peerJid == myJid;
             await db.createChat(
               Chat(
                 jid: peerJid,
-                title: mox.JID.fromString(peerJid).local,
+                title: isSelfChat
+                    ? 'Saved Messages'
+                    : mox.JID.fromString(peerJid).local,
                 type: ChatType.chat,
                 lastChangeTimestamp: lastChangeCandidate,
                 muted: muted,
@@ -638,7 +640,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   Future<void> _applyConversationIndexRetraction(mox.JID peerBare) async {
     final peer = peerBare.toBare().toString();
     if (peer.isEmpty) return;
-    if (peer == myJid) return;
     if (_isMucChatJid(peer)) return;
     await _dbOp<XmppDatabase>(
       (db) async {
@@ -653,7 +654,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
   Future<void> _syncConversationIndexMeta({required String jid}) async {
     if (connectionState != ConnectionState.connected) return;
-    if (jid.isEmpty || jid == myJid) return;
+    if (jid.isEmpty) return;
     if (_isMucChatJid(jid)) return;
 
     final manager = _connection.getManager<ConversationIndexManager>();
