@@ -1569,6 +1569,7 @@ class EmailService {
           .toString(),
       'send_security': _defaultSecurityMode,
       'send_user': localPart,
+      'show_emails': '2',
     };
   }
 
