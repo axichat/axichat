@@ -12,6 +12,8 @@ import 'calendar_task.dart';
 part 'calendar_model.freezed.dart';
 part 'calendar_model.g.dart';
 
+const _tombstoneRetentionDays = 30;
+
 @freezed
 @HiveType(typeId: 33)
 class CalendarModel with _$CalendarModel {
@@ -21,6 +23,9 @@ class CalendarModel with _$CalendarModel {
     @HiveField(2) @Default({}) Map<String, DayEvent> dayEvents,
     @HiveField(3) required String checksum,
     @HiveField(4) @Default({}) Map<String, CalendarCriticalPath> criticalPaths,
+    @HiveField(5) @Default({}) Map<String, DateTime> deletedTaskIds,
+    @HiveField(6) @Default({}) Map<String, DateTime> deletedDayEventIds,
+    @HiveField(7) @Default({}) Map<String, DateTime> deletedCriticalPathIds,
   }) = _CalendarModel;
 
   factory CalendarModel.fromJson(Map<String, dynamic> json) =>
@@ -49,12 +54,29 @@ class CalendarModel with _$CalendarModel {
     final sortedCriticalPaths = Map.fromEntries(
       criticalPaths.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
+    final sortedDeletedTaskIds = Map.fromEntries(
+      deletedTaskIds.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
+    final sortedDeletedDayEventIds = Map.fromEntries(
+      deletedDayEventIds.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key)),
+    );
+    final sortedDeletedCriticalPathIds = Map.fromEntries(
+      deletedCriticalPathIds.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key)),
+    );
     final content = jsonEncode({
       'tasks': sortedTasks.map((k, v) => MapEntry(k, v.toJson())),
       'dayEvents': sortedDayEvents.map((k, v) => MapEntry(k, v.toJson())),
       'lastModified': lastModified.toIso8601String(),
       'criticalPaths':
           sortedCriticalPaths.map((k, v) => MapEntry(k, v.toJson())),
+      'deletedTaskIds':
+          sortedDeletedTaskIds.map((k, v) => MapEntry(k, v.toIso8601String())),
+      'deletedDayEventIds': sortedDeletedDayEventIds
+          .map((k, v) => MapEntry(k, v.toIso8601String())),
+      'deletedCriticalPathIds': sortedDeletedCriticalPathIds
+          .map((k, v) => MapEntry(k, v.toIso8601String())),
     });
     return sha256.convert(utf8.encode(content)).toString();
   }
@@ -80,9 +102,12 @@ class CalendarModel with _$CalendarModel {
     final now = DateTime.now();
     final String baseId = baseTaskIdFrom(taskId);
     final bool shouldPrunePaths = !updatedTasks.containsKey(baseId);
+    final updatedDeletedTaskIds = _purgeStaleTombstones(deletedTaskIds, now);
+    updatedDeletedTaskIds[taskId] = now;
     final updated = copyWith(
       tasks: updatedTasks,
       lastModified: now,
+      deletedTaskIds: updatedDeletedTaskIds,
       criticalPaths: shouldPrunePaths
           ? _removeTaskFromPaths(taskId, now: now)
           : criticalPaths,
@@ -130,9 +155,13 @@ class CalendarModel with _$CalendarModel {
     final Map<String, DayEvent> updatedEvents =
         Map<String, DayEvent>.from(dayEvents)..remove(eventId);
     final DateTime now = DateTime.now();
+    final updatedDeletedDayEventIds =
+        _purgeStaleTombstones(deletedDayEventIds, now);
+    updatedDeletedDayEventIds[eventId] = now;
     final CalendarModel updated = copyWith(
       dayEvents: updatedEvents,
       lastModified: now,
+      deletedDayEventIds: updatedDeletedDayEventIds,
     );
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
@@ -155,16 +184,20 @@ class CalendarModel with _$CalendarModel {
 
   CalendarModel removeTasks(Iterable<String> taskIds) {
     final updatedTasks = Map<String, CalendarTask>.from(tasks);
-    var modified = false;
+    final List<String> removedIds = <String>[];
     for (final id in taskIds) {
       if (updatedTasks.remove(id) != null) {
-        modified = true;
+        removedIds.add(id);
       }
     }
-    if (!modified) {
+    if (removedIds.isEmpty) {
       return this;
     }
     final now = DateTime.now();
+    final updatedDeletedTaskIds = _purgeStaleTombstones(deletedTaskIds, now);
+    for (final id in removedIds) {
+      updatedDeletedTaskIds[id] = now;
+    }
     final Set<String> missingBaseIds = taskIds
         .map(baseTaskIdFrom)
         .where((id) => !updatedTasks.containsKey(id))
@@ -172,6 +205,7 @@ class CalendarModel with _$CalendarModel {
     final updated = copyWith(
       tasks: updatedTasks,
       lastModified: now,
+      deletedTaskIds: updatedDeletedTaskIds,
       criticalPaths: missingBaseIds.isEmpty
           ? criticalPaths
           : _removeMissingTasksFromPaths(missingBaseIds, now: now),
@@ -338,6 +372,20 @@ class CalendarModel with _$CalendarModel {
       }
     }
     return changed ? next : criticalPaths;
+  }
+
+  Map<String, DateTime> _purgeStaleTombstones(
+    Map<String, DateTime> tombstones,
+    DateTime now,
+  ) {
+    final cutoff = now.subtract(const Duration(days: _tombstoneRetentionDays));
+    final result = <String, DateTime>{};
+    for (final entry in tombstones.entries) {
+      if (entry.value.isAfter(cutoff)) {
+        result[entry.key] = entry.value;
+      }
+    }
+    return result;
   }
 }
 

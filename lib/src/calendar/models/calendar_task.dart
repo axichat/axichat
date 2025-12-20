@@ -111,7 +111,10 @@ class CalendarTask with _$CalendarTask {
     @HiveField(8) String? location,
     @HiveField(9) DateTime? deadline,
     @HiveField(10) TaskPriority? priority,
-    @HiveField(11) double? startHour,
+    // Legacy field: kept for Hive backward compatibility. Use computedStartHour
+    // getter instead. This field is excluded from JSON serialization.
+    // ignore: invalid_annotation_target
+    @JsonKey(includeToJson: false) @HiveField(11) double? startHour,
     @HiveField(12) DateTime? endDate,
     @HiveField(13) RecurrenceRule? recurrence,
     @HiveField(14)
@@ -135,7 +138,6 @@ class CalendarTask with _$CalendarTask {
     DateTime? deadline,
     DateTime? endDate,
     TaskPriority priority = TaskPriority.none,
-    double? startHour,
     RecurrenceRule? recurrence,
     ReminderPreferences? reminders,
     List<TaskChecklistItem> checklist = const [],
@@ -151,7 +153,7 @@ class CalendarTask with _$CalendarTask {
       deadline: deadline,
       endDate: endDate,
       priority: priority == TaskPriority.none ? null : priority,
-      startHour: startHour,
+      startHour: null,
       recurrence: recurrence?.isNone == true ? null : recurrence,
       occurrenceOverrides: const {},
       checklist: checklist,
@@ -163,6 +165,12 @@ class CalendarTask with _$CalendarTask {
 }
 
 extension CalendarTaskExtensions on CalendarTask {
+  /// Computes the start hour from scheduledTime. Use this instead of the
+  /// legacy stored startHour field.
+  double? get computedStartHour => scheduledTime != null
+      ? scheduledTime!.hour + (scheduledTime!.minute / 60.0)
+      : null;
+
   DateTime? get effectiveEndDate {
     if (endDate != null) return endDate;
     if (scheduledTime != null && duration != null) {
@@ -224,7 +232,6 @@ extension CalendarTaskExtensions on CalendarTask {
       scheduledTime: scheduledTime,
       duration: normalizedDuration,
       endDate: resolvedEnd,
-      startHour: scheduledTime.hour + (scheduledTime.minute / 60.0),
     );
   }
 

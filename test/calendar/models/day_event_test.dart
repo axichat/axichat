@@ -60,7 +60,9 @@ void main() {
         title: 'Birthday',
         description: 'Ice cream',
         startDate: DateTime(2024, 7, 14),
-        reminders: ReminderPreferences.defaults(),
+        reminders: const ReminderPreferences(
+          startOffsets: <Duration>[Duration(hours: 1)],
+        ),
       );
 
       final Map<String, dynamic> json = event.toJson();
@@ -70,6 +72,10 @@ void main() {
       expect(restored.description, equals(event.description));
       expect(restored.normalizedStart, equals(event.normalizedStart));
       expect(restored.effectiveReminders.isEnabled, isTrue);
+      expect(
+        restored.effectiveReminders.startOffsets,
+        contains(const Duration(hours: 1)),
+      );
     });
   });
 }

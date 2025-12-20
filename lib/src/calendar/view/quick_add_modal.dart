@@ -622,9 +622,7 @@ class _QuickAddModalState extends State<QuickAddModal>
           : _locationController.text.trim(),
       deadline: _formController.deadline,
       recurrence: recurrence,
-      startHour: scheduledTime != null
-          ? scheduledTime.hour + (scheduledTime.minute / 60.0)
-          : null,
+      startHour: null,
       checklist: _checklistController.items.toList(),
       reminders: _formController.reminders.normalized(),
     );

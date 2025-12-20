@@ -86,6 +86,17 @@ class CalendarTransferService {
   }
 }
 
+/// ICS (iCalendar) codec for calendar tasks.
+///
+/// **Limitations:** ICS is a lossy format for Axichat calendars. The following
+/// fields are NOT exported and will be lost when round-tripping through ICS:
+/// - Recurrence rules (RRULE is not generated; recurring tasks export as single events)
+/// - Checklists (VTODO subtasks are not supported in VEVENT)
+/// - Reminders (VALARM is not generated)
+/// - Critical path associations
+/// - Occurrence overrides for recurring tasks
+///
+/// For full-fidelity backup and restore, use JSON format instead.
 class _CalendarIcsCodec {
   static const _prodId = '-//Axichat//Calendar//EN';
 
@@ -208,9 +219,6 @@ class _CalendarIcsCodec {
               orElse: () => null,
             );
 
-    final double? startHour =
-        start != null ? start.hour + (start.minute / 60.0) : null;
-
     return CalendarTask(
       id: uid,
       title: summary,
@@ -223,7 +231,7 @@ class _CalendarIcsCodec {
       location: location?.isEmpty == true ? null : location,
       deadline: due,
       priority: priority == TaskPriority.none ? null : priority,
-      startHour: startHour,
+      startHour: null,
       endDate: end,
       recurrence: null,
       occurrenceOverrides: const {},

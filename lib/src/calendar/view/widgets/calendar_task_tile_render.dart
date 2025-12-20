@@ -638,9 +638,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       endDate: schedule != null && duration != null
           ? schedule.add(duration)
           : task.endDate,
-      startHour: schedule != null
-          ? schedule.hour + (schedule.minute / 60.0)
-          : task.startHour,
     );
   }
 

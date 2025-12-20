@@ -511,8 +511,8 @@ void main() {
           return updated.scheduledTime == newStart &&
               updated.duration == duration &&
               updated.endDate == newStart.add(duration) &&
-              updated.startHour != null &&
-              (updated.startHour! - expectedStartHour).abs() < 1e-6;
+              updated.computedStartHour != null &&
+              (updated.computedStartHour! - expectedStartHour).abs() < 1e-6;
         }),
       ],
     );
@@ -860,8 +860,8 @@ void main() {
               (scheduled.scheduledTime!.minute / 60.0);
           return scheduled.scheduledTime == DateTime(2024, 6, 12, 10, 15) &&
               scheduled.duration == const Duration(minutes: 45) &&
-              scheduled.startHour != null &&
-              (scheduled.startHour! - expectedHour).abs() < 1e-6;
+              scheduled.computedStartHour != null &&
+              (scheduled.computedStartHour! - expectedHour).abs() < 1e-6;
         }),
       ],
     );
