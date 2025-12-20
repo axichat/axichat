@@ -73,6 +73,8 @@ class XmppConnection extends mox.XmppConnection {
   Future<void> setShouldReconnect(bool value) =>
       reconnectionPolicy.setShouldReconnect(value);
 
+  Future<bool> isReconnecting() => _reconnectionPolicy.getIsReconnecting();
+
   T? getManager<T extends mox.XmppManagerBase>() {
     switch (T) {
       case == mox.MessageManager:
