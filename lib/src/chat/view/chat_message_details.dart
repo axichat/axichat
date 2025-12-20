@@ -11,6 +11,9 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_html/flutter_html.dart' as html_widget;
+import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -85,10 +88,49 @@ class ChatMessageDetails extends StatelessWidget {
                   spacing: 24,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    SelectableText(
-                      message.body ?? '',
-                      style: context.textTheme.lead,
-                    ),
+                    if (message.htmlBody != null &&
+                        message.htmlBody!.isNotEmpty)
+                      Builder(
+                        builder: (context) {
+                          final messageId = message.id;
+                          final shouldLoadImages = context
+                                  .read<SettingsCubit>()
+                                  .state
+                                  .autoLoadEmailImages ||
+                              (messageId != null &&
+                                  state.loadedImageMessageIds
+                                      .contains(messageId));
+                          return html_widget.Html(
+                            data: message.htmlBody,
+                            extensions: [
+                              createEmailImageExtension(
+                                shouldLoad: shouldLoadImages,
+                                onLoadRequested: messageId == null
+                                    ? null
+                                    : () {
+                                        context.read<ChatBloc>().add(
+                                              ChatEmailImagesLoaded(messageId),
+                                            );
+                                      },
+                              ),
+                            ],
+                            style: {
+                              'body': html_widget.Style(
+                                margin: html_widget.Margins.zero,
+                                padding: html_widget.HtmlPaddings.zero,
+                                fontSize: html_widget.FontSize(
+                                  context.textTheme.lead.fontSize ?? 16.0,
+                                ),
+                              ),
+                            },
+                          );
+                        },
+                      )
+                    else
+                      SelectableText(
+                        message.body ?? '',
+                        style: context.textTheme.lead,
+                      ),
                     if (shareContext?.subject?.isNotEmpty == true)
                       Column(
                         spacing: 8,

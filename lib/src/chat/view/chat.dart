@@ -58,6 +58,8 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter_html/flutter_html.dart' as html_widget;
+import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -4100,6 +4102,123 @@ class _ChatState extends State<Chat> {
                                                                 },
                                                               ),
                                                             );
+                                                          } else if (messageModel
+                                                                      .htmlBody !=
+                                                                  null &&
+                                                              messageModel
+                                                                  .htmlBody!
+                                                                  .isNotEmpty) {
+                                                            // Render HTML email content
+                                                            final shouldLoadImages = context
+                                                                    .read<
+                                                                        SettingsCubit>()
+                                                                    .state
+                                                                    .autoLoadEmailImages ||
+                                                                state
+                                                                    .loadedImageMessageIds
+                                                                    .contains(
+                                                                  messageModel
+                                                                      .id,
+                                                                );
+                                                            bubbleChildren.add(
+                                                              html_widget.Html(
+                                                                key: ValueKey(
+                                                                    bubbleContentKey),
+                                                                data: messageModel
+                                                                    .htmlBody,
+                                                                extensions: [
+                                                                  createEmailImageExtension(
+                                                                    shouldLoad:
+                                                                        shouldLoadImages,
+                                                                    onLoadRequested:
+                                                                        messageModel.id ==
+                                                                                null
+                                                                            ? null
+                                                                            : () {
+                                                                                context.read<ChatBloc>().add(
+                                                                                      ChatEmailImagesLoaded(messageModel.id!),
+                                                                                    );
+                                                                              },
+                                                                  ),
+                                                                ],
+                                                                style: {
+                                                                  'body':
+                                                                      html_widget
+                                                                          .Style(
+                                                                    margin: html_widget
+                                                                        .Margins
+                                                                        .zero,
+                                                                    padding: html_widget
+                                                                        .HtmlPaddings
+                                                                        .zero,
+                                                                    color:
+                                                                        textColor,
+                                                                    fontSize:
+                                                                        html_widget
+                                                                            .FontSize(
+                                                                      baseTextStyle
+                                                                              .fontSize ??
+                                                                          14.0,
+                                                                    ),
+                                                                  ),
+                                                                  'a': html_widget
+                                                                      .Style(
+                                                                    color: self
+                                                                        ? colors
+                                                                            .primaryForeground
+                                                                        : colors
+                                                                            .primary,
+                                                                    textDecoration:
+                                                                        TextDecoration
+                                                                            .underline,
+                                                                  ),
+                                                                },
+                                                                onLinkTap: (url,
+                                                                    _, __) {
+                                                                  if (url !=
+                                                                      null) {
+                                                                    _handleLinkTap(
+                                                                        url);
+                                                                  }
+                                                                },
+                                                              ),
+                                                            );
+                                                            // Add details row below HTML content
+                                                            bubbleChildren.add(
+                                                              Padding(
+                                                                padding:
+                                                                    const EdgeInsets
+                                                                        .only(
+                                                                        top: 4),
+                                                                child:
+                                                                    Text.rich(
+                                                                  TextSpan(
+                                                                    children: [
+                                                                      time,
+                                                                      const TextSpan(
+                                                                          text:
+                                                                              ' '),
+                                                                      transportDetail,
+                                                                      if (self &&
+                                                                          status !=
+                                                                              null) ...[
+                                                                        const TextSpan(
+                                                                            text:
+                                                                                ' '),
+                                                                        status,
+                                                                      ],
+                                                                      if (verification !=
+                                                                          null) ...[
+                                                                        const TextSpan(
+                                                                            text:
+                                                                                ' '),
+                                                                        verification,
+                                                                      ],
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            );
                                                           } else {
                                                             bubbleChildren.add(
                                                               DynamicInlineText(
@@ -8061,7 +8180,7 @@ class _CalendarTextSelectionDialogState
                         children: [
                           Expanded(
                             child: Text(
-                              'Choose text to add',
+                              l10n.chatChooseTextToAdd,
                               style: textTheme.h4,
                             ),
                           ),

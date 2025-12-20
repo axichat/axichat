@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_checklist_controller.dart';
 
@@ -13,7 +14,8 @@ class TaskChecklist extends StatefulWidget {
     super.key,
     required this.controller,
     this.label = 'Checklist',
-    this.addPlaceholder = 'Add checklist item',
+    this.addPlaceholder =
+        'Add checklist item', // Note: overridden by callers with l10n
   });
 
   final TaskChecklistController controller;
@@ -305,14 +307,14 @@ class _ChecklistItemRow extends StatelessWidget {
               controller: controller,
               onChanged: onLabelChanged,
               style: textTheme.p,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 isCollapsed: true,
-                hintText: 'Checklist item',
+                hintText: context.l10n.calendarChecklistItem,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
+                contentPadding: const EdgeInsets.symmetric(
                   vertical: calendarInsetSm,
                 ),
               ),
@@ -328,7 +330,7 @@ class _ChecklistItemRow extends StatelessWidget {
             borderWidth: 0,
             color: colors.mutedForeground,
             cornerRadius: 12,
-            tooltip: 'Remove item',
+            tooltip: context.l10n.calendarRemoveItem,
             onPressed: onRemove,
           ),
           const SizedBox(width: calendarInsetSm),
@@ -381,7 +383,7 @@ class _ChecklistAddField extends StatelessWidget {
           borderWidth: 0,
           color: colors.primary,
           cornerRadius: 10,
-          tooltip: 'Add checklist item',
+          tooltip: context.l10n.calendarAddChecklistItem,
           onPressed: onSubmitted,
         ),
         const SizedBox(width: calendarInsetSm),

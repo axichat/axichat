@@ -5095,6 +5095,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Video Games Alt'**
   String get avatarTemplateVideoGamesAlt;
+
+  /// No description provided for @commonDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get commonDone;
+
+  /// No description provided for @commonRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get commonRename;
+
+  /// No description provided for @calendarHour.
+  ///
+  /// In en, this message translates to:
+  /// **'Hour'**
+  String get calendarHour;
+
+  /// No description provided for @calendarMinute.
+  ///
+  /// In en, this message translates to:
+  /// **'Minute'**
+  String get calendarMinute;
+
+  /// No description provided for @calendarPasteTaskHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste Task Here'**
+  String get calendarPasteTaskHere;
+
+  /// No description provided for @calendarQuickAddTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick Add Task'**
+  String get calendarQuickAddTask;
+
+  /// No description provided for @calendarSplitTaskAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Split task at'**
+  String get calendarSplitTaskAt;
+
+  /// No description provided for @calendarAddDayEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Add day event'**
+  String get calendarAddDayEvent;
+
+  /// No description provided for @calendarZoomOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom out (Ctrl/Cmd + -)'**
+  String get calendarZoomOut;
+
+  /// No description provided for @calendarZoomIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom in (Ctrl/Cmd + +)'**
+  String get calendarZoomIn;
+
+  /// No description provided for @calendarChecklistItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist item'**
+  String get calendarChecklistItem;
+
+  /// No description provided for @calendarRemoveItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove item'**
+  String get calendarRemoveItem;
+
+  /// No description provided for @calendarAddChecklistItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Add checklist item'**
+  String get calendarAddChecklistItem;
+
+  /// No description provided for @calendarRepeatTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat times'**
+  String get calendarRepeatTimes;
+
+  /// No description provided for @calendarDayEventHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Birthday, holiday, or note'**
+  String get calendarDayEventHint;
+
+  /// No description provided for @calendarOptionalDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional details'**
+  String get calendarOptionalDetails;
+
+  /// No description provided for @calendarDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Dates'**
+  String get calendarDates;
+
+  /// No description provided for @calendarTaskTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Task title'**
+  String get calendarTaskTitleHint;
+
+  /// No description provided for @calendarDescriptionOptionalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Description (optional)'**
+  String get calendarDescriptionOptionalHint;
+
+  /// No description provided for @calendarLocationOptionalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Location (optional)'**
+  String get calendarLocationOptionalHint;
+
+  /// No description provided for @calendarCloseTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get calendarCloseTooltip;
+
+  /// No description provided for @calendarAddTaskInputHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add task... (e.g., \"Meeting tomorrow at 3pm\")'**
+  String get calendarAddTaskInputHint;
+
+  /// No description provided for @calendarBranch.
+  ///
+  /// In en, this message translates to:
+  /// **'Branch'**
+  String get calendarBranch;
+
+  /// No description provided for @calendarPickDifferentTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a different task for this slot'**
+  String get calendarPickDifferentTask;
+
+  /// No description provided for @calendarSyncRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Request'**
+  String get calendarSyncRequest;
+
+  /// No description provided for @calendarSyncPush.
+  ///
+  /// In en, this message translates to:
+  /// **'Push'**
+  String get calendarSyncPush;
+
+  /// No description provided for @calendarImportant.
+  ///
+  /// In en, this message translates to:
+  /// **'Important'**
+  String get calendarImportant;
+
+  /// No description provided for @calendarUrgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgent'**
+  String get calendarUrgent;
+
+  /// No description provided for @calendarClearSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear schedule'**
+  String get calendarClearSchedule;
+
+  /// No description provided for @calendarEditTaskTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit task'**
+  String get calendarEditTaskTooltip;
+
+  /// No description provided for @calendarDeleteTaskTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete task'**
+  String get calendarDeleteTaskTooltip;
+
+  /// No description provided for @calendarBackToChats.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to chats'**
+  String get calendarBackToChats;
+
+  /// No description provided for @calendarBackToLogin.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to login'**
+  String get calendarBackToLogin;
+
+  /// No description provided for @calendarRemindersSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders'**
+  String get calendarRemindersSection;
+
+  /// No description provided for @settingsAutoLoadEmailImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-load email images'**
+  String get settingsAutoLoadEmailImages;
+
+  /// No description provided for @settingsAutoLoadEmailImagesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'May reveal your IP address to senders'**
+  String get settingsAutoLoadEmailImagesDescription;
+
+  /// No description provided for @chatChooseTextToAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose text to add'**
+  String get chatChooseTextToAdd;
 }
 
 class _AppLocalizationsDelegate

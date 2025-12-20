@@ -32,5 +32,6 @@ class ChatState with _$ChatState {
     @Default(false) bool supportsHttpFileUpload,
     ChatToast? toast,
     @Default(0) int toastId,
+    @Default(<String>{}) Set<String> loadedImageMessageIds,
   }) = _ChatState;
 }

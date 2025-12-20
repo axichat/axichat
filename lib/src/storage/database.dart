@@ -1024,7 +1024,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration {
@@ -1126,6 +1126,9 @@ WHERE subject_token IS NOT NULL
         // Version 16 drops the table if it exists (silently for users who never had it).
         if (from < 16) {
           await customStatement('DROP TABLE IF EXISTS day_events');
+        }
+        if (from < 17) {
+          await m.addColumn(messages, messages.htmlBody);
         }
       },
       beforeOpen: (_) async {

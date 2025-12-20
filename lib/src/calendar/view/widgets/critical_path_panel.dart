@@ -567,7 +567,7 @@ class _PathActionsState extends State<_PathActions> {
                 actions: [
                   AxiMenuAction(
                     icon: Icons.drive_file_rename_outline,
-                    label: 'Rename',
+                    label: context.l10n.commonRename,
                     onPressed: () {
                       _closeMenu();
                       widget.onRename();
@@ -575,7 +575,7 @@ class _PathActionsState extends State<_PathActions> {
                   ),
                   AxiMenuAction(
                     icon: Icons.delete_outline,
-                    label: 'Delete',
+                    label: context.l10n.commonDelete,
                     destructive: true,
                     onPressed: () {
                       _closeMenu();

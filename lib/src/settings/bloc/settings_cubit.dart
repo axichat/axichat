@@ -81,6 +81,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(reminderSidebarOrder: List<String>.from(order)));
   }
 
+  void toggleAutoLoadEmailImages(bool enabled) {
+    emit(state.copyWith(autoLoadEmailImages: enabled));
+  }
+
   @override
   SettingsState? fromJson(Map<String, dynamic> json) {
     try {
@@ -100,6 +104,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'hideCompletedReminders': 'hide_completed_reminders',
         'unscheduledSidebarOrder': 'unscheduled_sidebar_order',
         'reminderSidebarOrder': 'reminder_sidebar_order',
+        'autoLoadEmailImages': 'auto_load_email_images',
       };
       for (final entry in keyMap.entries) {
         if (migrated.containsKey(entry.key) &&

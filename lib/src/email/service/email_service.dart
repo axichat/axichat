@@ -96,9 +96,17 @@ class EmailService {
             connectionConfigBuilder ?? _defaultConnectionConfig,
         _log = logger ?? Logger('EmailService'),
         _notificationService = notificationService,
-        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge,
-        blocking = EmailBlockingService(databaseBuilder: databaseBuilder),
-        spam = EmailSpamService(databaseBuilder: databaseBuilder) {
+        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
+    blocking = EmailBlockingService(
+      databaseBuilder: databaseBuilder,
+      onBlock: _transport.blockContact,
+      onUnblock: _transport.unblockContact,
+    );
+    spam = EmailSpamService(
+      databaseBuilder: databaseBuilder,
+      onMarkSpam: _transport.blockContact,
+      onUnmarkSpam: _transport.unblockContact,
+    );
     _eventListener = (event) => unawaited(_processDeltaEvent(event));
     _transport.addEventListener(_eventListener);
     _listenerAttached = true;
@@ -112,8 +120,8 @@ class EmailService {
   EndpointConfig _endpointConfig;
   final NotificationService? _notificationService;
   final ForegroundTaskBridge? _foregroundBridge;
-  final EmailBlockingService blocking;
-  final EmailSpamService spam;
+  late final EmailBlockingService blocking;
+  late final EmailSpamService spam;
   final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
@@ -1570,6 +1578,8 @@ class EmailService {
       'send_security': _defaultSecurityMode,
       'send_user': localPart,
       'show_emails': '2',
+      'download_limit': '40000000',
+      'mdns_enabled': '1',
     };
   }
 

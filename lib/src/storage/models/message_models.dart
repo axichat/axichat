@@ -213,6 +213,7 @@ class Message with _$Message implements Insertable<Message> {
     String? originID,
     String? occupantID,
     String? body,
+    String? htmlBody,
     @Default(MessageError.none) MessageError error,
     @Default(MessageWarning.none) MessageWarning warning,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
@@ -246,6 +247,7 @@ class Message with _$Message implements Insertable<Message> {
     required String senderJid,
     required String chatJid,
     required String? body,
+    required String? htmlBody,
     required DateTime timestamp,
     required MessageError error,
     required MessageWarning warning,
@@ -521,6 +523,8 @@ class Messages extends Table {
   TextColumn get chatJid => text()();
 
   TextColumn get body => text().nullable()();
+
+  TextColumn get htmlBody => text().nullable()();
 
   DateTimeColumn get timestamp =>
       dateTime().clientDefault(() => DateTime.timestamp())();

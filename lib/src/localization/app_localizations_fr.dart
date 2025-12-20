@@ -2827,4 +2827,119 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get avatarTemplateVideoGamesAlt => 'Video Games Alt';
+
+  @override
+  String get commonDone => 'Terminé';
+
+  @override
+  String get commonRename => 'Renommer';
+
+  @override
+  String get calendarHour => 'Heure';
+
+  @override
+  String get calendarMinute => 'Minute';
+
+  @override
+  String get calendarPasteTaskHere => 'Coller la tâche ici';
+
+  @override
+  String get calendarQuickAddTask => 'Ajouter une tâche rapide';
+
+  @override
+  String get calendarSplitTaskAt => 'Diviser la tâche à';
+
+  @override
+  String get calendarAddDayEvent => 'Ajouter un événement du jour';
+
+  @override
+  String get calendarZoomOut => 'Dézoomer (Ctrl/Cmd + -)';
+
+  @override
+  String get calendarZoomIn => 'Zoomer (Ctrl/Cmd + +)';
+
+  @override
+  String get calendarChecklistItem => 'Élément de liste';
+
+  @override
+  String get calendarRemoveItem => 'Supprimer l\'élément';
+
+  @override
+  String get calendarAddChecklistItem => 'Ajouter un élément à la liste';
+
+  @override
+  String get calendarRepeatTimes => 'Répétitions';
+
+  @override
+  String get calendarDayEventHint => 'Anniversaire, jour férié ou note';
+
+  @override
+  String get calendarOptionalDetails => 'Détails facultatifs';
+
+  @override
+  String get calendarDates => 'Dates';
+
+  @override
+  String get calendarTaskTitleHint => 'Titre de la tâche';
+
+  @override
+  String get calendarDescriptionOptionalHint => 'Description (facultatif)';
+
+  @override
+  String get calendarLocationOptionalHint => 'Lieu (facultatif)';
+
+  @override
+  String get calendarCloseTooltip => 'Fermer';
+
+  @override
+  String get calendarAddTaskInputHint =>
+      'Ajouter une tâche... (ex. \"Réunion demain à 15h\")';
+
+  @override
+  String get calendarBranch => 'Branche';
+
+  @override
+  String get calendarPickDifferentTask =>
+      'Choisir une autre tâche pour ce créneau';
+
+  @override
+  String get calendarSyncRequest => 'Demander';
+
+  @override
+  String get calendarSyncPush => 'Envoyer';
+
+  @override
+  String get calendarImportant => 'Important';
+
+  @override
+  String get calendarUrgent => 'Urgent';
+
+  @override
+  String get calendarClearSchedule => 'Effacer le planning';
+
+  @override
+  String get calendarEditTaskTooltip => 'Modifier la tâche';
+
+  @override
+  String get calendarDeleteTaskTooltip => 'Supprimer la tâche';
+
+  @override
+  String get calendarBackToChats => 'Retour aux discussions';
+
+  @override
+  String get calendarBackToLogin => 'Retour à la connexion';
+
+  @override
+  String get calendarRemindersSection => 'Rappels';
+
+  @override
+  String get settingsAutoLoadEmailImages =>
+      'Charger automatiquement les images des e-mails';
+
+  @override
+  String get settingsAutoLoadEmailImagesDescription =>
+      'Peut révéler votre adresse IP aux expéditeurs';
+
+  @override
+  String get chatChooseTextToAdd => 'Choisir le texte à ajouter';
 }

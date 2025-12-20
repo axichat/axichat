@@ -377,3 +377,12 @@ final class ChatContactRenameRequested extends ChatEvent {
   @override
   List<Object?> get props => [displayName, successMessage, failureMessage];
 }
+
+final class ChatEmailImagesLoaded extends ChatEvent {
+  const ChatEmailImagesLoaded(this.messageId);
+
+  final String messageId;
+
+  @override
+  List<Object?> get props => [messageId];
+}

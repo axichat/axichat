@@ -276,7 +276,7 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
                 TaskTextField(
                   controller: _controller,
                   focusNode: _focusNode,
-                  hintText: 'Add task... (e.g., "Meeting tomorrow at 3pm")',
+                  hintText: context.l10n.calendarAddTaskInputHint,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _handleSubmit(),
                   onChanged: _handleTextChanged,
@@ -343,7 +343,7 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
                       ),
                       Expanded(
                         child: TaskToolbarButton(
-                          label: 'Clear',
+                          label: context.l10n.commonClear,
                           onPressed: () {
                             _controller.clear();
                             _composerController.resetSchedule();

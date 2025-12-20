@@ -2606,7 +2606,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       actions.add(
         TaskContextAction(
           icon: Icons.content_paste_outlined,
-          label: 'Paste Task Here',
+          label: context.l10n.calendarPasteTaskHere,
           onSelected: () => _pasteTask(task.scheduledTime!),
         ),
       );
@@ -3336,7 +3336,7 @@ class DayEventsStrip extends StatelessWidget {
                 borderWidth: 0,
                 backgroundColor: colors.primary.withValues(alpha: 0.08),
                 color: colors.primary,
-                tooltip: 'Add day event',
+                tooltip: context.l10n.calendarAddDayEvent,
                 onPressed: onAdd,
               ).withTapBounce(),
             ],
@@ -3673,13 +3673,13 @@ class _CalendarGridContextMenu extends StatelessWidget {
         groupId: groupId,
         anchor: anchor == null ? null : ShadGlobalAnchor(anchor!),
         onTapOutside: (_) => onHide(),
-        items: _menuItems(),
+        items: _menuItems(context),
         child: child,
       ),
     );
   }
 
-  List<Widget> _menuItems() {
+  List<Widget> _menuItems(BuildContext context) {
     final DateTime? targetSlot = slot;
     if (targetSlot == null) {
       return const <Widget>[];
@@ -3693,7 +3693,7 @@ class _CalendarGridContextMenu extends StatelessWidget {
             onHide();
             onPasteTask(targetSlot);
           },
-          child: const Text('Paste Task Here'),
+          child: Text(context.l10n.calendarPasteTaskHere),
         ),
       );
     }
@@ -3705,7 +3705,7 @@ class _CalendarGridContextMenu extends StatelessWidget {
             onHide();
             onQuickAddTask!(targetSlot);
           },
-          child: const Text('Quick Add Task'),
+          child: Text(context.l10n.calendarQuickAddTask),
         ),
       );
     }
@@ -4011,7 +4011,7 @@ class _CalendarZoomControls extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             buildButton(
-              tooltip: 'Zoom out (Ctrl/Cmd + -)',
+              tooltip: context.l10n.calendarZoomOut,
               icon: Icons.remove,
               onPressed: canZoomOut ? gridState.zoomOut : null,
             ),
@@ -4025,7 +4025,7 @@ class _CalendarZoomControls extends StatelessWidget {
               ),
             ),
             buildButton(
-              tooltip: 'Zoom in (Ctrl/Cmd + +)',
+              tooltip: context.l10n.calendarZoomIn,
               icon: Icons.add,
               onPressed: canZoomIn ? gridState.zoomIn : null,
             ),
@@ -4084,7 +4084,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
     );
     return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
-        title: const Text('Split task at'),
+        title: Text(context.l10n.calendarSplitTaskAt),
         onClose: () => Navigator.of(context).maybePop(),
         padding: const EdgeInsets.fromLTRB(
           calendarGutterLg,
@@ -4117,7 +4117,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
           children: [
             Expanded(
               child: TaskSecondaryButton(
-                label: 'Cancel',
+                label: context.l10n.commonCancel,
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
             ),

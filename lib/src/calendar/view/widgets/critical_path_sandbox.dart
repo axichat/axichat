@@ -437,7 +437,7 @@ class _GridColumn extends StatelessWidget {
       children: [
         _TaskSlot(
           location: top,
-          label: 'Branch',
+          label: context.l10n.calendarBranch,
           colors: colors,
           textTheme: textTheme,
           size: slotSize,
@@ -453,7 +453,7 @@ class _GridColumn extends StatelessWidget {
           children: [
             _TaskSlot(
               location: left,
-              label: 'Previous',
+              label: context.l10n.commonPrevious,
               colors: colors,
               textTheme: textTheme,
               size: slotSize,
@@ -479,7 +479,7 @@ class _GridColumn extends StatelessWidget {
             SizedBox(width: gap),
             _TaskSlot(
               location: right,
-              label: 'Next',
+              label: context.l10n.commonNext,
               colors: colors,
               textTheme: textTheme,
               size: slotSize,
@@ -493,7 +493,7 @@ class _GridColumn extends StatelessWidget {
         SizedBox(height: gap),
         _TaskSlot(
           location: bottom,
-          label: 'Branch',
+          label: context.l10n.calendarBranch,
           colors: colors,
           textTheme: textTheme,
           size: slotSize,
@@ -1078,7 +1078,7 @@ extension on _CriticalPathSandboxState {
               _SlotActionTile(
                 icon: Icons.swap_horiz,
                 title: 'Replace task',
-                subtitle: 'Pick a different task for this slot',
+                subtitle: context.l10n.calendarPickDifferentTask,
                 onTap: () => Navigator.of(sheetContext).pop(
                   _SlotTapAction.replace,
                 ),

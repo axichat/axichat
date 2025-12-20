@@ -167,6 +167,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatLeaveRoomRequested>(_onLeaveRoomRequested);
     on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
+    on<ChatEmailImagesLoaded>(_onEmailImagesLoaded);
     if (jid != null) {
       final chatLookupJid = _chatLookupJid;
       if (chatLookupJid == null) return;
@@ -1033,6 +1034,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     }
+  }
+
+  void _onEmailImagesLoaded(
+    ChatEmailImagesLoaded event,
+    Emitter<ChatState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        loadedImageMessageIds: {
+          ...state.loadedImageMessageIds,
+          event.messageId
+        },
+      ),
+    );
   }
 
   Future<void> _onChatModerationActionRequested(

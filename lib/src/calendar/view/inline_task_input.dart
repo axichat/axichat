@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -278,7 +279,7 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
                 TaskTextField(
                   controller: _controller,
                   focusNode: _focusNode,
-                  hintText: 'Add task... (e.g., "Meeting tomorrow at 3pm")',
+                  hintText: context.l10n.calendarAddTaskInputHint,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _handleSubmit(),
                   onChanged: _handleTextChanged,
@@ -345,7 +346,7 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
                       ),
                       Expanded(
                         child: TaskToolbarButton(
-                          label: 'Clear',
+                          label: context.l10n.commonClear,
                           onPressed: () {
                             _controller.clear();
                             _composerController.resetSchedule();

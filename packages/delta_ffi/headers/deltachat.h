@@ -114,21 +114,27 @@ char* dc_chat_get_name(dc_chat_t* chat);
 char* dc_chat_get_mailinglist_addr(dc_chat_t* chat);
 int32_t dc_chat_get_type(const dc_chat_t* chat);
 uint32_t dc_chat_get_contact_id(const dc_chat_t* chat);
+dc_array_t* dc_get_chat_contacts(dc_context_t* ctx, uint32_t chat_id);
 
 dc_contact_t* dc_get_contact(dc_context_t* ctx, uint32_t contact_id);
 void dc_contact_unref(dc_contact_t* contact);
 char* dc_contact_get_addr(const dc_contact_t* contact);
 char* dc_contact_get_name(const dc_contact_t* contact);
+int32_t dc_block_contact(dc_context_t* ctx, uint32_t contact_id);
+int32_t dc_unblock_contact(dc_context_t* ctx, uint32_t contact_id);
+uint32_t dc_lookup_contact_id_by_addr(dc_context_t* ctx, const char* addr);
 
 dc_msg_t* dc_get_msg(dc_context_t* ctx, uint32_t msg_id);
 void dc_msg_unref(dc_msg_t* msg);
 char* dc_msg_get_text(dc_msg_t* msg);
+char* dc_msg_get_html(dc_msg_t* msg);
 char* dc_msg_get_subject(const dc_msg_t* msg);
 uint32_t dc_msg_get_chat_id(dc_msg_t* msg);
 uint32_t dc_msg_get_id(dc_msg_t* msg);
 int32_t dc_msg_get_viewtype(const dc_msg_t* msg);
 uint64_t dc_msg_get_timestamp(const dc_msg_t* msg);
 int32_t dc_msg_is_outgoing(const dc_msg_t* msg);
+int32_t dc_msg_get_state(const dc_msg_t* msg);
 dc_msg_t* dc_msg_new(dc_context_t* ctx, int32_t viewtype);
 void dc_msg_set_text(dc_msg_t* msg, const char* text);
 void dc_msg_set_subject(dc_msg_t* msg, const char* subject);

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/widgets/deadline_picker_field.dart';
 import 'package:flutter/material.dart';
@@ -609,7 +610,7 @@ class _RecurrenceEndControls extends StatelessWidget {
           enabled: enabled,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
-            hintText: 'Repeat times',
+            hintText: context.l10n.calendarRepeatTimes,
             hintStyle: TextStyle(
               color: calendarSubtitleColor.withValues(alpha: 0.55),
               fontSize: 13,
