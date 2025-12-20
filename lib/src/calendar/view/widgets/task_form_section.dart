@@ -3,6 +3,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/priority_checkbox_tile.dart';
 import 'recurrence_editor.dart';
@@ -114,7 +115,7 @@ class TaskPriorityToggles extends StatelessWidget {
       children: [
         Expanded(
           child: PriorityCheckboxTile(
-            label: 'Important',
+            label: context.l10n.calendarImportant,
             value: isImportant,
             color: calendarSuccessColor,
             isIndeterminate: isImportantIndeterminate,
@@ -124,7 +125,7 @@ class TaskPriorityToggles extends StatelessWidget {
         SizedBox(width: spacing),
         Expanded(
           child: PriorityCheckboxTile(
-            label: 'Urgent',
+            label: context.l10n.calendarUrgent,
             value: isUrgent,
             color: calendarWarningColor,
             isIndeterminate: isUrgentIndeterminate,
@@ -480,7 +481,7 @@ class TaskScheduleSection extends StatelessWidget {
       trailingChildren.add(
         TaskGhostIconButton(
           icon: Icons.close,
-          tooltip: 'Clear schedule',
+          tooltip: context.l10n.calendarClearSchedule,
           onPressed: clearHandler,
         ),
       );

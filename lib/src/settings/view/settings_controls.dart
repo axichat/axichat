@@ -227,6 +227,17 @@ class SettingsControls extends StatelessWidget {
                     .toggleShareTokenSignature(enabled),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsAutoLoadEmailImages),
+                sublabel: Text(l10n.settingsAutoLoadEmailImagesDescription),
+                value: state.autoLoadEmailImages,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleAutoLoadEmailImages(enabled),
+              ),
+            ),
             const AxiListDivider(),
           ],
         );

@@ -2723,6 +2723,117 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get avatarTemplateVideoGamesAlt => 'Video Games Alt';
+
+  @override
+  String get commonDone => '完成';
+
+  @override
+  String get commonRename => '重命名';
+
+  @override
+  String get calendarHour => '小时';
+
+  @override
+  String get calendarMinute => '分钟';
+
+  @override
+  String get calendarPasteTaskHere => '在此粘贴任务';
+
+  @override
+  String get calendarQuickAddTask => '快速添加任务';
+
+  @override
+  String get calendarSplitTaskAt => '拆分任务于';
+
+  @override
+  String get calendarAddDayEvent => '添加日程事件';
+
+  @override
+  String get calendarZoomOut => '缩小 (Ctrl/Cmd + -)';
+
+  @override
+  String get calendarZoomIn => '放大 (Ctrl/Cmd + +)';
+
+  @override
+  String get calendarChecklistItem => '清单项目';
+
+  @override
+  String get calendarRemoveItem => '移除项目';
+
+  @override
+  String get calendarAddChecklistItem => '添加清单项目';
+
+  @override
+  String get calendarRepeatTimes => '重复次数';
+
+  @override
+  String get calendarDayEventHint => '生日、节日或备注';
+
+  @override
+  String get calendarOptionalDetails => '可选详情';
+
+  @override
+  String get calendarDates => '日期';
+
+  @override
+  String get calendarTaskTitleHint => '任务标题';
+
+  @override
+  String get calendarDescriptionOptionalHint => '描述（可选）';
+
+  @override
+  String get calendarLocationOptionalHint => '地点（可选）';
+
+  @override
+  String get calendarCloseTooltip => '关闭';
+
+  @override
+  String get calendarAddTaskInputHint => '添加任务...（例如「明天下午3点开会」）';
+
+  @override
+  String get calendarBranch => '分支';
+
+  @override
+  String get calendarPickDifferentTask => '为此时段选择其他任务';
+
+  @override
+  String get calendarSyncRequest => '请求';
+
+  @override
+  String get calendarSyncPush => '推送';
+
+  @override
+  String get calendarImportant => '重要';
+
+  @override
+  String get calendarUrgent => '紧急';
+
+  @override
+  String get calendarClearSchedule => '清除日程';
+
+  @override
+  String get calendarEditTaskTooltip => '编辑任务';
+
+  @override
+  String get calendarDeleteTaskTooltip => '删除任务';
+
+  @override
+  String get calendarBackToChats => '返回聊天';
+
+  @override
+  String get calendarBackToLogin => '返回登录';
+
+  @override
+  String get calendarRemindersSection => '提醒';
+
+  @override
+  String get settingsAutoLoadEmailImages => '自动加载邮件图片';
+
+  @override
+  String get settingsAutoLoadEmailImagesDescription => '可能会向发件人泄露您的IP地址';
+
+  @override
+  String get chatChooseTextToAdd => '选择要添加的文本';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -5444,4 +5555,115 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get avatarTemplateVideoGamesAlt => 'Video Games Alt';
+
+  @override
+  String get commonDone => '完成';
+
+  @override
+  String get commonRename => '重新命名';
+
+  @override
+  String get calendarHour => '小時';
+
+  @override
+  String get calendarMinute => '分鐘';
+
+  @override
+  String get calendarPasteTaskHere => '在此貼上任務';
+
+  @override
+  String get calendarQuickAddTask => '快速新增任務';
+
+  @override
+  String get calendarSplitTaskAt => '拆分任務於';
+
+  @override
+  String get calendarAddDayEvent => '新增日程事件';
+
+  @override
+  String get calendarZoomOut => '縮小 (Ctrl/Cmd + -)';
+
+  @override
+  String get calendarZoomIn => '放大 (Ctrl/Cmd + +)';
+
+  @override
+  String get calendarChecklistItem => '清單項目';
+
+  @override
+  String get calendarRemoveItem => '移除項目';
+
+  @override
+  String get calendarAddChecklistItem => '新增清單項目';
+
+  @override
+  String get calendarRepeatTimes => '重複次數';
+
+  @override
+  String get calendarDayEventHint => '生日、節日或備註';
+
+  @override
+  String get calendarOptionalDetails => '可選詳情';
+
+  @override
+  String get calendarDates => '日期';
+
+  @override
+  String get calendarTaskTitleHint => '任務標題';
+
+  @override
+  String get calendarDescriptionOptionalHint => '描述（可選）';
+
+  @override
+  String get calendarLocationOptionalHint => '地點（可選）';
+
+  @override
+  String get calendarCloseTooltip => '關閉';
+
+  @override
+  String get calendarAddTaskInputHint => '新增任務...（例如『明天下午3點開會』）';
+
+  @override
+  String get calendarBranch => '分支';
+
+  @override
+  String get calendarPickDifferentTask => '為此時段選擇其他任務';
+
+  @override
+  String get calendarSyncRequest => '請求';
+
+  @override
+  String get calendarSyncPush => '推送';
+
+  @override
+  String get calendarImportant => '重要';
+
+  @override
+  String get calendarUrgent => '緊急';
+
+  @override
+  String get calendarClearSchedule => '清除日程';
+
+  @override
+  String get calendarEditTaskTooltip => '編輯任務';
+
+  @override
+  String get calendarDeleteTaskTooltip => '刪除任務';
+
+  @override
+  String get calendarBackToChats => '返回聊天';
+
+  @override
+  String get calendarBackToLogin => '返回登入';
+
+  @override
+  String get calendarRemindersSection => '提醒';
+
+  @override
+  String get settingsAutoLoadEmailImages => '自動載入電郵圖片';
+
+  @override
+  String get settingsAutoLoadEmailImagesDescription => '可能會向寄件人洩露您的IP地址';
+
+  @override
+  String get chatChooseTextToAdd => '選擇要新增的文字';
 }

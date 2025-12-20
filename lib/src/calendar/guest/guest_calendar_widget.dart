@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -290,7 +291,7 @@ class _GuestBanner extends StatelessWidget {
         children: [
           AxiIconButton(
             iconData: Icons.arrow_back,
-            tooltip: 'Back to login',
+            tooltip: context.l10n.calendarBackToLogin,
             onPressed: () {
               onNavigateBack();
             },

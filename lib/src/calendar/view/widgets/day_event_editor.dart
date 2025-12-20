@@ -128,7 +128,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
             const Spacer(),
             if (isEditing)
               TaskDestructiveButton(
-                label: 'Delete',
+                label: context.l10n.commonDelete,
                 icon: Icons.delete_outline,
                 onPressed: () => Navigator.of(context).pop(
                   const DayEventEditorResult.deleted(),
@@ -197,7 +197,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       controller: _titleController,
                       autofocus: true,
                       labelText: 'Title',
-                      hintText: 'Birthday, holiday, or note',
+                      hintText: context.l10n.calendarDayEventHint,
                       focusNode: _titleFocusNode,
                       onChanged: _handleTitleChanged,
                       validator: (value) => (value?.trim().isEmpty ?? true)
@@ -208,7 +208,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     const SizedBox(height: calendarGutterMd),
                     TaskDescriptionField(
                       controller: _descriptionController,
-                      hintText: 'Optional details',
+                      hintText: context.l10n.calendarOptionalDetails,
                       borderRadius: calendarBorderRadius,
                       focusBorderColor: calendarPrimaryColor,
                       contentPadding: calendarFieldPadding,
@@ -219,8 +219,8 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       color: colors.border,
                       verticalPadding: calendarGutterMd,
                     ),
-                    const TaskSectionHeader(
-                      title: 'Dates',
+                    TaskSectionHeader(
+                      title: context.l10n.calendarDates,
                     ),
                     const SizedBox(height: calendarInsetLg),
                     ScheduleRangeFields(

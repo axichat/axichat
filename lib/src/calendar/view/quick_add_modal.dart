@@ -1301,7 +1301,7 @@ class _QuickAddReminderSection extends StatelessWidget {
     return ReminderPreferencesField(
       value: reminders,
       onChanged: onChanged,
-      title: 'Reminders',
+      title: context.l10n.calendarRemindersSection,
       anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
     );
   }

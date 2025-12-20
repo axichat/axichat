@@ -1,4 +1,5 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -538,7 +539,7 @@ class _EditTaskHeader extends StatelessWidget {
           const Spacer(),
           AxiIconButton(
             iconData: Icons.close,
-            tooltip: 'Close',
+            tooltip: context.l10n.calendarCloseTooltip,
             onPressed: onClose,
             color: calendarSubtitleColor,
             backgroundColor: colors.card,
@@ -685,7 +686,7 @@ class _EditTaskTitleField extends StatelessWidget {
           controller: controller,
           focusNode: focusNode,
           autofocus: true,
-          hintText: 'Task title',
+          hintText: context.l10n.calendarTaskTitleHint,
           onChanged: onChanged,
           validator: validator,
           autovalidateMode: autovalidateMode,
@@ -708,7 +709,7 @@ class _EditTaskDescriptionField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TaskDescriptionField(
       controller: controller,
-      hintText: 'Description (optional)',
+      hintText: context.l10n.calendarDescriptionOptionalHint,
       minLines: 2,
       maxLines: 4,
       textCapitalization: TextCapitalization.sentences,
@@ -732,7 +733,7 @@ class _EditTaskLocationField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TaskLocationField(
       controller: controller,
-      hintText: 'Location (optional)',
+      hintText: context.l10n.calendarLocationOptionalHint,
       textCapitalization: TextCapitalization.words,
       contentPadding: calendarFieldPadding,
       borderRadius: calendarBorderRadius,
@@ -957,19 +958,19 @@ class _EditTaskActionsRow extends StatelessWidget {
       gap: 8,
       children: [
         TaskDestructiveButton(
-          label: 'Delete',
+          label: context.l10n.commonDelete,
           onPressed: onDelete,
         ),
         const Spacer(),
         TaskSecondaryButton(
-          label: 'Cancel',
+          label: context.l10n.commonCancel,
           onPressed: onCancel,
           foregroundColor: calendarPrimaryColor,
           hoverForegroundColor: calendarPrimaryHoverColor,
           hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
         ),
         TaskPrimaryButton(
-          label: 'Save',
+          label: context.l10n.commonSave,
           onPressed: canSave ? onSave : null,
         ),
       ],

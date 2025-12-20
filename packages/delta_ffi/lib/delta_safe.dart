@@ -237,6 +237,26 @@ class DeltaContextHandle {
     return chatId;
   }
 
+  Future<int?> lookupContactIdByAddress(String address) async {
+    _ensureState(_opened, 'lookup contact');
+    final contactId = _withCString(address, (addrPtr) {
+      return _bindings.dc_lookup_contact_id_by_addr(_context, addrPtr);
+    });
+    return contactId == 0 ? null : contactId;
+  }
+
+  Future<void> blockContact(int contactId) async {
+    _ensureState(_opened, 'block contact');
+    final result = _bindings.dc_block_contact(_context, contactId);
+    _ensureSuccess(result, 'block contact $contactId', _lastError);
+  }
+
+  Future<void> unblockContact(int contactId) async {
+    _ensureState(_opened, 'unblock contact');
+    final result = _bindings.dc_unblock_contact(_context, contactId);
+    _ensureSuccess(result, 'unblock contact $contactId', _lastError);
+  }
+
   Future<int> sendText({
     required int chatId,
     required String message,
@@ -484,6 +504,9 @@ class DeltaContextHandle {
       final viewType = _bindings.dc_msg_get_viewtype(msgPtr);
       final text =
           _takeString(_bindings.dc_msg_get_text(msgPtr), bindings: _bindings);
+      final html = _cleanString(
+        _takeString(_bindings.dc_msg_get_html(msgPtr), bindings: _bindings),
+      );
       final subject = _cleanString(
         _takeString(_bindings.dc_msg_get_subject(msgPtr), bindings: _bindings),
       );
@@ -513,6 +536,7 @@ class DeltaContextHandle {
         id: id,
         chatId: chatId,
         text: text,
+        html: html,
         subject: subject,
         viewType: viewType,
         filePath: filePath,
@@ -758,6 +782,7 @@ class DeltaMessage {
     required this.id,
     required this.chatId,
     this.text,
+    this.html,
     this.subject,
     this.viewType,
     this.filePath,
@@ -773,6 +798,7 @@ class DeltaMessage {
   final int id;
   final int chatId;
   final String? text;
+  final String? html;
   final String? subject;
   final int? viewType;
   final String? filePath;

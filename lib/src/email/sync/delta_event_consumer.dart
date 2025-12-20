@@ -273,6 +273,7 @@ class DeltaEventConsumer {
       chatJid: resolvedChat.jid,
       timestamp: timestamp,
       body: msg.text,
+      htmlBody: msg.html,
       warning: warning,
       encryptionProtocol: EncryptionProtocol.none,
       received: !isOutgoing,
