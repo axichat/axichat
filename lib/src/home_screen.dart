@@ -12,7 +12,7 @@ import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
-import 'package:axichat/src/calendar/storage/day_event_repository.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
@@ -135,6 +135,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final storageManager = context.read<CalendarStorageManager>();
+    return ListenableBuilder(
+      listenable: storageManager,
+      builder: (context, _) => _buildContent(context, storageManager),
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    CalendarStorageManager storageManager,
+  ) {
     final l10n = context.l10n;
 
     final isChat = context.read<XmppService>() is ChatsService;
@@ -145,8 +156,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final isBlocking = context.read<XmppService>() is BlockingService;
     final navPlacement = EnvScope.of(context).navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
-    final Storage? calendarStorage = context.watch<Storage?>();
-    final bool hasCalendarBloc = calendarStorage != null;
+    final Storage? calendarStorage = storageManager.authStorage;
+    final bool hasCalendarBloc = storageManager.isAuthStorageReady;
     final chatsFilters = chatsSearchFilters(l10n);
     final spamFilters = spamSearchFilters(l10n);
     final draftsFilters = _draftsSearchFilters(l10n);
@@ -429,14 +440,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   final xmppService = context.read<XmppService>();
                   const bool seedDemoCalendar = kEnableDemoChats;
                   final storage = calendarStorage;
-                  final DayEventRepository dayEventRepository =
-                      DayEventRepository(
-                    database: xmppService.database,
-                  );
 
                   final CalendarBloc bloc = CalendarBloc(
                     reminderController: reminderController,
-                    dayEventRepository: dayEventRepository,
                     syncManagerBuilder: (bloc) {
                       final manager = CalendarSyncManager(
                         readModel: () => bloc.currentModel,

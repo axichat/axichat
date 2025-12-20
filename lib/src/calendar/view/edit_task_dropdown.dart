@@ -459,7 +459,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     DateTime? scheduledTime;
     Duration? duration;
     DateTime? endDate;
-    double? startHour;
     if (_startTime != null && _endTime != null) {
       final DateTime start = _startTime!;
       DateTime end = _endTime!;
@@ -472,13 +471,11 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       scheduledTime = start;
       duration = computed;
       endDate = end;
-      startHour = start.hour + (start.minute / 60.0);
     }
 
     if (scheduledTime == null) {
       duration = null;
       endDate = null;
-      startHour = null;
     }
 
     final recurrenceAnchor =
@@ -500,7 +497,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       scheduledTime: scheduledTime,
       duration: duration,
       endDate: endDate,
-      startHour: startHour,
       deadline: _deadline,
       priority: priority == TaskPriority.none ? null : priority,
       isCompleted: _isCompleted,

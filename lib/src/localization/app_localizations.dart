@@ -4409,7 +4409,7 @@ abstract class AppLocalizations {
   /// No description provided for @calendarExportFormatIcsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Use for calendar clients'**
+  /// **'Compatible with other apps (recurrence & checklists excluded)'**
   String get calendarExportFormatIcsSubtitle;
 
   /// No description provided for @calendarExportFormatIcsTitle.
@@ -4421,7 +4421,7 @@ abstract class AppLocalizations {
   /// No description provided for @calendarExportFormatJsonSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Use for backups or scripts'**
+  /// **'Full backup with all task data (Recommended)'**
   String get calendarExportFormatJsonSubtitle;
 
   /// No description provided for @calendarExportFormatJsonTitle.

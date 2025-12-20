@@ -1042,9 +1042,9 @@
     }
   },
   "calendarErrorTitleEmptyFriendly": "Title cannot be empty",
-  "calendarExportFormatIcsSubtitle": "Use for calendar clients",
+  "calendarExportFormatIcsSubtitle": "Compatible with other apps (recurrence & checklists excluded)",
   "calendarExportFormatIcsTitle": "Export .ics",
-  "calendarExportFormatJsonSubtitle": "Use for backups or scripts",
+  "calendarExportFormatJsonSubtitle": "Full backup with all task data (Recommended)",
   "calendarExportFormatJsonTitle": "Export JSON",
   "calendarRemovePathConfirm": "Remove this task from \"{name}\"?",
   "@calendarRemovePathConfirm": {

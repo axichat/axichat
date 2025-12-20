@@ -1,17 +1,16 @@
-import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('ReminderPreferences', () {
-    test('defaults include start and deadline offsets', () {
+    test('defaults returns disabled empty reminders (sentinel value)', () {
       final ReminderPreferences prefs = ReminderPreferences.defaults();
 
-      expect(prefs.enabled, isTrue);
-      expect(
-          prefs.startOffsets, containsAll(calendarDefaultStartReminderOffsets));
-      expect(prefs.deadlineOffsets,
-          containsAll(calendarDefaultDeadlineReminderOffsets));
+      // defaults() is a sentinel for "no reminders configured"
+      expect(prefs.enabled, isFalse);
+      expect(prefs.startOffsets, isEmpty);
+      expect(prefs.deadlineOffsets, isEmpty);
+      expect(prefs.isEnabled, isFalse);
     });
 
     test('normalized removes negatives and duplicates', () {

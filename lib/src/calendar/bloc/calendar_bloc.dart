@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
@@ -17,7 +18,6 @@ class CalendarBloc extends BaseCalendarBloc {
     required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
     required super.storage,
     super.reminderController,
-    super.dayEventRepository,
     VoidCallback? onDispose,
   })  : _syncManagerBuilder = syncManagerBuilder,
         _onDispose = onDispose,
@@ -124,6 +124,42 @@ class CalendarBloc extends BaseCalendarBloc {
   }
 
   @override
+  Future<void> onCriticalPathAdded(CalendarCriticalPath path) async {
+    try {
+      await _syncManager.sendCriticalPathUpdate(path, 'add');
+    } catch (error) {
+      developer.log(
+        'Failed to sync critical path addition: $error',
+        name: 'CalendarBloc',
+      );
+    }
+  }
+
+  @override
+  Future<void> onCriticalPathUpdated(CalendarCriticalPath path) async {
+    try {
+      await _syncManager.sendCriticalPathUpdate(path, 'update');
+    } catch (error) {
+      developer.log(
+        'Failed to sync critical path update: $error',
+        name: 'CalendarBloc',
+      );
+    }
+  }
+
+  @override
+  Future<void> onCriticalPathDeleted(CalendarCriticalPath path) async {
+    try {
+      await _syncManager.sendCriticalPathUpdate(path, 'delete');
+    } catch (error) {
+      developer.log(
+        'Failed to sync critical path deletion: $error',
+        name: 'CalendarBloc',
+      );
+    }
+  }
+
+  @override
   void logError(String message, Object error) {
     developer.log(message, name: 'CalendarBloc');
   }
@@ -187,7 +223,6 @@ class CalendarBloc extends BaseCalendarBloc {
     Emitter<CalendarState> emit,
   ) async {
     emitModel(event.model, emit, lastSyncTime: DateTime.now());
-    await syncDayEventsToRepository(event.model.dayEvents.values);
   }
 
   Future<void> _onRemoteTaskApplied(

@@ -22,7 +22,6 @@ class CalendarEvent with _$CalendarEvent {
     String? location,
     DateTime? endDate,
     @Default(TaskPriority.none) TaskPriority priority,
-    double? startHour,
     RecurrenceRule? recurrence,
     @Default([]) List<TaskChecklistItem> checklist,
     ReminderPreferences? reminders,

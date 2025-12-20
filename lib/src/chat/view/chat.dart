@@ -5675,7 +5675,6 @@ class _ChatState extends State<Chat> {
                 location: task.location,
                 endDate: task.endDate,
                 priority: task.priority ?? TaskPriority.none,
-                startHour: task.startHour,
                 recurrence: task.recurrence,
               ),
             );
@@ -5806,7 +5805,6 @@ class _ChatState extends State<Chat> {
                 location: task.location,
                 endDate: task.endDate,
                 priority: task.priority ?? TaskPriority.none,
-                startHour: task.startHour,
                 recurrence: task.recurrence,
               ),
             );

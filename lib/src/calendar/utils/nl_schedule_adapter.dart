@@ -208,7 +208,6 @@ class NlScheduleAdapter {
     final recurrenceUntilZoned = _zonedOrNull(item.recurrence?.until);
 
     final DateTime? scheduledTime = startZoned?.wallTime;
-    final DateTime? startWallTime = startZoned?.wallTime;
     final DateTime? endDate = endZoned?.wallTime;
     final Duration? duration = _deriveDuration(
       start: scheduledTime,
@@ -224,7 +223,6 @@ class NlScheduleAdapter {
       deadline: deadlineZoned?.wallTime,
       endDate: endDate,
       priority: mapPriority(item.priority),
-      startHour: _startHourFor(startWallTime),
       recurrence: mapRecurrence(item.recurrence),
     );
 
@@ -390,12 +388,6 @@ class NlScheduleAdapter {
       return config.defaultDuration;
     }
     return null;
-  }
-
-  double? _startHourFor(DateTime? startTime) {
-    if (startTime == null) return null;
-    final local = startTime.toLocal();
-    return local.hour + (local.minute / 60.0);
   }
 
   NlZonedDateTime? _zonedOrNull(tz.TZDateTime? value) {

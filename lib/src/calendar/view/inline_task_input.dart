@@ -174,7 +174,6 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
       DateTime? endDate = task.endDate;
       final Duration? durationFromParser = task.duration;
       Duration? duration = durationFromParser;
-      double? startHour = task.startHour;
 
       final DateTime? selectedDate = _composerController.selectedDate;
       final TimeOfDay? selectedTime = _composerController.selectedTime;
@@ -189,7 +188,6 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
           time.minute,
         );
         scheduledTime = localManual;
-        startHour = time.hour + (time.minute / 60.0);
         if (duration != null) {
           endDate = scheduledTime.add(duration);
         } else {
@@ -208,7 +206,6 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
               location: task.location,
               endDate: endDate,
               priority: task.priority ?? TaskPriority.none,
-              startHour: startHour,
               recurrence: task.recurrence,
               checklist: task.checklist,
               reminders: task.effectiveReminders,

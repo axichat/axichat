@@ -231,7 +231,9 @@ void main() {
         birthday = DayEvent.create(
           title: 'Birthday',
           startDate: DateTime(2024, 5, 5),
-          reminders: ReminderPreferences.defaults(),
+          reminders: const ReminderPreferences(
+            startOffsets: <Duration>[Duration(hours: 1)],
+          ),
         );
       });
 

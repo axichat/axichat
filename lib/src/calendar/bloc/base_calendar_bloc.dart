@@ -12,7 +12,6 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
-import 'package:axichat/src/calendar/storage/day_event_repository.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
@@ -41,11 +40,9 @@ abstract class BaseCalendarBloc
     required String storagePrefix,
     String storageId = '',
     CalendarReminderController? reminderController,
-    DayEventRepository? dayEventRepository,
     DateTime Function()? now,
     NlScheduleParserService? parserService,
   })  : _reminderController = reminderController,
-        _dayEventRepository = dayEventRepository,
         _now = now ?? DateTime.now,
         _storagePrefix = storagePrefix,
         _storageId = storageId,
@@ -104,14 +101,12 @@ abstract class BaseCalendarBloc
   }
 
   final CalendarReminderController? _reminderController;
-  final DayEventRepository? _dayEventRepository;
   final DateTime Function() _now;
   final String _storagePrefix;
   final String _storageId;
   final Storage _storage;
   final NlScheduleParserService _nlParserService;
   Future<void> _pendingReminderSync = Future.value();
-  Future<void> _pendingDayEventPersist = Future.value();
   static const int _undoHistoryLimit = 50;
   final List<_CalendarUndoSnapshot> _undoStack = <_CalendarUndoSnapshot>[];
   final List<_CalendarUndoSnapshot> _redoStack = <_CalendarUndoSnapshot>[];
@@ -186,9 +181,6 @@ abstract class BaseCalendarBloc
       );
     }
   }
-
-  @protected
-  DayEventRepository? get dayEventRepository => _dayEventRepository;
 
   void commitTaskInteraction(CalendarTask snapshot) {
     final DateTime? scheduled = snapshot.scheduledTime;
@@ -356,7 +348,6 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) async {
     emitModel(state.model, emit, selectedDate: state.selectedDate);
-    await syncDayEventsToRepository(state.model.dayEvents.values);
   }
 
   Future<void> _onDataChanged(
@@ -366,7 +357,6 @@ abstract class BaseCalendarBloc
     // When hydration restores or an explicit refresh is requested, recompute
     // reminder snapshots without mutating the model.
     emitModel(state.model, emit, selectedDate: state.selectedDate);
-    await syncDayEventsToRepository(state.model.dayEvents.values);
   }
 
   Future<void> _onTaskAdded(
@@ -398,10 +388,6 @@ abstract class BaseCalendarBloc
       _recordUndoSnapshot();
 
       final now = _now();
-      final double? computedStartHour = event.startHour ??
-          (event.scheduledTime != null
-              ? event.scheduledTime!.hour + (event.scheduledTime!.minute / 60.0)
-              : null);
       final DateTime? computedEndDate = event.endDate ??
           (event.scheduledTime != null && event.duration != null
               ? event.scheduledTime!.add(event.duration!)
@@ -419,7 +405,6 @@ abstract class BaseCalendarBloc
         deadline: event.deadline,
         endDate: computedEndDate,
         priority: event.priority,
-        startHour: computedStartHour,
         recurrence: event.recurrence,
         checklist: checklist,
         reminders: event.reminders,
@@ -611,7 +596,6 @@ abstract class BaseCalendarBloc
 
         final CalendarTask scheduledTask = task.copyWith(
           scheduledTime: newStart,
-          startHour: newStart.hour + (newStart.minute / 60.0),
           duration: ensuredDuration,
           endDate: newEndDate,
           modifiedAt: _now(),
@@ -686,7 +670,6 @@ abstract class BaseCalendarBloc
         scheduledTime: newStart,
         duration: newDuration,
         endDate: newEndDate,
-        startHour: newStart.hour + (newStart.minute / 60.0),
         modifiedAt: _now(),
       );
       _recordUndoSnapshot();
@@ -825,8 +808,6 @@ abstract class BaseCalendarBloc
       final String targetId = requestedTarget.id;
       final DateTime leftEnd = splitTime;
       final DateTime rightEnd = end;
-      final startHourLeft = start.hour + (start.minute / 60.0);
-      final startHourRight = splitTime.hour + (splitTime.minute / 60.0);
 
       if (!baseTask.effectiveRecurrence.isNone && targetId.contains('::')) {
         final String? occurrenceKey = occurrenceKeyFrom(targetId);
@@ -863,7 +844,6 @@ abstract class BaseCalendarBloc
             endDate: rightEnd,
             recurrence: null,
             occurrenceOverrides: const {},
-            startHour: startHourRight,
             createdAt: now,
             modifiedAt: now,
           );
@@ -887,7 +867,6 @@ abstract class BaseCalendarBloc
         final CalendarTask updatedOccurrence = effectiveTarget.copyWith(
           duration: leftDuration,
           endDate: leftEnd,
-          startHour: startHourLeft,
           modifiedAt: now,
         );
         updates[updatedOccurrence.id] = updatedOccurrence;
@@ -899,7 +878,6 @@ abstract class BaseCalendarBloc
           endDate: rightEnd,
           recurrence: null,
           occurrenceOverrides: const {},
-          startHour: startHourRight,
           createdAt: now,
           modifiedAt: now,
         );
@@ -925,7 +903,6 @@ abstract class BaseCalendarBloc
         scheduledTime: originalStart,
         duration: leftDuration,
         endDate: baseEnd,
-        startHour: originalStart.hour + (originalStart.minute / 60.0),
         modifiedAt: now,
       );
       updates[baseTask.id] = updatedBaseTask;
@@ -937,7 +914,6 @@ abstract class BaseCalendarBloc
         endDate: rightEnd,
         recurrence: null,
         occurrenceOverrides: const {},
-        startHour: startHourRight,
         createdAt: now,
         modifiedAt: now,
       );
@@ -999,7 +975,6 @@ abstract class BaseCalendarBloc
       final CalendarTask newTask = source.copyWith(
         id: newId,
         scheduledTime: newStart,
-        startHour: newStart.hour + (newStart.minute / 60.0),
         duration: appliedDuration,
         endDate: newEndDate,
         occurrenceOverrides: const {},
@@ -1062,7 +1037,6 @@ abstract class BaseCalendarBloc
 
       final CalendarModel updatedModel = state.model.addDayEvent(dayEvent);
       emitModel(updatedModel, emit, isLoading: false);
-      await _persistDayEvent(dayEvent);
       await onDayEventAdded(dayEvent);
     } catch (error) {
       if (snapshotRecorded) {
@@ -1105,7 +1079,6 @@ abstract class BaseCalendarBloc
       );
       final CalendarModel updatedModel = state.model.updateDayEvent(normalized);
       emitModel(updatedModel, emit, isLoading: false);
-      await _persistDayEvent(normalized);
       await onDayEventUpdated(normalized);
     } catch (error) {
       if (snapshotRecorded) {
@@ -1133,7 +1106,6 @@ abstract class BaseCalendarBloc
       final CalendarModel updatedModel =
           state.model.deleteDayEvent(event.eventId);
       emitModel(updatedModel, emit, isLoading: false);
-      await _deleteDayEventFromRepository(event.eventId);
       await onDayEventDeleted(deleted);
     } catch (error) {
       if (snapshotRecorded) {
@@ -1913,13 +1885,11 @@ abstract class BaseCalendarBloc
     if (task.endDate == null && task.duration == null) {
       newEndDate = null;
     }
-    final double newStartHour = newStart.hour + (newStart.minute / 60.0);
 
     return task.copyWith(
       scheduledTime: newStart,
       duration: newDuration,
       endDate: newEndDate,
-      startHour: newStartHour,
     );
   }
 
@@ -2069,12 +2039,7 @@ abstract class BaseCalendarBloc
         if (next.id.isEmpty || existingIds.contains(next.id)) {
           next = next.copyWith(id: const Uuid().v4());
         }
-        final startHour = next.startHour ??
-            (next.scheduledTime != null
-                ? next.scheduledTime!.hour + (next.scheduledTime!.minute / 60.0)
-                : null);
         additions[next.id] = next.copyWith(
-          startHour: startHour,
           modifiedAt: now,
         );
         existingIds.add(next.id);
@@ -2136,7 +2101,8 @@ abstract class BaseCalendarBloc
             shouldFocus ? path.id : state.focusedCriticalPathId,
         focusedCriticalPathSpecified: shouldFocus,
       );
-      await onCriticalPathsChanged(updatedModel);
+      final createdPath = updatedModel.criticalPaths[path.id]!;
+      await onCriticalPathAdded(createdPath);
     } catch (error) {
       await _handleError(error, 'Failed to create critical path', emit);
     }
@@ -2172,7 +2138,7 @@ abstract class BaseCalendarBloc
         focusedCriticalPathId: state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
       );
-      await onCriticalPathsChanged(updatedModel);
+      await onCriticalPathUpdated(renamed);
     } catch (error) {
       await _handleError(error, 'Failed to rename critical path', emit);
     }
@@ -2183,7 +2149,8 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) async {
     try {
-      if (!state.model.criticalPaths.containsKey(event.pathId)) {
+      final existingPath = state.model.criticalPaths[event.pathId];
+      if (existingPath == null) {
         return;
       }
       _recordUndoSnapshot();
@@ -2197,7 +2164,7 @@ abstract class BaseCalendarBloc
             shouldClearFocus ? null : state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
       );
-      await onCriticalPathsChanged(updatedModel);
+      await onCriticalPathDeleted(existingPath);
     } catch (error) {
       await _handleError(error, 'Failed to delete critical path', emit);
     }
@@ -2234,7 +2201,8 @@ abstract class BaseCalendarBloc
         focusedCriticalPathId: state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
       );
-      await onCriticalPathsChanged(updatedModel);
+      final updatedPath = updatedModel.criticalPaths[path.id]!;
+      await onCriticalPathUpdated(updatedPath);
     } catch (error) {
       await _handleError(
         error,
@@ -2263,7 +2231,8 @@ abstract class BaseCalendarBloc
         focusedCriticalPathId: state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
       );
-      await onCriticalPathsChanged(updatedModel);
+      final updatedPath = updatedModel.criticalPaths[event.pathId]!;
+      await onCriticalPathUpdated(updatedPath);
     } catch (error) {
       await _handleError(
         error,
@@ -2298,7 +2267,8 @@ abstract class BaseCalendarBloc
         focusedCriticalPathId: state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
       );
-      await onCriticalPathsChanged(updatedModel);
+      final reorderedPath = updatedModel.criticalPaths[event.pathId]!;
+      await onCriticalPathUpdated(reorderedPath);
     } catch (error) {
       await _handleError(
         error,
@@ -2746,45 +2716,6 @@ abstract class BaseCalendarBloc
     emit(state.copyWith(isLoading: false, error: errorMessage));
   }
 
-  @protected
-  Future<void> syncDayEventsToRepository(
-    Iterable<DayEvent> events,
-  ) async {
-    final DayEventRepository? repo = _dayEventRepository;
-    if (repo == null) {
-      return;
-    }
-    final List<DayEvent> normalized = events
-        .map((DayEvent event) => event.normalizedCopy())
-        .toList(growable: false);
-    _pendingDayEventPersist = _pendingDayEventPersist.then(
-      (_) => repo.replaceAll(normalized),
-    );
-    await _pendingDayEventPersist;
-  }
-
-  Future<void> _persistDayEvent(DayEvent event) async {
-    final DayEventRepository? repo = _dayEventRepository;
-    if (repo == null) {
-      return;
-    }
-    _pendingDayEventPersist = _pendingDayEventPersist.then(
-      (_) => repo.upsert(event),
-    );
-    await _pendingDayEventPersist;
-  }
-
-  Future<void> _deleteDayEventFromRepository(String id) async {
-    final DayEventRepository? repo = _dayEventRepository;
-    if (repo == null) {
-      return;
-    }
-    _pendingDayEventPersist = _pendingDayEventPersist.then(
-      (_) => repo.delete(id),
-    );
-    await _pendingDayEventPersist;
-  }
-
   CalendarState _stateWithDerived(CalendarState state) {
     final dueReminders = _getDueReminders(state.model);
     final nextTask = _getNextTask(state.model);
@@ -2918,12 +2849,24 @@ abstract class BaseCalendarBloc
   @override
   Future<void> close() async {
     await _pendingReminderSync;
-    await _pendingDayEventPersist;
     return super.close();
   }
 
+  /// Called when any critical path changes. Override for bulk sync fallback.
   @protected
   Future<void> onCriticalPathsChanged(CalendarModel model) async {}
+
+  /// Called when a new critical path is created.
+  @protected
+  Future<void> onCriticalPathAdded(CalendarCriticalPath path) async {}
+
+  /// Called when a critical path is updated (renamed, tasks added/removed/reordered).
+  @protected
+  Future<void> onCriticalPathUpdated(CalendarCriticalPath path) async {}
+
+  /// Called when a critical path is deleted.
+  @protected
+  Future<void> onCriticalPathDeleted(CalendarCriticalPath path) async {}
 
   // Abstract methods for subclasses to implement
   Future<void> onTaskAdded(CalendarTask task);

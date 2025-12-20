@@ -2413,13 +2413,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calendarErrorTitleEmptyFriendly => 'Title cannot be empty';
 
   @override
-  String get calendarExportFormatIcsSubtitle => 'Use for calendar clients';
+  String get calendarExportFormatIcsSubtitle =>
+      'Compatible with other apps (recurrence & checklists excluded)';
 
   @override
   String get calendarExportFormatIcsTitle => 'Export .ics';
 
   @override
-  String get calendarExportFormatJsonSubtitle => 'Use for backups or scripts';
+  String get calendarExportFormatJsonSubtitle =>
+      'Full backup with all task data (Recommended)';
 
   @override
   String get calendarExportFormatJsonTitle => 'Export JSON';
