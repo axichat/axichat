@@ -161,7 +161,7 @@ class _SyncControlsState extends State<SyncControls> {
     }
     final file = File(path);
     try {
-      final tasks = await _transferService.importFromFile(file);
+      final tasks = await _transferService.importTasksFromFile(file);
       if (tasks.isEmpty) {
         if (!mounted) return;
         FeedbackSystem.showInfo(

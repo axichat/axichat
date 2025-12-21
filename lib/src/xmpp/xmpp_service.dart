@@ -56,18 +56,32 @@ import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
+
 part 'base_stream_service.dart';
+
 part 'blocking_service.dart';
+
 part 'chats_service.dart';
+
 part 'avatar_service.dart';
+
 part 'muc_service.dart';
+
 part 'muc_join_bootstrap_manager.dart';
+
 part 'message_service.dart';
+
 part 'message_sanitizer.dart';
+
 part 'mam_sm_guard.dart';
+
 part 'omemo_service.dart';
+
 part 'presence_service.dart';
+
 part 'roster_service.dart';
+
 part 'xmpp_connection.dart';
 
 sealed class XmppException implements Exception {
@@ -219,14 +233,21 @@ abstract interface class XmppBase {
   mox.JID? get _myJid;
 
   HttpUploadSupport get httpUploadSupport;
+
   RegisteredStateKey get selfAvatarPathKey;
+
   RegisteredStateKey get selfAvatarHashKey;
+
   SecretKey? get avatarEncryptionKey;
+
   Stream<StoredAvatar?> get selfAvatarStream;
+
   void _notifySelfAvatarUpdated(StoredAvatar? avatar);
+
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
+
   Stream<void> get databaseReloadStream;
 
   bool get needsReset => false;
@@ -356,7 +377,9 @@ class XmppService extends XmppBase
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
   var _httpUploadSupport = const HttpUploadSupport(supported: false);
+
   bool get mamSupported => _mamSupported;
+
   Stream<bool> get mamSupportStream => _mamSupportController.stream;
 
   @override
@@ -367,8 +390,10 @@ class XmppService extends XmppBase
 
   @override
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
+
   @override
   Stream<StoredAvatar?> get selfAvatarStream => _selfAvatarController.stream;
+
   @override
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
 
