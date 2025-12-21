@@ -914,6 +914,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final roomJid = data['roomJid'] as String?;
     final roomName = data['roomName'] as String?;
     final invitee = data['invitee'] as String?;
+    final password = data['password'] as String?;
     if (roomJid == null) return;
     final trimmedRoomName = roomName?.trim();
     const fallbackRoomName = 'group chat';
@@ -930,6 +931,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _mucService.acceptRoomInvite(
         roomJid: roomJid,
         roomName: roomName,
+        password: password,
       );
       emit(
         state.copyWith(
