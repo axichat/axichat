@@ -291,7 +291,7 @@ class Message with _$Message implements Insertable<Message> {
             ? to
             : from);
     final senderJid = isGroupChat ? event.from.toString() : from;
-    final invite = _ParsedInvite.fromBody(event.text, to: to);
+    final invite = _ParsedInvite.fromEvent(event, to: to);
     final htmlData = get<XhtmlImData>();
     final normalizedHtml = HtmlContentCodec.normalizeHtml(
       htmlData?.xhtmlBody,
@@ -300,7 +300,6 @@ class Message with _$Message implements Insertable<Message> {
         ? ''
         : HtmlContentCodec.toPlainText(normalizedHtml);
     final resolvedText = event.text.isNotEmpty ? event.text : fallbackText;
-    final invite = _ParsedInvite.fromEvent(event, to: to);
 
     return Message(
       stanzaID: event.id ?? uuid.v4(),
