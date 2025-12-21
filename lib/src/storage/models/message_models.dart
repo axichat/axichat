@@ -290,7 +290,7 @@ class Message with _$Message implements Insertable<Message> {
             ? to
             : from);
     final senderJid = isGroupChat ? event.from.toString() : from;
-    final invite = _ParsedInvite.fromBody(event.text, to: to);
+    final invite = _ParsedInvite.fromEvent(event, to: to);
 
     return Message(
       stanzaID: event.id ?? uuid.v4(),
@@ -473,6 +473,72 @@ class _ParsedInvite {
 
   static const _invitePrefix = 'axc-invite:';
   static const _inviteRevokePrefix = 'axc-invite-revoke:';
+  static const _inviteBodyLabel = 'You have been invited to a group chat';
+  static const _inviteRevokedBodyLabel = 'Invite revoked';
+
+  static String? _firstNonEmpty(Iterable<String?> values) {
+    for (final value in values) {
+      final trimmed = value?.trim();
+      if (trimmed?.isNotEmpty == true) return trimmed;
+    }
+    return null;
+  }
+
+  static _ParsedInvite? fromEvent(mox.MessageEvent event,
+      {required String to}) {
+    final directInvite = event.get<DirectMucInviteData>();
+    final axiInvite = event.get<AxiMucInvitePayload>();
+    if (directInvite == null && axiInvite == null) {
+      return fromBody(event.text, to: to);
+    }
+
+    final roomJid = _firstNonEmpty([
+      axiInvite?.roomJid,
+      directInvite?.roomJid,
+    ]);
+    if (roomJid == null) {
+      return fromBody(event.text, to: to);
+    }
+
+    final inviter = _firstNonEmpty([
+      axiInvite?.inviter,
+      event.from.toBare().toString(),
+    ]);
+    final invitee = _firstNonEmpty([
+      axiInvite?.invitee,
+      to,
+    ]);
+    final roomName = _firstNonEmpty([axiInvite?.roomName]);
+    final reason = _firstNonEmpty([
+      axiInvite?.reason,
+      directInvite?.reason,
+    ]);
+    final password = _firstNonEmpty([
+      axiInvite?.password,
+      directInvite?.password,
+    ]);
+    final token = _firstNonEmpty([axiInvite?.token]);
+    final isRevoked = axiInvite?.revoked == true;
+
+    final payload = <String, dynamic>{
+      'roomJid': roomJid,
+      if (inviter != null) 'inviter': inviter,
+      if (invitee != null) 'invitee': invitee,
+      if (roomName != null) 'roomName': roomName,
+      if (reason != null) 'reason': reason,
+      if (password != null) 'password': password,
+      if (token != null) 'token': token,
+      if (isRevoked) 'revoked': true,
+    };
+
+    return _ParsedInvite(
+      type: isRevoked
+          ? PseudoMessageType.mucInviteRevocation
+          : PseudoMessageType.mucInvite,
+      data: payload,
+      displayBody: isRevoked ? _inviteRevokedBodyLabel : _inviteBodyLabel,
+    );
+  }
 
   static _ParsedInvite? fromBody(String body, {required String to}) {
     if (body.isEmpty) return null;
@@ -495,9 +561,7 @@ class _ParsedInvite {
       return null;
     }
     payload['invitee'] ??= to;
-    const inviteBodyLabel = 'You have been invited to a group chat';
-    const inviteRevokedBodyLabel = 'Invite revoked';
-    final displayBody = isRevoke ? inviteRevokedBodyLabel : inviteBodyLabel;
+    final displayBody = isRevoke ? _inviteRevokedBodyLabel : _inviteBodyLabel;
     return _ParsedInvite(
       type: isRevoke
           ? PseudoMessageType.mucInviteRevocation

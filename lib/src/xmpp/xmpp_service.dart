@@ -560,13 +560,14 @@ class XmppService extends XmppBase
     final managers = super.featureManagers
       ..addAll([
         XmppStreamManagementManager(owner: this),
-        mox.DiscoManager([
+        (mox.DiscoManager([
           mox.Identity(
             category: 'client',
             type: _capability.discoClient,
             name: appDisplayName,
           ),
-        ]),
+        ])
+          ..addFeatures(const [BookmarksManager.bookmarksNotifyFeature])),
         mox.PingManager(const Duration(minutes: 3)),
         mox.EntityCapabilitiesManager(_capabilityHashBase),
         SafePubSubManager(),
@@ -960,6 +961,10 @@ class XmppService extends XmppBase
     final storedResource = await _dbOpReturning<XmppStateStore, String?>(
       (ss) async => ss.read(key: resourceStorageKey) as String?,
     );
+    final storedMucServiceHost = await _dbOpReturning<XmppStateStore, String?>(
+      (ss) async => ss.read(key: _mucServiceHostStorageKey) as String?,
+    );
+    _restoreMucServiceHost(storedMucServiceHost);
     final smNegotiator = mox.StreamManagementNegotiator();
     if (storedResource != null && storedResource.isNotEmpty) {
       smNegotiator.resource = storedResource;
