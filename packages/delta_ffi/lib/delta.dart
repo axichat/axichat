@@ -106,6 +106,7 @@ const List<String> _requiredDeltaSymbols = [
   'dc_msg_is_outgoing',
   'dc_msg_new',
   'dc_msg_set_file_and_deduplicate',
+  'dc_msg_set_html',
   'dc_msg_set_quote',
   'dc_msg_set_subject',
   'dc_msg_set_text',
@@ -147,15 +148,30 @@ ffi.DynamicLibrary loadDeltaLibrary() {
     }
   }
 
-  final configPath = _pathFromNativeAssetsConfig();
-  if (configPath != null) {
-    final configLibrary = tryLoad(() => ffi.DynamicLibrary.open(configPath));
-    if (configLibrary != null) {
-      return configLibrary;
+  if (_isProduct) {
+    for (final candidate in _bundledLibraryFiles()) {
+      final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
+      if (library != null) {
+        return library;
+      }
     }
-  }
+    if (Platform.isAndroid) {
+      for (final name in _platformLibraryNames()) {
+        final library = tryLoad(() => ffi.DynamicLibrary.open(name));
+        if (library != null) {
+          return library;
+        }
+      }
+    }
+  } else {
+    final configPath = _pathFromNativeAssetsConfig();
+    if (configPath != null) {
+      final configLibrary = tryLoad(() => ffi.DynamicLibrary.open(configPath));
+      if (configLibrary != null) {
+        return configLibrary;
+      }
+    }
 
-  if (!_isProduct) {
     final processLibrary = tryLoad(ffi.DynamicLibrary.process);
     if (processLibrary != null) {
       return processLibrary;
@@ -175,24 +191,12 @@ ffi.DynamicLibrary loadDeltaLibrary() {
         return library;
       }
     }
-  } else {
-    for (final candidate in _bundledLibraryFiles()) {
-      final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
+
+    for (final name in _platformLibraryNames()) {
+      final library = tryLoad(() => ffi.DynamicLibrary.open(name));
       if (library != null) {
         return library;
       }
-    }
-  }
-
-  final processLibrary = tryLoad(ffi.DynamicLibrary.process);
-  if (processLibrary != null) {
-    return processLibrary;
-  }
-
-  for (final name in _platformLibraryNames()) {
-    final library = tryLoad(() => ffi.DynamicLibrary.open(name));
-    if (library != null) {
-      return library;
     }
   }
 

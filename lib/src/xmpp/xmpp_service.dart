@@ -7,12 +7,14 @@ import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -73,6 +75,8 @@ part 'muc_join_bootstrap_manager.dart';
 part 'message_service.dart';
 
 part 'message_sanitizer.dart';
+
+part 'xhtml_im_manager.dart';
 
 part 'mam_sm_guard.dart';
 
@@ -372,7 +376,7 @@ class XmppService extends XmppBase
   final Capability _capability;
 
   // Calendar sync message callback
-  Future<void> Function(CalendarSyncMessage)? _calendarSyncCallback;
+  Future<void> Function(CalendarSyncInbound)? _calendarSyncCallback;
 
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
@@ -2112,7 +2116,7 @@ class XmppService extends XmppBase
 
   /// Register a callback to handle calendar sync messages
   void setCalendarSyncCallback(
-      Future<void> Function(CalendarSyncMessage) callback) {
+      Future<void> Function(CalendarSyncInbound) callback) {
     _calendarSyncCallback = callback;
   }
 

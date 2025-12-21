@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -499,12 +500,19 @@ class EmailService {
     required Chat chat,
     required String body,
     String? subject,
+    String? htmlBody,
   }) async {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(subject);
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();
+    final resolvedBody = trimmedBody.isNotEmpty
+        ? trimmedBody
+        : (normalizedHtml == null
+            ? ''
+            : HtmlContentCodec.toPlainText(normalizedHtml));
     String? shareId;
     String? subjectToken;
     if (normalizedSubject != null) {
@@ -534,13 +542,15 @@ class EmailService {
             token: subjectToken,
             body: _composeSubjectEnvelope(
               subject: normalizedSubject,
-              body: trimmedBody,
+              body: resolvedBody,
             ),
           )
         : _composeSubjectEnvelope(
             subject: normalizedSubject,
-            body: trimmedBody,
+            body: resolvedBody,
           );
+    final localBodyOverride =
+        trimmedBody.isNotEmpty ? trimmedBody : resolvedBody;
     final msgId = await _guardDeltaOperation(
       operation: 'send email message',
       body: () => _transport.sendText(
@@ -548,7 +558,8 @@ class EmailService {
         body: transmitBody,
         subject: normalizedSubject,
         shareId: shareId,
-        localBodyOverride: trimmedBody,
+        localBodyOverride: localBodyOverride,
+        htmlBody: normalizedHtml,
       ),
     );
     if (shareId != null) {
@@ -565,11 +576,13 @@ class EmailService {
     required Chat chat,
     required EmailAttachment attachment,
     String? subject,
+    String? htmlCaption,
   }) async {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(subject);
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlCaption);
     String? shareId;
     if (normalizedSubject != null) {
       shareId = ShareTokenCodec.generateShareId();
@@ -591,11 +604,15 @@ class EmailService {
         participants: participants,
       );
     }
+    var captionText = attachment.caption?.trim() ?? '';
+    if (captionText.isEmpty && normalizedHtml != null) {
+      captionText = HtmlContentCodec.toPlainText(normalizedHtml);
+    }
     final captionEnvelope = _composeSubjectEnvelope(
       subject: normalizedSubject,
-      body: attachment.caption,
+      body: captionText,
     );
-    final sanitizedCaption = attachment.caption?.trim() ?? '';
+    final sanitizedCaption = captionText.trim();
     final msgId = await _guardDeltaOperation(
       operation: 'send email attachment',
       body: () => _transport.sendAttachment(
@@ -604,6 +621,7 @@ class EmailService {
         subject: normalizedSubject,
         shareId: shareId,
         captionOverride: sanitizedCaption,
+        htmlCaption: normalizedHtml,
       ),
     );
     if (shareId != null) {
@@ -867,6 +885,7 @@ class EmailService {
       return null;
     }
     final size = metadata.sizeBytes ?? await file.length();
+    final caption = message.plainText.trim();
     return EmailAttachment(
       path: path,
       fileName: metadata.filename,
@@ -874,7 +893,7 @@ class EmailService {
       mimeType: metadata.mimeType,
       width: metadata.width,
       height: metadata.height,
-      caption: message.body,
+      caption: caption.isEmpty ? null : caption,
       metadataId: metadata.id,
     );
   }
@@ -1758,16 +1777,18 @@ class EmailService {
 
   /// Deletes messages from core and server.
   Future<bool> deleteMessages(List<Message> messages) async {
-    final deltaIds = messages
-        .map((m) => m.deltaMsgId)
-        .whereType<int>()
+    final deltaMessages = messages
+        .where((message) => message.deltaMsgId != null)
+        .toList(growable: false);
+    final deltaIds = deltaMessages
+        .map((message) => message.deltaMsgId!)
         .toList(growable: false);
     if (deltaIds.isEmpty) return false;
     await _ensureReady();
     final success = await _transport.deleteMessages(deltaIds);
     if (success) {
       final db = await _databaseBuilder();
-      for (final message in messages) {
+      for (final message in deltaMessages) {
         await db.deleteMessage(message.stanzaID);
       }
     }
@@ -1806,10 +1827,31 @@ class EmailService {
     if (deltaIds.isEmpty) return const [];
 
     final db = await _databaseBuilder();
-    final messages = <Message>[];
+    final messagesByDeltaId = <int, Message>{};
+    final missingIds = <int>[];
     for (final deltaId in deltaIds) {
       final stanzaId = _stanzaId(deltaId);
       final message = await db.getMessageByStanzaID(stanzaId);
+      if (message != null) {
+        messagesByDeltaId[deltaId] = message;
+      } else {
+        missingIds.add(deltaId);
+      }
+    }
+    if (missingIds.isNotEmpty) {
+      await _transport.hydrateMessages(missingIds);
+      for (final deltaId in missingIds) {
+        final stanzaId = _stanzaId(deltaId);
+        final message = await db.getMessageByStanzaID(stanzaId);
+        if (message != null) {
+          messagesByDeltaId[deltaId] = message;
+        }
+      }
+    }
+
+    final messages = <Message>[];
+    for (final deltaId in deltaIds) {
+      final message = messagesByDeltaId[deltaId];
       if (message != null) {
         messages.add(message);
       }
@@ -1858,28 +1900,43 @@ class EmailService {
     required String body,
     required Message quotedMessage,
     String? subject,
+    String? htmlBody,
   }) async {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     final quotedMsgId = quotedMessage.deltaMsgId;
     if (quotedMsgId == null) {
-      return sendMessage(chat: chat, body: body, subject: subject);
+      return sendMessage(
+        chat: chat,
+        body: body,
+        subject: subject,
+        htmlBody: htmlBody,
+      );
     }
     await _ensureReady();
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
+    final trimmedBody = body.trim();
+    final resolvedBody = trimmedBody.isNotEmpty
+        ? trimmedBody
+        : (normalizedHtml == null
+            ? ''
+            : HtmlContentCodec.toPlainText(normalizedHtml));
     final msgId = await _guardDeltaOperation(
       operation: 'send reply',
       body: () => _transport.sendTextWithQuote(
         chatId: chatId,
-        body: body,
+        body: resolvedBody,
         quotedMessageId: quotedMsgId,
         subject: subject,
+        htmlBody: normalizedHtml,
       ),
     );
     final deltaMessage = await _transport.getMessage(msgId);
     await _recordOutgoing(
       chatId: chatId,
       msgId: msgId,
-      body: body,
+      body: resolvedBody,
+      htmlBody: normalizedHtml,
       timestamp: deltaMessage?.timestamp,
     );
     return msgId;
@@ -1925,11 +1982,6 @@ class EmailService {
     await _ensureReady();
     final draft = await _transport.getDraft(chatId);
     return draft?.text;
-  }
-
-  Future<DeltaMessage?> _getMessage(int msgId) async {
-    await _ensureReady();
-    return _transport.getMessage(msgId);
   }
 
   /// Gets all contact IDs from core.
@@ -1997,6 +2049,7 @@ class EmailService {
     required int chatId,
     required int msgId,
     String? body,
+    String? htmlBody,
     DateTime? timestamp,
   }) async {
     final db = await _databaseBuilder();
@@ -2010,6 +2063,7 @@ class EmailService {
       chatJid: chat.jid,
       timestamp: resolvedTimestamp,
       body: body?.trim(),
+      htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
       received: false,

@@ -1288,6 +1288,23 @@ class DeltaChatBindings {
   late final _dc_msg_set_text = _dc_msg_set_textPtr.asFunction<
       void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>)>();
 
+  void dc_msg_set_html(
+    ffi.Pointer<dc_msg_t> msg,
+    ffi.Pointer<ffi.Char> html,
+  ) {
+    return _dc_msg_set_html(
+      msg,
+      html,
+    );
+  }
+
+  late final _dc_msg_set_htmlPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_msg_t>,
+              ffi.Pointer<ffi.Char>)>>('dc_msg_set_html');
+  late final _dc_msg_set_html = _dc_msg_set_htmlPtr.asFunction<
+      void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>)>();
+
   void dc_msg_set_subject(
     ffi.Pointer<dc_msg_t> msg,
     ffi.Pointer<ffi.Char> subject,
