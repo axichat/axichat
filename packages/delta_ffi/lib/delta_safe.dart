@@ -68,6 +68,26 @@ class DeltaMessageType {
   static const int file = 60;
 }
 
+class DeltaDownloadState {
+  static const int done = 0;
+  static const int available = 10;
+  static const int failure = 20;
+  static const int undecipherable = 30;
+  static const int inProgress = 1000;
+}
+
+class DeltaChatVisibility {
+  static const int normal = 0;
+  static const int archived = 1;
+  static const int pinned = 2;
+}
+
+class DeltaContactListFlags {
+  static const int addSelf = 0x1;
+  static const int verifiedOnly = 0x2;
+  static const int addRecent = 0x4;
+}
+
 class DeltaChatlistEntry {
   const DeltaChatlistEntry({
     required this.chatId,
@@ -123,6 +143,18 @@ class DeltaContextHandle {
   bool _opened = false;
   bool _ioRunning = false;
   bool? _supportsMessageIsOutgoing;
+  bool? _supportsFreshMsgs;
+  bool? _supportsMarkNoticed;
+  bool? _supportsMarkSeen;
+  bool? _supportsDeleteMsgs;
+  bool? _supportsQuote;
+  bool? _supportsForward;
+  bool? _supportsDraft;
+  bool? _supportsSearch;
+  bool? _supportsVisibility;
+  bool? _supportsDownload;
+  bool? _supportsResend;
+  bool? _supportsContactList;
 
   Future<void> open({required String passphrase}) async {
     final result = _withCString(passphrase, (passPtr) {
@@ -495,6 +527,33 @@ class DeltaContextHandle {
         state == DeltaMessageState.outMdnRcvd;
   }
 
+  int? _getDownloadState(ffi.Pointer<dc_msg_t> msgPtr) {
+    if (_supportsDownload == false) return null;
+    try {
+      final state = _bindings.dc_msg_get_download_state(msgPtr);
+      _supportsDownload = true;
+      return state;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsDownload = false;
+      return null;
+    }
+  }
+
+  String? _getMessageError(ffi.Pointer<dc_msg_t> msgPtr) {
+    if (_supportsResend == false) return null;
+    try {
+      final errorPtr = _bindings.dc_msg_get_error(msgPtr);
+      _supportsResend = true;
+      if (errorPtr == ffi.nullptr) return null;
+      return _takeString(errorPtr, bindings: _bindings);
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsResend = false;
+      return null;
+    }
+  }
+
   Future<DeltaMessage?> getMessage(int messageId) async {
     final msgPtr = _bindings.dc_get_msg(_context, messageId);
     if (msgPtr == ffi.nullptr) {
@@ -532,6 +591,8 @@ class DeltaContextHandle {
               isUtc: true,
             ).toLocal();
       final isOutgoing = _messageIsOutgoing(msgPtr);
+      final downloadState = _getDownloadState(msgPtr);
+      final error = _getMessageError(msgPtr);
       return DeltaMessage(
         id: id,
         chatId: chatId,
@@ -547,7 +608,406 @@ class DeltaContextHandle {
         height: height == 0 ? null : height,
         timestamp: timestamp,
         isOutgoing: isOutgoing,
+        downloadState: downloadState,
+        error: error,
       );
+    } finally {
+      _bindings.dc_msg_unref(msgPtr);
+    }
+  }
+
+  Future<List<int>> getFreshMessageIds() async {
+    if (_supportsFreshMsgs == false) return const [];
+    try {
+      final array = _bindings.dc_get_fresh_msgs(_context);
+      _supportsFreshMsgs = true;
+      if (array == ffi.nullptr) return const [];
+      try {
+        final count = _bindings.dc_array_get_cnt(array);
+        final ids = <int>[];
+        for (var i = 0; i < count; i++) {
+          ids.add(_bindings.dc_array_get_id(array, i));
+        }
+        return ids;
+      } finally {
+        _bindings.dc_array_unref(array);
+      }
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsFreshMsgs = false;
+      return const [];
+    }
+  }
+
+  Future<int> getFreshMessageCount(int chatId) async {
+    if (_supportsFreshMsgs == false) return 0;
+    try {
+      final count = _bindings.dc_get_fresh_msg_cnt(_context, chatId);
+      _supportsFreshMsgs = true;
+      return count;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsFreshMsgs = false;
+      return 0;
+    }
+  }
+
+  Future<bool> markNoticedChat(int chatId) async {
+    if (_supportsMarkNoticed == false) return false;
+    try {
+      _bindings.dc_marknoticed_chat(_context, chatId);
+      _supportsMarkNoticed = true;
+      return true;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsMarkNoticed = false;
+      return false;
+    }
+  }
+
+  Future<bool> markSeenMessages(List<int> messageIds) async {
+    if (_supportsMarkSeen == false || messageIds.isEmpty) return false;
+    final idsPointer = malloc<ffi.Uint32>(messageIds.length);
+    try {
+      for (var i = 0; i < messageIds.length; i++) {
+        idsPointer[i] = messageIds[i];
+      }
+      _bindings.dc_markseen_msgs(_context, idsPointer, messageIds.length);
+      _supportsMarkSeen = true;
+      return true;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsMarkSeen = false;
+      return false;
+    } finally {
+      malloc.free(idsPointer);
+    }
+  }
+
+  Future<bool> deleteMessages(List<int> messageIds) async {
+    if (_supportsDeleteMsgs == false || messageIds.isEmpty) return false;
+    final idsPointer = malloc<ffi.Uint32>(messageIds.length);
+    try {
+      for (var i = 0; i < messageIds.length; i++) {
+        idsPointer[i] = messageIds[i];
+      }
+      _bindings.dc_delete_msgs(_context, idsPointer, messageIds.length);
+      _supportsDeleteMsgs = true;
+      return true;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsDeleteMsgs = false;
+      return false;
+    } finally {
+      malloc.free(idsPointer);
+    }
+  }
+
+  Future<bool> forwardMessages({
+    required List<int> messageIds,
+    required int toChatId,
+  }) async {
+    if (_supportsForward == false || messageIds.isEmpty) return false;
+    final idsPointer = malloc<ffi.Uint32>(messageIds.length);
+    try {
+      for (var i = 0; i < messageIds.length; i++) {
+        idsPointer[i] = messageIds[i];
+      }
+      _bindings.dc_forward_msgs(
+        _context,
+        idsPointer,
+        messageIds.length,
+        toChatId,
+      );
+      _supportsForward = true;
+      return true;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsForward = false;
+      return false;
+    } finally {
+      malloc.free(idsPointer);
+    }
+  }
+
+  Future<bool> setDraft({required int chatId, DeltaMessage? message}) async {
+    if (_supportsDraft == false) return false;
+    try {
+      if (message == null) {
+        _bindings.dc_set_draft(_context, chatId, ffi.nullptr);
+      } else {
+        final msg = _bindings.dc_msg_new(_context, message.viewType ?? 10);
+        if (msg == ffi.nullptr) return false;
+        try {
+          if (message.text != null) {
+            _withCString(message.text!, (textPtr) {
+              _bindings.dc_msg_set_text(msg, textPtr);
+            });
+          }
+          _bindings.dc_set_draft(_context, chatId, msg);
+        } finally {
+          _bindings.dc_msg_unref(msg);
+        }
+      }
+      _supportsDraft = true;
+      return true;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsDraft = false;
+      return false;
+    }
+  }
+
+  Future<DeltaMessage?> getDraft(int chatId) async {
+    if (_supportsDraft == false) return null;
+    try {
+      final msgPtr = _bindings.dc_get_draft(_context, chatId);
+      _supportsDraft = true;
+      if (msgPtr == ffi.nullptr) return null;
+      try {
+        final text = _takeString(
+          _bindings.dc_msg_get_text(msgPtr),
+          bindings: _bindings,
+        );
+        final viewType = _bindings.dc_msg_get_viewtype(msgPtr);
+        return DeltaMessage(
+          id: 0,
+          chatId: chatId,
+          text: text,
+          viewType: viewType,
+        );
+      } finally {
+        _bindings.dc_msg_unref(msgPtr);
+      }
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsDraft = false;
+      return null;
+    }
+  }
+
+  Future<List<int>> searchMessages({
+    required int chatId,
+    required String query,
+  }) async {
+    if (_supportsSearch == false) return const [];
+    try {
+      final array = _withCString(query, (queryPtr) {
+        return _bindings.dc_search_msgs(_context, chatId, queryPtr);
+      });
+      _supportsSearch = true;
+      if (array == ffi.nullptr) return const [];
+      try {
+        final count = _bindings.dc_array_get_cnt(array);
+        final ids = <int>[];
+        for (var i = 0; i < count; i++) {
+          ids.add(_bindings.dc_array_get_id(array, i));
+        }
+        return ids;
+      } finally {
+        _bindings.dc_array_unref(array);
+      }
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsSearch = false;
+      return const [];
+    }
+  }
+
+  Future<bool> setChatVisibility({
+    required int chatId,
+    required int visibility,
+  }) async {
+    if (_supportsVisibility == false) return false;
+    try {
+      _bindings.dc_set_chat_visibility(_context, chatId, visibility);
+      _supportsVisibility = true;
+      return true;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsVisibility = false;
+      return false;
+    }
+  }
+
+  Future<bool> downloadFullMessage(int messageId) async {
+    if (_supportsDownload == false) return false;
+    try {
+      _bindings.dc_download_full_msg(_context, messageId);
+      _supportsDownload = true;
+      return true;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsDownload = false;
+      return false;
+    }
+  }
+
+  Future<bool> resendMessages(List<int> messageIds) async {
+    if (_supportsResend == false || messageIds.isEmpty) return false;
+    final idsPointer = malloc<ffi.Uint32>(messageIds.length);
+    try {
+      for (var i = 0; i < messageIds.length; i++) {
+        idsPointer[i] = messageIds[i];
+      }
+      final result = _bindings.dc_resend_msgs(
+        _context,
+        idsPointer,
+        messageIds.length,
+      );
+      _supportsResend = true;
+      return result != 0;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsResend = false;
+      return false;
+    } finally {
+      malloc.free(idsPointer);
+    }
+  }
+
+  Future<List<int>> getContactIds({int flags = 0, String? query}) async {
+    if (_supportsContactList == false) return const [];
+    ffi.Pointer<ffi.Char> queryPtr = ffi.nullptr;
+    try {
+      if (query != null && query.isNotEmpty) {
+        queryPtr = _toCString(query);
+      }
+      final array = _bindings.dc_get_contacts(_context, flags, queryPtr);
+      _supportsContactList = true;
+      if (array == ffi.nullptr) return const [];
+      try {
+        final count = _bindings.dc_array_get_cnt(array);
+        final ids = <int>[];
+        for (var i = 0; i < count; i++) {
+          ids.add(_bindings.dc_array_get_id(array, i));
+        }
+        return ids;
+      } finally {
+        _bindings.dc_array_unref(array);
+      }
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsContactList = false;
+      return const [];
+    } finally {
+      if (queryPtr != ffi.nullptr) {
+        malloc.free(queryPtr);
+      }
+    }
+  }
+
+  Future<List<int>> getBlockedContactIds() async {
+    if (_supportsContactList == false) return const [];
+    try {
+      final array = _bindings.dc_get_blocked_contacts(_context);
+      _supportsContactList = true;
+      if (array == ffi.nullptr) return const [];
+      try {
+        final count = _bindings.dc_array_get_cnt(array);
+        final ids = <int>[];
+        for (var i = 0; i < count; i++) {
+          ids.add(_bindings.dc_array_get_id(array, i));
+        }
+        return ids;
+      } finally {
+        _bindings.dc_array_unref(array);
+      }
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsContactList = false;
+      return const [];
+    }
+  }
+
+  Future<bool> deleteContact(int contactId) async {
+    if (_supportsContactList == false) return false;
+    try {
+      final result = _bindings.dc_delete_contact(_context, contactId);
+      _supportsContactList = true;
+      return result != 0;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsContactList = false;
+      return false;
+    }
+  }
+
+  Future<int> sendTextWithQuote({
+    required int chatId,
+    required String message,
+    required int quotedMessageId,
+    String? subject,
+  }) async {
+    if (_supportsQuote == false) {
+      return sendText(chatId: chatId, message: message, subject: subject);
+    }
+    _ensureState(_opened, 'send quoted message');
+    final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
+    if (deltaMessage == ffi.nullptr) {
+      throw const DeltaSafeException('Failed to allocate Delta message');
+    }
+    try {
+      _withCString(message, (msgPtr) {
+        _bindings.dc_msg_set_text(deltaMessage, msgPtr);
+      });
+      final normalizedSubject = subject?.trim();
+      if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
+        _withCString(normalizedSubject, (subjectPtr) {
+          _bindings.dc_msg_set_subject(deltaMessage, subjectPtr);
+        });
+      }
+
+      final quotedMsg = _bindings.dc_get_msg(_context, quotedMessageId);
+      if (quotedMsg != ffi.nullptr) {
+        try {
+          _bindings.dc_msg_set_quote(deltaMessage, quotedMsg);
+          _supportsQuote = true;
+        } on Object catch (error) {
+          if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+          _supportsQuote = false;
+        } finally {
+          _bindings.dc_msg_unref(quotedMsg);
+        }
+      }
+
+      final msgId = _bindings.dc_send_msg(_context, chatId, deltaMessage);
+      _ensurePositive(msgId, 'send quoted message', _lastError);
+      return msgId;
+    } finally {
+      _bindings.dc_msg_unref(deltaMessage);
+    }
+  }
+
+  Future<DeltaQuotedMessage?> getQuotedMessage(int messageId) async {
+    if (_supportsQuote == false) return null;
+    final msgPtr = _bindings.dc_get_msg(_context, messageId);
+    if (msgPtr == ffi.nullptr) return null;
+    try {
+      final quotedMsgPtr = _bindings.dc_msg_get_quoted_msg(msgPtr);
+      _supportsQuote = true;
+      if (quotedMsgPtr == ffi.nullptr) {
+        final quotedText = _takeString(
+          _bindings.dc_msg_get_quoted_text(msgPtr),
+          bindings: _bindings,
+        );
+        if (quotedText == null || quotedText.isEmpty) return null;
+        return DeltaQuotedMessage(text: quotedText);
+      }
+      try {
+        final quotedId = _bindings.dc_msg_get_id(quotedMsgPtr);
+        final quotedText = _takeString(
+          _bindings.dc_msg_get_text(quotedMsgPtr),
+          bindings: _bindings,
+        );
+        return DeltaQuotedMessage(id: quotedId, text: quotedText);
+      } finally {
+        _bindings.dc_msg_unref(quotedMsgPtr);
+      }
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsQuote = false;
+      return null;
     } finally {
       _bindings.dc_msg_unref(msgPtr);
     }
@@ -793,6 +1253,8 @@ class DeltaMessage {
     this.height,
     this.timestamp,
     this.isOutgoing = false,
+    this.downloadState,
+    this.error,
   });
 
   final int id;
@@ -809,8 +1271,21 @@ class DeltaMessage {
   final int? height;
   final DateTime? timestamp;
   final bool isOutgoing;
+  final int? downloadState;
+  final String? error;
 
   bool get hasFile => filePath != null && filePath!.isNotEmpty;
+
+  bool get needsDownload =>
+      downloadState == DeltaDownloadState.available ||
+      downloadState == DeltaDownloadState.failure;
+}
+
+class DeltaQuotedMessage {
+  const DeltaQuotedMessage({this.id, this.text});
+
+  final int? id;
+  final String? text;
 }
 
 class _DeltaEventLoop {

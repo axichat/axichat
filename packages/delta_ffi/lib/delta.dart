@@ -10,8 +10,129 @@ const _libraryName = 'deltachat_wrap';
 @ffi.DefaultAsset(_assetId)
 final DeltaChatBindings deltaBindings = DeltaChatBindings(loadDeltaLibrary());
 
+const bool _isProduct = bool.fromEnvironment('dart.vm.product');
+const List<String> _requiredDeltaSymbols = [
+  'dc_accounts_add_account',
+  'dc_accounts_add_closed_account',
+  'dc_accounts_background_fetch',
+  'dc_accounts_get_account',
+  'dc_accounts_get_all',
+  'dc_accounts_get_event_emitter',
+  'dc_accounts_maybe_network',
+  'dc_accounts_maybe_network_lost',
+  'dc_accounts_migrate_account',
+  'dc_accounts_new',
+  'dc_accounts_remove_account',
+  'dc_accounts_set_push_device_token',
+  'dc_accounts_start_io',
+  'dc_accounts_stop_io',
+  'dc_accounts_unref',
+  'dc_array_get_cnt',
+  'dc_array_get_id',
+  'dc_array_unref',
+  'dc_block_contact',
+  'dc_chat_get_contact_id',
+  'dc_chat_get_mailinglist_addr',
+  'dc_chat_get_name',
+  'dc_chat_get_type',
+  'dc_chat_unref',
+  'dc_chatlist_get_chat_id',
+  'dc_chatlist_get_cnt',
+  'dc_chatlist_get_msg_id',
+  'dc_chatlist_unref',
+  'dc_configure',
+  'dc_contact_get_addr',
+  'dc_contact_get_name',
+  'dc_contact_unref',
+  'dc_context_change_passphrase',
+  'dc_context_is_open',
+  'dc_context_new',
+  'dc_context_new_closed',
+  'dc_context_open',
+  'dc_context_unref',
+  'dc_create_chat_by_contact_id',
+  'dc_create_contact',
+  'dc_delete_contact',
+  'dc_delete_msgs',
+  'dc_download_full_msg',
+  'dc_event_emitter_unref',
+  'dc_event_get_account_id',
+  'dc_event_get_data1_int',
+  'dc_event_get_data1_str',
+  'dc_event_get_data2_int',
+  'dc_event_get_data2_str',
+  'dc_event_get_id',
+  'dc_event_unref',
+  'dc_forward_msgs',
+  'dc_get_blocked_contacts',
+  'dc_get_chat',
+  'dc_get_chat_contacts',
+  'dc_get_chat_msgs',
+  'dc_get_chatlist',
+  'dc_get_connectivity',
+  'dc_get_contact',
+  'dc_get_contacts',
+  'dc_get_draft',
+  'dc_get_event_emitter',
+  'dc_get_fresh_msg_cnt',
+  'dc_get_fresh_msgs',
+  'dc_get_last_error',
+  'dc_get_msg',
+  'dc_get_msg_cnt',
+  'dc_get_next_event',
+  'dc_is_configured',
+  'dc_lookup_contact_id_by_addr',
+  'dc_marknoticed_chat',
+  'dc_markseen_msgs',
+  'dc_maybe_network',
+  'dc_msg_get_chat_id',
+  'dc_msg_get_download_state',
+  'dc_msg_get_error',
+  'dc_msg_get_file',
+  'dc_msg_get_filebytes',
+  'dc_msg_get_filename',
+  'dc_msg_get_filemime',
+  'dc_msg_get_height',
+  'dc_msg_get_html',
+  'dc_msg_get_id',
+  'dc_msg_get_quoted_msg',
+  'dc_msg_get_quoted_text',
+  'dc_msg_get_state',
+  'dc_msg_get_subject',
+  'dc_msg_get_text',
+  'dc_msg_get_timestamp',
+  'dc_msg_get_viewtype',
+  'dc_msg_get_width',
+  'dc_msg_is_outgoing',
+  'dc_msg_new',
+  'dc_msg_set_file_and_deduplicate',
+  'dc_msg_set_quote',
+  'dc_msg_set_subject',
+  'dc_msg_set_text',
+  'dc_msg_unref',
+  'dc_resend_msgs',
+  'dc_search_msgs',
+  'dc_send_msg',
+  'dc_send_text_msg',
+  'dc_set_chat_visibility',
+  'dc_set_config',
+  'dc_set_draft',
+  'dc_start_io',
+  'dc_stop_io',
+  'dc_str_unref',
+  'dc_unblock_contact',
+];
+
 ffi.DynamicLibrary loadDeltaLibrary() {
   Object? lastError;
+
+  ffi.DynamicLibrary? finalizeLibrary(ffi.DynamicLibrary? library) {
+    if (library == null) return null;
+    if (_isProduct) {
+      _assertRequiredSymbols(library);
+    }
+    return library;
+  }
 
   ffi.DynamicLibrary? tryLoad(ffi.DynamicLibrary Function() loader) {
     try {
@@ -19,23 +140,10 @@ ffi.DynamicLibrary loadDeltaLibrary() {
       library.lookup<ffi.NativeFunction<ffi.Pointer<ffi.Void> Function()>>(
         'dc_context_new',
       );
-      return library;
+      return finalizeLibrary(library);
     } catch (error) {
       lastError = error;
       return null;
-    }
-  }
-
-  final processLibrary = tryLoad(ffi.DynamicLibrary.process);
-  if (processLibrary != null) {
-    return processLibrary;
-  }
-
-  final envOverride = Platform.environment['DELTA_FFI_LIBRARY_PATH'];
-  if (envOverride != null && envOverride.isNotEmpty) {
-    final envLibrary = tryLoad(() => ffi.DynamicLibrary.open(envOverride));
-    if (envLibrary != null) {
-      return envLibrary;
     }
   }
 
@@ -47,11 +155,38 @@ ffi.DynamicLibrary loadDeltaLibrary() {
     }
   }
 
-  for (final candidate in _candidateLibraryFiles()) {
-    final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
-    if (library != null) {
-      return library;
+  if (!_isProduct) {
+    final processLibrary = tryLoad(ffi.DynamicLibrary.process);
+    if (processLibrary != null) {
+      return processLibrary;
     }
+
+    final envOverride = Platform.environment['DELTA_FFI_LIBRARY_PATH'];
+    if (envOverride != null && envOverride.isNotEmpty) {
+      final envLibrary = tryLoad(() => ffi.DynamicLibrary.open(envOverride));
+      if (envLibrary != null) {
+        return envLibrary;
+      }
+    }
+
+    for (final candidate in _candidateLibraryFiles()) {
+      final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
+      if (library != null) {
+        return library;
+      }
+    }
+  } else {
+    for (final candidate in _bundledLibraryFiles()) {
+      final library = tryLoad(() => ffi.DynamicLibrary.open(candidate));
+      if (library != null) {
+        return library;
+      }
+    }
+  }
+
+  final processLibrary = tryLoad(ffi.DynamicLibrary.process);
+  if (processLibrary != null) {
+    return processLibrary;
   }
 
   for (final name in _platformLibraryNames()) {
@@ -66,6 +201,20 @@ ffi.DynamicLibrary loadDeltaLibrary() {
     _libraryName,
     'Failed to load deltachat native library.',
   );
+}
+
+void _assertRequiredSymbols(ffi.DynamicLibrary library) {
+  for (final symbol in _requiredDeltaSymbols) {
+    try {
+      library.lookup<ffi.NativeFunction<ffi.Void Function()>>(symbol);
+    } on ArgumentError {
+      throw ArgumentError.value(
+        symbol,
+        'symbol',
+        'Missing required DeltaChat symbol in bundled library.',
+      );
+    }
+  }
 }
 
 List<String> _candidateLibraryFiles() {
@@ -88,6 +237,30 @@ List<String> _candidateLibraryFiles() {
     for (final name in _platformLibraryNames()) {
       addPath(_joinPath(directory.path, [name]));
     }
+  }
+
+  return results;
+}
+
+List<String> _bundledLibraryFiles() {
+  final results = <String>[];
+  final seen = <String>{};
+
+  void addPath(String? path) {
+    if (path == null || path.isEmpty) return;
+    if (!seen.add(path)) return;
+    if (File(path).existsSync()) {
+      results.add(path);
+    }
+  }
+
+  for (final framework in _frameworkBinaryPaths()) {
+    addPath(framework);
+  }
+
+  final exeDir = File(Platform.resolvedExecutable).parent;
+  for (final name in _platformLibraryNames()) {
+    addPath(_joinPath(exeDir.path, [name]));
   }
 
   return results;
