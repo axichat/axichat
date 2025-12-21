@@ -15,6 +15,44 @@ abstract final class CalendarSyncType {
   static const List<String> all = [request, full, update, snapshot];
 }
 
+class CalendarSyncAttachment {
+  const CalendarSyncAttachment({
+    required this.url,
+    required this.fileName,
+    this.mimeType,
+  });
+
+  final String url;
+  final String fileName;
+  final String? mimeType;
+}
+
+class CalendarSyncOutbound {
+  const CalendarSyncOutbound({
+    required this.envelope,
+    this.attachment,
+  });
+
+  final String envelope;
+  final CalendarSyncAttachment? attachment;
+}
+
+class CalendarSyncInbound {
+  const CalendarSyncInbound({
+    required this.message,
+    this.stanzaId,
+    this.receivedAt,
+    this.isFromMam = false,
+  });
+
+  final CalendarSyncMessage message;
+  final String? stanzaId;
+  final DateTime? receivedAt;
+  final bool isFromMam;
+
+  DateTime get appliedTimestamp => receivedAt ?? message.timestamp;
+}
+
 @freezed
 class CalendarSyncMessage with _$CalendarSyncMessage {
   const factory CalendarSyncMessage({

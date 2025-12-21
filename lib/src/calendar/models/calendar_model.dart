@@ -389,7 +389,145 @@ class CalendarModel with _$CalendarModel {
   }
 }
 
+Map<String, DateTime> _mergeTombstones(
+  Map<String, DateTime> local,
+  Map<String, DateTime> remote,
+) {
+  final merged = <String, DateTime>{};
+  final allIds = <String>{...local.keys, ...remote.keys};
+  for (final id in allIds) {
+    final localTime = local[id];
+    final remoteTime = remote[id];
+    if (localTime == null) {
+      merged[id] = remoteTime!;
+    } else if (remoteTime == null) {
+      merged[id] = localTime;
+    } else {
+      merged[id] = remoteTime.isAfter(localTime) ? remoteTime : localTime;
+    }
+  }
+  return merged;
+}
+
+extension CalendarModelMerge on CalendarModel {
+  CalendarModel mergeWith(CalendarModel remote) {
+    final mergedDeletedTaskIds =
+        _mergeTombstones(deletedTaskIds, remote.deletedTaskIds);
+    final mergedDeletedDayEventIds =
+        _mergeTombstones(deletedDayEventIds, remote.deletedDayEventIds);
+    final mergedDeletedCriticalPathIds = _mergeTombstones(
+      deletedCriticalPathIds,
+      remote.deletedCriticalPathIds,
+    );
+
+    final mergedTasks = <String, CalendarTask>{};
+    final allTaskIds = <String>{...tasks.keys, ...remote.tasks.keys};
+
+    for (final id in allTaskIds) {
+      if (mergedDeletedTaskIds.containsKey(id)) {
+        continue;
+      }
+
+      final localTask = tasks[id];
+      final remoteTask = remote.tasks[id];
+
+      if (localTask == null && remoteTask != null) {
+        mergedTasks[id] = remoteTask;
+        continue;
+      }
+
+      if (localTask != null && remoteTask == null) {
+        mergedTasks[id] = localTask;
+        continue;
+      }
+
+      if (localTask != null && remoteTask != null) {
+        mergedTasks[id] = remoteTask.modifiedAt.isAfter(localTask.modifiedAt)
+            ? remoteTask
+            : localTask;
+      }
+    }
+
+    final mergedDayEvents = <String, DayEvent>{};
+    final allEventIds = <String>{...dayEvents.keys, ...remote.dayEvents.keys};
+
+    for (final id in allEventIds) {
+      if (mergedDeletedDayEventIds.containsKey(id)) {
+        continue;
+      }
+
+      final localEvent = dayEvents[id];
+      final remoteEvent = remote.dayEvents[id];
+
+      if (localEvent == null && remoteEvent != null) {
+        mergedDayEvents[id] = remoteEvent;
+        continue;
+      }
+
+      if (localEvent != null && remoteEvent == null) {
+        mergedDayEvents[id] = localEvent;
+        continue;
+      }
+
+      if (localEvent != null && remoteEvent != null) {
+        mergedDayEvents[id] = remoteEvent.modifiedAt.isAfter(
+          localEvent.modifiedAt,
+        )
+            ? remoteEvent
+            : localEvent;
+      }
+    }
+
+    final mergedPaths = <String, CalendarCriticalPath>{};
+    final allPathIds = <String>{
+      ...criticalPaths.keys,
+      ...remote.criticalPaths.keys
+    };
+
+    for (final id in allPathIds) {
+      if (mergedDeletedCriticalPathIds.containsKey(id)) {
+        continue;
+      }
+
+      final localPath = criticalPaths[id];
+      final remotePath = remote.criticalPaths[id];
+
+      if (localPath == null && remotePath != null) {
+        mergedPaths[id] = remotePath;
+        continue;
+      }
+
+      if (localPath != null && remotePath == null) {
+        mergedPaths[id] = localPath;
+        continue;
+      }
+
+      if (localPath != null && remotePath != null) {
+        mergedPaths[id] = remotePath.modifiedAt.isAfter(localPath.modifiedAt)
+            ? remotePath
+            : localPath;
+      }
+    }
+
+    final now = DateTime.now();
+    final merged = CalendarModel(
+      tasks: mergedTasks,
+      dayEvents: mergedDayEvents,
+      criticalPaths: mergedPaths,
+      deletedTaskIds: mergedDeletedTaskIds,
+      deletedDayEventIds: mergedDeletedDayEventIds,
+      deletedCriticalPathIds: mergedDeletedCriticalPathIds,
+      lastModified: now,
+      checksum: '',
+    );
+    return merged.copyWith(checksum: merged.calculateChecksum());
+  }
+}
+
 extension CalendarModelX on CalendarModel {
+  bool get hasCalendarData =>
+      tasks.isNotEmpty || dayEvents.isNotEmpty || criticalPaths.isNotEmpty;
+
   CalendarTask? resolveTaskInstance(String taskId) {
     final CalendarTask? direct = tasks[taskId];
     if (direct != null) {

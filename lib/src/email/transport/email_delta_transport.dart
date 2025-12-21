@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/email_address.dart';
@@ -520,12 +521,17 @@ class EmailDeltaTransport implements ChatTransport {
     String? subject,
     String? shareId,
     String? localBodyOverride,
+    String? htmlBody,
   }) async {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
-    final msgId = await _context!
-        .sendText(chatId: chatId, message: body, subject: subject);
+    final msgId = await _context!.sendText(
+      chatId: chatId,
+      message: body,
+      subject: subject,
+      html: htmlBody,
+    );
     final deltaMessage = await _context!.getMessage(msgId);
     await _recordOutgoing(
       chatId: chatId,
@@ -533,6 +539,7 @@ class EmailDeltaTransport implements ChatTransport {
       body: body,
       shareId: shareId,
       localBodyOverride: localBodyOverride,
+      htmlBody: htmlBody,
       timestamp: deltaMessage?.timestamp,
     );
     return msgId;
@@ -545,6 +552,7 @@ class EmailDeltaTransport implements ChatTransport {
     String? subject,
     String? shareId,
     String? captionOverride,
+    String? htmlCaption,
   }) async {
     if (_context == null) {
       throw StateError('Transport not initialized');
@@ -557,6 +565,7 @@ class EmailDeltaTransport implements ChatTransport {
       mimeType: attachment.mimeType,
       text: attachment.caption,
       subject: subject,
+      html: htmlCaption,
     );
     final deltaMessage = await _context!.getMessage(msgId);
     var metadata = _metadataForAttachment(attachment, msgId);
@@ -576,6 +585,7 @@ class EmailDeltaTransport implements ChatTransport {
       metadata: metadata,
       shareId: shareId,
       localBodyOverride: captionOverride,
+      htmlBody: htmlCaption,
       timestamp: deltaMessage?.timestamp,
     );
     return msgId;
@@ -605,6 +615,7 @@ class EmailDeltaTransport implements ChatTransport {
     FileMetadataData? metadata,
     String? shareId,
     String? localBodyOverride,
+    String? htmlBody,
     DateTime? timestamp,
   }) async {
     final db = await _databaseBuilder();
@@ -623,6 +634,7 @@ class EmailDeltaTransport implements ChatTransport {
       chatJid: chat.jid,
       timestamp: resolvedTimestamp,
       body: resolvedBody,
+      htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
       received: false,
@@ -967,6 +979,16 @@ class EmailDeltaTransport implements ChatTransport {
     return context.searchMessages(chatId: chatId, query: query);
   }
 
+  Future<void> hydrateMessages(List<int> messageIds) async {
+    if (messageIds.isEmpty) return;
+    await _ensureContextReady();
+    final consumer = _eventConsumer;
+    if (consumer == null) return;
+    for (final messageId in messageIds) {
+      await consumer.hydrateMessage(messageId);
+    }
+  }
+
   /// Sets the visibility of a chat (normal, archived, pinned).
   ///
   /// Returns true if the operation succeeded.
@@ -1009,6 +1031,7 @@ class EmailDeltaTransport implements ChatTransport {
     required String body,
     required int quotedMessageId,
     String? subject,
+    String? htmlBody,
   }) async {
     if (_context == null) {
       throw StateError('Transport not initialized');
@@ -1018,6 +1041,7 @@ class EmailDeltaTransport implements ChatTransport {
       message: body,
       quotedMessageId: quotedMessageId,
       subject: subject,
+      html: htmlBody,
     );
   }
 

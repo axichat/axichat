@@ -158,3 +158,16 @@ class CalendarSnapshotResult {
         'checksum: ${checksum.substring(0, 8)}...)';
   }
 }
+
+/// Result of uploading a calendar snapshot.
+class CalendarSnapshotUploadResult {
+  const CalendarSnapshotUploadResult({
+    required this.url,
+    required this.checksum,
+    required this.version,
+  });
+
+  final String url;
+  final String checksum;
+  final int version;
+}

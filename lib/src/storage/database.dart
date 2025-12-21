@@ -1503,15 +1503,21 @@ WHERE subject_token IS NOT NULL
       final persistedBody = persisted.body?.trim();
       final hasPersistedBody = persistedBody?.isNotEmpty == true;
 
+      final incomingHtml = messageToSave.htmlBody?.trim();
+      final hasIncomingHtml = incomingHtml?.isNotEmpty == true;
+      final persistedHtml = persisted.htmlBody?.trim();
+      final hasPersistedHtml = persistedHtml?.isNotEmpty == true;
+
       final incomingMetadataId = messageToSave.fileMetadataID?.trim();
       final hasIncomingMetadataId = incomingMetadataId?.isNotEmpty == true;
       final persistedMetadataId = persisted.fileMetadataID?.trim();
       final hasPersistedMetadataId = persistedMetadataId?.isNotEmpty == true;
 
       final shouldMergeBody = hasIncomingBody && !hasPersistedBody;
+      final shouldMergeHtml = hasIncomingHtml && !hasPersistedHtml;
       final shouldMergeMetadataId =
           hasIncomingMetadataId && !hasPersistedMetadataId;
-      if (!shouldMergeBody && !shouldMergeMetadataId) {
+      if (!shouldMergeBody && !shouldMergeHtml && !shouldMergeMetadataId) {
         return;
       }
 
@@ -1521,6 +1527,9 @@ WHERE subject_token IS NOT NULL
         MessagesCompanion(
           body: shouldMergeBody
               ? Value(messageToSave.body)
+              : const Value.absent(),
+          htmlBody: shouldMergeHtml
+              ? Value(messageToSave.htmlBody)
               : const Value.absent(),
           fileMetadataID: shouldMergeMetadataId
               ? Value(incomingMetadataId)

@@ -155,6 +155,7 @@ class DeltaContextHandle {
   bool? _supportsDownload;
   bool? _supportsResend;
   bool? _supportsContactList;
+  bool? _supportsMessageSetHtml;
 
   Future<void> open({required String passphrase}) async {
     final result = _withCString(passphrase, (passPtr) {
@@ -289,10 +290,36 @@ class DeltaContextHandle {
     _ensureSuccess(result, 'unblock contact $contactId', _lastError);
   }
 
+  Future<DeltaContact?> getContact(int contactId) async {
+    _ensureState(_opened, 'get contact');
+    final contactPtr = _bindings.dc_get_contact(_context, contactId);
+    if (contactPtr == ffi.nullptr) {
+      return null;
+    }
+    try {
+      final address = _cleanString(
+        _takeString(_bindings.dc_contact_get_addr(contactPtr),
+            bindings: _bindings),
+      );
+      final name = _cleanString(
+        _takeString(_bindings.dc_contact_get_name(contactPtr),
+            bindings: _bindings),
+      );
+      return DeltaContact(
+        id: contactId,
+        address: address,
+        name: name,
+      );
+    } finally {
+      _bindings.dc_contact_unref(contactPtr);
+    }
+  }
+
   Future<int> sendText({
     required int chatId,
     required String message,
     String? subject,
+    String? html,
   }) async {
     _ensureState(_opened, 'send text message');
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
@@ -303,6 +330,10 @@ class DeltaContextHandle {
       _withCString(message, (msgPtr) {
         _bindings.dc_msg_set_text(deltaMessage, msgPtr);
       });
+      final normalizedHtml = html?.trim();
+      if (normalizedHtml != null && normalizedHtml.isNotEmpty) {
+        _setMessageHtml(deltaMessage, normalizedHtml);
+      }
       final normalizedSubject = subject?.trim();
       if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
         _withCString(normalizedSubject, (subjectPtr) {
@@ -325,6 +356,7 @@ class DeltaContextHandle {
     String? mimeType,
     String? text,
     String? subject,
+    String? html,
   }) async {
     _ensureState(_opened, 'send attachment');
     final message = _bindings.dc_msg_new(_context, viewType);
@@ -336,6 +368,10 @@ class DeltaContextHandle {
         _withCString(text, (textPtr) {
           _bindings.dc_msg_set_text(message, textPtr);
         });
+      }
+      final normalizedHtml = html?.trim();
+      if (normalizedHtml != null && normalizedHtml.isNotEmpty) {
+        _setMessageHtml(message, normalizedHtml);
       }
       final normalizedSubject = subject?.trim();
       if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
@@ -554,6 +590,19 @@ class DeltaContextHandle {
     }
   }
 
+  void _setMessageHtml(ffi.Pointer<dc_msg_t> msgPtr, String html) {
+    if (_supportsMessageSetHtml == false) return;
+    try {
+      _withCString(html, (htmlPtr) {
+        _bindings.dc_msg_set_html(msgPtr, htmlPtr);
+      });
+      _supportsMessageSetHtml = true;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsMessageSetHtml = false;
+    }
+  }
+
   Future<DeltaMessage?> getMessage(int messageId) async {
     final msgPtr = _bindings.dc_get_msg(_context, messageId);
     if (msgPtr == ffi.nullptr) {
@@ -736,7 +785,10 @@ class DeltaContextHandle {
       if (message == null) {
         _bindings.dc_set_draft(_context, chatId, ffi.nullptr);
       } else {
-        final msg = _bindings.dc_msg_new(_context, message.viewType ?? 10);
+        final msg = _bindings.dc_msg_new(
+          _context,
+          message.viewType ?? DeltaMessageType.text,
+        );
         if (msg == ffi.nullptr) return false;
         try {
           if (message.text != null) {
@@ -938,9 +990,15 @@ class DeltaContextHandle {
     required String message,
     required int quotedMessageId,
     String? subject,
+    String? html,
   }) async {
     if (_supportsQuote == false) {
-      return sendText(chatId: chatId, message: message, subject: subject);
+      return sendText(
+        chatId: chatId,
+        message: message,
+        subject: subject,
+        html: html,
+      );
     }
     _ensureState(_opened, 'send quoted message');
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
@@ -951,6 +1009,10 @@ class DeltaContextHandle {
       _withCString(message, (msgPtr) {
         _bindings.dc_msg_set_text(deltaMessage, msgPtr);
       });
+      final normalizedHtml = html?.trim();
+      if (normalizedHtml != null && normalizedHtml.isNotEmpty) {
+        _setMessageHtml(deltaMessage, normalizedHtml);
+      }
       final normalizedSubject = subject?.trim();
       if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
         _withCString(normalizedSubject, (subjectPtr) {
@@ -1235,6 +1297,18 @@ class DeltaChat {
   final int? contactId;
   final String? contactName;
   final int? type;
+}
+
+class DeltaContact {
+  const DeltaContact({
+    required this.id,
+    this.address,
+    this.name,
+  });
+
+  final int id;
+  final String? address;
+  final String? name;
 }
 
 class DeltaMessage {

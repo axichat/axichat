@@ -57,6 +57,10 @@ class CalendarEvent with _$CalendarEvent {
     required List<CalendarTask> tasks,
   }) = CalendarTasksImported;
 
+  const factory CalendarEvent.modelImported({
+    required CalendarModel model,
+  }) = CalendarModelImported;
+
   const factory CalendarEvent.viewChanged({
     required CalendarView view,
   }) = CalendarViewChanged;
