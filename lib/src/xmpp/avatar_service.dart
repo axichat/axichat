@@ -52,12 +52,14 @@ final class _AvatarMetadataLoadFailed extends _AvatarMetadataLoadResult {
 mixin AvatarService on XmppBase {
   final _avatarLog = Logger('AvatarService');
   final Set<String> _avatarRefreshInProgress = {};
+  final Set<String> _configuredAvatarNodes = {};
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
   static const int _maxAvatarBytes = 512 * 1024;
   static const int _maxAvatarBase64Length = ((_maxAvatarBytes + 2) ~/ 3) * 4;
   static const int _avatarBytesCacheLimit = 64;
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
+  static const String _avatarConfigKeySeparator = '|';
   static const int _avatarPublishVerificationAttempts = 2;
   static const Duration _avatarPublishVerificationDelay =
       Duration(milliseconds: 350);
@@ -212,6 +214,7 @@ mixin AvatarService on XmppBase {
   @override
   Future<void> _reset() async {
     _avatarRefreshInProgress.clear();
+    _configuredAvatarNodes.clear();
     _avatarBytesCache.clear();
     _avatarDirectory = null;
     _selfAvatarRepairAttempted = false;
@@ -802,11 +805,24 @@ mixin AvatarService on XmppBase {
     const avatarDataTag = 'data';
     const avatarMetadataTag = 'metadata';
     const avatarMetadataInfoTag = 'info';
+    const publishModelPublishers = 'publishers';
     const maxPublishedAvatarItems = '1';
     const sendLastPublishedItemOnSubscribe = 'on_subscribe';
+    const sendLastPublishedItemNever = 'never';
     const publishNotRetrievableMessage =
         'Avatar publish succeeded but is not retrievable';
-    final pubsub = _connection.getManager<mox.PubSubManager>();
+    const notifyEnabled = true;
+    const notifyDisabled = false;
+    const deliverNotificationsEnabled = true;
+    const deliverNotificationsDisabled = false;
+    const deliverPayloadsEnabled = true;
+    const deliverPayloadsDisabled = false;
+    const persistItemsEnabled = true;
+    const presenceBasedDeliveryEnabled = true;
+    const presenceBasedDeliveryDisabled = false;
+    final presenceBasedDelivery =
+        public ? presenceBasedDeliveryDisabled : presenceBasedDeliveryEnabled;
+    final pubsub = _connection.getManager<SafePubSubManager>();
     if (pubsub == null) {
       throw XmppAvatarException('PubSub is unavailable');
     }
@@ -815,27 +831,45 @@ mixin AvatarService on XmppBase {
     final dataPublishOptions = mox.PubSubPublishOptions(
       accessModel: accessModel,
       maxItems: maxPublishedAvatarItems,
-      persistItems: true,
+      persistItems: persistItemsEnabled,
+      publishModel: publishModelPublishers,
+      sendLastPublishedItem: sendLastPublishedItemNever,
     );
     final metadataPublishOptions = mox.PubSubPublishOptions(
       accessModel: accessModel,
       maxItems: maxPublishedAvatarItems,
-      persistItems: true,
+      persistItems: persistItemsEnabled,
+      publishModel: publishModelPublishers,
+      sendLastPublishedItem: sendLastPublishedItemOnSubscribe,
     );
     final createNodeAccessModel =
         public ? mox.AccessModel.open : mox.AccessModel.presence;
-    final dataNodeConfig = mox.NodeConfig(
+    final dataNodeConfig = AxiPubSubNodeConfig(
       accessModel: createNodeAccessModel,
+      publishModel: publishModelPublishers,
+      deliverNotifications: deliverNotificationsDisabled,
+      deliverPayloads: deliverPayloadsDisabled,
       maxItems: maxPublishedAvatarItems,
-      persistItems: true,
+      notifyRetract: notifyDisabled,
+      notifyDelete: notifyDisabled,
+      notifyConfig: notifyDisabled,
+      notifySub: notifyDisabled,
+      presenceBasedDelivery: presenceBasedDelivery,
+      persistItems: persistItemsEnabled,
+      sendLastPublishedItem: sendLastPublishedItemNever,
     );
-    final metadataNodeConfig = mox.NodeConfig(
+    final metadataNodeConfig = AxiPubSubNodeConfig(
       accessModel: createNodeAccessModel,
-      deliverNotifications: true,
-      deliverPayloads: true,
+      publishModel: publishModelPublishers,
+      deliverNotifications: deliverNotificationsEnabled,
+      deliverPayloads: deliverPayloadsEnabled,
       maxItems: maxPublishedAvatarItems,
-      notifyRetract: true,
-      persistItems: true,
+      notifyRetract: notifyEnabled,
+      notifyDelete: notifyEnabled,
+      notifyConfig: notifyEnabled,
+      notifySub: notifyEnabled,
+      presenceBasedDelivery: presenceBasedDelivery,
+      persistItems: persistItemsEnabled,
       sendLastPublishedItem: sendLastPublishedItemOnSubscribe,
     );
 
@@ -860,7 +894,66 @@ mixin AvatarService on XmppBase {
               ))
             .build();
 
+    Future<void> ensureNodeConfigured({
+      required String node,
+      required AxiPubSubNodeConfig config,
+    }) async {
+      final cacheKey = _avatarConfigKey(
+        node: node,
+        accessModel: config.accessModel,
+      );
+      if (_configuredAvatarNodes.contains(cacheKey)) return;
+
+      final configured = await pubsub
+          .configureNode(host, node, config)
+          .timeout(_avatarPublishTimeout);
+      if (!configured.isType<mox.PubSubError>()) {
+        _configuredAvatarNodes.add(cacheKey);
+        return;
+      }
+
+      try {
+        final created = await pubsub
+            .createNodeWithConfig(
+              host,
+              config.toNodeConfig(),
+              nodeId: node,
+            )
+            .timeout(_avatarPublishTimeout);
+        if (created != null) {
+          final confirmed = await pubsub
+              .configureNode(host, node, config)
+              .timeout(_avatarPublishTimeout);
+          if (!confirmed.isType<mox.PubSubError>()) {
+            _configuredAvatarNodes.add(cacheKey);
+          }
+          return;
+        }
+      } on Exception {
+        // ignore and retry below
+      }
+
+      try {
+        final created = await pubsub
+            .createNode(host, nodeId: node)
+            .timeout(_avatarPublishTimeout);
+        if (created == null) return;
+        final confirmed = await pubsub
+            .configureNode(host, node, config)
+            .timeout(_avatarPublishTimeout);
+        if (!confirmed.isType<mox.PubSubError>()) {
+          _configuredAvatarNodes.add(cacheKey);
+        }
+      } on Exception {
+        return;
+      }
+    }
+
     Future<void> publishData() async {
+      await ensureNodeConfigured(
+        node: mox.userAvatarDataXmlns,
+        config: dataNodeConfig,
+      );
       final result = await pubsub
           .publish(
             host,
@@ -869,7 +962,7 @@ mixin AvatarService on XmppBase {
             id: payload.hash,
             options: dataPublishOptions,
             autoCreate: true,
-            createNodeConfig: dataNodeConfig,
+            createNodeConfig: dataNodeConfig.toNodeConfig(),
           )
           .timeout(_avatarPublishTimeout);
       if (result.isType<mox.PubSubError>()) {
@@ -878,6 +971,10 @@ mixin AvatarService on XmppBase {
     }
 
     Future<void> publishMetadata() async {
+      await ensureNodeConfigured(
+        node: mox.userAvatarMetadataXmlns,
+        config: metadataNodeConfig,
+      );
       final result = await pubsub
           .publish(
             host,
@@ -886,19 +983,12 @@ mixin AvatarService on XmppBase {
             id: payload.hash,
             options: metadataPublishOptions,
             autoCreate: true,
-            createNodeConfig: metadataNodeConfig,
+            createNodeConfig: metadataNodeConfig.toNodeConfig(),
           )
           .timeout(_avatarPublishTimeout);
       if (result.isType<mox.PubSubError>()) {
         throw XmppAvatarException(result.get<mox.PubSubError>());
       }
-    }
-
-    Future<void> configureNode(String node, mox.NodeConfig config) async {
-      final result = await pubsub
-          .configure(host, node, config)
-          .timeout(_avatarPublishTimeout);
-      if (result.isType<mox.PubSubError>()) return;
     }
 
     bool isRetriableVerificationError(mox.PubSubError error) =>
@@ -982,8 +1072,14 @@ mixin AvatarService on XmppBase {
       expectedTag: avatarDataTag,
     );
     if (!metadataStored || !dataStored) {
-      await configureNode(mox.userAvatarDataXmlns, dataNodeConfig);
-      await configureNode(mox.userAvatarMetadataXmlns, metadataNodeConfig);
+      await ensureNodeConfigured(
+        node: mox.userAvatarDataXmlns,
+        config: dataNodeConfig,
+      );
+      await ensureNodeConfigured(
+        node: mox.userAvatarMetadataXmlns,
+        config: metadataNodeConfig,
+      );
       await publishData();
       await publishMetadata();
       final repairedMetadataStored = await waitForStoredItem(
@@ -1008,6 +1104,12 @@ mixin AvatarService on XmppBase {
 
     return AvatarUploadResult(path: path, hash: payload.hash);
   }
+
+  String _avatarConfigKey({
+    required String node,
+    required mox.AccessModel accessModel,
+  }) =>
+      '$node$_avatarConfigKeySeparator${accessModel.value}';
 
   Future<void> _maybeRepairSelfAvatar(String bareJid) async {
     if (_selfAvatarRepairAttempted) return;

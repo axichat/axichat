@@ -97,8 +97,6 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.carbonsManager);
       case == mox.MAMManager:
         return getManagerById(mox.mamManager);
-      case == mox.MUCManager:
-        return getManagerById(mox.mucManager);
       case == MUCManager:
         return getManagerById(mox.mucManager);
       case == mox.BlockingManager:

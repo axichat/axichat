@@ -34,6 +34,7 @@ import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
 import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
@@ -589,13 +590,14 @@ class XmppService extends XmppBase
     final managers = super.featureManagers
       ..addAll([
         XmppStreamManagementManager(owner: this),
-        mox.DiscoManager([
+        (mox.DiscoManager([
           mox.Identity(
             category: 'client',
             type: _capability.discoClient,
             name: appDisplayName,
           ),
-        ]),
+        ])
+          ..addFeatures(const [BookmarksManager.bookmarksNotifyFeature])),
         mox.PingManager(const Duration(minutes: 3)),
         mox.EntityCapabilitiesManager(_capabilityHashBase),
         SafePubSubManager(),
@@ -989,6 +991,10 @@ class XmppService extends XmppBase
     final storedResource = await _dbOpReturning<XmppStateStore, String?>(
       (ss) async => ss.read(key: resourceStorageKey) as String?,
     );
+    final storedMucServiceHost = await _dbOpReturning<XmppStateStore, String?>(
+      (ss) async => ss.read(key: _mucServiceHostStorageKey) as String?,
+    );
+    _restoreMucServiceHost(storedMucServiceHost);
     final smNegotiator = mox.StreamManagementNegotiator();
     if (storedResource != null && storedResource.isNotEmpty) {
       smNegotiator.resource = storedResource;

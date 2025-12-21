@@ -52,6 +52,8 @@ final class HomeRefreshSyncService {
   Future<List<MucBookmark>> _refreshMucBookmarks() async {
     final manager = _xmppService.bookmarksManager;
     if (manager == null) return const [];
+    await manager.ensureNode();
+    await manager.subscribe();
     final bookmarks = await manager.getBookmarks();
     await _xmppService.applyMucBookmarks(bookmarks);
     return bookmarks;

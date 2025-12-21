@@ -700,36 +700,6 @@ class MUCManager extends mox.MUCManager {
     );
   }
 
-  Future<void> sendMediatedInvite({
-    required String roomJid,
-    required String inviteeJid,
-    String? reason,
-  }) async {
-    await getAttributes().sendStanza(
-      mox.StanzaDetails(
-        mox.Stanza.message(
-          to: roomJid,
-          children: [
-            mox.XMLNode.xmlns(
-              tag: 'x',
-              xmlns: _mucUserXmlns,
-              children: [
-                mox.XMLNode(
-                  tag: 'invite',
-                  attributes: {'to': inviteeJid},
-                  children: reason?.isNotEmpty == true
-                      ? [mox.XMLNode(tag: 'reason', text: reason)]
-                      : const [],
-                ),
-              ],
-            ),
-          ],
-        ),
-        awaitable: false,
-      ),
-    );
-  }
-
   Future<void> sendAdminIq({
     required String roomJid,
     required List<mox.XMLNode> items,

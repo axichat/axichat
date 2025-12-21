@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:axichat/src/xmpp/pubsub_events.dart';
+import 'package:axichat/src/xmpp/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 const conversationIndexNode = 'urn:ourapp:conversations';
@@ -156,6 +159,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   static const String _defaultMaxItems = '1000';
   static const String _publishModelPublishers = 'publishers';
   static const String _sendLastOnSubscribe = 'on_subscribe';
+  static const bool _notifyEnabled = true;
+  static const bool _deliverNotificationsEnabled = true;
+  static const bool _deliverPayloadsEnabled = true;
+  static const bool _persistItemsEnabled = true;
+  static const bool _presenceBasedDeliveryDisabled = false;
 
   final String _maxItems;
 
@@ -171,21 +179,29 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   ConvItem? cachedForPeer(mox.JID peerBare) =>
       _cache[peerBare.toBare().toString()];
 
-  mox.NodeConfig _nodeConfig() => mox.NodeConfig(
+  AxiPubSubNodeConfig _nodeConfig() => AxiPubSubNodeConfig(
         accessModel: mox.AccessModel.whitelist,
         publishModel: _publishModelPublishers,
-        deliverNotifications: true,
-        deliverPayloads: true,
+        deliverNotifications: _deliverNotificationsEnabled,
+        deliverPayloads: _deliverPayloadsEnabled,
         maxItems: _maxItems,
-        notifyRetract: true,
-        persistItems: true,
+        notifyRetract: _notifyEnabled,
+        notifyDelete: _notifyEnabled,
+        notifyConfig: _notifyEnabled,
+        notifySub: _notifyEnabled,
+        presenceBasedDelivery: _presenceBasedDeliveryDisabled,
+        persistItems: _persistItemsEnabled,
         sendLastPublishedItem: _sendLastOnSubscribe,
       );
+
+  mox.NodeConfig _createNodeConfig() => _nodeConfig().toNodeConfig();
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
         accessModel: mox.AccessModel.whitelist.value,
         maxItems: _maxItems,
-        persistItems: true,
+        persistItems: _persistItemsEnabled,
+        publishModel: _publishModelPublishers,
+        sendLastPublishedItem: _sendLastOnSubscribe,
       );
 
   mox.JID? _selfPepHost() {
@@ -196,8 +212,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     }
   }
 
-  mox.PubSubManager? _pubSub() =>
-      getAttributes().getManagerById<mox.PubSubManager>(mox.pubsubManager);
+  SafePubSubManager? _pubSub() =>
+      getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
 
   @override
   Future<void> onXmppEvent(mox.XmppEvent event) async {
@@ -213,6 +229,22 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     }
     if (event is mox.PubSubItemsRetractedEvent) {
       await _handleRetractions(event);
+      return;
+    }
+    if (event is PubSubItemsRefreshedEvent) {
+      await _handleRefreshEvent(event);
+      return;
+    }
+    if (event is PubSubSubscriptionChangedEvent) {
+      await _handleSubscriptionChanged(event);
+      return;
+    }
+    if (event is mox.PubSubNodeDeletedEvent) {
+      await _handleNodeDeleted(event);
+      return;
+    }
+    if (event is mox.PubSubNodePurgedEvent) {
+      await _handleNodePurged(event);
       return;
     }
 
@@ -236,7 +268,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     final config = _nodeConfig();
 
     final configured =
-        await pubsub.configure(host, conversationIndexNode, config);
+        await pubsub.configureNode(host, conversationIndexNode, config);
     if (!configured.isType<mox.PubSubError>()) {
       return;
     }
@@ -244,10 +276,13 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     try {
       final created = await pubsub.createNodeWithConfig(
         host,
-        config,
+        _createNodeConfig(),
         nodeId: conversationIndexNode,
       );
-      if (created != null) return;
+      if (created != null) {
+        await pubsub.configureNode(host, conversationIndexNode, config);
+        return;
+      }
     } on Exception {
       // ignore and retry below
     }
@@ -256,7 +291,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       final created =
           await pubsub.createNode(host, nodeId: conversationIndexNode);
       if (created == null) return;
-      await pubsub.configure(host, conversationIndexNode, config);
+      await pubsub.configureNode(host, conversationIndexNode, config);
     } on Exception {
       return;
     }
@@ -316,7 +351,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       id: id,
       options: _publishOptions(),
       autoCreate: true,
-      createNodeConfig: _nodeConfig(),
+      createNodeConfig: _createNodeConfig(),
     );
     if (result.isType<mox.PubSubError>()) {
       return;
@@ -373,12 +408,15 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     return aTrimmed!.compareTo(bTrimmed!) >= 0 ? aTrimmed : bTrimmed;
   }
 
-  ConvItem? _mergeIncoming(ConvItem incoming) {
-    final cached = _cache[incoming.itemId];
-    if (cached == null) return incoming;
+  ConvItem? _mergeIncoming(
+    ConvItem incoming, {
+    ConvItem? cached,
+  }) {
+    final resolvedCache = cached ?? _cache[incoming.itemId];
+    if (resolvedCache == null) return incoming;
 
     final incomingTs = incoming.lastTimestamp.toUtc();
-    final cachedTs = cached.lastTimestamp.toUtc();
+    final cachedTs = resolvedCache.lastTimestamp.toUtc();
     final mergedLastTimestamp =
         incomingTs.isAfter(cachedTs) ? incomingTs : cachedTs;
 
@@ -386,12 +424,12 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     if (incomingTs.isAfter(cachedTs)) {
       mergedLastId = incoming.lastId;
     } else if (incomingTs.isBefore(cachedTs)) {
-      mergedLastId = cached.lastId;
+      mergedLastId = resolvedCache.lastId;
     } else {
-      mergedLastId = _maxLastId(cached.lastId, incoming.lastId);
+      mergedLastId = _maxLastId(resolvedCache.lastId, incoming.lastId);
     }
 
-    final merged = cached.copyWith(
+    final merged = resolvedCache.copyWith(
       lastTimestamp: mergedLastTimestamp,
       lastId: mergedLastId,
       pinned: incoming.pinned,
@@ -399,11 +437,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       mutedUntil: incoming.mutedUntil,
     );
 
-    if (merged.lastTimestamp.toUtc() == cached.lastTimestamp.toUtc() &&
-        (merged.lastId ?? '') == (cached.lastId ?? '') &&
-        merged.pinned == cached.pinned &&
-        merged.archived == cached.archived &&
-        (merged.mutedUntil?.toUtc() == cached.mutedUntil?.toUtc())) {
+    if (merged.lastTimestamp.toUtc() == resolvedCache.lastTimestamp.toUtc() &&
+        (merged.lastId ?? '') == (resolvedCache.lastId ?? '') &&
+        merged.pinned == resolvedCache.pinned &&
+        merged.archived == resolvedCache.archived &&
+        (merged.mutedUntil?.toUtc() == resolvedCache.mutedUntil?.toUtc())) {
       return null;
     }
     return merged;
@@ -419,6 +457,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       final pubsub = _pubSub();
       final host = _selfPepHost();
       final itemId = event.item.id.trim();
+      if (itemId.isEmpty) {
+        await _refreshFromServer();
+        return;
+      }
       if (pubsub != null && host != null && itemId.isNotEmpty) {
         final itemResult =
             await pubsub.getItem(host, conversationIndexNode, itemId);
@@ -461,6 +503,108 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         _updatesController.add(update);
       }
       getAttributes().sendEvent(ConversationIndexItemRetractedEvent(peer));
+    }
+  }
+
+  Future<void> _handleRefreshEvent(PubSubItemsRefreshedEvent event) async {
+    if (event.node != conversationIndexNode) return;
+    final host = _selfPepHost();
+    if (host == null) return;
+    if (event.from.toBare().toString() != host.toString()) return;
+    await _refreshFromServer();
+  }
+
+  Future<void> _handleSubscriptionChanged(
+    PubSubSubscriptionChangedEvent event,
+  ) async {
+    if (event.node != conversationIndexNode) return;
+    final host = _selfPepHost();
+    if (host == null) return;
+    final subscriber = event.subscriberJid?.trim();
+    if (subscriber == null || subscriber.isEmpty) return;
+
+    late final mox.JID subscriberJid;
+    try {
+      subscriberJid = mox.JID.fromString(subscriber).toBare();
+    } on Exception {
+      return;
+    }
+    if (subscriberJid.toString() != host.toString()) return;
+
+    if (event.state == mox.SubscriptionState.subscribed) return;
+    await subscribe();
+  }
+
+  Future<void> _handleNodeDeleted(mox.PubSubNodeDeletedEvent event) async {
+    if (event.node != conversationIndexNode) return;
+    final host = _selfPepHost();
+    if (host == null) return;
+    if (!_isFromHost(event.from, host)) return;
+    _clearCache();
+  }
+
+  Future<void> _handleNodePurged(mox.PubSubNodePurgedEvent event) async {
+    if (event.node != conversationIndexNode) return;
+    final host = _selfPepHost();
+    if (host == null) return;
+    if (!_isFromHost(event.from, host)) return;
+    _clearCache();
+  }
+
+  Future<void> _refreshFromServer() async {
+    final previousCache = Map<String, ConvItem>.from(_cache);
+    final items = await fetchAll();
+    final freshIds = items.map((item) => item.itemId).toSet();
+    _cache.clear();
+    for (final item in items) {
+      final merged =
+          _mergeIncoming(item, cached: previousCache[item.itemId]) ?? item;
+      _cache[merged.itemId] = merged;
+      final update = ConvItemUpdated(merged);
+      if (!_updatesController.isClosed) {
+        _updatesController.add(update);
+      }
+      getAttributes().sendEvent(ConversationIndexItemUpdatedEvent(merged));
+    }
+
+    final removedIds = previousCache.keys
+        .where((id) => !freshIds.contains(id))
+        .toList(growable: false);
+    for (final id in removedIds) {
+      final removed = previousCache[id];
+      if (removed == null) continue;
+      final update = ConvItemRetracted(removed.peerBare);
+      if (!_updatesController.isClosed) {
+        _updatesController.add(update);
+      }
+      getAttributes().sendEvent(
+        ConversationIndexItemRetractedEvent(removed.peerBare),
+      );
+    }
+  }
+
+  void _clearCache() {
+    if (_cache.isEmpty) return;
+    final items = _cache.values.toList(growable: false);
+    _cache.clear();
+    for (final item in items) {
+      final update = ConvItemRetracted(item.peerBare);
+      if (!_updatesController.isClosed) {
+        _updatesController.add(update);
+      }
+      getAttributes().sendEvent(
+        ConversationIndexItemRetractedEvent(item.peerBare),
+      );
+    }
+  }
+
+  bool _isFromHost(String? from, mox.JID host) {
+    final raw = from?.trim();
+    if (raw == null || raw.isEmpty) return false;
+    try {
+      return mox.JID.fromString(raw).toBare().toString() == host.toString();
+    } on Exception {
+      return false;
     }
   }
 }
