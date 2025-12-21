@@ -637,7 +637,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event)) return;
 
+        final hasInvite = event.get<DirectMucInviteData>() != null ||
+            event.get<AxiMucInvitePayload>() != null;
         if (!event.displayable &&
+            !hasInvite &&
             event.encryptionError == null &&
             !hasAttachmentMetadata) {
           return;
