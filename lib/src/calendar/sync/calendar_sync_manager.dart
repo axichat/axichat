@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
@@ -9,31 +10,77 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
+
+/// Threshold of updates before sending a snapshot.
+const int kSnapshotThreshold = 50;
+
+/// Result of sending a snapshot file.
+class SnapshotSendResult {
+  const SnapshotSendResult({
+    required this.url,
+    required this.checksum,
+    required this.version,
+  });
+
+  final String url;
+  final String checksum;
+  final int version;
+}
 
 class CalendarSyncManager {
   CalendarSyncManager({
     required CalendarModel Function() readModel,
     required Future<void> Function(CalendarModel) applyModel,
     required Future<void> Function(String) sendCalendarMessage,
+    Future<SnapshotSendResult> Function(File file)? sendSnapshotFile,
+    CalendarSyncState Function()? readSyncState,
+    Future<void> Function(CalendarSyncState)? writeSyncState,
   })  : _readModel = readModel,
         _applyModel = applyModel,
-        _sendCalendarMessage = sendCalendarMessage;
+        _sendCalendarMessage = sendCalendarMessage,
+        _sendSnapshotFile = sendSnapshotFile,
+        _readSyncState = readSyncState ?? CalendarSyncState.read,
+        _writeSyncState = writeSyncState ?? ((s) => s.write());
 
   final CalendarModel Function() _readModel;
   final Future<void> Function(CalendarModel) _applyModel;
   final Future<void> Function(String) _sendCalendarMessage;
+  final Future<SnapshotSendResult> Function(File file)? _sendSnapshotFile;
+  final CalendarSyncState Function() _readSyncState;
+  final Future<void> Function(CalendarSyncState) _writeSyncState;
   final List<String> _pendingEnvelopes = <String>[];
   Future<void>? _pendingFlush;
 
-  Future<void> onCalendarMessage(CalendarSyncMessage message) async {
+  /// Whether the manager is currently rehydrating from MAM.
+  bool _rehydrating = false;
+
+  /// Sets the rehydrating flag to prevent snapshot feedback loops.
+  void setRehydrating(bool value) {
+    _rehydrating = value;
+  }
+
+  /// Whether the manager is currently rehydrating.
+  bool get isRehydrating => _rehydrating;
+
+  /// Handles an incoming calendar sync message.
+  ///
+  /// If [stanzaId] is provided, it will be recorded in the sync state.
+  Future<void> onCalendarMessage(
+    CalendarSyncMessage message, {
+    String? stanzaId,
+  }) async {
     try {
       switch (message.type) {
-        case 'calendar_request':
+        case CalendarSyncType.request:
           await _handleRequestMessage(message);
-        case 'calendar_full':
-          await _handleFullMessage(message);
-        case 'calendar_update':
-          await _handleUpdateMessage(message);
+        case CalendarSyncType.full:
+          await _handleFullMessage(message, stanzaId: stanzaId);
+        case CalendarSyncType.update:
+          await _handleUpdateMessage(message, stanzaId: stanzaId);
+        case CalendarSyncType.snapshot:
+          await _handleSnapshotMessage(message, stanzaId: stanzaId);
         default:
           developer.log('Unknown calendar sync message type: ${message.type}');
           throw CalendarSyncException(
@@ -50,6 +97,36 @@ class CalendarSyncManager {
     }
   }
 
+  /// Handles a snapshot message by merging the attached model.
+  Future<void> _handleSnapshotMessage(
+    CalendarSyncMessage message, {
+    String? stanzaId,
+  }) async {
+    if (message.data == null) return;
+
+    try {
+      final remoteModel = CalendarModel.fromJson(message.data!);
+      final localModel = _readModel();
+
+      developer.log(
+        'Applying snapshot (checksum: ${message.snapshotChecksum})',
+        name: 'CalendarSyncManager',
+      );
+
+      final mergedModel = _mergeModels(localModel, remoteModel);
+      await _applyModel(mergedModel);
+
+      final state = _readSyncState().resetCounter().copyWith(
+            lastAppliedTimestamp: message.timestamp,
+            lastAppliedStanzaId: stanzaId,
+            lastSnapshotChecksum: message.snapshotChecksum,
+          );
+      await _writeSyncState(state);
+    } catch (e) {
+      developer.log('Error handling snapshot message: $e');
+    }
+  }
+
   Future<void> _handleRequestMessage(CalendarSyncMessage message) async {
     try {
       await _flushPendingEnvelopes();
@@ -62,7 +139,10 @@ class CalendarSyncManager {
     }
   }
 
-  Future<void> _handleFullMessage(CalendarSyncMessage message) async {
+  Future<void> _handleFullMessage(
+    CalendarSyncMessage message, {
+    String? stanzaId,
+  }) async {
     if (message.data == null) return;
 
     try {
@@ -76,6 +156,7 @@ class CalendarSyncManager {
 
       if (localChecksum == remoteChecksum) {
         developer.log('Calendars already in sync - no changes needed');
+        await _recordAppliedMessage(message, stanzaId: stanzaId);
         return;
       }
 
@@ -83,12 +164,16 @@ class CalendarSyncManager {
           'Calendar conflict detected - merging models (local: $localChecksum, remote: $remoteChecksum)');
       final mergedModel = _mergeModels(localModel, remoteModel);
       await _applyModel(mergedModel);
+      await _recordAppliedMessage(message, stanzaId: stanzaId);
     } catch (e) {
       developer.log('Error handling full calendar message: $e');
     }
   }
 
-  Future<void> _handleUpdateMessage(CalendarSyncMessage message) async {
+  Future<void> _handleUpdateMessage(
+    CalendarSyncMessage message, {
+    String? stanzaId,
+  }) async {
     if (message.data == null || message.taskId == null) return;
 
     try {
@@ -103,8 +188,88 @@ class CalendarSyncManager {
           final task = CalendarTask.fromJson(message.data!);
           await _mergeTask(task, message.operation ?? 'update');
       }
+
+      await _incrementCounterAndMaybeSnapshot();
+      await _recordAppliedMessage(message, stanzaId: stanzaId);
     } catch (e) {
       developer.log('Error handling calendar update: $e');
+    }
+  }
+
+  /// Records that a message was applied, updating the sync state.
+  Future<void> _recordAppliedMessage(
+    CalendarSyncMessage message, {
+    String? stanzaId,
+  }) async {
+    final state = _readSyncState().copyWith(
+      lastAppliedTimestamp: message.timestamp,
+      lastAppliedStanzaId: stanzaId,
+    );
+    await _writeSyncState(state);
+  }
+
+  /// Increments the update counter and sends a snapshot if threshold reached.
+  Future<void> _incrementCounterAndMaybeSnapshot() async {
+    if (_rehydrating) return;
+
+    final state = _readSyncState().incrementCounter();
+    await _writeSyncState(state);
+
+    if (state.updatesSinceSnapshot >= kSnapshotThreshold) {
+      await _maybeSendSnapshot();
+    }
+  }
+
+  /// Sends a snapshot if the calendar has content and snapshot sending is available.
+  Future<void> _maybeSendSnapshot() async {
+    final sendSnapshot = _sendSnapshotFile;
+    if (sendSnapshot == null || _rehydrating) return;
+
+    final model = _readModel();
+    if (model.tasks.isEmpty &&
+        model.dayEvents.isEmpty &&
+        model.criticalPaths.isEmpty) {
+      return;
+    }
+
+    try {
+      final tempDir = Directory.systemTemp;
+      final file = await CalendarSnapshotCodec.encodeToFile(
+        model,
+        directory: tempDir,
+      );
+
+      try {
+        final result = await sendSnapshot(file);
+
+        final syncMessage = CalendarSyncMessage.snapshot(
+          snapshotChecksum: result.checksum,
+          snapshotVersion: result.version,
+          snapshotUrl: result.url,
+        );
+
+        final messageJson = jsonEncode({
+          'calendar_sync': syncMessage.toJson(),
+        });
+
+        await _sendCalendarMessage(messageJson);
+
+        final state = _readSyncState()
+            .resetCounter()
+            .copyWith(lastSnapshotChecksum: result.checksum);
+        await _writeSyncState(state);
+
+        developer.log(
+          'Sent calendar snapshot (checksum: ${result.checksum})',
+          name: 'CalendarSyncManager',
+        );
+      } finally {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+    } catch (e) {
+      developer.log('Error sending snapshot: $e', name: 'CalendarSyncManager');
     }
   }
 
@@ -132,6 +297,7 @@ class CalendarSyncManager {
       data: task.toJson(),
       entity: 'task',
     );
+    await _incrementCounterAndMaybeSnapshot();
   }
 
   Future<void> sendDayEventUpdate(DayEvent event, String operation) async {
@@ -142,6 +308,7 @@ class CalendarSyncManager {
       data: event.toJson(),
       entity: 'day_event',
     );
+    await _incrementCounterAndMaybeSnapshot();
   }
 
   /// Send critical path update to other devices
@@ -156,6 +323,7 @@ class CalendarSyncManager {
       data: path.toJson(),
       entity: 'critical_path',
     );
+    await _incrementCounterAndMaybeSnapshot();
   }
 
   /// Request full calendar sync from other devices

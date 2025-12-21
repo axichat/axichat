@@ -2401,7 +2401,89 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
     _log.info('Received calendar sync message type: ${syncMessage.type}');
 
+    // Handle snapshot messages by downloading and decoding the file
+    if (syncMessage.type == CalendarSyncType.snapshot) {
+      await _handleCalendarSnapshot(syncMessage, event);
+      return true;
+    }
+
     // Route to CalendarSyncManager for processing
+    await _invokeCalendarCallback(syncMessage, event);
+
+    return true; // Handled - don't process as regular chat message
+  }
+
+  Future<void> _handleCalendarSnapshot(
+    CalendarSyncMessage syncMessage,
+    mox.MessageEvent event,
+  ) async {
+    final url = syncMessage.snapshotUrl;
+    if (url == null || url.isEmpty) {
+      _log.warning('Snapshot message missing URL');
+      return;
+    }
+
+    try {
+      final decoded = await _downloadAndDecodeSnapshot(url);
+      if (decoded == null) {
+        _log.warning('Failed to decode snapshot from $url');
+        return;
+      }
+
+      // Synthesize a full calendar message with the decoded model data
+      final fullMessage = CalendarSyncMessage(
+        type: CalendarSyncType.snapshot,
+        data: decoded.model.toJson(),
+        checksum: decoded.checksum,
+        timestamp: syncMessage.timestamp,
+        isSnapshot: true,
+        snapshotChecksum: decoded.checksum,
+        snapshotVersion: decoded.version,
+        snapshotUrl: url,
+      );
+
+      await _invokeCalendarCallback(fullMessage, event);
+    } catch (e) {
+      _log.warning('Failed to process calendar snapshot: $e');
+    }
+  }
+
+  Future<CalendarSnapshotResult?> _downloadAndDecodeSnapshot(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') return null;
+
+    File? tmpFile;
+    try {
+      final directory = await _attachmentCacheDirectory();
+      final fileName = '.snapshot_${DateTime.now().millisecondsSinceEpoch}.tmp';
+      tmpFile = File(p.join(directory.path, fileName));
+
+      const maxBytes = 10 * 1024 * 1024; // 10MB max for snapshots
+      await _downloadUrlToFile(
+        uri: uri,
+        destination: tmpFile,
+        maxBytes: maxBytes,
+        allowHttp: !kReleaseMode,
+        allowInsecureHosts:
+            !kReleaseMode && kAllowInsecureXmppAttachmentDownloads,
+      );
+
+      final bytes = await tmpFile.readAsBytes();
+      return CalendarSnapshotCodec.decode(bytes);
+    } finally {
+      if (tmpFile != null && await tmpFile.exists()) {
+        await tmpFile.delete();
+      }
+    }
+  }
+
+  Future<void> _invokeCalendarCallback(
+    CalendarSyncMessage syncMessage,
+    mox.MessageEvent event,
+  ) async {
     if (owner is XmppService &&
         (owner as XmppService)._calendarSyncCallback != null) {
       try {
@@ -2413,8 +2495,45 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     } else {
       _log.info('No calendar sync callback registered - message ignored');
     }
+  }
 
-    return true; // Handled - don't process as regular chat message
+  /// Rehydrates calendar data from MAM (Message Archive Management).
+  ///
+  /// Queries MAM for recent self-messages containing calendar sync data.
+  /// Messages are processed through normal event handlers, which invoke
+  /// the calendar sync callback for each valid sync message found.
+  ///
+  /// Returns true if MAM query was successful.
+  Future<bool> rehydrateCalendarFromMam() async {
+    final selfJid = myJid;
+    if (selfJid == null) {
+      _log.warning('Cannot rehydrate calendar: no self JID available');
+      return false;
+    }
+
+    final mamSupported = await resolveMamSupport();
+    if (!mamSupported) {
+      _log.info('MAM not supported, skipping calendar rehydration');
+      return false;
+    }
+
+    _log.info('Starting calendar rehydration from MAM');
+
+    try {
+      // Query MAM for recent self-messages.
+      // The messages will be delivered via event handlers and processed by
+      // _maybeHandleCalendarSync, which invokes the calendar sync callback.
+      await fetchLatestFromArchive(
+        jid: selfJid,
+        pageSize: 100,
+        isMuc: false,
+      );
+      _log.info('Calendar rehydration query complete');
+      return true;
+    } on Exception catch (e) {
+      _log.warning('Calendar rehydration failed: $e');
+      return false;
+    }
   }
 
   Future<void> _handleFile(mox.MessageEvent event, String jid) async {}
