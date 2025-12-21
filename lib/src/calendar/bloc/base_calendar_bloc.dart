@@ -91,6 +91,7 @@ abstract class BaseCalendarBloc
     on<CalendarTaskFocusRequested>(_onTaskFocusRequested);
     on<CalendarTaskFocusCleared>(_onTaskFocusCleared);
     on<CalendarTasksImported>(_onTasksImported);
+    on<CalendarModelImported>(_onModelImported);
     on<CalendarCriticalPathCreated>(_onCriticalPathCreated);
     on<CalendarCriticalPathRenamed>(_onCriticalPathRenamed);
     on<CalendarCriticalPathDeleted>(_onCriticalPathDeleted);
@@ -2060,6 +2061,27 @@ abstract class BaseCalendarBloc
     }
   }
 
+  Future<void> _onModelImported(
+    CalendarModelImported event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      final merged = state.model.mergeWith(event.model);
+      emitModel(
+        merged,
+        emit,
+        isLoading: false,
+        isSelectionMode: false,
+        selectedTaskIds: const <String>{},
+      );
+      await onModelImported(merged);
+    } catch (error) {
+      await _handleError(error, 'Failed to import calendar', emit);
+    }
+  }
+
   Future<void> _onCriticalPathCreated(
     CalendarCriticalPathCreated event,
     Emitter<CalendarState> emit,
@@ -2867,6 +2889,10 @@ abstract class BaseCalendarBloc
   /// Called when a critical path is deleted.
   @protected
   Future<void> onCriticalPathDeleted(CalendarCriticalPath path) async {}
+
+  /// Called when a full calendar model is imported.
+  @protected
+  Future<void> onModelImported(CalendarModel model) async {}
 
   // Abstract methods for subclasses to implement
   Future<void> onTaskAdded(CalendarTask task);

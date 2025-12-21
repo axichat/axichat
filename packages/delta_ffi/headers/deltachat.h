@@ -155,6 +155,7 @@ int32_t dc_msg_is_outgoing(const dc_msg_t* msg);
 int32_t dc_msg_get_state(const dc_msg_t* msg);
 dc_msg_t* dc_msg_new(dc_context_t* ctx, int32_t viewtype);
 void dc_msg_set_text(dc_msg_t* msg, const char* text);
+void dc_msg_set_html(dc_msg_t* msg, const char* html);
 void dc_msg_set_subject(dc_msg_t* msg, const char* subject);
 void dc_msg_set_file_and_deduplicate(dc_msg_t* msg, const char* file, const char* name, const char* filemime);
 char* dc_msg_get_file(const dc_msg_t* msg);

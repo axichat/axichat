@@ -452,25 +452,25 @@ class _HomeScreenState extends State<HomeScreen> {
                             CalendarEvent.remoteModelApplied(model: model),
                           );
                         },
-                        sendCalendarMessage: (message) async {
+                        sendCalendarMessage: (outbound) async {
                           if (bloc.isClosed) {
                             return;
                           }
                           final jid = xmppService.myJid;
                           if (jid != null) {
-                            await xmppService.sendMessage(
+                            await xmppService.sendCalendarSyncMessage(
                               jid: jid,
-                              text: message,
-                              storeLocally: false,
+                              outbound: outbound,
                             );
                           }
                         },
+                        sendSnapshotFile: xmppService.uploadCalendarSnapshot,
                       );
 
                       xmppService.setCalendarSyncCallback(
-                        (syncMessage) async {
+                        (inbound) async {
                           if (bloc.isClosed) return;
-                          await manager.onCalendarMessage(syncMessage);
+                          await manager.onCalendarMessage(inbound);
                         },
                       );
                       return manager;

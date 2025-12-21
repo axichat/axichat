@@ -39,3 +39,8 @@ const List<Duration> calendarReminderDeadlineOptions = <Duration>[
   Duration(minutes: 15),
   Duration.zero,
 ];
+
+const String calendarSnapshotUnavailableWarningTitle = 'Calendar sync';
+const String calendarSnapshotUnavailableWarningMessage =
+    'Calendar snapshot unavailable. Export your calendar JSON from another '
+    'device and import it here to restore.';

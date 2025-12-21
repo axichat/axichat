@@ -7,12 +7,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -31,65 +29,28 @@ class SyncControls extends StatefulWidget {
   State<SyncControls> createState() => _SyncControlsState();
 }
 
+const String _noCalendarDataImportMessage =
+    'No calendar data detected in the selected file.';
+const String _calendarImportSuccessMessage = 'Imported calendar data.';
+const String _calendarImportWarningTitle = 'Import calendar';
+const String _calendarImportWarningMessage =
+    'Importing will merge data and override matching items in your current '
+    'calendar. Continue?';
+const String _calendarImportConfirmLabel = 'Import';
+
 class _SyncControlsState extends State<SyncControls> {
   final CalendarTransferService _transferService =
       const CalendarTransferService();
-  bool _awaitingManualSync = false;
 
   CalendarState get state => widget.state;
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<CalendarBloc, CalendarState>(
-      listenWhen: (previous, current) =>
-          previous.isSyncing != current.isSyncing ||
-          previous.syncError != current.syncError ||
-          previous.lastSyncTime != current.lastSyncTime,
-      listener: _handleSyncState,
-      child: _InlineSyncControls(
-        state: state,
-        onRequestSync: () => _requestSync(context),
-        onPushSync: () => _pushSync(context),
-        onExportCalendar: _handleExportAll,
-        onImportCalendar: _handleImportCalendar,
-        onRetrySync: () => _retrySync(context),
-      ),
+    return _InlineSyncControls(
+      state: state,
+      onExportCalendar: _handleExportAll,
+      onImportCalendar: _handleImportCalendar,
     );
-  }
-
-  void _handleSyncState(BuildContext context, CalendarState nextState) {
-    if (nextState.isSyncing) return;
-    if (nextState.syncError != null) {
-      _awaitingManualSync = false;
-      FeedbackSystem.showError(
-        context,
-        'Sync failed: ${nextState.syncError}',
-      );
-      return;
-    }
-    if (_awaitingManualSync && nextState.lastSyncTime != null) {
-      _awaitingManualSync = false;
-      FeedbackSystem.showSuccess(context, 'Calendar synced successfully');
-    }
-  }
-
-  void _requestSync(BuildContext context) {
-    context.read<CalendarBloc>().add(const CalendarEvent.syncRequested());
-    _awaitingManualSync = true;
-  }
-
-  void _pushSync(BuildContext context) {
-    context.read<CalendarBloc>().add(const CalendarEvent.syncPushed());
-    _awaitingManualSync = true;
-  }
-
-  void _retrySync(BuildContext context) {
-    if (state.syncError?.contains('request') == true) {
-      context.read<CalendarBloc>().add(const CalendarEvent.syncRequested());
-    } else {
-      context.read<CalendarBloc>().add(const CalendarEvent.syncPushed());
-    }
-    _awaitingManualSync = true;
   }
 
   void _handleExportAll() {
@@ -101,23 +62,24 @@ class _SyncControlsState extends State<SyncControls> {
   }
 
   Future<void> _exportAll() async {
-    await _exportTasks(
-      context.read<CalendarBloc>().state.model.tasks.values,
-    );
-  }
-
-  Future<void> _exportTasks(Iterable<CalendarTask> tasks) async {
-    if (tasks.isEmpty) {
+    final model = context.read<CalendarBloc>().state.model;
+    if (!model.hasCalendarData) {
       FeedbackSystem.showInfo(context, 'No tasks available to export.');
       return;
     }
     final format = await showCalendarExportFormatSheet(context);
     if (!mounted || format == null) return;
     try {
-      final file = await _transferService.exportTasks(
-        tasks: tasks,
-        format: format,
-      );
+      if (format == CalendarExportFormat.ics && model.tasks.isEmpty) {
+        FeedbackSystem.showInfo(context, 'No tasks available to export.');
+        return;
+      }
+      final file = format == CalendarExportFormat.json
+          ? await _transferService.exportModel(model: model)
+          : await _transferService.exportTasks(
+              tasks: model.tasks.values,
+              format: format,
+            );
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
         file: file,
         subject: 'Axichat calendar export',
@@ -142,6 +104,15 @@ class _SyncControlsState extends State<SyncControls> {
   }
 
   Future<void> _importCalendar() async {
+    final shouldImport = await confirm(
+      context,
+      title: _calendarImportWarningTitle,
+      message: _calendarImportWarningMessage,
+      confirmLabel: _calendarImportConfirmLabel,
+    );
+    if (shouldImport != true) {
+      return;
+    }
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
       type: FileType.custom,
@@ -161,7 +132,28 @@ class _SyncControlsState extends State<SyncControls> {
     }
     final file = File(path);
     try {
-      final tasks = await _transferService.importTasksFromFile(file);
+      final result = await _transferService.importFromFile(file);
+      if (result.isFullModel && result.model != null) {
+        final importedModel = result.model!;
+        if (!importedModel.hasCalendarData) {
+          if (!mounted) return;
+          FeedbackSystem.showInfo(
+            context,
+            _noCalendarDataImportMessage,
+          );
+          return;
+        }
+        if (!mounted) return;
+        context
+            .read<CalendarBloc>()
+            .add(CalendarEvent.modelImported(model: importedModel));
+        FeedbackSystem.showSuccess(
+          context,
+          _calendarImportSuccessMessage,
+        );
+        return;
+      }
+      final tasks = result.tasks;
       if (tasks.isEmpty) {
         if (!mounted) return;
         FeedbackSystem.showInfo(
@@ -255,28 +247,21 @@ class SyncStatusIndicator extends StatelessWidget {
 class _InlineSyncControls extends StatelessWidget {
   const _InlineSyncControls({
     required this.state,
-    required this.onRequestSync,
-    required this.onPushSync,
     required this.onExportCalendar,
     required this.onImportCalendar,
-    required this.onRetrySync,
   });
 
   final CalendarState state;
-  final VoidCallback onRequestSync;
-  final VoidCallback onPushSync;
   final VoidCallback onExportCalendar;
   final VoidCallback onImportCalendar;
-  final VoidCallback onRetrySync;
 
   @override
   Widget build(BuildContext context) {
     final disabled = state.isSyncing;
-    final hasTasks = state.model.tasks.isNotEmpty;
+    final hasCalendarData = state.model.hasCalendarData;
     final statusText = _statusTextFor(state);
     final lastSyncTime = state.lastSyncTime;
     final statusColor = _statusColorFor(context, state);
-    final bool showLabels = !ResponsiveHelper.isCompact(context);
 
     return Wrap(
       spacing: calendarGutterSm,
@@ -307,30 +292,12 @@ class _InlineSyncControls extends StatelessWidget {
             ],
           ],
         ),
-        _CompactSyncButton(
-          label: context.l10n.calendarSyncRequest,
-          icon: LucideIcons.cloudDownload,
-          showLabel: showLabels,
-          onPressed: disabled ? null : onRequestSync,
-        ),
-        _CompactSyncButton(
-          label: context.l10n.calendarSyncPush,
-          icon: LucideIcons.cloudUpload,
-          showLabel: showLabels,
-          onPressed: disabled ? null : onPushSync,
-        ),
         CalendarTransferMenuButton(
-          hasTasks: hasTasks,
+          hasCalendarData: hasCalendarData,
           onExport: onExportCalendar,
           onImport: onImportCalendar,
+          busy: disabled,
         ),
-        if (state.syncError != null)
-          _CompactSyncButton(
-            label: context.l10n.commonRetry,
-            icon: LucideIcons.refreshCcw,
-            showLabel: showLabels,
-            onPressed: onRetrySync,
-          ),
       ],
     );
   }
@@ -353,20 +320,20 @@ Color _statusColorFor(BuildContext context, CalendarState state) {
 class CalendarTransferMenuButton extends StatelessWidget {
   const CalendarTransferMenuButton({
     super.key,
-    required this.hasTasks,
+    required this.hasCalendarData,
     required this.onExport,
     required this.onImport,
     this.busy = false,
   });
 
-  final bool hasTasks;
+  final bool hasCalendarData;
   final VoidCallback onExport;
   final VoidCallback onImport;
   final bool busy;
 
   @override
   Widget build(BuildContext context) {
-    final bool canExport = hasTasks && !busy;
+    final bool canExport = hasCalendarData && !busy;
     final bool canImport = !busy;
     return AxiMore(
       actions: [
@@ -383,50 +350,6 @@ class CalendarTransferMenuButton extends StatelessWidget {
           onPressed: canImport ? onImport : null,
         ),
       ],
-    );
-  }
-}
-
-class _CompactSyncButton extends StatelessWidget {
-  const _CompactSyncButton({
-    required this.label,
-    required this.icon,
-    required this.showLabel,
-    this.onPressed,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool showLabel;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget content = showLabel
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16),
-              const SizedBox(width: 6),
-              Text(label),
-            ],
-          )
-        : Icon(icon, size: 16);
-    final button = ShadButton.outline(
-      onPressed: onPressed,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: content,
-    );
-    if (showLabel) {
-      return button.withTapBounce(enabled: onPressed != null);
-    }
-    return AxiTooltip(
-      builder: (_) => Text(label),
-      child: Semantics(
-        label: label,
-        button: true,
-        child: button.withTapBounce(enabled: onPressed != null),
-      ),
     );
   }
 }

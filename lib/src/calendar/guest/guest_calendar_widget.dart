@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
@@ -337,6 +338,15 @@ class _GuestTransferMenu extends StatefulWidget {
   State<_GuestTransferMenu> createState() => _GuestTransferMenuState();
 }
 
+const String _guestCalendarImportSuccessMessage = 'Imported calendar data.';
+const String _guestCalendarNoDataImportMessage =
+    'No calendar data detected in the selected file.';
+const String _guestCalendarImportWarningTitle = 'Import calendar';
+const String _guestCalendarImportWarningMessage =
+    'Importing will merge data and override matching items in your current '
+    'calendar. Continue?';
+const String _guestCalendarImportConfirmLabel = 'Import';
+
 class _GuestTransferMenuState extends State<_GuestTransferMenu> {
   final CalendarTransferService _transferService =
       const CalendarTransferService();
@@ -344,9 +354,9 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasTasks = widget.state.model.tasks.isNotEmpty;
+    final bool hasCalendarData = widget.state.model.hasCalendarData;
     return CalendarTransferMenuButton(
-      hasTasks: hasTasks,
+      hasCalendarData: hasCalendarData,
       onExport: _handleExportAll,
       onImport: _handleImportCalendar,
       busy: _busy,
@@ -357,9 +367,8 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final Iterable<CalendarTask> tasks =
-          context.read<GuestCalendarBloc>().state.model.tasks.values;
-      if (tasks.isEmpty) {
+      final model = context.read<GuestCalendarBloc>().state.model;
+      if (!model.hasCalendarData) {
         FeedbackSystem.showInfo(context, 'No tasks available to export.');
         return;
       }
@@ -368,11 +377,20 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         title: 'Export guest calendar',
       );
       if (!mounted || format == null) return;
-      final File file = await _transferService.exportTasks(
-        tasks: tasks,
-        format: format,
-        fileNamePrefix: 'axichat_guest_calendar',
-      );
+      if (format == CalendarExportFormat.ics && model.tasks.isEmpty) {
+        FeedbackSystem.showInfo(context, 'No tasks available to export.');
+        return;
+      }
+      final File file = format == CalendarExportFormat.json
+          ? await _transferService.exportModel(
+              model: model,
+              fileNamePrefix: 'axichat_guest_calendar',
+            )
+          : await _transferService.exportTasks(
+              tasks: model.tasks.values,
+              format: format,
+              fileNamePrefix: 'axichat_guest_calendar',
+            );
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
         file: file,
         subject: 'Axichat guest calendar export',
@@ -402,15 +420,24 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final shouldImport = await confirm(
+        context,
+        title: _guestCalendarImportWarningTitle,
+        message: _guestCalendarImportWarningMessage,
+        confirmLabel: _guestCalendarImportConfirmLabel,
+      );
+      if (shouldImport != true) {
+        return;
+      }
+      final pickerResult = await FilePicker.platform.pickFiles(
         allowMultiple: false,
         type: FileType.custom,
         allowedExtensions: const ['ics', 'json'],
       );
-      if (result == null || result.files.isEmpty) {
+      if (pickerResult == null || pickerResult.files.isEmpty) {
         return;
       }
-      final path = result.files.single.path;
+      final path = pickerResult.files.single.path;
       if (path == null) {
         if (!mounted) return;
         FeedbackSystem.showError(
@@ -420,7 +447,28 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       final file = File(path);
-      final tasks = await _transferService.importTasksFromFile(file);
+      final importResult = await _transferService.importFromFile(file);
+      if (importResult.isFullModel && importResult.model != null) {
+        final importedModel = importResult.model!;
+        if (!importedModel.hasCalendarData) {
+          if (!mounted) return;
+          FeedbackSystem.showInfo(
+            context,
+            _guestCalendarNoDataImportMessage,
+          );
+          return;
+        }
+        if (!mounted) return;
+        context
+            .read<GuestCalendarBloc>()
+            .add(CalendarEvent.modelImported(model: importedModel));
+        FeedbackSystem.showSuccess(
+          context,
+          _guestCalendarImportSuccessMessage,
+        );
+        return;
+      }
+      final tasks = importResult.tasks;
       if (tasks.isEmpty) {
         if (!mounted) return;
         FeedbackSystem.showInfo(
