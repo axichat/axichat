@@ -1,5 +1,13 @@
 import 'package:axichat/src/storage/models/chat_models.dart';
 
+const mucStatusSelfPresence = '110';
+const mucStatusNickChange = '303';
+const mucStatusRoomCreated = '201';
+const mucStatusNickAssigned = '210';
+const mucStatusBanned = '301';
+const mucStatusKicked = '307';
+const mucStatusRoomShutdown = '332';
+
 enum OccupantAffiliation {
   owner,
   admin,
@@ -110,11 +118,17 @@ class RoomState {
     required this.roomJid,
     Map<String, Occupant>? occupants,
     this.myOccupantId,
-  }) : occupants = Map.unmodifiable(occupants ?? <String, Occupant>{});
+    Set<String>? selfPresenceStatusCodes,
+    this.selfPresenceReason,
+  })  : occupants = Map.unmodifiable(occupants ?? <String, Occupant>{}),
+        selfPresenceStatusCodes =
+            Set.unmodifiable(selfPresenceStatusCodes ?? const <String>{});
 
   final String roomJid;
   final Map<String, Occupant> occupants;
   final String? myOccupantId;
+  final Set<String> selfPresenceStatusCodes;
+  final String? selfPresenceReason;
 
   OccupantAffiliation get myAffiliation =>
       occupants[myOccupantId]?.affiliation ?? OccupantAffiliation.none;
@@ -154,6 +168,19 @@ class RoomState {
             .toList(),
       );
 
+  bool get roomCreated =>
+      selfPresenceStatusCodes.contains(mucStatusRoomCreated);
+
+  bool get nickAssigned =>
+      selfPresenceStatusCodes.contains(mucStatusNickAssigned);
+
+  bool get wasKicked => selfPresenceStatusCodes.contains(mucStatusKicked);
+
+  bool get wasBanned => selfPresenceStatusCodes.contains(mucStatusBanned);
+
+  bool get roomShutdown =>
+      selfPresenceStatusCodes.contains(mucStatusRoomShutdown);
+
   List<Occupant> _sortedByNick(List<Occupant> items) => items
     ..sort(
       (a, b) => a.nick.toLowerCase().compareTo(b.nick.toLowerCase()),
@@ -162,11 +189,16 @@ class RoomState {
   RoomState copyWith({
     Map<String, Occupant>? occupants,
     String? myOccupantId,
+    Set<String>? selfPresenceStatusCodes,
+    String? selfPresenceReason,
   }) =>
       RoomState(
         roomJid: roomJid,
         occupants: occupants ?? this.occupants,
         myOccupantId: myOccupantId ?? this.myOccupantId,
+        selfPresenceStatusCodes:
+            selfPresenceStatusCodes ?? this.selfPresenceStatusCodes,
+        selfPresenceReason: selfPresenceReason ?? this.selfPresenceReason,
       );
 }
 
