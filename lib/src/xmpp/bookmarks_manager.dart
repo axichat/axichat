@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:axichat/src/xmpp/pubsub_events.dart';
+import 'package:axichat/src/xmpp/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 const _bookmarksNode = 'urn:xmpp:bookmarks:1';
@@ -14,6 +17,11 @@ const _passwordTag = 'password';
 const _publishModelPublishers = 'publishers';
 const _sendLastPublishedItemNever = 'never';
 const _defaultMaxItems = 'max';
+const _notifyEnabled = true;
+const _deliverNotificationsEnabled = true;
+const _deliverPayloadsEnabled = true;
+const _persistItemsEnabled = true;
+const _presenceBasedDeliveryDisabled = false;
 
 final class MucBookmark {
   const MucBookmark({
@@ -201,6 +209,22 @@ final class BookmarksManager extends mox.XmppManagerBase {
       await _handleRetractions(event);
       return;
     }
+    if (event is PubSubItemsRefreshedEvent) {
+      await _handleRefreshEvent(event);
+      return;
+    }
+    if (event is PubSubSubscriptionChangedEvent) {
+      await _handleSubscriptionChanged(event);
+      return;
+    }
+    if (event is mox.PubSubNodeDeletedEvent) {
+      await _handleNodeDeleted(event);
+      return;
+    }
+    if (event is mox.PubSubNodePurgedEvent) {
+      await _handleNodePurged(event);
+      return;
+    }
     return super.onXmppEvent(event);
   }
 
@@ -213,25 +237,33 @@ final class BookmarksManager extends mox.XmppManagerBase {
     }
   }
 
-  mox.NodeConfig _nodeConfig() => mox.NodeConfig(
+  AxiPubSubNodeConfig _nodeConfig() => AxiPubSubNodeConfig(
         accessModel: mox.AccessModel.whitelist,
         publishModel: _publishModelPublishers,
-        deliverNotifications: true,
-        deliverPayloads: true,
+        deliverNotifications: _deliverNotificationsEnabled,
+        deliverPayloads: _deliverPayloadsEnabled,
         maxItems: _maxItems,
-        notifyRetract: true,
-        persistItems: true,
+        notifyRetract: _notifyEnabled,
+        notifyDelete: _notifyEnabled,
+        notifyConfig: _notifyEnabled,
+        notifySub: _notifyEnabled,
+        presenceBasedDelivery: _presenceBasedDeliveryDisabled,
+        persistItems: _persistItemsEnabled,
         sendLastPublishedItem: _sendLastPublishedItemNever,
       );
+
+  mox.NodeConfig _createNodeConfig() => _nodeConfig().toNodeConfig();
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
         accessModel: mox.AccessModel.whitelist.value,
         maxItems: _maxItems,
-        persistItems: true,
+        persistItems: _persistItemsEnabled,
+        publishModel: _publishModelPublishers,
+        sendLastPublishedItem: _sendLastPublishedItemNever,
       );
 
-  mox.PubSubManager? _pubSub() =>
-      getAttributes().getManagerById<mox.PubSubManager>(mox.pubsubManager);
+  SafePubSubManager? _pubSub() =>
+      getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
 
   mox.JID? _selfPepHost() {
     try {
@@ -247,7 +279,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
     if (pubsub == null || host == null) return;
 
     final config = _nodeConfig();
-    final configured = await pubsub.configure(host, _bookmarksNode, config);
+    final configured = await pubsub.configureNode(host, _bookmarksNode, config);
     if (!configured.isType<mox.PubSubError>()) {
       return;
     }
@@ -255,10 +287,13 @@ final class BookmarksManager extends mox.XmppManagerBase {
     try {
       final created = await pubsub.createNodeWithConfig(
         host,
-        config,
+        _createNodeConfig(),
         nodeId: _bookmarksNode,
       );
-      if (created != null) return;
+      if (created != null) {
+        await pubsub.configureNode(host, _bookmarksNode, config);
+        return;
+      }
     } on Exception {
       // ignore and retry below
     }
@@ -266,7 +301,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
     try {
       final created = await pubsub.createNode(host, nodeId: _bookmarksNode);
       if (created == null) return;
-      await pubsub.configure(host, _bookmarksNode, config);
+      await pubsub.configureNode(host, _bookmarksNode, config);
     } on Exception {
       return;
     }
@@ -327,7 +362,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
       id: id,
       options: _publishOptions(),
       autoCreate: true,
-      createNodeConfig: _nodeConfig(),
+      createNodeConfig: _createNodeConfig(),
     );
     if (result.isType<mox.PubSubError>()) {
       return;
@@ -343,7 +378,12 @@ final class BookmarksManager extends mox.XmppManagerBase {
     if (pubsub == null || host == null) return;
 
     final normalizedRoom = roomBareJid.toBare().toString();
-    final result = await pubsub.retract(host, _bookmarksNode, normalizedRoom);
+    final result = await pubsub.retract(
+      host,
+      _bookmarksNode,
+      normalizedRoom,
+      notify: _notifyEnabled,
+    );
     if (result.isType<mox.PubSubError>()) {
       return;
     }
@@ -398,6 +438,10 @@ final class BookmarksManager extends mox.XmppManagerBase {
       final pubsub = _pubSub();
       final host = _selfPepHost();
       final itemId = event.item.id.trim();
+      if (itemId.isEmpty) {
+        await _refreshFromServer();
+        return;
+      }
       if (pubsub != null && host != null && itemId.isNotEmpty) {
         final itemResult = await pubsub.getItem(host, _bookmarksNode, itemId);
         if (!itemResult.isType<mox.PubSubError>()) {
@@ -427,6 +471,94 @@ final class BookmarksManager extends mox.XmppManagerBase {
         continue;
       }
       _emitRetraction(roomBare);
+    }
+  }
+
+  Future<void> _handleRefreshEvent(PubSubItemsRefreshedEvent event) async {
+    if (event.node != _bookmarksNode) return;
+    final host = _selfPepHost();
+    if (host == null) return;
+    if (event.from.toBare().toString() != host.toString()) return;
+    await _refreshFromServer();
+  }
+
+  Future<void> _handleSubscriptionChanged(
+    PubSubSubscriptionChangedEvent event,
+  ) async {
+    if (event.node != _bookmarksNode) return;
+    final host = _selfPepHost();
+    if (host == null) return;
+    final subscriber = event.subscriberJid?.trim();
+    if (subscriber == null || subscriber.isEmpty) return;
+
+    late final mox.JID subscriberJid;
+    try {
+      subscriberJid = mox.JID.fromString(subscriber).toBare();
+    } on Exception {
+      return;
+    }
+    if (subscriberJid.toString() != host.toString()) return;
+
+    if (event.state == mox.SubscriptionState.subscribed) return;
+    await subscribe();
+  }
+
+  Future<void> _handleNodeDeleted(mox.PubSubNodeDeletedEvent event) async {
+    if (event.node != _bookmarksNode) return;
+    final host = _selfPepHost();
+    if (host == null) return;
+    if (!_isFromHost(event.from, host)) return;
+    _clearCache();
+  }
+
+  Future<void> _handleNodePurged(mox.PubSubNodePurgedEvent event) async {
+    if (event.node != _bookmarksNode) return;
+    final host = _selfPepHost();
+    if (host == null) return;
+    if (!_isFromHost(event.from, host)) return;
+    _clearCache();
+  }
+
+  Future<void> _refreshFromServer() async {
+    final previousCache = Map<String, MucBookmark>.from(_cache);
+    final items = await fetchAll();
+    final freshIds =
+        items.map((item) => item.roomBare.toBare().toString()).toSet();
+    _cache.clear();
+    for (final item in items) {
+      final id = item.roomBare.toBare().toString();
+      final cached = previousCache[id];
+      final merged = _mergeBookmarks(incoming: item, cached: cached);
+      _cache[id] = merged;
+      _emitUpdate(merged);
+    }
+
+    final removedIds = previousCache.keys
+        .where((id) => !freshIds.contains(id))
+        .toList(growable: false);
+    for (final id in removedIds) {
+      final removed = previousCache[id];
+      if (removed == null) continue;
+      _emitRetraction(removed.roomBare);
+    }
+  }
+
+  void _clearCache() {
+    if (_cache.isEmpty) return;
+    final items = _cache.values.toList(growable: false);
+    _cache.clear();
+    for (final item in items) {
+      _emitRetraction(item.roomBare);
+    }
+  }
+
+  bool _isFromHost(String? from, mox.JID host) {
+    final raw = from?.trim();
+    if (raw == null || raw.isEmpty) return false;
+    try {
+      return mox.JID.fromString(raw).toBare().toString() == host.toString();
+    } on Exception {
+      return false;
     }
   }
 }

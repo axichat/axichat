@@ -1,3 +1,4 @@
+import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
@@ -14,6 +15,11 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
 
   @override
   Future<void> onXmppEvent(mox.XmppEvent event) async {
+    if (event is PubSubItemsRefreshedEvent) {
+      await _handleRefreshEvent(event);
+      return;
+    }
+
     if (event is! mox.PubSubNotificationEvent) {
       return super.onXmppEvent(event);
     }
@@ -30,46 +36,43 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
       return;
     }
 
-    Future<void> emitFromPayload(mox.XMLNode payload) async {
-      if (payload.tag != _metadataTag ||
-          payload.attributes['xmlns'] != mox.userAvatarMetadataXmlns) {
-        logger.warning('Received invalid user avatar metadata payload.');
-        return;
-      }
-
-      final metadata = payload
-          .findTags(_infoTag)
-          .map(mox.UserAvatarMetadata.fromXML)
-          .toList();
-      getAttributes().sendEvent(
-        mox.UserAvatarUpdatedEvent(
-          from,
-          metadata,
-        ),
-      );
-    }
-
     if (event.item.payload case final payload?) {
-      await emitFromPayload(payload);
+      await _emitFromPayload(from: from, payload: payload);
       return;
     }
 
+    final itemId = event.item.id.trim();
+    await _refreshMetadata(
+      from: from,
+      itemId: itemId.isNotEmpty ? itemId : null,
+    );
+  }
+
+  Future<void> _handleRefreshEvent(PubSubItemsRefreshedEvent event) async {
+    if (event.node != mox.userAvatarMetadataXmlns) return;
+    await _refreshMetadata(from: event.from);
+  }
+
+  Future<void> _refreshMetadata({
+    required mox.JID from,
+    String? itemId,
+  }) async {
     final pubsub =
         getAttributes().getManagerById<mox.PubSubManager>(mox.pubsubManager);
     if (pubsub == null) return;
 
     final bareFrom = from.toBare();
-    final itemId = event.item.id.trim();
-    if (itemId.isNotEmpty) {
+    final normalizedItemId = itemId?.trim();
+    if (normalizedItemId?.isNotEmpty == true) {
       final itemResult = await pubsub.getItem(
         bareFrom,
         mox.userAvatarMetadataXmlns,
-        itemId,
+        normalizedItemId!,
       );
       if (!itemResult.isType<mox.PubSubError>()) {
         final fetchedPayload = itemResult.get<mox.PubSubItem>().payload;
         if (fetchedPayload != null) {
-          await emitFromPayload(fetchedPayload);
+          await _emitFromPayload(from: from, payload: fetchedPayload);
           return;
         }
       }
@@ -106,7 +109,27 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
 
     final payload = items.first.payload;
     if (payload == null) return;
-    await emitFromPayload(payload);
+    await _emitFromPayload(from: from, payload: payload);
+  }
+
+  Future<void> _emitFromPayload({
+    required mox.JID from,
+    required mox.XMLNode payload,
+  }) async {
+    if (payload.tag != _metadataTag ||
+        payload.attributes['xmlns'] != mox.userAvatarMetadataXmlns) {
+      logger.warning('Received invalid user avatar metadata payload.');
+      return;
+    }
+
+    final metadata =
+        payload.findTags(_infoTag).map(mox.UserAvatarMetadata.fromXML).toList();
+    getAttributes().sendEvent(
+      mox.UserAvatarUpdatedEvent(
+        from,
+        metadata,
+      ),
+    );
   }
 
   @override
