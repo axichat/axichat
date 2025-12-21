@@ -5,24 +5,46 @@ import 'package:xml/xml.dart';
 part 'calendar_sync_message.freezed.dart';
 part 'calendar_sync_message.g.dart';
 
+/// Valid message types for calendar sync.
+abstract final class CalendarSyncType {
+  static const String request = 'calendar_request';
+  static const String full = 'calendar_full';
+  static const String update = 'calendar_update';
+  static const String snapshot = 'calendar_snapshot';
+
+  static const List<String> all = [request, full, update, snapshot];
+}
+
 @freezed
 class CalendarSyncMessage with _$CalendarSyncMessage {
   const factory CalendarSyncMessage({
-    required String
-        type, // 'calendar_request', 'calendar_full', 'calendar_update'
+    /// Message type: request, full, update, or snapshot.
+    required String type,
     Map<String, dynamic>? data,
     String? checksum,
     required DateTime timestamp,
     String? taskId,
-    String? operation, // 'add', 'update', 'delete'
-    @Default('task') String entity, // 'task', 'day_event'
+    String? operation,
+    @Default('task') String entity,
+
+    /// True if this message references an attachment-based snapshot.
+    @Default(false) bool isSnapshot,
+
+    /// Checksum of the snapshot file (for integrity verification).
+    String? snapshotChecksum,
+
+    /// Snapshot format version for compatibility checks.
+    int? snapshotVersion,
+
+    /// URL of the snapshot attachment (for file-based snapshots).
+    String? snapshotUrl,
   }) = _CalendarSyncMessage;
 
   factory CalendarSyncMessage.fromJson(Map<String, dynamic> json) =>
       _$CalendarSyncMessageFromJson(json);
 
   factory CalendarSyncMessage.request() => CalendarSyncMessage(
-        type: 'calendar_request',
+        type: CalendarSyncType.request,
         timestamp: DateTime.now(),
       );
 
@@ -31,7 +53,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     required String checksum,
   }) =>
       CalendarSyncMessage(
-        type: 'calendar_full',
+        type: CalendarSyncType.full,
         data: data,
         checksum: checksum,
         timestamp: DateTime.now(),
@@ -44,12 +66,27 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     String entity = 'task',
   }) =>
       CalendarSyncMessage(
-        type: 'calendar_update',
+        type: CalendarSyncType.update,
         data: data,
         timestamp: DateTime.now(),
         taskId: taskId,
         operation: operation,
         entity: entity,
+      );
+
+  /// Creates a snapshot message referencing an attachment-based snapshot.
+  factory CalendarSyncMessage.snapshot({
+    required String snapshotChecksum,
+    required int snapshotVersion,
+    required String snapshotUrl,
+  }) =>
+      CalendarSyncMessage(
+        type: CalendarSyncType.snapshot,
+        timestamp: DateTime.now(),
+        isSnapshot: true,
+        snapshotChecksum: snapshotChecksum,
+        snapshotVersion: snapshotVersion,
+        snapshotUrl: snapshotUrl,
       );
 
   const CalendarSyncMessage._();
@@ -90,6 +127,31 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       );
     }
 
+    if (isSnapshot) {
+      element.children.add(
+        XmlElement(XmlName('is_snapshot'))..innerText = 'true',
+      );
+    }
+
+    if (snapshotChecksum != null) {
+      element.children.add(
+        XmlElement(XmlName('snapshot_checksum'))..innerText = snapshotChecksum!,
+      );
+    }
+
+    if (snapshotVersion != null) {
+      element.children.add(
+        XmlElement(XmlName('snapshot_version'))
+          ..innerText = snapshotVersion.toString(),
+      );
+    }
+
+    if (snapshotUrl != null) {
+      element.children.add(
+        XmlElement(XmlName('snapshot_url'))..innerText = snapshotUrl!,
+      );
+    }
+
     return element;
   }
 
@@ -104,9 +166,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
         calendarExt.findElements(name).firstOrNull?.innerText;
 
     final type = getText('type');
-    if (type == null ||
-        !['calendar_request', 'calendar_full', 'calendar_update']
-            .contains(type)) {
+    if (type == null || !CalendarSyncType.all.contains(type)) {
       throw ArgumentError('Invalid or missing sync message type');
     }
 
@@ -131,6 +191,13 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       }
     }
 
+    final isSnapshot = getText('is_snapshot') == 'true';
+    final snapshotChecksum = getText('snapshot_checksum');
+    final snapshotVersionStr = getText('snapshot_version');
+    final snapshotVersion =
+        snapshotVersionStr != null ? int.tryParse(snapshotVersionStr) : null;
+    final snapshotUrl = getText('snapshot_url');
+
     return CalendarSyncMessage(
       type: type,
       data: data,
@@ -139,6 +206,10 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       taskId: taskId,
       operation: operation,
       entity: entity,
+      isSnapshot: isSnapshot,
+      snapshotChecksum: snapshotChecksum,
+      snapshotVersion: snapshotVersion,
+      snapshotUrl: snapshotUrl,
     );
   }
 

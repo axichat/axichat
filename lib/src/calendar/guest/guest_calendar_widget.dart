@@ -420,7 +420,7 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       final file = File(path);
-      final tasks = await _transferService.importFromFile(file);
+      final tasks = await _transferService.importTasksFromFile(file);
       if (tasks.isEmpty) {
         if (!mounted) return;
         FeedbackSystem.showInfo(
