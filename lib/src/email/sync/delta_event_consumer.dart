@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
@@ -230,6 +231,12 @@ class DeltaEventConsumer {
     await _ingestDeltaMessage(chatId: chatId, msg: msg);
   }
 
+  Future<void> hydrateMessage(int msgId) async {
+    final msg = await _context.getMessage(msgId);
+    if (msg == null) return;
+    await _ingestDeltaMessage(chatId: msg.chatId, msg: msg);
+  }
+
   Future<void> _ingestDeltaMessage({
     required int chatId,
     required DeltaMessage msg,
@@ -267,13 +274,19 @@ class DeltaEventConsumer {
       warning = MessageWarning.emailSpamQuarantined;
       await db.markChatSpam(jid: resolvedChat.jid, spam: true);
     }
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(msg.html);
+    final resolvedBody = msg.text?.trim().isNotEmpty == true
+        ? msg.text
+        : (normalizedHtml == null
+            ? msg.text
+            : HtmlContentCodec.toPlainText(normalizedHtml));
     var message = Message(
       stanzaID: stanzaId,
       senderJid: senderJid,
       chatJid: resolvedChat.jid,
       timestamp: timestamp,
-      body: msg.text,
-      htmlBody: msg.html,
+      body: resolvedBody?.trim().isEmpty == true ? null : resolvedBody,
+      htmlBody: normalizedHtml,
       warning: warning,
       encryptionProtocol: EncryptionProtocol.none,
       received: !isOutgoing,
