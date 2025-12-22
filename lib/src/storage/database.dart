@@ -388,6 +388,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> deleteBlocklist();
 
+  Future<void> replaceContacts(Map<String, String> contactsByNativeId);
+
   Stream<List<EmailBlocklistEntry>> watchEmailBlocklist();
 
   Future<List<EmailBlocklistEntry>> getEmailBlocklist();
@@ -2736,6 +2738,22 @@ $limitClause
   Future<void> deleteBlocklist() async {
     _log.info('Deleting blocklist...');
     await blocklistAccessor.deleteAll();
+  }
+
+  @override
+  Future<void> replaceContacts(Map<String, String> contactsByNativeId) async {
+    await transaction(() async {
+      await delete(contacts).go();
+      for (final entry in contactsByNativeId.entries) {
+        await into(contacts).insert(
+          ContactsCompanion.insert(
+            nativeID: entry.key,
+            jid: entry.value,
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    });
   }
 
   @override

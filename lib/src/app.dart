@@ -19,6 +19,7 @@ import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
@@ -152,6 +153,12 @@ class _AxichatState extends State<Axichat> {
             notificationService: context.read<NotificationService>(),
           ),
         ),
+        RepositoryProvider<HomeRefreshSyncService>(
+          create: (context) => HomeRefreshSyncService(
+            xmppService: context.read<XmppService>(),
+            emailService: context.read<EmailService>(),
+          ),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -163,6 +170,7 @@ class _AxichatState extends State<Axichat> {
               credentialStore: context.read<CredentialStore>(),
               xmppService: context.read<XmppService>(),
               emailService: context.read<EmailService>(),
+              homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
               notificationService: context.read<NotificationService>(),
               autoLoginOnStart:
                   context.read<AuthBootstrap>().hasStoredLoginCredentials,
@@ -179,6 +187,7 @@ class _AxichatState extends State<Axichat> {
           BlocProvider(
             create: (context) => ChatsCubit(
               xmppService: context.read<XmppService>(),
+              homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
             ),
           ),
           BlocProvider(

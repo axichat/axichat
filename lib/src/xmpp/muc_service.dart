@@ -22,6 +22,21 @@ const _axiInviteInviteeAttr = 'invitee';
 const _axiInviteReasonAttr = 'reason';
 const _axiInvitePasswordAttr = 'password';
 const _mucDiscoFeature = 'http://jabber.org/protocol/muc';
+const _discoInfoXmlns = 'http://jabber.org/protocol/disco#info';
+const _dataFormXmlns = 'jabber:x:data';
+const _dataFormTag = 'x';
+const _fieldTag = 'field';
+const _valueTag = 'value';
+const _varAttr = 'var';
+const _formTypeFieldVar = 'FORM_TYPE';
+const _mucRoomInfoFormType = 'http://jabber.org/protocol/muc#roominfo';
+const _mucRoomConfigFormType = 'http://jabber.org/protocol/muc#roomconfig';
+const _avatarFieldToken = 'avatar';
+const _avatarHashToken = 'hash';
+const _dataUriPrefix = 'data:';
+const _dataUriBase64Delimiter = ';base64,';
+const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
+const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _iqTypeAttr = 'type';
 const _iqTypeGet = 'get';
 const _iqTypeSet = 'set';
@@ -83,6 +98,16 @@ final class MucAffiliationEntry {
   final String? nick;
   final OccupantRole? role;
   final String? reason;
+}
+
+final class _RoomAvatarPayload {
+  const _RoomAvatarPayload({
+    this.data,
+    this.hash,
+  });
+
+  final String? data;
+  final String? hash;
 }
 
 mixin MucService on XmppBase, BaseStreamService {
@@ -813,6 +838,32 @@ mixin MucService on XmppBase, BaseStreamService {
     }
   }
 
+  Future<mox.XMLNode?> _fetchRoomInfoForm(String roomJid) async {
+    final stanza = mox.Stanza.iq(
+      type: _iqTypeGet,
+      to: roomJid,
+      children: [
+        mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _discoInfoXmlns,
+        ),
+      ],
+    );
+    final result = await _connection.sendStanza(
+      mox.StanzaDetails(
+        stanza,
+        shouldEncrypt: false,
+      ),
+    );
+    if (result == null) return null;
+    if (result.attributes[_iqTypeAttr]?.toString() != _iqTypeResult) {
+      return null;
+    }
+    final query = result.firstTag(_queryTag, xmlns: _discoInfoXmlns);
+    final form = query?.firstTag(_dataFormTag, xmlns: _dataFormXmlns);
+    return form;
+  }
+
   Future<mox.XMLNode?> fetchRoomConfigurationForm(String roomJid) async {
     final stanza = mox.Stanza.iq(
       type: _iqTypeGet,
@@ -890,6 +941,7 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<void> applyMucBookmarks(List<MucBookmark> bookmarks) async {
     if (bookmarks.isEmpty) return;
     await _upsertChatsFromBookmarks(bookmarks);
+    unawaited(refreshRoomAvatars(bookmarks));
 
     for (final bookmark in bookmarks) {
       final roomJid = bookmark.roomBare.toString();
@@ -927,6 +979,8 @@ mixin MucService on XmppBase, BaseStreamService {
     try {
       await database;
       if (connectionState != ConnectionState.connected) return;
+      final support = await refreshPubSubSupport();
+      if (!support.canUseBookmarks2) return;
       final bookmarksManager = _connection.getManager<BookmarksManager>();
       if (bookmarksManager == null) return;
 
@@ -939,6 +993,158 @@ mixin MucService on XmppBase, BaseStreamService {
       return;
     } finally {
       _mucBookmarksSyncInFlight = false;
+    }
+  }
+
+  Future<void> refreshRoomAvatars(List<MucBookmark> bookmarks) async {
+    if (connectionState != ConnectionState.connected) return;
+    if (bookmarks.isEmpty) return;
+    if (this is! AvatarService) return;
+
+    final rooms = <String>{};
+    for (final bookmark in bookmarks) {
+      final roomJid = bookmark.roomBare.toBare().toString().trim();
+      if (roomJid.isEmpty) continue;
+      rooms.add(roomJid);
+    }
+
+    for (final roomJid in rooms) {
+      await _refreshRoomAvatar(roomJid);
+    }
+  }
+
+  Future<void> _refreshRoomAvatar(String roomJid) async {
+    if (this is! AvatarService) return;
+    final normalizedRoom = _roomKey(roomJid);
+    try {
+      final payload = await _fetchRoomAvatarPayload(normalizedRoom);
+      if (payload.data == null || payload.data!.isEmpty) return;
+      final decoded = _decodeRoomAvatarData(payload.data!);
+      if (decoded == null) return;
+      await (this as AvatarService).storeAvatarBytesForJid(
+        jid: normalizedRoom,
+        bytes: decoded,
+        hash: payload.hash,
+      );
+    } on Exception catch (error, stackTrace) {
+      _mucLog.fine(_roomAvatarStoreFailedLog, error, stackTrace);
+    }
+  }
+
+  Future<_RoomAvatarPayload> _fetchRoomAvatarPayload(String roomJid) async {
+    final infoForm = await _fetchRoomInfoForm(roomJid);
+    final infoPayload = _roomAvatarPayloadFromForm(infoForm);
+    if (infoPayload.data?.isNotEmpty == true) return infoPayload;
+    final configForm = await fetchRoomConfigurationForm(roomJid);
+    final configPayload = _roomAvatarPayloadFromForm(configForm);
+    if (configPayload.data?.isNotEmpty == true) {
+      return _RoomAvatarPayload(
+        data: configPayload.data,
+        hash: configPayload.hash ?? infoPayload.hash,
+      );
+    }
+    return infoPayload;
+  }
+
+  _RoomAvatarPayload _roomAvatarPayloadFromForm(mox.XMLNode? form) {
+    if (form == null) return const _RoomAvatarPayload();
+    if (form.tag != _dataFormTag) return const _RoomAvatarPayload();
+    if (form.attributes['xmlns']?.toString() != _dataFormXmlns) {
+      return const _RoomAvatarPayload();
+    }
+    final fields = form.findTags(_fieldTag);
+    if (fields.isEmpty) return const _RoomAvatarPayload();
+    if (!_isRoomFormType(fields)) return const _RoomAvatarPayload();
+    return _roomAvatarPayloadFromFields(fields);
+  }
+
+  _RoomAvatarPayload _roomAvatarPayloadFromFields(
+    Iterable<mox.XMLNode> fields,
+  ) {
+    String? data;
+    String? hash;
+    for (final field in fields) {
+      final varName = _fieldVarName(field);
+      if (varName == null) continue;
+      final values = _fieldValues(field);
+      if (values.isEmpty) continue;
+      final lowerVar = varName.toLowerCase();
+      if (!lowerVar.contains(_avatarFieldToken)) continue;
+      if (lowerVar.contains(_avatarHashToken)) {
+        final value = _normalizeRoomAvatarValue(values.first);
+        if (value == null) continue;
+        hash = value;
+        continue;
+      }
+      final joined = _normalizeRoomAvatarValue(values.join());
+      if (joined == null) continue;
+      data ??= joined;
+    }
+    return _RoomAvatarPayload(data: data, hash: hash);
+  }
+
+  String? _fieldVarName(mox.XMLNode field) {
+    final raw = field.attributes[_varAttr]?.toString();
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return trimmed;
+  }
+
+  String? _fieldValue(mox.XMLNode field) {
+    final values = _fieldValues(field);
+    if (values.isEmpty) return null;
+    return values.first;
+  }
+
+  List<String> _fieldValues(mox.XMLNode field) {
+    final values = field.findTags(_valueTag);
+    if (values.isEmpty) return const [];
+    return values
+        .map((value) => value.innerText().trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  bool _isRoomFormType(Iterable<mox.XMLNode> fields) {
+    String? formType;
+    for (final field in fields) {
+      if (_fieldVarName(field) != _formTypeFieldVar) continue;
+      formType = _normalizeRoomAvatarValue(_fieldValue(field));
+      break;
+    }
+    if (formType == null || formType.isEmpty) return true;
+    return formType == _mucRoomInfoFormType ||
+        formType == _mucRoomConfigFormType;
+  }
+
+  String? _normalizeRoomAvatarValue(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return trimmed;
+  }
+
+  Uint8List? _decodeRoomAvatarData(String value) {
+    final normalized = _normalizeRoomAvatarValue(value);
+    if (normalized == null) return null;
+    var raw = normalized;
+    if (normalized.startsWith(_dataUriPrefix)) {
+      final index = normalized.indexOf(_dataUriBase64Delimiter);
+      if (index == -1) return null;
+      raw = normalized.substring(
+        index + _dataUriBase64Delimiter.length,
+      );
+    }
+    final trimmed = raw.replaceAll(RegExp(r'\s+'), '');
+    if (trimmed.isEmpty) return null;
+    if (trimmed.length > AvatarService._maxAvatarBase64Length) return null;
+    try {
+      final bytes = base64Decode(trimmed);
+      if (bytes.isEmpty) return null;
+      if (bytes.length > AvatarService._maxAvatarBytes) return null;
+      return bytes;
+    } on FormatException {
+      _mucLog.fine(_roomAvatarDecodeFailedLog);
+      return null;
     }
   }
 

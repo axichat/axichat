@@ -246,6 +246,18 @@ class EmailDeltaTransport implements ChatTransport {
     return await _eventConsumer?.bootstrapFromCore() ?? false;
   }
 
+  Future<void> refreshChatlistSnapshot() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    final consumer = _eventConsumer;
+    if (consumer == null) {
+      return;
+    }
+    await consumer.refreshChatlistSnapshot();
+  }
+
   Future<void> notifyNetworkAvailable() async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -315,6 +327,20 @@ class EmailDeltaTransport implements ChatTransport {
     }
     await _ensureContextReady();
     return _context?.connectivity();
+  }
+
+  bool get accountsSupported => _accountsSupported;
+
+  bool get accountsActive => _accounts != null;
+
+  Future<String?> getCoreConfig(String key) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return null;
+    }
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return null;
+    return context.getConfig(key);
   }
 
   Future<void> registerPushToken(String token) async {

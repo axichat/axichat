@@ -26,7 +26,12 @@ class _AttachAwareScrollController extends ScrollController {
   @override
   void attach(ScrollPosition position) {
     super.attach(position);
-    _onAttach();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!hasClients) {
+        return;
+      }
+      _onAttach();
+    });
   }
 }
 
@@ -100,6 +105,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   static const double _timeItemHeight = 40;
   static const double _timePickerDesiredHeight = 660.0;
   static const double _datePickerExpandedHeight = 428.0;
+  static const int _expectedScrollPositions = 1;
+  static const double _scrollOffsetClampMin = 0.0;
+  static const double _scrollOffsetEpsilon = 0.5;
 
   final LayerLink _layerLink = LayerLink();
   final GlobalKey _dropdownKey = GlobalKey();
@@ -235,6 +243,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   void _toggleOverlay(BuildContext context) {
     if (_shouldUseSheetMenus(context)) {
+      if (_isOpen) {
+        _hideOverlay();
+      }
       if (_isBottomSheetOpen) {
         return;
       }
@@ -863,12 +874,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     );
   }
 
-  double _clampedOffset(ScrollController controller, double target) {
-    if (!controller.hasClients) return target;
-    final maxExtent = controller.position.maxScrollExtent;
-    return target.clamp(0.0, maxExtent);
-  }
-
   void _jumpToCurrent(DateTime reference) {
     if (_applyTimeJump(reference)) {
       _pendingTimeJump = null;
@@ -887,24 +892,48 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   bool _applyTimeJump(DateTime reference) {
-    if (!_hourScrollController.hasClients ||
-        !_minuteScrollController.hasClients) {
+    final ScrollPosition? hourPosition =
+        _resolvedScrollPosition(_hourScrollController);
+    final ScrollPosition? minutePosition =
+        _resolvedScrollPosition(_minuteScrollController);
+    if (hourPosition == null || minutePosition == null) {
       return false;
     }
     final double hourTarget =
-        _clampedOffset(_hourScrollController, _hourOffset(reference.hour));
-    if ((_hourScrollController.offset - hourTarget).abs() > 0.5) {
+        _clampedOffsetForPosition(hourPosition, _hourOffset(reference.hour));
+    if ((hourPosition.pixels - hourTarget).abs() > _scrollOffsetEpsilon) {
       _hourScrollController.jumpTo(hourTarget);
     }
 
-    final double minuteTarget = _clampedOffset(
-      _minuteScrollController,
+    final double minuteTarget = _clampedOffsetForPosition(
+      minutePosition,
       _minuteOffset(_roundToFive(reference.minute)),
     );
-    if ((_minuteScrollController.offset - minuteTarget).abs() > 0.5) {
+    if ((minutePosition.pixels - minuteTarget).abs() > _scrollOffsetEpsilon) {
       _minuteScrollController.jumpTo(minuteTarget);
     }
     return true;
+  }
+
+  ScrollPosition? _resolvedScrollPosition(ScrollController controller) {
+    if (!controller.hasClients) {
+      return null;
+    }
+    final positions = controller.positions;
+    if (positions.length != _expectedScrollPositions) {
+      return null;
+    }
+    final ScrollPosition position = positions.single;
+    if (!position.hasContentDimensions) {
+      return null;
+    }
+    return position;
+  }
+
+  double _clampedOffsetForPosition(ScrollPosition position, double target) {
+    final double maxExtent = position.maxScrollExtent;
+    final double upperBound = math.max(_scrollOffsetClampMin, maxExtent);
+    return target.clamp(_scrollOffsetClampMin, upperBound);
   }
 }
 

@@ -51,6 +51,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       await database;
       if (connectionState != ConnectionState.connected) return;
 
+      final support = await refreshPubSubSupport();
+      if (!support.canUsePepNodes) return;
+
       final manager = _connection.getManager<ConversationIndexManager>();
       if (manager == null) return;
 

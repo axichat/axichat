@@ -89,6 +89,13 @@ final class HomeRefreshSyncService {
   }
 
   Future<List<MucBookmark>> _refreshMucBookmarks() async {
+    if (_xmppService.connectionState != ConnectionState.connected) {
+      return const [];
+    }
+    final support = await _xmppService.refreshPubSubSupport();
+    if (!support.canUseBookmarks2) {
+      return const [];
+    }
     final manager = _xmppService.bookmarksManager;
     if (manager == null) return const [];
     await manager.ensureNode();
@@ -99,6 +106,13 @@ final class HomeRefreshSyncService {
   }
 
   Future<List<ConvItem>> _refreshConversationIndex() async {
+    if (_xmppService.connectionState != ConnectionState.connected) {
+      return const [];
+    }
+    final support = await _xmppService.refreshPubSubSupport();
+    if (!support.canUsePepNodes) {
+      return const [];
+    }
     final manager = _xmppService.conversationIndexManager;
     if (manager == null) return const [];
     await manager.ensureNode();
