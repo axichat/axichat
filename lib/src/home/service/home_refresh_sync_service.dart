@@ -27,7 +27,18 @@ final class HomeRefreshSyncService {
       conversations: conversationItems,
     );
 
+    await _rehydrateCalendar();
+
     return DateTime.timestamp();
+  }
+
+  Future<void> _rehydrateCalendar() async {
+    if (_xmppService.connectionState != ConnectionState.connected) return;
+    try {
+      await _xmppService.rehydrateCalendarFromMam();
+    } on Exception {
+      // Best-effort: calendar rehydration failures should not block refresh
+    }
   }
 
   Future<void> _ensureConnected() async {

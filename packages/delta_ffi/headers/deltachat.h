@@ -45,6 +45,24 @@ typedef struct dc_msg dc_msg_t;
 #define DC_CONNECTIVITY_WORKING 3000
 #define DC_CONNECTIVITY_CONNECTED 4000
 
+#define DC_DOWNLOAD_DONE 0
+#define DC_DOWNLOAD_AVAILABLE 10
+#define DC_DOWNLOAD_FAILURE 20
+#define DC_DOWNLOAD_UNDECIPHERABLE 30
+#define DC_DOWNLOAD_IN_PROGRESS 1000
+
+#define DC_CHAT_VISIBILITY_NORMAL 0
+#define DC_CHAT_VISIBILITY_ARCHIVED 1
+#define DC_CHAT_VISIBILITY_PINNED 2
+
+#define DC_GCL_ADD_SELF 0x1
+#define DC_GCL_VERIFIED_ONLY 0x2
+#define DC_GCL_ADD_RECENT 0x4
+
+#define DC_EVENT_MSGS_CHANGED 2000
+#define DC_EVENT_CHAT_MODIFIED 2020
+#define DC_EVENT_MSGS_NOTICED 2004
+
 dc_accounts_t* dc_accounts_new(const char* dir, int32_t writable);
 void dc_accounts_unref(dc_accounts_t* accounts);
 uint32_t dc_accounts_add_account(dc_accounts_t* accounts);
@@ -137,6 +155,7 @@ int32_t dc_msg_is_outgoing(const dc_msg_t* msg);
 int32_t dc_msg_get_state(const dc_msg_t* msg);
 dc_msg_t* dc_msg_new(dc_context_t* ctx, int32_t viewtype);
 void dc_msg_set_text(dc_msg_t* msg, const char* text);
+void dc_msg_set_html(dc_msg_t* msg, const char* html);
 void dc_msg_set_subject(dc_msg_t* msg, const char* subject);
 void dc_msg_set_file_and_deduplicate(dc_msg_t* msg, const char* file, const char* name, const char* filemime);
 char* dc_msg_get_file(const dc_msg_t* msg);
@@ -145,6 +164,36 @@ char* dc_msg_get_filemime(const dc_msg_t* msg);
 uint64_t dc_msg_get_filebytes(const dc_msg_t* msg);
 int32_t dc_msg_get_width(const dc_msg_t* msg);
 int32_t dc_msg_get_height(const dc_msg_t* msg);
+
+dc_array_t* dc_get_fresh_msgs(dc_context_t* ctx);
+int dc_get_fresh_msg_cnt(dc_context_t* ctx, uint32_t chat_id);
+void dc_marknoticed_chat(dc_context_t* ctx, uint32_t chat_id);
+
+void dc_markseen_msgs(dc_context_t* ctx, const uint32_t* msg_ids, int msg_cnt);
+void dc_delete_msgs(dc_context_t* ctx, const uint32_t* msg_ids, int msg_cnt);
+
+void dc_msg_set_quote(dc_msg_t* msg, const dc_msg_t* quote);
+dc_msg_t* dc_msg_get_quoted_msg(const dc_msg_t* msg);
+char* dc_msg_get_quoted_text(const dc_msg_t* msg);
+
+void dc_forward_msgs(dc_context_t* ctx, const uint32_t* msg_ids, int msg_cnt, uint32_t chat_id);
+
+void dc_set_draft(dc_context_t* ctx, uint32_t chat_id, dc_msg_t* msg);
+dc_msg_t* dc_get_draft(dc_context_t* ctx, uint32_t chat_id);
+
+dc_array_t* dc_search_msgs(dc_context_t* ctx, uint32_t chat_id, const char* query);
+
+void dc_set_chat_visibility(dc_context_t* ctx, uint32_t chat_id, int visibility);
+
+void dc_download_full_msg(dc_context_t* ctx, int msg_id);
+int dc_msg_get_download_state(const dc_msg_t* msg);
+
+int dc_resend_msgs(dc_context_t* ctx, const uint32_t* msg_ids, int msg_cnt);
+char* dc_msg_get_error(const dc_msg_t* msg);
+
+dc_array_t* dc_get_contacts(dc_context_t* ctx, uint32_t flags, const char* query);
+dc_array_t* dc_get_blocked_contacts(dc_context_t* ctx);
+int dc_delete_contact(dc_context_t* ctx, uint32_t contact_id);
 
 #ifdef __cplusplus
 }

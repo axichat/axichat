@@ -72,6 +72,7 @@ dependencies:
   xml: ^6.5.0
   hsluv: ^1.1.3
   flutter_foreground_task: ^9.1.0
+  html: ^0.15.6
   shorebird_code_push: ^2.0.3
   url_launcher: ^6.3.0
   flutter_html: ^3.0.0

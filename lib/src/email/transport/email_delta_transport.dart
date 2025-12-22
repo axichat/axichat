@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/email_address.dart';
@@ -520,12 +521,17 @@ class EmailDeltaTransport implements ChatTransport {
     String? subject,
     String? shareId,
     String? localBodyOverride,
+    String? htmlBody,
   }) async {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
-    final msgId = await _context!
-        .sendText(chatId: chatId, message: body, subject: subject);
+    final msgId = await _context!.sendText(
+      chatId: chatId,
+      message: body,
+      subject: subject,
+      html: htmlBody,
+    );
     final deltaMessage = await _context!.getMessage(msgId);
     await _recordOutgoing(
       chatId: chatId,
@@ -533,6 +539,7 @@ class EmailDeltaTransport implements ChatTransport {
       body: body,
       shareId: shareId,
       localBodyOverride: localBodyOverride,
+      htmlBody: htmlBody,
       timestamp: deltaMessage?.timestamp,
     );
     return msgId;
@@ -545,6 +552,7 @@ class EmailDeltaTransport implements ChatTransport {
     String? subject,
     String? shareId,
     String? captionOverride,
+    String? htmlCaption,
   }) async {
     if (_context == null) {
       throw StateError('Transport not initialized');
@@ -557,6 +565,7 @@ class EmailDeltaTransport implements ChatTransport {
       mimeType: attachment.mimeType,
       text: attachment.caption,
       subject: subject,
+      html: htmlCaption,
     );
     final deltaMessage = await _context!.getMessage(msgId);
     var metadata = _metadataForAttachment(attachment, msgId);
@@ -576,6 +585,7 @@ class EmailDeltaTransport implements ChatTransport {
       metadata: metadata,
       shareId: shareId,
       localBodyOverride: captionOverride,
+      htmlBody: htmlCaption,
       timestamp: deltaMessage?.timestamp,
     );
     return msgId;
@@ -605,6 +615,7 @@ class EmailDeltaTransport implements ChatTransport {
     FileMetadataData? metadata,
     String? shareId,
     String? localBodyOverride,
+    String? htmlBody,
     DateTime? timestamp,
   }) async {
     final db = await _databaseBuilder();
@@ -623,6 +634,7 @@ class EmailDeltaTransport implements ChatTransport {
       chatJid: chat.jid,
       timestamp: resolvedTimestamp,
       body: resolvedBody,
+      htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
       received: false,
@@ -890,6 +902,220 @@ class EmailDeltaTransport implements ChatTransport {
     if (contactId == null) return false;
     await context.unblockContact(contactId);
     return true;
+  }
+
+  /// Marks a chat as noticed in core, clearing unread badges.
+  ///
+  /// Returns true if the operation succeeded.
+  Future<bool> markNoticedChat(int chatId) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.markNoticedChat(chatId);
+  }
+
+  /// Marks messages as seen, triggering MDN if enabled.
+  ///
+  /// Returns true if the operation succeeded.
+  Future<bool> markSeenMessages(List<int> messageIds) async {
+    if (messageIds.isEmpty) return true;
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.markSeenMessages(messageIds);
+  }
+
+  /// Returns the count of fresh (unread) messages in a chat.
+  Future<int> getFreshMessageCount(int chatId) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return 0;
+    return context.getFreshMessageCount(chatId);
+  }
+
+  /// Returns all fresh (unread) message IDs across all chats.
+  Future<List<int>> getFreshMessageIds() async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return const [];
+    return context.getFreshMessageIds();
+  }
+
+  /// Deletes messages from core and server.
+  ///
+  /// Returns true if the operation succeeded.
+  Future<bool> deleteMessages(List<int> messageIds) async {
+    if (messageIds.isEmpty) return true;
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.deleteMessages(messageIds);
+  }
+
+  /// Forwards messages to another chat.
+  ///
+  /// Returns true if the operation succeeded.
+  Future<bool> forwardMessages({
+    required List<int> messageIds,
+    required int toChatId,
+  }) async {
+    if (messageIds.isEmpty) return true;
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.forwardMessages(messageIds: messageIds, toChatId: toChatId);
+  }
+
+  /// Searches messages in a chat.
+  ///
+  /// Pass chatId=0 to search all chats.
+  Future<List<int>> searchMessages({
+    required int chatId,
+    required String query,
+  }) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return const [];
+    return context.searchMessages(chatId: chatId, query: query);
+  }
+
+  Future<void> hydrateMessages(List<int> messageIds) async {
+    if (messageIds.isEmpty) return;
+    await _ensureContextReady();
+    final consumer = _eventConsumer;
+    if (consumer == null) return;
+    for (final messageId in messageIds) {
+      await consumer.hydrateMessage(messageId);
+    }
+  }
+
+  /// Sets the visibility of a chat (normal, archived, pinned).
+  ///
+  /// Returns true if the operation succeeded.
+  Future<bool> setChatVisibility({
+    required int chatId,
+    required int visibility,
+  }) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.setChatVisibility(chatId: chatId, visibility: visibility);
+  }
+
+  /// Triggers download of full message content for partial messages.
+  ///
+  /// Returns true if the download was initiated.
+  Future<bool> downloadFullMessage(int messageId) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.downloadFullMessage(messageId);
+  }
+
+  /// Resends failed messages.
+  ///
+  /// Returns true if the resend was initiated.
+  Future<bool> resendMessages(List<int> messageIds) async {
+    if (messageIds.isEmpty) return true;
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.resendMessages(messageIds);
+  }
+
+  /// Sends a text message with a quote reference to another message.
+  ///
+  /// Returns the new message ID.
+  Future<int> sendTextWithQuote({
+    required int chatId,
+    required String body,
+    required int quotedMessageId,
+    String? subject,
+    String? htmlBody,
+  }) async {
+    if (_context == null) {
+      throw StateError('Transport not initialized');
+    }
+    return _context!.sendTextWithQuote(
+      chatId: chatId,
+      message: body,
+      quotedMessageId: quotedMessageId,
+      subject: subject,
+      html: htmlBody,
+    );
+  }
+
+  /// Gets the quoted message info for a message.
+  Future<DeltaQuotedMessage?> getQuotedMessage(int messageId) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return null;
+    return context.getQuotedMessage(messageId);
+  }
+
+  /// Sets the draft for a chat.
+  ///
+  /// Pass null message to clear the draft.
+  Future<bool> setDraft({
+    required int chatId,
+    DeltaMessage? message,
+  }) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.setDraft(chatId: chatId, message: message);
+  }
+
+  /// Gets the draft for a chat.
+  Future<DeltaMessage?> getDraft(int chatId) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return null;
+    return context.getDraft(chatId);
+  }
+
+  /// Gets a message by ID from core.
+  Future<DeltaMessage?> getMessage(int messageId) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return null;
+    return context.getMessage(messageId);
+  }
+
+  /// Gets contact IDs from core.
+  ///
+  /// Use flags from [DeltaContactListFlags] to filter results.
+  Future<List<int>> getContactIds({int flags = 0, String? query}) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return const [];
+    return context.getContactIds(flags: flags, query: query);
+  }
+
+  /// Gets blocked contact IDs from core.
+  Future<List<int>> getBlockedContactIds() async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return const [];
+    return context.getBlockedContactIds();
+  }
+
+  /// Deletes a contact from core.
+  ///
+  /// Returns true if the contact was deleted.
+  Future<bool> deleteContact(int contactId) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return false;
+    return context.deleteContact(contactId);
+  }
+
+  /// Gets a contact by ID from core.
+  Future<DeltaContact?> getContact(int contactId) async {
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return null;
+    return context.getContact(contactId);
   }
 }
 

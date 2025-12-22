@@ -1623,19 +1623,50 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatMessageForwardRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final body = event.message.body;
-    if (body?.isNotEmpty != true) return;
     final target = event.target;
     final isEmailTarget = target.isEmailOnlyContact;
+    final message = event.message;
+    final plainText = message.plainText.trim();
+    final htmlBody = message.normalizedHtmlBody;
+    final attachment = await _attachmentForMessage(message);
     try {
+      if (attachment != null) {
+        final captionedAttachment = plainText.isNotEmpty
+            ? attachment.copyWith(caption: plainText)
+            : attachment;
+        if (isEmailTarget) {
+          final emailService = _emailService;
+          if (emailService == null) return;
+          await emailService.sendAttachment(
+            chat: target,
+            attachment: captionedAttachment,
+            htmlCaption: htmlBody,
+          );
+          return;
+        }
+        await _messageService.sendAttachment(
+          jid: target.jid,
+          attachment: captionedAttachment,
+          encryptionProtocol: target.encryptionProtocol,
+          chatType: target.type,
+          htmlCaption: htmlBody,
+        );
+        return;
+      }
+      if (plainText.isEmpty && htmlBody == null) return;
       if (isEmailTarget) {
         final emailService = _emailService;
         if (emailService == null) return;
-        await emailService.sendMessage(chat: target, body: body!);
+        await emailService.sendMessage(
+          chat: target,
+          body: plainText,
+          htmlBody: htmlBody,
+        );
       } else {
         await _messageService.sendMessage(
           jid: target.jid,
-          text: body!,
+          text: plainText,
+          htmlBody: htmlBody,
           encryptionProtocol: target.encryptionProtocol,
           chatType: target.type,
         );
@@ -1680,7 +1711,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         return;
       }
-      final hasBody = message.body?.isNotEmpty == true;
+      final hasBody =
+          message.plainText.isNotEmpty || message.normalizedHtmlBody != null;
       if (!hasBody) return;
       await _messageService.resendMessage(
         message.stanzaID,
@@ -2484,10 +2516,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   String _composeEmailBody(String body, Message? quoted) {
-    if (quoted?.body?.isNotEmpty != true) {
+    if (quoted?.plainText.isNotEmpty != true) {
       return body;
     }
-    final quotedBody = quoted!.body!
+    final quotedBody = quoted!.plainText
         .split('\n')
         .map((line) => line.isEmpty ? '>' : '> $line')
         .join('\n');
@@ -2776,7 +2808,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         recipients: recipients,
         pendingAttachments: pendingAttachments,
         composerHydrationId: nextHydrationId,
-        composerHydrationText: message.body ?? '',
+        composerHydrationText: message.plainText,
         composerError: message.error.isNotNone
             ? message.error.asString
             : state.composerError,
@@ -2941,7 +2973,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(
       state.copyWith(
         composerHydrationId: nextHydrationId,
-        composerHydrationText: message.body ?? '',
+        composerHydrationText: message.plainText,
         composerError: message.error.isNotNone
             ? message.error.asString
             : state.composerError,
@@ -3004,6 +3036,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return null;
     }
     final size = metadata.sizeBytes ?? await file.length();
+    final caption = message.plainText.trim();
     return EmailAttachment(
       path: path,
       fileName: metadata.filename,
@@ -3011,7 +3044,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       mimeType: metadata.mimeType,
       width: metadata.width,
       height: metadata.height,
-      caption: message.body,
+      caption: caption.isEmpty ? null : caption,
     );
   }
 
@@ -3095,8 +3128,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     final service = _emailService;
     if (chat == null || service == null) return;
-    final trimmedBody = (message.body ?? '').trim();
-    final hasBody = trimmedBody.isNotEmpty;
+    final resolvedBody = message.plainText.trim();
+    final normalizedHtml = message.normalizedHtmlBody;
+    final hasBody = resolvedBody.isNotEmpty;
     final hasAttachment = message.fileMetadataID != null;
     if (!hasBody && !hasAttachment) {
       return;
@@ -3104,21 +3138,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ShareContext? shareContext = state.shareContexts[message.stanzaID];
     shareContext ??= await service.shareContextForMessage(message);
     try {
-      if (hasBody) {
-        await service.sendMessage(
-          chat: chat,
-          body: trimmedBody,
-          subject: shareContext?.subject,
-        );
-      }
       if (hasAttachment) {
         final attachment = await service.attachmentForMessage(message);
         if (attachment != null) {
+          final captionedAttachment =
+              hasBody ? attachment.copyWith(caption: resolvedBody) : attachment;
           await service.sendAttachment(
             chat: chat,
-            attachment: attachment,
+            attachment: captionedAttachment,
+            htmlCaption: normalizedHtml,
           );
         }
+        return;
+      }
+      if (hasBody) {
+        await service.sendMessage(
+          chat: chat,
+          body: resolvedBody,
+          subject: shareContext?.subject,
+          htmlBody: normalizedHtml,
+        );
       }
     } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
