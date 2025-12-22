@@ -112,8 +112,35 @@ class MamPageResult {
   final int? count;
 }
 
+enum MamGlobalSyncOutcome {
+  completed,
+  skippedUnsupported,
+  skippedDenied,
+  skippedInFlight,
+  failed;
+}
+
+extension MamGlobalSyncOutcomeBehavior on MamGlobalSyncOutcome {
+  bool get shouldFallbackToPerChat => switch (this) {
+        MamGlobalSyncOutcome.failed => true,
+        MamGlobalSyncOutcome.skippedDenied => true,
+        MamGlobalSyncOutcome.completed => false,
+        MamGlobalSyncOutcome.skippedUnsupported => false,
+        MamGlobalSyncOutcome.skippedInFlight => false,
+      };
+}
+
 final _capabilityCacheKey =
     XmppStateStore.registerKey('message_peer_capabilities');
+const String _mamGlobalLastIdKeyName = 'mam_global_last_id';
+const String _mamGlobalLastSyncKeyName = 'mam_global_last_sync';
+const String _mamGlobalDeniedUntilKeyName = 'mam_global_denied_until';
+final _mamGlobalLastIdKey =
+    XmppStateStore.registerKey(_mamGlobalLastIdKeyName);
+final _mamGlobalLastSyncKey =
+    XmppStateStore.registerKey(_mamGlobalLastSyncKeyName);
+final _mamGlobalDeniedUntilKey =
+    XmppStateStore.registerKey(_mamGlobalDeniedUntilKeyName);
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
 const Duration _httpAttachmentGetTimeout = Duration(minutes: 2);
@@ -123,6 +150,7 @@ const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
 const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
+const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
 const int _calendarMamPageSize = 100;
 const int _calendarSnapshotDownloadMaxBytes = 10 * 1024 * 1024;
 const String _calendarSnapshotDefaultName =
@@ -587,8 +615,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   static const Duration _conversationIndexMutedForeverDuration =
       Duration(days: 3650);
   bool _mamLoginSyncInFlight = false;
+  bool _mamGlobalSyncInFlight = false;
   bool _calendarMamRehydrateInFlight = false;
   bool _calendarMamSnapshotSeen = false;
+  final Set<String> _mucMamUnsupportedRooms = {};
+  DateTime? _mamGlobalDeniedUntil;
 
   final Map<String, Set<String>> _seenStableKeys = {};
   final Map<String, Queue<String>> _stableKeyOrder = {};
