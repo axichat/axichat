@@ -1,6 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
@@ -60,6 +61,12 @@ class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.modelImported({
     required CalendarModel model,
   }) = CalendarModelImported;
+
+  const factory CalendarEvent.syncWarningRaised({
+    required CalendarSyncWarning warning,
+  }) = CalendarSyncWarningRaised;
+
+  const factory CalendarEvent.syncWarningCleared() = CalendarSyncWarningCleared;
 
   const factory CalendarEvent.viewChanged({
     required CalendarView view,
