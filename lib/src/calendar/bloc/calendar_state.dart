@@ -3,6 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
@@ -31,6 +32,7 @@ class CalendarState with _$CalendarState {
     @Default(false) bool isLoading,
     DateTime? lastSyncTime,
     String? syncError,
+    CalendarSyncWarning? syncWarning,
     String? error,
     @Default(CalendarView.week) CalendarView viewMode,
     required DateTime selectedDate,
