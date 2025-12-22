@@ -35,6 +35,8 @@ const _defaultImapPort = '993';
 const _defaultSecurityMode = 'ssl';
 const _unknownEmailPassword = '';
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
+const _minimumHistoryWindow = 1;
+const _includePseudoMessagesInBackfill = false;
 
 typedef EmailConnectionConfigBuilder = Map<String, String> Function(
   String address,
@@ -942,6 +944,47 @@ class EmailService {
       return false;
     }
     return _transport.performBackgroundFetch(timeout);
+  }
+
+  Future<void> backfillChatHistory({
+    required Chat chat,
+    required int desiredWindow,
+    int? beforeMessageId,
+    DateTime? beforeTimestamp,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    if (!chat.defaultTransport.isEmail) {
+      return;
+    }
+    if (desiredWindow < _minimumHistoryWindow) {
+      return;
+    }
+    final chatId = chat.deltaChatId;
+    if (chatId == null) {
+      return;
+    }
+    if (beforeMessageId == null && beforeTimestamp == null) {
+      return;
+    }
+    await _ensureReady();
+    final db = await _databaseBuilder();
+    final localCount = await db.countChatMessages(
+      chat.jid,
+      filter: filter,
+      includePseudoMessages: _includePseudoMessagesInBackfill,
+    );
+    if (localCount >= desiredWindow) {
+      return;
+    }
+    await performBackgroundFetch(timeout: _foregroundFetchTimeout);
+    await _transport.backfillChatHistory(
+      chatId: chatId,
+      chatJid: chat.jid,
+      desiredWindow: desiredWindow,
+      beforeMessageId: beforeMessageId,
+      beforeTimestamp: beforeTimestamp,
+      filter: filter,
+    );
   }
 
   Future<void> setForegroundKeepalive(bool enabled) async {
