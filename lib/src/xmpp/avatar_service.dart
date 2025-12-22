@@ -273,6 +273,38 @@ mixin AvatarService on XmppBase {
     await refreshSelfAvatarIfNeeded(force: true);
   }
 
+  Future<void> storeAvatarBytesForJid({
+    required String jid,
+    required Uint8List bytes,
+    String? hash,
+  }) async {
+    final bareJid = _avatarSafeBareJid(jid);
+    if (bareJid == null) return;
+    if (bytes.isEmpty) return;
+    if (bytes.length > _maxAvatarBytes) return;
+    if (!_isSupportedAvatarBytes(bytes)) return;
+    final resolvedHash = _resolveAvatarHash(bytes, hash);
+    try {
+      final existingHash = await _storedAvatarHash(bareJid);
+      if (existingHash != null && existingHash == resolvedHash) {
+        final existingPath = await _storedAvatarPath(bareJid);
+        if (await _hasCachedAvatarFile(existingPath)) {
+          return;
+        }
+      }
+      final path = await _writeAvatarFile(bytes: bytes);
+      await _storeAvatar(jid: bareJid, path: path, hash: resolvedHash);
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine('Failed to store avatar bytes.', error, stackTrace);
+    }
+  }
+
+  String _resolveAvatarHash(Uint8List bytes, String? hash) {
+    final trimmed = hash?.trim();
+    if (trimmed?.isNotEmpty == true) return trimmed!;
+    return sha1.convert(bytes).toString();
+  }
+
   Future<void> prefetchAvatarForJid(String jid) async {
     final bareJid = _avatarSafeBareJid(jid);
     if (bareJid == null) return;

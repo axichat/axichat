@@ -81,6 +81,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       (this as AvatarService)
           .scheduleAvatarRefresh(items.map((item) => item.jid));
     }
+    await _publishConversationIndexForRoster(items);
 
     final version = rosterResult.ver;
     if (version != null && version.isNotEmpty) {
@@ -94,6 +95,18 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
     }
   }
 
+  Future<void> _publishConversationIndexForRoster(
+    Iterable<RosterItem> items,
+  ) async {
+    final uniqueJids = <String>{};
+    for (final item in items) {
+      final jid = item.jid.trim();
+      if (jid.isEmpty) continue;
+      if (!uniqueJids.add(jid)) continue;
+      await _ensureConversationIndexEntryForContact(jid);
+    }
+  }
+
   Future<void> addToRoster({required String jid, String? title}) async {
     _rosterLog.info('Requesting to add roster entry...');
     if (!await _connection.addToRoster(jid, title: title)) {
@@ -101,14 +114,41 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
     }
 
     _rosterLog.info('Requesting roster subscription...');
-    if (!await _connection.preApproveSubscription(jid)) {
-      if (await _connection.requestSubscription(jid)) return;
-      _rosterLog.severe('Failed to request roster subscription.');
-      throw XmppRosterException();
+    final preApproved = await _connection.preApproveSubscription(jid);
+    if (!preApproved) {
+      final requested = await _connection.requestSubscription(jid);
+      if (!requested) {
+        _rosterLog.severe('Failed to request roster subscription.');
+        throw XmppRosterException();
+      }
     }
     if (this is AvatarService) {
       (this as AvatarService).scheduleAvatarRefresh([jid]);
     }
+    await _ensureConversationIndexEntryForContact(jid);
+  }
+
+  Future<void> _ensureConversationIndexEntryForContact(String jid) async {
+    final normalized = jid.trim();
+    if (normalized.isEmpty) return;
+    final createdAt = DateTime.timestamp();
+    final existing = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(normalized),
+    );
+    if (existing == null) {
+      await _dbOp<XmppDatabase>(
+        (db) => db.createChat(
+          Chat.fromJid(normalized).copyWith(
+            lastChangeTimestamp: createdAt,
+          ),
+        ),
+      );
+    }
+    await _upsertConversationIndexForPeer(
+      peerJid: normalized,
+      lastTimestamp: existing?.lastChangeTimestamp ?? createdAt,
+      lastId: null,
+    );
   }
 
   Future<void> removeFromRoster({required String jid}) async {

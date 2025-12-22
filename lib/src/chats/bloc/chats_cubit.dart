@@ -12,10 +12,11 @@ part 'chats_cubit.freezed.dart';
 part 'chats_state.dart';
 
 class ChatsCubit extends Cubit<ChatsState> {
-  ChatsCubit({required XmppService xmppService})
-      : _chatsService = xmppService,
-        _homeRefreshSyncService =
-            HomeRefreshSyncService(xmppService: xmppService),
+  ChatsCubit({
+    required XmppService xmppService,
+    required HomeRefreshSyncService homeRefreshSyncService,
+  })  : _chatsService = xmppService,
+        _homeRefreshSyncService = homeRefreshSyncService,
         super(
           const ChatsState(
             openJid: null,
