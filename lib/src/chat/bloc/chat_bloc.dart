@@ -265,6 +265,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _mamComplete = false;
   bool _mamLoading = false;
   bool _mamCatchingUp = false;
+  bool _emailHistoryLoading = false;
   Completer<void>? _mamLoadingCompleter;
 
   RestartableTimer? _typingTimer;
@@ -361,6 +362,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     _finishMamLoad();
+  }
+
+  Future<void> _loadEarlierFromEmail({required int desiredWindow}) async {
+    if (_emailHistoryLoading) {
+      return;
+    }
+    final chat = state.chat;
+    final emailService = _emailService;
+    if (chat == null || emailService == null) {
+      return;
+    }
+    final items = state.items;
+    if (items.isEmpty) {
+      return;
+    }
+    final oldest = items.reversed.firstWhere(
+      (message) => message.deltaMsgId != null,
+      orElse: () => items.last,
+    );
+    _emailHistoryLoading = true;
+    try {
+      await emailService.backfillChatHistory(
+        chat: chat,
+        desiredWindow: desiredWindow,
+        beforeMessageId: oldest.deltaMsgId,
+        beforeTimestamp: oldest.timestamp,
+        filter: state.viewFilter,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to backfill email history', error, stackTrace);
+    } finally {
+      _emailHistoryLoading = false;
+    }
   }
 
   Future<void> _catchUpFromMam() async {
@@ -1568,9 +1602,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final nextLimit = state.items.length + messageBatchSize;
     _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
-    if (!_isEmailChat) {
-      await _loadEarlierFromMam(desiredWindow: nextLimit);
+    if (_isEmailChat) {
+      await _loadEarlierFromEmail(desiredWindow: nextLimit);
+      return;
     }
+    await _loadEarlierFromMam(desiredWindow: nextLimit);
   }
 
   Future<void> _onChatAlertHidden(

@@ -282,6 +282,32 @@ class EmailDeltaTransport implements ChatTransport {
     return accounts.backgroundFetch(timeout);
   }
 
+  Future<void> backfillChatHistory({
+    required int chatId,
+    required String chatJid,
+    required int desiredWindow,
+    int? beforeMessageId,
+    DateTime? beforeTimestamp,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    final consumer = _eventConsumer;
+    if (consumer == null) {
+      return;
+    }
+    await consumer.backfillChatHistory(
+      chatId: chatId,
+      chatJid: chatJid,
+      desiredWindow: desiredWindow,
+      beforeMessageId: beforeMessageId,
+      beforeTimestamp: beforeTimestamp,
+      filter: filter,
+    );
+  }
+
   @override
   Future<int?> connectivity() async {
     if (_databasePrefix == null || _databasePassphrase == null) {

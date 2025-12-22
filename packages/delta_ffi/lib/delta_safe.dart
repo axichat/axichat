@@ -98,6 +98,8 @@ class DeltaChatlistEntry {
   final int msgId;
 }
 
+const int _deltaMessageIdInitial = 0;
+
 class DeltaMessageState {
   static const int undefined = 0;
   static const int inFresh = 10;
@@ -494,11 +496,17 @@ class DeltaContextHandle {
   Future<List<int>> getChatMessageIds({
     required int chatId,
     int flags = 0,
+    int beforeMessageId = _deltaMessageIdInitial,
   }) async {
     _ensureState(_opened, 'get chat messages');
     ffi.Pointer<dc_array_t> array = ffi.nullptr;
     try {
-      array = _bindings.dc_get_chat_msgs(_context, chatId, flags, 0);
+      array = _bindings.dc_get_chat_msgs(
+        _context,
+        chatId,
+        flags,
+        beforeMessageId,
+      );
       if (array == ffi.nullptr) {
         return const <int>[];
       }
