@@ -418,8 +418,7 @@ class XmppService extends XmppBase
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
   var _httpUploadSupport = const HttpUploadSupport(supported: false);
-  final _pubSubSupportController =
-      StreamController<PubSubSupport>.broadcast();
+  final _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
   var _pubSubSupport = const PubSubSupport(
     pubSubSupported: false,
     pepSupported: false,
@@ -2359,14 +2358,12 @@ class XmppService extends XmppBase
     final hostFeatures =
         await _discoFeaturesFor(discoManager: discoManager, jid: hostJid);
 
-    final pubSubSupported =
-        selfFeatures.contains(mox.pubsubXmlns) ||
-            selfFeatures.contains(mox.pubsubOwnerXmlns) ||
-            hostFeatures.contains(mox.pubsubXmlns) ||
-            hostFeatures.contains(mox.pubsubOwnerXmlns);
-    final pepSupported =
-        selfFeatures.contains(mox.pubsubEventXmlns) ||
-            selfFeatures.contains(mox.pubsubXmlns);
+    final pubSubSupported = selfFeatures.contains(mox.pubsubXmlns) ||
+        selfFeatures.contains(mox.pubsubOwnerXmlns) ||
+        hostFeatures.contains(mox.pubsubXmlns) ||
+        hostFeatures.contains(mox.pubsubOwnerXmlns);
+    final pepSupported = selfFeatures.contains(mox.pubsubEventXmlns) ||
+        selfFeatures.contains(mox.pubsubXmlns);
     final bookmarks2Supported =
         selfFeatures.contains(BookmarksManager.bookmarksNotifyFeature) ||
             selfFeatures.contains(_bookmarks2NodeXmlns);
@@ -2387,7 +2384,7 @@ class XmppService extends XmppBase
     if (jid == null) return const {};
     try {
       final result = await discoManager.discoInfoQuery(jid);
-      if (result == null || result.isType<mox.StanzaError>()) {
+      if (result.isType<mox.StanzaError>()) {
         return const {};
       }
       final info = result.get<mox.DiscoInfo>();

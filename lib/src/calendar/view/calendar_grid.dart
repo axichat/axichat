@@ -18,7 +18,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';

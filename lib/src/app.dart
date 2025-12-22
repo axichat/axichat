@@ -157,7 +157,7 @@ class _AxichatState extends State<Axichat> {
           create: (context) => HomeRefreshSyncService(
             xmppService: context.read<XmppService>(),
             emailService: context.read<EmailService>(),
-          ),
+          )..start(),
         ),
       ],
       child: MultiBlocProvider(
