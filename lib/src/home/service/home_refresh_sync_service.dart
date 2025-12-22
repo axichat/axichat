@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -21,6 +22,35 @@ final class HomeRefreshSyncService {
   final Logger _log = Logger('HomeRefreshSyncService');
   bool _syncInFlight = false;
   DateTime? _lastSyncAt;
+  StreamSubscription<ConnectionState>? _xmppConnectivitySubscription;
+  StreamSubscription<EmailSyncState>? _emailSyncSubscription;
+  ConnectionState? _lastXmppState;
+  EmailSyncStatus? _lastEmailStatus;
+  var _listenersStarted = false;
+
+  void start() {
+    if (_listenersStarted) return;
+    _listenersStarted = true;
+    _lastXmppState = _xmppService.connectionState;
+    _xmppConnectivitySubscription =
+        _xmppService.connectivityStream.listen(_handleXmppConnectivity);
+    final emailService = _emailService;
+    if (emailService != null) {
+      _lastEmailStatus = emailService.syncState.status;
+      _emailSyncSubscription =
+          emailService.syncStateStream.listen(_handleEmailSyncState);
+    }
+  }
+
+  Future<void> close() async {
+    _listenersStarted = false;
+    final xmppSub = _xmppConnectivitySubscription;
+    _xmppConnectivitySubscription = null;
+    await xmppSub?.cancel();
+    final emailSub = _emailSyncSubscription;
+    _emailSyncSubscription = null;
+    await emailSub?.cancel();
+  }
 
   Future<void> syncOnLogin() async {
     try {
@@ -38,6 +68,7 @@ final class HomeRefreshSyncService {
     try {
       await _healTransports();
 
+      await _syncEmailContacts();
       await _refreshMucBookmarks();
       await _refreshConversationIndex();
       await _refreshEmailHistory();
@@ -50,6 +81,33 @@ final class HomeRefreshSyncService {
       return _lastSyncAt!;
     } finally {
       _syncInFlight = false;
+    }
+  }
+
+  void _handleXmppConnectivity(ConnectionState state) {
+    final wasConnected = _lastXmppState == ConnectionState.connected;
+    _lastXmppState = state;
+    if (!wasConnected && state == ConnectionState.connected) {
+      unawaited(_runReconnectSync());
+    }
+  }
+
+  void _handleEmailSyncState(EmailSyncState state) {
+    final wasReady = _lastEmailStatus == EmailSyncStatus.ready;
+    _lastEmailStatus = state.status;
+    if (!wasReady && state.status == EmailSyncStatus.ready) {
+      unawaited(_runReconnectSync());
+    }
+  }
+
+  Future<void> _runReconnectSync() async {
+    if (_syncInFlight) {
+      return;
+    }
+    try {
+      await refresh();
+    } on Exception {
+      _log.fine('Reconnect sync failed.');
     }
   }
 
@@ -79,9 +137,7 @@ final class HomeRefreshSyncService {
     final emailService = _emailService;
     if (emailService == null) return;
     try {
-      if (!emailService.isRunning) {
-        await emailService.start();
-      }
+      await emailService.ensureEventChannelActive();
       await emailService.handleNetworkAvailable();
     } on Exception {
       _log.fine('Email transport recovery failed.');
@@ -126,9 +182,19 @@ final class HomeRefreshSyncService {
     final emailService = _emailService;
     if (emailService == null) return;
     try {
-      await emailService.performBackgroundFetch();
+      await emailService.syncInboxAndSent();
     } on Exception {
       _log.fine('Email background sync failed.');
+    }
+  }
+
+  Future<void> _syncEmailContacts() async {
+    final emailService = _emailService;
+    if (emailService == null) return;
+    try {
+      await emailService.syncContactsFromCore();
+    } on Exception {
+      _log.fine('Email contact sync failed.');
     }
   }
 

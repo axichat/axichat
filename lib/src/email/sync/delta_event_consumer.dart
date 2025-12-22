@@ -229,9 +229,8 @@ class DeltaEventConsumer {
         final last = await _context.getMessage(entry.msgId);
         final timestamp = last?.timestamp;
         final preview = last?.text?.trim();
-        final hasTimestamp = timestamp != null;
-        final newerTimestamp = hasTimestamp &&
-            timestamp!.isAfter(updated.lastChangeTimestamp);
+        final newerTimestamp =
+            timestamp != null && timestamp.isAfter(updated.lastChangeTimestamp);
         if (newerTimestamp) {
           updated = updated.copyWith(lastChangeTimestamp: timestamp);
         }

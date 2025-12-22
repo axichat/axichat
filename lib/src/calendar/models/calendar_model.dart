@@ -5,7 +5,10 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'calendar_availability.dart';
+import 'calendar_collection.dart';
 import 'calendar_critical_path.dart';
+import 'calendar_ics_meta.dart';
 import 'day_event.dart';
 import 'calendar_task.dart';
 
@@ -13,6 +16,9 @@ part 'calendar_model.freezed.dart';
 part 'calendar_model.g.dart';
 
 const _tombstoneRetentionDays = 30;
+const int _calendarModelCollectionField = 8;
+const int _calendarModelAvailabilityField = 9;
+const int _calendarModelAvailabilityOverlayField = 10;
 
 @freezed
 @HiveType(typeId: 33)
@@ -26,6 +32,13 @@ class CalendarModel with _$CalendarModel {
     @HiveField(5) @Default({}) Map<String, DateTime> deletedTaskIds,
     @HiveField(6) @Default({}) Map<String, DateTime> deletedDayEventIds,
     @HiveField(7) @Default({}) Map<String, DateTime> deletedCriticalPathIds,
+    @HiveField(_calendarModelCollectionField) CalendarCollection? collection,
+    @HiveField(_calendarModelAvailabilityField)
+    @Default({})
+    Map<String, CalendarAvailability> availability,
+    @HiveField(_calendarModelAvailabilityOverlayField)
+    @Default({})
+    Map<String, CalendarAvailabilityOverlay> availabilityOverlays,
   }) = _CalendarModel;
 
   factory CalendarModel.fromJson(Map<String, dynamic> json) =>
@@ -54,6 +67,13 @@ class CalendarModel with _$CalendarModel {
     final sortedCriticalPaths = Map.fromEntries(
       criticalPaths.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
+    final sortedAvailability = Map.fromEntries(
+      availability.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
+    final sortedAvailabilityOverlays = Map.fromEntries(
+      availabilityOverlays.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key)),
+    );
     final sortedDeletedTaskIds = Map.fromEntries(
       deletedTaskIds.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
@@ -65,12 +85,17 @@ class CalendarModel with _$CalendarModel {
       deletedCriticalPathIds.entries.toList()
         ..sort((a, b) => a.key.compareTo(b.key)),
     );
+    final collectionJson = collection?.toJson();
     final content = jsonEncode({
       'tasks': sortedTasks.map((k, v) => MapEntry(k, v.toJson())),
       'dayEvents': sortedDayEvents.map((k, v) => MapEntry(k, v.toJson())),
       'lastModified': lastModified.toIso8601String(),
       'criticalPaths':
           sortedCriticalPaths.map((k, v) => MapEntry(k, v.toJson())),
+      'availability': sortedAvailability.map((k, v) => MapEntry(k, v.toJson())),
+      'availabilityOverlays':
+          sortedAvailabilityOverlays.map((k, v) => MapEntry(k, v.toJson())),
+      'collection': collectionJson,
       'deletedTaskIds':
           sortedDeletedTaskIds.map((k, v) => MapEntry(k, v.toIso8601String())),
       'deletedDayEventIds': sortedDeletedDayEventIds
@@ -409,6 +434,88 @@ Map<String, DateTime> _mergeTombstones(
   return merged;
 }
 
+CalendarCollection? _mergeCollections(
+  CalendarCollection? local,
+  CalendarCollection? remote,
+) {
+  if (remote == null) {
+    return local;
+  }
+  if (local == null) {
+    return remote;
+  }
+  return remote;
+}
+
+DateTime? _availabilityTimestamp(CalendarAvailability availability) {
+  final CalendarIcsMeta? meta = availability.icsMeta;
+  return meta?.lastModified ?? meta?.dtStamp ?? meta?.created;
+}
+
+Map<String, CalendarAvailability> _mergeAvailability(
+  Map<String, CalendarAvailability> local,
+  Map<String, CalendarAvailability> remote,
+) {
+  final merged = <String, CalendarAvailability>{};
+  final allIds = <String>{...local.keys, ...remote.keys};
+  for (final id in allIds) {
+    final localAvailability = local[id];
+    final remoteAvailability = remote[id];
+    if (localAvailability == null && remoteAvailability != null) {
+      merged[id] = remoteAvailability;
+      continue;
+    }
+    if (localAvailability != null && remoteAvailability == null) {
+      merged[id] = localAvailability;
+      continue;
+    }
+    if (localAvailability != null && remoteAvailability != null) {
+      final localStamp = _availabilityTimestamp(localAvailability);
+      final remoteStamp = _availabilityTimestamp(remoteAvailability);
+      if (localStamp == null && remoteStamp == null) {
+        merged[id] = remoteAvailability;
+        continue;
+      }
+      if (localStamp == null && remoteStamp != null) {
+        merged[id] = remoteAvailability;
+        continue;
+      }
+      if (localStamp != null && remoteStamp == null) {
+        merged[id] = localAvailability;
+        continue;
+      }
+      merged[id] = remoteStamp!.isAfter(localStamp!)
+          ? remoteAvailability
+          : localAvailability;
+    }
+  }
+  return merged;
+}
+
+Map<String, CalendarAvailabilityOverlay> _mergeAvailabilityOverlays(
+  Map<String, CalendarAvailabilityOverlay> local,
+  Map<String, CalendarAvailabilityOverlay> remote,
+) {
+  final merged = <String, CalendarAvailabilityOverlay>{};
+  final allIds = <String>{...local.keys, ...remote.keys};
+  for (final id in allIds) {
+    final localOverlay = local[id];
+    final remoteOverlay = remote[id];
+    if (localOverlay == null && remoteOverlay != null) {
+      merged[id] = remoteOverlay;
+      continue;
+    }
+    if (localOverlay != null && remoteOverlay == null) {
+      merged[id] = localOverlay;
+      continue;
+    }
+    if (localOverlay != null && remoteOverlay != null) {
+      merged[id] = remoteOverlay;
+    }
+  }
+  return merged;
+}
+
 extension CalendarModelMerge on CalendarModel {
   CalendarModel mergeWith(CalendarModel remote) {
     final mergedDeletedTaskIds =
@@ -509,11 +616,21 @@ extension CalendarModelMerge on CalendarModel {
       }
     }
 
+    final mergedAvailability =
+        _mergeAvailability(availability, remote.availability);
+    final mergedAvailabilityOverlays = _mergeAvailabilityOverlays(
+      availabilityOverlays,
+      remote.availabilityOverlays,
+    );
+    final mergedCollection = _mergeCollections(collection, remote.collection);
     final now = DateTime.now();
     final merged = CalendarModel(
       tasks: mergedTasks,
       dayEvents: mergedDayEvents,
       criticalPaths: mergedPaths,
+      availability: mergedAvailability,
+      availabilityOverlays: mergedAvailabilityOverlays,
+      collection: mergedCollection,
       deletedTaskIds: mergedDeletedTaskIds,
       deletedDayEventIds: mergedDeletedDayEventIds,
       deletedCriticalPathIds: mergedDeletedCriticalPathIds,
@@ -526,7 +643,11 @@ extension CalendarModelMerge on CalendarModel {
 
 extension CalendarModelX on CalendarModel {
   bool get hasCalendarData =>
-      tasks.isNotEmpty || dayEvents.isNotEmpty || criticalPaths.isNotEmpty;
+      tasks.isNotEmpty ||
+      dayEvents.isNotEmpty ||
+      criticalPaths.isNotEmpty ||
+      availability.isNotEmpty ||
+      availabilityOverlays.isNotEmpty;
 
   CalendarTask? resolveTaskInstance(String taskId) {
     final CalendarTask? direct = tasks[taskId];

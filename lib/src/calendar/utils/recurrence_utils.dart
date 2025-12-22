@@ -312,6 +312,7 @@ DateTime? _nextOccurrence(
     case RecurrenceFrequency.monthly:
       return _addMonths(current, max(1, rule.interval), baseStart.day);
   }
+  return null;
 }
 
 DateTime? calculateRecurrenceEndDate({

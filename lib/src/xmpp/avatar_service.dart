@@ -53,6 +53,7 @@ mixin AvatarService on XmppBase {
   final _avatarLog = Logger('AvatarService');
   final Set<String> _avatarRefreshInProgress = {};
   final Set<String> _configuredAvatarNodes = {};
+  final Map<String, DateTime> _conversationAvatarRefreshAttempts = {};
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
   static const int _maxAvatarBytes = 512 * 1024;
@@ -60,6 +61,8 @@ mixin AvatarService on XmppBase {
   static const int _avatarBytesCacheLimit = 64;
   static const int _conversationAvatarChatStart = 0;
   static const int _conversationAvatarChatEnd = 0;
+  static const Duration _conversationAvatarRefreshCooldown =
+      Duration(minutes: 2);
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
   static const String _avatarConfigKeySeparator = '|';
   static const int _avatarPublishVerificationAttempts = 2;
@@ -131,6 +134,14 @@ mixin AvatarService on XmppBase {
           bareJid,
           metadata: event.metadata,
         );
+      })
+      ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
+        if (connectionState != ConnectionState.connected) return;
+        final peerJid = event.item.peerBare.toBare().toString();
+        if (peerJid.isEmpty) return;
+        if (peerJid == myJid) return;
+        if (!await _shouldRefreshConversationAvatar(peerJid)) return;
+        unawaited(_refreshConversationAvatars([peerJid]));
       })
       ..registerHandler<mox.VCardAvatarUpdatedEvent>((event) async {
         final bareJid = event.jid.toBare().toString();
@@ -246,6 +257,31 @@ mixin AvatarService on XmppBase {
     }
   }
 
+  Future<void> _refreshConversationAvatars(Iterable<String> jids) async {
+    if (jids.isEmpty) return;
+    scheduleAvatarRefresh(jids);
+  }
+
+  Future<bool> _shouldRefreshConversationAvatar(String jid) async {
+    final now = DateTime.timestamp();
+    final lastAttempt = _conversationAvatarRefreshAttempts[jid];
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _conversationAvatarRefreshCooldown) {
+      return false;
+    }
+
+    final existingHash = await _storedAvatarHash(jid);
+    if (existingHash != null && existingHash.trim().isNotEmpty) {
+      final existingPath = await _storedAvatarPath(jid);
+      if (await _hasCachedAvatarFile(existingPath)) {
+        return false;
+      }
+    }
+
+    _conversationAvatarRefreshAttempts[jid] = now;
+    return true;
+  }
+
   Future<void> refreshAvatarsForConversationIndex() async {
     if (connectionState != ConnectionState.connected) return;
     List<Chat> chats;
@@ -268,7 +304,7 @@ mixin AvatarService on XmppBase {
       directJids.add(jid);
     }
     if (directJids.isNotEmpty) {
-      scheduleAvatarRefresh(directJids);
+      await _refreshConversationAvatars(directJids);
     }
     await refreshSelfAvatarIfNeeded(force: true);
   }

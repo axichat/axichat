@@ -73,7 +73,7 @@ final class _DeltaOptionalConfig {
 
   final _DcGetConfigDart? _getConfig;
 
-  _DcGetConfigDart? _loadGetConfig() {
+  static _DcGetConfigDart? _loadGetConfig() {
     try {
       final library = loadDeltaLibrary();
       final symbol = library.lookup<ffi.NativeFunction<_DcGetConfigNative>>(

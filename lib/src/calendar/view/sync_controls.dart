@@ -64,21 +64,16 @@ class _SyncControlsState extends State<SyncControls> {
   Future<void> _exportAll() async {
     final model = context.read<CalendarBloc>().state.model;
     if (!model.hasCalendarData) {
-      FeedbackSystem.showInfo(context, 'No tasks available to export.');
+      FeedbackSystem.showInfo(context, 'No calendar data available to export.');
       return;
     }
     final format = await showCalendarExportFormatSheet(context);
     if (!mounted || format == null) return;
     try {
-      if (format == CalendarExportFormat.ics && model.tasks.isEmpty) {
-        FeedbackSystem.showInfo(context, 'No tasks available to export.');
-        return;
-      }
       final file = format == CalendarExportFormat.json
           ? await _transferService.exportModel(model: model)
-          : await _transferService.exportTasks(
-              tasks: model.tasks.values,
-              format: format,
+          : await _transferService.exportIcs(
+              model: model,
             );
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
         file: file,
