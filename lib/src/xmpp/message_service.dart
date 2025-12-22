@@ -135,8 +135,7 @@ final _capabilityCacheKey =
 const String _mamGlobalLastIdKeyName = 'mam_global_last_id';
 const String _mamGlobalLastSyncKeyName = 'mam_global_last_sync';
 const String _mamGlobalDeniedUntilKeyName = 'mam_global_denied_until';
-final _mamGlobalLastIdKey =
-    XmppStateStore.registerKey(_mamGlobalLastIdKeyName);
+final _mamGlobalLastIdKey = XmppStateStore.registerKey(_mamGlobalLastIdKeyName);
 final _mamGlobalLastSyncKey =
     XmppStateStore.registerKey(_mamGlobalLastSyncKeyName);
 final _mamGlobalDeniedUntilKey =
@@ -567,6 +566,73 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     );
   }
 
+  Future<String?> _loadMamGlobalLastId() async {
+    return await _dbOpReturning<XmppStateStore, String?>(
+      (ss) => ss.read(key: _mamGlobalLastIdKey) as String?,
+    );
+  }
+
+  Future<void> _storeMamGlobalLastId(String value) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return;
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        await ss.write(key: _mamGlobalLastIdKey, value: trimmed);
+      },
+      awaitDatabase: true,
+    );
+  }
+
+  Future<DateTime?> _loadMamGlobalLastSync() async {
+    return await _dbOpReturning<XmppStateStore, DateTime?>(
+      (ss) {
+        final raw = ss.read(key: _mamGlobalLastSyncKey) as String?;
+        return raw == null ? null : DateTime.tryParse(raw);
+      },
+    );
+  }
+
+  Future<void> _storeMamGlobalLastSync(DateTime timestamp) async {
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        await ss.write(
+          key: _mamGlobalLastSyncKey,
+          value: timestamp.toUtc().toIso8601String(),
+        );
+      },
+      awaitDatabase: true,
+    );
+  }
+
+  Future<DateTime?> _loadMamGlobalDeniedUntil() async {
+    if (_mamGlobalDeniedUntil != null) return _mamGlobalDeniedUntil;
+    final loaded = await _dbOpReturning<XmppStateStore, DateTime?>(
+      (ss) {
+        final raw = ss.read(key: _mamGlobalDeniedUntilKey) as String?;
+        return raw == null ? null : DateTime.tryParse(raw);
+      },
+    );
+    _mamGlobalDeniedUntil = loaded;
+    return loaded;
+  }
+
+  Future<void> _storeMamGlobalDeniedUntil(DateTime? until) async {
+    _mamGlobalDeniedUntil = until;
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        if (until == null) {
+          await ss.delete(key: _mamGlobalDeniedUntilKey);
+          return;
+        }
+        await ss.write(
+          key: _mamGlobalDeniedUntilKey,
+          value: until.toUtc().toIso8601String(),
+        );
+      },
+      awaitDatabase: true,
+    );
+  }
+
   Future<List<Message>> searchChatMessages({
     required String jid,
     String? query,
@@ -620,6 +686,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   bool _calendarMamSnapshotSeen = false;
   final Set<String> _mucMamUnsupportedRooms = {};
   DateTime? _mamGlobalDeniedUntil;
+  DateTime? _mamGlobalMaxTimestamp;
 
   final Map<String, Set<String>> _seenStableKeys = {};
   final Map<String, Queue<String>> _stableKeyOrder = {};
@@ -641,6 +708,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     manager
       ..registerHandler<mox.MessageEvent>((event) async {
         if (await _handleError(event)) return;
+        _trackMamGlobalAnchor(event);
 
         final reactionOnly = await _handleReactions(event);
         if (reactionOnly) return;
@@ -848,7 +916,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       });
   }
 
-  Future<void> syncMessageArchiveOnLogin() async {
+  Future<void> syncMessageArchiveOnLogin({
+    bool includeDirect = true,
+    bool includeMuc = true,
+  }) async {
     if (_mamLoginSyncInFlight) return;
     if (connectionState != ConnectionState.connected) return;
     _mamLoginSyncInFlight = true;
@@ -856,13 +927,17 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       await database;
       if (connectionState != ConnectionState.connected) return;
       await _resolveMamSupportForAccount();
-      if (!_mamSupported) return;
+      final canSyncDirect = _mamSupported;
 
       final chats = await _loadChatsForMamSync();
 
       for (final chat in chats) {
         if (connectionState != ConnectionState.connected) return;
         if (chat.defaultTransport.isEmail) continue;
+        if (chat.type == ChatType.chat && (!includeDirect || !canSyncDirect)) {
+          continue;
+        }
+        if (chat.type == ChatType.groupChat && !includeMuc) continue;
 
         final chatJid = chat.remoteJid;
         if (chatJid.isEmpty) continue;
@@ -947,6 +1022,142 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       }
       afterId = nextAfterId;
     }
+  }
+
+  void _trackMamGlobalAnchor(mox.MessageEvent event) {
+    if (!_mamGlobalSyncInFlight) return;
+    if (!event.isFromMAM) return;
+    final stamp = event.extensions.get<mox.DelayedDeliveryData>()?.timestamp;
+    if (stamp == null) return;
+    final normalized = stamp.toUtc();
+    final current = _mamGlobalMaxTimestamp;
+    if (current == null || normalized.isAfter(current)) {
+      _mamGlobalMaxTimestamp = normalized;
+    }
+  }
+
+  Future<MamGlobalSyncOutcome> syncGlobalMamCatchUp({
+    int pageSize = mamLoginBackfillMessageLimit,
+  }) async {
+    if (_mamGlobalSyncInFlight) {
+      return MamGlobalSyncOutcome.skippedInFlight;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return MamGlobalSyncOutcome.failed;
+    }
+    _mamGlobalSyncInFlight = true;
+    try {
+      await database;
+      _mamGlobalMaxTimestamp = null;
+      if (connectionState != ConnectionState.connected) {
+        return MamGlobalSyncOutcome.failed;
+      }
+      await _resolveMamSupportForAccount();
+      if (!_mamSupported) {
+        return MamGlobalSyncOutcome.skippedUnsupported;
+      }
+
+      final deniedUntil = await _loadMamGlobalDeniedUntil();
+      if (deniedUntil != null && deniedUntil.isAfter(DateTime.timestamp())) {
+        return MamGlobalSyncOutcome.skippedDenied;
+      }
+
+      String? after = await _loadMamGlobalLastId();
+      final anchor = await _loadMamGlobalLastSync();
+      String? before;
+      DateTime? start;
+      if (after == null) {
+        before = '';
+        start = anchor;
+      }
+
+      while (true) {
+        final result = await _fetchGlobalMamPage(
+          after: after,
+          before: before,
+          start: start,
+          pageSize: pageSize,
+        );
+        if (result.lastId != null && result.lastId != after) {
+          after = result.lastId;
+          await _storeMamGlobalLastId(after!);
+        }
+        if (result.complete || result.lastId == null) {
+          break;
+        }
+        before = null;
+        start = null;
+      }
+
+      final anchorTimestamp =
+          _mamGlobalMaxTimestamp?.toUtc() ?? DateTime.timestamp().toUtc();
+      await _storeMamGlobalLastSync(anchorTimestamp);
+      await _storeMamGlobalDeniedUntil(null);
+      return MamGlobalSyncOutcome.completed;
+    } on XmppAbortedException {
+      return MamGlobalSyncOutcome.failed;
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Global MAM sync failed.', error, stackTrace);
+      final backoff = DateTime.timestamp().add(_mamGlobalDeniedBackoff);
+      await _storeMamGlobalDeniedUntil(backoff);
+      return MamGlobalSyncOutcome.failed;
+    } finally {
+      _mamGlobalSyncInFlight = false;
+    }
+  }
+
+  Future<MamPageResult> _fetchGlobalMamPage({
+    String? before,
+    String? after,
+    DateTime? start,
+    int pageSize = mamLoginBackfillMessageLimit,
+  }) async {
+    final mamManager = _connection.getManager<mox.MAMManager>();
+    if (mamManager == null) {
+      _log.warning('MAM manager unavailable; ensure it is registered.');
+      throw XmppMessageException();
+    }
+    final options = mox.MAMQueryOptions(
+      withJid: null,
+      start: start,
+      formType: mox.mamXmlns,
+      forceForm: true,
+    );
+    final result = await mamManager.queryArchive(
+      to: null,
+      options: options,
+      rsm: mox.ResultSetManagement(
+        before: before,
+        after: after,
+        max: pageSize,
+      ),
+    );
+    if (result == null) {
+      _log.warning('Global MAM query failed.');
+      throw XmppMessageException();
+    }
+    final rsm = result.rsm;
+    return MamPageResult(
+      complete: result.complete,
+      firstId: rsm?.first,
+      lastId: rsm?.last,
+      count: rsm?.count,
+    );
+  }
+
+  bool _canQueryMucArchive(String jid) {
+    final trimmed = jid.trim();
+    if (trimmed.isEmpty) return false;
+    late final String bareRoom;
+    try {
+      bareRoom = mox.JID.fromString(trimmed).toBare().toString();
+    } on Exception {
+      return false;
+    }
+    if (_mucMamUnsupportedRooms.contains(bareRoom)) return false;
+    if (hasLeftRoom(bareRoom)) return false;
+    final roomState = roomStateFor(bareRoom);
+    return roomState?.myOccupantId != null;
   }
 
   @override
@@ -1910,6 +2121,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     int pageSize = 50,
     bool isMuc = false,
   }) async {
+    if (isMuc && !_canQueryMucArchive(jid)) {
+      return const MamPageResult(complete: true);
+    }
     final mamManager = _connection.getManager<mox.MAMManager>();
     if (mamManager == null) {
       _log.warning('MAM manager unavailable; ensure it is registered.');
@@ -1931,9 +2145,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         max: pageSize,
       ),
     );
-    final rsm = result?.rsm;
+    if (result == null) {
+      _log.warning('MAM query failed.');
+      throw XmppMessageException();
+    }
+    final rsm = result.rsm;
     return MamPageResult(
-      complete: result?.complete ?? false,
+      complete: result.complete,
       firstId: rsm?.first,
       lastId: rsm?.last,
       count: rsm?.count,
@@ -2192,23 +2410,28 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         chats.where((chat) => chat.type == ChatType.groupChat).toList();
     if (mucChats.isEmpty) return;
 
-    var missingMam = false;
+    final unsupportedRooms = <String>{};
     for (final chat in mucChats) {
       try {
         final hasMam = await _supportsMam(chat.jid);
         if (!hasMam) {
-          missingMam = true;
+          unsupportedRooms.add(
+            mox.JID.fromString(chat.jid).toBare().toString(),
+          );
         }
       } on Exception catch (error, stackTrace) {
         _log.fine('MAM disco for a group chat failed.', error, stackTrace);
       }
     }
-    if (missingMam) {
+    _mucMamUnsupportedRooms
+      ..clear()
+      ..addAll(unsupportedRooms);
+    if (unsupportedRooms.isNotEmpty) {
       _log.warning(
         'Archive backfill may be incomplete: one or more group chats did not advertise MAM v2.',
       );
     }
-    _updateMamSupport(_mamSupported && !missingMam);
+    _updateMamSupport(_mamSupported);
   }
 
   Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
@@ -2375,6 +2598,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     await super._reset();
 
     _mamLoginSyncInFlight = false;
+    _mamGlobalSyncInFlight = false;
+    _mucMamUnsupportedRooms.clear();
+    _mamGlobalDeniedUntil = null;
+    _mamGlobalMaxTimestamp = null;
     _resetStableKeyCache();
     _lastSeenKeys.clear();
     _capabilityCache.clear();

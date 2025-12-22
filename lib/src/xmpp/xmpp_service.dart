@@ -178,6 +178,34 @@ class HttpUploadSupport {
   int get hashCode => Object.hash(supported, entityJid, maxFileSizeBytes);
 }
 
+class PubSubSupport {
+  const PubSubSupport({
+    required this.pubSubSupported,
+    required this.pepSupported,
+    required this.bookmarks2Supported,
+  });
+
+  final bool pubSubSupported;
+  final bool pepSupported;
+  final bool bookmarks2Supported;
+
+  bool get canUsePepNodes => pubSubSupported && pepSupported;
+
+  bool get canUseBookmarks2 => canUsePepNodes && bookmarks2Supported;
+
+  @override
+  bool operator ==(Object other) {
+    return other is PubSubSupport &&
+        other.pubSubSupported == pubSubSupported &&
+        other.pepSupported == pepSupported &&
+        other.bookmarks2Supported == bookmarks2Supported;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(pubSubSupported, pepSupported, bookmarks2Supported);
+}
+
 class StoredAvatar {
   const StoredAvatar({
     required this.path,
@@ -202,6 +230,8 @@ final serverLookup = <String, IOEndpoint>{
   'draugr.de': const IOEndpoint('23.88.8.69', 5222),
   'jix.im': const IOEndpoint('51.77.59.5', 5222),
 };
+
+const String _bookmarks2NodeXmlns = 'urn:xmpp:bookmarks:1';
 
 bool _isFirstPartyJid({
   required mox.JID? myJid,
@@ -238,6 +268,12 @@ abstract interface class XmppBase {
   mox.JID? get _myJid;
 
   HttpUploadSupport get httpUploadSupport;
+
+  PubSubSupport get pubSubSupport;
+
+  Stream<PubSubSupport> get pubSubSupportStream;
+
+  Future<PubSubSupport> refreshPubSubSupport({bool force = false});
 
   RegisteredStateKey get selfAvatarPathKey;
 
@@ -382,6 +418,14 @@ class XmppService extends XmppBase
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
   var _httpUploadSupport = const HttpUploadSupport(supported: false);
+  final _pubSubSupportController =
+      StreamController<PubSubSupport>.broadcast();
+  var _pubSubSupport = const PubSubSupport(
+    pubSubSupported: false,
+    pepSupported: false,
+    bookmarks2Supported: false,
+  );
+  var _pubSubSupportResolved = false;
 
   bool get mamSupported => _mamSupported;
 
@@ -392,6 +436,13 @@ class XmppService extends XmppBase
 
   Stream<HttpUploadSupport> get httpUploadSupportStream =>
       _httpUploadSupportController.stream;
+
+  @override
+  PubSubSupport get pubSubSupport => _pubSubSupport;
+
+  @override
+  Stream<PubSubSupport> get pubSubSupportStream =>
+      _pubSubSupportController.stream;
 
   @override
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
@@ -465,6 +516,9 @@ class XmppService extends XmppBase
     manager
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         _setConnectionState(event.state);
+        if (event.state != ConnectionState.connected) {
+          _pubSubSupportResolved = false;
+        }
         if (event.state == ConnectionState.error ||
             event.state == ConnectionState.notConnected) {
           unawaited(_triggerImmediateReconnectIfAppropriate());
@@ -492,6 +546,7 @@ class XmppService extends XmppBase
         if (!event.resumed && _streamResumptionAttempted) {
           final sm = _connection.getManager<XmppStreamManagementManager>();
           await sm?.handleFailedResumption();
+          unawaited(_syncAfterReconnect());
         }
         _streamResumptionAttempted = false;
         if (!event.resumed) {
@@ -511,6 +566,7 @@ class XmppService extends XmppBase
         }
         if (event.resumed) return;
         unawaited(_refreshHttpUploadSupport());
+        unawaited(_refreshPubSubSupport());
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
@@ -2121,6 +2177,9 @@ class XmppService extends XmppBase
     if (!_httpUploadSupportController.isClosed) {
       await _httpUploadSupportController.close();
     }
+    if (!_pubSubSupportController.isClosed) {
+      await _pubSubSupportController.close();
+    }
     if (!_mamSupportController.isClosed) {
       await _mamSupportController.close();
     }
@@ -2216,6 +2275,14 @@ class XmppService extends XmppBase
     _httpUploadSupportController.add(support);
   }
 
+  void _updatePubSubSupport(PubSubSupport support) {
+    final unchanged = _pubSubSupportResolved && _pubSubSupport == support;
+    _pubSubSupport = support;
+    _pubSubSupportResolved = true;
+    if (unchanged || _pubSubSupportController.isClosed) return;
+    _pubSubSupportController.add(support);
+  }
+
   Future<void> _refreshHttpUploadSupport() async {
     final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
     final discoManager = _connection.getManager<mox.DiscoManager>();
@@ -2257,6 +2324,100 @@ class XmppService extends XmppBase
         stackTrace,
       );
       _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+    }
+  }
+
+  @override
+  Future<PubSubSupport> refreshPubSubSupport({bool force = false}) async {
+    if (!force && _pubSubSupportResolved) {
+      return _pubSubSupport;
+    }
+    return _refreshPubSubSupport();
+  }
+
+  Future<PubSubSupport> _refreshPubSubSupport() async {
+    if (connectionState != ConnectionState.connected) {
+      return _pubSubSupport;
+    }
+    final discoManager = _connection.getManager<mox.DiscoManager>();
+    if (discoManager == null) {
+      _updatePubSubSupport(
+        const PubSubSupport(
+          pubSubSupported: false,
+          pepSupported: false,
+          bookmarks2Supported: false,
+        ),
+      );
+      return _pubSubSupport;
+    }
+
+    final selfBare = _myJid?.toBare();
+    final host = _myJid?.domain;
+    final hostJid = _safeJidFromString(host);
+    final selfFeatures =
+        await _discoFeaturesFor(discoManager: discoManager, jid: selfBare);
+    final hostFeatures =
+        await _discoFeaturesFor(discoManager: discoManager, jid: hostJid);
+
+    final pubSubSupported =
+        selfFeatures.contains(mox.pubsubXmlns) ||
+            selfFeatures.contains(mox.pubsubOwnerXmlns) ||
+            hostFeatures.contains(mox.pubsubXmlns) ||
+            hostFeatures.contains(mox.pubsubOwnerXmlns);
+    final pepSupported =
+        selfFeatures.contains(mox.pubsubEventXmlns) ||
+            selfFeatures.contains(mox.pubsubXmlns);
+    final bookmarks2Supported =
+        selfFeatures.contains(BookmarksManager.bookmarksNotifyFeature) ||
+            selfFeatures.contains(_bookmarks2NodeXmlns);
+
+    final support = PubSubSupport(
+      pubSubSupported: pubSubSupported,
+      pepSupported: pepSupported,
+      bookmarks2Supported: bookmarks2Supported,
+    );
+    _updatePubSubSupport(support);
+    return support;
+  }
+
+  Future<Set<String>> _discoFeaturesFor({
+    required mox.DiscoManager discoManager,
+    required mox.JID? jid,
+  }) async {
+    if (jid == null) return const {};
+    try {
+      final result = await discoManager.discoInfoQuery(jid);
+      if (result == null || result.isType<mox.StanzaError>()) {
+        return const {};
+      }
+      final info = result.get<mox.DiscoInfo>();
+      return info.features.toSet();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine('Disco feature query failed.', error, stackTrace);
+      return const {};
+    }
+  }
+
+  Future<void> _syncAfterReconnect() async {
+    if (connectionState != ConnectionState.connected) return;
+    try {
+      final outcome = await syncGlobalMamCatchUp();
+      final includeDirect = outcome.shouldFallbackToPerChat;
+      await syncMessageArchiveOnLogin(
+        includeDirect: includeDirect,
+        includeMuc: true,
+      );
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine('Reconnect MAM catch-up failed.', error, stackTrace);
+    }
+  }
+
+  mox.JID? _safeJidFromString(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return mox.JID.fromString(raw);
+    } on Exception {
+      return null;
     }
   }
 

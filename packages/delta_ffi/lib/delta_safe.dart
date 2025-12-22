@@ -58,6 +58,47 @@ class DeltaSafe {
   }
 }
 
+typedef _DcGetConfigNative = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Pointer<ffi.Char>,
+);
+
+typedef _DcGetConfigDart = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Pointer<ffi.Char>,
+);
+
+final class _DeltaOptionalConfig {
+  _DeltaOptionalConfig() : _getConfig = _loadGetConfig();
+
+  final _DcGetConfigDart? _getConfig;
+
+  _DcGetConfigDart? _loadGetConfig() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol = library.lookup<ffi.NativeFunction<_DcGetConfigNative>>(
+        'dc_get_config',
+      );
+      return symbol.asFunction<_DcGetConfigDart>();
+    } on Exception {
+      return null;
+    }
+  }
+
+  String? read(
+    ffi.Pointer<dc_context_t> context,
+    String key,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getConfig;
+    if (fn == null) return null;
+    final ptr = _withCString(key, (keyPtr) => fn(context, keyPtr));
+    return _takeString(ptr, bindings: bindings);
+  }
+}
+
+final _DeltaOptionalConfig _deltaOptionalConfig = _DeltaOptionalConfig();
+
 class DeltaMessageType {
   static const int text = 10;
   static const int image = 20;
@@ -202,6 +243,11 @@ class DeltaContextHandle {
   }) async {
     _ensureState(_opened, 'set config $key');
     await _setConfig(key, value);
+  }
+
+  Future<String?> getConfig(String key) async {
+    _ensureState(_opened, 'get config $key');
+    return _deltaOptionalConfig.read(_context, key, _bindings);
   }
 
   Future<void> startIo() async {

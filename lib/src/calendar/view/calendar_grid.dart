@@ -1444,7 +1444,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     if (details.hitTask) {
-      _scrollToSlot(details.slotStart, allowDeferral: false);
       return;
     }
     if (widget.state.viewMode == CalendarView.day) {

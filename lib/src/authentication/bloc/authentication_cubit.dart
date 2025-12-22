@@ -11,6 +11,7 @@ import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
+import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
@@ -60,6 +61,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required CredentialStore credentialStore,
     required XmppService xmppService,
     EmailService? emailService,
+    HomeRefreshSyncService? homeRefreshSyncService,
     NotificationService? notificationService,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
@@ -70,6 +72,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
         _emailService = emailService,
+        _homeRefreshSyncService = homeRefreshSyncService ??
+            HomeRefreshSyncService(
+              xmppService: xmppService,
+              emailService: emailService,
+            ),
         _endpointResolver = endpointResolver,
         _endpointConfig = initialState?.config ??
             initialEndpointConfig ??
@@ -121,6 +128,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (connectionState == ConnectionState.connected) {
         unawaited(_emailService?.handleNetworkAvailable());
         unawaited(_publishPendingAvatar());
+        if (_authenticatedJid != null) {
+          unawaited(_homeRefreshSyncService.syncOnLogin());
+        }
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
         unawaited(_emailService?.handleNetworkLost());
@@ -171,6 +181,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
   final EmailService? _emailService;
+  final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
   EndpointConfig _endpointConfig;
   late final http.Client _httpClient;
