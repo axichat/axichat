@@ -208,11 +208,11 @@ class DeltaEventConsumer {
     }
     final needed = desiredWindow - localCount;
     final chat = await _ensureChat(chatId);
-    final hasMarker =
-        beforeMessageId != null && beforeMessageId > _deltaMessageIdUnset;
+    final marker = beforeMessageId ?? _deltaMessageIdUnset;
+    final hasMarker = marker > _deltaMessageIdUnset;
     final messageIds = await _context.getChatMessageIds(
       chatId: chatId,
-      beforeMessageId: hasMarker ? beforeMessageId! : _deltaMessageIdUnset,
+      beforeMessageId: marker,
     );
     if (messageIds.isEmpty) {
       return _deltaMessageIdUnset;
