@@ -34,6 +34,7 @@ abstract class ChatTransport {
     String? subject,
     String? shareId,
     String? localBodyOverride,
+    String? htmlBody,
   });
 
   /// Sends an attachment message to an existing chat id.
@@ -43,6 +44,7 @@ abstract class ChatTransport {
     String? subject,
     String? shareId,
     String? captionOverride,
+    String? htmlCaption,
   });
 
   /// Ensures there is a 1:1 chat for the provided address and returns

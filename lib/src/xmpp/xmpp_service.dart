@@ -7,12 +7,14 @@ import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -57,18 +59,34 @@ import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
+
 part 'base_stream_service.dart';
+
 part 'blocking_service.dart';
+
 part 'chats_service.dart';
+
 part 'avatar_service.dart';
+
 part 'muc_service.dart';
+
 part 'muc_join_bootstrap_manager.dart';
+
 part 'message_service.dart';
+
 part 'message_sanitizer.dart';
+
+part 'xhtml_im_manager.dart';
+
 part 'mam_sm_guard.dart';
+
 part 'omemo_service.dart';
+
 part 'presence_service.dart';
+
 part 'roster_service.dart';
+
 part 'xmpp_connection.dart';
 
 sealed class XmppException implements Exception {
@@ -220,14 +238,21 @@ abstract interface class XmppBase {
   mox.JID? get _myJid;
 
   HttpUploadSupport get httpUploadSupport;
+
   RegisteredStateKey get selfAvatarPathKey;
+
   RegisteredStateKey get selfAvatarHashKey;
+
   SecretKey? get avatarEncryptionKey;
+
   Stream<StoredAvatar?> get selfAvatarStream;
+
   void _notifySelfAvatarUpdated(StoredAvatar? avatar);
+
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
+
   Stream<void> get databaseReloadStream;
 
   bool get needsReset => false;
@@ -352,12 +377,14 @@ class XmppService extends XmppBase
   final Capability _capability;
 
   // Calendar sync message callback
-  Future<void> Function(CalendarSyncMessage)? _calendarSyncCallback;
+  Future<void> Function(CalendarSyncInbound)? _calendarSyncCallback;
 
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
   var _httpUploadSupport = const HttpUploadSupport(supported: false);
+
   bool get mamSupported => _mamSupported;
+
   Stream<bool> get mamSupportStream => _mamSupportController.stream;
 
   @override
@@ -368,8 +395,10 @@ class XmppService extends XmppBase
 
   @override
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
+
   @override
   Stream<StoredAvatar?> get selfAvatarStream => _selfAvatarController.stream;
+
   @override
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
 
@@ -2093,7 +2122,7 @@ class XmppService extends XmppBase
 
   /// Register a callback to handle calendar sync messages
   void setCalendarSyncCallback(
-      Future<void> Function(CalendarSyncMessage) callback) {
+      Future<void> Function(CalendarSyncInbound) callback) {
     _calendarSyncCallback = callback;
   }
 

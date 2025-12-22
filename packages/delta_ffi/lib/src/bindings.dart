@@ -1288,6 +1288,23 @@ class DeltaChatBindings {
   late final _dc_msg_set_text = _dc_msg_set_textPtr.asFunction<
       void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>)>();
 
+  void dc_msg_set_html(
+    ffi.Pointer<dc_msg_t> msg,
+    ffi.Pointer<ffi.Char> html,
+  ) {
+    return _dc_msg_set_html(
+      msg,
+      html,
+    );
+  }
+
+  late final _dc_msg_set_htmlPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_msg_t>,
+              ffi.Pointer<ffi.Char>)>>('dc_msg_set_html');
+  late final _dc_msg_set_html = _dc_msg_set_htmlPtr.asFunction<
+      void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>)>();
+
   void dc_msg_set_subject(
     ffi.Pointer<dc_msg_t> msg,
     ffi.Pointer<ffi.Char> subject,
@@ -1417,6 +1434,354 @@ class DeltaChatBindings {
           'dc_msg_get_height');
   late final _dc_msg_get_height =
       _dc_msg_get_heightPtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  ffi.Pointer<dc_array_t> dc_get_fresh_msgs(
+    ffi.Pointer<dc_context_t> ctx,
+  ) {
+    return _dc_get_fresh_msgs(
+      ctx,
+    );
+  }
+
+  late final _dc_get_fresh_msgsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_array_t> Function(
+              ffi.Pointer<dc_context_t>)>>('dc_get_fresh_msgs');
+  late final _dc_get_fresh_msgs = _dc_get_fresh_msgsPtr.asFunction<
+      ffi.Pointer<dc_array_t> Function(ffi.Pointer<dc_context_t>)>();
+
+  int dc_get_fresh_msg_cnt(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+  ) {
+    return _dc_get_fresh_msg_cnt(
+      ctx,
+      chat_id,
+    );
+  }
+
+  late final _dc_get_fresh_msg_cntPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int Function(
+              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_get_fresh_msg_cnt');
+  late final _dc_get_fresh_msg_cnt = _dc_get_fresh_msg_cntPtr
+      .asFunction<int Function(ffi.Pointer<dc_context_t>, int)>();
+
+  void dc_marknoticed_chat(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+  ) {
+    return _dc_marknoticed_chat(
+      ctx,
+      chat_id,
+    );
+  }
+
+  late final _dc_marknoticed_chatPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(
+              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_marknoticed_chat');
+  late final _dc_marknoticed_chat = _dc_marknoticed_chatPtr
+      .asFunction<void Function(ffi.Pointer<dc_context_t>, int)>();
+
+  void dc_markseen_msgs(
+    ffi.Pointer<dc_context_t> ctx,
+    ffi.Pointer<ffi.Uint32> msg_ids,
+    int msg_cnt,
+  ) {
+    return _dc_markseen_msgs(
+      ctx,
+      msg_ids,
+      msg_cnt,
+    );
+  }
+
+  late final _dc_markseen_msgsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Uint32>,
+              ffi.Int)>>('dc_markseen_msgs');
+  late final _dc_markseen_msgs = _dc_markseen_msgsPtr.asFunction<
+      void Function(ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Uint32>, int)>();
+
+  void dc_delete_msgs(
+    ffi.Pointer<dc_context_t> ctx,
+    ffi.Pointer<ffi.Uint32> msg_ids,
+    int msg_cnt,
+  ) {
+    return _dc_delete_msgs(
+      ctx,
+      msg_ids,
+      msg_cnt,
+    );
+  }
+
+  late final _dc_delete_msgsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Uint32>,
+              ffi.Int)>>('dc_delete_msgs');
+  late final _dc_delete_msgs = _dc_delete_msgsPtr.asFunction<
+      void Function(ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Uint32>, int)>();
+
+  void dc_msg_set_quote(
+    ffi.Pointer<dc_msg_t> msg,
+    ffi.Pointer<dc_msg_t> quote,
+  ) {
+    return _dc_msg_set_quote(
+      msg,
+      quote,
+    );
+  }
+
+  late final _dc_msg_set_quotePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_msg_t>,
+              ffi.Pointer<dc_msg_t>)>>('dc_msg_set_quote');
+  late final _dc_msg_set_quote = _dc_msg_set_quotePtr.asFunction<
+      void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<dc_msg_t>)>();
+
+  ffi.Pointer<dc_msg_t> dc_msg_get_quoted_msg(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_quoted_msg(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_quoted_msgPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_msg_t> Function(
+              ffi.Pointer<dc_msg_t>)>>('dc_msg_get_quoted_msg');
+  late final _dc_msg_get_quoted_msg = _dc_msg_get_quoted_msgPtr
+      .asFunction<ffi.Pointer<dc_msg_t> Function(ffi.Pointer<dc_msg_t>)>();
+
+  ffi.Pointer<ffi.Char> dc_msg_get_quoted_text(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_quoted_text(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_quoted_textPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_msg_t>)>>('dc_msg_get_quoted_text');
+  late final _dc_msg_get_quoted_text = _dc_msg_get_quoted_textPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_msg_t>)>();
+
+  void dc_forward_msgs(
+    ffi.Pointer<dc_context_t> ctx,
+    ffi.Pointer<ffi.Uint32> msg_ids,
+    int msg_cnt,
+    int chat_id,
+  ) {
+    return _dc_forward_msgs(
+      ctx,
+      msg_ids,
+      msg_cnt,
+      chat_id,
+    );
+  }
+
+  late final _dc_forward_msgsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Uint32>,
+              ffi.Int, ffi.Uint32)>>('dc_forward_msgs');
+  late final _dc_forward_msgs = _dc_forward_msgsPtr.asFunction<
+      void Function(
+          ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Uint32>, int, int)>();
+
+  void dc_set_draft(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_set_draft(
+      ctx,
+      chat_id,
+      msg,
+    );
+  }
+
+  late final _dc_set_draftPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_context_t>, ffi.Uint32,
+              ffi.Pointer<dc_msg_t>)>>('dc_set_draft');
+  late final _dc_set_draft = _dc_set_draftPtr.asFunction<
+      void Function(ffi.Pointer<dc_context_t>, int, ffi.Pointer<dc_msg_t>)>();
+
+  ffi.Pointer<dc_msg_t> dc_get_draft(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+  ) {
+    return _dc_get_draft(
+      ctx,
+      chat_id,
+    );
+  }
+
+  late final _dc_get_draftPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_msg_t> Function(
+              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_get_draft');
+  late final _dc_get_draft = _dc_get_draftPtr.asFunction<
+      ffi.Pointer<dc_msg_t> Function(ffi.Pointer<dc_context_t>, int)>();
+
+  ffi.Pointer<dc_array_t> dc_search_msgs(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+    ffi.Pointer<ffi.Char> query,
+  ) {
+    return _dc_search_msgs(
+      ctx,
+      chat_id,
+      query,
+    );
+  }
+
+  late final _dc_search_msgsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_array_t> Function(ffi.Pointer<dc_context_t>,
+              ffi.Uint32, ffi.Pointer<ffi.Char>)>>('dc_search_msgs');
+  late final _dc_search_msgs = _dc_search_msgsPtr.asFunction<
+      ffi.Pointer<dc_array_t> Function(
+          ffi.Pointer<dc_context_t>, int, ffi.Pointer<ffi.Char>)>();
+
+  void dc_set_chat_visibility(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+    int visibility,
+  ) {
+    return _dc_set_chat_visibility(
+      ctx,
+      chat_id,
+      visibility,
+    );
+  }
+
+  late final _dc_set_chat_visibilityPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_context_t>, ffi.Uint32,
+              ffi.Int)>>('dc_set_chat_visibility');
+  late final _dc_set_chat_visibility = _dc_set_chat_visibilityPtr
+      .asFunction<void Function(ffi.Pointer<dc_context_t>, int, int)>();
+
+  void dc_download_full_msg(
+    ffi.Pointer<dc_context_t> ctx,
+    int msg_id,
+  ) {
+    return _dc_download_full_msg(
+      ctx,
+      msg_id,
+    );
+  }
+
+  late final _dc_download_full_msgPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(
+              ffi.Pointer<dc_context_t>, ffi.Int)>>('dc_download_full_msg');
+  late final _dc_download_full_msg = _dc_download_full_msgPtr
+      .asFunction<void Function(ffi.Pointer<dc_context_t>, int)>();
+
+  int dc_msg_get_download_state(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_download_state(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_download_statePtr =
+      _lookup<ffi.NativeFunction<ffi.Int Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_get_download_state');
+  late final _dc_msg_get_download_state = _dc_msg_get_download_statePtr
+      .asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  int dc_resend_msgs(
+    ffi.Pointer<dc_context_t> ctx,
+    ffi.Pointer<ffi.Uint32> msg_ids,
+    int msg_cnt,
+  ) {
+    return _dc_resend_msgs(
+      ctx,
+      msg_ids,
+      msg_cnt,
+    );
+  }
+
+  late final _dc_resend_msgsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int Function(ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Uint32>,
+              ffi.Int)>>('dc_resend_msgs');
+  late final _dc_resend_msgs = _dc_resend_msgsPtr.asFunction<
+      int Function(ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Uint32>, int)>();
+
+  ffi.Pointer<ffi.Char> dc_msg_get_error(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_error(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_errorPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_msg_t>)>>('dc_msg_get_error');
+  late final _dc_msg_get_error = _dc_msg_get_errorPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_msg_t>)>();
+
+  ffi.Pointer<dc_array_t> dc_get_contacts(
+    ffi.Pointer<dc_context_t> ctx,
+    int flags,
+    ffi.Pointer<ffi.Char> query,
+  ) {
+    return _dc_get_contacts(
+      ctx,
+      flags,
+      query,
+    );
+  }
+
+  late final _dc_get_contactsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_array_t> Function(ffi.Pointer<dc_context_t>,
+              ffi.Uint32, ffi.Pointer<ffi.Char>)>>('dc_get_contacts');
+  late final _dc_get_contacts = _dc_get_contactsPtr.asFunction<
+      ffi.Pointer<dc_array_t> Function(
+          ffi.Pointer<dc_context_t>, int, ffi.Pointer<ffi.Char>)>();
+
+  ffi.Pointer<dc_array_t> dc_get_blocked_contacts(
+    ffi.Pointer<dc_context_t> ctx,
+  ) {
+    return _dc_get_blocked_contacts(
+      ctx,
+    );
+  }
+
+  late final _dc_get_blocked_contactsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_array_t> Function(
+              ffi.Pointer<dc_context_t>)>>('dc_get_blocked_contacts');
+  late final _dc_get_blocked_contacts = _dc_get_blocked_contactsPtr.asFunction<
+      ffi.Pointer<dc_array_t> Function(ffi.Pointer<dc_context_t>)>();
+
+  int dc_delete_contact(
+    ffi.Pointer<dc_context_t> ctx,
+    int contact_id,
+  ) {
+    return _dc_delete_contact(
+      ctx,
+      contact_id,
+    );
+  }
+
+  late final _dc_delete_contactPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int Function(
+              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_delete_contact');
+  late final _dc_delete_contact = _dc_delete_contactPtr
+      .asFunction<int Function(ffi.Pointer<dc_context_t>, int)>();
 }
 
 final class __mbstate_t extends ffi.Union {
@@ -1762,3 +2127,31 @@ const int DC_CONNECTIVITY_CONNECTING = 2000;
 const int DC_CONNECTIVITY_WORKING = 3000;
 
 const int DC_CONNECTIVITY_CONNECTED = 4000;
+
+const int DC_DOWNLOAD_DONE = 0;
+
+const int DC_DOWNLOAD_AVAILABLE = 10;
+
+const int DC_DOWNLOAD_FAILURE = 20;
+
+const int DC_DOWNLOAD_UNDECIPHERABLE = 30;
+
+const int DC_DOWNLOAD_IN_PROGRESS = 1000;
+
+const int DC_CHAT_VISIBILITY_NORMAL = 0;
+
+const int DC_CHAT_VISIBILITY_ARCHIVED = 1;
+
+const int DC_CHAT_VISIBILITY_PINNED = 2;
+
+const int DC_GCL_ADD_SELF = 1;
+
+const int DC_GCL_VERIFIED_ONLY = 2;
+
+const int DC_GCL_ADD_RECENT = 4;
+
+const int DC_EVENT_MSGS_CHANGED = 2000;
+
+const int DC_EVENT_CHAT_MODIFIED = 2020;
+
+const int DC_EVENT_MSGS_NOTICED = 2004;

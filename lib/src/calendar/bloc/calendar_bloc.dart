@@ -160,6 +160,18 @@ class CalendarBloc extends BaseCalendarBloc {
   }
 
   @override
+  Future<void> onModelImported(CalendarModel model) async {
+    try {
+      await _syncManager.pushFullSync();
+    } catch (error) {
+      developer.log(
+        'Failed to sync imported calendar: $error',
+        name: 'CalendarBloc',
+      );
+    }
+  }
+
+  @override
   void logError(String message, Object error) {
     developer.log(message, name: 'CalendarBloc');
   }

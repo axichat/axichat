@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/drift.dart' hide JsonKey;
@@ -291,12 +292,21 @@ class Message with _$Message implements Insertable<Message> {
             : from);
     final senderJid = isGroupChat ? event.from.toString() : from;
     final invite = _ParsedInvite.fromEvent(event, to: to);
+    final htmlData = get<XhtmlImData>();
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(
+      htmlData?.xhtmlBody,
+    );
+    final fallbackText = normalizedHtml == null
+        ? ''
+        : HtmlContentCodec.toPlainText(normalizedHtml);
+    final resolvedText = event.text.isNotEmpty ? event.text : fallbackText;
 
     return Message(
       stanzaID: event.id ?? uuid.v4(),
       senderJid: senderJid,
       chatJid: chatJid,
-      body: invite?.displayBody ?? event.text,
+      body: invite?.displayBody ?? (resolvedText.isEmpty ? null : resolvedText),
+      htmlBody: normalizedHtml,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
       noStore: get<mox.MessageProcessingHintData>()?.hints.contains(
                 mox.MessageProcessingHint.noStore,
@@ -343,7 +353,7 @@ class Message with _$Message implements Insertable<Message> {
       mox.ChatState.active,
     ];
 
-    var outgoingBody = body ?? '';
+    var outgoingBody = plainText;
     mox.ReplyData? replyData;
     if (quoting != null) {
       if (quotedBody != null) {
@@ -360,6 +370,18 @@ class Message with _$Message implements Insertable<Message> {
     }
 
     extensions.insert(0, mox.MessageBodyData(outgoingBody));
+    final normalizedHtml = normalizedHtmlBody;
+    if (normalizedHtml != null) {
+      final xhtml = HtmlContentCodec.toXhtml(normalizedHtml);
+      if (xhtml != null) {
+        extensions.add(
+          XhtmlImData(
+            xhtmlBody: xhtml,
+            plainText: outgoingBody,
+          ),
+        );
+      }
+    }
     if (replyData != null) {
       extensions.add(replyData);
     }
@@ -424,6 +446,9 @@ class Message with _$Message implements Insertable<Message> {
     if (body != null) {
       map['body'] = Variable<String>(body);
     }
+    if (htmlBody != null) {
+      map['html_body'] = Variable<String>(htmlBody);
+    }
     if (timestamp != null) {
       map['timestamp'] = Variable<DateTime>(timestamp!);
     }
@@ -457,6 +482,18 @@ class Message with _$Message implements Insertable<Message> {
       map['delta_msg_id'] = Variable<int>(deltaMsgId);
     }
     return map;
+  }
+}
+
+extension MessageContent on Message {
+  String? get normalizedHtmlBody => HtmlContentCodec.normalizeHtml(htmlBody);
+
+  String get plainText {
+    final bodyText = body;
+    if (bodyText?.isNotEmpty == true) return bodyText!;
+    final html = normalizedHtmlBody;
+    if (html == null) return '';
+    return HtmlContentCodec.toPlainText(html);
   }
 }
 

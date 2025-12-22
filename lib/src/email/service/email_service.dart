@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -499,12 +500,19 @@ class EmailService {
     required Chat chat,
     required String body,
     String? subject,
+    String? htmlBody,
   }) async {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(subject);
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();
+    final resolvedBody = trimmedBody.isNotEmpty
+        ? trimmedBody
+        : (normalizedHtml == null
+            ? ''
+            : HtmlContentCodec.toPlainText(normalizedHtml));
     String? shareId;
     String? subjectToken;
     if (normalizedSubject != null) {
@@ -534,13 +542,15 @@ class EmailService {
             token: subjectToken,
             body: _composeSubjectEnvelope(
               subject: normalizedSubject,
-              body: trimmedBody,
+              body: resolvedBody,
             ),
           )
         : _composeSubjectEnvelope(
             subject: normalizedSubject,
-            body: trimmedBody,
+            body: resolvedBody,
           );
+    final localBodyOverride =
+        trimmedBody.isNotEmpty ? trimmedBody : resolvedBody;
     final msgId = await _guardDeltaOperation(
       operation: 'send email message',
       body: () => _transport.sendText(
@@ -548,7 +558,8 @@ class EmailService {
         body: transmitBody,
         subject: normalizedSubject,
         shareId: shareId,
-        localBodyOverride: trimmedBody,
+        localBodyOverride: localBodyOverride,
+        htmlBody: normalizedHtml,
       ),
     );
     if (shareId != null) {
@@ -565,11 +576,13 @@ class EmailService {
     required Chat chat,
     required EmailAttachment attachment,
     String? subject,
+    String? htmlCaption,
   }) async {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(subject);
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlCaption);
     String? shareId;
     if (normalizedSubject != null) {
       shareId = ShareTokenCodec.generateShareId();
@@ -591,11 +604,15 @@ class EmailService {
         participants: participants,
       );
     }
+    var captionText = attachment.caption?.trim() ?? '';
+    if (captionText.isEmpty && normalizedHtml != null) {
+      captionText = HtmlContentCodec.toPlainText(normalizedHtml);
+    }
     final captionEnvelope = _composeSubjectEnvelope(
       subject: normalizedSubject,
-      body: attachment.caption,
+      body: captionText,
     );
-    final sanitizedCaption = attachment.caption?.trim() ?? '';
+    final sanitizedCaption = captionText.trim();
     final msgId = await _guardDeltaOperation(
       operation: 'send email attachment',
       body: () => _transport.sendAttachment(
@@ -604,6 +621,7 @@ class EmailService {
         subject: normalizedSubject,
         shareId: shareId,
         captionOverride: sanitizedCaption,
+        htmlCaption: normalizedHtml,
       ),
     );
     if (shareId != null) {
@@ -867,6 +885,7 @@ class EmailService {
       return null;
     }
     final size = metadata.sizeBytes ?? await file.length();
+    final caption = message.plainText.trim();
     return EmailAttachment(
       path: path,
       fileName: metadata.filename,
@@ -874,7 +893,7 @@ class EmailService {
       mimeType: metadata.mimeType,
       width: metadata.width,
       height: metadata.height,
-      caption: message.body,
+      caption: caption.isEmpty ? null : caption,
       metadataId: metadata.id,
     );
   }
@@ -1723,6 +1742,338 @@ class EmailService {
     if (!preserveActiveSession) {
       _ephemeralProvisionedScopes.remove(scope);
     }
+  }
+
+  /// Marks a chat as noticed, clearing unread badges in core.
+  ///
+  /// Call this when the user opens a chat.
+  Future<bool> markNoticedChat(Chat chat) async {
+    final chatId = chat.deltaChatId;
+    if (chatId == null) return false;
+    await _ensureReady();
+    return _transport.markNoticedChat(chatId);
+  }
+
+  /// Marks messages as seen, triggering MDN if enabled.
+  ///
+  /// Call this when messages are displayed to the user.
+  Future<bool> markSeenMessages(List<Message> messages) async {
+    final deltaIds = messages
+        .map((m) => m.deltaMsgId)
+        .whereType<int>()
+        .toList(growable: false);
+    if (deltaIds.isEmpty) return true;
+    await _ensureReady();
+    return _transport.markSeenMessages(deltaIds);
+  }
+
+  /// Returns the count of fresh (unread) messages in a chat.
+  Future<int> getFreshMessageCount(Chat chat) async {
+    final chatId = chat.deltaChatId;
+    if (chatId == null) return 0;
+    await _ensureReady();
+    return _transport.getFreshMessageCount(chatId);
+  }
+
+  /// Deletes messages from core and server.
+  Future<bool> deleteMessages(List<Message> messages) async {
+    final deltaMessages = messages
+        .where((message) => message.deltaMsgId != null)
+        .toList(growable: false);
+    final deltaIds = deltaMessages
+        .map((message) => message.deltaMsgId!)
+        .toList(growable: false);
+    if (deltaIds.isEmpty) return false;
+    await _ensureReady();
+    final success = await _transport.deleteMessages(deltaIds);
+    if (success) {
+      final db = await _databaseBuilder();
+      for (final message in deltaMessages) {
+        await db.deleteMessage(message.stanzaID);
+      }
+    }
+    return success;
+  }
+
+  /// Forwards messages to another chat using core.
+  Future<bool> forwardMessages({
+    required List<Message> messages,
+    required Chat toChat,
+  }) async {
+    final toChatId = toChat.deltaChatId;
+    if (toChatId == null) return false;
+    final deltaIds = messages
+        .map((m) => m.deltaMsgId)
+        .whereType<int>()
+        .toList(growable: false);
+    if (deltaIds.isEmpty) return false;
+    await _ensureReady();
+    return _transport.forwardMessages(messageIds: deltaIds, toChatId: toChatId);
+  }
+
+  /// Searches messages using core search.
+  ///
+  /// Pass null for chat to search all chats.
+  Future<List<Message>> searchMessages({
+    Chat? chat,
+    required String query,
+  }) async {
+    await _ensureReady();
+    final chatId = chat?.deltaChatId ?? 0;
+    final deltaIds = await _transport.searchMessages(
+      chatId: chatId,
+      query: query,
+    );
+    if (deltaIds.isEmpty) return const [];
+
+    final db = await _databaseBuilder();
+    final messagesByDeltaId = <int, Message>{};
+    final missingIds = <int>[];
+    for (final deltaId in deltaIds) {
+      final stanzaId = _stanzaId(deltaId);
+      final message = await db.getMessageByStanzaID(stanzaId);
+      if (message != null) {
+        messagesByDeltaId[deltaId] = message;
+      } else {
+        missingIds.add(deltaId);
+      }
+    }
+    if (missingIds.isNotEmpty) {
+      await _transport.hydrateMessages(missingIds);
+      for (final deltaId in missingIds) {
+        final stanzaId = _stanzaId(deltaId);
+        final message = await db.getMessageByStanzaID(stanzaId);
+        if (message != null) {
+          messagesByDeltaId[deltaId] = message;
+        }
+      }
+    }
+
+    final messages = <Message>[];
+    for (final deltaId in deltaIds) {
+      final message = messagesByDeltaId[deltaId];
+      if (message != null) {
+        messages.add(message);
+      }
+    }
+    return messages;
+  }
+
+  /// Sets chat visibility (normal, archived, pinned) in core.
+  Future<bool> setChatVisibility({
+    required Chat chat,
+    required int visibility,
+  }) async {
+    final chatId = chat.deltaChatId;
+    if (chatId == null) return false;
+    await _ensureReady();
+    return _transport.setChatVisibility(
+      chatId: chatId,
+      visibility: visibility,
+    );
+  }
+
+  /// Triggers download of full message content for partial messages.
+  Future<bool> downloadFullMessage(Message message) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null) return false;
+    await _ensureReady();
+    return _transport.downloadFullMessage(deltaId);
+  }
+
+  /// Resends failed messages using core retry.
+  Future<bool> resendMessages(List<Message> messages) async {
+    final deltaIds = messages
+        .map((m) => m.deltaMsgId)
+        .whereType<int>()
+        .toList(growable: false);
+    if (deltaIds.isEmpty) return false;
+    await _ensureReady();
+    return _transport.resendMessages(deltaIds);
+  }
+
+  /// Sends a message as a reply to another message.
+  ///
+  /// Uses core's quote mechanism for proper email threading.
+  Future<int> sendReply({
+    required Chat chat,
+    required String body,
+    required Message quotedMessage,
+    String? subject,
+    String? htmlBody,
+  }) async {
+    final deltaChat = await ensureChatForEmailChat(chat);
+    final chatId = deltaChat.deltaChatId!;
+    final quotedMsgId = quotedMessage.deltaMsgId;
+    if (quotedMsgId == null) {
+      return sendMessage(
+        chat: chat,
+        body: body,
+        subject: subject,
+        htmlBody: htmlBody,
+      );
+    }
+    await _ensureReady();
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
+    final trimmedBody = body.trim();
+    final resolvedBody = trimmedBody.isNotEmpty
+        ? trimmedBody
+        : (normalizedHtml == null
+            ? ''
+            : HtmlContentCodec.toPlainText(normalizedHtml));
+    final msgId = await _guardDeltaOperation(
+      operation: 'send reply',
+      body: () => _transport.sendTextWithQuote(
+        chatId: chatId,
+        body: resolvedBody,
+        quotedMessageId: quotedMsgId,
+        subject: subject,
+        htmlBody: normalizedHtml,
+      ),
+    );
+    final deltaMessage = await _transport.getMessage(msgId);
+    await _recordOutgoing(
+      chatId: chatId,
+      msgId: msgId,
+      body: resolvedBody,
+      htmlBody: normalizedHtml,
+      timestamp: deltaMessage?.timestamp,
+    );
+    return msgId;
+  }
+
+  /// Gets the quoted message info for a message.
+  Future<DeltaQuotedMessage?> getQuotedMessage(Message message) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null) return null;
+    await _ensureReady();
+    return _transport.getQuotedMessage(deltaId);
+  }
+
+  /// Saves a draft to core.
+  Future<bool> saveDraftToCore({
+    required Chat chat,
+    required String text,
+  }) async {
+    final chatId = chat.deltaChatId;
+    if (chatId == null) return false;
+    await _ensureReady();
+    final message = DeltaMessage(
+      id: 0,
+      chatId: chatId,
+      text: text,
+      viewType: DeltaMessageType.text,
+    );
+    return _transport.setDraft(chatId: chatId, message: message);
+  }
+
+  /// Clears a draft from core.
+  Future<bool> clearDraftFromCore(Chat chat) async {
+    final chatId = chat.deltaChatId;
+    if (chatId == null) return false;
+    await _ensureReady();
+    return _transport.setDraft(chatId: chatId, message: null);
+  }
+
+  /// Gets a draft from core.
+  Future<String?> getDraftFromCore(Chat chat) async {
+    final chatId = chat.deltaChatId;
+    if (chatId == null) return null;
+    await _ensureReady();
+    final draft = await _transport.getDraft(chatId);
+    return draft?.text;
+  }
+
+  /// Gets all contact IDs from core.
+  ///
+  /// Use flags from [DeltaContactListFlags] to filter results.
+  Future<List<int>> getContactIds({int flags = 0, String? query}) async {
+    await _ensureReady();
+    return _transport.getContactIds(flags: flags, query: query);
+  }
+
+  /// Gets all blocked contact IDs from core.
+  Future<List<int>> getBlockedContactIds() async {
+    await _ensureReady();
+    return _transport.getBlockedContactIds();
+  }
+
+  /// Deletes a contact from core.
+  ///
+  /// Returns true if the contact was deleted.
+  Future<bool> deleteContact(int contactId) async {
+    await _ensureReady();
+    return _transport.deleteContact(contactId);
+  }
+
+  /// Gets a contact by ID from core.
+  Future<DeltaContact?> getContact(int contactId) async {
+    await _ensureReady();
+    return _transport.getContact(contactId);
+  }
+
+  /// Gets all contacts from core as a list.
+  ///
+  /// Use flags from [DeltaContactListFlags] to filter results.
+  Future<List<DeltaContact>> getContacts({
+    int flags = 0,
+    String? query,
+  }) async {
+    await _ensureReady();
+    final ids = await _transport.getContactIds(flags: flags, query: query);
+    final contacts = <DeltaContact>[];
+    for (final id in ids) {
+      final contact = await _transport.getContact(id);
+      if (contact != null) {
+        contacts.add(contact);
+      }
+    }
+    return contacts;
+  }
+
+  /// Gets all blocked contacts from core as a list.
+  Future<List<DeltaContact>> getBlockedContacts() async {
+    await _ensureReady();
+    final ids = await _transport.getBlockedContactIds();
+    final contacts = <DeltaContact>[];
+    for (final id in ids) {
+      final contact = await _transport.getContact(id);
+      if (contact != null) {
+        contacts.add(contact);
+      }
+    }
+    return contacts;
+  }
+
+  Future<void> _recordOutgoing({
+    required int chatId,
+    required int msgId,
+    String? body,
+    String? htmlBody,
+    DateTime? timestamp,
+  }) async {
+    final db = await _databaseBuilder();
+    final chat = await db.getChatByDeltaChatId(chatId);
+    if (chat == null) return;
+
+    final resolvedTimestamp = timestamp ?? DateTime.timestamp();
+    final message = Message(
+      stanzaID: _stanzaId(msgId),
+      senderJid: selfSenderJid ?? _defaultDeltaSelfJid,
+      chatJid: chat.jid,
+      timestamp: resolvedTimestamp,
+      body: body?.trim(),
+      htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
+      encryptionProtocol: EncryptionProtocol.none,
+      acked: false,
+      received: false,
+      deltaChatId: chatId,
+      deltaMsgId: msgId,
+    );
+    await db.saveMessage(message);
+    await db.updateChat(
+      chat.copyWith(lastChangeTimestamp: resolvedTimestamp),
+    );
   }
 }
 

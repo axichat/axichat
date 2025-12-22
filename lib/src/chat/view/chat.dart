@@ -5728,7 +5728,10 @@ class _ChatState extends State<Chat> {
     required Message model,
   }) async {
     final l10n = context.l10n;
-    final content = (model.body ?? dashMessage.text).trim();
+    final content = _plainTextForMessage(
+      dashMessage: dashMessage,
+      model: model,
+    ).trim();
     if (content.isEmpty) {
       _showSnackbar(l10n.chatShareNoText);
       return;
@@ -5747,7 +5750,10 @@ class _ChatState extends State<Chat> {
     required ChatMessage dashMessage,
     required Message model,
   }) async {
-    final copiedText = model.body ?? dashMessage.text;
+    final copiedText = _plainTextForMessage(
+      dashMessage: dashMessage,
+      model: model,
+    );
     if (copiedText.isEmpty) return;
     await Clipboard.setData(
       ClipboardData(text: copiedText),
@@ -5761,7 +5767,10 @@ class _ChatState extends State<Chat> {
   }) async {
     final l10n = context.l10n;
     _clearAllSelections();
-    final seededText = (model.body ?? dashMessage.text).trim();
+    final seededText = _plainTextForMessage(
+      dashMessage: dashMessage,
+      model: model,
+    ).trim();
     if (seededText.isEmpty) {
       _showSnackbar(l10n.chatCalendarNoText);
       return;
@@ -5818,12 +5827,21 @@ class _ChatState extends State<Chat> {
   }
 
   String _displayTextForMessage(Message message) {
-    final body = (message.body ?? '').trim();
+    final body = message.plainText.trim();
     if (message.error.isNotNone) {
       final label = message.error.asString;
       return body.isEmpty ? label : '$label: "$body"';
     }
     return body;
+  }
+
+  String _plainTextForMessage({
+    required ChatMessage dashMessage,
+    required Message model,
+  }) {
+    final plainText = model.plainText.trim();
+    if (plainText.isNotEmpty) return plainText;
+    return dashMessage.text.trim();
   }
 
   String _joinedMessageText(List<Message> messages) {
