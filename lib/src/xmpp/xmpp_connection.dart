@@ -337,6 +337,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   int _reconnectionAttempts = 0;
   Timer? _backoffTimer;
+  Future<void>? _reconnectAction;
 
   @override
   mox.PerformReconnectFunction? performReconnect;
@@ -411,6 +412,32 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _backoffTimer = null;
   }
 
+  Future<void> _runReconnectAction(
+    Future<void> Function() action,
+  ) async {
+    final existing = _reconnectAction;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _reconnectAction = completer.future;
+    try {
+      await action();
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    } catch (error, stackTrace) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
+      rethrow;
+    } finally {
+      _reconnectAction = null;
+    }
+  }
+
   Future<void> _fireBackoffReconnect() async {
     _cancelBackoff();
     try {
@@ -423,10 +450,12 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   }
 
   Future<void> _reconnect() async {
-    _reconnectionAttempts++;
-    if (performReconnect case final reconnect?) {
-      await reconnect();
-    }
+    await _runReconnectAction(() async {
+      _reconnectionAttempts++;
+      if (performReconnect case final reconnect?) {
+        await reconnect();
+      }
+    });
   }
 
   @override
