@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -35,8 +36,8 @@ const _defaultImapPort = '993';
 const _defaultSecurityMode = 'ssl';
 const _unknownEmailPassword = '';
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
-const _minimumHistoryWindow = 1;
-const _includePseudoMessagesInBackfill = false;
+const int _minimumHistoryWindow = 1;
+const bool _includePseudoMessagesInBackfill = false;
 
 typedef EmailConnectionConfigBuilder = Map<String, String> Function(
   String address,
@@ -953,7 +954,7 @@ class EmailService {
     DateTime? beforeTimestamp,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
-    if (!chat.defaultTransport.isEmail) {
+    if (chat.defaultTransport != MessageTransport.email) {
       return;
     }
     if (desiredWindow < _minimumHistoryWindow) {
