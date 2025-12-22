@@ -37,16 +37,17 @@ class SafePubSubManager extends mox.PubSubManager {
       {};
 
   @override
-  List<mox.StanzaHandler> getIncomingStanzaHandlers() =>
-      super.getIncomingStanzaHandlers()
-        ..add(
-          mox.StanzaHandler(
-            stanzaTag: _messageTag,
-            tagName: _eventTag,
-            tagXmlns: _pubsubEventXmlns,
-            callback: _onPubSubEvent,
-          ),
-        );
+  List<mox.StanzaHandler> getIncomingStanzaHandlers() {
+    return [
+      mox.StanzaHandler(
+        stanzaTag: _messageTag,
+        tagName: _eventTag,
+        tagXmlns: _pubsubEventXmlns,
+        callback: _onPubSubEvent,
+      ),
+      ...super.getIncomingStanzaHandlers(),
+    ];
+  }
 
   Future<moxlib.Result<mox.PubSubError, bool>> publishRaw(
     mox.JID jid,
@@ -130,18 +131,27 @@ class SafePubSubManager extends mox.PubSubManager {
     }
 
     final pubsub = result.firstTag('pubsub', xmlns: mox.pubsubXmlns);
-    final subscription = pubsub?.firstTag('subscription');
+    if (pubsub == null) {
+      return moxlib.Result(mox.UnknownPubSubError());
+    }
+    final subscription = pubsub.firstTag('subscription');
+    if (subscription == null) {
+      return moxlib.Result(mox.UnknownPubSubError());
+    }
     final state = mox.SubscriptionState.fromString(
-          subscription?.attributes['subscription'] as String?,
+          subscription.attributes['subscription'] as String?,
         ) ??
-        mox.SubscriptionState.subscribed;
-    final subId = subscription?.attributes['subid'] as String?;
+        mox.SubscriptionState.none;
+    final subId = subscription.attributes['subid'] as String?;
+    final configurationRequired =
+        subscription.attributes['subscription'] == 'unconfigured';
 
     final subscriptionInfo = mox.SubscriptionInfo(
       jid: subscriberJid,
       node: node,
       state: state,
       subId: subId,
+      configurationRequired: configurationRequired,
     );
     _recordSubscription(subscriptionInfo);
     return moxlib.Result(subscriptionInfo);
@@ -153,6 +163,8 @@ class SafePubSubManager extends mox.PubSubManager {
     String node, {
     String? subId,
   }) async {
+    final attrs = getAttributes();
+    final subscriberJid = attrs.getFullJID().toBare().toString();
     final result = await super.unsubscribe(jid, node, subId: subId);
     if (result.isType<mox.PubSubError>() &&
         result.get<mox.PubSubError>() is mox.MalformedResponseError) {
@@ -160,7 +172,7 @@ class SafePubSubManager extends mox.PubSubManager {
     }
     if (!result.isType<mox.PubSubError>()) {
       _removeSubscription(
-        jid: jid.toString(),
+        jid: subscriberJid,
         node: node,
         subId: subId,
       );
@@ -340,6 +352,7 @@ class SafePubSubManager extends mox.PubSubManager {
       subId: subId,
     );
     _subscriptionCache.remove(key);
+    subscriptionManager.removeSubscription(jid, node, subId: subId);
   }
 }
 
