@@ -50,6 +50,18 @@ const _imapSyncFetchTimeout = Duration(seconds: 25);
 const _imapCapabilityRefreshInterval = Duration(minutes: 10);
 const _imapConnectionLimitSingle = 1;
 const _imapConnectionLimitMulti = 2;
+const Set<String> _imapConfigBoolTrueValues = {
+  '1',
+  'true',
+  'yes',
+  'on',
+};
+const Set<String> _imapConfigBoolFalseValues = {
+  '0',
+  'false',
+  'no',
+  'off',
+};
 const int _minimumHistoryWindow = 1;
 const bool _includePseudoMessagesInBackfill = false;
 
@@ -198,6 +210,7 @@ class EmailService {
     idleCutoff: _imapIdleKeepaliveInterval,
   );
   DateTime? _imapCapabilitiesCheckedAt;
+  bool _imapCapabilitiesResolved = false;
   Timer? _imapSyncTimer;
   var _imapSyncLoopActive = false;
   var _imapSyncInFlight = false;
@@ -1001,7 +1014,7 @@ class EmailService {
   }
 
   Future<bool> performBackgroundFetch({
-    Duration timeout = const Duration(seconds: 25),
+    Duration timeout = _imapSyncFetchTimeout,
   }) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return false;
@@ -1082,8 +1095,7 @@ class EmailService {
     }
 
     final existing = await db.getEmailBlocklist();
-    final existingAddresses =
-        existing.map((entry) => entry.address).toSet();
+    final existingAddresses = existing.map((entry) => entry.address).toSet();
 
     final toAdd = blockedAddresses.difference(existingAddresses);
     final toRemove = existingAddresses.difference(blockedAddresses);
@@ -1167,8 +1179,10 @@ class EmailService {
   Future<void> setForegroundKeepalive(bool enabled) async {
     if (!enabled) {
       await _stopForegroundKeepalive();
+      _startImapSyncLoop();
       return;
     }
+    _stopImapSyncLoop();
 
     final operationId = ++_foregroundKeepaliveOperationId;
 
@@ -1305,10 +1319,12 @@ class EmailService {
       case DeltaEventType.accountsBackgroundFetchDone:
         _handleBackgroundFetchDone();
         unawaited(_bootstrapActiveAccountIfNeeded());
+        unawaited(refreshChatlistFromCore());
         break;
       case DeltaEventType.connectivityChanged:
         unawaited(_refreshConnectivityState());
         unawaited(_bootstrapActiveAccountIfNeeded());
+        unawaited(_runReconnectCatchUp());
         break;
       case DeltaEventType.channelOverflow:
         unawaited(_handleChannelOverflow());
@@ -1468,6 +1484,7 @@ class EmailService {
       if (!success) {
         await _transport.notifyNetworkAvailable();
       }
+      await refreshChatlistFromCore();
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to recover from Delta channel overflow',
@@ -1675,6 +1692,148 @@ class EmailService {
       await refreshChatlistFromCore();
     } on Exception catch (error, stackTrace) {
       _log.finer('Foreground keepalive tick failed', error, stackTrace);
+    }
+  }
+
+  void _startImapSyncLoop() {
+    if (_imapSyncLoopActive) {
+      return;
+    }
+    _imapSyncLoopActive = true;
+    _scheduleNextImapSync();
+  }
+
+  void _stopImapSyncLoop() {
+    _imapSyncLoopActive = false;
+    _imapSyncTimer?.cancel();
+    _imapSyncTimer = null;
+  }
+
+  void _scheduleNextImapSync() {
+    if (!_imapSyncLoopActive || _foregroundKeepaliveEnabled) {
+      return;
+    }
+    final interval = _imapSyncInterval();
+    _imapSyncTimer?.cancel();
+    _imapSyncTimer = Timer(
+      interval,
+      () => unawaited(_runImapSyncTick()),
+    );
+  }
+
+  Future<void> _runImapSyncTick() async {
+    if (!_imapSyncLoopActive || _foregroundKeepaliveEnabled) {
+      return;
+    }
+    if (_imapSyncInFlight) {
+      _scheduleNextImapSync();
+      return;
+    }
+    _imapSyncInFlight = true;
+    try {
+      await _refreshImapCapabilities();
+      await performBackgroundFetch(timeout: _imapSyncFetchTimeout);
+      await refreshChatlistFromCore();
+    } finally {
+      _imapSyncInFlight = false;
+      _scheduleNextImapSync();
+    }
+  }
+
+  Duration _imapSyncInterval() {
+    final capabilities = _imapCapabilities;
+    if (!capabilities.idleSupported) {
+      return _imapPollIntervalNoIdle;
+    }
+    if (capabilities.connectionLimit <= _imapConnectionLimitSingle) {
+      return _imapSentPollIntervalSingleConnection;
+    }
+    return capabilities.idleCutoff;
+  }
+
+  Future<void> _refreshImapCapabilities({bool force = false}) async {
+    final now = DateTime.timestamp();
+    final lastChecked = _imapCapabilitiesCheckedAt;
+    final shouldReuse = !force &&
+        _imapCapabilitiesResolved &&
+        lastChecked != null &&
+        now.difference(lastChecked) < _imapCapabilityRefreshInterval;
+    if (shouldReuse) {
+      return;
+    }
+    _imapCapabilities = await _resolveImapCapabilities();
+    _imapCapabilitiesCheckedAt = now;
+    _imapCapabilitiesResolved = true;
+  }
+
+  Future<EmailImapCapabilities> _resolveImapCapabilities() async {
+    await _ensureReady();
+    final idleFlag = await _readImapConfigBool(_imapIdleConfigKey);
+    final idleTimeout = await _readImapConfigInt(_imapIdleTimeoutConfigKey);
+    final maxConnections =
+        await _readImapConfigInt(_imapMaxConnectionsConfigKey);
+    final accountsActive =
+        _transport.accountsActive || _transport.accountsSupported;
+    final defaultLimit =
+        accountsActive ? _imapConnectionLimitMulti : _imapConnectionLimitSingle;
+    final idleSupported = idleFlag ?? accountsActive;
+    final connectionLimit =
+        _normalizeConnectionLimit(maxConnections ?? defaultLimit);
+    final idleCutoff = idleTimeout == null
+        ? _imapIdleKeepaliveInterval
+        : Duration(seconds: idleTimeout);
+    return EmailImapCapabilities(
+      idleSupported: idleSupported,
+      connectionLimit: connectionLimit,
+      idleCutoff: idleCutoff,
+    );
+  }
+
+  Future<bool?> _readImapConfigBool(String key) async {
+    final raw = await _transport.getCoreConfig(key);
+    if (raw == null) {
+      return null;
+    }
+    final normalized = raw.trim().toLowerCase();
+    if (_imapConfigBoolTrueValues.contains(normalized)) {
+      return true;
+    }
+    if (_imapConfigBoolFalseValues.contains(normalized)) {
+      return false;
+    }
+    return null;
+  }
+
+  Future<int?> _readImapConfigInt(String key) async {
+    final raw = await _transport.getCoreConfig(key);
+    if (raw == null) {
+      return null;
+    }
+    final parsed = int.tryParse(raw.trim());
+    if (parsed == null || parsed < _imapConnectionLimitSingle) {
+      return null;
+    }
+    return parsed;
+  }
+
+  int _normalizeConnectionLimit(int value) {
+    if (value < _imapConnectionLimitSingle) {
+      return _imapConnectionLimitSingle;
+    }
+    return value;
+  }
+
+  Future<void> _runReconnectCatchUp() async {
+    if (_reconnectCatchUpInFlight) {
+      return;
+    }
+    _reconnectCatchUpInFlight = true;
+    try {
+      await _refreshImapCapabilities();
+      await performBackgroundFetch(timeout: _imapSyncFetchTimeout);
+      await refreshChatlistFromCore();
+    } finally {
+      _reconnectCatchUpInFlight = false;
     }
   }
 
