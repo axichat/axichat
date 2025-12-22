@@ -947,7 +947,7 @@ abstract class BaseCalendarBloc
       final CalendarTask source = template;
 
       final now = _now();
-      final String newId = '$baseId::${const Uuid().v4()}';
+      final String newId = const Uuid().v4();
       final DateTime newStart = event.scheduledTime;
 
       Duration appliedDuration =

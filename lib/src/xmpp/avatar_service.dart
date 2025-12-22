@@ -58,6 +58,8 @@ mixin AvatarService on XmppBase {
   static const int _maxAvatarBytes = 512 * 1024;
   static const int _maxAvatarBase64Length = ((_maxAvatarBytes + 2) ~/ 3) * 4;
   static const int _avatarBytesCacheLimit = 64;
+  static const int _conversationAvatarChatStart = 0;
+  static const int _conversationAvatarChatEnd = 0;
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
   static const String _avatarConfigKeySeparator = '|';
   static const int _avatarPublishVerificationAttempts = 2;
@@ -242,6 +244,33 @@ mixin AvatarService on XmppBase {
     for (final jid in jids) {
       unawaited(_refreshAvatarForJid(jid, force: force));
     }
+  }
+
+  Future<void> refreshAvatarsForConversationIndex() async {
+    if (connectionState != ConnectionState.connected) return;
+    List<Chat> chats;
+    try {
+      chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
+        (db) => db.getChats(
+          start: _conversationAvatarChatStart,
+          end: _conversationAvatarChatEnd,
+        ),
+      );
+    } on XmppAbortedException {
+      return;
+    }
+    final directJids = <String>{};
+    for (final chat in chats) {
+      if (!chat.transport.isXmpp) continue;
+      if (chat.type != ChatType.chat) continue;
+      final jid = chat.remoteJid.trim();
+      if (jid.isEmpty) continue;
+      directJids.add(jid);
+    }
+    if (directJids.isNotEmpty) {
+      scheduleAvatarRefresh(directJids);
+    }
+    await refreshSelfAvatarIfNeeded(force: true);
   }
 
   Future<void> prefetchAvatarForJid(String jid) async {

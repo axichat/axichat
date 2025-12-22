@@ -40,6 +40,8 @@ const int _calendarTaskIcsMetaField = 17;
 const List<CalendarDateTime> _emptyCalendarDateTimes = <CalendarDateTime>[];
 const List<CalendarRawProperty> _emptyCalendarRawProperties =
     <CalendarRawProperty>[];
+const Map<String, TaskOccurrenceOverride> _emptyTaskOccurrenceOverrides =
+    <String, TaskOccurrenceOverride>{};
 
 @freezed
 @HiveType(typeId: 36)
@@ -97,13 +99,22 @@ class RecurrenceRule with _$RecurrenceRule {
     @HiveField(_recurrenceRuleByMonthsField) List<int>? byMonths,
     @HiveField(_recurrenceRuleBySetPositionsField) List<int>? bySetPositions,
     @HiveField(_recurrenceRuleWeekStartField) CalendarWeekday? weekStart,
-    @HiveField(_recurrenceRuleRDatesField)
+    @HiveField(
+      _recurrenceRuleRDatesField,
+      defaultValue: _emptyCalendarDateTimes,
+    )
     @Default(_emptyCalendarDateTimes)
     List<CalendarDateTime> rDates,
-    @HiveField(_recurrenceRuleExDatesField)
+    @HiveField(
+      _recurrenceRuleExDatesField,
+      defaultValue: _emptyCalendarDateTimes,
+    )
     @Default(_emptyCalendarDateTimes)
     List<CalendarDateTime> exDates,
-    @HiveField(_recurrenceRuleRawPropertiesField)
+    @HiveField(
+      _recurrenceRuleRawPropertiesField,
+      defaultValue: _emptyCalendarRawProperties,
+    )
     @Default(_emptyCalendarRawProperties)
     List<CalendarRawProperty> rawProperties,
   }) = _RecurrenceRule;
@@ -387,4 +398,24 @@ extension CalendarTaskExtensions on CalendarTask {
 
   ReminderPreferences get effectiveReminders =>
       (reminders ?? ReminderPreferences.defaults()).normalized();
+
+  CalendarTask forClipboardInstance() {
+    final bool hasRecurrence = !effectiveRecurrence.isNone;
+    if (!hasRecurrence && occurrenceOverrides.isEmpty) {
+      return this;
+    }
+    return copyWith(
+      recurrence: null,
+      occurrenceOverrides: _emptyTaskOccurrenceOverrides,
+    );
+  }
+
+  CalendarTask forClipboardTemplate() {
+    if (occurrenceOverrides.isEmpty) {
+      return this;
+    }
+    return copyWith(
+      occurrenceOverrides: _emptyTaskOccurrenceOverrides,
+    );
+  }
 }

@@ -747,8 +747,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController.clearPreview();
   }
 
-  void _copyTask(CalendarTask task) {
-    _taskInteractionController.setClipboardTemplate(task);
+  void _copyTaskInstance(CalendarTask task) {
+    final CalendarTask template = task.forClipboardInstance();
+    _taskInteractionController.setClipboardTemplate(template);
+  }
+
+  void _copyTaskTemplate(CalendarTask task) {
+    final CalendarTask template = task.forClipboardTemplate();
+    _taskInteractionController.setClipboardTemplate(template);
   }
 
   Future<void> _copyTaskToClipboard(CalendarTask task) async {
@@ -2547,7 +2553,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       TaskContextAction(
         icon: Icons.copy_outlined,
         label: 'Copy Task',
-        onSelected: () => _copyTask(task),
+        onSelected: () => _copyTaskInstance(task),
       ),
       TaskContextAction(
         icon: Icons.share_outlined,
@@ -2721,7 +2727,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         TaskContextAction(
           icon: Icons.copy_outlined,
           label: 'Copy Template',
-          onSelected: () => _copyTask(task),
+          onSelected: () => _copyTaskTemplate(task),
         ),
       );
     }
@@ -2734,7 +2740,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           destructive: true,
           onSelected: () {
             context.read<T>().add(
-                  CalendarEvent.taskDeleted(taskId: task.baseId),
+                  CalendarEvent.taskDeleted(taskId: task.id),
                 );
             onTaskDeleted?.call();
           },
