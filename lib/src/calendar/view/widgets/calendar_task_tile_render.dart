@@ -15,6 +15,17 @@ typedef TaskTileContextMenuCallback = void Function(
   Offset normalizedPosition,
 );
 
+extension PointerDeviceKindX on PointerDeviceKind {
+  bool get usesResizeLongPress => switch (this) {
+        PointerDeviceKind.touch => true,
+        PointerDeviceKind.stylus => true,
+        PointerDeviceKind.invertedStylus => true,
+        PointerDeviceKind.mouse => false,
+        PointerDeviceKind.trackpad => false,
+        PointerDeviceKind.unknown => false,
+      };
+}
+
 class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
   const CalendarTaskTileRenderRegion({
     super.key,
@@ -461,10 +472,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   bool _shouldDelayResizeForPointer(PointerDeviceKind kind) {
-    return kind == PointerDeviceKind.touch ||
-        kind == PointerDeviceKind.stylus ||
-        kind == PointerDeviceKind.invertedStylus ||
-        kind == PointerDeviceKind.unknown;
+    return kind.usesResizeLongPress;
   }
 
   void _startResizeLongPressRecognizer(
