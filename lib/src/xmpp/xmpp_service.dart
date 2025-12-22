@@ -564,8 +564,17 @@ class XmppService extends XmppBase
     return appVisible || allowForeground;
   }
 
+  bool _isConnectingStale(DateTime now) {
+    final DateTime? startedAt = _connectingSince;
+    if (startedAt == null) {
+      return false;
+    }
+    return now.difference(startedAt) >= _connectingStallTimeout;
+  }
+
   Future<bool> _acquireImmediateReconnectGuard({
     required bool requireVisible,
+    bool allowWhenReconnectPolicyEnabled = true,
   }) async {
     if (_immediateReconnectInFlight) {
       return false;
@@ -575,15 +584,20 @@ class XmppService extends XmppBase
     try {
       if (!_synchronousConnection.isCompleted) return false;
       if (!_connection.hasConnectionSettings) return false;
+      if (!_sessionReconnectEnabled) return false;
+      if (_connectInFlight) return false;
       if (connected) return false;
       if (_reconnectBlocked) return false;
       if (requireVisible && !_isReconnectAllowedByVisibility()) return false;
-      if (connectionState == ConnectionState.connecting) return false;
+      final DateTime now = DateTime.now();
+      if (connectionState == ConnectionState.connecting &&
+          !_isConnectingStale(now)) {
+        return false;
+      }
       if (await _connection.isReconnecting()) return false;
-      if (!await _connection.reconnectionPolicy.getShouldReconnect()) {
-        if (!_sessionReconnectEnabled) {
-          return false;
-        }
+      final bool shouldReconnect =
+          await _connection.reconnectionPolicy.getShouldReconnect();
+      if (!shouldReconnect) {
         try {
           await _connection.setShouldReconnect(true);
         } catch (error) {
@@ -592,6 +606,8 @@ class XmppService extends XmppBase
           );
           return false;
         }
+      } else if (!allowWhenReconnectPolicyEnabled) {
+        return false;
       }
       shouldProceed = true;
       return true;
@@ -618,9 +634,12 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> _triggerImmediateReconnectIfAppropriate() async {
+  Future<void> _triggerImmediateReconnectIfAppropriate({
+    bool allowWhenReconnectPolicyEnabled = false,
+  }) async {
     final bool canProceed = await _acquireImmediateReconnectGuard(
       requireVisible: true,
+      allowWhenReconnectPolicyEnabled: allowWhenReconnectPolicyEnabled,
     );
     if (!canProceed) {
       return;
@@ -734,6 +753,7 @@ class XmppService extends XmppBase
       'stream negotiations done';
   static const _nonRecoverableReconnectDisableLog =
       'Failed to disable reconnection after non-recoverable error.';
+  static const _connectingStallTimeout = Duration(seconds: 30);
 
   void _setConnectionState(ConnectionState state) {
     if (_connectionState == state) {
@@ -741,6 +761,11 @@ class XmppService extends XmppBase
     }
 
     _connectionState = state;
+    if (state == ConnectionState.connecting) {
+      _connectingSince = DateTime.now();
+    } else {
+      _connectingSince = null;
+    }
     if (!_connectivityStream.isClosed) {
       _connectivityStream.add(state);
     }
@@ -777,10 +802,12 @@ class XmppService extends XmppBase
   var _synchronousConnection = Completer<void>();
   bool _sessionReconnectEnabled = false;
   bool _immediateReconnectInFlight = false;
+  bool _connectInFlight = false;
   bool _reconnectBlocked = false;
   var _foregroundServiceNotificationSent = false;
   var _streamResumptionAttempted = false;
   var _connectionPasswordPreHashed = false;
+  DateTime? _connectingSince;
   DateTime? _lastForegroundSocketMigrationAttempt;
   Timer? _foregroundSocketMigrationTimer;
   var _demoSeedAttempted = false;
@@ -974,11 +1001,17 @@ class XmppService extends XmppBase
       password: password,
     );
 
-    final result = await _connection.connect(
-      shouldReconnect: false,
-      waitForConnection: true,
-      waitUntilLogin: true,
-    );
+    _connectInFlight = true;
+    late final moxlib.Result<bool, mox.XmppError> result;
+    try {
+      result = await _connection.connect(
+        shouldReconnect: false,
+        waitForConnection: true,
+        waitUntilLogin: true,
+      );
+    } finally {
+      _connectInFlight = false;
+    }
 
     if (result.isType<mox.XmppError>()) {
       final error = result.get<mox.XmppError>();
@@ -1770,6 +1803,9 @@ class XmppService extends XmppBase
     if (_immediateReconnectInFlight) {
       return;
     }
+    if (_connectInFlight) {
+      return;
+    }
     if (await _connection.isReconnecting()) {
       return;
     }
@@ -1857,11 +1893,17 @@ class XmppService extends XmppBase
         password: existingPassword,
       );
 
-      final result = await _connection.connect(
-        shouldReconnect: false,
-        waitForConnection: true,
-        waitUntilLogin: true,
-      );
+      _connectInFlight = true;
+      late final moxlib.Result<bool, mox.XmppError> result;
+      try {
+        result = await _connection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        );
+      } finally {
+        _connectInFlight = false;
+      }
       if (result.isType<mox.XmppError>()) {
         final error = result.get<mox.XmppError>();
         if (_isAuthenticationError(error)) {
@@ -1896,11 +1938,17 @@ class XmppService extends XmppBase
           jid: existingJid,
           password: existingPassword,
         );
-        final result = await _connection.connect(
-          shouldReconnect: false,
-          waitForConnection: true,
-          waitUntilLogin: true,
-        );
+        _connectInFlight = true;
+        late final moxlib.Result<bool, mox.XmppError> result;
+        try {
+          result = await _connection.connect(
+            shouldReconnect: false,
+            waitForConnection: true,
+            waitUntilLogin: true,
+          );
+        } finally {
+          _connectInFlight = false;
+        }
         if (result.isType<mox.XmppError>()) {
           final error = result.get<mox.XmppError>();
           if (_isAuthenticationError(error)) {
@@ -1930,7 +1978,11 @@ class XmppService extends XmppBase
             'Failed to enable reconnection after foreground migration failure: ${error.runtimeType}.',
           );
         }
-        unawaited(_triggerImmediateReconnectIfAppropriate());
+        unawaited(
+          _triggerImmediateReconnectIfAppropriate(
+            allowWhenReconnectPolicyEnabled: true,
+          ),
+        );
       }
     } finally {
       if (warmupAcquired) {
@@ -1953,6 +2005,7 @@ class XmppService extends XmppBase
 
     _setConnectionState(ConnectionState.notConnected);
     _immediateReconnectInFlight = false;
+    _connectInFlight = false;
 
     // Only disable session reconnect for fatal errors (auth/database).
     // Network errors should allow reconnection attempts.
