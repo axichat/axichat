@@ -78,9 +78,9 @@ extension MessageEvent on mox.MessageEvent {
     if (replyText != null) return replyText;
     final body = get<mox.MessageBodyData>()?.body;
     if (body != null && body.isNotEmpty) return body;
-    final html = get<XhtmlImData>()?.xhtmlBody;
-    if (html != null && html.isNotEmpty) {
-      return HtmlContentCodec.toPlainText(html);
+    final htmlPlain = get<XhtmlImData>()?.plainText;
+    if (htmlPlain != null && htmlPlain.isNotEmpty) {
+      return htmlPlain;
     }
     return '';
   }
@@ -589,6 +589,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   bool _mamLoginSyncInFlight = false;
   bool _calendarMamRehydrateInFlight = false;
   bool _calendarMamSnapshotSeen = false;
+  bool _calendarMamSnapshotUnavailableNotified = false;
 
   final Map<String, Set<String>> _seenStableKeys = {};
   final Map<String, Queue<String>> _stableKeyOrder = {};
@@ -2540,11 +2541,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
     _log.info('Received calendar sync message type: ${syncMessage.type}');
 
-    if (_calendarMamRehydrateInFlight &&
-        syncMessage.type == CalendarSyncType.snapshot) {
-      _calendarMamSnapshotSeen = true;
-    }
-
     // Handle snapshot messages by downloading and decoding the file
     if (syncMessage.type == CalendarSyncType.snapshot) {
       await _handleCalendarSnapshot(
@@ -2570,6 +2566,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     final hasUrl = url != null && url.isNotEmpty;
     if (!hasUrl && metadata == null) {
       _log.warning('Snapshot message missing URL');
+      await _maybeNotifySnapshotUnavailable(event);
       return;
     }
 
@@ -2580,17 +2577,20 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       );
       if (decoded == null) {
         _log.warning(_calendarSnapshotDecodeFailedMessage);
+        await _maybeNotifySnapshotUnavailable(event);
         return;
       }
 
       if (!CalendarSnapshotCodec.verifyChecksum(decoded)) {
         _log.warning(_calendarSnapshotChecksumFailedMessage);
+        await _maybeNotifySnapshotUnavailable(event);
         return;
       }
 
       final expectedChecksum = syncMessage.snapshotChecksum;
       if (expectedChecksum != null && expectedChecksum != decoded.checksum) {
         _log.warning(_calendarSnapshotChecksumMismatchMessage);
+        await _maybeNotifySnapshotUnavailable(event);
         return;
       }
 
@@ -2607,6 +2607,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       );
 
       await _invokeCalendarCallback(fullMessage, event);
+      if (_calendarMamRehydrateInFlight) {
+        _calendarMamSnapshotSeen = true;
+      }
     } catch (e) {
       _log.warning('Failed to process calendar snapshot: $e');
     }
@@ -2694,6 +2697,28 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
   }
 
+  Future<void> _maybeNotifySnapshotUnavailable(mox.MessageEvent event) async {
+    if (!_calendarMamRehydrateInFlight && !event.isFromMAM) {
+      return;
+    }
+    if (_calendarMamSnapshotUnavailableNotified) {
+      return;
+    }
+    _calendarMamSnapshotUnavailableNotified = true;
+    if (owner is XmppService &&
+        (owner as XmppService)._calendarSyncWarningCallback != null) {
+      const warning = CalendarSyncWarning(
+        title: calendarSnapshotUnavailableWarningTitle,
+        message: calendarSnapshotUnavailableWarningMessage,
+      );
+      try {
+        await (owner as XmppService)._calendarSyncWarningCallback!(warning);
+      } catch (e) {
+        _log.warning('Calendar sync warning callback failed: $e');
+      }
+    }
+  }
+
   String? _calendarSyncStanzaId(mox.MessageEvent event) {
     final stableIdData = event.extensions.get<mox.StableIdData>();
     final stanzaIds = stableIdData?.stanzaIds;
@@ -2735,6 +2760,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     try {
       _calendarMamRehydrateInFlight = true;
       _calendarMamSnapshotSeen = false;
+      _calendarMamSnapshotUnavailableNotified = false;
       final state = CalendarSyncState.read();
       final lastApplied = state.lastAppliedTimestamp;
       if (lastApplied != null) {
@@ -2755,6 +2781,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     } finally {
       _calendarMamRehydrateInFlight = false;
       _calendarMamSnapshotSeen = false;
+      _calendarMamSnapshotUnavailableNotified = false;
     }
   }
 

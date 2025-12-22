@@ -467,16 +467,31 @@ class _HomeScreenState extends State<HomeScreen> {
                         sendSnapshotFile: xmppService.uploadCalendarSnapshot,
                       );
 
-                      xmppService.setCalendarSyncCallback(
-                        (inbound) async {
-                          if (bloc.isClosed) return;
-                          await manager.onCalendarMessage(inbound);
-                        },
-                      );
+                      xmppService
+                        ..setCalendarSyncCallback(
+                          (inbound) async {
+                            if (bloc.isClosed) return;
+                            await manager.onCalendarMessage(inbound);
+                          },
+                        )
+                        ..setCalendarSyncWarningCallback(
+                          (warning) async {
+                            if (bloc.isClosed) return;
+                            bloc.add(
+                              CalendarEvent.syncWarningRaised(
+                                warning: warning,
+                              ),
+                            );
+                          },
+                        );
                       return manager;
                     },
                     storage: storage,
-                    onDispose: xmppService.clearCalendarSyncCallback,
+                    onDispose: () {
+                      xmppService
+                        ..clearCalendarSyncCallback()
+                        ..clearCalendarSyncWarningCallback();
+                    },
                   )..add(const CalendarEvent.started());
                   if (seedDemoCalendar) {
                     bloc.add(

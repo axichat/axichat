@@ -296,9 +296,12 @@ class Message with _$Message implements Insertable<Message> {
     final normalizedHtml = HtmlContentCodec.normalizeHtml(
       htmlData?.xhtmlBody,
     );
-    final fallbackText = normalizedHtml == null
-        ? ''
-        : HtmlContentCodec.toPlainText(normalizedHtml);
+    final htmlPlain = htmlData?.plainText ?? '';
+    final fallbackText = htmlPlain.isNotEmpty
+        ? htmlPlain
+        : (normalizedHtml == null
+            ? ''
+            : HtmlContentCodec.toPlainText(normalizedHtml));
     final resolvedText = event.text.isNotEmpty ? event.text : fallbackText;
 
     return Message(
