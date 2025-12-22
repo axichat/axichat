@@ -13,6 +13,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -29,6 +30,8 @@ const _missingDatabaseSecretsErrorText =
     'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
 const _emailAuthFailureErrorText =
     'Email authentication failed. Please log in again.';
+const _storageLockedErrorText =
+    'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
 const _smtpProvisioningMaxAttempts = 3;
 const _smtpProvisioningMaxDuration = Duration(seconds: 20);
 const _smtpProvisioningInitialDelay = Duration(seconds: 2);
@@ -856,6 +859,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             await _markXmppConnected();
             effectivePassword = resolvedPassword;
           } on Exception catch (error) {
+            if (_looksLikeStorageLock(error)) {
+              _log.warning('Storage lock detected during login.', error);
+              await _xmppService.disconnect();
+              _authenticatedJid = null;
+              _emit(const AuthenticationFailure(_storageLockedErrorText));
+              return;
+            }
             final canResumeOffline = usingStoredCredentials &&
                 hasStoredDatabaseSecrets &&
                 _looksLikeConnectivityError(error);
@@ -1441,6 +1451,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     if (error is XmppException && error.wrapped != null) {
       return _looksLikeConnectivityError(error.wrapped!);
+    }
+    return false;
+  }
+
+  bool _looksLikeStorageLock(Object error) {
+    if (isHiveLockUnavailable(error)) {
+      return true;
+    }
+    if (error is XmppException && error.wrapped != null) {
+      return _looksLikeStorageLock(error.wrapped!);
     }
     return false;
   }

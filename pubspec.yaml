@@ -26,6 +26,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_bloc: ^8.1.6
+  provider: ^6.1.5
   flutter_localizations:
     sdk: flutter
   flutter_secure_storage: ^9.2.2

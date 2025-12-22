@@ -39,8 +39,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:logging/logging.dart';
+import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:axichat/src/storage/hive_extensions.dart';
 import 'localization/app_localizations.dart';
 
 Timer? _pendingAuthNavigation;
@@ -87,8 +90,8 @@ class _AxichatState extends State<Axichat> {
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<CalendarStorageManager>.value(
-          value: widget._storageManager,
+        ChangeNotifierProvider<CalendarStorageManager>(
+          create: (context) => widget._storageManager,
         ),
         if (widget._xmppService == null)
           RepositoryProvider<XmppService>(
@@ -100,13 +103,15 @@ class _AxichatState extends State<Axichat> {
                         )
                       : XmppConnection(),
               buildStateStore: (prefix, passphrase) async {
+                final Logger logger = Logger('XmppStateStore');
                 await Hive.initFlutter(prefix);
                 if (!Hive.isAdapterRegistered(1)) {
                   Hive.registerAdapter(PresenceAdapter());
                 }
-                await Hive.openBox(
+                await Hive.openBoxWithRetry(
                   XmppStateStore.boxName,
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
+                  logger: logger,
                 );
                 await widget._storageManager.ensureAuthStorage(
                   passphrase: passphrase,

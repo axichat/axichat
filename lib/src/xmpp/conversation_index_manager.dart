@@ -5,7 +5,8 @@ import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
-const conversationIndexNode = 'urn:ourapp:conversations';
+const conversationIndexNode = 'urn:axi:conversations';
+const conversationIndexNotifyFeature = 'urn:axi:conversations+notify';
 
 const _convTag = 'conv';
 const _peerAttr = 'peer';
