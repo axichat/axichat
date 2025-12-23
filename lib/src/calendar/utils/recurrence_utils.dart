@@ -1,8 +1,10 @@
 import 'dart:math';
 
+import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 const _occurrenceSeparator = '::';
+const int _baseOccurrenceCount = 1;
 
 enum RecurrenceEndUnit {
   days,
@@ -30,14 +32,14 @@ extension CalendarTaskInstanceX on CalendarTask {
   /// True if this task represents a generated occurrence rather than the
   /// persisted base record.
   bool get isOccurrence =>
-      id.contains(_occurrenceSeparator) && !effectiveRecurrence.isNone;
+      id.contains(_occurrenceSeparator) && hasRecurrenceData;
 
   /// True for any task whose identifier encodes a derived instance (recurrence
   /// occurrence or split segment).
   bool get hasDerivedInstance => id.contains(_occurrenceSeparator);
 
   /// True when the task participates in a recurring series.
-  bool get isSeries => !effectiveRecurrence.isNone;
+  bool get isSeries => hasRecurrenceData;
 
   /// The persistent task identifier associated with this instance.
   String get baseId {
@@ -75,13 +77,19 @@ extension CalendarTaskInstanceX on CalendarTask {
   CalendarTask? baseOccurrenceInstance() {
     final scheduled = scheduledTime;
     if (scheduled == null) return null;
-    if (effectiveRecurrence.isNone) return this;
+    if (!hasRecurrenceData) return this;
 
     final key = baseOccurrenceKey;
     if (key == null) return null;
 
     final override = occurrenceOverrides[key];
-    if (override?.isCancelled == true) {
+    final Set<String> exDateKeys =
+        _calendarDateTimeKeys(effectiveRecurrence.exDates);
+    if (_isExcludedOccurrence(
+      occurrenceKey: key,
+      override: override,
+      exDateKeys: exDateKeys,
+    )) {
       return null;
     }
 
@@ -98,6 +106,9 @@ extension CalendarTaskInstanceX on CalendarTask {
     if (key == null) {
       return null;
     }
+    if (!hasRecurrenceData) {
+      return null;
+    }
 
     final originalStart = _originalStartForKey(key);
     if (originalStart == null) {
@@ -105,7 +116,13 @@ extension CalendarTaskInstanceX on CalendarTask {
     }
 
     final override = occurrenceOverrides[key];
-    if (override?.isCancelled == true) {
+    final Set<String> exDateKeys =
+        _calendarDateTimeKeys(effectiveRecurrence.exDates);
+    if (_isExcludedOccurrence(
+      occurrenceKey: key,
+      override: override,
+      exDateKeys: exDateKeys,
+    )) {
       return null;
     }
 
@@ -147,79 +164,134 @@ extension CalendarTaskInstanceX on CalendarTask {
     final recurrence = effectiveRecurrence;
     final scheduled = scheduledTime;
 
-    if (scheduled == null || recurrence.isNone) {
+    if (scheduled == null || !hasRecurrenceData) {
       return const [];
     }
 
-    final inclusiveEnd = _minDateTime(
-      rangeEnd,
-      recurrence.until == null ? null : _endOfDay(recurrence.until!),
-    );
+    final bool hasRule = !recurrence.isNone;
+    final DateTime? inclusiveEnd = hasRule
+        ? _minDateTime(
+            rangeEnd,
+            recurrence.until == null ? null : _endOfDay(recurrence.until!),
+          )
+        : null;
 
-    if (inclusiveEnd != null && inclusiveEnd.isBefore(scheduled)) {
+    if (hasRule && inclusiveEnd != null && inclusiveEnd.isBefore(scheduled)) {
       return const [];
     }
 
-    final results = <CalendarTask>[];
-    final overrides = occurrenceOverrides;
-    var current = scheduled;
-    var generatedCount = 1; // Base instance counts toward limits.
+    final List<CalendarTask> results = <CalendarTask>[];
+    final Map<String, TaskOccurrenceOverride> overrides = occurrenceOverrides;
+    final Set<String> exDateKeys =
+        _calendarDateTimeKeys(recurrence.exDates);
+    final Set<String> emittedKeys = <String>{};
 
-    while (true) {
-      final next = _nextOccurrence(current, recurrence, scheduled);
-      if (next == null) {
-        break;
-      }
+    if (hasRule) {
+      var current = scheduled;
+      var generatedCount = _baseOccurrenceCount;
 
-      generatedCount += 1;
-      current = next;
-
-      if (recurrence.count != null && generatedCount > recurrence.count!) {
-        break;
-      }
-
-      if (inclusiveEnd != null && next.isAfter(inclusiveEnd)) {
-        break;
-      }
-
-      final overrideKey = next.microsecondsSinceEpoch.toString();
-      final override = overrides[overrideKey];
-
-      if (override?.isCancelled == true) {
-        if (next.isAfter(rangeEnd)) {
+      while (true) {
+        final DateTime? next = _nextOccurrence(current, recurrence, scheduled);
+        if (next == null) {
           break;
         }
-        continue;
-      }
 
-      final actualStart = override?.scheduledTime ?? next;
+        generatedCount += 1;
+        current = next;
 
-      if (actualStart.isAfter(rangeEnd)) {
-        if (next.isAfter(rangeEnd)) {
+        if (recurrence.count != null && generatedCount > recurrence.count!) {
           break;
         }
-        continue;
-      }
 
-      if (actualStart.isBefore(rangeStart)) {
-        continue;
-      }
+        if (inclusiveEnd != null && next.isAfter(inclusiveEnd)) {
+          break;
+        }
 
-      results.add(
-        _copyForOccurrence(
-          originalStart: next,
-          occurrenceKey: overrideKey,
-          scheduledOverride: override?.scheduledTime,
-          durationOverride: override?.duration,
-          endDateOverride: override?.endDate,
-          priorityOverride: override?.priority,
-          completedOverride: override?.isCompleted,
-          titleOverride: override?.title,
-          descriptionOverride: override?.description,
-          locationOverride: override?.location,
-          checklistOverride: override?.checklist,
-        ),
-      );
+        final String occurrenceKey = _occurrenceKeyFromDateTime(next);
+        if (emittedKeys.contains(occurrenceKey)) {
+          continue;
+        }
+        final TaskOccurrenceOverride? override = overrides[occurrenceKey];
+
+        if (_isExcludedOccurrence(
+          occurrenceKey: occurrenceKey,
+          override: override,
+          exDateKeys: exDateKeys,
+        )) {
+          if (next.isAfter(rangeEnd)) {
+            break;
+          }
+          continue;
+        }
+
+        final DateTime actualStart = override?.scheduledTime ?? next;
+
+        if (actualStart.isAfter(rangeEnd)) {
+          if (next.isAfter(rangeEnd)) {
+            break;
+          }
+          continue;
+        }
+
+        if (actualStart.isBefore(rangeStart)) {
+          continue;
+        }
+
+        results.add(
+          _copyForOccurrence(
+            originalStart: next,
+            occurrenceKey: occurrenceKey,
+            scheduledOverride: override?.scheduledTime,
+            durationOverride: override?.duration,
+            endDateOverride: override?.endDate,
+            priorityOverride: override?.priority,
+            completedOverride: override?.isCompleted,
+            titleOverride: override?.title,
+            descriptionOverride: override?.description,
+            locationOverride: override?.location,
+            checklistOverride: override?.checklist,
+          ),
+        );
+        emittedKeys.add(occurrenceKey);
+      }
+    }
+
+    if (recurrence.rDates.isNotEmpty) {
+      for (final CalendarDateTime date in recurrence.rDates) {
+        final DateTime originalStart = date.value;
+        final String occurrenceKey = _occurrenceKeyFromDateTime(originalStart);
+        if (!emittedKeys.add(occurrenceKey)) {
+          continue;
+        }
+        final TaskOccurrenceOverride? override = overrides[occurrenceKey];
+        if (_isExcludedOccurrence(
+          occurrenceKey: occurrenceKey,
+          override: override,
+          exDateKeys: exDateKeys,
+        )) {
+          continue;
+        }
+        final DateTime actualStart = override?.scheduledTime ?? originalStart;
+        if (actualStart.isBefore(rangeStart) ||
+            actualStart.isAfter(rangeEnd)) {
+          continue;
+        }
+        results.add(
+          _copyForOccurrence(
+            originalStart: originalStart,
+            occurrenceKey: occurrenceKey,
+            scheduledOverride: override?.scheduledTime,
+            durationOverride: override?.duration,
+            endDateOverride: override?.endDate,
+            priorityOverride: override?.priority,
+            completedOverride: override?.isCompleted,
+            titleOverride: override?.title,
+            descriptionOverride: override?.description,
+            locationOverride: override?.location,
+            checklistOverride: override?.checklist,
+          ),
+        );
+      }
     }
 
     return results;
@@ -312,7 +384,6 @@ DateTime? _nextOccurrence(
     case RecurrenceFrequency.monthly:
       return _addMonths(current, max(1, rule.interval), baseStart.day);
   }
-  return null;
 }
 
 DateTime? calculateRecurrenceEndDate({
@@ -503,4 +574,26 @@ String? occurrenceKeyFrom(String taskId) {
     return null;
   }
   return taskId.substring(separatorIndex + _occurrenceSeparator.length);
+}
+
+String _occurrenceKeyFromDateTime(DateTime dateTime) =>
+    dateTime.microsecondsSinceEpoch.toString();
+
+Set<String> _calendarDateTimeKeys(List<CalendarDateTime> dates) {
+  final Set<String> keys = <String>{};
+  for (final CalendarDateTime date in dates) {
+    keys.add(_occurrenceKeyFromDateTime(date.value));
+  }
+  return keys;
+}
+
+bool _isExcludedOccurrence({
+  required String occurrenceKey,
+  required TaskOccurrenceOverride? override,
+  required Set<String> exDateKeys,
+}) {
+  if (override != null) {
+    return override.isCancelled == true;
+  }
+  return exDateKeys.contains(occurrenceKey);
 }

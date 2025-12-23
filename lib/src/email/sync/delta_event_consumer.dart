@@ -340,7 +340,6 @@ class DeltaEventConsumer {
   Future<void> handle(DeltaCoreEvent event) async {
     final eventType = DeltaEventType.fromCode(event.type);
     if (eventType == null) {
-      _log.finer('Ignoring Delta event ${event.type}');
       return;
     }
     switch (eventType) {
@@ -368,7 +367,7 @@ class DeltaEventConsumer {
         await _refreshChat(event.data1);
         break;
       default:
-        _log.finer('Ignoring Delta event ${event.type}');
+        break;
     }
   }
 
