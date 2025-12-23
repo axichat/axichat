@@ -122,6 +122,8 @@ final class ConvItem {
   }
 }
 
+const List<ConvItem> _emptyConvItems = <ConvItem>[];
+
 sealed class ConvItemUpdate {
   const ConvItemUpdate();
 }
@@ -215,6 +217,24 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
   SafePubSubManager? _pubSub() =>
       getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
+
+  int? _parseMaxItems(String raw) {
+    final normalized = raw.trim();
+    if (normalized.isEmpty) return null;
+    return int.tryParse(normalized);
+  }
+
+  int _resolveFetchLimit() {
+    final parsed = _parseMaxItems(_maxItems);
+    if (parsed != null) return parsed;
+    return int.parse(_defaultMaxItems);
+  }
+
+  bool _isSnapshotComplete({
+    required int itemsCount,
+    required int maxItems,
+  }) =>
+      itemsCount < maxItems;
 
   @override
   Future<void> onXmppEvent(mox.XmppEvent event) async {
@@ -311,17 +331,44 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   }
 
   Future<List<ConvItem>> fetchAll() async {
+    final result = await fetchAllWithStatus();
+    return result.items;
+  }
+
+  Future<PubSubFetchResult<ConvItem>> fetchAllWithStatus() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
-    if (pubsub == null || host == null) return const [];
+    if (pubsub == null || host == null) {
+      return const PubSubFetchResult(
+        items: _emptyConvItems,
+        isSuccess: false,
+        isComplete: false,
+      );
+    }
 
-    final result = await pubsub.getItems(host, conversationIndexNode);
+    final fetchLimit = _resolveFetchLimit();
+    final result = await pubsub.getItems(
+      host,
+      conversationIndexNode,
+      maxItems: fetchLimit,
+    );
     if (result.isType<mox.PubSubError>()) {
       final error = result.get<mox.PubSubError>();
       final missing =
           error is mox.ItemNotFoundError || error is mox.NoItemReturnedError;
-      if (missing) return const [];
-      return const [];
+      if (missing) {
+        _cache.clear();
+        return const PubSubFetchResult(
+          items: _emptyConvItems,
+          isSuccess: true,
+          isComplete: true,
+        );
+      }
+      return const PubSubFetchResult(
+        items: _emptyConvItems,
+        isSuccess: false,
+        isComplete: false,
+      );
     }
 
     final items = result.get<List<mox.PubSubItem>>();
@@ -331,10 +378,19 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
         .map(ConvItem.fromXml)
         .whereType<ConvItem>()
         .toList(growable: false);
-    for (final entry in parsed) {
-      _cache[entry.itemId] = entry;
-    }
-    return List<ConvItem>.unmodifiable(parsed);
+    _cache
+      ..clear()
+      ..addAll({
+        for (final entry in parsed) entry.itemId: entry,
+      });
+    return PubSubFetchResult(
+      items: List<ConvItem>.unmodifiable(parsed),
+      isSuccess: true,
+      isComplete: _isSnapshotComplete(
+        itemsCount: parsed.length,
+        maxItems: fetchLimit,
+      ),
+    );
   }
 
   Future<void> upsert(ConvItem item) async {

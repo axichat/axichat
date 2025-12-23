@@ -148,34 +148,14 @@ final class HomeRefreshSyncService {
     if (_xmppService.connectionState != ConnectionState.connected) {
       return const [];
     }
-    final support = await _xmppService.refreshPubSubSupport();
-    if (!support.canUseBookmarks2) {
-      return const [];
-    }
-    final manager = _xmppService.bookmarksManager;
-    if (manager == null) return const [];
-    await manager.ensureNode();
-    await manager.subscribe();
-    final bookmarks = await manager.getBookmarks();
-    await _xmppService.applyMucBookmarks(bookmarks);
-    return bookmarks;
+    return _xmppService.syncMucBookmarksSnapshot();
   }
 
   Future<List<ConvItem>> _refreshConversationIndex() async {
     if (_xmppService.connectionState != ConnectionState.connected) {
       return const [];
     }
-    final support = await _xmppService.refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
-      return const [];
-    }
-    final manager = _xmppService.conversationIndexManager;
-    if (manager == null) return const [];
-    await manager.ensureNode();
-    await manager.subscribe();
-    final items = await manager.fetchAll();
-    await _xmppService.applyConversationIndexItems(items);
-    return items;
+    return _xmppService.syncConversationIndexSnapshot();
   }
 
   Future<void> _refreshEmailHistory() async {

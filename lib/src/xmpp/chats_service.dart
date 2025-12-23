@@ -18,8 +18,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   final Logger _chatLog = Logger('ChatsService');
   static const _typingParticipantLinger = Duration(seconds: 6);
   static const _typingParticipantMaxCount = 7;
+  static const int _conversationIndexSnapshotStart = 0;
+  static const int _conversationIndexSnapshotEnd = 0;
   static const _recipientAddressSuggestionLimit = 50000;
   static const Duration _mutedForeverDuration = Duration(days: 3650);
+  static const List<ConvItem> _emptyConversationIndexSnapshot = <ConvItem>[];
   final Map<String, Set<String>> _typingParticipants = {};
   final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
   final Map<String, StreamController<List<String>>> _typingParticipantStreams =
@@ -44,26 +47,40 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<void> syncConversationIndexOnLogin() async {
-    if (_conversationIndexLoginSyncInFlight) return;
-    if (connectionState != ConnectionState.connected) return;
+    await syncConversationIndexSnapshot();
+  }
+
+  Future<List<ConvItem>> syncConversationIndexSnapshot() async {
+    if (_conversationIndexLoginSyncInFlight) {
+      return _emptyConversationIndexSnapshot;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return _emptyConversationIndexSnapshot;
+    }
     _conversationIndexLoginSyncInFlight = true;
     try {
       await database;
-      if (connectionState != ConnectionState.connected) return;
+      if (connectionState != ConnectionState.connected) {
+        return _emptyConversationIndexSnapshot;
+      }
 
       final support = await refreshPubSubSupport();
-      if (!support.canUsePepNodes) return;
+      if (!support.canUsePepNodes) {
+        return _emptyConversationIndexSnapshot;
+      }
 
       final manager = _connection.getManager<ConversationIndexManager>();
-      if (manager == null) return;
+      if (manager == null) {
+        return _emptyConversationIndexSnapshot;
+      }
 
       await manager.ensureNode();
       await manager.subscribe();
-      final items = await manager.fetchAll();
-      if (items.isEmpty) return;
-      await applyConversationIndexItems(items);
+      final snapshot = await manager.fetchAllWithStatus();
+      await applyConversationIndexSnapshot(snapshot);
+      return snapshot.items;
     } on XmppAbortedException {
-      return;
+      return _emptyConversationIndexSnapshot;
     } finally {
       _conversationIndexLoginSyncInFlight = false;
     }
@@ -399,6 +416,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     }
     await sendChatState(jid: jid, state: mox.ChatState.active);
+    unawaited(_publishConversationIndexForOpenChat(jid));
   }
 
   Future<void> closeChat() async {
@@ -640,6 +658,45 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     );
   }
 
+  Future<void> applyConversationIndexSnapshot(
+    PubSubFetchResult<ConvItem> snapshot,
+  ) async {
+    if (!snapshot.isSuccess) return;
+    final items = snapshot.items;
+    await applyConversationIndexItems(items);
+    if (snapshot.isComplete) {
+      await _reconcileConversationIndexRemovals(items);
+    }
+  }
+
+  Future<void> _reconcileConversationIndexRemovals(
+    List<ConvItem> items,
+  ) async {
+    final knownPeers =
+        items.map((item) => item.peerBare.toBare().toString()).toSet();
+    final selfJid = myJid;
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        final chats = await db.getChats(
+          start: _conversationIndexSnapshotStart,
+          end: _conversationIndexSnapshotEnd,
+        );
+        for (final chat in chats) {
+          if (chat.type != ChatType.chat) continue;
+          if (!chat.defaultTransport.isXmpp) continue;
+          final normalized = _normalizeBareChatJid(chat.jid);
+          if (normalized == null || normalized.isEmpty) continue;
+          if (normalized == selfJid) continue;
+          if (_isMucChatJid(normalized)) continue;
+          if (knownPeers.contains(normalized)) continue;
+          if (chat.archived) continue;
+          await db.updateChat(chat.copyWith(archived: true));
+        }
+      },
+      awaitDatabase: true,
+    );
+  }
+
   Future<void> _applyConversationIndexRetraction(mox.JID peerBare) async {
     final peer = peerBare.toBare().toString();
     if (peer.isEmpty) return;
@@ -687,6 +744,23 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         mutedUntil: mutedUntil,
       ),
     );
+  }
+
+  Future<void> _publishConversationIndexForOpenChat(String jid) async {
+    final normalized = _normalizeBareChatJid(jid);
+    if (normalized == null || normalized.isEmpty) return;
+    if (_isMucChatJid(normalized)) return;
+    await _syncConversationIndexMeta(jid: normalized);
+  }
+
+  String? _normalizeBareChatJid(String jid) {
+    final trimmed = jid.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      return mox.JID.fromString(trimmed).toBare().toString();
+    } on Exception {
+      return null;
+    }
   }
 }
 

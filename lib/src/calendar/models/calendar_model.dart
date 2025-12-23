@@ -9,6 +9,7 @@ import 'calendar_availability.dart';
 import 'calendar_collection.dart';
 import 'calendar_critical_path.dart';
 import 'calendar_ics_meta.dart';
+import 'calendar_journal.dart';
 import 'day_event.dart';
 import 'calendar_task.dart';
 
@@ -19,6 +20,9 @@ const _tombstoneRetentionDays = 30;
 const int _calendarModelCollectionField = 8;
 const int _calendarModelAvailabilityField = 9;
 const int _calendarModelAvailabilityOverlayField = 10;
+const int _calendarModelJournalsField = 11;
+const int _calendarModelDeletedJournalIdsField = 12;
+const int _calendarSequenceDefault = 0;
 
 @freezed
 @HiveType(typeId: 33)
@@ -28,9 +32,15 @@ class CalendarModel with _$CalendarModel {
     @HiveField(1) required DateTime lastModified,
     @HiveField(2) @Default({}) Map<String, DayEvent> dayEvents,
     @HiveField(3) required String checksum,
+    @HiveField(_calendarModelJournalsField)
+    @Default({})
+    Map<String, CalendarJournal> journals,
     @HiveField(4) @Default({}) Map<String, CalendarCriticalPath> criticalPaths,
     @HiveField(5) @Default({}) Map<String, DateTime> deletedTaskIds,
     @HiveField(6) @Default({}) Map<String, DateTime> deletedDayEventIds,
+    @HiveField(_calendarModelDeletedJournalIdsField)
+    @Default({})
+    Map<String, DateTime> deletedJournalIds,
     @HiveField(7) @Default({}) Map<String, DateTime> deletedCriticalPathIds,
     @HiveField(_calendarModelCollectionField) CalendarCollection? collection,
     @HiveField(_calendarModelAvailabilityField)
@@ -64,6 +74,9 @@ class CalendarModel with _$CalendarModel {
     final sortedDayEvents = Map.fromEntries(
       dayEvents.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
+    final sortedJournals = Map.fromEntries(
+      journals.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
     final sortedCriticalPaths = Map.fromEntries(
       criticalPaths.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
@@ -81,6 +94,10 @@ class CalendarModel with _$CalendarModel {
       deletedDayEventIds.entries.toList()
         ..sort((a, b) => a.key.compareTo(b.key)),
     );
+    final sortedDeletedJournalIds = Map.fromEntries(
+      deletedJournalIds.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key)),
+    );
     final sortedDeletedCriticalPathIds = Map.fromEntries(
       deletedCriticalPathIds.entries.toList()
         ..sort((a, b) => a.key.compareTo(b.key)),
@@ -89,6 +106,7 @@ class CalendarModel with _$CalendarModel {
     final content = jsonEncode({
       'tasks': sortedTasks.map((k, v) => MapEntry(k, v.toJson())),
       'dayEvents': sortedDayEvents.map((k, v) => MapEntry(k, v.toJson())),
+      'journals': sortedJournals.map((k, v) => MapEntry(k, v.toJson())),
       'lastModified': lastModified.toIso8601String(),
       'criticalPaths':
           sortedCriticalPaths.map((k, v) => MapEntry(k, v.toJson())),
@@ -99,6 +117,8 @@ class CalendarModel with _$CalendarModel {
       'deletedTaskIds':
           sortedDeletedTaskIds.map((k, v) => MapEntry(k, v.toIso8601String())),
       'deletedDayEventIds': sortedDeletedDayEventIds
+          .map((k, v) => MapEntry(k, v.toIso8601String())),
+      'deletedJournalIds': sortedDeletedJournalIds
           .map((k, v) => MapEntry(k, v.toIso8601String())),
       'deletedCriticalPathIds': sortedDeletedCriticalPathIds
           .map((k, v) => MapEntry(k, v.toIso8601String())),
@@ -202,6 +222,61 @@ class CalendarModel with _$CalendarModel {
     final DateTime now = DateTime.now();
     final CalendarModel updated = copyWith(
       dayEvents: updatedEvents,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel addJournal(CalendarJournal journal) {
+    final updatedJournals = <String, CalendarJournal>{
+      ...journals,
+      journal.id: journal,
+    };
+    final DateTime now = DateTime.now();
+    final CalendarModel updated = copyWith(
+      journals: updatedJournals,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel updateJournal(CalendarJournal journal) {
+    if (!journals.containsKey(journal.id)) {
+      return this;
+    }
+    return addJournal(journal);
+  }
+
+  CalendarModel deleteJournal(String journalId) {
+    if (!journals.containsKey(journalId)) {
+      return this;
+    }
+    final Map<String, CalendarJournal> updatedJournals =
+        Map<String, CalendarJournal>.from(journals)..remove(journalId);
+    final DateTime now = DateTime.now();
+    final updatedDeletedJournalIds =
+        _purgeStaleTombstones(deletedJournalIds, now);
+    updatedDeletedJournalIds[journalId] = now;
+    final CalendarModel updated = copyWith(
+      journals: updatedJournals,
+      lastModified: now,
+      deletedJournalIds: updatedDeletedJournalIds,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel replaceJournals(Map<String, CalendarJournal> replacements) {
+    if (replacements.isEmpty) {
+      return this;
+    }
+    final Map<String, CalendarJournal> updatedJournals =
+        <String, CalendarJournal>{
+      ...journals,
+      ...replacements,
+    };
+    final DateTime now = DateTime.now();
+    final CalendarModel updated = copyWith(
+      journals: updatedJournals,
       lastModified: now,
     );
     return updated.copyWith(checksum: updated.calculateChecksum());
@@ -516,12 +591,31 @@ Map<String, CalendarAvailabilityOverlay> _mergeAvailabilityOverlays(
   return merged;
 }
 
+bool _shouldPreferRemote({
+  required DateTime localModifiedAt,
+  required DateTime remoteModifiedAt,
+  required CalendarIcsMeta? localMeta,
+  required CalendarIcsMeta? remoteMeta,
+}) {
+  if (remoteModifiedAt.isAfter(localModifiedAt)) {
+    return true;
+  }
+  if (localModifiedAt.isAfter(remoteModifiedAt)) {
+    return false;
+  }
+  final int localSequence = localMeta?.sequence ?? _calendarSequenceDefault;
+  final int remoteSequence = remoteMeta?.sequence ?? _calendarSequenceDefault;
+  return remoteSequence > localSequence;
+}
+
 extension CalendarModelMerge on CalendarModel {
   CalendarModel mergeWith(CalendarModel remote) {
     final mergedDeletedTaskIds =
         _mergeTombstones(deletedTaskIds, remote.deletedTaskIds);
     final mergedDeletedDayEventIds =
         _mergeTombstones(deletedDayEventIds, remote.deletedDayEventIds);
+    final mergedDeletedJournalIds =
+        _mergeTombstones(deletedJournalIds, remote.deletedJournalIds);
     final mergedDeletedCriticalPathIds = _mergeTombstones(
       deletedCriticalPathIds,
       remote.deletedCriticalPathIds,
@@ -549,9 +643,13 @@ extension CalendarModelMerge on CalendarModel {
       }
 
       if (localTask != null && remoteTask != null) {
-        mergedTasks[id] = remoteTask.modifiedAt.isAfter(localTask.modifiedAt)
-            ? remoteTask
-            : localTask;
+        final bool preferRemote = _shouldPreferRemote(
+          localModifiedAt: localTask.modifiedAt,
+          remoteModifiedAt: remoteTask.modifiedAt,
+          localMeta: localTask.icsMeta,
+          remoteMeta: remoteTask.icsMeta,
+        );
+        mergedTasks[id] = preferRemote ? remoteTask : localTask;
       }
     }
 
@@ -577,11 +675,48 @@ extension CalendarModelMerge on CalendarModel {
       }
 
       if (localEvent != null && remoteEvent != null) {
-        mergedDayEvents[id] = remoteEvent.modifiedAt.isAfter(
-          localEvent.modifiedAt,
-        )
-            ? remoteEvent
-            : localEvent;
+        final bool preferRemote = _shouldPreferRemote(
+          localModifiedAt: localEvent.modifiedAt,
+          remoteModifiedAt: remoteEvent.modifiedAt,
+          localMeta: localEvent.icsMeta,
+          remoteMeta: remoteEvent.icsMeta,
+        );
+        mergedDayEvents[id] = preferRemote ? remoteEvent : localEvent;
+      }
+    }
+
+    final mergedJournals = <String, CalendarJournal>{};
+    final allJournalIds = <String>{
+      ...journals.keys,
+      ...remote.journals.keys,
+    };
+
+    for (final id in allJournalIds) {
+      if (mergedDeletedJournalIds.containsKey(id)) {
+        continue;
+      }
+
+      final localJournal = journals[id];
+      final remoteJournal = remote.journals[id];
+
+      if (localJournal == null && remoteJournal != null) {
+        mergedJournals[id] = remoteJournal;
+        continue;
+      }
+
+      if (localJournal != null && remoteJournal == null) {
+        mergedJournals[id] = localJournal;
+        continue;
+      }
+
+      if (localJournal != null && remoteJournal != null) {
+        final bool preferRemote = _shouldPreferRemote(
+          localModifiedAt: localJournal.modifiedAt,
+          remoteModifiedAt: remoteJournal.modifiedAt,
+          localMeta: localJournal.icsMeta,
+          remoteMeta: remoteJournal.icsMeta,
+        );
+        mergedJournals[id] = preferRemote ? remoteJournal : localJournal;
       }
     }
 
@@ -627,12 +762,14 @@ extension CalendarModelMerge on CalendarModel {
     final merged = CalendarModel(
       tasks: mergedTasks,
       dayEvents: mergedDayEvents,
+      journals: mergedJournals,
       criticalPaths: mergedPaths,
       availability: mergedAvailability,
       availabilityOverlays: mergedAvailabilityOverlays,
       collection: mergedCollection,
       deletedTaskIds: mergedDeletedTaskIds,
       deletedDayEventIds: mergedDeletedDayEventIds,
+      deletedJournalIds: mergedDeletedJournalIds,
       deletedCriticalPathIds: mergedDeletedCriticalPathIds,
       lastModified: now,
       checksum: '',
@@ -645,6 +782,7 @@ extension CalendarModelX on CalendarModel {
   bool get hasCalendarData =>
       tasks.isNotEmpty ||
       dayEvents.isNotEmpty ||
+      journals.isNotEmpty ||
       criticalPaths.isNotEmpty ||
       availability.isNotEmpty ||
       availabilityOverlays.isNotEmpty;

@@ -76,7 +76,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             HomeRefreshSyncService(
               xmppService: xmppService,
               emailService: emailService,
-            ),
+            )
+          ..start(),
         _endpointResolver = endpointResolver,
         _endpointConfig = initialState?.config ??
             initialEndpointConfig ??
