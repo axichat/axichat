@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
 import 'package:axichat/src/calendar/models/calendar_item.dart';
+import 'package:axichat/src/calendar/models/calendar_journal.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -200,6 +201,9 @@ void registerCalendarHiveAdapters([HiveInterface? hive]) {
   }
   if (!target.isAdapterRegistered(CalendarTaskAdapter().typeId)) {
     target.registerAdapter<CalendarTask>(CalendarTaskAdapter());
+  }
+  if (!target.isAdapterRegistered(CalendarJournalAdapter().typeId)) {
+    target.registerAdapter<CalendarJournal>(CalendarJournalAdapter());
   }
   if (!target.isAdapterRegistered(RecurrenceRuleAdapter().typeId)) {
     target.registerAdapter<RecurrenceRule>(RecurrenceRuleAdapter());

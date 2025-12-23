@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
+import 'package:axichat/src/calendar/models/calendar_journal.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -22,6 +23,7 @@ const String _icsComponentRoot = 'ROOT';
 const String _icsComponentVcalendar = 'VCALENDAR';
 const String _icsComponentVevent = 'VEVENT';
 const String _icsComponentVtodo = 'VTODO';
+const String _icsComponentVjournal = 'VJOURNAL';
 const String _icsComponentValarm = 'VALARM';
 const String _icsComponentVtimezone = 'VTIMEZONE';
 const String _icsComponentVfreebusy = 'VFREEBUSY';
@@ -123,11 +125,19 @@ const String _icsValueSemicolon = ';';
 const String _icsValueComma = ',';
 const String _icsValueSpace = ' ';
 const String _icsValueSlash = '/';
+const String _icsValueBackslash = '\\';
+const String _icsValueNewline = '\n';
+const String _icsEscapeNewline = 'n';
+const String _icsEscapedBackslash = r'\\';
+const String _icsEscapedNewline = r'\n';
+const String _icsEscapedComma = r'\,';
+const String _icsEscapedSemicolon = r'\;';
 
 const String _calendarFallbackName = 'Calendar';
 const String _calendarFallbackId = 'calendar';
 const String _taskFallbackTitle = 'Untitled task';
 const String _eventFallbackTitle = 'Untitled event';
+const String _journalFallbackTitle = 'Untitled journal';
 
 const int _icsDateLength = 8;
 const int _icsDateTimeMinLength = 15;
@@ -277,6 +287,9 @@ class CalendarIcsCodec {
     for (final DayEvent event in model.dayEvents.values) {
       _writeDayEventComponent(writer, event);
     }
+    for (final CalendarJournal journal in model.journals.values) {
+      _writeJournalComponent(writer, journal);
+    }
     for (final MapEntry<String, CalendarAvailability> entry
         in model.availability.entries) {
       _writeAvailabilityComponent(writer, entry.value, entry.key);
@@ -308,9 +321,11 @@ class CalendarIcsCodec {
     final CalendarModel model = CalendarModel(
       tasks: result.tasks,
       dayEvents: result.dayEvents,
+      journals: result.journals,
       criticalPaths: result.criticalPaths,
       deletedTaskIds: result.deletedTaskIds,
       deletedDayEventIds: result.deletedDayEventIds,
+      deletedJournalIds: result.deletedJournalIds,
       deletedCriticalPathIds: result.deletedCriticalPathIds,
       availability: result.availability,
       availabilityOverlays: result.availabilityOverlays,
@@ -326,9 +341,11 @@ class _CalendarParseResult {
   const _CalendarParseResult({
     required this.tasks,
     required this.dayEvents,
+    required this.journals,
     required this.criticalPaths,
     required this.deletedTaskIds,
     required this.deletedDayEventIds,
+    required this.deletedJournalIds,
     required this.deletedCriticalPathIds,
     required this.availability,
     required this.availabilityOverlays,
@@ -337,9 +354,11 @@ class _CalendarParseResult {
 
   final Map<String, CalendarTask> tasks;
   final Map<String, DayEvent> dayEvents;
+  final Map<String, CalendarJournal> journals;
   final Map<String, CalendarCriticalPath> criticalPaths;
   final Map<String, DateTime> deletedTaskIds;
   final Map<String, DateTime> deletedDayEventIds;
+  final Map<String, DateTime> deletedJournalIds;
   final Map<String, DateTime> deletedCriticalPathIds;
   final Map<String, CalendarAvailability> availability;
   final Map<String, CalendarAvailabilityOverlay> availabilityOverlays;
@@ -351,6 +370,7 @@ class _CalendarModelParser {
     final collection = _parseCollection(calendar);
     final Map<String, List<CalendarRawComponent>> todoGroups = {};
     final Map<String, List<CalendarRawComponent>> eventGroups = {};
+    final Map<String, List<CalendarRawComponent>> journalGroups = {};
     final Map<String, CalendarAvailability> availability = {};
     final Map<String, CalendarAvailabilityOverlay> overlays = {};
     final List<CalendarRawComponent> otherComponents = <CalendarRawComponent>[];
@@ -366,6 +386,13 @@ class _CalendarModelParser {
       if (name == _icsComponentVevent) {
         final String uid = _componentUid(component);
         eventGroups.putIfAbsent(uid, () => <CalendarRawComponent>[]).add(
+              component,
+            );
+        continue;
+      }
+      if (name == _icsComponentVjournal) {
+        final String uid = _componentUid(component);
+        journalGroups.putIfAbsent(uid, () => <CalendarRawComponent>[]).add(
               component,
             );
         continue;
@@ -393,8 +420,10 @@ class _CalendarModelParser {
 
     final Map<String, CalendarTask> tasks = <String, CalendarTask>{};
     final Map<String, DayEvent> dayEvents = <String, DayEvent>{};
+    final Map<String, CalendarJournal> journals = <String, CalendarJournal>{};
     final Map<String, DateTime> deletedTaskIds = <String, DateTime>{};
     final Map<String, DateTime> deletedDayEventIds = <String, DateTime>{};
+    final Map<String, DateTime> deletedJournalIds = <String, DateTime>{};
     final Map<String, DateTime> deletedCriticalPathIds = <String, DateTime>{};
     final Map<String, List<_CriticalPathEntry>> pathEntries =
         <String, List<_CriticalPathEntry>>{};
@@ -454,6 +483,26 @@ class _CalendarModelParser {
       }
     }
 
+    for (final MapEntry<String, List<CalendarRawComponent>> entry
+        in journalGroups.entries) {
+      final _JournalGroupResult? parsed = _parseJournalGroup(
+        entry.value,
+        isCalendarCancel: isCalendarCancel,
+      );
+      if (parsed == null) {
+        otherComponents.addAll(entry.value);
+        continue;
+      }
+      if (parsed.isCancelled) {
+        deletedJournalIds[parsed.journalId] = parsed.cancelledAt;
+        continue;
+      }
+      journals[parsed.journal.id] = parsed.journal;
+      if (parsed.passthroughComponents.isNotEmpty) {
+        otherComponents.addAll(parsed.passthroughComponents);
+      }
+    }
+
     final Map<String, CalendarCriticalPath> criticalPaths =
         _buildCriticalPaths(pathEntries);
 
@@ -463,9 +512,11 @@ class _CalendarModelParser {
     return _CalendarParseResult(
       tasks: tasks,
       dayEvents: dayEvents,
+      journals: journals,
       criticalPaths: criticalPaths,
       deletedTaskIds: deletedTaskIds,
       deletedDayEventIds: deletedDayEventIds,
+      deletedJournalIds: deletedJournalIds,
       deletedCriticalPathIds: deletedCriticalPathIds,
       availability: availability,
       availabilityOverlays: overlays,
@@ -488,6 +539,22 @@ class _TaskGroupResult {
   final bool isCancelled;
   final DateTime cancelledAt;
   final List<CalendarCriticalPathLink> pathLinks;
+}
+
+class _JournalGroupResult {
+  const _JournalGroupResult({
+    required this.journal,
+    required this.journalId,
+    required this.isCancelled,
+    required this.cancelledAt,
+    required this.passthroughComponents,
+  });
+
+  final CalendarJournal journal;
+  final String journalId;
+  final bool isCancelled;
+  final DateTime cancelledAt;
+  final List<CalendarRawComponent> passthroughComponents;
 }
 
 class _EventGroupResult {
@@ -747,18 +814,50 @@ String _normalizeName(String input) => input.trim().toUpperCase();
 
 String _escapeText(String input) {
   return input
-      .replaceAll('\\', r'\\')
-      .replaceAll('\n', r'\n')
-      .replaceAll(_icsValueComma, r'\,')
-      .replaceAll(_icsValueSemicolon, r'\;');
+      .replaceAll(_icsValueBackslash, _icsEscapedBackslash)
+      .replaceAll(_icsValueNewline, _icsEscapedNewline)
+      .replaceAll(_icsValueComma, _icsEscapedComma)
+      .replaceAll(_icsValueSemicolon, _icsEscapedSemicolon);
 }
 
 String _unescapeText(String input) {
-  return input
-      .replaceAll(r'\n', '\n')
-      .replaceAll(r'\,', _icsValueComma)
-      .replaceAll(r'\;', _icsValueSemicolon)
-      .replaceAll(r'\\', '\\');
+  if (!input.contains(_icsValueBackslash)) {
+    return input;
+  }
+  final StringBuffer buffer = StringBuffer();
+  int index = 0;
+  while (index < input.length) {
+    final String char = input[index];
+    if (char != _icsValueBackslash) {
+      buffer.write(char);
+      index += 1;
+      continue;
+    }
+    if (index == input.length - 1) {
+      buffer.write(_icsValueBackslash);
+      break;
+    }
+    final String next = input[index + 1];
+    switch (next) {
+      case _icsEscapeNewline:
+        buffer.write(_icsValueNewline);
+        break;
+      case _icsValueComma:
+        buffer.write(_icsValueComma);
+        break;
+      case _icsValueSemicolon:
+        buffer.write(_icsValueSemicolon);
+        break;
+      case _icsValueBackslash:
+        buffer.write(_icsValueBackslash);
+        break;
+      default:
+        buffer.write(next);
+        break;
+    }
+    index += 2;
+  }
+  return buffer.toString();
 }
 
 List<String> _foldLine(String line) {
@@ -1135,6 +1234,47 @@ _EventGroupResult? _parseEventGroup(
   );
 }
 
+_JournalGroupResult? _parseJournalGroup(
+  List<CalendarRawComponent> components, {
+  required bool isCalendarCancel,
+}) {
+  if (components.isEmpty) {
+    return null;
+  }
+  final CalendarRawComponent base = _findBaseComponent(components);
+  final bool hasBase = _firstPropertyValue(
+        base.properties,
+        _icsPropertyRecurrenceId,
+      ) ==
+      null;
+  if (!hasBase) {
+    return null;
+  }
+  final _ParsedJournal parsedBase = _parseJournalComponent(base);
+  final bool isCancelled =
+      isCalendarCancel || parsedBase.meta.status?.isCancelled == true;
+  final DateTime cancelledAt =
+      parsedBase.meta.lastModified ?? parsedBase.meta.dtStamp ?? DateTime.now();
+  final List<CalendarRawComponent> passthroughComponents =
+      <CalendarRawComponent>[];
+  for (final CalendarRawComponent component in components) {
+    if (component == base) {
+      continue;
+    }
+    if (_firstPropertyValue(component.properties, _icsPropertyRecurrenceId) !=
+        null) {
+      passthroughComponents.add(component);
+    }
+  }
+  return _JournalGroupResult(
+    journal: parsedBase.journal,
+    journalId: parsedBase.journal.id,
+    isCancelled: isCancelled,
+    cancelledAt: cancelledAt,
+    passthroughComponents: passthroughComponents,
+  );
+}
+
 CalendarRawComponent _findBaseComponent(List<CalendarRawComponent> components) {
   for (final CalendarRawComponent component in components) {
     if (_firstPropertyValue(component.properties, _icsPropertyRecurrenceId) ==
@@ -1209,6 +1349,11 @@ _ParsedComponent _parseTaskComponent(
       _remindersFromAlarms(alarms).normalized();
 
   final RecurrenceRule? recurrence = _parseRecurrence(properties);
+  final bool hasRecurrenceData = recurrence != null &&
+      (!recurrence.isNone ||
+          recurrence.rDates.isNotEmpty ||
+          recurrence.exDates.isNotEmpty ||
+          recurrence.rawProperties.isNotEmpty);
 
   final bool isCompleted = _isCompleted(properties, meta.status);
   final CalendarAxiExtensions? axi = _mergeAxi(checklistResult, pathLinks);
@@ -1231,7 +1376,7 @@ _ParsedComponent _parseTaskComponent(
     location: location?.isEmpty == true ? null : location,
     priority: priority == TaskPriority.none ? null : priority,
     startHour: null,
-    recurrence: recurrence?.isNone == true ? null : recurrence,
+    recurrence: hasRecurrenceData ? recurrence : null,
     occurrenceOverrides: const <String, TaskOccurrenceOverride>{},
     reminders: reminders,
     checklist: checklistResult.items,
@@ -1257,6 +1402,16 @@ class _ParsedComponent {
   final List<CalendarCriticalPathLink> pathLinks;
 }
 
+class _ParsedJournal {
+  const _ParsedJournal({
+    required this.journal,
+    required this.meta,
+  });
+
+  final CalendarJournal journal;
+  final CalendarIcsMeta meta;
+}
+
 class _ParsedDayEvent {
   const _ParsedDayEvent({
     required this.event,
@@ -1265,6 +1420,52 @@ class _ParsedDayEvent {
 
   final DayEvent event;
   final CalendarIcsMeta meta;
+}
+
+_ParsedJournal _parseJournalComponent(CalendarRawComponent component) {
+  final CalendarIcsMeta meta = _parseMeta(component);
+  final List<CalendarRawProperty> properties = component.properties;
+  final String id = _firstPropertyValue(properties, _axiTaskIdProperty) ??
+      meta.uid ??
+      const Uuid().v4();
+  final String title = _firstPropertyValue(properties, _icsPropertySummary) ??
+      _journalFallbackTitle;
+  final String? description =
+      _firstPropertyValue(properties, _icsPropertyDescription);
+  final CalendarRawProperty? dtStartProp =
+      _firstProperty(properties, _icsPropertyDtStart);
+  final CalendarDateTime? parsedEntry =
+      dtStartProp == null ? null : _parseDateTime(dtStartProp);
+  final CalendarDateTime entryDate =
+      parsedEntry ?? _fallbackJournalEntryDate(meta);
+  final List<CalendarAlarm> alarms = _parseAlarms(component.components);
+  final CalendarIcsMeta mergedMeta = meta.copyWith(alarms: alarms);
+  final DateTime createdAt = meta.created ?? meta.dtStamp ?? DateTime.now();
+  final DateTime modifiedAt = meta.lastModified ?? meta.dtStamp ?? createdAt;
+  final CalendarJournal journal = CalendarJournal(
+    id: id,
+    title: title,
+    entryDate: entryDate,
+    description: description?.isEmpty == true ? null : description,
+    createdAt: createdAt,
+    modifiedAt: modifiedAt,
+    icsMeta: mergedMeta,
+  );
+  return _ParsedJournal(
+    journal: journal,
+    meta: mergedMeta,
+  );
+}
+
+CalendarDateTime _fallbackJournalEntryDate(CalendarIcsMeta meta) {
+  final DateTime fallbackDate = meta.created ?? meta.dtStamp ?? DateTime.now();
+  final bool isUtc = fallbackDate.isUtc;
+  return CalendarDateTime(
+    value: fallbackDate,
+    tzid: null,
+    isAllDay: false,
+    isFloating: !isUtc,
+  );
 }
 
 _ParsedDayEvent _parseDayEventComponent(CalendarRawComponent component) {
@@ -1483,12 +1684,8 @@ CalendarIcsMeta _parseMeta(CalendarRawComponent component) {
   final List<CalendarRawComponent> rawComponents = component.components
       .where((child) => child.name != _icsComponentValarm)
       .toList(growable: false);
-  final List<CalendarRawProperty> rawProperties = properties
-      .where(
-        (property) =>
-            !_isMetaProperty(property.name) || property.parameters.isNotEmpty,
-      )
-      .toList(growable: false);
+  final List<CalendarRawProperty> rawProperties =
+      properties.toList(growable: false);
   return CalendarIcsMeta(
     uid: uid,
     dtStamp: dtStamp,
@@ -1509,28 +1706,6 @@ CalendarIcsMeta _parseMeta(CalendarRawComponent component) {
     rawProperties: rawProperties,
     rawComponents: rawComponents,
   );
-}
-
-bool _isMetaProperty(String name) {
-  switch (name) {
-    case _icsPropertyUid:
-    case _icsPropertyDtStamp:
-    case _icsPropertyCreated:
-    case _icsPropertyLastModified:
-    case _icsPropertySequence:
-    case _icsPropertyStatus:
-    case _icsPropertyClass:
-    case _icsPropertyTransp:
-    case _icsPropertyCategories:
-    case _icsPropertyUrl:
-    case _icsPropertyGeo:
-    case _icsPropertyAttach:
-    case _icsPropertyOrganizer:
-    case _icsPropertyAttendee:
-      return true;
-    default:
-      return false;
-  }
 }
 
 CalendarRawProperty? _firstProperty(
@@ -2144,12 +2319,13 @@ RecurrenceRule? _parseRecurrence(List<CalendarRawProperty> properties) {
       _propertiesByName(properties, _icsPropertyExrule);
   final List<CalendarRawProperty> rawProps = <CalendarRawProperty>[];
 
-  if (rrule == null && rdates.isEmpty && exdates.isEmpty) {
+  if (rrule == null && rdates.isEmpty && exdates.isEmpty && exrules.isEmpty) {
     return null;
   }
   RecurrenceFrequency frequency = RecurrenceFrequency.none;
   var interval = 1;
   DateTime? until;
+  bool untilIsDate = false;
   int? count;
   List<int>? byWeekdays;
   List<int>? bySeconds;
@@ -2176,7 +2352,11 @@ RecurrenceRule? _parseRecurrence(List<CalendarRawProperty> properties) {
         value: untilRaw,
         parameters: rrule.parameters,
       );
-      until = _parseDateTime(untilProp)?.value;
+      final CalendarDateTime? untilValue = _parseDateTime(untilProp);
+      if (untilValue != null) {
+        until = untilValue.value;
+        untilIsDate = untilValue.isAllDay;
+      }
     }
     byWeekdays = _parseIntList(parts['BYDAY']);
     byDays = _parseRecurrenceWeekdays(parts['BYDAY']);
@@ -2216,6 +2396,7 @@ RecurrenceRule? _parseRecurrence(List<CalendarRawProperty> properties) {
     byMonths: byMonths,
     bySetPositions: bySetPositions,
     weekStart: weekStart,
+    untilIsDate: untilIsDate,
     rDates: rDates,
     exDates: exDates,
     rawProperties: rawProps,
@@ -2948,6 +3129,53 @@ void _writeDayEventComponent(_IcsWriter writer, DayEvent event) {
   writer.endComponent(_icsComponentVevent);
 }
 
+void _writeJournalComponent(_IcsWriter writer, CalendarJournal journal) {
+  final CalendarIcsMeta? meta = journal.icsMeta;
+  final String uid = meta?.uid ?? '${journal.id}$_icsUidSuffix';
+  writer
+    ..beginComponent(_icsComponentVjournal)
+    ..writeProperty(_icsPropertyUid, uid, escapeText: false)
+    ..writeProperty(_axiTaskIdProperty, journal.id, escapeText: false);
+  _writeMeta(writer, journal.modifiedAt, meta);
+  _writeJournalStatus(writer, meta);
+  writer.writeProperty(_icsPropertySummary, journal.title);
+  if (journal.description != null && journal.description!.isNotEmpty) {
+    writer.writeProperty(_icsPropertyDescription, journal.description!);
+  }
+  _writeDateTimeProperty(
+    writer,
+    _icsPropertyDtStart,
+    journal.entryDate.value,
+    rawProperty: _rawProperty(meta, _icsPropertyDtStart),
+    isAllDay: journal.entryDate.isAllDay,
+    tzidOverride: journal.entryDate.tzid,
+    isFloatingOverride: journal.entryDate.isFloating,
+  );
+  final List<CalendarAlarm> alarms = meta?.alarms ?? const <CalendarAlarm>[];
+  for (final CalendarAlarm alarm in alarms) {
+    _writeAlarm(writer, alarm);
+  }
+  _writeParticipants(writer, meta);
+  _writeMetaRawProperties(writer, meta, _journalRawPropertySkips);
+  _writeMetaRawComponents(writer, meta);
+  writer.endComponent(_icsComponentVjournal);
+}
+
+void _writeJournalStatus(_IcsWriter writer, CalendarIcsMeta? meta) {
+  final CalendarRawProperty? rawStatus = _rawProperty(meta, _icsPropertyStatus);
+  if (rawStatus != null) {
+    writer.writeRawProperty(rawStatus);
+    return;
+  }
+  if (meta?.status != null) {
+    writer.writeProperty(
+      _icsPropertyStatus,
+      meta!.status!.icsValue,
+      escapeText: false,
+    );
+  }
+}
+
 void _writeAvailabilityComponent(
   _IcsWriter writer,
   CalendarAvailability availability,
@@ -3017,71 +3245,84 @@ void _writeFreeBusyComponent(
     _icsPropertyDtEnd,
     overlay.rangeEnd,
   );
-  final Map<CalendarFreeBusyType, List<CalendarFreeBusyInterval>> grouped =
-      <CalendarFreeBusyType, List<CalendarFreeBusyInterval>>{};
+  final Map<CalendarFreeBusyType, Map<String?, List<CalendarFreeBusyInterval>>>
+      grouped =
+      <CalendarFreeBusyType, Map<String?, List<CalendarFreeBusyInterval>>>{};
   for (final CalendarFreeBusyInterval interval in overlay.intervals) {
+    final String? tzid = _freeBusyGroupTzid(interval);
     grouped
-        .putIfAbsent(interval.type, () => <CalendarFreeBusyInterval>[])
+        .putIfAbsent(
+          interval.type,
+          () => <String?, List<CalendarFreeBusyInterval>>{},
+        )
+        .putIfAbsent(tzid, () => <CalendarFreeBusyInterval>[])
         .add(interval);
   }
   for (final MapEntry<CalendarFreeBusyType,
-      List<CalendarFreeBusyInterval>> entry in grouped.entries) {
-    final List<String> ranges = entry.value
-        .map(
-          (interval) => '${_formatCalendarDateTime(interval.start)}/'
-              '${_formatCalendarDateTime(interval.end)}',
-        )
-        .toList(growable: false);
-    final String? tzid = _sharedFreeBusyTzid(entry.value);
-    final List<CalendarPropertyParameter> parameters =
-        <CalendarPropertyParameter>[
-      CalendarPropertyParameter(
-        name: _icsParamFbType,
-        values: <String>[entry.key.icsValue],
-      ),
-      if (tzid != null && tzid.isNotEmpty)
+      Map<String?, List<CalendarFreeBusyInterval>>> entry in grouped.entries) {
+    final CalendarFreeBusyType type = entry.key;
+    final Map<String?, List<CalendarFreeBusyInterval>> intervalsByTzid =
+        entry.value;
+    for (final MapEntry<String?, List<CalendarFreeBusyInterval>> tzidEntry
+        in intervalsByTzid.entries) {
+      final String? tzid = tzidEntry.key;
+      final List<CalendarFreeBusyInterval> intervals = tzidEntry.value;
+      final List<String> ranges = intervals
+          .map(
+            (interval) => '${_formatCalendarDateTime(
+              _normalizeFreeBusyDateTime(interval.start, tzid),
+            )}/${_formatCalendarDateTime(
+              _normalizeFreeBusyDateTime(interval.end, tzid),
+            )}',
+          )
+          .toList(growable: false);
+      final List<CalendarPropertyParameter> parameters =
+          <CalendarPropertyParameter>[
         CalendarPropertyParameter(
-          name: _icsParamTzid,
-          values: <String>[tzid],
+          name: _icsParamFbType,
+          values: <String>[type.icsValue],
         ),
-    ];
-    writer.writeProperty(
-      _icsPropertyFreeBusy,
-      ranges.join(_icsValueComma),
-      parameters: parameters,
-      escapeText: false,
-    );
+        if (tzid != null && tzid.isNotEmpty)
+          CalendarPropertyParameter(
+            name: _icsParamTzid,
+            values: <String>[tzid],
+          ),
+      ];
+      writer.writeProperty(
+        _icsPropertyFreeBusy,
+        ranges.join(_icsValueComma),
+        parameters: parameters,
+        escapeText: false,
+      );
+    }
   }
   writer.endComponent(_icsComponentVfreebusy);
 }
 
-String? _sharedFreeBusyTzid(List<CalendarFreeBusyInterval> intervals) {
-  if (intervals.isEmpty) {
-    return null;
-  }
-  final CalendarDateTime startSample = intervals.first.start;
-  final CalendarDateTime endSample = intervals.first.end;
-  final String? tzid = startSample.tzid ?? endSample.tzid;
+String? _freeBusyGroupTzid(CalendarFreeBusyInterval interval) {
+  final CalendarDateTime start = interval.start;
+  final CalendarDateTime end = interval.end;
+  final String? tzid = start.tzid ?? end.tzid;
   if (tzid == null || tzid.isEmpty) {
     return null;
   }
-  if (startSample.isFloating ||
-      endSample.isFloating ||
-      startSample.isAllDay ||
-      endSample.isAllDay) {
+  if (start.tzid != tzid || end.tzid != tzid) {
     return null;
   }
-  for (final CalendarFreeBusyInterval interval in intervals) {
-    if (interval.start.tzid != tzid ||
-        interval.end.tzid != tzid ||
-        interval.start.isFloating ||
-        interval.end.isFloating ||
-        interval.start.isAllDay ||
-        interval.end.isAllDay) {
-      return null;
-    }
+  if (start.isFloating || end.isFloating || start.isAllDay || end.isAllDay) {
+    return null;
   }
   return tzid;
+}
+
+CalendarDateTime _normalizeFreeBusyDateTime(
+  CalendarDateTime value,
+  String? tzid,
+) {
+  if (tzid == null || tzid.isEmpty) {
+    return value.copyWith(tzid: null);
+  }
+  return value;
 }
 
 void _writeMeta(
@@ -3554,7 +3795,10 @@ String _formatRrule(RecurrenceRule rule) {
     parts['COUNT'] = rule.count.toString();
   }
   if (rule.until != null) {
-    parts['UNTIL'] = _formatDateTime(rule.until!, isUtc: true);
+    final DateTime until = rule.until!;
+    parts['UNTIL'] = rule.untilIsDate
+        ? _formatDate(until)
+        : _formatDateTime(until, isUtc: until.isUtc);
   }
   final String? byDay = _formatByDay(rule);
   if (byDay != null && byDay.isNotEmpty) {
@@ -3625,6 +3869,35 @@ void _appendNumericPart(
   parts[key] = values.join(_icsValueComma);
 }
 
+class _DateListKey {
+  const _DateListKey({
+    required this.isAllDay,
+    required this.isFloating,
+    required this.tzid,
+    required this.isUtc,
+  });
+
+  final bool isAllDay;
+  final bool isFloating;
+  final String? tzid;
+  final bool isUtc;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is _DateListKey &&
+        other.isAllDay == isAllDay &&
+        other.isFloating == isFloating &&
+        other.tzid == tzid &&
+        other.isUtc == isUtc;
+  }
+
+  @override
+  int get hashCode => Object.hash(isAllDay, isFloating, tzid, isUtc);
+}
+
 void _writeDateList(
   _IcsWriter writer,
   String name,
@@ -3633,21 +3906,39 @@ void _writeDateList(
   if (dates.isEmpty) {
     return;
   }
-  final CalendarDateTime sample = dates.first;
-  final List<CalendarPropertyParameter> parameters = _mergeDateTimeParameters(
-    const <CalendarPropertyParameter>[],
-    isAllDay: sample.isAllDay,
-    tzidOverride: sample.tzid,
-    isFloatingOverride: sample.isFloating,
-    rangeOverride: null,
-  );
-  final String joined = dates.map(_formatCalendarDateTime).join(_icsValueComma);
-  writer.writeProperty(
-    name,
-    joined,
-    parameters: parameters,
-    escapeText: false,
-  );
+  final Map<_DateListKey, List<CalendarDateTime>> grouped =
+      <_DateListKey, List<CalendarDateTime>>{};
+  for (final CalendarDateTime date in dates) {
+    final bool isUtc =
+        date.tzid == null && !date.isFloating && date.value.isUtc;
+    final _DateListKey key = _DateListKey(
+      isAllDay: date.isAllDay,
+      isFloating: date.isFloating,
+      tzid: date.tzid,
+      isUtc: isUtc,
+    );
+    grouped.putIfAbsent(key, () => <CalendarDateTime>[]).add(date);
+  }
+  for (final MapEntry<_DateListKey, List<CalendarDateTime>> entry
+      in grouped.entries) {
+    final _DateListKey key = entry.key;
+    final List<CalendarDateTime> values = entry.value;
+    final List<CalendarPropertyParameter> parameters = _mergeDateTimeParameters(
+      const <CalendarPropertyParameter>[],
+      isAllDay: key.isAllDay,
+      tzidOverride: key.tzid,
+      isFloatingOverride: key.isFloating,
+      rangeOverride: null,
+    );
+    final String joined =
+        values.map(_formatCalendarDateTime).join(_icsValueComma);
+    writer.writeProperty(
+      name,
+      joined,
+      parameters: parameters,
+      escapeText: false,
+    );
+  }
 }
 
 List<CalendarDateTime> _mergeExDates(
@@ -3891,6 +4182,7 @@ const Set<String> _taskRawPropertySkips = <String>{
   _icsPropertyRrule,
   _icsPropertyRdate,
   _icsPropertyExdate,
+  _icsPropertyExrule,
   _icsPropertyRecurrenceId,
   _icsPropertyPercentComplete,
   _axiChecklistProperty,
@@ -3922,6 +4214,27 @@ const Set<String> _eventRawPropertySkips = <String>{
   _icsPropertyDtStart,
   _icsPropertyDtEnd,
   _icsPropertyRecurrenceId,
+  _axiTaskIdProperty,
+};
+
+const Set<String> _journalRawPropertySkips = <String>{
+  _icsPropertyUid,
+  _icsPropertyDtStamp,
+  _icsPropertyCreated,
+  _icsPropertyLastModified,
+  _icsPropertySequence,
+  _icsPropertyStatus,
+  _icsPropertyClass,
+  _icsPropertyTransp,
+  _icsPropertyCategories,
+  _icsPropertyUrl,
+  _icsPropertyGeo,
+  _icsPropertyAttach,
+  _icsPropertyOrganizer,
+  _icsPropertyAttendee,
+  _icsPropertySummary,
+  _icsPropertyDescription,
+  _icsPropertyDtStart,
   _axiTaskIdProperty,
 };
 

@@ -34,6 +34,8 @@ const int _recurrenceRuleWeekStartField = 14;
 const int _recurrenceRuleRDatesField = 15;
 const int _recurrenceRuleExDatesField = 16;
 const int _recurrenceRuleRawPropertiesField = 17;
+const int _recurrenceRuleUntilIsDateField = 18;
+const bool _recurrenceRuleUntilIsDateDefault = false;
 
 const int _calendarTaskIcsMetaField = 17;
 
@@ -88,6 +90,12 @@ class RecurrenceRule with _$RecurrenceRule {
     @HiveField(1) @Default(1) int interval,
     @HiveField(2) List<int>? byWeekdays,
     @HiveField(3) DateTime? until,
+    @HiveField(
+      _recurrenceRuleUntilIsDateField,
+      defaultValue: _recurrenceRuleUntilIsDateDefault,
+    )
+    @Default(_recurrenceRuleUntilIsDateDefault)
+    bool untilIsDate,
     @HiveField(4) int? count,
     @HiveField(_recurrenceRuleBySecondsField) List<int>? bySeconds,
     @HiveField(_recurrenceRuleByMinutesField) List<int>? byMinutes,
@@ -316,6 +324,11 @@ extension CalendarTaskExtensions on CalendarTask {
 
   RecurrenceRule get effectiveRecurrence => recurrence ?? RecurrenceRule.none;
 
+  bool get hasRecurrenceData {
+    final RecurrenceRule rule = effectiveRecurrence;
+    return !rule.isNone || rule.rDates.isNotEmpty || rule.exDates.isNotEmpty;
+  }
+
   bool get isCritical => effectivePriority == TaskPriority.critical;
   bool get isImportant => effectivePriority == TaskPriority.important;
   bool get isUrgent => effectivePriority == TaskPriority.urgent;
@@ -400,7 +413,7 @@ extension CalendarTaskExtensions on CalendarTask {
       (reminders ?? ReminderPreferences.defaults()).normalized();
 
   CalendarTask forClipboardInstance() {
-    final bool hasRecurrence = !effectiveRecurrence.isNone;
+    final bool hasRecurrence = hasRecurrenceData;
     if (!hasRecurrence && occurrenceOverrides.isEmpty) {
       return this;
     }

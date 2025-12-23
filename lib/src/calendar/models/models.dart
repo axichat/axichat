@@ -14,6 +14,7 @@ export 'calendar_fragment.dart';
 export 'calendar_ics_meta.dart';
 export 'calendar_ics_raw.dart';
 export 'calendar_item.dart';
+export 'calendar_journal.dart';
 export 'calendar_participant.dart';
 export 'day_event.dart';
 export 'reminder_preferences.dart';

@@ -149,6 +149,7 @@ const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
 const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
+const int _emptyMessageCount = 0;
 const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
 const int _calendarMamPageSize = 100;
 const int _calendarSnapshotDownloadMaxBytes = 10 * 1024 * 1024;
@@ -685,6 +686,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   bool _calendarMamRehydrateInFlight = false;
   bool _calendarMamSnapshotSeen = false;
   final Set<String> _mucMamUnsupportedRooms = {};
+  final Set<String> _mucJoinMamSyncRooms = {};
+  final Set<String> _mucJoinMamDeferredRooms = {};
   DateTime? _mamGlobalDeniedUntil;
   DateTime? _mamGlobalMaxTimestamp;
 
@@ -870,6 +873,18 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
         _messageStream.add(message);
       })
+      ..registerHandler<MucSelfPresenceEvent>((event) async {
+        if (!event.isAvailable) return;
+        if (event.isNickChange) return;
+        final roomJid = event.roomJid.trim();
+        if (roomJid.isEmpty) return;
+        if (!_isMucChatJid(roomJid)) return;
+        if (_mamLoginSyncInFlight) {
+          _mucJoinMamDeferredRooms.add(roomJid);
+          return;
+        }
+        unawaited(_syncMucArchiveAfterJoin(roomJid));
+      })
       ..registerHandler<mox.ChatMarkerEvent>((event) async {
         _log.info('Received chat marker');
 
@@ -980,6 +995,53 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       return;
     } finally {
       _mamLoginSyncInFlight = false;
+      if (_mucJoinMamDeferredRooms.isNotEmpty) {
+        final deferred = List<String>.from(_mucJoinMamDeferredRooms);
+        _mucJoinMamDeferredRooms.clear();
+        for (final roomJid in deferred) {
+          unawaited(_syncMucArchiveAfterJoin(roomJid));
+        }
+      }
+    }
+  }
+
+  Future<void> _syncMucArchiveAfterJoin(String roomJid) async {
+    if (_mamLoginSyncInFlight) return;
+    if (connectionState != ConnectionState.connected) return;
+    final normalizedRoom = _roomKey(roomJid);
+    if (_mucJoinMamSyncRooms.contains(normalizedRoom)) return;
+    _mucJoinMamSyncRooms.add(normalizedRoom);
+    try {
+      final mamSupported = await resolveMamSupport();
+      if (!mamSupported) return;
+      if (!_canQueryMucArchive(normalizedRoom)) return;
+      final localCount = await countLocalMessages(
+        jid: normalizedRoom,
+        includePseudoMessages: false,
+      );
+      final lastSeen = await loadLastSeenTimestamp(normalizedRoom);
+      final shouldBackfillLatest = messageStorageMode.isServerOnly ||
+          localCount == _emptyMessageCount ||
+          lastSeen == null;
+
+      if (shouldBackfillLatest) {
+        await fetchLatestFromArchive(
+          jid: normalizedRoom,
+          pageSize: mamLoginBackfillMessageLimit,
+          isMuc: true,
+        );
+        return;
+      }
+
+      await _catchUpChatFromArchive(
+        jid: normalizedRoom,
+        since: lastSeen,
+        isMuc: true,
+      );
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _mucJoinMamSyncRooms.remove(normalizedRoom);
     }
   }
 
@@ -2600,6 +2662,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     _mamLoginSyncInFlight = false;
     _mamGlobalSyncInFlight = false;
     _mucMamUnsupportedRooms.clear();
+    _mucJoinMamDeferredRooms.clear();
     _mamGlobalDeniedUntil = null;
     _mamGlobalMaxTimestamp = null;
     _resetStableKeyCache();

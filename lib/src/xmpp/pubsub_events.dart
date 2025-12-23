@@ -37,3 +37,17 @@ final class PubSubSubscriptionConfigChangedEvent extends mox.XmppEvent {
   final String node;
   final mox.XMLNode? dataForm;
 }
+
+final class PubSubFetchResult<T> {
+  const PubSubFetchResult({
+    required this.items,
+    required this.isSuccess,
+    this.isComplete = _pubSubFetchCompleteDefault,
+  });
+
+  final List<T> items;
+  final bool isSuccess;
+  final bool isComplete;
+}
+
+const bool _pubSubFetchCompleteDefault = true;

@@ -114,6 +114,9 @@ mixin MucService on XmppBase, BaseStreamService {
   final _mucLog = Logger('MucService');
   static const Duration _mucJoinTimeout = Duration(seconds: 10);
   static const int _defaultMucJoinHistoryStanzas = 50;
+  static const int _mucSnapshotStart = 0;
+  static const int _mucSnapshotEnd = 0;
+  static const List<MucBookmark> _emptyMucSnapshot = <MucBookmark>[];
   final _roomStates = <String, RoomState>{};
   final _roomStreams = <String, StreamController<RoomState>>{};
   final _roomSubjects = <String, String?>{};
@@ -419,6 +422,7 @@ mixin MucService on XmppBase, BaseStreamService {
       if (result.isType<mox.MUCError>()) {
         throw XmppMessageException();
       }
+      unawaited(_refreshRoomAvatar(roomJid));
     } on TimeoutException {
       _mucLog.fine('Timed out waiting for room join to complete.');
     }
@@ -972,25 +976,83 @@ mixin MucService on XmppBase, BaseStreamService {
     }
   }
 
+  Future<void> applyMucBookmarksSnapshot(
+    PubSubFetchResult<MucBookmark> snapshot,
+  ) async {
+    if (!snapshot.isSuccess) return;
+    final bookmarks = snapshot.items;
+    await applyMucBookmarks(bookmarks);
+    if (snapshot.isComplete) {
+      await _reconcileMucBookmarkRemovals(bookmarks);
+    }
+  }
+
+  Future<void> _reconcileMucBookmarkRemovals(
+    List<MucBookmark> bookmarks,
+  ) async {
+    final knownRooms = bookmarks
+        .map((bookmark) => bookmark.roomBare.toBare().toString())
+        .toSet();
+    final toRemove = <String>{};
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        final chats = await db.getChats(
+          start: _mucSnapshotStart,
+          end: _mucSnapshotEnd,
+        );
+        for (final chat in chats) {
+          if (!_isSnapshotRoomChat(chat)) continue;
+          final roomBare = _normalizeBareJid(chat.jid);
+          if (roomBare == null || roomBare.isEmpty) continue;
+          if (knownRooms.contains(roomBare)) continue;
+          toRemove.add(roomBare);
+        }
+      },
+      awaitDatabase: true,
+    );
+
+    for (final roomBare in toRemove) {
+      try {
+        await _applyBookmarkRetraction(mox.JID.fromString(roomBare));
+      } on Exception {
+        // Ignore leave failures when applying snapshot removals.
+      }
+    }
+  }
+
   Future<void> syncMucBookmarksOnLogin() async {
-    if (_mucBookmarksSyncInFlight) return;
-    if (connectionState != ConnectionState.connected) return;
+    await syncMucBookmarksSnapshot();
+  }
+
+  Future<List<MucBookmark>> syncMucBookmarksSnapshot() async {
+    if (_mucBookmarksSyncInFlight) {
+      return _emptyMucSnapshot;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return _emptyMucSnapshot;
+    }
     _mucBookmarksSyncInFlight = true;
     try {
       await database;
-      if (connectionState != ConnectionState.connected) return;
+      if (connectionState != ConnectionState.connected) {
+        return _emptyMucSnapshot;
+      }
       final support = await refreshPubSubSupport();
-      if (!support.canUseBookmarks2) return;
+      if (!support.canUseBookmarks2) {
+        return _emptyMucSnapshot;
+      }
       final bookmarksManager = _connection.getManager<BookmarksManager>();
-      if (bookmarksManager == null) return;
+      if (bookmarksManager == null) {
+        return _emptyMucSnapshot;
+      }
 
       await bookmarksManager.ensureNode();
       await bookmarksManager.subscribe();
-      final bookmarks = await bookmarksManager.getBookmarks();
-      if (bookmarks.isEmpty) return;
-      await applyMucBookmarks(bookmarks);
+      final snapshot = await bookmarksManager.fetchAllWithStatus();
+      await applyMucBookmarksSnapshot(snapshot);
+      return snapshot.items;
     } on XmppAbortedException {
-      return;
+      return _emptyMucSnapshot;
     } finally {
       _mucBookmarksSyncInFlight = false;
     }
@@ -1317,6 +1379,9 @@ mixin MucService on XmppBase, BaseStreamService {
       statusCodes: event.statusCodes,
       reason: event.reason,
     );
+    if (event.statusCodes.contains(mucStatusConfigurationChanged)) {
+      unawaited(_refreshRoomAvatar(roomJid));
+    }
 
     unawaited(_dbOp<XmppDatabase>(
       (db) async {
@@ -1533,6 +1598,18 @@ mixin MucService on XmppBase, BaseStreamService {
     final raw = item.attributes[key]?.toString().trim();
     if (raw == null || raw.isEmpty) return null;
     return raw;
+  }
+
+  bool _isSnapshotRoomChat(Chat chat) {
+    if (chat.type != ChatType.groupChat) return false;
+    if (chat.deltaChatId != null) return false;
+    final roomBare = _normalizeBareJid(chat.jid);
+    if (roomBare == null || roomBare.isEmpty) return false;
+    try {
+      return mox.JID.fromString(roomBare).domain == mucServiceHost;
+    } on Exception {
+      return false;
+    }
   }
 
   String? _normalizeBareJid(String? raw) {
