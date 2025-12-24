@@ -317,12 +317,38 @@ class XmppConnection extends mox.XmppConnection {
     }
   }
 
-  Future<void> triggerImmediateReconnect() =>
-      _reconnectionPolicy.triggerImmediateReconnect();
+  Future<void> requestReconnect(ReconnectTrigger trigger) =>
+      _reconnectionPolicy.requestReconnect(trigger);
 }
 
 class XmppConnectionSettings extends mox.ConnectionSettings {
   XmppConnectionSettings({required super.jid, required super.password});
+}
+
+enum ReconnectTrigger {
+  resume,
+  userAction,
+  foregroundMigration,
+  networkAvailable,
+  autoFailure,
+}
+
+extension ReconnectTriggerBehavior on ReconnectTrigger {
+  bool get shouldBypassBackoff => switch (this) {
+        ReconnectTrigger.resume => true,
+        ReconnectTrigger.userAction => true,
+        ReconnectTrigger.foregroundMigration => true,
+        ReconnectTrigger.networkAvailable => true,
+        ReconnectTrigger.autoFailure => false,
+      };
+
+  bool get shouldResetAttemptCounter => switch (this) {
+        ReconnectTrigger.resume => true,
+        ReconnectTrigger.userAction => true,
+        ReconnectTrigger.foregroundMigration => true,
+        ReconnectTrigger.networkAvailable => true,
+        ReconnectTrigger.autoFailure => false,
+      };
 }
 
 class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
@@ -389,8 +415,14 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     );
   }
 
-  Future<void> triggerImmediateReconnect() async {
+  Future<void> requestReconnect(ReconnectTrigger trigger) async {
     if (!await getShouldReconnect()) return;
+    if (trigger.shouldResetAttemptCounter) {
+      _resetAttemptCounter();
+    }
+    if (!trigger.shouldBypassBackoff) {
+      return;
+    }
     final hasBackoff = _backoffTimer != null;
     _cancelBackoff();
     if (hasBackoff) {
@@ -456,6 +488,10 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
         await reconnect();
       }
     });
+  }
+
+  void _resetAttemptCounter() {
+    _reconnectionAttempts = 0;
   }
 
   @override

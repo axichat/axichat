@@ -399,7 +399,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     try {
-      await _xmppService.triggerImmediateReconnect();
+      await _xmppService.requestReconnect(ReconnectTrigger.resume);
     } on Exception {
       // Fall back to a full login attempt below (covers cold starts and
       // foreground-socket unavailability).
