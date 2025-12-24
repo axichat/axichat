@@ -317,7 +317,7 @@ class NlScheduleAdapter {
   }
 
   TaskBucket mapBucket(ScheduleItem item) {
-    if (item.start != null || item.recurrence != null) {
+    if (item.start != null) {
       return TaskBucket.scheduled;
     }
     if (item.deadline != null) {

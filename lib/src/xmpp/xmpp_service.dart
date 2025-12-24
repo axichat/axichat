@@ -2511,7 +2511,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   Socket? _socket;
   StreamSubscription<dynamic>? _socketSubscription;
-  bool _expectSocketClosure = false;
+  final Set<Socket> _expectedClosures = {};
   bool _secure = false;
 
   @override
@@ -2551,7 +2551,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     String? host,
     int? port,
   }) async {
-    _expectSocketClosure = false;
+    _dropSocket(expectClosure: true);
     _secure = false;
 
     final endpoint = serverLookup[domain];
@@ -2617,13 +2617,17 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     );
 
     socket.done.then((_) {
-      _eventStream.add(mox.XmppSocketClosureEvent(_expectSocketClosure));
-      _expectSocketClosure = false;
+      _markSocketClosed(socket);
+      _eventStream.add(
+        mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
+      );
     }).catchError((Object error, StackTrace stackTrace) {
       _log.fine(_socketClosedWithErrorLog, error, stackTrace);
       _eventStream.add(mox.XmppSocketErrorEvent(error));
-      _eventStream.add(mox.XmppSocketClosureEvent(_expectSocketClosure));
-      _expectSocketClosure = false;
+      _markSocketClosed(socket);
+      _eventStream.add(
+        mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
+      );
     });
   }
 
@@ -2641,7 +2645,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     }
 
     try {
-      _expectSocketClosure = true;
+      _expectedClosures.add(socket);
       _socket = await SecureSocket.secure(
         socket,
         host: domain,
@@ -2663,8 +2667,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   @override
   void close() {
-    _expectSocketClosure = true;
-
     final socket = _socket;
     if (socket == null) {
       _log.warning('Failed to close socket since _socket is null');
@@ -2672,10 +2674,12 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     }
 
     try {
+      _expectedClosures.add(socket);
       socket.close();
     } catch (error) {
       _log.warning('Closing socket threw exception: $error');
     }
+    _markSocketClosed(socket);
   }
 
   @override
@@ -2706,7 +2710,38 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       _eventStream.stream.asBroadcastStream();
 
   @override
-  void prepareDisconnect() {}
+  void prepareDisconnect() {
+    _dropSocket(expectClosure: true);
+  }
+
+  void _dropSocket({required bool expectClosure}) {
+    final socket = _socket;
+    if (socket == null) return;
+    if (expectClosure) {
+      _expectedClosures.add(socket);
+    }
+    _socket = null;
+    _secure = false;
+    final subscription = _socketSubscription;
+    _socketSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
+    try {
+      socket.destroy();
+    } catch (error) {
+      _log.warning('Closing socket threw exception: $error');
+    }
+  }
+
+  void _markSocketClosed(Socket socket) {
+    if (!identical(_socket, socket)) {
+      return;
+    }
+    _socket = null;
+    _secure = false;
+    _socketSubscription = null;
+  }
 }
 
 /// Custom Stream Management manager that adds persistent state storage.

@@ -489,24 +489,14 @@ class CalendarModel with _$CalendarModel {
   }
 }
 
-Map<String, DateTime> _mergeTombstones(
-  Map<String, DateTime> local,
-  Map<String, DateTime> remote,
-) {
-  final merged = <String, DateTime>{};
-  final allIds = <String>{...local.keys, ...remote.keys};
-  for (final id in allIds) {
-    final localTime = local[id];
-    final remoteTime = remote[id];
-    if (localTime == null) {
-      merged[id] = remoteTime!;
-    } else if (remoteTime == null) {
-      merged[id] = localTime;
-    } else {
-      merged[id] = remoteTime.isAfter(localTime) ? remoteTime : localTime;
-    }
+DateTime? _latestTimestamp(DateTime? localTime, DateTime? remoteTime) {
+  if (localTime == null) {
+    return remoteTime;
   }
-  return merged;
+  if (remoteTime == null) {
+    return localTime;
+  }
+  return remoteTime.isAfter(localTime) ? remoteTime : localTime;
 }
 
 CalendarCollection? _mergeCollections(
@@ -610,145 +600,188 @@ bool _shouldPreferRemote({
 
 extension CalendarModelMerge on CalendarModel {
   CalendarModel mergeWith(CalendarModel remote) {
-    final mergedDeletedTaskIds =
-        _mergeTombstones(deletedTaskIds, remote.deletedTaskIds);
-    final mergedDeletedDayEventIds =
-        _mergeTombstones(deletedDayEventIds, remote.deletedDayEventIds);
-    final mergedDeletedJournalIds =
-        _mergeTombstones(deletedJournalIds, remote.deletedJournalIds);
-    final mergedDeletedCriticalPathIds = _mergeTombstones(
-      deletedCriticalPathIds,
-      remote.deletedCriticalPathIds,
-    );
-
     final mergedTasks = <String, CalendarTask>{};
-    final allTaskIds = <String>{...tasks.keys, ...remote.tasks.keys};
+    final mergedDeletedTaskIds = <String, DateTime>{};
+    final allTaskIds = <String>{
+      ...tasks.keys,
+      ...remote.tasks.keys,
+      ...deletedTaskIds.keys,
+      ...remote.deletedTaskIds.keys,
+    };
 
     for (final id in allTaskIds) {
-      if (mergedDeletedTaskIds.containsKey(id)) {
-        continue;
-      }
+      final CalendarTask? localTask = tasks[id];
+      final CalendarTask? remoteTask = remote.tasks[id];
+      final DateTime? localDeletedAt = deletedTaskIds[id];
+      final DateTime? remoteDeletedAt = remote.deletedTaskIds[id];
+      final DateTime? deletedAt =
+          _latestTimestamp(localDeletedAt, remoteDeletedAt);
 
-      final localTask = tasks[id];
-      final remoteTask = remote.tasks[id];
-
-      if (localTask == null && remoteTask != null) {
-        mergedTasks[id] = remoteTask;
-        continue;
-      }
-
-      if (localTask != null && remoteTask == null) {
-        mergedTasks[id] = localTask;
-        continue;
-      }
-
-      if (localTask != null && remoteTask != null) {
+      CalendarTask? selectedTask;
+      if (localTask == null) {
+        selectedTask = remoteTask;
+      } else if (remoteTask == null) {
+        selectedTask = localTask;
+      } else {
         final bool preferRemote = _shouldPreferRemote(
           localModifiedAt: localTask.modifiedAt,
           remoteModifiedAt: remoteTask.modifiedAt,
           localMeta: localTask.icsMeta,
           remoteMeta: remoteTask.icsMeta,
         );
-        mergedTasks[id] = preferRemote ? remoteTask : localTask;
+        selectedTask = preferRemote ? remoteTask : localTask;
       }
+
+      if (selectedTask == null) {
+        if (deletedAt != null) {
+          mergedDeletedTaskIds[id] = deletedAt;
+        }
+        continue;
+      }
+
+      if (deletedAt != null && !selectedTask.modifiedAt.isAfter(deletedAt)) {
+        mergedDeletedTaskIds[id] = deletedAt;
+        continue;
+      }
+
+      mergedTasks[id] = selectedTask;
     }
 
     final mergedDayEvents = <String, DayEvent>{};
-    final allEventIds = <String>{...dayEvents.keys, ...remote.dayEvents.keys};
+    final mergedDeletedDayEventIds = <String, DateTime>{};
+    final allEventIds = <String>{
+      ...dayEvents.keys,
+      ...remote.dayEvents.keys,
+      ...deletedDayEventIds.keys,
+      ...remote.deletedDayEventIds.keys,
+    };
 
     for (final id in allEventIds) {
-      if (mergedDeletedDayEventIds.containsKey(id)) {
-        continue;
-      }
+      final DayEvent? localEvent = dayEvents[id];
+      final DayEvent? remoteEvent = remote.dayEvents[id];
+      final DateTime? localDeletedAt = deletedDayEventIds[id];
+      final DateTime? remoteDeletedAt = remote.deletedDayEventIds[id];
+      final DateTime? deletedAt =
+          _latestTimestamp(localDeletedAt, remoteDeletedAt);
 
-      final localEvent = dayEvents[id];
-      final remoteEvent = remote.dayEvents[id];
-
-      if (localEvent == null && remoteEvent != null) {
-        mergedDayEvents[id] = remoteEvent;
-        continue;
-      }
-
-      if (localEvent != null && remoteEvent == null) {
-        mergedDayEvents[id] = localEvent;
-        continue;
-      }
-
-      if (localEvent != null && remoteEvent != null) {
+      DayEvent? selectedEvent;
+      if (localEvent == null) {
+        selectedEvent = remoteEvent;
+      } else if (remoteEvent == null) {
+        selectedEvent = localEvent;
+      } else {
         final bool preferRemote = _shouldPreferRemote(
           localModifiedAt: localEvent.modifiedAt,
           remoteModifiedAt: remoteEvent.modifiedAt,
           localMeta: localEvent.icsMeta,
           remoteMeta: remoteEvent.icsMeta,
         );
-        mergedDayEvents[id] = preferRemote ? remoteEvent : localEvent;
+        selectedEvent = preferRemote ? remoteEvent : localEvent;
       }
+
+      if (selectedEvent == null) {
+        if (deletedAt != null) {
+          mergedDeletedDayEventIds[id] = deletedAt;
+        }
+        continue;
+      }
+
+      if (deletedAt != null && !selectedEvent.modifiedAt.isAfter(deletedAt)) {
+        mergedDeletedDayEventIds[id] = deletedAt;
+        continue;
+      }
+
+      mergedDayEvents[id] = selectedEvent;
     }
 
     final mergedJournals = <String, CalendarJournal>{};
+    final mergedDeletedJournalIds = <String, DateTime>{};
     final allJournalIds = <String>{
       ...journals.keys,
       ...remote.journals.keys,
+      ...deletedJournalIds.keys,
+      ...remote.deletedJournalIds.keys,
     };
 
     for (final id in allJournalIds) {
-      if (mergedDeletedJournalIds.containsKey(id)) {
-        continue;
-      }
+      final CalendarJournal? localJournal = journals[id];
+      final CalendarJournal? remoteJournal = remote.journals[id];
+      final DateTime? localDeletedAt = deletedJournalIds[id];
+      final DateTime? remoteDeletedAt = remote.deletedJournalIds[id];
+      final DateTime? deletedAt =
+          _latestTimestamp(localDeletedAt, remoteDeletedAt);
 
-      final localJournal = journals[id];
-      final remoteJournal = remote.journals[id];
-
-      if (localJournal == null && remoteJournal != null) {
-        mergedJournals[id] = remoteJournal;
-        continue;
-      }
-
-      if (localJournal != null && remoteJournal == null) {
-        mergedJournals[id] = localJournal;
-        continue;
-      }
-
-      if (localJournal != null && remoteJournal != null) {
+      CalendarJournal? selectedJournal;
+      if (localJournal == null) {
+        selectedJournal = remoteJournal;
+      } else if (remoteJournal == null) {
+        selectedJournal = localJournal;
+      } else {
         final bool preferRemote = _shouldPreferRemote(
           localModifiedAt: localJournal.modifiedAt,
           remoteModifiedAt: remoteJournal.modifiedAt,
           localMeta: localJournal.icsMeta,
           remoteMeta: remoteJournal.icsMeta,
         );
-        mergedJournals[id] = preferRemote ? remoteJournal : localJournal;
+        selectedJournal = preferRemote ? remoteJournal : localJournal;
       }
+
+      if (selectedJournal == null) {
+        if (deletedAt != null) {
+          mergedDeletedJournalIds[id] = deletedAt;
+        }
+        continue;
+      }
+
+      if (deletedAt != null && !selectedJournal.modifiedAt.isAfter(deletedAt)) {
+        mergedDeletedJournalIds[id] = deletedAt;
+        continue;
+      }
+
+      mergedJournals[id] = selectedJournal;
     }
 
     final mergedPaths = <String, CalendarCriticalPath>{};
+    final mergedDeletedCriticalPathIds = <String, DateTime>{};
     final allPathIds = <String>{
       ...criticalPaths.keys,
-      ...remote.criticalPaths.keys
+      ...remote.criticalPaths.keys,
+      ...deletedCriticalPathIds.keys,
+      ...remote.deletedCriticalPathIds.keys,
     };
 
     for (final id in allPathIds) {
-      if (mergedDeletedCriticalPathIds.containsKey(id)) {
-        continue;
-      }
+      final CalendarCriticalPath? localPath = criticalPaths[id];
+      final CalendarCriticalPath? remotePath = remote.criticalPaths[id];
+      final DateTime? localDeletedAt = deletedCriticalPathIds[id];
+      final DateTime? remoteDeletedAt = remote.deletedCriticalPathIds[id];
+      final DateTime? deletedAt =
+          _latestTimestamp(localDeletedAt, remoteDeletedAt);
 
-      final localPath = criticalPaths[id];
-      final remotePath = remote.criticalPaths[id];
-
-      if (localPath == null && remotePath != null) {
-        mergedPaths[id] = remotePath;
-        continue;
-      }
-
-      if (localPath != null && remotePath == null) {
-        mergedPaths[id] = localPath;
-        continue;
-      }
-
-      if (localPath != null && remotePath != null) {
-        mergedPaths[id] = remotePath.modifiedAt.isAfter(localPath.modifiedAt)
+      CalendarCriticalPath? selectedPath;
+      if (localPath == null) {
+        selectedPath = remotePath;
+      } else if (remotePath == null) {
+        selectedPath = localPath;
+      } else {
+        selectedPath = remotePath.modifiedAt.isAfter(localPath.modifiedAt)
             ? remotePath
             : localPath;
       }
+
+      if (selectedPath == null) {
+        if (deletedAt != null) {
+          mergedDeletedCriticalPathIds[id] = deletedAt;
+        }
+        continue;
+      }
+
+      if (deletedAt != null && !selectedPath.modifiedAt.isAfter(deletedAt)) {
+        mergedDeletedCriticalPathIds[id] = deletedAt;
+        continue;
+      }
+
+      mergedPaths[id] = selectedPath;
     }
 
     final mergedAvailability =
