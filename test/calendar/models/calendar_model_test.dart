@@ -1,5 +1,9 @@
 import 'dart:convert';
 
+import 'package:axichat/src/calendar/models/calendar_date_time.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_journal.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
@@ -409,6 +413,112 @@ void main() {
             originalModel.tasks[testTask1.id]?.title, equals(testTask1.title));
         // Result should have updated task
         expect(result.tasks[testTask1.id]?.title, equals('Updated'));
+      });
+    });
+
+    group('mergeWith', () {
+      const String taskId = 'merge-task';
+      const String localTitle = 'Local task';
+      const String remoteTitle = 'Remote task';
+      const int localSequence = 1;
+      const int remoteSequence = 2;
+      const Duration earlierDelta = Duration(minutes: 1);
+      const Duration tombstoneDelta = Duration(hours: 1);
+      const String resurrectedTitle = 'Resurrected task';
+      const String deletedTitle = 'Deleted task';
+
+      test('prefers higher sequence when modifiedAt is equal', () {
+        final DateTime sharedModifiedAt = testTime;
+        final CalendarTask localTask = CalendarTask(
+          id: taskId,
+          title: localTitle,
+          createdAt: sharedModifiedAt,
+          modifiedAt: sharedModifiedAt,
+          icsMeta: const CalendarIcsMeta(sequence: localSequence),
+        );
+        final CalendarTask remoteTask = localTask.copyWith(
+          title: remoteTitle,
+          icsMeta: const CalendarIcsMeta(sequence: remoteSequence),
+        );
+        final CalendarModel localModel = CalendarModel.empty().addTask(
+          localTask,
+        );
+        final CalendarModel remoteModel = CalendarModel.empty().addTask(
+          remoteTask,
+        );
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.tasks[taskId]?.title, equals(remoteTitle));
+      });
+
+      test('keeps newer modifiedAt even when sequence is lower', () {
+        final DateTime localModifiedAt = testTime;
+        final DateTime remoteModifiedAt = testTime.subtract(earlierDelta);
+        final CalendarTask localTask = CalendarTask(
+          id: taskId,
+          title: localTitle,
+          createdAt: localModifiedAt,
+          modifiedAt: localModifiedAt,
+          icsMeta: const CalendarIcsMeta(sequence: localSequence),
+        );
+        final CalendarTask remoteTask = localTask.copyWith(
+          title: remoteTitle,
+          modifiedAt: remoteModifiedAt,
+          icsMeta: const CalendarIcsMeta(sequence: remoteSequence),
+        );
+        final CalendarModel localModel = CalendarModel.empty().addTask(
+          localTask,
+        );
+        final CalendarModel remoteModel = CalendarModel.empty().addTask(
+          remoteTask,
+        );
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.tasks[taskId]?.title, equals(localTitle));
+      });
+
+      test('prefers newer task over tombstone', () {
+        final DateTime deletedAt = testTime;
+        final DateTime remoteModifiedAt = testTime.add(tombstoneDelta);
+        final CalendarTask remoteTask = CalendarTask(
+          id: taskId,
+          title: resurrectedTitle,
+          createdAt: remoteModifiedAt,
+          modifiedAt: remoteModifiedAt,
+        );
+        final CalendarModel localModel = CalendarModel.empty().copyWith(
+          deletedTaskIds: {taskId: deletedAt},
+        );
+        final CalendarModel remoteModel =
+            CalendarModel.empty().addTask(remoteTask);
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.tasks[taskId]?.title, equals(resurrectedTitle));
+        expect(merged.deletedTaskIds.containsKey(taskId), isFalse);
+      });
+
+      test('keeps tombstone when newer than task', () {
+        final DateTime taskModifiedAt = testTime;
+        final DateTime deletedAt = testTime.add(tombstoneDelta);
+        final CalendarTask localTask = CalendarTask(
+          id: taskId,
+          title: deletedTitle,
+          createdAt: taskModifiedAt,
+          modifiedAt: taskModifiedAt,
+        );
+        final CalendarModel localModel =
+            CalendarModel.empty().addTask(localTask);
+        final CalendarModel remoteModel = CalendarModel.empty().copyWith(
+          deletedTaskIds: {taskId: deletedAt},
+        );
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.tasks.containsKey(taskId), isFalse);
+        expect(merged.deletedTaskIds[taskId], equals(deletedAt));
       });
     });
   });

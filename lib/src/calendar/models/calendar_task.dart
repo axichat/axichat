@@ -335,6 +335,8 @@ extension CalendarTaskExtensions on CalendarTask {
 
   bool get isScheduled => scheduledTime != null;
   bool get hasDeadline => deadline != null;
+  bool get isReminder => scheduledTime == null && deadline != null;
+  bool get isUnscheduled => scheduledTime == null && deadline == null;
 
   Color get priorityColor {
     if (isCompleted) {

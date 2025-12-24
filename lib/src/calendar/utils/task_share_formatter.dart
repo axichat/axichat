@@ -374,12 +374,11 @@ class TaskShareDecoder {
         endDate != null ? _toZonedDateTime(endDate, context) : base.end;
     final NlZonedDateTime? deadlineZoned =
         deadline != null ? _toZonedDateTime(deadline, context) : base.deadline;
-    final TaskBucket bucket =
-        (scheduledTime != null || !task.effectiveRecurrence.isNone)
-            ? TaskBucket.scheduled
-            : (task.deadline != null
-                ? TaskBucket.reminder
-                : TaskBucket.unscheduled);
+    final TaskBucket bucket = scheduledTime != null
+        ? TaskBucket.scheduled
+        : (task.deadline != null
+            ? TaskBucket.reminder
+            : TaskBucket.unscheduled);
 
     return NlAdapterResult(
       task: task,

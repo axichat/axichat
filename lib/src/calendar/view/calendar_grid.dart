@@ -2622,7 +2622,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final Set<String> selectedIds = state.selectedTaskIds;
     final bool hasSeriesGroup = seriesIds.length > 1;
     final bool isSeriesTask =
-        hasSeriesGroup || task.isOccurrence || !task.effectiveRecurrence.isNone;
+        hasSeriesGroup || task.isOccurrence || task.hasRecurrenceData;
     final bool isOccurrenceSelected = selectedIds.contains(task.id);
     final bool isSeriesSelected =
         hasSeriesGroup && seriesIds.every(selectedIds.contains);
