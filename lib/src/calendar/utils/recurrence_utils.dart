@@ -5,6 +5,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 const _occurrenceSeparator = '::';
 const int _baseOccurrenceCount = 1;
+const int _daysPerWeek = 7;
 
 enum RecurrenceEndUnit {
   days,
@@ -82,21 +83,22 @@ extension CalendarTaskInstanceX on CalendarTask {
     final key = baseOccurrenceKey;
     if (key == null) return null;
 
-    final override = occurrenceOverrides[key];
     final Set<String> exDateKeys =
         _calendarDateTimeKeys(effectiveRecurrence.exDates);
-    if (_isExcludedOccurrence(
+    final _OverrideResolution resolution = _resolveOccurrenceOverride(
+      originalStart: scheduled,
       occurrenceKey: key,
-      override: override,
+      overrides: occurrenceOverrides,
       exDateKeys: exDateKeys,
-    )) {
+    );
+    if (resolution.isExcluded) {
       return null;
     }
 
     return createOccurrenceInstance(
       originalStart: scheduled,
       occurrenceKey: key,
-      override: override,
+      override: resolution.override,
     );
   }
 
@@ -115,21 +117,22 @@ extension CalendarTaskInstanceX on CalendarTask {
       return null;
     }
 
-    final override = occurrenceOverrides[key];
     final Set<String> exDateKeys =
         _calendarDateTimeKeys(effectiveRecurrence.exDates);
-    if (_isExcludedOccurrence(
+    final _OverrideResolution resolution = _resolveOccurrenceOverride(
+      originalStart: originalStart,
       occurrenceKey: key,
-      override: override,
+      overrides: occurrenceOverrides,
       exDateKeys: exDateKeys,
-    )) {
+    );
+    if (resolution.isExcluded) {
       return null;
     }
 
     return createOccurrenceInstance(
       originalStart: originalStart,
       occurrenceKey: key,
-      override: override,
+      override: resolution.override,
     );
   }
 
@@ -169,12 +172,9 @@ extension CalendarTaskInstanceX on CalendarTask {
     }
 
     final bool hasRule = !recurrence.isNone;
-    final DateTime? inclusiveEnd = hasRule
-        ? _minDateTime(
-            rangeEnd,
-            recurrence.until == null ? null : _endOfDay(recurrence.until!),
-          )
-        : null;
+    final DateTime? ruleUntil = _recurrenceUntilLimit(recurrence);
+    final DateTime? inclusiveEnd =
+        hasRule ? _minDateTime(rangeEnd, ruleUntil) : null;
 
     if (hasRule && inclusiveEnd != null && inclusiveEnd.isBefore(scheduled)) {
       return const [];
@@ -210,13 +210,15 @@ extension CalendarTaskInstanceX on CalendarTask {
         if (emittedKeys.contains(occurrenceKey)) {
           continue;
         }
-        final TaskOccurrenceOverride? override = overrides[occurrenceKey];
-
-        if (_isExcludedOccurrence(
+        final _OverrideResolution resolution = _resolveOccurrenceOverride(
+          originalStart: next,
           occurrenceKey: occurrenceKey,
-          override: override,
+          overrides: overrides,
           exDateKeys: exDateKeys,
-        )) {
+        );
+        final TaskOccurrenceOverride? override = resolution.override;
+
+        if (resolution.isExcluded) {
           if (next.isAfter(rangeEnd)) {
             break;
           }
@@ -262,12 +264,14 @@ extension CalendarTaskInstanceX on CalendarTask {
         if (!emittedKeys.add(occurrenceKey)) {
           continue;
         }
-        final TaskOccurrenceOverride? override = overrides[occurrenceKey];
-        if (_isExcludedOccurrence(
+        final _OverrideResolution resolution = _resolveOccurrenceOverride(
+          originalStart: originalStart,
           occurrenceKey: occurrenceKey,
-          override: override,
+          overrides: overrides,
           exDateKeys: exDateKeys,
-        )) {
+        );
+        final TaskOccurrenceOverride? override = resolution.override;
+        if (resolution.isExcluded) {
           continue;
         }
         final DateTime actualStart = override?.scheduledTime ?? originalStart;
@@ -506,16 +510,14 @@ DateTime _nextWeeklyOccurrence(
   RecurrenceRule rule,
   DateTime baseStart,
 ) {
-  final rawWeekdays = (rule.byWeekdays != null && rule.byWeekdays!.isNotEmpty)
-      ? rule.byWeekdays!
-      : <int>[baseStart.weekday];
+  final List<int> rawWeekdays = _resolveWeeklyDays(rule, baseStart);
   final weekdays = rawWeekdays
-      .map((day) => day == DateTime.sunday ? 7 : day)
+      .map((day) => day == DateTime.sunday ? DateTime.sunday : day)
       .toList()
     ..sort();
 
   final currentWeekday =
-      current.weekday == DateTime.sunday ? 7 : current.weekday;
+      current.weekday == DateTime.sunday ? DateTime.sunday : current.weekday;
   for (final day in weekdays) {
     if (day > currentWeekday) {
       final delta = day - currentWeekday;
@@ -525,8 +527,35 @@ DateTime _nextWeeklyOccurrence(
 
   final firstDay = weekdays.first;
   final weeksToAdd = max(1, rule.interval);
-  final daysUntilNext = (weeksToAdd * 7) - (currentWeekday - firstDay);
+  final daysUntilNext =
+      (weeksToAdd * _daysPerWeek) - (currentWeekday - firstDay);
   return current.add(Duration(days: daysUntilNext));
+}
+
+List<int> _resolveWeeklyDays(RecurrenceRule rule, DateTime baseStart) {
+  final List<int>? byWeekdays = rule.byWeekdays;
+  if (byWeekdays != null && byWeekdays.isNotEmpty) {
+    return byWeekdays;
+  }
+  final List<int>? byDays = _weekdaysFromByDays(rule.byDays);
+  if (byDays != null && byDays.isNotEmpty) {
+    return byDays;
+  }
+  return <int>[baseStart.weekday];
+}
+
+List<int>? _weekdaysFromByDays(List<RecurrenceWeekday>? byDays) {
+  if (byDays == null || byDays.isEmpty) {
+    return null;
+  }
+  final List<int> weekdays = <int>[];
+  for (final RecurrenceWeekday day in byDays) {
+    if (day.position != null) {
+      continue;
+    }
+    weekdays.add(day.weekday.isoValue);
+  }
+  return weekdays.isEmpty ? null : weekdays;
 }
 
 int _daysInMonth(int year, int month) {
@@ -552,6 +581,17 @@ int _daysInMonth(int year, int month) {
 DateTime? _minDateTime(DateTime a, DateTime? b) {
   if (b == null) return a;
   return a.isBefore(b) ? a : b;
+}
+
+DateTime? _recurrenceUntilLimit(RecurrenceRule rule) {
+  final DateTime? until = rule.until;
+  if (until == null) {
+    return null;
+  }
+  if (rule.untilIsDate) {
+    return _endOfDay(until);
+  }
+  return until;
 }
 
 DateTime _endOfDay(DateTime date) {
@@ -585,13 +625,213 @@ Set<String> _calendarDateTimeKeys(List<CalendarDateTime> dates) {
   return keys;
 }
 
-bool _isExcludedOccurrence({
+class _OverrideResolution {
+  const _OverrideResolution({
+    required this.isExcluded,
+    required this.override,
+  });
+
+  final bool isExcluded;
+  final TaskOccurrenceOverride? override;
+}
+
+class _RangeOverrideSelection {
+  const _RangeOverrideSelection({
+    required this.originalStart,
+    required this.override,
+  });
+
+  final DateTime originalStart;
+  final TaskOccurrenceOverride override;
+}
+
+const TaskOccurrenceOverride _emptyOverride = TaskOccurrenceOverride();
+const _OverrideResolution _excludedResolution =
+    _OverrideResolution(isExcluded: true, override: null);
+const _OverrideResolution _noOverrideResolution =
+    _OverrideResolution(isExcluded: false, override: null);
+
+_OverrideResolution _resolveOccurrenceOverride({
+  required DateTime originalStart,
   required String occurrenceKey,
-  required TaskOccurrenceOverride? override,
+  required Map<String, TaskOccurrenceOverride> overrides,
   required Set<String> exDateKeys,
 }) {
-  if (override != null) {
-    return override.isCancelled == true;
+  final TaskOccurrenceOverride? direct = overrides[occurrenceKey];
+  if (direct?.isCancelled == true) {
+    return _excludedResolution;
   }
-  return exDateKeys.contains(occurrenceKey);
+
+  final bool excludedByDate = exDateKeys.contains(occurrenceKey);
+  if (direct == null && excludedByDate) {
+    return _excludedResolution;
+  }
+
+  final _RangeOverrideSelection? range =
+      _selectRangeOverride(overrides, originalStart);
+  if (direct == null && range?.override.isCancelled == true) {
+    return _excludedResolution;
+  }
+
+  if (direct == null && range == null) {
+    return _noOverrideResolution;
+  }
+
+  final TaskOccurrenceOverride base = range?.override ?? _emptyOverride;
+  final TaskOccurrenceOverride merged = _mergeOverrides(base, direct);
+  final DateTime? shiftedStart = _shiftedStartForRange(
+    occurrenceStart: originalStart,
+    range: range,
+    direct: direct,
+  );
+  final DateTime? resolvedScheduledTime = shiftedStart ?? merged.scheduledTime;
+
+  Duration? resolvedDuration = merged.duration;
+  DateTime? resolvedEndDate = merged.endDate;
+  if (direct?.duration == null && direct?.endDate == null && range != null) {
+    final Duration? rangeDuration = _rangeDurationForOverride(
+      range.override,
+      range.originalStart,
+    );
+    if (rangeDuration != null) {
+      resolvedDuration = rangeDuration;
+      resolvedEndDate = null;
+    }
+  }
+
+  return _OverrideResolution(
+    isExcluded: false,
+    override: merged.copyWith(
+      scheduledTime: resolvedScheduledTime,
+      duration: resolvedDuration,
+      endDate: resolvedEndDate,
+    ),
+  );
+}
+
+_RangeOverrideSelection? _selectRangeOverride(
+  Map<String, TaskOccurrenceOverride> overrides,
+  DateTime occurrenceStart,
+) {
+  _RangeOverrideSelection? futureCandidate;
+  _RangeOverrideSelection? priorCandidate;
+
+  overrides.forEach((key, override) {
+    final RecurrenceRange? range = override.range;
+    if (range == null) {
+      return;
+    }
+    final DateTime? originalStart = override.recurrenceId?.value;
+    if (originalStart == null) {
+      return;
+    }
+    if (range.isThisAndFuture) {
+      if (!originalStart.isAfter(occurrenceStart)) {
+        if (futureCandidate == null ||
+            originalStart.isAfter(futureCandidate!.originalStart)) {
+          futureCandidate = _RangeOverrideSelection(
+            originalStart: originalStart,
+            override: override,
+          );
+        }
+      }
+      return;
+    }
+    if (range.isThisAndPrior) {
+      if (!originalStart.isBefore(occurrenceStart)) {
+        if (priorCandidate == null ||
+            originalStart.isBefore(priorCandidate!.originalStart)) {
+          priorCandidate = _RangeOverrideSelection(
+            originalStart: originalStart,
+            override: override,
+          );
+        }
+      }
+    }
+  });
+
+  if (futureCandidate == null) {
+    return priorCandidate;
+  }
+  if (priorCandidate == null) {
+    return futureCandidate;
+  }
+  final int futureDistance =
+      _distanceMicros(occurrenceStart, futureCandidate!.originalStart);
+  final int priorDistance =
+      _distanceMicros(occurrenceStart, priorCandidate!.originalStart);
+  return futureDistance <= priorDistance ? futureCandidate : priorCandidate;
+}
+
+int _distanceMicros(DateTime left, DateTime right) {
+  final int delta = left.microsecondsSinceEpoch - right.microsecondsSinceEpoch;
+  return delta.abs();
+}
+
+DateTime? _shiftedStartForRange({
+  required DateTime occurrenceStart,
+  required _RangeOverrideSelection? range,
+  required TaskOccurrenceOverride? direct,
+}) {
+  if (direct?.scheduledTime != null) {
+    return direct!.scheduledTime;
+  }
+  if (range == null) {
+    return null;
+  }
+  final DateTime? overrideStart = range.override.scheduledTime;
+  if (overrideStart == null) {
+    return null;
+  }
+  final Duration shift = overrideStart.difference(range.originalStart);
+  return occurrenceStart.add(shift);
+}
+
+Duration? _rangeDurationForOverride(
+  TaskOccurrenceOverride override,
+  DateTime originalStart,
+) {
+  final Duration? duration = override.duration;
+  if (duration != null) {
+    return duration;
+  }
+  final DateTime? endDate = override.endDate;
+  if (endDate == null) {
+    return null;
+  }
+  final DateTime anchor = override.scheduledTime ?? originalStart;
+  final Duration derived = endDate.difference(anchor);
+  if (derived.compareTo(Duration.zero) <= 0) {
+    return null;
+  }
+  return derived;
+}
+
+TaskOccurrenceOverride _mergeOverrides(
+  TaskOccurrenceOverride base,
+  TaskOccurrenceOverride? override,
+) {
+  if (override == null) {
+    return base;
+  }
+  return TaskOccurrenceOverride(
+    scheduledTime: override.scheduledTime ?? base.scheduledTime,
+    duration: override.duration ?? base.duration,
+    endDate: override.endDate ?? base.endDate,
+    isCancelled: override.isCancelled ?? base.isCancelled,
+    priority: override.priority ?? base.priority,
+    isCompleted: override.isCompleted ?? base.isCompleted,
+    title: override.title ?? base.title,
+    description: override.description ?? base.description,
+    location: override.location ?? base.location,
+    checklist: override.checklist ?? base.checklist,
+    recurrenceId: override.recurrenceId ?? base.recurrenceId,
+    range: override.range ?? base.range,
+    rawProperties: override.rawProperties.isNotEmpty
+        ? override.rawProperties
+        : base.rawProperties,
+    rawComponents: override.rawComponents.isNotEmpty
+        ? override.rawComponents
+        : base.rawComponents,
+  );
 }

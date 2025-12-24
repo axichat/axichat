@@ -33,6 +33,13 @@ const int _calendarTransparencyTypeId = 53;
 const int _calendarTransparencyOpaqueField = 0;
 const int _calendarTransparencyTransparentField = 1;
 
+const int _calendarIcsComponentTypeTypeId = 81;
+const int _calendarIcsComponentTypeTodoField = 0;
+const int _calendarIcsComponentTypeEventField = 1;
+const int _calendarIcsComponentTypeJournalField = 2;
+const int _calendarIcsComponentTypeAvailabilityField = 3;
+const int _calendarIcsComponentTypeFreeBusyField = 4;
+
 const int _calendarCriticalPathLinkTypeId = 66;
 const int _calendarCriticalPathLinkPathIdField = 0;
 const int _calendarCriticalPathLinkOrderField = 1;
@@ -60,6 +67,7 @@ const int _calendarIcsMetaAlarmsField = 14;
 const int _calendarIcsMetaAxiField = 15;
 const int _calendarIcsMetaRawPropertiesField = 16;
 const int _calendarIcsMetaRawComponentsField = 17;
+const int _calendarIcsMetaComponentTypeField = 18;
 
 const List<String> _emptyCalendarCategories = <String>[];
 const List<CalendarAttachment> _emptyCalendarAttachments =
@@ -205,6 +213,26 @@ enum CalendarTransparency {
       };
 }
 
+@HiveType(typeId: _calendarIcsComponentTypeTypeId)
+enum CalendarIcsComponentType {
+  @HiveField(_calendarIcsComponentTypeTodoField)
+  todo,
+  @HiveField(_calendarIcsComponentTypeEventField)
+  event,
+  @HiveField(_calendarIcsComponentTypeJournalField)
+  journal,
+  @HiveField(_calendarIcsComponentTypeAvailabilityField)
+  availability,
+  @HiveField(_calendarIcsComponentTypeFreeBusyField)
+  freeBusy;
+
+  bool get isTodo => this == CalendarIcsComponentType.todo;
+  bool get isEvent => this == CalendarIcsComponentType.event;
+  bool get isJournal => this == CalendarIcsComponentType.journal;
+  bool get isAvailability => this == CalendarIcsComponentType.availability;
+  bool get isFreeBusy => this == CalendarIcsComponentType.freeBusy;
+}
+
 @freezed
 @HiveType(typeId: _calendarCriticalPathLinkTypeId)
 class CalendarCriticalPathLink with _$CalendarCriticalPathLink {
@@ -247,6 +275,8 @@ class CalendarIcsMeta with _$CalendarIcsMeta {
     CalendarPrivacyClass? privacyClass,
     @HiveField(_calendarIcsMetaTransparencyField)
     CalendarTransparency? transparency,
+    @HiveField(_calendarIcsMetaComponentTypeField)
+    CalendarIcsComponentType? componentType,
     @HiveField(_calendarIcsMetaCategoriesField)
     @Default(_emptyCalendarCategories)
     List<String> categories,

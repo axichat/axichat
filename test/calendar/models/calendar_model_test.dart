@@ -426,6 +426,15 @@ void main() {
       const Duration tombstoneDelta = Duration(hours: 1);
       const String resurrectedTitle = 'Resurrected task';
       const String deletedTitle = 'Deleted task';
+      const String dayEventId = 'merge-day-event';
+      const String dayEventResurrectedTitle = 'Resurrected day event';
+      const String dayEventDeletedTitle = 'Deleted day event';
+      const String journalId = 'merge-journal';
+      const String journalResurrectedTitle = 'Resurrected journal';
+      const String journalDeletedTitle = 'Deleted journal';
+      const String criticalPathId = 'merge-critical-path';
+      const String criticalPathResurrectedName = 'Resurrected path';
+      const String criticalPathDeletedName = 'Deleted path';
 
       test('prefers higher sequence when modifiedAt is equal', () {
         final DateTime sharedModifiedAt = testTime;
@@ -519,6 +528,143 @@ void main() {
 
         expect(merged.tasks.containsKey(taskId), isFalse);
         expect(merged.deletedTaskIds[taskId], equals(deletedAt));
+      });
+
+      test('prefers newer day event over tombstone', () {
+        final DateTime deletedAt = testTime;
+        final DateTime remoteModifiedAt = testTime.add(tombstoneDelta);
+        final DayEvent remoteEvent = DayEvent(
+          id: dayEventId,
+          title: dayEventResurrectedTitle,
+          startDate: testTime,
+          createdAt: remoteModifiedAt,
+          modifiedAt: remoteModifiedAt,
+        );
+        final CalendarModel localModel = CalendarModel.empty().copyWith(
+          deletedDayEventIds: {dayEventId: deletedAt},
+        );
+        final CalendarModel remoteModel =
+            CalendarModel.empty().addDayEvent(remoteEvent);
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.dayEvents[dayEventId]?.title,
+            equals(dayEventResurrectedTitle));
+        expect(merged.deletedDayEventIds.containsKey(dayEventId), isFalse);
+      });
+
+      test('keeps day event tombstone when newer than event', () {
+        final DateTime eventModifiedAt = testTime;
+        final DateTime deletedAt = testTime.add(tombstoneDelta);
+        final DayEvent localEvent = DayEvent(
+          id: dayEventId,
+          title: dayEventDeletedTitle,
+          startDate: testTime,
+          createdAt: eventModifiedAt,
+          modifiedAt: eventModifiedAt,
+        );
+        final CalendarModel localModel =
+            CalendarModel.empty().addDayEvent(localEvent);
+        final CalendarModel remoteModel = CalendarModel.empty().copyWith(
+          deletedDayEventIds: {dayEventId: deletedAt},
+        );
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.dayEvents.containsKey(dayEventId), isFalse);
+        expect(merged.deletedDayEventIds[dayEventId], equals(deletedAt));
+      });
+
+      test('prefers newer journal over tombstone', () {
+        final DateTime deletedAt = testTime;
+        final DateTime remoteModifiedAt = testTime.add(tombstoneDelta);
+        final CalendarDateTime entryDate = CalendarDateTime(value: testTime);
+        final CalendarJournal remoteJournal = CalendarJournal(
+          id: journalId,
+          title: journalResurrectedTitle,
+          entryDate: entryDate,
+          createdAt: remoteModifiedAt,
+          modifiedAt: remoteModifiedAt,
+        );
+        final CalendarModel localModel = CalendarModel.empty().copyWith(
+          deletedJournalIds: {journalId: deletedAt},
+        );
+        final CalendarModel remoteModel =
+            CalendarModel.empty().addJournal(remoteJournal);
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(
+            merged.journals[journalId]?.title, equals(journalResurrectedTitle));
+        expect(merged.deletedJournalIds.containsKey(journalId), isFalse);
+      });
+
+      test('keeps journal tombstone when newer than journal', () {
+        final DateTime journalModifiedAt = testTime;
+        final DateTime deletedAt = testTime.add(tombstoneDelta);
+        final CalendarDateTime entryDate = CalendarDateTime(value: testTime);
+        final CalendarJournal localJournal = CalendarJournal(
+          id: journalId,
+          title: journalDeletedTitle,
+          entryDate: entryDate,
+          createdAt: journalModifiedAt,
+          modifiedAt: journalModifiedAt,
+        );
+        final CalendarModel localModel =
+            CalendarModel.empty().addJournal(localJournal);
+        final CalendarModel remoteModel = CalendarModel.empty().copyWith(
+          deletedJournalIds: {journalId: deletedAt},
+        );
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.journals.containsKey(journalId), isFalse);
+        expect(merged.deletedJournalIds[journalId], equals(deletedAt));
+      });
+
+      test('prefers newer critical path over tombstone', () {
+        final DateTime deletedAt = testTime;
+        final DateTime remoteModifiedAt = testTime.add(tombstoneDelta);
+        final CalendarCriticalPath remotePath = CalendarCriticalPath(
+          id: criticalPathId,
+          name: criticalPathResurrectedName,
+          createdAt: remoteModifiedAt,
+          modifiedAt: remoteModifiedAt,
+        );
+        final CalendarModel localModel = CalendarModel.empty().copyWith(
+          deletedCriticalPathIds: {criticalPathId: deletedAt},
+        );
+        final CalendarModel remoteModel =
+            CalendarModel.empty().addCriticalPath(remotePath);
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.criticalPaths[criticalPathId]?.name,
+            equals(criticalPathResurrectedName));
+        expect(
+            merged.deletedCriticalPathIds.containsKey(criticalPathId), isFalse);
+      });
+
+      test('keeps critical path tombstone when newer than path', () {
+        final DateTime pathModifiedAt = testTime;
+        final DateTime deletedAt = testTime.add(tombstoneDelta);
+        final CalendarCriticalPath localPath = CalendarCriticalPath(
+          id: criticalPathId,
+          name: criticalPathDeletedName,
+          createdAt: pathModifiedAt,
+          modifiedAt: pathModifiedAt,
+        );
+        final CalendarModel localModel =
+            CalendarModel.empty().addCriticalPath(localPath);
+        final CalendarModel remoteModel = CalendarModel.empty().copyWith(
+          deletedCriticalPathIds: {criticalPathId: deletedAt},
+        );
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.criticalPaths.containsKey(criticalPathId), isFalse);
+        expect(
+            merged.deletedCriticalPathIds[criticalPathId], equals(deletedAt));
       });
     });
   });

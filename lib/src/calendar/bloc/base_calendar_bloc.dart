@@ -1791,7 +1791,9 @@ abstract class BaseCalendarBloc
         override.title == null &&
         override.description == null &&
         override.location == null &&
-        (override.checklist == null || override.checklist!.isEmpty);
+        (override.checklist == null || override.checklist!.isEmpty) &&
+        override.rawProperties.isEmpty &&
+        override.rawComponents.isEmpty;
   }
 
   List<TaskChecklistItem> _normalizedChecklist(

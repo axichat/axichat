@@ -139,6 +139,14 @@ const String _taskFallbackTitle = 'Untitled task';
 const String _eventFallbackTitle = 'Untitled event';
 const String _journalFallbackTitle = 'Untitled journal';
 
+const CalendarPrivacyClass _defaultPrivacyClass = CalendarPrivacyClass.private;
+const CalendarTransparency _defaultEventTransparency =
+    CalendarTransparency.opaque;
+const CalendarTransparency _defaultDayEventTransparency =
+    CalendarTransparency.transparent;
+const CalendarIcsComponentType _defaultTaskComponentType =
+    CalendarIcsComponentType.todo;
+
 const int _icsDateLength = 8;
 const int _icsDateTimeMinLength = 15;
 const int _icsDateTimeShortLength = 13;
@@ -1082,6 +1090,23 @@ String _componentUid(CalendarRawComponent component) {
   return fallback?.isNotEmpty == true ? fallback! : const Uuid().v4();
 }
 
+CalendarIcsComponentType? _componentTypeFromName(String name) {
+  switch (name) {
+    case _icsComponentVtodo:
+      return CalendarIcsComponentType.todo;
+    case _icsComponentVevent:
+      return CalendarIcsComponentType.event;
+    case _icsComponentVjournal:
+      return CalendarIcsComponentType.journal;
+    case _icsComponentVavailability:
+      return CalendarIcsComponentType.availability;
+    case _icsComponentVfreebusy:
+      return CalendarIcsComponentType.freeBusy;
+    default:
+      return null;
+  }
+}
+
 String? _firstPropertyValue(
   List<CalendarRawProperty> properties,
   String name,
@@ -1112,12 +1137,14 @@ _TaskGroupResult? _parseTaskGroup(
     return null;
   }
   final CalendarRawComponent base = _findBaseComponent(components);
+  final bool hasBase =
+      _firstPropertyValue(base.properties, _icsPropertyRecurrenceId) == null;
   final _ParsedComponent parsedBase = _parseTaskComponent(
     base,
     isEvent: isEvent,
   );
-  final bool isCancelled =
-      isCalendarCancel || parsedBase.meta.status?.isCancelled == true;
+  final bool isCancelled = (isCalendarCancel && hasBase) ||
+      parsedBase.meta.status?.isCancelled == true;
   final DateTime cancelledAt =
       parsedBase.meta.lastModified ?? parsedBase.meta.dtStamp ?? DateTime.now();
   if (isCancelled) {
@@ -1165,14 +1192,16 @@ _EventGroupResult? _parseEventGroup(
     return null;
   }
   final CalendarRawComponent base = _findBaseComponent(components);
+  final bool hasBase =
+      _firstPropertyValue(base.properties, _icsPropertyRecurrenceId) == null;
   final bool isAllDay = _isAllDayComponent(base);
   final bool hasRecurrence = _hasRecurrence(base);
   final bool useDayEvent = isAllDay && !hasRecurrence;
 
   if (useDayEvent) {
     final _ParsedDayEvent parsed = _parseDayEventComponent(base);
-    final bool isCancelled =
-        isCalendarCancel || parsed.meta.status?.isCancelled == true;
+    final bool isCancelled = (isCalendarCancel && hasBase) ||
+        parsed.meta.status?.isCancelled == true;
     final DateTime cancelledAt =
         parsed.meta.lastModified ?? parsed.meta.dtStamp ?? DateTime.now();
     return _EventGroupResult(
@@ -1190,8 +1219,8 @@ _EventGroupResult? _parseEventGroup(
     base,
     isEvent: true,
   );
-  final bool isCancelled =
-      isCalendarCancel || parsedTask.meta.status?.isCancelled == true;
+  final bool isCancelled = (isCalendarCancel && hasBase) ||
+      parsedTask.meta.status?.isCancelled == true;
   final DateTime cancelledAt =
       parsedTask.meta.lastModified ?? parsedTask.meta.dtStamp ?? DateTime.now();
   if (isCancelled) {
@@ -1550,6 +1579,8 @@ TaskOccurrenceOverride? _parseTaskOverride(
       recurrenceProp.parameters.firstValue(_icsParamRange);
   final RecurrenceRange? range =
       rangeValue == null ? null : RecurrenceRange.fromIcsValue(rangeValue);
+  final List<CalendarRawProperty> rawProperties = meta.rawProperties;
+  final List<CalendarRawComponent> rawComponents = meta.rawComponents;
 
   return TaskOccurrenceOverride(
     scheduledTime: scheduledTime,
@@ -1564,6 +1595,8 @@ TaskOccurrenceOverride? _parseTaskOverride(
     checklist: checklistResult.items.isEmpty ? null : checklistResult.items,
     recurrenceId: recurrenceId,
     range: range,
+    rawProperties: rawProperties,
+    rawComponents: rawComponents,
   );
 }
 
@@ -1680,6 +1713,8 @@ CalendarIcsMeta _parseMeta(CalendarRawComponent component) {
       _parseOrganizer(_firstProperty(properties, _icsPropertyOrganizer));
   final List<CalendarAttendee> attendees =
       _parseAttendees(_propertiesByName(properties, _icsPropertyAttendee));
+  final CalendarIcsComponentType? componentType =
+      _componentTypeFromName(component.name);
 
   final List<CalendarRawComponent> rawComponents = component.components
       .where((child) => child.name != _icsComponentValarm)
@@ -1705,6 +1740,7 @@ CalendarIcsMeta _parseMeta(CalendarRawComponent component) {
     axi: null,
     rawProperties: rawProperties,
     rawComponents: rawComponents,
+    componentType: componentType,
   );
 }
 
@@ -2288,6 +2324,9 @@ ReminderPreferences _remindersFromAlarms(List<CalendarAlarm> alarms) {
         alarm.trigger.offset == null) {
       continue;
     }
+    if (alarm.trigger.offsetDirection == CalendarAlarmOffsetDirection.after) {
+      continue;
+    }
     final Duration offset = alarm.trigger.offset!;
     final CalendarAlarmRelativeTo relativeTo =
         alarm.trigger.relativeTo ?? CalendarAlarmRelativeTo.start;
@@ -2358,8 +2397,10 @@ RecurrenceRule? _parseRecurrence(List<CalendarRawProperty> properties) {
         untilIsDate = untilValue.isAllDay;
       }
     }
-    byWeekdays = _parseIntList(parts['BYDAY']);
-    byDays = _parseRecurrenceWeekdays(parts['BYDAY']);
+    final String? byDayValue = parts['BYDAY'];
+    byDays = _parseRecurrenceWeekdays(byDayValue);
+    byWeekdays = _deriveWeekdaysFromByDays(byDays);
+    byWeekdays ??= _parseIntList(byDayValue);
     bySeconds = _parseNumericList(parts['BYSECOND']);
     byMinutes = _parseNumericList(parts['BYMINUTE']);
     byHours = _parseNumericList(parts['BYHOUR']);
@@ -2500,6 +2541,20 @@ List<RecurrenceWeekday>? _parseRecurrenceWeekdays(String? value) {
     );
   }
   return days.isEmpty ? null : days;
+}
+
+List<int>? _deriveWeekdaysFromByDays(List<RecurrenceWeekday>? byDays) {
+  if (byDays == null || byDays.isEmpty) {
+    return null;
+  }
+  final List<int> weekdays = <int>[];
+  for (final RecurrenceWeekday day in byDays) {
+    if (day.position != null) {
+      continue;
+    }
+    weekdays.add(day.weekday.isoValue);
+  }
+  return weekdays.isEmpty ? null : weekdays;
 }
 
 List<int>? _parseNumericList(String? value) {
@@ -2822,6 +2877,19 @@ Map<String, String> _buildTaskUidLookup(CalendarModel model) {
   return lookup;
 }
 
+CalendarIcsComponentType _resolveTaskComponentType(
+  CalendarTask task,
+  CalendarIcsMeta? meta,
+) {
+  final CalendarIcsComponentType? componentType = meta?.componentType;
+  final bool hasSchedule = task.scheduledTime != null;
+  final bool hasDeadline = task.deadline != null;
+  if (componentType?.isEvent == true && hasSchedule && !hasDeadline) {
+    return componentType!;
+  }
+  return _defaultTaskComponentType;
+}
+
 void _writeTaskComponent(
   _IcsWriter writer,
   CalendarTask task, {
@@ -2829,11 +2897,22 @@ void _writeTaskComponent(
   required Map<String, String> taskUids,
 }) {
   final CalendarIcsMeta? meta = task.icsMeta;
+  final CalendarIcsComponentType componentType =
+      _resolveTaskComponentType(task, meta);
+  final bool isEventComponent = componentType.isEvent;
+  final String componentName =
+      isEventComponent ? _icsComponentVevent : _icsComponentVtodo;
   final String uid = meta?.uid ?? '${task.id}$_icsUidSuffix';
-  writer.beginComponent(_icsComponentVtodo);
+  writer.beginComponent(componentName);
   writer.writeProperty(_icsPropertyUid, uid, escapeText: false);
   writer.writeProperty(_axiTaskIdProperty, task.id, escapeText: false);
-  _writeMeta(writer, task.modifiedAt, meta);
+  _writeMeta(
+    writer,
+    task.modifiedAt,
+    meta,
+    defaultPrivacyClass: _defaultPrivacyClass,
+    defaultTransparency: isEventComponent ? _defaultEventTransparency : null,
+  );
 
   writer.writeProperty(_icsPropertySummary, task.title);
   if (task.description != null && task.description!.isNotEmpty) {
@@ -2855,34 +2934,57 @@ void _writeTaskComponent(
     );
   }
 
-  final CalendarRawProperty? rawDue = _rawProperty(meta, _icsPropertyDue);
-  if (task.deadline != null) {
-    _writeDateTimeProperty(
-      writer,
-      _icsPropertyDue,
-      task.deadline!,
-      rawProperty: rawDue,
-      isAllDay: false,
-    );
-  }
-
-  final bool hasDeadline = task.deadline != null;
-  if (task.scheduledTime != null) {
-    if (task.endDate != null) {
-      final CalendarRawProperty? rawScheduleEnd =
-          _rawProperty(meta, _axiScheduleEndProperty);
+  if (!isEventComponent) {
+    final CalendarRawProperty? rawDue = _rawProperty(meta, _icsPropertyDue);
+    if (task.deadline != null) {
       _writeDateTimeProperty(
         writer,
-        _axiScheduleEndProperty,
-        task.endDate!,
-        rawProperty: rawScheduleEnd,
+        _icsPropertyDue,
+        task.deadline!,
+        rawProperty: rawDue,
         isAllDay: false,
       );
-    } else if (task.duration != null) {
-      final String durationValue = _formatDuration(task.duration!);
-      final String propertyName =
-          hasDeadline ? _axiScheduleDurationProperty : _icsPropertyDuration;
-      writer.writeProperty(propertyName, durationValue, escapeText: false);
+    }
+  }
+
+  if (task.scheduledTime != null) {
+    if (isEventComponent) {
+      if (task.endDate != null) {
+        final CalendarRawProperty? rawDtEnd =
+            _rawProperty(meta, _icsPropertyDtEnd);
+        _writeDateTimeProperty(
+          writer,
+          _icsPropertyDtEnd,
+          task.endDate!,
+          rawProperty: rawDtEnd,
+          isAllDay: false,
+        );
+      } else if (task.duration != null) {
+        final String durationValue = _formatDuration(task.duration!);
+        writer.writeProperty(
+          _icsPropertyDuration,
+          durationValue,
+          escapeText: false,
+        );
+      }
+    } else {
+      final bool hasDeadline = task.deadline != null;
+      if (task.endDate != null) {
+        final CalendarRawProperty? rawScheduleEnd =
+            _rawProperty(meta, _axiScheduleEndProperty);
+        _writeDateTimeProperty(
+          writer,
+          _axiScheduleEndProperty,
+          task.endDate!,
+          rawProperty: rawScheduleEnd,
+          isAllDay: false,
+        );
+      } else if (task.duration != null) {
+        final String durationValue = _formatDuration(task.duration!);
+        final String propertyName =
+            hasDeadline ? _axiScheduleDurationProperty : _icsPropertyDuration;
+        writer.writeProperty(propertyName, durationValue, escapeText: false);
+      }
     }
   }
 
@@ -2894,18 +2996,29 @@ void _writeTaskComponent(
     );
   }
 
-  final String statusValue = task.isCompleted
-      ? CalendarIcsStatus.completed.icsValue
-      : (meta?.status?.icsValue ?? CalendarIcsStatus.needsAction.icsValue);
-  writer.writeProperty(_icsPropertyStatus, statusValue, escapeText: false);
+  if (isEventComponent) {
+    final CalendarIcsStatus? status = meta?.status;
+    if (status != null) {
+      writer.writeProperty(
+        _icsPropertyStatus,
+        status.icsValue,
+        escapeText: false,
+      );
+    }
+  } else {
+    final String statusValue = task.isCompleted
+        ? CalendarIcsStatus.completed.icsValue
+        : (meta?.status?.icsValue ?? CalendarIcsStatus.needsAction.icsValue);
+    writer.writeProperty(_icsPropertyStatus, statusValue, escapeText: false);
 
-  final int checklistPercent = _percentComplete(task.checklist);
-  if (checklistPercent > 0) {
-    writer.writeProperty(
-      _icsPropertyPercentComplete,
-      checklistPercent.toString(),
-      escapeText: false,
-    );
+    if (task.checklist.isNotEmpty) {
+      final int checklistPercent = _percentComplete(task.checklist);
+      writer.writeProperty(
+        _icsPropertyPercentComplete,
+        checklistPercent.toString(),
+        escapeText: false,
+      );
+    }
   }
 
   final String checklistPayload = _encodeChecklist(task.checklist);
@@ -2976,11 +3089,18 @@ void _writeTaskComponent(
   }
 
   _writeParticipants(writer, meta);
-  _writeMetaRawProperties(writer, meta, _taskRawPropertySkips);
+  final Set<String> rawPropertySkips =
+      isEventComponent ? _eventTaskRawPropertySkips : _taskRawPropertySkips;
+  _writeMetaRawProperties(writer, meta, rawPropertySkips);
   _writeMetaRawComponents(writer, meta);
-  writer.endComponent(_icsComponentVtodo);
+  writer.endComponent(componentName);
 
-  _writeOverrides(writer, task, uid);
+  _writeOverrides(
+    writer,
+    task,
+    uid,
+    componentType: componentType,
+  );
 }
 
 String? _relatedTaskId(
@@ -3005,11 +3125,19 @@ String? _relatedTaskId(
   return null;
 }
 
-void _writeOverrides(_IcsWriter writer, CalendarTask task, String uid) {
+void _writeOverrides(
+  _IcsWriter writer,
+  CalendarTask task,
+  String uid, {
+  required CalendarIcsComponentType componentType,
+}) {
   final RecurrenceRule recurrence = task.effectiveRecurrence;
   if (recurrence.isNone || task.occurrenceOverrides.isEmpty) {
     return;
   }
+  final bool isEventComponent = componentType.isEvent;
+  final String componentName =
+      isEventComponent ? _icsComponentVevent : _icsComponentVtodo;
   for (final TaskOccurrenceOverride override
       in task.occurrenceOverrides.values) {
     if (override.recurrenceId == null) {
@@ -3018,7 +3146,10 @@ void _writeOverrides(_IcsWriter writer, CalendarTask task, String uid) {
     if (override.isCancelled == true) {
       continue;
     }
-    writer.beginComponent(_icsComponentVtodo);
+    final Set<String> skip = <String>{}
+      ..add(_icsPropertyUid)
+      ..add(_icsPropertyRecurrenceId);
+    writer.beginComponent(componentName);
     writer.writeProperty(_icsPropertyUid, uid, escapeText: false);
     _writeDateTimeProperty(
       writer,
@@ -3032,12 +3163,15 @@ void _writeOverrides(_IcsWriter writer, CalendarTask task, String uid) {
     );
     if (override.title != null) {
       writer.writeProperty(_icsPropertySummary, override.title!);
+      skip.add(_icsPropertySummary);
     }
     if (override.description != null) {
       writer.writeProperty(_icsPropertyDescription, override.description!);
+      skip.add(_icsPropertyDescription);
     }
     if (override.location != null) {
       writer.writeProperty(_icsPropertyLocation, override.location!);
+      skip.add(_icsPropertyLocation);
     }
     if (override.scheduledTime != null) {
       _writeDateTimeProperty(
@@ -3047,21 +3181,44 @@ void _writeOverrides(_IcsWriter writer, CalendarTask task, String uid) {
         rawProperty: null,
         isAllDay: false,
       );
+      skip.add(_icsPropertyDtStart);
     }
-    if (override.endDate != null) {
-      _writeDateTimeProperty(
-        writer,
-        _axiScheduleEndProperty,
-        override.endDate!,
-        rawProperty: null,
-        isAllDay: false,
-      );
-    } else if (override.duration != null) {
-      writer.writeProperty(
-        _axiScheduleDurationProperty,
-        _formatDuration(override.duration!),
-        escapeText: false,
-      );
+    if (isEventComponent) {
+      if (override.endDate != null) {
+        _writeDateTimeProperty(
+          writer,
+          _icsPropertyDtEnd,
+          override.endDate!,
+          rawProperty: null,
+          isAllDay: false,
+        );
+        skip.add(_icsPropertyDtEnd);
+      } else if (override.duration != null) {
+        writer.writeProperty(
+          _icsPropertyDuration,
+          _formatDuration(override.duration!),
+          escapeText: false,
+        );
+        skip.add(_icsPropertyDuration);
+      }
+    } else {
+      if (override.endDate != null) {
+        _writeDateTimeProperty(
+          writer,
+          _axiScheduleEndProperty,
+          override.endDate!,
+          rawProperty: null,
+          isAllDay: false,
+        );
+        skip.add(_axiScheduleEndProperty);
+      } else if (override.duration != null) {
+        writer.writeProperty(
+          _axiScheduleDurationProperty,
+          _formatDuration(override.duration!),
+          escapeText: false,
+        );
+        skip.add(_axiScheduleDurationProperty);
+      }
     }
     if (override.priority != null) {
       writer.writeProperty(
@@ -3069,21 +3226,26 @@ void _writeOverrides(_IcsWriter writer, CalendarTask task, String uid) {
         override.priority!.name,
         escapeText: false,
       );
+      skip.add(_axiPriorityProperty);
     }
-    if (override.isCompleted == true) {
+    if (!isEventComponent && override.isCompleted == true) {
       writer.writeProperty(
         _icsPropertyStatus,
         CalendarIcsStatus.completed.icsValue,
         escapeText: false,
       );
+      skip.add(_icsPropertyStatus);
     }
     if (override.checklist != null && override.checklist!.isNotEmpty) {
       writer.writeProperty(
         _axiChecklistProperty,
         _encodeChecklist(override.checklist!),
       );
+      skip.add(_axiChecklistProperty);
     }
-    writer.endComponent(_icsComponentVtodo);
+    _writeRawProperties(writer, override.rawProperties, skip);
+    _writeRawComponents(writer, override.rawComponents);
+    writer.endComponent(componentName);
   }
 }
 
@@ -3093,7 +3255,13 @@ void _writeDayEventComponent(_IcsWriter writer, DayEvent event) {
   writer.beginComponent(_icsComponentVevent);
   writer.writeProperty(_icsPropertyUid, uid, escapeText: false);
   writer.writeProperty(_axiTaskIdProperty, event.id, escapeText: false);
-  _writeMeta(writer, event.modifiedAt, meta);
+  _writeMeta(
+    writer,
+    event.modifiedAt,
+    meta,
+    defaultPrivacyClass: _defaultPrivacyClass,
+    defaultTransparency: _defaultDayEventTransparency,
+  );
   writer.writeProperty(_icsPropertySummary, event.title);
   if (event.description != null && event.description!.isNotEmpty) {
     writer.writeProperty(_icsPropertyDescription, event.description!);
@@ -3136,7 +3304,12 @@ void _writeJournalComponent(_IcsWriter writer, CalendarJournal journal) {
     ..beginComponent(_icsComponentVjournal)
     ..writeProperty(_icsPropertyUid, uid, escapeText: false)
     ..writeProperty(_axiTaskIdProperty, journal.id, escapeText: false);
-  _writeMeta(writer, journal.modifiedAt, meta);
+  _writeMeta(
+    writer,
+    journal.modifiedAt,
+    meta,
+    defaultPrivacyClass: _defaultPrivacyClass,
+  );
   _writeJournalStatus(writer, meta);
   writer.writeProperty(_icsPropertySummary, journal.title);
   if (journal.description != null && journal.description!.isNotEmpty) {
@@ -3328,8 +3501,10 @@ CalendarDateTime _normalizeFreeBusyDateTime(
 void _writeMeta(
   _IcsWriter writer,
   DateTime modifiedAt,
-  CalendarIcsMeta? meta,
-) {
+  CalendarIcsMeta? meta, {
+  CalendarPrivacyClass? defaultPrivacyClass,
+  CalendarTransparency? defaultTransparency,
+}) {
   final DateTime dtStamp = meta?.dtStamp ?? meta?.lastModified ?? modifiedAt;
   writer.writeProperty(
     _icsPropertyDtStamp,
@@ -3357,17 +3532,21 @@ void _writeMeta(
       escapeText: false,
     );
   }
-  if (meta?.privacyClass != null) {
+  final CalendarPrivacyClass? privacyClass =
+      meta?.privacyClass ?? defaultPrivacyClass;
+  if (privacyClass != null) {
     writer.writeProperty(
       _icsPropertyClass,
-      meta!.privacyClass!.icsValue,
+      privacyClass.icsValue,
       escapeText: false,
     );
   }
-  if (meta?.transparency != null) {
+  final CalendarTransparency? transparency =
+      meta?.transparency ?? defaultTransparency;
+  if (transparency != null) {
     writer.writeProperty(
       _icsPropertyTransp,
-      meta!.transparency!.icsValue,
+      transparency.icsValue,
       escapeText: false,
     );
   }
@@ -3631,6 +3810,18 @@ void _writeMetaRawProperties(
   }
 }
 
+void _writeRawProperties(
+  _IcsWriter writer,
+  List<CalendarRawProperty> properties,
+  Set<String> skip,
+) {
+  for (final CalendarRawProperty property in properties) {
+    if (!skip.contains(property.name)) {
+      writer.writeRawProperty(property);
+    }
+  }
+}
+
 void _writeMetaRawComponents(
   _IcsWriter writer,
   CalendarIcsMeta? meta,
@@ -3639,6 +3830,15 @@ void _writeMetaRawComponents(
     return;
   }
   for (final CalendarRawComponent component in meta.rawComponents) {
+    writer.writeRawComponent(component);
+  }
+}
+
+void _writeRawComponents(
+  _IcsWriter writer,
+  List<CalendarRawComponent> components,
+) {
+  for (final CalendarRawComponent component in components) {
     writer.writeRawComponent(component);
   }
 }
@@ -4192,6 +4392,39 @@ const Set<String> _taskRawPropertySkips = <String>{
   _axiTaskIdProperty,
   _axiScheduleEndProperty,
   _axiScheduleDurationProperty,
+};
+
+const Set<String> _eventTaskRawPropertySkips = <String>{
+  _icsPropertyUid,
+  _icsPropertyDtStamp,
+  _icsPropertyCreated,
+  _icsPropertyLastModified,
+  _icsPropertySequence,
+  _icsPropertyStatus,
+  _icsPropertyClass,
+  _icsPropertyTransp,
+  _icsPropertyCategories,
+  _icsPropertyUrl,
+  _icsPropertyGeo,
+  _icsPropertyAttach,
+  _icsPropertyOrganizer,
+  _icsPropertyAttendee,
+  _icsPropertySummary,
+  _icsPropertyDescription,
+  _icsPropertyLocation,
+  _icsPropertyDtStart,
+  _icsPropertyDtEnd,
+  _icsPropertyDuration,
+  _icsPropertyRrule,
+  _icsPropertyRdate,
+  _icsPropertyExdate,
+  _icsPropertyExrule,
+  _icsPropertyRecurrenceId,
+  _axiChecklistProperty,
+  _axiPriorityProperty,
+  _axiPathIdProperty,
+  _axiPathOrderProperty,
+  _axiTaskIdProperty,
 };
 
 const Set<String> _eventRawPropertySkips = <String>{
