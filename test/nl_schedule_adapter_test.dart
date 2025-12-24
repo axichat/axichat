@@ -119,6 +119,18 @@ void main() {
       expect(result.task.deadline, isNull);
     });
 
+    test('keeps unscheduled bucket when recurrence has no start time', () {
+      const recurrence = Recurrence(rrule: 'FREQ=DAILY', text: 'every day');
+      final item = buildItem(
+        start: null,
+        deadline: null,
+        recurrence: recurrence,
+      );
+      final result = baseAdapter.mapToAppTypes(item, ctx: context);
+      expect(result.bucket, TaskBucket.unscheduled);
+      expect(result.task.scheduledTime, isNull);
+    });
+
     test('uses default duration when only start provided', () {
       const adapter = NlScheduleAdapter(
         config: NlAdapterConfig(

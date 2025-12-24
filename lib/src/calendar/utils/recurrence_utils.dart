@@ -182,8 +182,7 @@ extension CalendarTaskInstanceX on CalendarTask {
 
     final List<CalendarTask> results = <CalendarTask>[];
     final Map<String, TaskOccurrenceOverride> overrides = occurrenceOverrides;
-    final Set<String> exDateKeys =
-        _calendarDateTimeKeys(recurrence.exDates);
+    final Set<String> exDateKeys = _calendarDateTimeKeys(recurrence.exDates);
     final Set<String> emittedKeys = <String>{};
 
     if (hasRule) {
@@ -272,8 +271,7 @@ extension CalendarTaskInstanceX on CalendarTask {
           continue;
         }
         final DateTime actualStart = override?.scheduledTime ?? originalStart;
-        if (actualStart.isBefore(rangeStart) ||
-            actualStart.isAfter(rangeEnd)) {
+        if (actualStart.isBefore(rangeStart) || actualStart.isAfter(rangeEnd)) {
           continue;
         }
         results.add(

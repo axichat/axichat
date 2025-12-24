@@ -432,7 +432,19 @@ class CalendarSyncManager {
       case _calendarSyncOperationUpdate:
         final localTask = currentModel.tasks[remoteTask.id];
         if (localTask == null) {
-          updatedModel = currentModel.updateTask(remoteTask);
+          final DateTime? deletedAt =
+              currentModel.deletedTaskIds[remoteTask.id];
+          if (deletedAt != null && !remoteTask.modifiedAt.isAfter(deletedAt)) {
+            return;
+          }
+          final Map<String, DateTime> updatedDeletedTaskIds = deletedAt == null
+              ? currentModel.deletedTaskIds
+              : Map<String, DateTime>.from(currentModel.deletedTaskIds)
+            ..remove(remoteTask.id);
+          final CalendarModel baseModel = deletedAt == null
+              ? currentModel
+              : currentModel.copyWith(deletedTaskIds: updatedDeletedTaskIds);
+          updatedModel = baseModel.addTask(remoteTask);
           break;
         }
         final bool preferRemote = _shouldPreferRemote(

@@ -199,7 +199,7 @@ class ScheduleItem {
   });
 
   TaskBucket get bucket {
-    if (start != null || recurrence != null) return TaskBucket.scheduled;
+    if (start != null) return TaskBucket.scheduled;
     if (deadline != null) return TaskBucket.reminder;
     return TaskBucket.unscheduled;
   }

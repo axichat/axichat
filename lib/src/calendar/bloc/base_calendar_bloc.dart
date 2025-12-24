@@ -494,7 +494,7 @@ abstract class BaseCalendarBloc
         throw CalendarTaskNotFoundException(event.taskId);
       }
 
-      if (occurrenceKey != null && !taskToDelete.effectiveRecurrence.isNone) {
+      if (occurrenceKey != null && taskToDelete.hasRecurrenceData) {
         emit(state.copyWith(isLoading: true, error: null));
         _recordUndoSnapshot();
 
@@ -810,7 +810,7 @@ abstract class BaseCalendarBloc
       final DateTime leftEnd = splitTime;
       final DateTime rightEnd = end;
 
-      if (!baseTask.effectiveRecurrence.isNone && targetId.contains('::')) {
+      if (baseTask.hasRecurrenceData && targetId.contains('::')) {
         final String? occurrenceKey = occurrenceKeyFrom(targetId);
         if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
           final overrides = Map<String, TaskOccurrenceOverride>.from(
@@ -864,7 +864,7 @@ abstract class BaseCalendarBloc
         }
       }
 
-      if (targetIsOccurrence && baseTask.effectiveRecurrence.isNone) {
+      if (targetIsOccurrence && !baseTask.hasRecurrenceData) {
         final CalendarTask updatedOccurrence = effectiveTarget.copyWith(
           duration: leftDuration,
           endDate: leftEnd,
@@ -2480,7 +2480,7 @@ abstract class BaseCalendarBloc
         continue;
       }
       final CalendarTask? baseTask = state.model.tasks[baseId];
-      if (baseTask == null || baseTask.effectiveRecurrence.isNone) {
+      if (baseTask == null || !baseTask.hasRecurrenceData) {
         continue;
       }
       occurrencesByBase.putIfAbsent(baseId, () => <String>{}).add(id);
