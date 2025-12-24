@@ -127,7 +127,7 @@ final class HomeRefreshSyncService {
 
   Future<void> _ensureConnected() async {
     if (_xmppService.connectionState == ConnectionState.connected) return;
-    await _xmppService.triggerImmediateReconnect();
+    await _xmppService.requestReconnect(ReconnectTrigger.userAction);
     await _xmppService.connectivityStream
         .firstWhere((state) => state == ConnectionState.connected)
         .timeout(_connectionTimeout);
