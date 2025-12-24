@@ -20,6 +20,8 @@ part 'calendar_task.g.dart';
 
 const int _taskOccurrenceOverrideRecurrenceIdField = 10;
 const int _taskOccurrenceOverrideRangeField = 11;
+const int _taskOccurrenceOverrideRawPropertiesField = 12;
+const int _taskOccurrenceOverrideRawComponentsField = 13;
 
 const int _recurrenceRuleBySecondsField = 5;
 const int _recurrenceRuleByMinutesField = 6;
@@ -42,6 +44,8 @@ const int _calendarTaskIcsMetaField = 17;
 const List<CalendarDateTime> _emptyCalendarDateTimes = <CalendarDateTime>[];
 const List<CalendarRawProperty> _emptyCalendarRawProperties =
     <CalendarRawProperty>[];
+const List<CalendarRawComponent> _emptyCalendarRawComponents =
+    <CalendarRawComponent>[];
 const Map<String, TaskOccurrenceOverride> _emptyTaskOccurrenceOverrides =
     <String, TaskOccurrenceOverride>{};
 
@@ -62,6 +66,12 @@ class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
     @HiveField(_taskOccurrenceOverrideRecurrenceIdField)
     CalendarDateTime? recurrenceId,
     @HiveField(_taskOccurrenceOverrideRangeField) RecurrenceRange? range,
+    @HiveField(_taskOccurrenceOverrideRawPropertiesField)
+    @Default(_emptyCalendarRawProperties)
+    List<CalendarRawProperty> rawProperties,
+    @HiveField(_taskOccurrenceOverrideRawComponentsField)
+    @Default(_emptyCalendarRawComponents)
+    List<CalendarRawComponent> rawComponents,
   }) = _TaskOccurrenceOverride;
 
   factory TaskOccurrenceOverride.fromJson(Map<String, dynamic> json) =>

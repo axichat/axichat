@@ -84,6 +84,70 @@ void main() {
       expect(extraDayTasks, hasLength(1));
       expect(extraDayTasks.first.scheduledTime, equals(extraStart));
     });
+
+    test('applies range override to future occurrences', () {
+      const String taskId = 'task-range';
+      const String title = 'Daily';
+      const int baseYear = 2024;
+      const int baseMonth = 1;
+      const int baseDay = 1;
+      const int priorDay = 2;
+      const int overrideDay = 3;
+      const int futureDay = 4;
+      const int baseHour = 9;
+      const int shiftedHour = 10;
+      const int durationHours = 1;
+      const int singleItemCount = 1;
+      const Duration taskDuration = Duration(hours: durationHours);
+      const RecurrenceRule recurrence =
+          RecurrenceRule(frequency: RecurrenceFrequency.daily);
+
+      final DateTime baseStart =
+          DateTime(baseYear, baseMonth, baseDay, baseHour);
+      final DateTime overrideOriginalStart =
+          DateTime(baseYear, baseMonth, overrideDay, baseHour);
+      final DateTime overrideShiftedStart =
+          DateTime(baseYear, baseMonth, overrideDay, shiftedHour);
+      final DateTime priorDate = DateTime(baseYear, baseMonth, priorDay);
+      final DateTime futureDate = DateTime(baseYear, baseMonth, futureDay);
+      final String overrideKey =
+          overrideOriginalStart.microsecondsSinceEpoch.toString();
+
+      final CalendarTask task = CalendarTask(
+        id: taskId,
+        title: title,
+        scheduledTime: baseStart,
+        duration: taskDuration,
+        createdAt: baseStart,
+        modifiedAt: baseStart,
+        recurrence: recurrence,
+        occurrenceOverrides: {
+          overrideKey: TaskOccurrenceOverride(
+            scheduledTime: overrideShiftedStart,
+            recurrenceId: CalendarDateTime(value: overrideOriginalStart),
+            range: RecurrenceRange.thisAndFuture,
+          ),
+        },
+      );
+
+      final CalendarModel model = CalendarModel.empty().addTask(task);
+      final CalendarState state = CalendarState(
+        model: model,
+        selectedDate: baseStart,
+      );
+
+      final List<CalendarTask> priorTasks = state.tasksForDate(priorDate);
+      expect(priorTasks, hasLength(singleItemCount));
+      final DateTime expectedPriorStart =
+          DateTime(baseYear, baseMonth, priorDay, baseHour);
+      expect(priorTasks.first.scheduledTime, equals(expectedPriorStart));
+
+      final List<CalendarTask> futureTasks = state.tasksForDate(futureDate);
+      expect(futureTasks, hasLength(singleItemCount));
+      final DateTime expectedFutureStart =
+          DateTime(baseYear, baseMonth, futureDay, shiftedHour);
+      expect(futureTasks.first.scheduledTime, equals(expectedFutureStart));
+    });
   });
 
   group('CalendarState bucket getters', () {

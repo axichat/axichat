@@ -72,6 +72,11 @@ void registerCalendarHiveAdapters([HiveInterface? hive]) {
       CalendarTransparencyAdapter(),
     );
   }
+  if (!target.isAdapterRegistered(CalendarIcsComponentTypeAdapter().typeId)) {
+    target.registerAdapter<CalendarIcsComponentType>(
+      CalendarIcsComponentTypeAdapter(),
+    );
+  }
   if (!target.isAdapterRegistered(CalendarAlarmActionAdapter().typeId)) {
     target.registerAdapter<CalendarAlarmAction>(CalendarAlarmActionAdapter());
   }

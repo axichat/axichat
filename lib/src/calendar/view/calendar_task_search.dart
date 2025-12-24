@@ -877,7 +877,7 @@ class _QueryMatcher {
       case _ScheduledFilter.scheduled:
         return task.scheduledTime != null;
       case _ScheduledFilter.unscheduled:
-        return task.scheduledTime == null;
+        return task.isUnscheduled;
       case _ScheduledFilter.today:
         final DateTime? start = task.scheduledTime;
         if (start == null) return false;
