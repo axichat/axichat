@@ -4,8 +4,11 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/view/calendar_availability_share_sheet.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
 import 'package:axichat/src/calendar/view/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
@@ -16,9 +19,11 @@ import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 const double _participantAvatarSize = 28.0;
 const double _participantAvatarOverlap = 10.0;
@@ -26,16 +31,35 @@ const double _participantOverflowGap = 6.0;
 const double _participantAvatarBorderWidth = 1.6;
 const int _participantMaxAvatars = 7;
 const String _participantOverflowLabel = '...';
+const double _chatCalendarShareActionSpacing = 8.0;
+const String _chatCalendarAvailabilityShareTooltip = 'Share availability';
+const String _chatCalendarAvailabilityShareMissingJidMessage =
+    'Calendar sharing is unavailable.';
+
+CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
+  BuildContext context,
+) {
+  try {
+    return RepositoryProvider.of<CalendarAvailabilityShareCoordinator>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
+  }
+}
 
 class ChatCalendarWidget extends StatefulWidget {
   const ChatCalendarWidget({
     super.key,
     required this.onBackPressed,
+    required this.chat,
     required this.participants,
     required this.avatarPaths,
   });
 
   final VoidCallback onBackPressed;
+  final Chat chat;
   final List<String> participants;
   final Map<String, String> avatarPaths;
 
@@ -158,6 +182,9 @@ class _ChatCalendarWidgetState
     Widget layout,
   ) {
     final Widget tintedLayout = CalendarNavSurface(child: layout);
+    final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
+      context,
+    );
     return CalendarHoverTitleScope(
       controller: _hoverTitleController,
       child: Column(
@@ -167,6 +194,12 @@ class _ChatCalendarWidgetState
             onBackPressed: widget.onBackPressed,
             participants: widget.participants,
             avatarPaths: widget.avatarPaths,
+            onShareAvailability: availabilityCoordinator == null
+                ? null
+                : () => _openAvailabilityShareSheet(
+                      state,
+                      availabilityCoordinator,
+                    ),
           ),
           Expanded(child: tintedLayout),
         ],
@@ -216,6 +249,31 @@ class _ChatCalendarWidgetState
     );
   }
 
+  Future<void> _openAvailabilityShareSheet(
+    CalendarState state,
+    CalendarAvailabilityShareCoordinator coordinator,
+  ) async {
+    final xmpp = context.read<XmppService>();
+    final ownerJid = xmpp.myJid?.trim();
+    if (ownerJid == null || ownerJid.isEmpty) {
+      FeedbackSystem.showError(
+        context,
+        _chatCalendarAvailabilityShareMissingJidMessage,
+      );
+      return;
+    }
+    await showCalendarAvailabilityShareSheet(
+      context: context,
+      coordinator: coordinator,
+      source: CalendarAvailabilityShareSource.chat(
+        chatJid: widget.chat.jid,
+      ),
+      model: state.model,
+      ownerJid: ownerJid,
+      initialChat: widget.chat,
+    );
+  }
+
   @override
   Widget wrapWithTaskFeedback(BuildContext context, Widget child) {
     return CalendarTaskFeedbackObserver<ChatCalendarBloc>(child: child);
@@ -242,11 +300,13 @@ class _ChatCalendarAppBar extends StatelessWidget {
     required this.onBackPressed,
     required this.participants,
     required this.avatarPaths,
+    this.onShareAvailability,
   });
 
   final VoidCallback onBackPressed;
   final List<String> participants;
   final Map<String, String> avatarPaths;
+  final VoidCallback? onShareAvailability;
 
   @override
   Widget build(BuildContext context) {
@@ -275,6 +335,16 @@ class _ChatCalendarAppBar extends StatelessWidget {
                 borderColor: colors.border,
                 onPressed: onBackPressed,
               ),
+              if (onShareAvailability != null) ...[
+                const SizedBox(width: _chatCalendarShareActionSpacing),
+                AxiIconButton(
+                  iconData: LucideIcons.share2,
+                  tooltip: _chatCalendarAvailabilityShareTooltip,
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  onPressed: onShareAvailability,
+                ),
+              ],
               const Spacer(),
               if (participants.isNotEmpty)
                 Flexible(

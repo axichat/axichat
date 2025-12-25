@@ -103,6 +103,17 @@ final class ChatMessageSent extends ChatEvent {
   List<Object?> get props => [text, calendarFragment];
 }
 
+final class ChatAvailabilityMessageSent extends ChatEvent {
+  const ChatAvailabilityMessageSent({
+    required this.message,
+  });
+
+  final CalendarAvailabilityMessage message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
 final class ChatMuted extends ChatEvent {
   const ChatMuted(this.muted);
 
