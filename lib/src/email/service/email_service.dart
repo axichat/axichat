@@ -237,6 +237,9 @@ class EmailService {
 
   EmailAccount? get activeAccount => _activeAccount;
 
+  bool get isSmtpOnly =>
+      _endpointConfig.enableSmtp && !_endpointConfig.enableXmpp;
+
   bool get isRunning => _running;
 
   Stream<DeltaCoreEvent> get events => _transport.events;

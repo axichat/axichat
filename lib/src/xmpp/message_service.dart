@@ -2996,9 +2996,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   }
 
   bool _isSnapshotCalendarMessage(CalendarSyncMessage message) {
-    if (message.type == CalendarSyncType.full) {
-      return true;
-    }
     if (message.type == CalendarSyncType.snapshot) {
       return true;
     }

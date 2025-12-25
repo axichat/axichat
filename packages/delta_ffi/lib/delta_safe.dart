@@ -142,6 +142,21 @@ class DeltaChatlistEntry {
 }
 
 const int _deltaMessageIdInitial = 0;
+const int _freshMessageCountDefault = 0;
+
+class DeltaFreshMessageCount {
+  const DeltaFreshMessageCount({
+    required this.count,
+    required this.supported,
+  });
+
+  const DeltaFreshMessageCount.unsupported()
+      : count = _freshMessageCountDefault,
+        supported = false;
+
+  final int count;
+  final bool supported;
+}
 
 class DeltaMessageState {
   static const int undefined = 0;
@@ -189,6 +204,7 @@ class DeltaContextHandle {
   bool _ioRunning = false;
   bool? _supportsMessageIsOutgoing;
   bool? _supportsFreshMsgs;
+  bool? _supportsFreshMsgCount;
   bool? _supportsMarkNoticed;
   bool? _supportsMarkSeen;
   bool? _supportsDeleteMsgs;
@@ -749,17 +765,27 @@ class DeltaContextHandle {
     return _supportsFreshMsgs == true;
   }
 
-  Future<int> getFreshMessageCount(int chatId) async {
-    if (_supportsFreshMsgs == false) return 0;
+  Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId) async {
+    if (_supportsFreshMsgCount == false) {
+      return const DeltaFreshMessageCount.unsupported();
+    }
     try {
       final count = _bindings.dc_get_fresh_msg_cnt(_context, chatId);
-      _supportsFreshMsgs = true;
-      return count;
+      _supportsFreshMsgCount = true;
+      return DeltaFreshMessageCount(
+        count: count,
+        supported: true,
+      );
     } on Object catch (error) {
       if (error is! ArgumentError && error is! UnsupportedError) rethrow;
-      _supportsFreshMsgs = false;
-      return 0;
+      _supportsFreshMsgCount = false;
+      return const DeltaFreshMessageCount.unsupported();
     }
+  }
+
+  Future<int> getFreshMessageCount(int chatId) async {
+    final result = await getFreshMessageCountSafe(chatId);
+    return result.count;
   }
 
   Future<bool> markNoticedChat(int chatId) async {

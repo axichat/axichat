@@ -21,6 +21,9 @@ const String _snapshotFallbackName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _snapshotChecksumMismatchLog =
     'Snapshot checksum mismatch - ignoring snapshot';
+const String _snapshotVersionUnsupportedLogPrefix =
+    'Snapshot version unsupported - ignoring snapshot (version: ';
+const String _snapshotVersionUnsupportedLogSuffix = ')';
 const String _inlineSnapshotSentLog = 'Sent inline calendar snapshot';
 const String _inlineSnapshotFailedLog = 'Error sending inline snapshot';
 const String _calendarSyncEntityTask = 'task';
@@ -94,6 +97,17 @@ class CalendarSyncManager {
     if (message.data == null) return false;
 
     try {
+      final int? snapshotVersion = message.snapshotVersion;
+      if (snapshotVersion != null &&
+          snapshotVersion > CalendarSnapshotCodec.currentVersion) {
+        developer.log(
+          '$_snapshotVersionUnsupportedLogPrefix'
+          '$snapshotVersion'
+          '$_snapshotVersionUnsupportedLogSuffix',
+          name: 'CalendarSyncManager',
+        );
+        return false;
+      }
       final remoteModel = CalendarModel.fromJson(message.data!);
       final localModel = _readModel();
       final snapshotChecksum = message.snapshotChecksum ?? message.checksum;
