@@ -835,6 +835,15 @@ class XmppService extends XmppBase
   static const _foregroundSocketMigrationCooldown = Duration(seconds: 30);
   static const _foregroundSocketWarmupClientId =
       '${foregroundClientXmpp}_warmup';
+  static const bool _foregroundServiceRunningFallback = false;
+
+  Future<bool> _isForegroundServiceRunning() async {
+    try {
+      return await FlutterForegroundTask.isRunningService;
+    } on Exception {
+      return _foregroundServiceRunningFallback;
+    }
+  }
 
   void _scheduleForegroundSocketMigration() {
     if (!withForeground) {
@@ -1723,7 +1732,8 @@ class XmppService extends XmppBase
     if (connected) {
       return;
     }
-    if (await _connection.isReconnecting()) {
+    final bool reconnecting = await _connection.isReconnecting();
+    if (reconnecting && !trigger.shouldBypassBackoff) {
       return;
     }
 
@@ -1740,6 +1750,11 @@ class XmppService extends XmppBase
         );
         return;
       }
+    }
+
+    if (trigger.shouldBypassBackoff &&
+        connectionState != ConnectionState.connecting) {
+      _setConnectionState(ConnectionState.connecting);
     }
 
     await _connection.requestReconnect(trigger);
@@ -1771,7 +1786,10 @@ class XmppService extends XmppBase
     if (await _connection.isReconnecting()) {
       return;
     }
-    if (_connection.socketWrapper is ForegroundSocketWrapper) {
+    final bool serviceRunning = await _isForegroundServiceRunning();
+    final bool usingForegroundSocket =
+        _connection.socketWrapper is ForegroundSocketWrapper;
+    if (serviceRunning && usingForegroundSocket) {
       return;
     }
     if (!_connection.hasConnectionSettings) {

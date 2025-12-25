@@ -336,7 +336,11 @@ extension CalendarTaskExtensions on CalendarTask {
 
   bool get hasRecurrenceData {
     final RecurrenceRule rule = effectiveRecurrence;
-    return !rule.isNone || rule.rDates.isNotEmpty || rule.exDates.isNotEmpty;
+    return !rule.isNone ||
+        rule.rDates.isNotEmpty ||
+        rule.exDates.isNotEmpty ||
+        rule.rawProperties.isNotEmpty ||
+        occurrenceOverrides.isNotEmpty;
   }
 
   bool get isCritical => effectivePriority == TaskPriority.critical;

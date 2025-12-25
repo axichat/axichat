@@ -6,6 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 const _occurrenceSeparator = '::';
 const int _baseOccurrenceCount = 1;
 const int _daysPerWeek = 7;
+const Duration _zeroDuration = Duration.zero;
 
 enum RecurrenceEndUnit {
   days,
@@ -172,16 +173,18 @@ extension CalendarTaskInstanceX on CalendarTask {
     }
 
     final bool hasRule = !recurrence.isNone;
+    final Map<String, TaskOccurrenceOverride> overrides = occurrenceOverrides;
+    final Duration rangeShift = _futureRangeBackwardShift(overrides);
+    final DateTime adjustedRangeEnd = _extendRangeEnd(rangeEnd, rangeShift);
     final DateTime? ruleUntil = _recurrenceUntilLimit(recurrence);
     final DateTime? inclusiveEnd =
-        hasRule ? _minDateTime(rangeEnd, ruleUntil) : null;
+        hasRule ? _minDateTime(adjustedRangeEnd, ruleUntil) : null;
 
     if (hasRule && inclusiveEnd != null && inclusiveEnd.isBefore(scheduled)) {
       return const [];
     }
 
     final List<CalendarTask> results = <CalendarTask>[];
-    final Map<String, TaskOccurrenceOverride> overrides = occurrenceOverrides;
     final Set<String> exDateKeys = _calendarDateTimeKeys(recurrence.exDates);
     final Set<String> emittedKeys = <String>{};
 
@@ -367,6 +370,38 @@ extension CalendarTaskInstanceX on CalendarTask {
       checklist: checklistOverride ?? checklist,
     );
   }
+}
+
+DateTime _extendRangeEnd(DateTime rangeEnd, Duration shift) {
+  if (shift == _zeroDuration) {
+    return rangeEnd;
+  }
+  return rangeEnd.add(shift);
+}
+
+Duration _futureRangeBackwardShift(
+  Map<String, TaskOccurrenceOverride> overrides,
+) {
+  var maxShift = _zeroDuration;
+  for (final TaskOccurrenceOverride override in overrides.values) {
+    final RecurrenceRange? range = override.range;
+    if (range == null || !range.isThisAndFuture) {
+      continue;
+    }
+    final DateTime? overrideStart = override.scheduledTime;
+    final DateTime? originalStart = override.recurrenceId?.value;
+    if (overrideStart == null || originalStart == null) {
+      continue;
+    }
+    final Duration shift = originalStart.difference(overrideStart);
+    if (shift.compareTo(_zeroDuration) <= 0) {
+      continue;
+    }
+    if (shift.compareTo(maxShift) > 0) {
+      maxShift = shift;
+    }
+  }
+  return maxShift;
 }
 
 DateTime? _nextOccurrence(
