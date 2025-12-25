@@ -744,6 +744,11 @@ class DeltaContextHandle {
     }
   }
 
+  Future<bool> probeFreshMessagesSupport() async {
+    await getFreshMessageIds();
+    return _supportsFreshMsgs == true;
+  }
+
   Future<int> getFreshMessageCount(int chatId) async {
     if (_supportsFreshMsgs == false) return 0;
     try {

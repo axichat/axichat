@@ -188,6 +188,7 @@ class _AxichatState extends State<Axichat> {
             create: (context) => ChatsCubit(
               xmppService: context.read<XmppService>(),
               homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
+              emailService: context.read<EmailService>(),
             ),
           ),
           BlocProvider(
