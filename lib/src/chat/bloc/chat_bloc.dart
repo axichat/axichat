@@ -327,6 +327,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return _isAxiDomainJid(candidate);
   }
 
+  bool get _shouldUseCoreDraftFallback {
+    final xmppJid = _xmppService?.myJid;
+    if (xmppJid == null) {
+      return true;
+    }
+    return xmppJid.trim().isEmpty;
+  }
+
   Future<void> _prefetchPeerAvatar(Chat chat) async {
     if (chat.type == ChatType.groupChat) return;
     if (!_xmppAllowedForChat(chat)) return;
@@ -2776,7 +2784,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachments: attachments,
       );
       final emailService = _emailService;
-      if (emailService != null) {
+      if (emailService != null && _shouldUseCoreDraftFallback) {
         try {
           await emailService.saveDraftToCore(
             chat: chat,
