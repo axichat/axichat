@@ -7,7 +7,9 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
@@ -24,6 +26,7 @@ import 'package:axichat/src/chat/view/chat_message_details.dart';
 import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
@@ -119,6 +122,12 @@ const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
+const String _calendarFragmentShareDeniedMessage =
+    'Calendar cards are disabled for your role in this room.';
+const String _calendarFragmentPropertyKey = 'calendarFragment';
+const String _composerShareSeparator = '\n\n';
+const String _emptyText = '';
+const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 const _selectionExtrasMaxWidth = 500.0;
 const _messageAvatarSize = 36.0;
 const _messageRowAvatarReservation = 32.0;
@@ -206,6 +215,16 @@ class _MessageFilterOption {
 
   final MessageTimelineFilter filter;
   final String label;
+}
+
+class _CalendarFragmentShare {
+  const _CalendarFragmentShare({
+    required this.fragment,
+    required this.text,
+  });
+
+  final CalendarFragment? fragment;
+  final String text;
 }
 
 List<_MessageFilterOption> _messageFilterOptions(AppLocalizations l10n) => [
@@ -765,6 +784,12 @@ class _ChatState extends State<Chat> {
   Offset? _selectionDismissOrigin;
   int? _selectionDismissPointer;
   var _selectionDismissMoved = false;
+  static const CalendarFragmentPolicy _calendarFragmentPolicy =
+      CalendarFragmentPolicy();
+  static const CalendarFragmentFormatter _calendarFragmentFormatter =
+      CalendarFragmentFormatter();
+  CalendarFragment? _pendingCalendarFragment;
+  String? _pendingCalendarSeedText;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
@@ -783,9 +808,25 @@ class _ChatState extends State<Chat> {
     if (hasText && _anySelectionActive) {
       _clearAllSelections();
     }
+    _maybeClearPendingCalendarFragment(text);
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
+  }
+
+  void _maybeClearPendingCalendarFragment(String text) {
+    final seedText = _pendingCalendarSeedText;
+    if (_pendingCalendarFragment == null || seedText == null) {
+      return;
+    }
+    if (text.trim() == seedText) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _pendingCalendarFragment = null;
+      _pendingCalendarSeedText = null;
+    });
   }
 
   List<String> _demoTypingParticipants(ChatState state) {
@@ -802,11 +843,15 @@ class _ChatState extends State<Chat> {
     return participants;
   }
 
-  void _appendTaskShareText(CalendarTask task) {
-    final String shareText = task.toShareText();
+  void _appendTaskShareText(
+    CalendarTask task, {
+    String? shareText,
+  }) {
+    final String resolvedShareText = shareText ?? task.toShareText();
     final String existing = _textController.text;
-    final String separator = existing.trim().isEmpty ? '' : '\n\n';
-    final String nextText = '$existing$separator$shareText';
+    final String separator =
+        existing.trim().isEmpty ? _emptyText : _composerShareSeparator;
+    final String nextText = '$existing$separator$resolvedShareText';
     _textController.value = _textController.value.copyWith(
       text: nextText,
       selection: TextSelection.collapsed(offset: nextText.length),
@@ -815,8 +860,67 @@ class _ChatState extends State<Chat> {
     _focusNode.requestFocus();
   }
 
+  _CalendarFragmentShare? _resolveCalendarFragmentShare(CalendarTask task) {
+    final chatState = context.read<ChatBloc>().state;
+    final chat = chatState.chat;
+    if (chat == null) {
+      return null;
+    }
+    final decision = _calendarFragmentPolicy.decisionForChat(
+      chat: chat,
+      roomState: chatState.roomState,
+    );
+    final CalendarFragment fragment = _calendarFragmentPolicy.redactFragment(
+      CalendarFragment.task(task: task),
+      decision.visibility,
+    );
+    final String shareText =
+        _calendarFragmentFormatter.describe(fragment).trim();
+    if (shareText.isEmpty) {
+      return null;
+    }
+    if (!decision.canWrite) {
+      _showSnackbar(_calendarFragmentShareDeniedMessage);
+      return _CalendarFragmentShare(
+        fragment: null,
+        text: shareText,
+      );
+    }
+    return _CalendarFragmentShare(
+      fragment: fragment,
+      text: shareText,
+    );
+  }
+
   void _handleTaskDrop(CalendarDragPayload payload) {
-    _appendTaskShareText(payload.snapshot);
+    final share = _resolveCalendarFragmentShare(payload.snapshot);
+    if (share == null) {
+      return;
+    }
+    if (share.fragment == null) {
+      if (_pendingCalendarFragment != null ||
+          _pendingCalendarSeedText != null) {
+        if (!mounted) return;
+        setState(() {
+          _pendingCalendarFragment = null;
+          _pendingCalendarSeedText = null;
+        });
+      }
+      _appendTaskShareText(
+        payload.snapshot,
+        shareText: share.text,
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _pendingCalendarFragment = share.fragment;
+      _pendingCalendarSeedText = share.text;
+    });
+    _appendTaskShareText(
+      payload.snapshot,
+      shareText: share.text,
+    );
   }
 
   KeyEventResult _handleSubjectKeyEvent(FocusNode node, KeyEvent event) {
@@ -1281,7 +1385,10 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleSendMessage() {
-    final text = _textController.text.trim();
+    final rawText = _textController.text.trim();
+    final seedText = _pendingCalendarSeedText;
+    final String resolvedText =
+        rawText.isNotEmpty ? rawText : (seedText ?? _emptyText);
     final bool hasPreparingAttachments =
         context.read<ChatBloc>().state.pendingAttachments.any(
               (attachment) => attachment.isPreparing,
@@ -1293,11 +1400,23 @@ class _ChatState extends State<Chat> {
             );
     final hasSubject = _subjectController.text.trim().isNotEmpty;
     final canSend = !hasPreparingAttachments &&
-        (text.isNotEmpty || hasQueuedAttachments || hasSubject);
+        (resolvedText.isNotEmpty || hasQueuedAttachments || hasSubject);
     if (!canSend) return;
-    context.read<ChatBloc>().add(ChatMessageSent(text: text));
-    if (text.isNotEmpty) {
+    context.read<ChatBloc>().add(
+          ChatMessageSent(
+            text: resolvedText,
+            calendarFragment: _pendingCalendarFragment,
+          ),
+        );
+    if (resolvedText.isNotEmpty) {
       _textController.clear();
+    }
+    if (_pendingCalendarFragment != null || _pendingCalendarSeedText != null) {
+      if (!mounted) return;
+      setState(() {
+        _pendingCalendarFragment = null;
+        _pendingCalendarSeedText = null;
+      });
     }
     _focusNode.requestFocus();
   }
@@ -3142,6 +3261,8 @@ class _ChatState extends State<Chat> {
                                             'trusted': e.trusted,
                                             'isSelf': isSelf,
                                             'model': e,
+                                            _calendarFragmentPropertyKey:
+                                                e.calendarFragment,
                                             'quoted': quotedMessage,
                                             'reactions': e.reactionsPreview,
                                             'shareContext': shareContext,
@@ -3654,6 +3775,28 @@ class _ChatState extends State<Chat> {
                                                             ),
                                                           );
                                                         }
+                                                        final CalendarFragment?
+                                                            rawFragment =
+                                                            message.customProperties?[
+                                                                    _calendarFragmentPropertyKey]
+                                                                as CalendarFragment?;
+                                                        final CalendarFragmentVisibility
+                                                            fragmentVisibility =
+                                                            _calendarFragmentPolicy
+                                                                .visibilityForChat(
+                                                          chat: state.chat,
+                                                          roomState:
+                                                              state.roomState,
+                                                        );
+                                                        final CalendarFragment?
+                                                            displayFragment =
+                                                            rawFragment == null
+                                                                ? null
+                                                                : _calendarFragmentPolicy
+                                                                    .redactFragment(
+                                                                    rawFragment,
+                                                                    fragmentVisibility,
+                                                                  );
                                                         final verification =
                                                             trusted == null
                                                                 ? null
@@ -4022,12 +4165,65 @@ class _ChatState extends State<Chat> {
                                                                           'renderedText']
                                                                       as String?) ??
                                                                   message.text;
+                                                          final String
+                                                              trimmedRenderedText =
+                                                              rawRenderedText
+                                                                  .trim();
+                                                          final String?
+                                                              fragmentFallbackText =
+                                                              displayFragment ==
+                                                                      null
+                                                                  ? null
+                                                                  : _calendarFragmentFormatter
+                                                                      .describe(
+                                                                        displayFragment,
+                                                                      )
+                                                                      .trim();
+                                                          final bool
+                                                              hideFragmentText =
+                                                              fragmentFallbackText !=
+                                                                      null &&
+                                                                  fragmentFallbackText
+                                                                      .isNotEmpty &&
+                                                                  fragmentFallbackText ==
+                                                                      trimmedRenderedText;
+                                                          final List<InlineSpan>
+                                                              fragmentDetails =
+                                                              <InlineSpan>[
+                                                            time,
+                                                            transportDetail,
+                                                            if (self &&
+                                                                status != null)
+                                                              status,
+                                                            if (verification !=
+                                                                null)
+                                                              verification,
+                                                          ];
+                                                          final List<InlineSpan>
+                                                              fragmentFooterDetails =
+                                                              hideFragmentText
+                                                                  ? fragmentDetails
+                                                                  : _emptyInlineSpans;
+                                                          if (displayFragment !=
+                                                              null) {
+                                                            bubbleChildren.add(
+                                                              CalendarFragmentCard(
+                                                                fragment:
+                                                                    displayFragment,
+                                                                footerDetails:
+                                                                    fragmentFooterDetails,
+                                                              ),
+                                                            );
+                                                          }
                                                           final metadataIdForCaption =
                                                               messageModel
                                                                   .fileMetadataID;
+                                                          final bool
+                                                              shouldRenderTextContent =
+                                                              !hideFragmentText;
                                                           final showAttachmentCaption =
-                                                              rawRenderedText
-                                                                      .trim()
+                                                              shouldRenderTextContent &&
+                                                                  trimmedRenderedText
                                                                       .isEmpty &&
                                                                   metadataIdForCaption
                                                                           ?.isNotEmpty ==
@@ -4107,7 +4303,8 @@ class _ChatState extends State<Chat> {
                                                                   null &&
                                                               messageModel
                                                                   .htmlBody!
-                                                                  .isNotEmpty) {
+                                                                  .isNotEmpty &&
+                                                              shouldRenderTextContent) {
                                                             // Render HTML email content
                                                             final shouldLoadImages = context
                                                                     .read<
@@ -4219,7 +4416,7 @@ class _ChatState extends State<Chat> {
                                                                 ),
                                                               ),
                                                             );
-                                                          } else {
+                                                          } else if (shouldRenderTextContent) {
                                                             bubbleChildren.add(
                                                               DynamicInlineText(
                                                                 key: ValueKey(

@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:async/async.dart';
+import 'package:axichat/src/calendar/models/calendar_fragment.dart';
+import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/event_transform.dart';
@@ -214,6 +216,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static const messageBatchSize = 50;
   static final RegExp _axiDomainPattern =
       RegExp(r'@(?:[\\w-]+\\.)*axi\\.im$', caseSensitive: false);
+  static const CalendarFragmentPolicy _calendarFragmentPolicy =
+      CalendarFragmentPolicy();
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
     final normalized = value.trim().toLowerCase();
@@ -308,7 +312,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<int> _archivedMessageCount(Chat chat) {
     if (_messageService.messageStorageMode.isServerOnly) {
       final visibleMessages = state.items.where(
-        (message) => message.pseudoMessageType == null,
+        (message) =>
+            message.pseudoMessageType == null ||
+            message.pseudoMessageType!.isCalendarFragment,
       );
       return Future<int>.value(visibleMessages.length);
     }
@@ -1306,6 +1312,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null) return;
     final trimmedText = event.text.trim();
+    final CalendarFragment? requestedFragment = event.calendarFragment;
+    final CalendarFragmentShareDecision fragmentDecision =
+        _calendarFragmentPolicy.decisionForChat(
+      chat: chat,
+      roomState: state.roomState,
+    );
+    final CalendarFragment? effectiveFragment =
+        requestedFragment == null || !fragmentDecision.canWrite
+            ? null
+            : _calendarFragmentPolicy.redactFragment(
+                requestedFragment,
+                fragmentDecision.visibility,
+              );
     final attachments = List<PendingAttachment>.from(state.pendingAttachments);
     final queuedAttachments = attachments
         .where((attachment) =>
@@ -1346,6 +1365,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       subject: state.emailSubject,
     );
     final hasXmppBody = xmppBody.isNotEmpty;
+    final CalendarFragment? fragmentForXmpp =
+        hasQueuedAttachments ? null : effectiveFragment;
+    final Chat? soleRecipientChat =
+        xmppRecipients.length == 1 ? xmppRecipients.first.target.chat : null;
+    final CalendarFragment? fanOutFragment =
+        soleRecipientChat?.jid == chat.jid ? fragmentForXmpp : null;
     final service = _emailService;
     if (requiresEmail && service == null) {
       emit(
@@ -1473,6 +1498,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _sendXmppFanOut(
           recipients: xmppRecipients,
           body: xmppBody,
+          calendarFragment: fanOutFragment,
           quotedDraft: quotedDraft,
         );
         xmppSendSucceeded = true;
@@ -1486,6 +1512,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           text: xmppBody,
           encryptionProtocol: chat.encryptionProtocol,
           quotedMessage: sameChatQuote,
+          calendarFragment: fragmentForXmpp,
           chatType: chat.type,
         );
         xmppSendSucceeded = true;
@@ -2691,6 +2718,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _sendXmppFanOut({
     required List<ComposerRecipient> recipients,
     required String body,
+    CalendarFragment? calendarFragment,
     required Message? quotedDraft,
   }) async {
     final processed = <String>{};
@@ -2709,6 +2737,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         text: body,
         encryptionProtocol: targetChat.encryptionProtocol,
         quotedMessage: quote,
+        calendarFragment: calendarFragment,
         chatType: targetChat.type,
       );
     }
