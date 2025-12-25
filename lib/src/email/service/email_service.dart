@@ -19,6 +19,7 @@ import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -282,6 +283,7 @@ class EmailService {
     if (needsInit) {
       _databasePrefix = databasePrefix;
       _databasePassphrase = databasePassphrase;
+      _resetImapCapabilities();
       await _transport.ensureInitialized(
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
@@ -383,6 +385,7 @@ class EmailService {
           displayName: displayName,
           additional: _buildConnectionConfig(normalizedAddress),
         );
+        _resetImapCapabilities();
         await _transport.purgeStockMessages();
         if (shouldPersistCredentials) {
           await _credentialStore.write(key: provisionedKey, value: 'true');
@@ -438,6 +441,7 @@ class EmailService {
 
     _transport.hydrateAccountAddress(normalizedAddress);
     await start();
+    unawaited(_refreshImapCapabilities(force: true));
     await _applyPendingPushToken();
 
     final account = EmailAccount(
@@ -475,6 +479,8 @@ class EmailService {
       displayName: displayName,
       additional: _buildConnectionConfig(address),
     );
+    _resetImapCapabilities();
+    unawaited(_refreshImapCapabilities(force: true));
     _activeCredentialScope = scope;
     _activeAccount = EmailAccount(address: address, password: password);
   }
@@ -509,6 +515,7 @@ class EmailService {
   }) async {
     await stop();
     await _stopForegroundKeepalive();
+    _resetImapCapabilities();
     _clearNotificationQueue();
     if (!clearCredentials) {
       return;
@@ -769,6 +776,20 @@ class EmailService {
     final resolvedToken = existingShare?.subjectToken ??
         (shouldUseToken ? _shareTokenForShare(resolvedShareId) : null);
     final resolvedSubject = normalizedSubject ?? existingShare?.subject;
+    final resolvedHtmlBody = resolvedToken == null
+        ? normalizedHtmlBody
+        : ShareTokenHtmlCodec.injectToken(
+            html: normalizedHtmlBody,
+            token: resolvedToken,
+            asSignature: tokenAsSignature,
+          );
+    final resolvedHtmlCaption = resolvedToken == null
+        ? normalizedHtmlCaption
+        : ShareTokenHtmlCodec.injectToken(
+            html: normalizedHtmlCaption,
+            token: resolvedToken,
+            asSignature: tokenAsSignature,
+          );
 
     final transmitBody = resolvedToken != null
         ? ShareTokenCodec.injectToken(
@@ -843,7 +864,7 @@ class EmailService {
               subject: resolvedSubject,
               shareId: resolvedShareId,
               captionOverride: sanitizedCaption,
-              htmlCaption: normalizedHtmlCaption,
+              htmlCaption: resolvedHtmlCaption,
             ),
           );
         } else {
@@ -855,7 +876,7 @@ class EmailService {
               subject: resolvedSubject,
               shareId: resolvedShareId,
               localBodyOverride: sanitizedBody,
-              htmlBody: normalizedHtmlBody,
+              htmlBody: resolvedHtmlBody,
             ),
           );
         }
@@ -1832,6 +1853,16 @@ class EmailService {
       return _imapSentPollIntervalSingleConnection;
     }
     return capabilities.idleCutoff;
+  }
+
+  void _resetImapCapabilities() {
+    _imapCapabilities = const EmailImapCapabilities(
+      idleSupported: false,
+      connectionLimit: _imapConnectionLimitSingle,
+      idleCutoff: _imapIdleKeepaliveInterval,
+    );
+    _imapCapabilitiesCheckedAt = null;
+    _imapCapabilitiesResolved = false;
   }
 
   Future<void> _refreshImapCapabilities({bool force = false}) async {

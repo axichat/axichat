@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
-import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -453,6 +453,7 @@ class DeltaEventConsumer {
       db: db,
       message: message,
       rawBody: msg.text,
+      rawHtml: msg.html,
       chatId: chatId,
       msgId: msg.id,
     );
@@ -698,10 +699,14 @@ class DeltaEventConsumer {
     required XmppDatabase db,
     required Message message,
     required String? rawBody,
+    required String? rawHtml,
     required int chatId,
     required int msgId,
   }) async {
-    final match = ShareTokenCodec.stripToken(rawBody);
+    final match = ShareTokenHtmlCodec.parseToken(
+      plainText: rawBody,
+      html: rawHtml,
+    );
     if (match == null) {
       return message;
     }
@@ -709,7 +714,12 @@ class DeltaEventConsumer {
     final cleanedBody = share?.subject?.isNotEmpty == true
         ? _stripSubjectHeader(match.cleanedBody, share!.subject!)
         : match.cleanedBody;
-    final sanitized = message.copyWith(body: cleanedBody);
+    final cleanedHtml =
+        ShareTokenHtmlCodec.stripInjectedToken(message.htmlBody);
+    final sanitized = message.copyWith(
+      body: cleanedBody,
+      htmlBody: cleanedHtml,
+    );
     if (share != null) {
       await db.insertMessageCopy(
         shareId: share.shareId,
