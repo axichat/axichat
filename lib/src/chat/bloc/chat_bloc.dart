@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:async/async.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
@@ -102,6 +103,9 @@ class ChatToast extends Equatable {
 
 enum MamPageDirection { before, after }
 
+const String _availabilitySendFailureLog =
+    'Failed to send availability message';
+
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static final Set<String> _seededDemoPendingAttachmentJids = <String>{};
 
@@ -136,6 +140,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
     );
+    on<ChatAvailabilityMessageSent>(_onChatAvailabilityMessageSent);
     on<ChatMuted>(_onChatMuted);
     on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
@@ -1567,6 +1572,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           (state.emailSubject?.isNotEmpty ?? false)) {
         _clearEmailSubject(emit);
       }
+    }
+  }
+
+  Future<void> _onChatAvailabilityMessageSent(
+    ChatAvailabilityMessageSent event,
+    Emitter<ChatState> emit,
+  ) async {
+    _stopTyping();
+    emit(state.copyWith(typing: false));
+    final chat = state.chat;
+    if (chat == null || _isEmailChat) {
+      return;
+    }
+    if (chat.type == ChatType.groupChat) {
+      await _ensureMucMembership(chat);
+    }
+    try {
+      await _messageService.sendAvailabilityMessage(
+        jid: chat.jid,
+        message: event.message,
+        chatType: chat.type,
+      );
+    } catch (error, stackTrace) {
+      _log.warning(_availabilitySendFailureLog, error, stackTrace);
     }
   }
 
