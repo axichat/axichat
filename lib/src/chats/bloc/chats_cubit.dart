@@ -265,10 +265,14 @@ class ChatsCubit extends Cubit<ChatsState> {
     final chat = await _resolveChat(jid);
     final emailService = _emailService;
     if (chat != null && chat.defaultTransport.isEmail && emailService != null) {
-      await _deleteEmailMessagesForChat(
-        chat: chat,
-        emailService: emailService,
-      );
+      try {
+        await _deleteEmailMessagesForChat(
+          chat: chat,
+          emailService: emailService,
+        );
+      } on Exception {
+        // Best-effort: core delete should not block local cleanup.
+      }
     }
     await _chatsService.deleteChatMessages(jid: jid);
   }
