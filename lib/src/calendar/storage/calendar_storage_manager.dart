@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 import 'package:axichat/src/storage/impatient_completer.dart';
-import 'calendar_hydrated_storage.dart';
 import 'calendar_storage_registry.dart';
 import 'storage_builders.dart';
 
@@ -19,11 +18,19 @@ class CalendarStorageManager extends ChangeNotifier {
       : _registry = registry;
 
   final CalendarStorageRegistry _registry;
-  Storage? _guestStorage;
+  ImpatientCompleter<Storage>? _guestStorageCompleter;
   ImpatientCompleter<Storage>? _authStorageCompleter;
 
   /// The currently registered guest storage, if any.
-  Storage? get guestStorage => _guestStorage;
+  Storage? get guestStorage => _guestStorageCompleter?.value;
+
+  /// Future that completes when guest storage is ready.
+  ///
+  /// Returns null if [ensureGuestStorage] hasn't been called yet.
+  Future<Storage>? get guestStorageFuture => _guestStorageCompleter?.future;
+
+  /// Whether guest storage initialization has completed.
+  bool get isGuestStorageReady => _guestStorageCompleter?.isCompleted ?? false;
 
   /// The currently registered authenticated storage, if any.
   ///
@@ -41,17 +48,26 @@ class CalendarStorageManager extends ChangeNotifier {
 
   /// Ensures guest calendar hydrated storage exists and is registered.
   Future<Storage> ensureGuestStorage() async {
-    if (_guestStorage != null) return _guestStorage!;
+    if (_guestStorageCompleter != null) {
+      return _guestStorageCompleter!.future;
+    }
 
-    final storage = await CalendarHydratedStorage.open(
-      boxName: 'guest_calendar_state',
-      prefix: guestStoragePrefix,
-    );
+    final ImpatientCompleter<Storage> completer =
+        ImpatientCompleter<Storage>(Completer<Storage>());
+    _guestStorageCompleter = completer;
 
-    _registry.registerPrefix(guestStoragePrefix, storage);
+    try {
+      final Storage storage = await buildGuestCalendarStorage();
+      _registry.registerPrefix(guestStoragePrefix, storage);
 
-    _guestStorage = storage;
-    return storage;
+      completer.complete(storage);
+      notifyListeners();
+      return storage;
+    } catch (e, st) {
+      completer.completeError(e, st);
+      _guestStorageCompleter = null;
+      rethrow;
+    }
   }
 
   /// Ensures authenticated calendar hydrated storage exists and is registered.
@@ -65,7 +81,8 @@ class CalendarStorageManager extends ChangeNotifier {
       return _authStorageCompleter!.future;
     }
 
-    final completer = ImpatientCompleter<Storage>(Completer<Storage>());
+    final ImpatientCompleter<Storage> completer =
+        ImpatientCompleter<Storage>(Completer<Storage>());
     _authStorageCompleter = completer;
 
     try {

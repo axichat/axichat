@@ -8,16 +8,35 @@ class SafeLogging {
   static const int _secretPreviewPrefixLength = 4;
 
   static const int _maxInputLengthForFullSanitize = 1024;
+  static const int _xmppTrafficScanLimit = 512;
+  static const int _xmppErrorScanLimit = 2048;
+  static const int _notFoundIndex = -1;
 
   static const String _xmppTrafficOutPrefix = '==>';
   static const String _xmppTrafficInPrefix = '<==';
   static const String _xmppAvatarDataXmlns = 'urn:xmpp:avatar:data';
   static const String _xmppAvatarMetadataXmlns = 'urn:xmpp:avatar:metadata';
+  static const String _xmppMamXmlnsPrefix = 'urn:xmpp:mam';
+  static const String _xmppErrorTypeValue = 'error';
+  static const String _xmppErrorTagStart = '<error';
+  static const String _xmppErrorTagEnd = '</error>';
+  static const String _xmppErrorTagName = 'error';
+  static const String _xmppErrorTextTagName = 'text';
+  static const String _calendarSyncTag = 'calendar_sync';
 
   static final RegExp _xmppTrafficFirstTagPattern =
       RegExp(r'^<\s*([A-Za-z0-9:_-]+)');
   static final RegExp _xmppTrafficTypeAttrPattern =
       RegExp(r'''\btype\s*=\s*['"]([^'"]+)['"]''', caseSensitive: false);
+  static final RegExp _xmppErrorTypeAttrPattern = RegExp(
+    r'''<error\b[^>]*\btype\s*=\s*['"]([^'"]+)['"]''',
+    caseSensitive: false,
+  );
+  static final RegExp _xmppErrorCodeAttrPattern = RegExp(
+    r'''<error\b[^>]*\bcode\s*=\s*['"]([^'"]+)['"]''',
+    caseSensitive: false,
+  );
+  static final RegExp _xmppAnyTagPattern = RegExp(r'<\s*([A-Za-z0-9:_-]+)\b');
 
   static final RegExp _xmlBodyPattern = RegExp(
     r'(<body\b[^>]*>).*?(</body>)',
@@ -52,6 +71,10 @@ class SafeLogging {
       RegExp('\\b[a-fA-F0-9]{$_minSecretLength,}\\b');
   static final RegExp _tokenSecretPattern =
       RegExp('\\b[A-Za-z0-9_-]{$_minSecretLength,}\\b');
+  static const Set<String> _xmppErrorIgnoredTags = <String>{
+    _xmppErrorTagName,
+    _xmppErrorTextTagName,
+  };
 
   static String sanitizeMessage(String message) => _sanitize(message);
 
@@ -122,9 +145,10 @@ class SafeLogging {
         : _xmppTrafficOutPrefix;
 
     final stanzaStartIndex = input.indexOf('<');
-    final headerStart = stanzaStartIndex == -1 ? 0 : stanzaStartIndex;
+    final headerStart =
+        stanzaStartIndex == _notFoundIndex ? 0 : stanzaStartIndex;
     final headerEnd = input.indexOf('>', headerStart);
-    final headerLimit = headerEnd == -1
+    final headerLimit = headerEnd == _notFoundIndex
         ? (headerStart + 256).clamp(0, totalLength)
         : (headerEnd + 1).clamp(0, totalLength);
     final header = input.substring(headerStart, headerLimit);
@@ -132,18 +156,26 @@ class SafeLogging {
     final tag = _xmppTrafficFirstTagPattern.firstMatch(header)?.group(1);
     final type = _xmppTrafficTypeAttrPattern.firstMatch(header)?.group(1);
 
-    final scanLimit = totalLength < 512 ? totalLength : 512;
+    final scanLimit = totalLength < _xmppTrafficScanLimit
+        ? totalLength
+        : _xmppTrafficScanLimit;
     final scannedPrefix = input.substring(0, scanLimit);
     final flags = <String>[
       if (scannedPrefix.contains(_xmppAvatarDataXmlns)) _xmppAvatarDataXmlns,
       if (scannedPrefix.contains(_xmppAvatarMetadataXmlns))
         _xmppAvatarMetadataXmlns,
+      if (scannedPrefix.contains(_xmppMamXmlnsPrefix)) _xmppMamXmlnsPrefix,
+      if (scannedPrefix.contains(_calendarSyncTag)) _calendarSyncTag,
     ];
     final renderedTag = tag == null ? '' : ' <$tag>';
     final renderedType = type == null ? '' : ' type=$type';
     final renderedFlags = flags.isEmpty ? '' : ' flags=${flags.join(',')}';
+    final errorSummary =
+        type == _xmppErrorTypeValue ? _summarizeXmppError(input) : null;
+    final renderedError = errorSummary == null ? '' : ' error=$errorSummary';
 
-    return '$direction ($totalLength chars)$renderedTag$renderedType$renderedFlags';
+    return '$direction ($totalLength chars)$renderedTag$renderedType'
+        '$renderedFlags$renderedError';
   }
 
   static String _redactSecretMatch(Match match) {
@@ -152,5 +184,44 @@ class SafeLogging {
     if (value.length <= _minSecretPreviewLength) return redactedSecret;
     final prefix = value.substring(0, _secretPreviewPrefixLength);
     return '$redactedSecret($prefix…len=${value.length})';
+  }
+
+  static String? _summarizeXmppError(String input) {
+    final errorStart = input.indexOf(_xmppErrorTagStart);
+    if (errorStart == _notFoundIndex) {
+      return _xmppErrorTypeValue;
+    }
+    final errorEnd = input.indexOf(_xmppErrorTagEnd, errorStart);
+    final errorLimit =
+        (errorStart + _xmppErrorScanLimit).clamp(0, input.length);
+    final segmentEnd = errorEnd == _notFoundIndex
+        ? errorLimit
+        : errorEnd.clamp(0, input.length);
+    final errorSegment = input.substring(errorStart, segmentEnd);
+    final errorType =
+        _xmppErrorTypeAttrPattern.firstMatch(errorSegment)?.group(1);
+    final errorCode =
+        _xmppErrorCodeAttrPattern.firstMatch(errorSegment)?.group(1);
+    final errorCondition = _firstXmppErrorCondition(errorSegment);
+    final parts = <String>[
+      if (errorType != null && errorType.isNotEmpty) errorType,
+      if (errorCode != null && errorCode.isNotEmpty) errorCode,
+      if (errorCondition != null && errorCondition.isNotEmpty) errorCondition,
+    ];
+    if (parts.isEmpty) {
+      return _xmppErrorTypeValue;
+    }
+    return parts.join('/');
+  }
+
+  static String? _firstXmppErrorCondition(String input) {
+    for (final match in _xmppAnyTagPattern.allMatches(input)) {
+      final raw = match.group(1);
+      if (raw == null || raw.isEmpty) continue;
+      final normalized = raw.toLowerCase();
+      if (_xmppErrorIgnoredTags.contains(normalized)) continue;
+      return normalized;
+    }
+    return null;
   }
 }

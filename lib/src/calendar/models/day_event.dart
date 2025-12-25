@@ -2,14 +2,18 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
+import 'calendar_ics_meta.dart';
+import 'calendar_item.dart';
 import 'reminder_preferences.dart';
 
 part 'day_event.freezed.dart';
 part 'day_event.g.dart';
 
+const int _dayEventIcsMetaField = 8;
+
 @freezed
 @HiveType(typeId: 40)
-class DayEvent with _$DayEvent {
+class DayEvent with _$DayEvent implements CalendarItemBase {
   const factory DayEvent({
     @HiveField(0) required String id,
     @HiveField(1) required String title,
@@ -19,9 +23,13 @@ class DayEvent with _$DayEvent {
     @HiveField(5) ReminderPreferences? reminders,
     @HiveField(6) required DateTime createdAt,
     @HiveField(7) required DateTime modifiedAt,
+    @HiveField(_dayEventIcsMetaField) CalendarIcsMeta? icsMeta,
   }) = _DayEvent;
 
   const DayEvent._();
+
+  @override
+  CalendarItemType get itemType => CalendarItemType.event;
 
   factory DayEvent.fromJson(Map<String, dynamic> json) =>
       _$DayEventFromJson(json);

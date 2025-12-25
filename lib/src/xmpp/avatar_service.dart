@@ -53,11 +53,16 @@ mixin AvatarService on XmppBase {
   final _avatarLog = Logger('AvatarService');
   final Set<String> _avatarRefreshInProgress = {};
   final Set<String> _configuredAvatarNodes = {};
+  final Map<String, DateTime> _conversationAvatarRefreshAttempts = {};
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
   static const int _maxAvatarBytes = 512 * 1024;
   static const int _maxAvatarBase64Length = ((_maxAvatarBytes + 2) ~/ 3) * 4;
   static const int _avatarBytesCacheLimit = 64;
+  static const int _conversationAvatarChatStart = 0;
+  static const int _conversationAvatarChatEnd = 0;
+  static const Duration _conversationAvatarRefreshCooldown =
+      Duration(minutes: 2);
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
   static const String _avatarConfigKeySeparator = '|';
   static const int _avatarPublishVerificationAttempts = 2;
@@ -129,6 +134,14 @@ mixin AvatarService on XmppBase {
           bareJid,
           metadata: event.metadata,
         );
+      })
+      ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
+        if (connectionState != ConnectionState.connected) return;
+        final peerJid = event.item.peerBare.toBare().toString();
+        if (peerJid.isEmpty) return;
+        if (peerJid == myJid) return;
+        if (!await _shouldRefreshConversationAvatar(peerJid)) return;
+        unawaited(_refreshConversationAvatars([peerJid]));
       })
       ..registerHandler<mox.VCardAvatarUpdatedEvent>((event) async {
         final bareJid = event.jid.toBare().toString();
@@ -242,6 +255,90 @@ mixin AvatarService on XmppBase {
     for (final jid in jids) {
       unawaited(_refreshAvatarForJid(jid, force: force));
     }
+  }
+
+  Future<void> _refreshConversationAvatars(Iterable<String> jids) async {
+    if (jids.isEmpty) return;
+    scheduleAvatarRefresh(jids);
+  }
+
+  Future<bool> _shouldRefreshConversationAvatar(String jid) async {
+    final now = DateTime.timestamp();
+    final lastAttempt = _conversationAvatarRefreshAttempts[jid];
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _conversationAvatarRefreshCooldown) {
+      return false;
+    }
+
+    final existingHash = await _storedAvatarHash(jid);
+    if (existingHash != null && existingHash.trim().isNotEmpty) {
+      final existingPath = await _storedAvatarPath(jid);
+      if (await _hasCachedAvatarFile(existingPath)) {
+        return false;
+      }
+    }
+
+    _conversationAvatarRefreshAttempts[jid] = now;
+    return true;
+  }
+
+  Future<void> refreshAvatarsForConversationIndex() async {
+    if (connectionState != ConnectionState.connected) return;
+    List<Chat> chats;
+    try {
+      chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
+        (db) => db.getChats(
+          start: _conversationAvatarChatStart,
+          end: _conversationAvatarChatEnd,
+        ),
+      );
+    } on XmppAbortedException {
+      return;
+    }
+    final directJids = <String>{};
+    for (final chat in chats) {
+      if (!chat.transport.isXmpp) continue;
+      if (chat.type != ChatType.chat) continue;
+      final jid = chat.remoteJid.trim();
+      if (jid.isEmpty) continue;
+      directJids.add(jid);
+    }
+    if (directJids.isNotEmpty) {
+      await _refreshConversationAvatars(directJids);
+    }
+    await refreshSelfAvatarIfNeeded(force: true);
+  }
+
+  Future<void> storeAvatarBytesForJid({
+    required String jid,
+    required Uint8List bytes,
+    String? hash,
+  }) async {
+    final bareJid = _avatarSafeBareJid(jid);
+    if (bareJid == null) return;
+    if (bytes.isEmpty) return;
+    if (bytes.length > _maxAvatarBytes) return;
+    if (!_isSupportedAvatarBytes(bytes)) return;
+    final resolvedHash = _resolveAvatarHash(bytes, hash);
+    try {
+      final existingHash = await _storedAvatarHash(bareJid);
+      if (existingHash != null && existingHash == resolvedHash) {
+        final existingPath = await _storedAvatarPath(bareJid);
+        if (await _hasCachedAvatarFile(existingPath)) {
+          return;
+        }
+      }
+      final path = await _writeAvatarFile(bytes: bytes);
+      await _storeAvatar(jid: bareJid, path: path, hash: resolvedHash);
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine('Failed to store avatar bytes.', error, stackTrace);
+    }
+  }
+
+  String _resolveAvatarHash(Uint8List bytes, String? hash) {
+    final trimmed = hash?.trim();
+    if (trimmed?.isNotEmpty == true) return trimmed!;
+    return sha1.convert(bytes).toString();
   }
 
   Future<void> prefetchAvatarForJid(String jid) async {

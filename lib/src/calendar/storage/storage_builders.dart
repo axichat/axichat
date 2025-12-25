@@ -7,20 +7,22 @@ import 'calendar_hydrated_storage.dart';
 
 const _guestPrefix = 'calendar_guest';
 const _authPrefix = 'calendar_auth';
+const _guestBoxName = 'guest_calendar_state';
+const _authBoxName = 'auth_calendar';
 
 String get guestStoragePrefix => _guestPrefix;
 String get authStoragePrefix => _authPrefix;
 
 Future<Storage> buildGuestCalendarStorage() {
   return CalendarHydratedStorage.open(
-    boxName: 'guest_calendar',
+    boxName: _guestBoxName,
     prefix: _guestPrefix,
   );
 }
 
 Future<Storage> buildAuthCalendarStorage({required List<int> encryptionKey}) {
   return CalendarHydratedStorage.open(
-    boxName: 'auth_calendar',
+    boxName: _authBoxName,
     prefix: _authPrefix,
     encryptionCipher: HydratedAesCipher(encryptionKey),
   );

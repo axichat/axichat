@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/widgets/recurrence_editor.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/schedule_range_utils.dart';
 
 /// Reusable controller that owns the mutable state for composing a task draft.
 /// Widgets can listen to this controller to rebuild when priority, schedule,
@@ -58,20 +59,18 @@ class TaskDraftController extends ChangeNotifier {
       return;
     }
 
+    final DateTime? previousStart = _startTime;
+    final DateTime? previousEnd = _endTime;
     _startTime = value;
+    _endTime = shiftEndTimeWithStart(
+      previousStart: previousStart,
+      previousEnd: previousEnd,
+      nextStart: value,
+    );
 
     if (value == null) {
-      if (_endTime != null) {
-        _endTime = null;
-        notifyListeners();
-      } else {
-        notifyListeners();
-      }
+      notifyListeners();
       return;
-    }
-
-    if (_endTime == null || !_endTime!.isAfter(value)) {
-      _endTime = value.add(const Duration(hours: 1));
     }
 
     if (_recurrence.frequency == RecurrenceFrequency.weekly &&
@@ -87,28 +86,12 @@ class TaskDraftController extends ChangeNotifier {
   }
 
   void updateEnd(DateTime? value) {
-    if (value == null) {
-      if (_endTime != null) {
-        _endTime = null;
-        notifyListeners();
-      }
+    final DateTime? clamped = clampEndTime(start: _startTime, end: value);
+    if (clamped == _endTime) {
       return;
     }
-
-    if (_startTime != null && !value.isAfter(_startTime!)) {
-      final DateTime adjusted = _startTime!.add(const Duration(minutes: 15));
-      if (_endTime == adjusted) {
-        return;
-      }
-      _endTime = adjusted;
-      notifyListeners();
-      return;
-    }
-
-    if (_endTime != value) {
-      _endTime = value;
-      notifyListeners();
-    }
+    _endTime = clamped;
+    notifyListeners();
   }
 
   void clearSchedule() {

@@ -36,6 +36,7 @@ import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
@@ -180,6 +181,34 @@ class HttpUploadSupport {
   int get hashCode => Object.hash(supported, entityJid, maxFileSizeBytes);
 }
 
+class PubSubSupport {
+  const PubSubSupport({
+    required this.pubSubSupported,
+    required this.pepSupported,
+    required this.bookmarks2Supported,
+  });
+
+  final bool pubSubSupported;
+  final bool pepSupported;
+  final bool bookmarks2Supported;
+
+  bool get canUsePepNodes => pubSubSupported && pepSupported;
+
+  bool get canUseBookmarks2 => canUsePepNodes && bookmarks2Supported;
+
+  @override
+  bool operator ==(Object other) {
+    return other is PubSubSupport &&
+        other.pubSubSupported == pubSubSupported &&
+        other.pepSupported == pepSupported &&
+        other.bookmarks2Supported == bookmarks2Supported;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(pubSubSupported, pepSupported, bookmarks2Supported);
+}
+
 class StoredAvatar {
   const StoredAvatar({
     required this.path,
@@ -204,6 +233,8 @@ final serverLookup = <String, IOEndpoint>{
   'draugr.de': const IOEndpoint('23.88.8.69', 5222),
   'jix.im': const IOEndpoint('51.77.59.5', 5222),
 };
+
+const String _bookmarks2NodeXmlns = 'urn:xmpp:bookmarks:1';
 
 bool _isFirstPartyJid({
   required mox.JID? myJid,
@@ -240,6 +271,12 @@ abstract interface class XmppBase {
   mox.JID? get _myJid;
 
   HttpUploadSupport get httpUploadSupport;
+
+  PubSubSupport get pubSubSupport;
+
+  Stream<PubSubSupport> get pubSubSupportStream;
+
+  Future<PubSubSupport> refreshPubSubSupport({bool force = false});
 
   RegisteredStateKey get selfAvatarPathKey;
 
@@ -385,6 +422,13 @@ class XmppService extends XmppBase
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
   var _httpUploadSupport = const HttpUploadSupport(supported: false);
+  final _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
+  var _pubSubSupport = const PubSubSupport(
+    pubSubSupported: false,
+    pepSupported: false,
+    bookmarks2Supported: false,
+  );
+  var _pubSubSupportResolved = false;
 
   bool get mamSupported => _mamSupported;
 
@@ -395,6 +439,13 @@ class XmppService extends XmppBase
 
   Stream<HttpUploadSupport> get httpUploadSupportStream =>
       _httpUploadSupportController.stream;
+
+  @override
+  PubSubSupport get pubSubSupport => _pubSubSupport;
+
+  @override
+  Stream<PubSubSupport> get pubSubSupportStream =>
+      _pubSubSupportController.stream;
 
   @override
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
@@ -468,9 +519,8 @@ class XmppService extends XmppBase
     manager
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         _setConnectionState(event.state);
-        if (event.state == ConnectionState.error ||
-            event.state == ConnectionState.notConnected) {
-          unawaited(_triggerImmediateReconnectIfAppropriate());
+        if (event.state != ConnectionState.connected) {
+          _pubSubSupportResolved = false;
         }
       })
       ..registerHandler<mox.StanzaAckedEvent>((event) async {
@@ -495,6 +545,7 @@ class XmppService extends XmppBase
         if (!event.resumed && _streamResumptionAttempted) {
           final sm = _connection.getManager<XmppStreamManagementManager>();
           await sm?.handleFailedResumption();
+          unawaited(_syncAfterReconnect());
         }
         _streamResumptionAttempted = false;
         if (!event.resumed) {
@@ -514,6 +565,7 @@ class XmppService extends XmppBase
         }
         if (event.resumed) return;
         unawaited(_refreshHttpUploadSupport());
+        unawaited(_refreshPubSubSupport());
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
@@ -534,58 +586,26 @@ class XmppService extends XmppBase
           final sm = _connection.getManager<XmppStreamManagementManager>();
           await sm?.resetState();
           await sm?.clearPersistedState();
+          _reconnectBlocked = false;
           await _connection.setShouldReconnect(true);
           if (await _connection.reconnectionPolicy.canTriggerFailure()) {
             await _connection.reconnectionPolicy.onFailure();
           }
+          return;
+        }
+
+        _reconnectBlocked = true;
+        _sessionReconnectEnabled = false;
+        try {
+          await _connection.setShouldReconnect(false);
+        } catch (error, stackTrace) {
+          _xmppLogger.fine(
+            _nonRecoverableReconnectDisableLog,
+            error,
+            stackTrace,
+          );
         }
       });
-  }
-
-  Future<void> _triggerImmediateReconnectIfAppropriate() async {
-    if (!_synchronousConnection.isCompleted) {
-      return;
-    }
-    if (!_connection.hasConnectionSettings) {
-      return;
-    }
-    if (!await _connection.reconnectionPolicy.getShouldReconnect()) {
-      if (!_sessionReconnectEnabled) {
-        return;
-      }
-      try {
-        await _connection.setShouldReconnect(true);
-      } catch (error) {
-        _xmppLogger.finer(
-          'Failed to enable reconnection before triggering immediate reconnect: ${error.runtimeType}.',
-        );
-        return;
-      }
-    }
-
-    final lifecycleState = SchedulerBinding.instance.lifecycleState;
-    final appVisible = lifecycleState == null ||
-        lifecycleState == AppLifecycleState.resumed ||
-        lifecycleState == AppLifecycleState.inactive;
-    if (!appVisible && !(withForeground && foregroundServiceActive.value)) {
-      return;
-    }
-
-    try {
-      _setConnectionState(ConnectionState.connecting);
-      await _connection.triggerImmediateReconnect();
-
-      // Ensure state isn't stuck if reconnection didn't actually start.
-      if (connectionState == ConnectionState.connecting &&
-          !await _connection.isReconnecting()) {
-        _setConnectionState(ConnectionState.notConnected);
-      }
-    } catch (error) {
-      _xmppLogger.finer(
-        'Immediate reconnect trigger failed: ${error.runtimeType}.',
-      );
-      _setConnectionState(ConnectionState.notConnected);
-    }
   }
 
   @override
@@ -600,7 +620,10 @@ class XmppService extends XmppBase
             name: appDisplayName,
           ),
         ])
-          ..addFeatures(const [BookmarksManager.bookmarksNotifyFeature])),
+          ..addFeatures(const [
+            BookmarksManager.bookmarksNotifyFeature,
+            conversationIndexNotifyFeature,
+          ])),
         mox.PingManager(const Duration(minutes: 3)),
         mox.EntityCapabilitiesManager(_capabilityHashBase),
         SafePubSubManager(),
@@ -679,6 +702,10 @@ class XmppService extends XmppBase
   static const _connectivityRepairReasonStanzaAcked = 'stanza acked';
   static const _connectivityRepairReasonStreamNegotiationsDone =
       'stream negotiations done';
+  static const _nonRecoverableReconnectDisableLog =
+      'Failed to disable reconnection after non-recoverable error.';
+  static const _reconnectEnableFailedLog =
+      'Failed to enable reconnection before requesting reconnect.';
 
   void _setConnectionState(ConnectionState state) {
     if (_connectionState == state) {
@@ -720,7 +747,9 @@ class XmppService extends XmppBase
   }
 
   var _synchronousConnection = Completer<void>();
-  var _sessionReconnectEnabled = false;
+  bool _sessionReconnectEnabled = false;
+  bool _connectInFlight = false;
+  bool _reconnectBlocked = false;
   var _foregroundServiceNotificationSent = false;
   var _streamResumptionAttempted = false;
   var _connectionPasswordPreHashed = false;
@@ -743,6 +772,7 @@ class XmppService extends XmppBase
   }) async {
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
+    _reconnectBlocked = false;
     if (_synchronousConnection.isCompleted && connected) {
       throw XmppAlreadyConnectedException();
     }
@@ -808,6 +838,15 @@ class XmppService extends XmppBase
   static const _foregroundSocketMigrationCooldown = Duration(seconds: 30);
   static const _foregroundSocketWarmupClientId =
       '${foregroundClientXmpp}_warmup';
+  static const bool _foregroundServiceRunningFallback = false;
+
+  Future<bool> _isForegroundServiceRunning() async {
+    try {
+      return await FlutterForegroundTask.isRunningService;
+    } on Exception {
+      return _foregroundServiceRunningFallback;
+    }
+  }
 
   void _scheduleForegroundSocketMigration() {
     if (!withForeground) {
@@ -835,6 +874,7 @@ class XmppService extends XmppBase
     final shouldNotify = _hasInitializedDatabases;
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
+    _reconnectBlocked = false;
     final targetJid = mox.JID.fromString(jid);
     final activeJid = _myJid?.toBare().toString();
     if (activeJid != null && activeJid != targetJid.toBare().toString()) {
@@ -915,11 +955,17 @@ class XmppService extends XmppBase
       password: password,
     );
 
-    final result = await _connection.connect(
-      shouldReconnect: false,
-      waitForConnection: true,
-      waitUntilLogin: true,
-    );
+    _connectInFlight = true;
+    late final moxlib.Result<bool, mox.XmppError> result;
+    try {
+      result = await _connection.connect(
+        shouldReconnect: false,
+        waitForConnection: true,
+        waitUntilLogin: true,
+      );
+    } finally {
+      _connectInFlight = false;
+    }
 
     if (result.isType<mox.XmppError>()) {
       final error = result.get<mox.XmppError>();
@@ -1670,10 +1716,51 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> triggerImmediateReconnect() async {
-    if (!_synchronousConnection.isCompleted) return;
-    if (connected) return;
-    await _connection.triggerImmediateReconnect();
+  Future<void> requestReconnect(ReconnectTrigger trigger) async {
+    if (!_synchronousConnection.isCompleted) {
+      return;
+    }
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (!_sessionReconnectEnabled) {
+      return;
+    }
+    if (_reconnectBlocked) {
+      return;
+    }
+    if (_connectInFlight) {
+      return;
+    }
+    if (connected) {
+      return;
+    }
+    final bool reconnecting = await _connection.isReconnecting();
+    if (reconnecting && !trigger.shouldBypassBackoff) {
+      return;
+    }
+
+    final bool shouldReconnect =
+        await _connection.reconnectionPolicy.getShouldReconnect();
+    if (!shouldReconnect) {
+      try {
+        await _connection.setShouldReconnect(true);
+      } catch (error, stackTrace) {
+        _xmppLogger.finer(
+          _reconnectEnableFailedLog,
+          error,
+          stackTrace,
+        );
+        return;
+      }
+    }
+
+    if (trigger.shouldBypassBackoff &&
+        connectionState != ConnectionState.connecting) {
+      _setConnectionState(ConnectionState.connecting);
+    }
+
+    await _connection.requestReconnect(trigger);
   }
 
   Future<void> ensureForegroundSocketIfActive() async {
@@ -1690,7 +1777,22 @@ class XmppService extends XmppBase
     if (connectionState == ConnectionState.connecting) {
       return;
     }
-    if (_connection.socketWrapper is ForegroundSocketWrapper) {
+    if (_reconnectBlocked) {
+      return;
+    }
+    if (!_sessionReconnectEnabled) {
+      return;
+    }
+    if (_connectInFlight) {
+      return;
+    }
+    if (await _connection.isReconnecting()) {
+      return;
+    }
+    final bool serviceRunning = await _isForegroundServiceRunning();
+    final bool usingForegroundSocket =
+        _connection.socketWrapper is ForegroundSocketWrapper;
+    if (serviceRunning && usingForegroundSocket) {
       return;
     }
     if (!_connection.hasConnectionSettings) {
@@ -1774,11 +1876,17 @@ class XmppService extends XmppBase
         password: existingPassword,
       );
 
-      final result = await _connection.connect(
-        shouldReconnect: false,
-        waitForConnection: true,
-        waitUntilLogin: true,
-      );
+      _connectInFlight = true;
+      late final moxlib.Result<bool, mox.XmppError> result;
+      try {
+        result = await _connection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        );
+      } finally {
+        _connectInFlight = false;
+      }
       if (result.isType<mox.XmppError>()) {
         final error = result.get<mox.XmppError>();
         if (_isAuthenticationError(error)) {
@@ -1813,11 +1921,17 @@ class XmppService extends XmppBase
           jid: existingJid,
           password: existingPassword,
         );
-        final result = await _connection.connect(
-          shouldReconnect: false,
-          waitForConnection: true,
-          waitUntilLogin: true,
-        );
+        _connectInFlight = true;
+        late final moxlib.Result<bool, mox.XmppError> result;
+        try {
+          result = await _connection.connect(
+            shouldReconnect: false,
+            waitForConnection: true,
+            waitUntilLogin: true,
+          );
+        } finally {
+          _connectInFlight = false;
+        }
         if (result.isType<mox.XmppError>()) {
           final error = result.get<mox.XmppError>();
           if (_isAuthenticationError(error)) {
@@ -1847,7 +1961,7 @@ class XmppService extends XmppBase
             'Failed to enable reconnection after foreground migration failure: ${error.runtimeType}.',
           );
         }
-        unawaited(_triggerImmediateReconnectIfAppropriate());
+        unawaited(requestReconnect(ReconnectTrigger.foregroundMigration));
       }
     } finally {
       if (warmupAcquired) {
@@ -1869,6 +1983,7 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _setConnectionState(ConnectionState.notConnected);
+    _connectInFlight = false;
 
     // Only disable session reconnect for fatal errors (auth/database).
     // Network errors should allow reconnection attempts.
@@ -1984,6 +2099,9 @@ class XmppService extends XmppBase
     if (!_httpUploadSupportController.isClosed) {
       await _httpUploadSupportController.close();
     }
+    if (!_pubSubSupportController.isClosed) {
+      await _pubSubSupportController.close();
+    }
     if (!_mamSupportController.isClosed) {
       await _mamSupportController.close();
     }
@@ -2079,6 +2197,14 @@ class XmppService extends XmppBase
     _httpUploadSupportController.add(support);
   }
 
+  void _updatePubSubSupport(PubSubSupport support) {
+    final unchanged = _pubSubSupportResolved && _pubSubSupport == support;
+    _pubSubSupport = support;
+    _pubSubSupportResolved = true;
+    if (unchanged || _pubSubSupportController.isClosed) return;
+    _pubSubSupportController.add(support);
+  }
+
   Future<void> _refreshHttpUploadSupport() async {
     final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
     final discoManager = _connection.getManager<mox.DiscoManager>();
@@ -2120,6 +2246,98 @@ class XmppService extends XmppBase
         stackTrace,
       );
       _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+    }
+  }
+
+  @override
+  Future<PubSubSupport> refreshPubSubSupport({bool force = false}) async {
+    if (!force && _pubSubSupportResolved) {
+      return _pubSubSupport;
+    }
+    return _refreshPubSubSupport();
+  }
+
+  Future<PubSubSupport> _refreshPubSubSupport() async {
+    if (connectionState != ConnectionState.connected) {
+      return _pubSubSupport;
+    }
+    final discoManager = _connection.getManager<mox.DiscoManager>();
+    if (discoManager == null) {
+      _updatePubSubSupport(
+        const PubSubSupport(
+          pubSubSupported: false,
+          pepSupported: false,
+          bookmarks2Supported: false,
+        ),
+      );
+      return _pubSubSupport;
+    }
+
+    final selfBare = _myJid?.toBare();
+    final host = _myJid?.domain;
+    final hostJid = _safeJidFromString(host);
+    final selfFeatures =
+        await _discoFeaturesFor(discoManager: discoManager, jid: selfBare);
+    final hostFeatures =
+        await _discoFeaturesFor(discoManager: discoManager, jid: hostJid);
+
+    final pubSubSupported = selfFeatures.contains(mox.pubsubXmlns) ||
+        selfFeatures.contains(mox.pubsubOwnerXmlns) ||
+        hostFeatures.contains(mox.pubsubXmlns) ||
+        hostFeatures.contains(mox.pubsubOwnerXmlns);
+    final pepSupported = selfFeatures.contains(mox.pubsubEventXmlns) ||
+        selfFeatures.contains(mox.pubsubXmlns);
+    final bookmarks2Supported =
+        selfFeatures.contains(BookmarksManager.bookmarksNotifyFeature) ||
+            selfFeatures.contains(_bookmarks2NodeXmlns);
+
+    final support = PubSubSupport(
+      pubSubSupported: pubSubSupported,
+      pepSupported: pepSupported,
+      bookmarks2Supported: bookmarks2Supported,
+    );
+    _updatePubSubSupport(support);
+    return support;
+  }
+
+  Future<Set<String>> _discoFeaturesFor({
+    required mox.DiscoManager discoManager,
+    required mox.JID? jid,
+  }) async {
+    if (jid == null) return const {};
+    try {
+      final result = await discoManager.discoInfoQuery(jid);
+      if (result.isType<mox.StanzaError>()) {
+        return const {};
+      }
+      final info = result.get<mox.DiscoInfo>();
+      return info.features.toSet();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine('Disco feature query failed.', error, stackTrace);
+      return const {};
+    }
+  }
+
+  Future<void> _syncAfterReconnect() async {
+    if (connectionState != ConnectionState.connected) return;
+    try {
+      final outcome = await syncGlobalMamCatchUp();
+      final includeDirect = outcome.shouldFallbackToPerChat;
+      await syncMessageArchiveOnLogin(
+        includeDirect: includeDirect,
+        includeMuc: true,
+      );
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine('Reconnect MAM catch-up failed.', error, stackTrace);
+    }
+  }
+
+  mox.JID? _safeJidFromString(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return mox.JID.fromString(raw);
+    } on Exception {
+      return null;
     }
   }
 
@@ -2226,7 +2444,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   Socket? _socket;
   StreamSubscription<dynamic>? _socketSubscription;
-  bool _expectSocketClosure = false;
+  final Set<Socket> _expectedClosures = {};
   bool _secure = false;
 
   @override
@@ -2266,7 +2484,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     String? host,
     int? port,
   }) async {
-    _expectSocketClosure = false;
+    _dropSocket(expectClosure: true);
     _secure = false;
 
     final endpoint = serverLookup[domain];
@@ -2309,6 +2527,11 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       return;
     }
 
+    final StreamSubscription<dynamic>? priorSubscription = _socketSubscription;
+    if (priorSubscription != null) {
+      unawaited(priorSubscription.cancel());
+    }
+
     _socketSubscription = socket.listen(
       (List<int> event) {
         final data = utf8.decode(event);
@@ -2327,13 +2550,17 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     );
 
     socket.done.then((_) {
-      _eventStream.add(mox.XmppSocketClosureEvent(_expectSocketClosure));
-      _expectSocketClosure = false;
+      _markSocketClosed(socket);
+      _eventStream.add(
+        mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
+      );
     }).catchError((Object error, StackTrace stackTrace) {
       _log.fine(_socketClosedWithErrorLog, error, stackTrace);
       _eventStream.add(mox.XmppSocketErrorEvent(error));
-      _eventStream.add(mox.XmppSocketClosureEvent(_expectSocketClosure));
-      _expectSocketClosure = false;
+      _markSocketClosed(socket);
+      _eventStream.add(
+        mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
+      );
     });
   }
 
@@ -2351,7 +2578,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     }
 
     try {
-      _expectSocketClosure = true;
+      _expectedClosures.add(socket);
       _socket = await SecureSocket.secure(
         socket,
         host: domain,
@@ -2373,8 +2600,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   @override
   void close() {
-    _expectSocketClosure = true;
-
     final socket = _socket;
     if (socket == null) {
       _log.warning('Failed to close socket since _socket is null');
@@ -2382,10 +2607,12 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     }
 
     try {
+      _expectedClosures.add(socket);
       socket.close();
     } catch (error) {
       _log.warning('Closing socket threw exception: $error');
     }
+    _markSocketClosed(socket);
   }
 
   @override
@@ -2416,7 +2643,38 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       _eventStream.stream.asBroadcastStream();
 
   @override
-  void prepareDisconnect() {}
+  void prepareDisconnect() {
+    _dropSocket(expectClosure: true);
+  }
+
+  void _dropSocket({required bool expectClosure}) {
+    final socket = _socket;
+    if (socket == null) return;
+    if (expectClosure) {
+      _expectedClosures.add(socket);
+    }
+    _socket = null;
+    _secure = false;
+    final subscription = _socketSubscription;
+    _socketSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
+    try {
+      socket.destroy();
+    } catch (error) {
+      _log.warning('Closing socket threw exception: $error');
+    }
+  }
+
+  void _markSocketClosed(Socket socket) {
+    if (!identical(_socket, socket)) {
+      return;
+    }
+    _socket = null;
+    _secure = false;
+    _socketSubscription = null;
+  }
 }
 
 /// Custom Stream Management manager that adds persistent state storage.

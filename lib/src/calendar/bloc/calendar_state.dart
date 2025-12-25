@@ -55,10 +55,13 @@ class CalendarState with _$CalendarState {
 
 extension CalendarStateExtensions on CalendarState {
   List<CalendarTask> get unscheduledTasks =>
-      model.tasks.values.where((task) => task.scheduledTime == null).toList();
+      model.tasks.values.where((task) => task.isUnscheduled).toList();
+
+  List<CalendarTask> get reminderTasks =>
+      model.tasks.values.where((task) => task.isReminder).toList();
 
   List<CalendarTask> get scheduledTasks =>
-      model.tasks.values.where((task) => task.scheduledTime != null).toList();
+      model.tasks.values.where((task) => task.isScheduled).toList();
 
   List<CalendarCriticalPath> get criticalPaths => model.activeCriticalPaths;
 
@@ -162,12 +165,15 @@ extension CalendarStateExtensions on CalendarState {
         }
       }
 
-      if (task.effectiveRecurrence.isNone) {
+      if (!task.hasRecurrenceData) {
         continue;
       }
 
       final generated = task.occurrencesWithin(normalizedStart, normalizedEnd);
       for (final occurrence in generated) {
+        if (emittedIds.contains(occurrence.id)) {
+          continue;
+        }
         final occurrenceStart = occurrence.scheduledTime;
         if (occurrenceStart == null) continue;
         final occurrenceEnd = occurrence.effectiveEndDate ?? occurrenceStart;
