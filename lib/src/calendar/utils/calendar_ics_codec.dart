@@ -1139,11 +1139,16 @@ _TaskGroupResult? _parseTaskGroup(
   final CalendarRawComponent base = _findBaseComponent(components);
   final bool hasBase =
       _firstPropertyValue(base.properties, _icsPropertyRecurrenceId) == null;
+  final bool hasOverrides = components.any(
+    (component) =>
+        _firstPropertyValue(component.properties, _icsPropertyRecurrenceId) !=
+        null,
+  );
   final _ParsedComponent parsedBase = _parseTaskComponent(
     base,
     isEvent: isEvent,
   );
-  final bool isCancelled = (isCalendarCancel && hasBase) ||
+  final bool isCancelled = (isCalendarCancel && hasBase && !hasOverrides) ||
       parsedBase.meta.status?.isCancelled == true;
   final DateTime cancelledAt =
       parsedBase.meta.lastModified ?? parsedBase.meta.dtStamp ?? DateTime.now();
@@ -1163,8 +1168,11 @@ _TaskGroupResult? _parseTaskGroup(
     if (component == base) {
       continue;
     }
-    final TaskOccurrenceOverride? override =
-        _parseTaskOverride(component, isEvent: isEvent);
+    final TaskOccurrenceOverride? override = _parseTaskOverride(
+      component,
+      isEvent: isEvent,
+      isCalendarCancel: isCalendarCancel,
+    );
     if (override == null || override.recurrenceId == null) {
       continue;
     }
@@ -1194,13 +1202,18 @@ _EventGroupResult? _parseEventGroup(
   final CalendarRawComponent base = _findBaseComponent(components);
   final bool hasBase =
       _firstPropertyValue(base.properties, _icsPropertyRecurrenceId) == null;
+  final bool hasOverrides = components.any(
+    (component) =>
+        _firstPropertyValue(component.properties, _icsPropertyRecurrenceId) !=
+        null,
+  );
   final bool isAllDay = _isAllDayComponent(base);
   final bool hasRecurrence = _hasRecurrence(base);
   final bool useDayEvent = isAllDay && !hasRecurrence;
 
   if (useDayEvent) {
     final _ParsedDayEvent parsed = _parseDayEventComponent(base);
-    final bool isCancelled = (isCalendarCancel && hasBase) ||
+    final bool isCancelled = (isCalendarCancel && hasBase && !hasOverrides) ||
         parsed.meta.status?.isCancelled == true;
     final DateTime cancelledAt =
         parsed.meta.lastModified ?? parsed.meta.dtStamp ?? DateTime.now();
@@ -1219,7 +1232,7 @@ _EventGroupResult? _parseEventGroup(
     base,
     isEvent: true,
   );
-  final bool isCancelled = (isCalendarCancel && hasBase) ||
+  final bool isCancelled = (isCalendarCancel && hasBase && !hasOverrides) ||
       parsedTask.meta.status?.isCancelled == true;
   final DateTime cancelledAt =
       parsedTask.meta.lastModified ?? parsedTask.meta.dtStamp ?? DateTime.now();
@@ -1240,8 +1253,11 @@ _EventGroupResult? _parseEventGroup(
     if (component == base) {
       continue;
     }
-    final TaskOccurrenceOverride? override =
-        _parseTaskOverride(component, isEvent: true);
+    final TaskOccurrenceOverride? override = _parseTaskOverride(
+      component,
+      isEvent: true,
+      isCalendarCancel: isCalendarCancel,
+    );
     if (override == null || override.recurrenceId == null) {
       continue;
     }
@@ -1542,6 +1558,7 @@ _ParsedDayEvent _parseDayEventComponent(CalendarRawComponent component) {
 TaskOccurrenceOverride? _parseTaskOverride(
   CalendarRawComponent component, {
   required bool isEvent,
+  required bool isCalendarCancel,
 }) {
   final CalendarRawProperty? recurrenceProp =
       _firstProperty(component.properties, _icsPropertyRecurrenceId);
@@ -1572,7 +1589,7 @@ TaskOccurrenceOverride? _parseTaskOverride(
       _firstPropertyValue(properties, _icsPropertyLocation);
   final TaskPriority? priority = _parsePriority(properties);
   final bool isCompleted = _isCompleted(properties, meta.status);
-  final bool isCancelled = meta.status?.isCancelled == true;
+  final bool isCancelled = meta.status?.isCancelled == true || isCalendarCancel;
   final TaskChecklistResult checklistResult =
       _parseChecklist(properties, meta.axi);
   final String? rangeValue =
@@ -3041,6 +3058,7 @@ void _writeTaskComponent(
     final List<CalendarDateTime> exDates = _mergeExDates(
       recurrence.exDates,
       task.occurrenceOverrides,
+      task,
     );
     _writeDateList(writer, _icsPropertyExdate, exDates);
     for (final CalendarRawProperty raw in recurrence.rawProperties) {
@@ -3138,9 +3156,12 @@ void _writeOverrides(
   final bool isEventComponent = componentType.isEvent;
   final String componentName =
       isEventComponent ? _icsComponentVevent : _icsComponentVtodo;
-  for (final TaskOccurrenceOverride override
-      in task.occurrenceOverrides.values) {
-    if (override.recurrenceId == null) {
+  for (final MapEntry<String, TaskOccurrenceOverride> entry
+      in task.occurrenceOverrides.entries) {
+    final TaskOccurrenceOverride override = entry.value;
+    final CalendarDateTime? recurrenceId =
+        override.recurrenceId ?? _recurrenceIdFromOverrideKey(entry.key, task);
+    if (recurrenceId == null) {
       continue;
     }
     if (override.isCancelled == true) {
@@ -3154,11 +3175,11 @@ void _writeOverrides(
     _writeDateTimeProperty(
       writer,
       _icsPropertyRecurrenceId,
-      override.recurrenceId!.value,
+      recurrenceId.value,
       rawProperty: null,
-      isAllDay: override.recurrenceId!.isAllDay,
-      tzidOverride: override.recurrenceId!.tzid,
-      isFloatingOverride: override.recurrenceId!.isFloating,
+      isAllDay: recurrenceId.isAllDay,
+      tzidOverride: recurrenceId.tzid,
+      isFloatingOverride: recurrenceId.isFloating,
       rangeOverride: override.range,
     );
     if (override.title != null) {
@@ -4144,17 +4165,67 @@ void _writeDateList(
 List<CalendarDateTime> _mergeExDates(
   List<CalendarDateTime> base,
   Map<String, TaskOccurrenceOverride> overrides,
+  CalendarTask task,
 ) {
   final List<CalendarDateTime> merged = <CalendarDateTime>[...base];
-  for (final TaskOccurrenceOverride override in overrides.values) {
-    if (override.isCancelled != true || override.recurrenceId == null) {
+  for (final MapEntry<String, TaskOccurrenceOverride> entry
+      in overrides.entries) {
+    final TaskOccurrenceOverride override = entry.value;
+    if (override.isCancelled != true) {
       continue;
     }
-    if (!_containsDateTime(merged, override.recurrenceId!)) {
-      merged.add(override.recurrenceId!);
+    final CalendarDateTime? recurrenceId =
+        override.recurrenceId ?? _recurrenceIdFromOverrideKey(entry.key, task);
+    if (recurrenceId == null) {
+      continue;
+    }
+    if (!_containsDateTime(merged, recurrenceId)) {
+      merged.add(recurrenceId);
     }
   }
   return merged;
+}
+
+const bool _recurrenceIdDefaultAllDay = false;
+const bool _recurrenceIdDefaultUtc = false;
+
+CalendarDateTime? _recurrenceIdTemplate(CalendarTask task) {
+  final CalendarIcsMeta? meta = task.icsMeta;
+  if (meta == null) {
+    return null;
+  }
+  final CalendarRawProperty? rawStart = _rawProperty(meta, _icsPropertyDtStart);
+  if (rawStart == null) {
+    return null;
+  }
+  return _parseDateTime(rawStart);
+}
+
+CalendarDateTime? _recurrenceIdFromOverrideKey(
+  String key,
+  CalendarTask task,
+) {
+  final int? micros = int.tryParse(key);
+  if (micros == null) {
+    return null;
+  }
+  final CalendarDateTime? template = _recurrenceIdTemplate(task);
+  final bool isUtc = template?.value.isUtc ??
+      task.scheduledTime?.isUtc ??
+      _recurrenceIdDefaultUtc;
+  final DateTime value = DateTime.fromMicrosecondsSinceEpoch(
+    micros,
+    isUtc: isUtc,
+  );
+  final bool isAllDay = template?.isAllDay ?? _recurrenceIdDefaultAllDay;
+  final String? tzid = template?.tzid;
+  final bool isFloating = template?.isFloating ?? (!isUtc && tzid == null);
+  return CalendarDateTime(
+    value: value,
+    tzid: tzid,
+    isAllDay: isAllDay,
+    isFloating: isFloating,
+  );
 }
 
 bool _containsDateTime(List<CalendarDateTime> list, CalendarDateTime value) {

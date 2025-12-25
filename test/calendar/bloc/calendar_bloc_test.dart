@@ -5,6 +5,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
@@ -37,6 +38,7 @@ class _MockCalendarSyncManager extends Mock implements CalendarSyncManager {}
 
 void main() {
   group('CalendarBloc', () {
+    const String rawOverrideTitle = 'Raw override';
     late _InMemoryStorage storage;
     late _MockCalendarSyncManager syncManager;
     late CalendarBloc bloc;
@@ -308,6 +310,116 @@ void main() {
           return base.title == 'Daily Sync' &&
               override != null &&
               override.title == 'Updated Sync';
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'selectionTitleChanged keeps overrides with raw passthrough data',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        const String baseTaskId = 'raw-override-task';
+        const String baseTitle = rawOverrideTitle;
+        const String occurrenceSeparator = '::';
+        const String rawPropertyName = 'X-AXI-RAW';
+        const String rawPropertyValue = '1';
+        const String rawComponentName = 'X-AXI-COMPONENT';
+        const int startYear = 2024;
+        const int startMonth = 6;
+        const int startDay = 1;
+        const int startHour = 10;
+        const int startMinute = 0;
+        const int startSecond = 0;
+        const int oneDay = 1;
+        const int durationMinutes = 30;
+        const List<TaskChecklistItem> emptyChecklist = <TaskChecklistItem>[];
+
+        final DateTime start = DateTime(
+          startYear,
+          startMonth,
+          startDay,
+          startHour,
+          startMinute,
+          startSecond,
+        );
+        final DateTime occurrenceStart =
+            start.add(const Duration(days: oneDay));
+        final String occurrenceKey =
+            occurrenceStart.microsecondsSinceEpoch.toString();
+        final String occurrenceId =
+            '$baseTaskId$occurrenceSeparator$occurrenceKey';
+        const CalendarRawProperty rawProperty = CalendarRawProperty(
+          name: rawPropertyName,
+          value: rawPropertyValue,
+        );
+        const CalendarRawComponent rawComponent = CalendarRawComponent(
+          name: rawComponentName,
+        );
+        const List<CalendarRawProperty> rawProperties = <CalendarRawProperty>[
+          rawProperty
+        ];
+        const List<CalendarRawComponent> rawComponents = <CalendarRawComponent>[
+          rawComponent
+        ];
+        const TaskOccurrenceOverride override = TaskOccurrenceOverride(
+          rawProperties: rawProperties,
+          rawComponents: rawComponents,
+        );
+        final Map<String, TaskOccurrenceOverride> overrides =
+            <String, TaskOccurrenceOverride>{}..[occurrenceKey] = override;
+        final CalendarTask task = CalendarTask(
+          id: baseTaskId,
+          title: baseTitle,
+          description: null,
+          scheduledTime: start,
+          duration: const Duration(minutes: durationMinutes),
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+          location: null,
+          deadline: null,
+          priority: null,
+          startHour: null,
+          endDate: null,
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+          ),
+          occurrenceOverrides: overrides,
+          reminders: null,
+          checklist: emptyChecklist,
+          icsMeta: null,
+        );
+        final CalendarModel model = CalendarModel.empty().addTask(task);
+        return CalendarState.initial().copyWith(
+          model: model,
+          isSelectionMode: true,
+          selectedTaskIds: <String>{occurrenceId},
+        );
+      },
+      act: (bloc) => bloc.add(
+        const CalendarEvent.selectionTitleChanged(title: rawOverrideTitle),
+      ),
+      expect: () => [
+        predicate<CalendarState>((state) {
+          const String baseTaskId = 'raw-override-task';
+          const int oneDay = 1;
+          final CalendarTask base = state.model.tasks[baseTaskId]!;
+          final DateTime? baseStart = base.scheduledTime;
+          if (baseStart == null) {
+            return false;
+          }
+          final DateTime occurrenceStart =
+              baseStart.add(const Duration(days: oneDay));
+          final String occurrenceKey =
+              occurrenceStart.microsecondsSinceEpoch.toString();
+          final TaskOccurrenceOverride? override =
+              base.occurrenceOverrides[occurrenceKey];
+          return override != null &&
+              override.rawProperties.isNotEmpty &&
+              override.rawComponents.isNotEmpty;
         }),
       ],
     );

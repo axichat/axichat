@@ -500,15 +500,10 @@ abstract class BaseCalendarBloc
 
         final overrides = Map<String, TaskOccurrenceOverride>.from(
             taskToDelete.occurrenceOverrides);
-        final existing = overrides[occurrenceKey];
-        overrides[occurrenceKey] = TaskOccurrenceOverride(
-          scheduledTime: existing?.scheduledTime,
-          duration: existing?.duration,
-          endDate: existing?.endDate,
-          isCancelled: true,
-          priority: existing?.priority,
-          isCompleted: existing?.isCompleted,
-        );
+        final TaskOccurrenceOverride? existing = overrides[occurrenceKey];
+        final TaskOccurrenceOverride baseOverride =
+            existing ?? const TaskOccurrenceOverride();
+        overrides[occurrenceKey] = baseOverride.copyWith(isCancelled: true);
 
         final updatedTask = taskToDelete.copyWith(
           occurrenceOverrides: overrides,
@@ -706,12 +701,14 @@ abstract class BaseCalendarBloc
           Map<String, TaskOccurrenceOverride>.from(task.occurrenceOverrides);
       final existing = overrides[occurrenceKey];
 
-      final updatedOverride = TaskOccurrenceOverride(
-        scheduledTime: event.scheduledTime ?? existing?.scheduledTime,
-        duration: event.duration ?? existing?.duration,
-        endDate: event.endDate ?? existing?.endDate,
-        isCancelled: event.isCancelled ?? existing?.isCancelled,
-        checklist: event.checklist ?? existing?.checklist,
+      final TaskOccurrenceOverride baseOverride =
+          existing ?? const TaskOccurrenceOverride();
+      final TaskOccurrenceOverride updatedOverride = baseOverride.copyWith(
+        scheduledTime: event.scheduledTime ?? baseOverride.scheduledTime,
+        duration: event.duration ?? baseOverride.duration,
+        endDate: event.endDate ?? baseOverride.endDate,
+        isCancelled: event.isCancelled ?? baseOverride.isCancelled,
+        checklist: event.checklist ?? baseOverride.checklist,
       );
 
       if (_isOccurrenceOverrideEmpty(updatedOverride)) {
@@ -817,13 +814,12 @@ abstract class BaseCalendarBloc
             baseTask.occurrenceOverrides,
           );
           final TaskOccurrenceOverride? existing = overrides[occurrenceKey];
-          final TaskOccurrenceOverride updatedOverride = TaskOccurrenceOverride(
+          final TaskOccurrenceOverride baseOverride =
+              existing ?? const TaskOccurrenceOverride();
+          final TaskOccurrenceOverride updatedOverride = baseOverride.copyWith(
             scheduledTime: start,
             duration: leftDuration,
             endDate: leftEnd,
-            isCancelled: existing?.isCancelled,
-            priority: existing?.priority,
-            isCompleted: existing?.isCompleted,
           );
 
           if (_isOccurrenceOverrideEmpty(updatedOverride)) {
@@ -2508,15 +2504,10 @@ abstract class BaseCalendarBloc
         if (occurrenceKey == null) {
           continue;
         }
-        final existing = overrides[occurrenceKey];
-        overrides[occurrenceKey] = TaskOccurrenceOverride(
-          scheduledTime: existing?.scheduledTime,
-          duration: existing?.duration,
-          endDate: existing?.endDate,
-          isCancelled: true,
-          priority: existing?.priority,
-          isCompleted: existing?.isCompleted,
-        );
+        final TaskOccurrenceOverride? existing = overrides[occurrenceKey];
+        final TaskOccurrenceOverride baseOverride =
+            existing ?? const TaskOccurrenceOverride();
+        overrides[occurrenceKey] = baseOverride.copyWith(isCancelled: true);
         modified = true;
       }
       if (!modified) {
@@ -2915,5 +2906,10 @@ bool _isOccurrenceOverrideEmpty(TaskOccurrenceOverride override) {
       override.endDate == null &&
       override.priority == null &&
       override.isCompleted == null &&
-      (override.checklist == null || override.checklist!.isEmpty);
+      override.title == null &&
+      override.description == null &&
+      override.location == null &&
+      (override.checklist == null || override.checklist!.isEmpty) &&
+      override.rawProperties.isEmpty &&
+      override.rawComponents.isEmpty;
 }

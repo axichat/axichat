@@ -591,13 +591,19 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   }
 
   List<IOEndpoint> _resolveEndpoints() {
+    final configuredEndpoints = _endpoints;
     final rawDomain = _domainProvider();
-    if (rawDomain == null) return _endpoints;
+    if (rawDomain == null) return configuredEndpoints;
     final domain = rawDomain.trim().toLowerCase();
-    if (domain.isEmpty) return _endpoints;
+    if (domain.isEmpty) return configuredEndpoints;
     final endpoint = serverLookup[domain];
-    if (endpoint == null) return _endpoints;
-    return [endpoint];
+    if (endpoint != null) {
+      return [endpoint];
+    }
+    if (configuredEndpoints.isNotEmpty) {
+      return configuredEndpoints;
+    }
+    return [IOEndpoint(domain, EndpointConfig.defaultXmppPort)];
   }
 
   bool _isOfflineSocketError(SocketException error) {
