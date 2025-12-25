@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -79,16 +81,20 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
   ChatSearchCubit({
     required this.jid,
     required MessageService messageService,
+    EmailService? emailService,
     this.resultLimit = 200,
   })  : _messageService = messageService,
+        _emailService = emailService,
         super(const ChatSearchState());
 
   final String jid;
   final MessageService _messageService;
+  final EmailService? _emailService;
   final int resultLimit;
 
   Timer? _debounce;
   bool _subjectsLoaded = false;
+  Chat? _cachedChat;
 
   void toggleActive() => setActive(!state.active);
 
@@ -129,6 +135,29 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     if (state.filter == filter) return;
     emit(state.copyWith(filter: filter));
     _scheduleSearch(immediate: true);
+  }
+
+  Future<Chat?> _chatForSearch() async {
+    final cached = _cachedChat;
+    if (cached != null) return cached;
+    final db = await _messageService.database;
+    final chat = await db.getChat(jid);
+    _cachedChat = chat;
+    return chat;
+  }
+
+  List<Message> _sortResults(List<Message> results) {
+    if (results.isEmpty) return results;
+    final earliestTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
+    final ordered = List<Message>.of(results)
+      ..sort(
+        (a, b) => (a.timestamp ?? earliestTimestamp)
+            .compareTo(b.timestamp ?? earliestTimestamp),
+      );
+    if (state.sort == SearchSortOrder.newestFirst) {
+      return ordered.reversed.toList(growable: false);
+    }
+    return ordered;
   }
 
   Future<void> _maybeLoadSubjects() async {
@@ -185,15 +214,33 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     if (query.isEmpty && (subject == null || subject.isEmpty)) return;
     emit(state.copyWith(status: RequestStatus.loading, error: null));
     try {
-      final results = await _messageService.searchChatMessages(
-        jid: jid,
-        query: query,
-        subject: subject,
-        excludeSubject: state.excludeSubject,
-        filter: state.filter,
-        sortOrder: state.sort,
-        limit: resultLimit,
-      );
+      final chat = await _chatForSearch();
+      final emailService = _emailService;
+      final shouldUseEmailSearch = emailService != null &&
+          chat?.defaultTransport.isEmail == true &&
+          (subject == null || subject.isEmpty) &&
+          !state.excludeSubject;
+      List<Message> results;
+      if (shouldUseEmailSearch) {
+        results = await emailService.searchMessages(
+          chat: chat,
+          query: query,
+        );
+        results = _sortResults(results);
+        if (results.length > resultLimit) {
+          results = results.sublist(0, resultLimit);
+        }
+      } else {
+        results = await _messageService.searchChatMessages(
+          jid: jid,
+          query: query,
+          subject: subject,
+          excludeSubject: state.excludeSubject,
+          filter: state.filter,
+          sortOrder: state.sort,
+          limit: resultLimit,
+        );
+      }
       emit(
         state.copyWith(
           status: RequestStatus.success,

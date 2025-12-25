@@ -1139,6 +1139,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     required EmailAttachment attachment,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     String? htmlCaption,
+    String? transportGroupId,
+    int? attachmentOrder,
     Message? quotedMessage,
     ChatType chatType = ChatType.chat,
   }) async {
@@ -1236,6 +1238,21 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     );
     const shouldStore = true;
     await _storeMessage(message, chatType: chatType);
+    if (transportGroupId != null || attachmentOrder != null) {
+      await _dbOp<XmppDatabase>((db) async {
+        final persisted = await db.getMessageByStanzaID(message.stanzaID);
+        final messageId = persisted?.id;
+        if (messageId == null || messageId.isEmpty) {
+          return;
+        }
+        await db.addMessageAttachment(
+          messageId: messageId,
+          fileMetadataId: metadata.id,
+          transportGroupId: transportGroupId,
+          sortOrder: attachmentOrder,
+        );
+      });
+    }
     _log.fine(
       'Uploading attachment $filename ($size bytes) to HTTP upload slot.',
     );

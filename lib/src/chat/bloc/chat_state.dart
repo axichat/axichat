@@ -5,6 +5,10 @@ class ChatState with _$ChatState {
   const factory ChatState({
     required List<Message> items,
     @Default(false) bool messagesLoaded,
+    @Default(<String, List<String>>{})
+    Map<String, List<String>> attachmentMetadataIdsByMessageId,
+    @Default(<String, String>{})
+    Map<String, String> attachmentGroupLeaderByMessageId,
     Chat? chat,
     RoomState? roomState,
     Message? focused,

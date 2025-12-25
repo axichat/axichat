@@ -108,6 +108,32 @@ abstract interface class XmppDatabase implements Database {
     String? body,
   });
 
+  Future<void> addMessageAttachment({
+    required String messageId,
+    required String fileMetadataId,
+    String? transportGroupId,
+    int? sortOrder,
+  });
+
+  Future<void> replaceMessageAttachments({
+    required String messageId,
+    required List<String> fileMetadataIds,
+    String? transportGroupId,
+  });
+
+  Future<List<MessageAttachmentData>> getMessageAttachments(String messageId);
+
+  Future<Map<String, List<MessageAttachmentData>>>
+      getMessageAttachmentsForMessages(
+    Iterable<String> messageIds,
+  );
+
+  Future<List<MessageAttachmentData>> getMessageAttachmentsForGroup(
+    String transportGroupId,
+  );
+
+  Future<List<String>> deleteMessageAttachments(String messageId);
+
   Future<void> markMessageRetracted(String stanzaID);
 
   Future<void> markMessageAcked(String stanzaID);
@@ -486,6 +512,75 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
 
   Future<void> deleteChatMessages(String jid) =>
       (delete(table)..where((item) => item.chatJid.equals(jid))).go();
+}
+
+@DriftAccessor(tables: [MessageAttachments])
+class MessageAttachmentsAccessor
+    extends BaseAccessor<MessageAttachmentData, $MessageAttachmentsTable>
+    with _$MessageAttachmentsAccessorMixin {
+  MessageAttachmentsAccessor(super.attachedDatabase);
+
+  @override
+  $MessageAttachmentsTable get table => messageAttachments;
+
+  @override
+  Future<MessageAttachmentData?> selectOne(Object value) =>
+      (select(table)..where((tbl) => tbl.id.equals(value as int)))
+          .getSingleOrNull();
+
+  Future<List<MessageAttachmentData>> selectForMessage(String messageId) =>
+      (select(table)
+            ..where((tbl) => tbl.messageId.equals(messageId))
+            ..orderBy([
+              (tbl) => OrderingTerm(
+                    expression: tbl.sortOrder,
+                    mode: OrderingMode.asc,
+                  ),
+            ]))
+          .get();
+
+  Future<List<MessageAttachmentData>> selectForMessages(
+    Iterable<String> messageIds,
+  ) {
+    final ids = messageIds.toList(growable: false);
+    if (ids.isEmpty) return Future.value(const []);
+    return (select(table)
+          ..where((tbl) => tbl.messageId.isIn(ids))
+          ..orderBy([
+            (tbl) => OrderingTerm(
+                  expression: tbl.sortOrder,
+                  mode: OrderingMode.asc,
+                ),
+          ]))
+        .get();
+  }
+
+  Future<List<MessageAttachmentData>> selectForGroup(String transportGroupId) =>
+      (select(table)
+            ..where((tbl) => tbl.transportGroupId.equals(transportGroupId))
+            ..orderBy([
+              (tbl) => OrderingTerm(
+                    expression: tbl.sortOrder,
+                    mode: OrderingMode.asc,
+                  ),
+            ]))
+          .get();
+
+  Future<int> nextSortOrder(String messageId) async {
+    final query = selectOnly(table)
+      ..addColumns([table.sortOrder.max()])
+      ..where(table.messageId.equals(messageId));
+    final row = await query.getSingleOrNull();
+    final maxOrder = row?.read(table.sortOrder.max()) ?? -1;
+    return maxOrder + 1;
+  }
+
+  @override
+  Future<void> deleteOne(Object value) =>
+      (delete(table)..where((tbl) => tbl.id.equals(value as int))).go();
+
+  Future<void> deleteForMessage(String messageId) =>
+      (delete(table)..where((tbl) => tbl.messageId.equals(messageId))).go();
 }
 
 @DriftAccessor(tables: [MessageShares])
@@ -940,6 +1035,7 @@ class EmailSpamlistAccessor
 
 @DriftDatabase(tables: [
   Messages,
+  MessageAttachments,
   MessageShares,
   MessageParticipants,
   MessageCopies,
@@ -963,6 +1059,7 @@ class EmailSpamlistAccessor
   EmailSpamlist,
 ], daos: [
   MessagesAccessor,
+  MessageAttachmentsAccessor,
   MessageSharesAccessor,
   MessageParticipantsAccessor,
   MessageCopiesAccessor,
@@ -1024,7 +1121,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration {
@@ -1129,6 +1226,18 @@ WHERE subject_token IS NOT NULL
         }
         if (from < 17) {
           await m.addColumn(messages, messages.htmlBody);
+        }
+        if (from < 18) {
+          await m.createTable(messageAttachments);
+          await customStatement(
+            '''
+INSERT INTO message_attachments(message_id, file_metadata_id, sort_order)
+SELECT id, file_metadata_id, 0
+FROM messages
+WHERE file_metadata_id IS NOT NULL
+  AND trim(file_metadata_id) != ''
+''',
+          );
         }
       },
       beforeOpen: (_) async {
@@ -1436,6 +1545,7 @@ WHERE subject_token IS NOT NULL
     ChatType chatType = ChatType.chat,
   }) async {
     _log.fine('Persisting message');
+    final resolvedMessageId = message.id ?? uuid.v4();
     final trimmedBody = message.body?.trim();
     final hasBody = trimmedBody?.isNotEmpty == true;
     final hasAttachment = message.fileMetadataID?.isNotEmpty == true;
@@ -1481,6 +1591,7 @@ WHERE subject_token IS NOT NULL
         trusted = trustData?.trusted;
       }
       final messageToSave = message.copyWith(
+        id: resolvedMessageId,
         trust: trust,
         trusted: trusted,
       );
@@ -1498,6 +1609,16 @@ WHERE subject_token IS NOT NULL
         return;
       }
 
+      final persistedMessageId = persisted.id ?? resolvedMessageId;
+      final incomingMetadataId = messageToSave.fileMetadataID?.trim();
+      final hasIncomingMetadataId = incomingMetadataId?.isNotEmpty == true;
+      if (hasIncomingMetadataId) {
+        await addMessageAttachment(
+          messageId: persistedMessageId,
+          fileMetadataId: incomingMetadataId!,
+        );
+      }
+
       final incomingBody = messageToSave.body?.trim();
       final hasIncomingBody = incomingBody?.isNotEmpty == true;
       final persistedBody = persisted.body?.trim();
@@ -1508,8 +1629,6 @@ WHERE subject_token IS NOT NULL
       final persistedHtml = persisted.htmlBody?.trim();
       final hasPersistedHtml = persistedHtml?.isNotEmpty == true;
 
-      final incomingMetadataId = messageToSave.fileMetadataID?.trim();
-      final hasIncomingMetadataId = incomingMetadataId?.isNotEmpty == true;
       final persistedMetadataId = persisted.fileMetadataID?.trim();
       final hasPersistedMetadataId = persistedMetadataId?.isNotEmpty == true;
 
@@ -1644,6 +1763,13 @@ WHERE subject_token IS NOT NULL
       if (metadata != null) {
         await saveFileMetadata(metadata);
       }
+      final existing = await messagesAccessor.selectOne(stanzaID);
+      if (metadata != null && existing?.id != null) {
+        await addMessageAttachment(
+          messageId: existing!.id!,
+          fileMetadataId: metadata.id,
+        );
+      }
       await (update(messages)..where((tbl) => tbl.stanzaID.equals(stanzaID)))
           .write(
         MessagesCompanion(
@@ -1668,7 +1794,11 @@ WHERE subject_token IS NOT NULL
         error: Value(MessageError.none),
         warning: Value(MessageWarning.none),
       ));
-      if (message.firstOrNull?.fileMetadataID case final id?) {
+      final resolved = message.firstOrNull;
+      if (resolved?.id != null) {
+        await messageAttachmentsAccessor.deleteForMessage(resolved!.id!);
+      }
+      if (resolved?.fileMetadataID case final id?) {
         await fileMetadataAccessor.deleteOne(id);
       }
     });
@@ -1726,6 +1856,9 @@ WHERE subject_token IS NOT NULL
     if (existing == null) return;
     await transaction(() async {
       await reactionsAccessor.deleteByMessage(stanzaID);
+      if (existing.id != null) {
+        await messageAttachmentsAccessor.deleteForMessage(existing.id!);
+      }
       await messagesAccessor.deleteOne(stanzaID);
       final chat = await getChat(existing.chatJid);
       if (chat == null) return;
@@ -1765,6 +1898,7 @@ WHERE subject_token IS NOT NULL
         await delete(messageParticipants).go();
         await delete(messageCopies).go();
         await delete(messageShares).go();
+        await delete(messageAttachments).go();
         await delete(messages).go();
         await delete(drafts).go();
         await delete(fileMetadata).go();
@@ -1798,7 +1932,7 @@ WHERE subject_token IS NOT NULL
     final offset = maxMessages <= 0 ? 0 : maxMessages;
     final pruned = await customSelect(
       '''
-      SELECT stanza_i_d AS stanza_id, delta_msg_id
+      SELECT id AS message_id, stanza_i_d AS stanza_id, delta_msg_id
       FROM messages
       WHERE chat_jid = ?
       ORDER BY timestamp DESC
@@ -1815,7 +1949,10 @@ WHERE subject_token IS NOT NULL
 
     final stanzaIds = <String>[];
     final deltaMsgIds = <int>[];
+    final messageIds = <String>[];
     for (final row in pruned) {
+      final messageId = row.read<String>('message_id');
+      messageIds.add(messageId);
       stanzaIds.add(row.read<String>('stanza_id'));
       final deltaMsgId = row.read<int?>('delta_msg_id');
       if (deltaMsgId != null) {
@@ -1840,6 +1977,11 @@ WHERE subject_token IS NOT NULL
       if (stanzaIds.isNotEmpty) {
         for (final batch in chunked(stanzaIds)) {
           await (delete(reactions)..where((tbl) => tbl.messageID.isIn(batch)))
+              .go();
+        }
+        for (final batch in chunked(messageIds)) {
+          await (delete(messageAttachments)
+                ..where((tbl) => tbl.messageId.isIn(batch)))
               .go();
         }
         for (final batch in chunked(stanzaIds)) {
@@ -2162,6 +2304,111 @@ WHERE subject_token IS NOT NULL
   @override
   Future<void> deleteFileMetadata(String id) async {
     await fileMetadataAccessor.deleteOne(id);
+  }
+
+  @override
+  Future<void> addMessageAttachment({
+    required String messageId,
+    required String fileMetadataId,
+    String? transportGroupId,
+    int? sortOrder,
+  }) async {
+    final existing = await (select(messageAttachments)
+          ..where((tbl) =>
+              tbl.messageId.equals(messageId) &
+              tbl.fileMetadataId.equals(fileMetadataId)))
+        .getSingleOrNull();
+    if (existing != null) {
+      final shouldUpdateGroup = transportGroupId != null &&
+          existing.transportGroupId != transportGroupId;
+      final shouldUpdateOrder =
+          sortOrder != null && existing.sortOrder != sortOrder;
+      if (shouldUpdateGroup || shouldUpdateOrder) {
+        await (update(messageAttachments)
+              ..where((tbl) => tbl.id.equals(existing.id)))
+            .write(
+          MessageAttachmentsCompanion(
+            transportGroupId: shouldUpdateGroup
+                ? Value(transportGroupId)
+                : const Value.absent(),
+            sortOrder:
+                shouldUpdateOrder ? Value(sortOrder) : const Value.absent(),
+          ),
+        );
+      }
+      return;
+    }
+    final nextOrder = sortOrder ??
+        await messageAttachmentsAccessor.nextSortOrder(
+          messageId,
+        );
+    await into(messageAttachments).insert(
+      MessageAttachmentsCompanion.insert(
+        messageId: messageId,
+        fileMetadataId: fileMetadataId,
+        sortOrder: Value(nextOrder),
+        transportGroupId: Value.absentIfNull(transportGroupId),
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+
+  @override
+  Future<void> replaceMessageAttachments({
+    required String messageId,
+    required List<String> fileMetadataIds,
+    String? transportGroupId,
+  }) async {
+    await transaction(() async {
+      await messageAttachmentsAccessor.deleteForMessage(messageId);
+      if (fileMetadataIds.isEmpty) return;
+      var order = 0;
+      for (final metadataId in fileMetadataIds) {
+        await into(messageAttachments).insert(
+          MessageAttachmentsCompanion.insert(
+            messageId: messageId,
+            fileMetadataId: metadataId,
+            sortOrder: Value(order),
+            transportGroupId: Value.absentIfNull(transportGroupId),
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+        order += 1;
+      }
+    });
+  }
+
+  @override
+  Future<List<MessageAttachmentData>> getMessageAttachments(String messageId) =>
+      messageAttachmentsAccessor.selectForMessage(messageId);
+
+  @override
+  Future<Map<String, List<MessageAttachmentData>>>
+      getMessageAttachmentsForMessages(Iterable<String> messageIds) async {
+    final ids = messageIds.toList(growable: false);
+    if (ids.isEmpty) return const {};
+    final attachments = await messageAttachmentsAccessor.selectForMessages(ids);
+    final grouped = <String, List<MessageAttachmentData>>{};
+    for (final attachment in attachments) {
+      grouped.putIfAbsent(attachment.messageId, () => []).add(attachment);
+    }
+    return grouped;
+  }
+
+  @override
+  Future<List<MessageAttachmentData>> getMessageAttachmentsForGroup(
+    String transportGroupId,
+  ) =>
+      messageAttachmentsAccessor.selectForGroup(transportGroupId);
+
+  @override
+  Future<List<String>> deleteMessageAttachments(String messageId) async {
+    final attachments = await messageAttachmentsAccessor.selectForMessage(
+      messageId,
+    );
+    if (attachments.isEmpty) return const [];
+    await messageAttachmentsAccessor.deleteForMessage(messageId);
+    return attachments.map((attachment) => attachment.fileMetadataId).toList();
   }
 
   @override

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -31,10 +32,14 @@ const _notificationFlushDelay = Duration(milliseconds: 500);
 const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
+const _coreDraftMessageId = 0;
 const _defaultImapPort = '993';
 const _defaultSecurityMode = 'ssl';
 const _unknownEmailPassword = '';
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
+const _notificationAttachmentLabel = 'Attachment';
+const _notificationAttachmentPrefix = 'Attachment: ';
+const List<EmailAttachment> _emptyEmailAttachments = <EmailAttachment>[];
 
 typedef EmailConnectionConfigBuilder = Map<String, String> Function(
   String address,
@@ -637,7 +642,9 @@ class EmailService {
   Future<FanOutSendReport> fanOutSend({
     required List<FanOutTarget> targets,
     String? body,
+    String? htmlBody,
     EmailAttachment? attachment,
+    String? htmlCaption,
     bool useSubjectToken = true,
     bool tokenAsSignature = true,
     String? shareId,
@@ -656,11 +663,17 @@ class EmailService {
         'Fan-out limited to $_maxFanOutRecipients recipients.',
       );
     }
-    final trimmedBody = body?.trim();
-    final hasBody = trimmedBody?.isNotEmpty == true;
+    final trimmedBody = body?.trim() ?? '';
+    final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(htmlBody);
+    var resolvedBodyText = trimmedBody;
+    if (resolvedBodyText.isEmpty && normalizedHtmlBody != null) {
+      resolvedBodyText = HtmlContentCodec.toPlainText(normalizedHtmlBody);
+    }
+    final hasBody = resolvedBodyText.isNotEmpty;
     final normalizedSubject = _normalizeSubject(subject);
     final hasSubject = normalizedSubject != null;
     final hasAttachment = attachment != null;
+    final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
     if (!hasBody && !hasAttachment && !hasSubject) {
       throw const FanOutValidationException('Message cannot be empty.');
     }
@@ -685,17 +698,20 @@ class EmailService {
             token: resolvedToken,
             body: _composeSubjectEnvelope(
               subject: resolvedSubject,
-              body: trimmedBody,
+              body: resolvedBodyText,
             ),
             asSignature: tokenAsSignature,
           )
         : _composeSubjectEnvelope(
             subject: resolvedSubject,
-            body: trimmedBody,
+            body: resolvedBodyText,
           );
-    final sanitizedBody = trimmedBody ?? '';
+    final sanitizedBody = resolvedBodyText;
 
-    final captionText = attachment?.caption?.trim();
+    var captionText = attachment?.caption?.trim() ?? '';
+    if (captionText.isEmpty && normalizedHtmlCaption != null) {
+      captionText = HtmlContentCodec.toPlainText(normalizedHtmlCaption);
+    }
     final transmitCaption = resolvedToken != null
         ? ShareTokenCodec.injectToken(
             token: resolvedToken,
@@ -709,7 +725,7 @@ class EmailService {
             subject: resolvedSubject,
             body: captionText,
           );
-    final sanitizedCaption = captionText ?? '';
+    final sanitizedCaption = captionText;
 
     final participants = await _shareParticipants(
       shareId: resolvedShareId,
@@ -750,6 +766,7 @@ class EmailService {
               subject: resolvedSubject,
               shareId: resolvedShareId,
               captionOverride: sanitizedCaption,
+              htmlCaption: normalizedHtmlCaption,
             ),
           );
         } else {
@@ -761,6 +778,7 @@ class EmailService {
               subject: resolvedSubject,
               shareId: resolvedShareId,
               localBodyOverride: sanitizedBody,
+              htmlBody: normalizedHtmlBody,
             ),
           );
         }
@@ -818,6 +836,38 @@ class EmailService {
     return trimmed;
   }
 
+  String? _normalizeDraftHtml({
+    required String text,
+    String? htmlBody,
+  }) {
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
+    if (normalizedHtml != null) {
+      return normalizedHtml;
+    }
+    final trimmedText = text.trim();
+    if (trimmedText.isEmpty) {
+      return null;
+    }
+    return HtmlContentCodec.normalizeHtml(
+      HtmlContentCodec.fromPlainText(text),
+    );
+  }
+
+  EmailAttachment? _draftAttachmentForCore(
+    List<EmailAttachment> attachments,
+  ) {
+    if (attachments.isEmpty) return null;
+    return attachments.first;
+  }
+
+  int _viewTypeForDraftAttachment(EmailAttachment attachment) {
+    if (attachment.isGif) return DeltaMessageType.gif;
+    if (attachment.isImage) return DeltaMessageType.image;
+    if (attachment.isVideo) return DeltaMessageType.video;
+    if (attachment.isAudio) return DeltaMessageType.audio;
+    return DeltaMessageType.file;
+  }
+
   String _composeSubjectEnvelope({
     required String? subject,
     required String? body,
@@ -869,33 +919,66 @@ class EmailService {
     );
   }
 
-  Future<EmailAttachment?> attachmentForMessage(Message message) async {
-    final metadataId = message.fileMetadataID;
-    if (metadataId == null) return null;
+  Future<List<EmailAttachment>> attachmentsForMessage(Message message) async {
+    final messageId = message.id;
     await _ensureReady();
     final db = await _databaseBuilder();
-    final metadata = await db.getFileMetadata(metadataId);
-    if (metadata == null) return null;
-    final path = metadata.path;
-    if (path == null || path.isEmpty) {
-      return null;
+    final metadataIds = <String>[];
+    if (messageId != null && messageId.isNotEmpty) {
+      var attachments = await db.getMessageAttachments(messageId);
+      if (attachments.isNotEmpty) {
+        final transportGroupId = attachments.first.transportGroupId?.trim();
+        if (transportGroupId != null && transportGroupId.isNotEmpty) {
+          attachments =
+              await db.getMessageAttachmentsForGroup(transportGroupId);
+        }
+        final ordered = attachments
+            .whereType<MessageAttachmentData>()
+            .toList(growable: false)
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        for (final attachment in ordered) {
+          metadataIds.add(attachment.fileMetadataId);
+        }
+      }
     }
-    final file = File(path);
-    if (!await file.exists()) {
-      return null;
+    if (metadataIds.isEmpty) {
+      final fallbackId = message.fileMetadataID;
+      if (fallbackId != null && fallbackId.isNotEmpty) {
+        metadataIds.add(fallbackId);
+      }
     }
-    final size = metadata.sizeBytes ?? await file.length();
-    final caption = message.plainText.trim();
-    return EmailAttachment(
-      path: path,
-      fileName: metadata.filename,
-      sizeBytes: size,
-      mimeType: metadata.mimeType,
-      width: metadata.width,
-      height: metadata.height,
-      caption: caption.isEmpty ? null : caption,
-      metadataId: metadata.id,
-    );
+    final orderedIds = LinkedHashSet<String>.from(metadataIds);
+    if (orderedIds.isEmpty) return const [];
+    final resolved = <EmailAttachment>[];
+    for (final metadataId in orderedIds) {
+      final metadata = await db.getFileMetadata(metadataId);
+      final path = metadata?.path;
+      if (metadata == null || path == null || path.isEmpty) {
+        continue;
+      }
+      final file = File(path);
+      if (!await file.exists()) {
+        continue;
+      }
+      final size = metadata.sizeBytes ?? await file.length();
+      resolved.add(
+        EmailAttachment(
+          path: path,
+          fileName: metadata.filename,
+          sizeBytes: size,
+          mimeType: metadata.mimeType,
+          width: metadata.width,
+          height: metadata.height,
+          metadataId: metadata.id,
+        ),
+      );
+    }
+    return resolved;
+  }
+
+  Future<EmailAttachment?> attachmentForMessage(Message message) async {
+    final attachments = await attachmentsForMessage(message);
+    return attachments.isEmpty ? null : attachments.first;
   }
 
   Future<int> sendToAddress({
@@ -1474,16 +1557,41 @@ class EmailService {
     if (trimmed?.isNotEmpty == true) {
       return trimmed;
     }
+    final messageId = message.id;
+    if (messageId != null && messageId.isNotEmpty) {
+      var attachments = await db.getMessageAttachments(messageId);
+      if (attachments.isNotEmpty) {
+        final transportGroupId = attachments.first.transportGroupId?.trim();
+        if (transportGroupId != null && transportGroupId.isNotEmpty) {
+          attachments =
+              await db.getMessageAttachmentsForGroup(transportGroupId);
+        }
+        final ordered = attachments
+            .whereType<MessageAttachmentData>()
+            .toList(growable: false)
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        final metadata = await db.getFileMetadata(ordered.first.fileMetadataId);
+        if (metadata == null) {
+          return _notificationAttachmentLabel;
+        }
+        final filename = metadata.filename.trim();
+        return filename.isEmpty
+            ? _notificationAttachmentLabel
+            : '$_notificationAttachmentPrefix$filename';
+      }
+    }
     final metadataId = message.fileMetadataID;
     if (metadataId == null) {
       return null;
     }
     final metadata = await db.getFileMetadata(metadataId);
     if (metadata == null) {
-      return 'Attachment';
+      return _notificationAttachmentLabel;
     }
     final filename = metadata.filename.trim();
-    return filename.isEmpty ? 'Attachment' : 'Attachment: $filename';
+    return filename.isEmpty
+        ? _notificationAttachmentLabel
+        : '$_notificationAttachmentPrefix$filename';
   }
 
   String? get selfSenderJid => _transport.selfJid;
@@ -1954,15 +2062,36 @@ class EmailService {
   Future<bool> saveDraftToCore({
     required Chat chat,
     required String text,
+    String? subject,
+    String? htmlBody,
+    List<EmailAttachment> attachments = _emptyEmailAttachments,
   }) async {
-    final chatId = chat.deltaChatId;
+    final deltaChat = await ensureChatForEmailChat(chat);
+    final chatId = deltaChat.deltaChatId;
     if (chatId == null) return false;
     await _ensureReady();
+    final normalizedSubject = _normalizeSubject(subject);
+    final normalizedHtml = _normalizeDraftHtml(
+      text: text,
+      htmlBody: htmlBody,
+    );
+    final attachment = _draftAttachmentForCore(attachments);
+    final viewType = attachment == null
+        ? DeltaMessageType.text
+        : _viewTypeForDraftAttachment(attachment);
     final message = DeltaMessage(
-      id: 0,
+      id: _coreDraftMessageId,
       chatId: chatId,
       text: text,
-      viewType: DeltaMessageType.text,
+      html: normalizedHtml,
+      subject: normalizedSubject,
+      viewType: viewType,
+      filePath: attachment?.path,
+      fileName: attachment?.fileName,
+      fileMime: attachment?.mimeType,
+      fileSize: attachment?.sizeBytes,
+      width: attachment?.width,
+      height: attachment?.height,
     );
     return _transport.setDraft(chatId: chatId, message: message);
   }
@@ -1976,12 +2105,11 @@ class EmailService {
   }
 
   /// Gets a draft from core.
-  Future<String?> getDraftFromCore(Chat chat) async {
+  Future<DeltaMessage?> getDraftFromCore(Chat chat) async {
     final chatId = chat.deltaChatId;
     if (chatId == null) return null;
     await _ensureReady();
-    final draft = await _transport.getDraft(chatId);
-    return draft?.text;
+    return _transport.getDraft(chatId);
   }
 
   /// Gets all contact IDs from core.
