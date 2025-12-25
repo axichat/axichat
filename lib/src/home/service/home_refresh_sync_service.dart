@@ -16,6 +16,8 @@ final class HomeRefreshSyncService {
 
   static const Duration _connectionTimeout = Duration(seconds: 20);
   static const int _mamHistoryPageSize = 50;
+  static const Duration _emailUnreadFetchTimeout = Duration(seconds: 8);
+  static const Duration _emailHistoryFetchTimeout = Duration(seconds: 25);
 
   final XmppService _xmppService;
   final EmailService? _emailService;
@@ -67,15 +69,15 @@ final class HomeRefreshSyncService {
     _syncInFlight = true;
     try {
       await _healTransports();
-
+      final mamOutcome = await _pullUnreadFromNewContacts();
       await _syncEmailContacts();
-      await _refreshMucBookmarks();
       await _refreshConversationIndex();
+      await _refreshMucBookmarks();
       await _refreshEmailHistory();
-
-      await _refreshXmppHistory();
+      await _refreshXmppHistory(mamOutcome: mamOutcome);
       await _rehydrateCalendar();
       await _refreshAvatars();
+      await _refreshDrafts();
 
       _lastSyncAt = DateTime.timestamp();
       return _lastSyncAt!;
@@ -89,6 +91,7 @@ final class HomeRefreshSyncService {
     _lastXmppState = state;
     if (!wasConnected && state == ConnectionState.connected) {
       unawaited(_runReconnectSync());
+      return;
     }
   }
 
@@ -123,6 +126,34 @@ final class HomeRefreshSyncService {
   Future<void> _healTransports() async {
     await _ensureConnected();
     await _ensureEmailConnected();
+  }
+
+  Future<MamGlobalSyncOutcome> _pullUnreadFromNewContacts() async {
+    final mamOutcome = await _refreshXmppUnread();
+    await _refreshEmailUnread();
+    return mamOutcome;
+  }
+
+  Future<MamGlobalSyncOutcome> _refreshXmppUnread() async {
+    if (_xmppService.connectionState != ConnectionState.connected) {
+      return MamGlobalSyncOutcome.failed;
+    }
+    return _xmppService.syncGlobalMamCatchUp(
+      pageSize: _mamHistoryPageSize,
+    );
+  }
+
+  Future<void> _refreshEmailUnread() async {
+    final emailService = _emailService;
+    if (emailService == null) return;
+    try {
+      await emailService.performBackgroundFetch(
+        timeout: _emailUnreadFetchTimeout,
+      );
+      await emailService.refreshChatlistFromCore();
+    } on Exception {
+      _log.fine('Email unread sync failed.');
+    }
   }
 
   Future<void> _ensureConnected() async {
@@ -162,6 +193,9 @@ final class HomeRefreshSyncService {
     final emailService = _emailService;
     if (emailService == null) return;
     try {
+      await emailService.performBackgroundFetch(
+        timeout: _emailHistoryFetchTimeout,
+      );
       await emailService.syncInboxAndSent();
     } on Exception {
       _log.fine('Email background sync failed.');
@@ -178,12 +212,11 @@ final class HomeRefreshSyncService {
     }
   }
 
-  Future<void> _refreshXmppHistory() async {
+  Future<void> _refreshXmppHistory({
+    required MamGlobalSyncOutcome mamOutcome,
+  }) async {
     if (_xmppService.connectionState != ConnectionState.connected) return;
-    final outcome = await _xmppService.syncGlobalMamCatchUp(
-      pageSize: _mamHistoryPageSize,
-    );
-    final includeDirect = outcome.shouldFallbackToPerChat;
+    final includeDirect = mamOutcome.shouldFallbackToPerChat;
     await _xmppService.syncMessageArchiveOnLogin(
       includeDirect: includeDirect,
       includeMuc: true,
@@ -193,5 +226,10 @@ final class HomeRefreshSyncService {
   Future<void> _refreshAvatars() async {
     if (_xmppService.connectionState != ConnectionState.connected) return;
     await _xmppService.refreshAvatarsForConversationIndex();
+  }
+
+  Future<void> _refreshDrafts() async {
+    if (_xmppService.connectionState != ConnectionState.connected) return;
+    await _xmppService.syncDraftsSnapshot();
   }
 }

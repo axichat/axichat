@@ -7,6 +7,9 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'file_models.freezed.dart';
 
+const String draftSyncIdFallback = '';
+const String draftSourceLegacyId = 'legacy';
+
 @Freezed(toJson: false, fromJson: false)
 class FileMetadataData
     with _$FileMetadataData
@@ -156,6 +159,9 @@ class Draft with _$Draft implements Insertable<Draft> {
   const factory Draft({
     required int id,
     required List<String> jids,
+    required String draftSyncId,
+    required DateTime draftUpdatedAt,
+    required String draftSourceId,
     String? body,
     String? subject,
     @Default(<String>[]) List<String> attachmentMetadataIds,
@@ -168,6 +174,9 @@ class Draft with _$Draft implements Insertable<Draft> {
       DraftsCompanion(
         id: Value(id),
         jids: Value(jids),
+        draftSyncId: Value(draftSyncId),
+        draftUpdatedAt: Value(draftUpdatedAt),
+        draftSourceId: Value(draftSourceId),
         body: Value.absentIfNull(body),
         subject: Value.absentIfNull(subject),
         attachmentMetadataIds: Value(attachmentMetadataIds),
@@ -179,6 +188,15 @@ class Drafts extends Table {
   IntColumn get id => integer().autoIncrement()();
 
   TextColumn get jids => text().map(ListConverter<String>())();
+
+  TextColumn get draftSyncId =>
+      text().withDefault(const Constant(draftSyncIdFallback))();
+
+  DateTimeColumn get draftUpdatedAt =>
+      dateTime().withDefault(currentDateAndTime)();
+
+  TextColumn get draftSourceId =>
+      text().withDefault(const Constant(draftSourceLegacyId))();
 
   TextColumn get body => text().nullable()();
 
