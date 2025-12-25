@@ -1,5 +1,6 @@
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
@@ -12,7 +13,9 @@ class ChatCalendarBloc extends CalendarBloc {
     required ChatCalendarSyncCoordinator coordinator,
     required super.storage,
     super.reminderController,
-  }) : super(
+    super.availabilityCoordinator,
+  })  : _chatJid = chatJid,
+        super(
           storageId: chatCalendarStorageId(chatJid),
           syncManagerBuilder: (bloc) {
             coordinator.registerBloc(
@@ -35,4 +38,10 @@ class ChatCalendarBloc extends CalendarBloc {
           },
           onDispose: () => coordinator.unregisterBloc(chatJid: chatJid),
         );
+
+  final String _chatJid;
+
+  @override
+  CalendarAvailabilityShareSource get availabilityShareSource =>
+      CalendarAvailabilityShareSource.chat(chatJid: _chatJid);
 }
