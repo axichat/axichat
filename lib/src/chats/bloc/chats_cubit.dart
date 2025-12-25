@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -15,8 +17,10 @@ class ChatsCubit extends Cubit<ChatsState> {
   ChatsCubit({
     required XmppService xmppService,
     required HomeRefreshSyncService homeRefreshSyncService,
+    EmailService? emailService,
   })  : _chatsService = xmppService,
         _homeRefreshSyncService = homeRefreshSyncService,
+        _emailService = emailService,
         super(
           const ChatsState(
             openJid: null,
@@ -33,6 +37,7 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   final ChatsService _chatsService;
   final HomeRefreshSyncService _homeRefreshSyncService;
+  final EmailService? _emailService;
 
   late final StreamSubscription<List<Chat>> _chatsSubscription;
 
@@ -257,7 +262,37 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   Future<void> deleteChatMessages({required String jid}) async {
+    final chat = await _resolveChat(jid);
+    final emailService = _emailService;
+    if (chat != null && chat.defaultTransport.isEmail && emailService != null) {
+      await _deleteEmailMessagesForChat(
+        chat: chat,
+        emailService: emailService,
+      );
+    }
     await _chatsService.deleteChatMessages(jid: jid);
+  }
+
+  Future<void> _deleteEmailMessagesForChat({
+    required Chat chat,
+    required EmailService emailService,
+  }) async {
+    final db = await _loadDatabase();
+    final messages = await db.getAllMessagesForChat(chat.jid);
+    if (messages.isEmpty) return;
+    await emailService.deleteMessages(messages);
+  }
+
+  Future<Chat?> _resolveChat(String jid) async {
+    final fromState = _chatFor(jid);
+    if (fromState != null) return fromState;
+    final db = await _loadDatabase();
+    return db.getChat(jid);
+  }
+
+  Future<XmppDatabase> _loadDatabase() async {
+    final xmppBase = _chatsService as XmppBase;
+    return xmppBase.database;
   }
 
   Future<void> renameContact({
