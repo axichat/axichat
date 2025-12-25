@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -155,6 +156,15 @@ enum PseudoMessageType {
   unknown,
   mucInvite,
   mucInviteRevocation,
+  calendarFragment,
+}
+
+extension PseudoMessageTypeX on PseudoMessageType {
+  bool get isInvite =>
+      this == PseudoMessageType.mucInvite ||
+      this == PseudoMessageType.mucInviteRevocation;
+
+  bool get isCalendarFragment => this == PseudoMessageType.calendarFragment;
 }
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
@@ -292,6 +302,11 @@ class Message with _$Message implements Insertable<Message> {
             : from);
     final senderJid = isGroupChat ? event.from.toString() : from;
     final invite = _ParsedInvite.fromEvent(event, to: to);
+    final fragmentPayload = get<CalendarFragmentPayload>();
+    final PseudoMessageType? pseudoMessageType = invite?.type ??
+        (fragmentPayload == null ? null : PseudoMessageType.calendarFragment);
+    final Map<String, dynamic>? pseudoMessageData =
+        invite?.data ?? fragmentPayload?.fragment.toJson();
     final htmlData = get<XhtmlImData>();
     final normalizedHtml = HtmlContentCodec.normalizeHtml(
       htmlData?.xhtmlBody,
@@ -320,8 +335,8 @@ class Message with _$Message implements Insertable<Message> {
           event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
       deviceID: get<OmemoDeviceData>()?.id,
       error: MessageError.fromOmemo(event.encryptionError),
-      pseudoMessageType: invite?.type,
-      pseudoMessageData: invite?.data,
+      pseudoMessageType: pseudoMessageType,
+      pseudoMessageData: pseudoMessageData,
     );
   }
 
@@ -494,6 +509,25 @@ extension MessageContent on Message {
     final html = normalizedHtmlBody;
     if (html == null) return '';
     return HtmlContentCodec.toPlainText(html);
+  }
+}
+
+extension MessageCalendarFragmentX on Message {
+  CalendarFragment? get calendarFragment {
+    if (pseudoMessageType != PseudoMessageType.calendarFragment) {
+      return null;
+    }
+    final payload = pseudoMessageData;
+    if (payload == null || payload.isEmpty) {
+      return null;
+    }
+    try {
+      return CalendarFragment.fromJson(
+        Map<String, dynamic>.from(payload),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }
 
