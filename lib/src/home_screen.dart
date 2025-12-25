@@ -344,6 +344,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 jid: openJid,
                                                 messageService:
                                                     context.read<XmppService>(),
+                                                emailService: context
+                                                    .read<EmailService>(),
                                               ),
                                             ),
                                             /* Verification flow temporarily disabled
