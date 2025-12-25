@@ -151,6 +151,7 @@ const _selectionAutoscrollReboundCurve = Curves.easeOutCubic;
 const _selectionAutoscrollReboundDuration = Duration(milliseconds: 260);
 const _selectionAttachmentBaseGap = 16.0;
 const _selectionAttachmentSelectedGap = 8.0;
+const _attachmentPreviewSpacing = 8.0;
 const _selectionExtrasViewportGap = 50.0;
 const _reactionManagerRadius = 18.0;
 const _reactionManagerQuickSpacing = 8.0;
@@ -179,6 +180,8 @@ const _reactionQuickChoices = [
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _chatScrollStoragePrefix = 'chat-scroll-offset-';
+const _recipientVisibilityCcLabel = 'CC';
+const _recipientVisibilityBccLabel = 'BCC';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
 const _guestDesktopHorizontalPadding = _chatHorizontalPadding + 6.0;
@@ -2875,16 +2878,51 @@ class _ChatState extends State<Chat> {
                                     final activeItems = searchFiltering
                                         ? searchResults
                                         : state.items;
-                                    final filteredItems = activeItems
+                                    final attachmentsByMessageId =
+                                        state.attachmentMetadataIdsByMessageId;
+                                    final groupLeaderByMessageId =
+                                        state.attachmentGroupLeaderByMessageId;
+                                    const emptyAttachments = <String>[];
+                                    String messageKey(Message message) =>
+                                        message.id ?? message.stanzaID;
+                                    bool isGroupedNonLeader(Message message) {
+                                      final messageId = message.id;
+                                      if (messageId == null ||
+                                          messageId.isEmpty) {
+                                        return false;
+                                      }
+                                      final leaderId =
+                                          groupLeaderByMessageId[messageId];
+                                      return leaderId != null &&
+                                          leaderId != messageId;
+                                    }
+
+                                    List<String> attachmentsForMessage(
+                                      Message message,
+                                    ) {
+                                      final key = messageKey(message);
+                                      return attachmentsByMessageId[key] ??
+                                          emptyAttachments;
+                                    }
+
+                                    final displayItems = activeItems
                                         .where(
                                           (message) =>
-                                              message.body != null ||
-                                              message.error.isNotNone ||
-                                              message.fileMetadataID
-                                                      ?.isNotEmpty ==
-                                                  true,
+                                              !isGroupedNonLeader(message),
                                         )
                                         .toList();
+                                    final filteredItems =
+                                        displayItems.where((message) {
+                                      final hasHtml = message
+                                              .normalizedHtmlBody?.isNotEmpty ==
+                                          true;
+                                      final attachments =
+                                          attachmentsForMessage(message);
+                                      return message.body != null ||
+                                          hasHtml ||
+                                          message.error.isNotNone ||
+                                          attachments.isNotEmpty;
+                                    }).toList();
                                     final isEmailChat =
                                         state.chat?.defaultTransport.isEmail ==
                                             true;
@@ -3109,8 +3147,10 @@ class _ChatState extends State<Chat> {
                                           : e.error.isNotNone
                                               ? '$errorLabel${bodyText.isNotEmpty ? ': "$bodyTextTrimmed"' : ''}'
                                               : displayedBody;
+                                      final attachmentIds =
+                                          attachmentsForMessage(e);
                                       final hasAttachment =
-                                          e.fileMetadataID?.isNotEmpty == true;
+                                          attachmentIds.isNotEmpty;
                                       final hasRenderableSubjectHeader =
                                           showSubjectHeader &&
                                               subjectText.isNotEmpty;
@@ -3132,7 +3172,7 @@ class _ChatState extends State<Chat> {
                                             'id': e.stanzaID,
                                             'body': bodyText,
                                             'renderedText': renderedText,
-                                            'fileMetadataID': e.fileMetadataID,
+                                            'attachmentIds': attachmentIds,
                                             'edited': e.edited,
                                             'retracted': e.retracted,
                                             'error': e.error,
@@ -3690,6 +3730,12 @@ class _ChatState extends State<Chat> {
                                                                         .Chat>?) ??
                                                                 const <chat_models
                                                                     .Chat>[];
+                                                        final attachmentIds =
+                                                            (message.customProperties?[
+                                                                        'attachmentIds']
+                                                                    as List<
+                                                                        String>?) ??
+                                                                const <String>[];
                                                         final showReplyStrip =
                                                             isEmailMessage &&
                                                                 replyParticipants
@@ -4022,23 +4068,22 @@ class _ChatState extends State<Chat> {
                                                                           'renderedText']
                                                                       as String?) ??
                                                                   message.text;
-                                                          final metadataIdForCaption =
-                                                              messageModel
-                                                                  .fileMetadataID;
-                                                          final showAttachmentCaption =
+                                                          final hasAttachmentCaption =
                                                               rawRenderedText
                                                                       .trim()
                                                                       .isEmpty &&
-                                                                  metadataIdForCaption
-                                                                          ?.isNotEmpty ==
-                                                                      true;
-                                                          if (showAttachmentCaption) {
+                                                                  attachmentIds
+                                                                      .isNotEmpty;
+                                                          if (hasAttachmentCaption) {
+                                                            final metadataIdForCaption =
+                                                                attachmentIds
+                                                                    .first;
                                                             bubbleChildren.add(
                                                               StreamBuilder<
                                                                   FileMetadataData?>(
                                                                 stream:
                                                                     _metadataStreamFor(
-                                                                  metadataIdForCaption!,
+                                                                  metadataIdForCaption,
                                                                 ),
                                                                 initialData:
                                                                     _metadataInitialFor(
@@ -4268,18 +4313,15 @@ class _ChatState extends State<Chat> {
                                                             );
                                                           }
                                                         }
-                                                        final metadataId =
-                                                            messageModel
-                                                                .fileMetadataID;
-                                                        if (metadataId !=
-                                                                null &&
-                                                            metadataId
-                                                                .isNotEmpty) {
+                                                        if (attachmentIds
+                                                            .isNotEmpty) {
                                                           if (bubbleChildren
                                                               .isNotEmpty) {
                                                             bubbleChildren.add(
                                                               const SizedBox(
-                                                                  height: 8),
+                                                                height:
+                                                                    _attachmentPreviewSpacing,
+                                                              ),
                                                             );
                                                           }
                                                           final allowAttachmentByRoster =
@@ -4303,45 +4345,57 @@ class _ChatState extends State<Chat> {
                                                           final allowAttachment =
                                                               allowAttachmentByRoster ||
                                                                   allowAttachmentOnce;
-                                                          bubbleChildren.add(
-                                                            ChatAttachmentPreview(
-                                                              stanzaId:
-                                                                  messageModel
-                                                                      .stanzaID,
-                                                              metadataStream:
-                                                                  _metadataStreamFor(
-                                                                metadataId,
+                                                          for (var index = 0;
+                                                              index <
+                                                                  attachmentIds
+                                                                      .length;
+                                                              index += 1) {
+                                                            final attachmentId =
+                                                                attachmentIds[
+                                                                    index];
+                                                            if (index > 0) {
+                                                              bubbleChildren
+                                                                  .add(
+                                                                const SizedBox(
+                                                                  height:
+                                                                      _attachmentPreviewSpacing,
+                                                                ),
+                                                              );
+                                                            }
+                                                            bubbleChildren.add(
+                                                              ChatAttachmentPreview(
+                                                                stanzaId:
+                                                                    messageModel
+                                                                        .stanzaID,
+                                                                metadataStream:
+                                                                    _metadataStreamFor(
+                                                                  attachmentId,
+                                                                ),
+                                                                initialMetadata:
+                                                                    _metadataInitialFor(
+                                                                  attachmentId,
+                                                                ),
+                                                                allowed:
+                                                                    allowAttachment,
+                                                                autoDownload:
+                                                                    allowAttachment,
+                                                                autoDownloadUserInitiated:
+                                                                    allowAttachmentOnce,
+                                                                onAllowPressed:
+                                                                    allowAttachment
+                                                                        ? null
+                                                                        : () =>
+                                                                            _approveAttachment(
+                                                                              senderJid: messageModel.senderJid,
+                                                                              stanzaId: messageModel.stanzaID,
+                                                                              metadataId: attachmentId,
+                                                                              isGroupChat: isGroupChat,
+                                                                              isEmailChat: isEmailChat,
+                                                                              senderEmail: state.chat?.emailAddress,
+                                                                            ),
                                                               ),
-                                                              initialMetadata:
-                                                                  _metadataInitialFor(
-                                                                metadataId,
-                                                              ),
-                                                              allowed:
-                                                                  allowAttachment,
-                                                              autoDownload:
-                                                                  allowAttachment,
-                                                              autoDownloadUserInitiated:
-                                                                  allowAttachmentOnce,
-                                                              onAllowPressed:
-                                                                  allowAttachment
-                                                                      ? null
-                                                                      : () =>
-                                                                          _approveAttachment(
-                                                                            senderJid:
-                                                                                messageModel.senderJid,
-                                                                            stanzaId:
-                                                                                messageModel.stanzaID,
-                                                                            metadataId:
-                                                                                metadataId,
-                                                                            isGroupChat:
-                                                                                isGroupChat,
-                                                                            isEmailChat:
-                                                                                isEmailChat,
-                                                                            senderEmail:
-                                                                                state.chat?.emailAddress,
-                                                                          ),
-                                                            ),
-                                                          );
+                                                            );
+                                                          }
                                                         }
                                                         var bubbleBottomInset =
                                                             0.0;
@@ -5529,11 +5583,17 @@ class _ChatState extends State<Chat> {
                                               _ensureRecipientBarHeightCleared();
                                               return const _ReadOnlyComposerBanner();
                                             }
+                                            final visibilityLabel =
+                                                _recipientVisibilityLabel(
+                                              chat: state.chat,
+                                              recipients: recipients,
+                                            );
                                             return _ChatComposerSection(
                                               hintText: composerHintText,
                                               recipients: recipients,
                                               availableChats: availableChats,
                                               latestStatuses: latestStatuses,
+                                              visibilityLabel: visibilityLabel,
                                               pendingAttachments:
                                                   pendingAttachments,
                                               composerHasText: _composerHasText,
@@ -5842,6 +5902,46 @@ class _ChatState extends State<Chat> {
     final plainText = model.plainText.trim();
     if (plainText.isNotEmpty) return plainText;
     return dashMessage.text.trim();
+  }
+
+  String? _recipientVisibilityLabel({
+    required chat_models.Chat? chat,
+    required List<ComposerRecipient> recipients,
+  }) {
+    if (chat == null) return null;
+    final included =
+        recipients.where((recipient) => recipient.included).toList();
+    if (included.length <= 1) return null;
+    final hasEmailRecipient = included.any((recipient) {
+      final targetChat = recipient.target.chat;
+      if (targetChat != null) {
+        return targetChat.supportsEmail;
+      }
+      final address = recipient.target.address;
+      return address != null && address.trim().isNotEmpty;
+    });
+    if (!hasEmailRecipient) return null;
+    final shouldFanOut = _shouldFanOutRecipients(
+      chat: chat,
+      recipients: included,
+    );
+    return shouldFanOut
+        ? _recipientVisibilityBccLabel
+        : _recipientVisibilityCcLabel;
+  }
+
+  bool _shouldFanOutRecipients({
+    required chat_models.Chat chat,
+    required List<ComposerRecipient> recipients,
+  }) {
+    if (recipients.isEmpty) return false;
+    if (recipients.length == 1) {
+      final targetChat = recipients.single.target.chat;
+      if (targetChat != null && targetChat.jid == chat.jid) {
+        return false;
+      }
+    }
+    return true;
   }
 
   String _joinedMessageText(List<Message> messages) {
@@ -7067,6 +7167,7 @@ class _ChatComposerSection extends StatelessWidget {
     required this.recipients,
     required this.availableChats,
     required this.latestStatuses,
+    required this.visibilityLabel,
     required this.pendingAttachments,
     required this.composerHasText,
     required this.subjectController,
@@ -7095,6 +7196,7 @@ class _ChatComposerSection extends StatelessWidget {
   final List<ComposerRecipient> recipients;
   final List<chat_models.Chat> availableChats;
   final Map<String, FanOutRecipientState> latestStatuses;
+  final String? visibilityLabel;
   final List<PendingAttachment> pendingAttachments;
   final bool composerHasText;
   final TextEditingController subjectController;
@@ -7284,6 +7386,7 @@ class _ChatComposerSection extends StatelessWidget {
         onRecipientAdded: onRecipientAdded,
         onRecipientRemoved: onRecipientRemoved,
         onRecipientToggled: onRecipientToggled,
+        visibilityLabel: visibilityLabel,
       ),
     );
     children.add(composer);
