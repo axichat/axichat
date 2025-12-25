@@ -8,6 +8,7 @@ import 'dart:ui' as ui;
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
@@ -416,6 +417,7 @@ class XmppService extends XmppBase
 
   // Calendar sync message callback
   Future<void> Function(CalendarSyncInbound)? _calendarSyncCallback;
+  ChatCalendarSyncHandler? _chatCalendarSyncCallback;
 
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
@@ -2348,6 +2350,16 @@ class XmppService extends XmppBase
   /// Clear any calendar sync callback to avoid calling disposed handlers.
   void clearCalendarSyncCallback() {
     _calendarSyncCallback = null;
+  }
+
+  /// Register a callback to handle chat calendar sync messages.
+  void setChatCalendarSyncCallback(ChatCalendarSyncHandler callback) {
+    _chatCalendarSyncCallback = callback;
+  }
+
+  /// Clear any chat calendar sync callback to avoid calling disposed handlers.
+  void clearChatCalendarSyncCallback() {
+    _chatCalendarSyncCallback = null;
   }
 
   static String generateResource() => 'axi.${generateRandomString(

@@ -7,11 +7,16 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/calendar/view/chat_calendar_widget.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -84,6 +89,7 @@ extension on MessageStatus {
 enum _ChatRoute {
   main,
   details,
+  calendar,
 }
 
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
@@ -122,6 +128,7 @@ const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
+const _chatCalendarActionSpacing = 4.0;
 const String _calendarFragmentShareDeniedMessage =
     'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
@@ -588,6 +595,19 @@ bool _chatMessagesShouldChain(
   return neighborDate == currentDate;
 }
 
+ChatCalendarSyncCoordinator? _maybeReadChatCalendarCoordinator(
+  BuildContext context,
+) {
+  try {
+    return RepositoryProvider.of<ChatCalendarSyncCoordinator>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
+  }
+}
+
 class Chat extends StatefulWidget {
   const Chat({super.key, this.readOnly = false});
 
@@ -870,10 +890,7 @@ class _ChatState extends State<Chat> {
       chat: chat,
       roomState: chatState.roomState,
     );
-    final CalendarFragment fragment = _calendarFragmentPolicy.redactFragment(
-      CalendarFragment.task(task: task),
-      decision.visibility,
-    );
+    final CalendarFragment fragment = CalendarFragment.task(task: task);
     final String shareText =
         _calendarFragmentFormatter.describe(fragment).trim();
     if (shareText.isEmpty) {
@@ -2539,6 +2556,7 @@ class _ChatState extends State<Chat> {
                 final jid = chatEntity?.jid;
                 final isDefaultEmail =
                     chatEntity?.defaultTransport.isEmail ?? false;
+                final isGroupChat = chatEntity?.type == ChatType.groupChat;
                 final currentUserId = isDefaultEmail
                     ? (emailSelfJid ?? profile?.jid ?? '')
                     : (profile?.jid ?? emailSelfJid ?? '');
@@ -2631,6 +2649,37 @@ class _ChatState extends State<Chat> {
                   return avatarPathForBareJid(bareRealJid);
                 }
 
+                final storageManager = context.watch<CalendarStorageManager>();
+                final chatCalendarCoordinator =
+                    _maybeReadChatCalendarCoordinator(context);
+                final bool supportsChatCalendar =
+                    chatEntity?.supportsChatCalendar ?? false;
+                final OccupantAffiliation calendarAffiliation =
+                    state.roomState?.myAffiliation ?? OccupantAffiliation.none;
+                final bool chatCalendarAllowed = supportsChatCalendar &&
+                    (!isGroupChat || calendarAffiliation.isMemberOrAbove);
+                final bool chatCalendarReady =
+                    storageManager.isAuthStorageReady &&
+                        chatCalendarCoordinator != null;
+                final bool chatCalendarAvailable =
+                    chatCalendarAllowed && chatCalendarReady;
+                final List<String> chatCalendarParticipants =
+                    chatCalendarAllowed
+                        ? _resolveChatCalendarParticipants(
+                            chat: chatEntity,
+                            roomState: state.roomState,
+                            currentUserId: currentUserId,
+                          )
+                        : const <String>[];
+                final chatCalendarAvatarPaths = <String, String>{};
+                for (final participant in chatCalendarParticipants) {
+                  final path = avatarPathForTypingParticipant(participant);
+                  if (path == null || path.isEmpty) {
+                    continue;
+                  }
+                  chatCalendarAvatarPaths[participant] = path;
+                }
+
                 final retryEntry = _lastReportEntryWhere(
                   fanOutReports.entries,
                   (entry) => entry.value.hasFailures,
@@ -2672,7 +2721,6 @@ class _ChatState extends State<Chat> {
                   return true;
                 }
 
-                final isGroupChat = chatEntity?.type == ChatType.groupChat;
                 final selfUserId = isGroupChat && myOccupantId != null
                     ? myOccupantId
                     : currentUserId;
@@ -2690,6 +2738,16 @@ class _ChatState extends State<Chat> {
                     !readOnly &&
                     jid != null &&
                     _chatRoute == _ChatRoute.main;
+                if (!chatCalendarAvailable &&
+                    _chatRoute == _ChatRoute.calendar) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    setState(() {
+                      _chatRoute = _ChatRoute.main;
+                      _settingsPanelExpanded = false;
+                    });
+                  });
+                }
                 return Container(
                   decoration: BoxDecoration(
                     color: context.colorScheme.background,
@@ -2924,6 +2982,24 @@ class _ChatState extends State<Chat> {
                               onPressed: _showMembers,
                             ),
                           const _ChatSearchToggleButton(),
+                          if (chatCalendarAllowed) ...[
+                            const SizedBox(
+                              width: _chatCalendarActionSpacing,
+                            ),
+                            AxiIconButton(
+                              iconData: LucideIcons.calendarClock,
+                              tooltip: context.l10n.homeRailCalendar,
+                              onPressed: () {
+                                if (!chatCalendarAvailable) {
+                                  _showSnackbar(
+                                    context.l10n.chatCalendarUnavailable,
+                                  );
+                                  return;
+                                }
+                                _openChatCalendar();
+                              },
+                            ),
+                          ],
                           if (!readOnly) ...[
                             const SizedBox(width: 4),
                             AxiIconButton(
@@ -3780,23 +3856,9 @@ class _ChatState extends State<Chat> {
                                                             message.customProperties?[
                                                                     _calendarFragmentPropertyKey]
                                                                 as CalendarFragment?;
-                                                        final CalendarFragmentVisibility
-                                                            fragmentVisibility =
-                                                            _calendarFragmentPolicy
-                                                                .visibilityForChat(
-                                                          chat: state.chat,
-                                                          roomState:
-                                                              state.roomState,
-                                                        );
                                                         final CalendarFragment?
                                                             displayFragment =
-                                                            rawFragment == null
-                                                                ? null
-                                                                : _calendarFragmentPolicy
-                                                                    .redactFragment(
-                                                                    rawFragment,
-                                                                    fragmentVisibility,
-                                                                  );
+                                                            rawFragment;
                                                         final verification =
                                                             trusted == null
                                                                 ? null
@@ -5800,6 +5862,14 @@ class _ChatState extends State<Chat> {
                                   },
                                 ),
                                 const ChatMessageDetails(),
+                                _ChatCalendarPanel(
+                                  key: ValueKey(chatEntity?.jid),
+                                  chat: chatEntity,
+                                  calendarAvailable: chatCalendarAvailable,
+                                  participants: chatCalendarParticipants,
+                                  avatarPaths: chatCalendarAvatarPaths,
+                                  onBackPressed: _closeChatCalendar,
+                                ),
                               ],
                             ),
                           ),
@@ -6160,6 +6230,71 @@ class _ChatState extends State<Chat> {
     });
   }
 
+  void _openChatCalendar() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.calendar;
+      _settingsPanelExpanded = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
+  }
+
+  void _closeChatCalendar() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.main;
+    });
+  }
+
+  List<String> _resolveChatCalendarParticipants({
+    required chat_models.Chat? chat,
+    required RoomState? roomState,
+    required String? currentUserId,
+  }) {
+    if (chat == null) {
+      return const <String>[];
+    }
+    final participants = <String>[];
+    final seen = <String>{};
+    void addParticipant(String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) {
+        return;
+      }
+      final normalized = trimmed.toLowerCase();
+      if (seen.contains(normalized)) {
+        return;
+      }
+      seen.add(normalized);
+      participants.add(trimmed);
+    }
+
+    if (chat.type == ChatType.groupChat) {
+      final room = roomState;
+      if (room != null) {
+        final eligible = <Occupant>[
+          ...room.owners,
+          ...room.admins,
+          ...room.members,
+        ];
+        for (final occupant in eligible) {
+          final realJid = occupant.realJid?.trim();
+          addParticipant(
+            realJid?.isNotEmpty == true ? realJid : occupant.occupantId,
+          );
+        }
+      }
+      addParticipant(currentUserId);
+      return participants;
+    }
+
+    addParticipant(currentUserId);
+    addParticipant(chat.remoteJid);
+    return participants;
+  }
+
   Future<chat_models.Chat?> _selectForwardTarget() async {
     if (!mounted) return null;
     final l10n = context.l10n;
@@ -6276,6 +6411,52 @@ class _ChatState extends State<Chat> {
       }
     }
     return null;
+  }
+}
+
+class _ChatCalendarPanel extends StatelessWidget {
+  const _ChatCalendarPanel({
+    super.key,
+    required this.chat,
+    required this.calendarAvailable,
+    required this.participants,
+    required this.avatarPaths,
+    required this.onBackPressed,
+  });
+
+  final chat_models.Chat? chat;
+  final bool calendarAvailable;
+  final List<String> participants;
+  final Map<String, String> avatarPaths;
+  final VoidCallback onBackPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChat = chat;
+    if (!calendarAvailable || resolvedChat == null) {
+      return const SizedBox.shrink();
+    }
+    final storageManager = context.read<CalendarStorageManager>();
+    final storage = storageManager.authStorage;
+    final coordinator = _maybeReadChatCalendarCoordinator(context);
+    if (storage == null || coordinator == null) {
+      return const SizedBox.shrink();
+    }
+    final reminderController = context.read<CalendarReminderController>();
+    return BlocProvider<ChatCalendarBloc>(
+      create: (context) => ChatCalendarBloc(
+        chatJid: resolvedChat.jid,
+        chatType: resolvedChat.type,
+        coordinator: coordinator,
+        storage: storage,
+        reminderController: reminderController,
+      )..add(const CalendarEvent.started()),
+      child: ChatCalendarWidget(
+        onBackPressed: onBackPressed,
+        participants: participants,
+        avatarPaths: avatarPaths,
+      ),
+    );
   }
 }
 
