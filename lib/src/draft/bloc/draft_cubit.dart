@@ -250,13 +250,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   bool get _shouldUseCoreDraftFallback {
-    if (_messageService case final XmppBase xmppBase) {
-      final jid = xmppBase.myJid;
-      if (jid != null && jid.trim().isNotEmpty) {
-        return false;
-      }
-    }
-    return true;
+    final emailService = _emailService;
+    if (emailService == null) return false;
+    return emailService.isSmtpOnly;
   }
 
   String? _singleEmailRecipient(List<String> jids) {

@@ -106,7 +106,6 @@ class DeltaEventConsumer {
     register(unarchived);
     register(archived);
 
-    final supportsFreshMessages = await _context.probeFreshMessagesSupport();
     final db = await _db();
     var didBootstrap = false;
 
@@ -135,11 +134,9 @@ class DeltaEventConsumer {
           updated = updated.copyWith(lastMessage: preview);
         }
       }
-      if (supportsFreshMessages) {
-        final freshCount = await _context.getFreshMessageCount(chatId);
-        if (freshCount != updated.unreadCount) {
-          updated = updated.copyWith(unreadCount: freshCount);
-        }
+      final freshCount = await _context.getFreshMessageCountSafe(chatId);
+      if (freshCount.supported && freshCount.count != updated.unreadCount) {
+        updated = updated.copyWith(unreadCount: freshCount.count);
       }
       if (updated != chat) {
         await db.updateChat(updated);
@@ -219,7 +216,6 @@ class DeltaEventConsumer {
     register(unarchived);
     register(archived);
 
-    final supportsFreshMessages = await _context.probeFreshMessagesSupport();
     final db = await _db();
     var processed = 0;
     for (final entry in entriesByChatId.values) {
@@ -246,11 +242,9 @@ class DeltaEventConsumer {
           updated = updated.copyWith(lastMessage: preview);
         }
       }
-      if (supportsFreshMessages) {
-        final freshCount = await _context.getFreshMessageCount(chatId);
-        if (freshCount != updated.unreadCount) {
-          updated = updated.copyWith(unreadCount: freshCount);
-        }
+      final freshCount = await _context.getFreshMessageCountSafe(chatId);
+      if (freshCount.supported && freshCount.count != updated.unreadCount) {
+        updated = updated.copyWith(unreadCount: freshCount.count);
       }
       if (updated != chat) {
         await db.updateChat(updated);

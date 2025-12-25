@@ -328,11 +328,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool get _shouldUseCoreDraftFallback {
-    final xmppJid = _xmppService?.myJid;
-    if (xmppJid == null) {
-      return true;
-    }
-    return xmppJid.trim().isEmpty;
+    final emailService = _emailService;
+    if (emailService == null) return false;
+    return emailService.isSmtpOnly;
   }
 
   Future<void> _prefetchPeerAvatar(Chat chat) async {
