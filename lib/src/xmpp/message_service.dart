@@ -1678,6 +1678,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   Future<void> sendCalendarSyncMessage({
     required String jid,
     required CalendarSyncOutbound outbound,
+    ChatType chatType = ChatType.chat,
   }) async {
     const hint = mox.MessageProcessingHintData(
       [mox.MessageProcessingHint.store],
@@ -1692,6 +1693,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       text: outbound.envelope,
       storeLocally: false,
       extraExtensions: extensions,
+      chatType: chatType,
     );
   }
 
@@ -2857,6 +2859,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
     final senderJid = event.from.toBare().toString();
     final selfJid = myJid;
+    final chatJid = _calendarSyncChatJid(event, selfJid);
+    final chatType = _calendarSyncChatType(event);
 
     final syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
     if (syncMessage == null) {
@@ -2869,14 +2873,16 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       return false;
     }
 
-    if (selfJid != null && senderJid != selfJid) {
+    final bool isSelfCalendar = selfJid != null && chatJid == selfJid;
+    if (isSelfCalendar && senderJid != selfJid) {
       _log.warning('Rejected calendar sync message from unauthorized sender');
-      return true; // Handled - don't process as regular chat message
+      return true;
     }
 
     _log.info('Received calendar sync message type: ${syncMessage.type}');
 
-    if (_calendarMamRehydrateInFlight &&
+    if (isSelfCalendar &&
+        _calendarMamRehydrateInFlight &&
         syncMessage.type == CalendarSyncType.snapshot) {
       _calendarMamSnapshotSeen = true;
     }
@@ -2887,12 +2893,35 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         syncMessage,
         event,
         metadata: metadata,
+        onMessageDecoded: (fullMessage, decodedEvent) async {
+          if (isSelfCalendar) {
+            await _invokeCalendarCallback(fullMessage, decodedEvent);
+            return;
+          }
+          await _invokeChatCalendarCallback(
+            fullMessage,
+            decodedEvent,
+            chatJid: chatJid,
+            chatType: chatType,
+            senderJid: senderJid,
+          );
+        },
       );
       return true;
     }
 
-    // Route to CalendarSyncManager for processing
-    await _invokeCalendarCallback(syncMessage, event);
+    if (isSelfCalendar) {
+      // Route to CalendarSyncManager for processing
+      await _invokeCalendarCallback(syncMessage, event);
+    } else {
+      await _invokeChatCalendarCallback(
+        syncMessage,
+        event,
+        chatJid: chatJid,
+        chatType: chatType,
+        senderJid: senderJid,
+      );
+    }
 
     return true; // Handled - don't process as regular chat message
   }
@@ -2901,6 +2930,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event, {
     FileMetadataData? metadata,
+    required Future<void> Function(
+      CalendarSyncMessage fullMessage,
+      mox.MessageEvent event,
+    ) onMessageDecoded,
   }) async {
     final url = syncMessage.snapshotUrl;
     final hasUrl = url != null && url.isNotEmpty;
@@ -2942,7 +2975,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         snapshotUrl: url ?? metadata?.sourceUrls?.first,
       );
 
-      await _invokeCalendarCallback(fullMessage, event);
+      await onMessageDecoded(fullMessage, event);
     } catch (e) {
       _log.warning('Failed to process calendar snapshot: $e');
     }
@@ -3030,6 +3063,38 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
   }
 
+  Future<void> _invokeChatCalendarCallback(
+    CalendarSyncMessage syncMessage,
+    mox.MessageEvent event, {
+    required String chatJid,
+    required ChatType chatType,
+    required String senderJid,
+  }) async {
+    if (owner is XmppService &&
+        (owner as XmppService)._chatCalendarSyncCallback != null) {
+      try {
+        final inbound = CalendarSyncInbound(
+          message: syncMessage,
+          stanzaId: _calendarSyncStanzaId(event),
+          receivedAt: _calendarSyncTimestamp(event),
+          isFromMam: event.isFromMAM,
+        );
+        final envelope = ChatCalendarSyncEnvelope(
+          chatJid: chatJid,
+          chatType: chatType,
+          senderJid: senderJid,
+          inbound: inbound,
+        );
+        await (owner as XmppService)._chatCalendarSyncCallback!(envelope);
+        unawaited(_acknowledgeMessage(event));
+      } catch (e) {
+        _log.warning('Chat calendar sync callback failed: $e');
+      }
+    } else {
+      _log.info('No chat calendar sync callback registered - message ignored');
+    }
+  }
+
   String? _calendarSyncStanzaId(mox.MessageEvent event) {
     final stableIdData = event.extensions.get<mox.StableIdData>();
     final stanzaIds = stableIdData?.stanzaIds;
@@ -3041,6 +3106,25 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
 
   DateTime? _calendarSyncTimestamp(mox.MessageEvent event) {
     return event.extensions.get<mox.DelayedDeliveryData>()?.timestamp;
+  }
+
+  String _calendarSyncChatJid(mox.MessageEvent event, String? accountJid) {
+    final isGroupChat = event.type == 'groupchat';
+    final to = event.to.toBare().toString();
+    final from = event.from.toBare().toString();
+    if (isGroupChat) {
+      return from;
+    }
+    if (accountJid != null && accountJid.isNotEmpty) {
+      if (from.toLowerCase() == accountJid.toLowerCase()) {
+        return to;
+      }
+    }
+    return from;
+  }
+
+  ChatType _calendarSyncChatType(mox.MessageEvent event) {
+    return event.type == 'groupchat' ? ChatType.groupChat : ChatType.chat;
   }
 
   /// Rehydrates calendar data from MAM (Message Archive Management).

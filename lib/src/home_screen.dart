@@ -11,9 +11,12 @@ import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -84,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = true;
   bool Function(KeyEvent event)? _globalShortcutHandler;
+  ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
 
   @override
   void initState() {
@@ -98,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (handler != null) {
       HardwareKeyboard.instance.removeHandler(handler);
     }
+    context.read<XmppService?>()?.clearChatCalendarSyncCallback();
     _shortcutFocusNode.dispose();
     super.dispose();
   }
@@ -148,16 +153,41 @@ class _HomeScreenState extends State<HomeScreen> {
   ) {
     final l10n = context.l10n;
 
-    final isChat = context.read<XmppService>() is ChatsService;
-    final isMessage = context.read<XmppService>() is MessageService;
-    final isRoster = context.read<XmppService>() is RosterService;
-    final isPresence = context.read<XmppService>() is PresenceService;
-    final isOmemo = context.read<XmppService>() is OmemoService;
-    final isBlocking = context.read<XmppService>() is BlockingService;
+    final xmppService = context.read<XmppService>();
+    final isChat = xmppService is ChatsService;
+    final isMessage = xmppService is MessageService;
+    final isRoster = xmppService is RosterService;
+    final isPresence = xmppService is PresenceService;
+    final isOmemo = xmppService is OmemoService;
+    final isBlocking = xmppService is BlockingService;
     final navPlacement = EnvScope.of(context).navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final Storage? calendarStorage = storageManager.authStorage;
     final bool hasCalendarBloc = storageManager.isAuthStorageReady;
+    final chatCalendarCoordinator = _chatCalendarCoordinator ??
+        (calendarStorage == null
+            ? null
+            : ChatCalendarSyncCoordinator(
+                storage: ChatCalendarStorage(storage: calendarStorage),
+                sendMessage: ({
+                  required String jid,
+                  required CalendarSyncOutbound outbound,
+                  required ChatType chatType,
+                }) async {
+                  await xmppService.sendCalendarSyncMessage(
+                    jid: jid,
+                    outbound: outbound,
+                    chatType: chatType,
+                  );
+                },
+                sendSnapshotFile: xmppService.uploadCalendarSnapshot,
+              ));
+    if (_chatCalendarCoordinator == null && chatCalendarCoordinator != null) {
+      _chatCalendarCoordinator = chatCalendarCoordinator;
+      xmppService.setChatCalendarSyncCallback(
+        chatCalendarCoordinator.handleInbound,
+      );
+    }
     final chatsFilters = chatsSearchFilters(l10n);
     final spamFilters = spamSearchFilters(l10n);
     final draftsFilters = _draftsSearchFilters(l10n);
@@ -509,6 +539,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+    final Widget wrappedScaffold = chatCalendarCoordinator == null
+        ? scaffold
+        : RepositoryProvider<ChatCalendarSyncCoordinator>.value(
+            value: chatCalendarCoordinator,
+            child: scaffold,
+          );
 
     return BlocProvider(
       create: (context) {
@@ -592,7 +628,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 child: Stack(
                   children: [
-                    scaffold,
+                    wrappedScaffold,
                     const AccessibilityActionMenu(),
                   ],
                 ),
