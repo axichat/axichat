@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';

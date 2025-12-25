@@ -121,7 +121,7 @@ class CalendarSyncManager {
       final state = _readSyncState().resetCounter().copyWith(
             lastAppliedTimestamp: inbound.appliedTimestamp,
             lastAppliedStanzaId: inbound.stanzaId,
-            lastSnapshotChecksum: message.snapshotChecksum,
+            lastSnapshotChecksum: snapshotChecksum,
           );
       await _writeSyncState(state);
     } catch (e) {
@@ -132,8 +132,7 @@ class CalendarSyncManager {
   Future<void> _handleRequestMessage(CalendarSyncMessage message) async {
     try {
       await _flushPendingEnvelopes();
-      final model = _readModel();
-      await _sendFullCalendar(model);
+      await _maybeSendSnapshot();
     } catch (e) {
       developer.log('Error handling request message: $e',
           name: 'CalendarSyncManager');
@@ -236,15 +235,16 @@ class CalendarSyncManager {
   }
 
   /// Sends a snapshot if the calendar has content and snapshot sending is available.
-  Future<void> _maybeSendSnapshot() async {
+  Future<bool> _maybeSendSnapshot() async {
     final sendSnapshot = _sendSnapshotFile;
-    if (sendSnapshot == null) return;
+    if (sendSnapshot == null) return false;
 
     final model = _readModel();
     if (!model.hasCalendarData) {
-      return;
+      return false;
     }
 
+    var sent = false;
     try {
       final tempDir = Directory.systemTemp;
       final file = await CalendarSnapshotCodec.encodeToFile(
@@ -287,6 +287,7 @@ class CalendarSyncManager {
           'Sent calendar snapshot (checksum: ${result.checksum})',
           name: 'CalendarSyncManager',
         );
+        sent = true;
       } finally {
         if (await file.exists()) {
           await file.delete();
@@ -295,21 +296,7 @@ class CalendarSyncManager {
     } catch (e) {
       developer.log('Error sending snapshot: $e', name: 'CalendarSyncManager');
     }
-  }
-
-  Future<void> _sendFullCalendar(CalendarModel model) async {
-    final syncMessage = CalendarSyncMessage.full(
-      data: model.toJson(),
-      checksum: model.checksum,
-    );
-
-    final messageJson = jsonEncode({
-      'calendar_sync': syncMessage.toJson(),
-    });
-    await _sendEnvelope(
-      CalendarSyncOutbound(envelope: messageJson),
-      clearQueueUntil: _pendingEnvelopes.length,
-    );
+    return sent;
   }
 
   /// Send task update to other devices
@@ -364,7 +351,7 @@ class CalendarSyncManager {
     await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
   }
 
-  /// Request full calendar sync from other devices
+  /// Request a calendar snapshot from other devices.
   Future<void> requestFullSync() async {
     await _flushPendingEnvelopes();
     final syncMessage = CalendarSyncMessage.request();
@@ -375,11 +362,10 @@ class CalendarSyncManager {
     await _sendEnvelope(CalendarSyncOutbound(envelope: messageJson));
   }
 
-  /// Push full calendar to other devices
+  /// Push a calendar snapshot to other devices.
   Future<void> pushFullSync() async {
     await _flushPendingEnvelopes();
-    final model = _readModel();
-    await _sendFullCalendar(model);
+    await _maybeSendSnapshot();
   }
 
   Future<void> _sendUpdate({
