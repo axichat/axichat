@@ -24,6 +24,23 @@ abstract interface class Database {
   Future<void> close();
 }
 
+const String _draftSyncIdSql = "lower(hex(randomblob(16)))";
+const String _draftSyncIdUpdateSql = '''
+UPDATE drafts
+SET draft_sync_id = $_draftSyncIdSql
+WHERE draft_sync_id IS NULL OR trim(draft_sync_id) = ''
+''';
+const String _draftUpdatedAtUpdateSql = '''
+UPDATE drafts
+SET draft_updated_at = CURRENT_TIMESTAMP
+WHERE draft_updated_at IS NULL
+''';
+const String _draftSourceIdUpdateSql = '''
+UPDATE drafts
+SET draft_source_id = ?
+WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
+''';
+
 abstract interface class XmppDatabase implements Database {
   Stream<List<Message>> watchChatMessages(
     String jid, {
@@ -192,10 +209,32 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Draft?> getDraft(int id);
 
+  Future<Draft?> getDraftBySyncId(String syncId);
+
   Future<int> saveDraft({
     int? id,
     required List<String> jids,
     required String body,
+    required String draftSyncId,
+    required DateTime draftUpdatedAt,
+    required String draftSourceId,
+    String? subject,
+    List<String> attachmentMetadataIds = const [],
+  });
+
+  Future<void> updateDraftSyncMetadata({
+    required int id,
+    required String draftSyncId,
+    required DateTime draftUpdatedAt,
+    required String draftSourceId,
+  });
+
+  Future<int> upsertDraftFromSync({
+    required String draftSyncId,
+    required List<String> jids,
+    required DateTime draftUpdatedAt,
+    required String draftSourceId,
+    String? body,
     String? subject,
     List<String> attachmentMetadataIds = const [],
   });
@@ -1123,7 +1162,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration {
@@ -1240,6 +1279,14 @@ WHERE file_metadata_id IS NOT NULL
   AND trim(file_metadata_id) != ''
 ''',
           );
+        }
+        if (from < 19) {
+          await m.addColumn(drafts, drafts.draftSyncId);
+          await m.addColumn(drafts, drafts.draftUpdatedAt);
+          await m.addColumn(drafts, drafts.draftSourceId);
+          await customStatement(_draftSyncIdUpdateSql);
+          await customStatement(_draftUpdatedAtUpdateSql);
+          await customStatement(_draftSourceIdUpdateSql, [draftSourceLegacyId]);
         }
       },
       beforeOpen: (_) async {
@@ -2164,10 +2211,22 @@ WHERE jid = ?
   Future<Draft?> getDraft(int id) => draftsAccessor.selectOne(id);
 
   @override
+  Future<Draft?> getDraftBySyncId(String syncId) {
+    final normalized = syncId.trim();
+    if (normalized.isEmpty) return Future.value(null);
+    final query = select(drafts)
+      ..where((tbl) => tbl.draftSyncId.equals(normalized));
+    return query.getSingleOrNull();
+  }
+
+  @override
   Future<int> saveDraft({
     int? id,
     required List<String> jids,
     required String body,
+    required String draftSyncId,
+    required DateTime draftUpdatedAt,
+    required String draftSourceId,
     String? subject,
     List<String> attachmentMetadataIds = const [],
   }) =>
@@ -2175,9 +2234,70 @@ WHERE jid = ?
         id: Value.absentIfNull(id),
         jids: Value(jids),
         body: Value(body),
+        draftSyncId: Value(draftSyncId),
+        draftUpdatedAt: Value(draftUpdatedAt),
+        draftSourceId: Value(draftSourceId),
         subject: Value.absentIfNull(subject),
         attachmentMetadataIds: Value(attachmentMetadataIds),
       ));
+
+  @override
+  Future<void> updateDraftSyncMetadata({
+    required int id,
+    required String draftSyncId,
+    required DateTime draftUpdatedAt,
+    required String draftSourceId,
+  }) {
+    return draftsAccessor.updateOne(
+      DraftsCompanion(
+        id: Value(id),
+        draftSyncId: Value(draftSyncId),
+        draftUpdatedAt: Value(draftUpdatedAt),
+        draftSourceId: Value(draftSourceId),
+      ),
+    );
+  }
+
+  @override
+  Future<int> upsertDraftFromSync({
+    required String draftSyncId,
+    required List<String> jids,
+    required DateTime draftUpdatedAt,
+    required String draftSourceId,
+    String? body,
+    String? subject,
+    List<String> attachmentMetadataIds = const [],
+  }) async {
+    final normalized = draftSyncId.trim();
+    if (normalized.isEmpty) return 0;
+    final existing = await getDraftBySyncId(normalized);
+    if (existing == null) {
+      return draftsAccessor.insertOrUpdateOne(
+        DraftsCompanion(
+          jids: Value(jids),
+          draftSyncId: Value(normalized),
+          draftUpdatedAt: Value(draftUpdatedAt),
+          draftSourceId: Value(draftSourceId),
+          body: Value(body),
+          subject: Value(subject),
+          attachmentMetadataIds: Value(attachmentMetadataIds),
+        ),
+      );
+    }
+    await draftsAccessor.updateOne(
+      DraftsCompanion(
+        id: Value(existing.id),
+        jids: Value(jids),
+        draftSyncId: Value(normalized),
+        draftUpdatedAt: Value(draftUpdatedAt),
+        draftSourceId: Value(draftSourceId),
+        body: Value(body),
+        subject: Value(subject),
+        attachmentMetadataIds: Value(attachmentMetadataIds),
+      ),
+    );
+    return existing.id;
+  }
 
   @override
   Future<void> removeDraft(int id) => draftsAccessor.deleteOne(id);

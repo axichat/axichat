@@ -213,7 +213,8 @@ class _PeerCapabilities {
   );
 }
 
-mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
+mixin MessageService
+    on XmppBase, BaseStreamService, MucService, ChatsService, DraftSyncService {
   ImpatientCompleter<XmppDatabase> get _database;
 
   set _database(ImpatientCompleter<XmppDatabase> value);
@@ -2342,14 +2343,18 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     String? subject,
     List<EmailAttachment> attachments = const [],
   }) async {
-    final previousMetadataIds = id == null
-        ? const <String>[]
-        : await _dbOpReturning<XmppDatabase, List<String>>(
-            (db) async {
-              final draft = await db.getDraft(id);
-              return draft?.attachmentMetadataIds ?? const <String>[];
-            },
+    final Draft? existingDraft = id == null
+        ? null
+        : await _dbOpReturning<XmppDatabase, Draft?>(
+            (db) => db.getDraft(id),
           );
+    final previousMetadataIds =
+        existingDraft?.attachmentMetadataIds ?? const <String>[];
+    final resolvedSyncId = existingDraft?.draftSyncId.trim().isNotEmpty == true
+        ? existingDraft!.draftSyncId
+        : uuid.v4();
+    final resolvedSourceId = await _ensureDraftSourceId();
+    final resolvedUpdatedAt = DateTime.timestamp().toUtc();
     final metadataIds = <String>[];
     for (final attachment in attachments) {
       final metadataId = await _persistDraftAttachmentMetadata(attachment);
@@ -2360,6 +2365,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         id: id,
         jids: jids,
         body: body,
+        draftSyncId: resolvedSyncId,
+        draftUpdatedAt: resolvedUpdatedAt,
+        draftSourceId: resolvedSourceId,
         subject: subject,
         attachmentMetadataIds: metadataIds,
       ),
@@ -2369,6 +2377,12 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         .toList();
     if (staleMetadataIds.isNotEmpty) {
       await _deleteAttachmentMetadata(staleMetadataIds);
+    }
+    final savedDraft = await _dbOpReturning<XmppDatabase, Draft?>(
+      (db) => db.getDraft(savedId),
+    );
+    if (savedDraft != null) {
+      unawaited(publishDraftSync(savedDraft));
     }
     return DraftSaveResult(
       draftId: savedId,
@@ -2412,17 +2426,19 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   }
 
   Future<void> deleteDraft({required int id}) async {
-    final metadataIds = await _dbOpReturning<XmppDatabase, List<String>>(
-      (db) async {
-        final draft = await db.getDraft(id);
-        return draft?.attachmentMetadataIds ?? const <String>[];
-      },
+    final draft = await _dbOpReturning<XmppDatabase, Draft?>(
+      (db) => db.getDraft(id),
     );
+    final metadataIds = draft?.attachmentMetadataIds ?? const <String>[];
+    final syncId = draft?.draftSyncId ?? '';
     await _dbOp<XmppDatabase>(
       (db) => db.removeDraft(id),
     );
     if (metadataIds.isNotEmpty) {
       await _deleteAttachmentMetadata(metadataIds);
+    }
+    if (syncId.trim().isNotEmpty) {
+      unawaited(retractDraftSync(syncId));
     }
   }
 

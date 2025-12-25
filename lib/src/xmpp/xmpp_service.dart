@@ -36,6 +36,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
+import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
@@ -78,6 +79,8 @@ part 'muc_service.dart';
 part 'muc_join_bootstrap_manager.dart';
 
 part 'message_service.dart';
+
+part 'draft_sync_service.dart';
 
 part 'message_sanitizer.dart';
 
@@ -365,6 +368,7 @@ class XmppService extends XmppBase
         BaseStreamService,
         MucService,
         ChatsService,
+        DraftSyncService,
         MessageService,
         AvatarService,
         // OmemoService,
@@ -624,6 +628,7 @@ class XmppService extends XmppBase
           ..addFeatures(const [
             BookmarksManager.bookmarksNotifyFeature,
             conversationIndexNotifyFeature,
+            draftsNotifyFeature,
           ])),
         mox.PingManager(const Duration(minutes: 3)),
         mox.EntityCapabilitiesManager(_capabilityHashBase),
@@ -635,6 +640,7 @@ class XmppService extends XmppBase
         MucJoinBootstrapManager(),
         BookmarksManager(),
         ConversationIndexManager(),
+        DraftsPubSubManager(),
       ]);
 
     return managers;
