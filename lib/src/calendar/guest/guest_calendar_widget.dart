@@ -378,7 +378,8 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
     try {
       final model = context.read<GuestCalendarBloc>().state.model;
       if (!model.hasCalendarData) {
-        FeedbackSystem.showInfo(context, 'No tasks available to export.');
+        FeedbackSystem.showInfo(
+            context, 'No calendar data available to export.');
         return;
       }
       final format = await showCalendarExportFormatSheet(
@@ -386,18 +387,13 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         title: 'Export guest calendar',
       );
       if (!mounted || format == null) return;
-      if (format == CalendarExportFormat.ics && model.tasks.isEmpty) {
-        FeedbackSystem.showInfo(context, 'No tasks available to export.');
-        return;
-      }
       final File file = format == CalendarExportFormat.json
           ? await _transferService.exportModel(
               model: model,
               fileNamePrefix: 'axichat_guest_calendar',
             )
-          : await _transferService.exportTasks(
-              tasks: model.tasks.values,
-              format: format,
+          : await _transferService.exportIcs(
+              model: model,
               fileNamePrefix: 'axichat_guest_calendar',
             );
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(

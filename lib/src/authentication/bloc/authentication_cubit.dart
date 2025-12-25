@@ -11,8 +11,10 @@ import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
+import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -29,6 +31,8 @@ const _missingDatabaseSecretsErrorText =
     'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
 const _emailAuthFailureErrorText =
     'Email authentication failed. Please log in again.';
+const _storageLockedErrorText =
+    'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
 const _smtpProvisioningMaxAttempts = 3;
 const _smtpProvisioningMaxDuration = Duration(seconds: 20);
 const _smtpProvisioningInitialDelay = Duration(seconds: 2);
@@ -57,6 +61,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required CredentialStore credentialStore,
     required XmppService xmppService,
     EmailService? emailService,
+    HomeRefreshSyncService? homeRefreshSyncService,
     NotificationService? notificationService,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
@@ -67,6 +72,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
         _emailService = emailService,
+        _homeRefreshSyncService = homeRefreshSyncService ??
+            HomeRefreshSyncService(
+              xmppService: xmppService,
+              emailService: emailService,
+            )
+          ..start(),
         _endpointResolver = endpointResolver,
         _endpointConfig = initialState?.config ??
             initialEndpointConfig ??
@@ -118,6 +129,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (connectionState == ConnectionState.connected) {
         unawaited(_emailService?.handleNetworkAvailable());
         unawaited(_publishPendingAvatar());
+        if (_authenticatedJid != null) {
+          unawaited(_homeRefreshSyncService.syncOnLogin());
+        }
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
         unawaited(_emailService?.handleNetworkLost());
@@ -168,6 +182,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
   final EmailService? _emailService;
+  final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
   EndpointConfig _endpointConfig;
   late final http.Client _httpClient;
@@ -384,7 +399,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     try {
-      await _xmppService.triggerImmediateReconnect();
+      await _xmppService.requestReconnect(ReconnectTrigger.resume);
     } on Exception {
       // Fall back to a full login attempt below (covers cold starts and
       // foreground-socket unavailability).
@@ -856,6 +871,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             await _markXmppConnected();
             effectivePassword = resolvedPassword;
           } on Exception catch (error) {
+            if (_looksLikeStorageLock(error)) {
+              _log.warning('Storage lock detected during login.', error);
+              await _xmppService.disconnect();
+              _authenticatedJid = null;
+              _emit(const AuthenticationFailure(_storageLockedErrorText));
+              return;
+            }
             final canResumeOffline = usingStoredCredentials &&
                 hasStoredDatabaseSecrets &&
                 _looksLikeConnectivityError(error);
@@ -1441,6 +1463,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     if (error is XmppException && error.wrapped != null) {
       return _looksLikeConnectivityError(error.wrapped!);
+    }
+    return false;
+  }
+
+  bool _looksLikeStorageLock(Object error) {
+    if (isHiveLockUnavailable(error)) {
+      return true;
+    }
+    if (error is XmppException && error.wrapped != null) {
+      return _looksLikeStorageLock(error.wrapped!);
     }
     return false;
   }

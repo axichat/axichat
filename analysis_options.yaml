@@ -12,6 +12,9 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - third_party/**
+    - packages/delta_ffi/lib/src/bindings.dart
+  errors:
+    duplicate_ignore: ignore
 
 linter:
   # The lint rules applied to this project can be customized in the

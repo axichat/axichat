@@ -4,6 +4,7 @@ const mucStatusSelfPresence = '110';
 const mucStatusNickChange = '303';
 const mucStatusRoomCreated = '201';
 const mucStatusNickAssigned = '210';
+const mucStatusConfigurationChanged = '104';
 const mucStatusBanned = '301';
 const mucStatusKicked = '307';
 const mucStatusRoomShutdown = '332';
