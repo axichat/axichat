@@ -1321,10 +1321,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final CalendarFragment? effectiveFragment =
         requestedFragment == null || !fragmentDecision.canWrite
             ? null
-            : _calendarFragmentPolicy.redactFragment(
-                requestedFragment,
-                fragmentDecision.visibility,
-              );
+            : requestedFragment;
     final attachments = List<PendingAttachment>.from(state.pendingAttachments);
     final queuedAttachments = attachments
         .where((attachment) =>

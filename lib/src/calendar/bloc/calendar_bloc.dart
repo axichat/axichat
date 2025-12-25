@@ -17,13 +17,13 @@ class CalendarBloc extends BaseCalendarBloc {
   CalendarBloc({
     required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
     required super.storage,
+    super.storageId = 'state',
     super.reminderController,
     VoidCallback? onDispose,
   })  : _syncManagerBuilder = syncManagerBuilder,
         _onDispose = onDispose,
         super(
           storagePrefix: authStoragePrefix,
-          storageId: 'state',
         ) {
     _syncManager = _syncManagerBuilder(this);
     on<CalendarSyncRequested>(_onCalendarSyncRequested);

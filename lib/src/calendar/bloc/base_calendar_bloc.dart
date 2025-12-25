@@ -13,6 +13,7 @@ import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
+import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
@@ -122,29 +123,10 @@ abstract class BaseCalendarBloc
   @override
   CalendarState? fromJson(Map<String, dynamic> json) {
     try {
-      final modelJson = json['model'] as Map<String, dynamic>?;
-      final selectedDate = json['selectedDate'] as String?;
-      final view = json['viewMode'] as String?;
-      final selectedDayIndex = json['selectedDayIndex'] as int?;
-
-      if (modelJson == null || selectedDate == null || view == null) {
+      final restored = CalendarStateStorageCodec.decode(json);
+      if (restored == null) {
         return null;
       }
-
-      final model = CalendarModel.fromJson(modelJson);
-      final parsedDate = DateTime.parse(selectedDate);
-      final viewMode = CalendarView.values.firstWhere(
-        (element) => element.name == view,
-        orElse: () => CalendarView.week,
-      );
-
-      final restored = CalendarState(
-        model: model,
-        selectedDate: parsedDate,
-        viewMode: viewMode,
-        selectedDayIndex: selectedDayIndex,
-      );
-
       return _stateWithDerived(restored);
     } catch (error) {
       logError('Failed to restore calendar state', error);
@@ -155,13 +137,7 @@ abstract class BaseCalendarBloc
   @override
   Map<String, dynamic>? toJson(CalendarState state) {
     try {
-      return {
-        'model': state.model.toJson(),
-        'selectedDate': state.selectedDate.toIso8601String(),
-        'viewMode': state.viewMode.name,
-        if (state.selectedDayIndex != null)
-          'selectedDayIndex': state.selectedDayIndex,
-      };
+      return CalendarStateStorageCodec.encode(state);
     } catch (error) {
       logError('Failed to persist calendar state', error);
       return null;
