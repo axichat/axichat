@@ -200,6 +200,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     String? subject,
     required List<EmailAttachment> attachments,
   }) async {
+    if (!_shouldUseCoreDraftFallback) return;
     final emailService = _emailService;
     if (emailService == null) return;
     final recipient = _singleEmailRecipient(jids);
@@ -218,6 +219,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   Future<void> _clearCoreDraftForDraft(Draft? draft) async {
+    if (!_shouldUseCoreDraftFallback) return;
     final emailService = _emailService;
     if (emailService == null || draft == null) return;
     final recipient = _singleEmailRecipient(draft.jids);
@@ -245,6 +247,16 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   Future<XmppDatabase> _loadDatabase() async {
     final xmppBase = _messageService as XmppBase;
     return xmppBase.database;
+  }
+
+  bool get _shouldUseCoreDraftFallback {
+    if (_messageService case final XmppBase xmppBase) {
+      final jid = xmppBase.myJid;
+      if (jid != null && jid.trim().isNotEmpty) {
+        return false;
+      }
+    }
+    return true;
   }
 
   String? _singleEmailRecipient(List<String> jids) {
