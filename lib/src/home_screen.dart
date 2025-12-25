@@ -472,8 +472,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       xmppService
                         ..setCalendarSyncCallback(
                           (inbound) async {
-                            if (bloc.isClosed) return;
-                            await manager.onCalendarMessage(inbound);
+                            if (bloc.isClosed) return false;
+                            return await manager.onCalendarMessage(inbound);
                           },
                         )
                         ..setCalendarSyncWarningCallback(

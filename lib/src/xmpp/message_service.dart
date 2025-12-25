@@ -3177,15 +3177,16 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     if (owner is XmppService &&
         (owner as XmppService)._calendarSyncCallback != null) {
       try {
+        final callback = (owner as XmppService)._calendarSyncCallback!;
         final inbound = CalendarSyncInbound(
           message: syncMessage,
           stanzaId: _calendarSyncStanzaId(event),
           receivedAt: _calendarSyncTimestamp(event),
           isFromMam: event.isFromMAM,
         );
-        await (owner as XmppService)._calendarSyncCallback!(inbound);
+        final applied = await callback(inbound);
         unawaited(_acknowledgeMessage(event));
-        return true;
+        return applied;
       } catch (e) {
         _log.warning('Calendar sync callback failed: $e');
         return false;

@@ -21,6 +21,8 @@ const String _snapshotFallbackName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _snapshotChecksumMismatchLog =
     'Snapshot checksum mismatch - ignoring snapshot';
+const String _inlineSnapshotSentLog = 'Sent inline calendar snapshot';
+const String _inlineSnapshotFailedLog = 'Error sending inline snapshot';
 const String _calendarSyncEntityTask = 'task';
 const String _calendarSyncEntityDayEvent = 'day_event';
 const String _calendarSyncEntityCriticalPath = 'critical_path';
@@ -56,18 +58,18 @@ class CalendarSyncManager {
   Future<void>? _pendingFlush;
 
   /// Handles an incoming calendar sync message.
-  Future<void> onCalendarMessage(CalendarSyncInbound inbound) async {
+  Future<bool> onCalendarMessage(CalendarSyncInbound inbound) async {
     final message = inbound.message;
     try {
       switch (message.type) {
         case CalendarSyncType.request:
-          await _handleRequestMessage(message);
+          return await _handleRequestMessage(message);
         case CalendarSyncType.full:
-          await _handleFullMessage(message, inbound: inbound);
+          return await _handleFullMessage(message, inbound: inbound);
         case CalendarSyncType.update:
-          await _handleUpdateMessage(message, inbound: inbound);
+          return await _handleUpdateMessage(message, inbound: inbound);
         case CalendarSyncType.snapshot:
-          await _handleSnapshotMessage(message, inbound: inbound);
+          return await _handleSnapshotMessage(message, inbound: inbound);
         default:
           developer.log('Unknown calendar sync message type: ${message.type}');
           throw CalendarSyncException(
@@ -85,11 +87,11 @@ class CalendarSyncManager {
   }
 
   /// Handles a snapshot message by merging the attached model.
-  Future<void> _handleSnapshotMessage(
+  Future<bool> _handleSnapshotMessage(
     CalendarSyncMessage message, {
     required CalendarSyncInbound inbound,
   }) async {
-    if (message.data == null) return;
+    if (message.data == null) return false;
 
     try {
       final remoteModel = CalendarModel.fromJson(message.data!);
@@ -107,12 +109,17 @@ class CalendarSyncManager {
           _snapshotChecksumMismatchLog,
           name: 'CalendarSyncManager',
         );
-        return;
+        return false;
       }
 
       if (snapshotChecksum != null && localModel.checksum == snapshotChecksum) {
-        await _recordAppliedMessage(message, inbound: inbound);
-        return;
+        final state = _readSyncState().resetCounter().copyWith(
+              lastAppliedTimestamp: inbound.appliedTimestamp,
+              lastAppliedStanzaId: inbound.stanzaId,
+              lastSnapshotChecksum: snapshotChecksum,
+            );
+        await _writeSyncState(state);
+        return true;
       }
 
       final mergedModel = localModel.mergeWith(remoteModel);
@@ -124,15 +131,17 @@ class CalendarSyncManager {
             lastSnapshotChecksum: snapshotChecksum,
           );
       await _writeSyncState(state);
+      return true;
     } catch (e) {
       developer.log('Error handling snapshot message: $e');
     }
+    return false;
   }
 
-  Future<void> _handleRequestMessage(CalendarSyncMessage message) async {
+  Future<bool> _handleRequestMessage(CalendarSyncMessage message) async {
     try {
       await _flushPendingEnvelopes();
-      await _maybeSendSnapshot();
+      return await _maybeSendSnapshot();
     } catch (e) {
       developer.log('Error handling request message: $e',
           name: 'CalendarSyncManager');
@@ -140,11 +149,11 @@ class CalendarSyncManager {
     }
   }
 
-  Future<void> _handleFullMessage(
+  Future<bool> _handleFullMessage(
     CalendarSyncMessage message, {
     required CalendarSyncInbound inbound,
   }) async {
-    if (message.data == null) return;
+    if (message.data == null) return false;
 
     try {
       final remoteModel = CalendarModel.fromJson(message.data!);
@@ -158,7 +167,7 @@ class CalendarSyncManager {
       if (localChecksum == remoteChecksum) {
         developer.log('Calendars already in sync - no changes needed');
         await _recordAppliedMessage(message, inbound: inbound);
-        return;
+        return true;
       }
 
       developer.log(
@@ -166,37 +175,40 @@ class CalendarSyncManager {
       final mergedModel = localModel.mergeWith(remoteModel);
       await _applyModel(mergedModel);
       await _recordAppliedMessage(message, inbound: inbound);
+      return true;
     } catch (e) {
       developer.log('Error handling full calendar message: $e');
     }
+    return false;
   }
 
-  Future<void> _handleUpdateMessage(
+  Future<bool> _handleUpdateMessage(
     CalendarSyncMessage message, {
     required CalendarSyncInbound inbound,
   }) async {
-    if (message.data == null || message.taskId == null) return;
+    if (message.data == null || message.taskId == null) return false;
 
     try {
+      bool applied = false;
       final String operation =
           message.operation ?? _calendarSyncOperationUpdate;
       switch (message.entity) {
         case _calendarSyncEntityDayEvent:
           final DayEvent event = DayEvent.fromJson(message.data!);
-          await _mergeDayEvent(event, operation);
+          applied = await _mergeDayEvent(event, operation);
           break;
         case _calendarSyncEntityCriticalPath:
           final path = CalendarCriticalPath.fromJson(message.data!);
-          await _mergeCriticalPath(path, operation);
+          applied = await _mergeCriticalPath(path, operation);
           break;
         case _calendarSyncEntityJournal:
           final CalendarJournal journal =
               CalendarJournal.fromJson(message.data!);
-          await _mergeJournal(journal, operation);
+          applied = await _mergeJournal(journal, operation);
           break;
         default:
           final task = CalendarTask.fromJson(message.data!);
-          await _mergeTask(task, operation);
+          applied = await _mergeTask(task, operation);
           break;
       }
 
@@ -204,9 +216,11 @@ class CalendarSyncManager {
         allowSnapshot: !inbound.isFromMam,
       );
       await _recordAppliedMessage(message, inbound: inbound);
+      return applied;
     } catch (e) {
       developer.log('Error handling calendar update: $e');
     }
+    return false;
   }
 
   /// Records that a message was applied, updating the sync state.
@@ -236,15 +250,17 @@ class CalendarSyncManager {
 
   /// Sends a snapshot if the calendar has content and snapshot sending is available.
   Future<bool> _maybeSendSnapshot() async {
-    final sendSnapshot = _sendSnapshotFile;
-    if (sendSnapshot == null) return false;
-
     final model = _readModel();
     if (!model.hasCalendarData) {
       return false;
     }
 
-    var sent = false;
+    final sendSnapshot = _sendSnapshotFile;
+    if (sendSnapshot == null) {
+      return _sendInlineSnapshot(model);
+    }
+
+    bool sent = false;
     try {
       final tempDir = Directory.systemTemp;
       final file = await CalendarSnapshotCodec.encodeToFile(
@@ -296,7 +312,48 @@ class CalendarSyncManager {
     } catch (e) {
       developer.log('Error sending snapshot: $e', name: 'CalendarSyncManager');
     }
+    if (!sent) {
+      return _sendInlineSnapshot(model);
+    }
     return sent;
+  }
+
+  Future<bool> _sendInlineSnapshot(CalendarModel model) async {
+    try {
+      final checksum = CalendarSnapshotCodec.computeChecksum(model);
+      final syncMessage = CalendarSyncMessage(
+        type: CalendarSyncType.snapshot,
+        timestamp: DateTime.now(),
+        data: model.toJson(),
+        checksum: checksum,
+        isSnapshot: true,
+        snapshotChecksum: checksum,
+        snapshotVersion: CalendarSnapshotCodec.currentVersion,
+      );
+
+      final messageJson = jsonEncode({
+        'calendar_sync': syncMessage.toJson(),
+      });
+
+      await _sendCalendarMessage(
+        CalendarSyncOutbound(envelope: messageJson),
+      );
+
+      final state = _readSyncState()
+          .resetCounter()
+          .copyWith(lastSnapshotChecksum: checksum);
+      await _writeSyncState(state);
+
+      developer.log(
+        '$_inlineSnapshotSentLog (checksum: $checksum)',
+        name: 'CalendarSyncManager',
+      );
+      return true;
+    } catch (e) {
+      developer.log('$_inlineSnapshotFailedLog: $e',
+          name: 'CalendarSyncManager');
+    }
+    return false;
   }
 
   /// Send task update to other devices
@@ -409,7 +466,7 @@ class CalendarSyncManager {
     return remoteSequence > localSequence;
   }
 
-  Future<void> _mergeTask(CalendarTask remoteTask, String operation) async {
+  Future<bool> _mergeTask(CalendarTask remoteTask, String operation) async {
     final currentModel = _readModel();
 
     CalendarModel updatedModel;
@@ -421,7 +478,7 @@ class CalendarSyncManager {
           final DateTime? deletedAt =
               currentModel.deletedTaskIds[remoteTask.id];
           if (deletedAt != null && !remoteTask.modifiedAt.isAfter(deletedAt)) {
-            return;
+            return false;
           }
           final Map<String, DateTime> updatedDeletedTaskIds = deletedAt == null
               ? currentModel.deletedTaskIds
@@ -444,7 +501,7 @@ class CalendarSyncManager {
         if (preferRemote) {
           updatedModel = currentModel.updateTask(remoteTask);
         } else {
-          return;
+          return false;
         }
         break;
       case _calendarSyncOperationDelete:
@@ -459,20 +516,21 @@ class CalendarSyncManager {
                 remoteTask.icsMeta?.sequence ?? _calendarSequenceDefault,
           );
           if (!preferRemote) {
-            return;
+            return false;
           }
         }
         updatedModel = currentModel.deleteTask(remoteTask.id);
         break;
       default:
         developer.log('Unknown task operation: $operation');
-        return;
+        return false;
     }
 
     await _applyModel(updatedModel);
+    return true;
   }
 
-  Future<void> _mergeDayEvent(DayEvent remoteEvent, String operation) async {
+  Future<bool> _mergeDayEvent(DayEvent remoteEvent, String operation) async {
     final CalendarModel currentModel = _readModel();
 
     CalendarModel updatedModel;
@@ -492,7 +550,7 @@ class CalendarSyncManager {
         )) {
           updatedModel = currentModel.updateDayEvent(remoteEvent);
         } else {
-          return;
+          return false;
         }
         break;
       case _calendarSyncOperationDelete:
@@ -507,20 +565,21 @@ class CalendarSyncManager {
                 remoteEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
           );
           if (!preferRemote) {
-            return;
+            return false;
           }
         }
         updatedModel = currentModel.deleteDayEvent(remoteEvent.id);
         break;
       default:
         developer.log('Unknown day event operation: $operation');
-        return;
+        return false;
     }
 
     await _applyModel(updatedModel);
+    return true;
   }
 
-  Future<void> _mergeCriticalPath(
+  Future<bool> _mergeCriticalPath(
     CalendarCriticalPath remotePath,
     String operation,
   ) async {
@@ -536,26 +595,27 @@ class CalendarSyncManager {
         } else if (remotePath.modifiedAt.isAfter(localPath.modifiedAt)) {
           updatedModel = currentModel.updateCriticalPath(remotePath);
         } else {
-          return;
+          return false;
         }
         break;
       case _calendarSyncOperationDelete:
         final existing = currentModel.criticalPaths[remotePath.id];
         if (existing != null &&
             existing.modifiedAt.isAfter(remotePath.modifiedAt)) {
-          return;
+          return false;
         }
         updatedModel = currentModel.removeCriticalPath(remotePath.id);
         break;
       default:
         developer.log('Unknown critical path operation: $operation');
-        return;
+        return false;
     }
 
     await _applyModel(updatedModel);
+    return true;
   }
 
-  Future<void> _mergeJournal(
+  Future<bool> _mergeJournal(
     CalendarJournal remoteJournal,
     String operation,
   ) async {
@@ -579,7 +639,7 @@ class CalendarSyncManager {
         )) {
           updatedModel = currentModel.updateJournal(remoteJournal);
         } else {
-          return;
+          return false;
         }
         break;
       case _calendarSyncOperationDelete:
@@ -595,17 +655,18 @@ class CalendarSyncManager {
                 remoteJournal.icsMeta?.sequence ?? _calendarSequenceDefault,
           );
           if (!preferRemote) {
-            return;
+            return false;
           }
         }
         updatedModel = currentModel.deleteJournal(remoteJournal.id);
         break;
       default:
         developer.log('Unknown journal operation: $operation');
-        return;
+        return false;
     }
 
     await _applyModel(updatedModel);
+    return true;
   }
 
   String _snapshotAttachmentName(File file) {
