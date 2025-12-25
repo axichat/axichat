@@ -1281,6 +1281,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     String? htmlBody,
     Message? quotedMessage,
+    CalendarFragment? calendarFragment,
     bool? storeLocally,
     bool noStore = false,
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
@@ -1314,6 +1315,15 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         : (normalizedHtml == null
             ? ''
             : HtmlContentCodec.toPlainText(normalizedHtml));
+    final CalendarFragmentPayload? fragmentPayload = calendarFragment == null
+        ? null
+        : CalendarFragmentPayload(fragment: calendarFragment);
+    final List<mox.StanzaHandlerExtension> resolvedExtensions =
+        List<mox.StanzaHandlerExtension>.from(extraExtensions);
+    if (fragmentPayload != null) {
+      resolvedExtensions.add(fragmentPayload);
+    }
+    final Map<String, dynamic>? fragmentData = calendarFragment?.toJson();
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -1328,6 +1338,9 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       acked: offlineDemo,
       received: offlineDemo,
       displayed: offlineDemo,
+      pseudoMessageType:
+          fragmentData == null ? null : PseudoMessageType.calendarFragment,
+      pseudoMessageData: fragmentData,
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${resolvedText.length} chars)',
@@ -1345,7 +1358,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       final stanza = _buildOutgoingMessageEvent(
         message: message,
         quotedMessage: quotedMessage,
-        extraExtensions: extraExtensions,
+        extraExtensions: resolvedExtensions,
         chatType: chatType,
       );
       final sent = await _connection.sendMessage(
@@ -2076,6 +2089,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     if (message == null || (resolvedBody.isEmpty && normalizedHtml == null)) {
       return;
     }
+    final CalendarFragment? fragment = message.calendarFragment;
     final resolvedChatType = chatType ??
         await _dbOpReturning<XmppDatabase, ChatType?>(
           (db) async => (await db.getChat(message.chatJid))?.type,
@@ -2093,6 +2107,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       htmlBody: normalizedHtml,
       encryptionProtocol: message.encryptionProtocol,
       quotedMessage: quoted,
+      calendarFragment: fragment,
       chatType: resolvedChatType,
     );
   }
