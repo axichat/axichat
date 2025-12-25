@@ -5,6 +5,11 @@ const _calendarFragmentTag = 'calendar-fragment';
 const _calendarFragmentPayloadTag = 'payload';
 const _calendarFragmentVersionAttr = 'version';
 const _calendarFragmentVersionValue = '1';
+const _calendarAvailabilityXmlns = 'urn:axichat:calendar-availability:1';
+const _calendarAvailabilityTag = 'calendar-availability';
+const _calendarAvailabilityPayloadTag = 'payload';
+const _calendarAvailabilityVersionAttr = 'version';
+const _calendarAvailabilityVersionValue = '1';
 
 final class DirectMucInviteData implements mox.StanzaHandlerExtension {
   const DirectMucInviteData({
@@ -194,6 +199,55 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
   }
 }
 
+final class CalendarAvailabilityMessagePayload
+    implements mox.StanzaHandlerExtension {
+  const CalendarAvailabilityMessagePayload({required this.message});
+
+  final CalendarAvailabilityMessage message;
+
+  mox.XMLNode toXml() {
+    final payload = jsonEncode(message.toJson());
+    return mox.XMLNode.xmlns(
+      tag: _calendarAvailabilityTag,
+      xmlns: _calendarAvailabilityXmlns,
+      attributes: const {
+        _calendarAvailabilityVersionAttr: _calendarAvailabilityVersionValue,
+      },
+      children: [
+        mox.XMLNode(
+          tag: _calendarAvailabilityPayloadTag,
+          text: payload,
+        ),
+      ],
+    );
+  }
+
+  static CalendarAvailabilityMessagePayload? fromStanza(mox.Stanza stanza) {
+    final node = stanza.firstTag(
+      _calendarAvailabilityTag,
+      xmlns: _calendarAvailabilityXmlns,
+    );
+    if (node == null) return null;
+    final payloadNode = node.firstTag(_calendarAvailabilityPayloadTag);
+    final payloadText =
+        payloadNode?.innerText().trim() ?? node.innerText().trim();
+    if (payloadText.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(payloadText);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      return CalendarAvailabilityMessagePayload(
+        message: CalendarAvailabilityMessage.fromJson(decoded),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 bool? _parseInviteBool(String? raw) {
   final normalized = raw?.trim().toLowerCase();
   return switch (normalized) {
@@ -258,6 +312,10 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     if (fragment != null) {
       nodes.add(fragment.toXml());
     }
+    final availability = extensions.get<CalendarAvailabilityMessagePayload>();
+    if (availability != null) {
+      nodes.add(availability.toXml());
+    }
     return nodes;
   }
 
@@ -290,6 +348,10 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     final fragment = CalendarFragmentPayload.fromStanza(stanza);
     if (fragment != null) {
       state.extensions.set(fragment);
+    }
+    final availability = CalendarAvailabilityMessagePayload.fromStanza(stanza);
+    if (availability != null) {
+      state.extensions.set(availability);
     }
 
     final subjectNode = stanza.firstTag(_subjectTag);

@@ -9,6 +9,12 @@ const String _messageStatusSyncEnvelopeVersionKey = 'v';
 const String _messageStatusSyncEnvelopeAckedKey = 'acked';
 const String _messageStatusSyncEnvelopeReceivedKey = 'received';
 const String _messageStatusSyncEnvelopeDisplayedKey = 'displayed';
+const String _availabilityShareFallbackText = 'Shared availability';
+const String _availabilityRequestFallbackText = 'Availability request';
+const String _availabilityResponseAcceptedFallbackText =
+    'Availability accepted';
+const String _availabilityResponseDeclinedFallbackText =
+    'Availability declined';
 
 final class _MessageStatusSyncEnvelope {
   const _MessageStatusSyncEnvelope({
@@ -1282,6 +1288,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     String? htmlBody,
     Message? quotedMessage,
     CalendarFragment? calendarFragment,
+    CalendarAvailabilityMessage? calendarAvailabilityMessage,
     bool? storeLocally,
     bool noStore = false,
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
@@ -1318,12 +1325,28 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     final CalendarFragmentPayload? fragmentPayload = calendarFragment == null
         ? null
         : CalendarFragmentPayload(fragment: calendarFragment);
+    final CalendarAvailabilityMessagePayload? availabilityPayload =
+        calendarAvailabilityMessage == null
+            ? null
+            : CalendarAvailabilityMessagePayload(
+                message: calendarAvailabilityMessage,
+              );
     final List<mox.StanzaHandlerExtension> resolvedExtensions =
         List<mox.StanzaHandlerExtension>.from(extraExtensions);
     if (fragmentPayload != null) {
       resolvedExtensions.add(fragmentPayload);
     }
+    if (availabilityPayload != null) {
+      resolvedExtensions.add(availabilityPayload);
+    }
     final Map<String, dynamic>? fragmentData = calendarFragment?.toJson();
+    final Map<String, dynamic>? availabilityData =
+        calendarAvailabilityMessage?.toJson();
+    final PseudoMessageType? resolvedPseudoType =
+        _calendarAvailabilityPseudoType(calendarAvailabilityMessage) ??
+            (fragmentData == null ? null : PseudoMessageType.calendarFragment);
+    final Map<String, dynamic>? pseudoMessageData =
+        availabilityData ?? fragmentData;
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -1338,9 +1361,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       acked: offlineDemo,
       received: offlineDemo,
       displayed: offlineDemo,
-      pseudoMessageType:
-          fragmentData == null ? null : PseudoMessageType.calendarFragment,
-      pseudoMessageData: fragmentData,
+      pseudoMessageType: resolvedPseudoType,
+      pseudoMessageData: pseudoMessageData,
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${resolvedText.length} chars)',
@@ -1447,6 +1469,29 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         archived: chat?.archived ?? false,
         mutedUntil: mutedUntil,
       ),
+    );
+  }
+
+  PseudoMessageType? _calendarAvailabilityPseudoType(
+    CalendarAvailabilityMessage? message,
+  ) {
+    if (message == null) {
+      return null;
+    }
+    return message.map(
+      share: (_) => PseudoMessageType.calendarAvailabilityShare,
+      request: (_) => PseudoMessageType.calendarAvailabilityRequest,
+      response: (_) => PseudoMessageType.calendarAvailabilityResponse,
+    );
+  }
+
+  String _availabilityFallbackText(CalendarAvailabilityMessage message) {
+    return message.map(
+      share: (_) => _availabilityShareFallbackText,
+      request: (_) => _availabilityRequestFallbackText,
+      response: (value) => value.response.status.isAccepted
+          ? _availabilityResponseAcceptedFallbackText
+          : _availabilityResponseDeclinedFallbackText,
     );
   }
 
@@ -1691,8 +1736,24 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     await sendMessage(
       jid: jid,
       text: outbound.envelope,
+      encryptionProtocol: EncryptionProtocol.none,
       storeLocally: false,
       extraExtensions: extensions,
+      chatType: chatType,
+    );
+  }
+
+  Future<void> sendAvailabilityMessage({
+    required String jid,
+    required CalendarAvailabilityMessage message,
+    ChatType chatType = ChatType.chat,
+  }) async {
+    final fallbackText = _availabilityFallbackText(message);
+    await sendMessage(
+      jid: jid,
+      text: fallbackText,
+      encryptionProtocol: EncryptionProtocol.none,
+      calendarAvailabilityMessage: message,
       chatType: chatType,
     );
   }
@@ -2092,6 +2153,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       return;
     }
     final CalendarFragment? fragment = message.calendarFragment;
+    final CalendarAvailabilityMessage? availabilityMessage =
+        message.calendarAvailabilityMessage;
     final resolvedChatType = chatType ??
         await _dbOpReturning<XmppDatabase, ChatType?>(
           (db) async => (await db.getChat(message.chatJid))?.type,
@@ -2110,6 +2173,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       encryptionProtocol: message.encryptionProtocol,
       quotedMessage: quoted,
       calendarFragment: fragment,
+      calendarAvailabilityMessage: availabilityMessage,
       chatType: resolvedChatType,
     );
   }

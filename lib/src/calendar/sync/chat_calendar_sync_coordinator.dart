@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_state_store.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
@@ -18,6 +20,8 @@ typedef ChatCalendarSendMessage = Future<void> Function({
 
 typedef ChatCalendarSnapshotSender = Future<CalendarSnapshotUploadResult>
     Function(File file);
+
+const String _chatCalendarTaskAddOperation = 'add';
 
 class ChatCalendarSyncCoordinator {
   ChatCalendarSyncCoordinator({
@@ -63,7 +67,7 @@ class ChatCalendarSyncCoordinator {
   void unregisterBloc({
     required String chatJid,
   }) {
-    final context = _contexts[chatJid];
+    final context = _contexts[_chatKey(chatJid)];
     if (context == null) {
       return;
     }
@@ -78,12 +82,31 @@ class ChatCalendarSyncCoordinator {
     await manager.onCalendarMessage(envelope.inbound);
   }
 
+  Future<void> addTask({
+    required String chatJid,
+    required ChatType chatType,
+    required CalendarTask task,
+  }) async {
+    if (chatType == ChatType.note) {
+      return;
+    }
+    final context = _ensureContext(chatJid: chatJid, chatType: chatType);
+    final manager = _ensureManager(chatJid: chatJid, chatType: chatType);
+    final model = context.readModel();
+    final updated = model.addTask(task);
+    await context.applyModel(updated);
+    await manager.sendTaskUpdate(task, _chatCalendarTaskAddOperation);
+  }
+
   CalendarSyncManager _ensureManager({
     required String chatJid,
     required ChatType chatType,
   }) {
-    return _managers.putIfAbsent(chatJid, () {
-      final context = _ensureContext(chatJid: chatJid, chatType: chatType);
+    final normalizedJid = _normalizeChatJid(chatJid);
+    final key = _chatKey(normalizedJid);
+    return _managers.putIfAbsent(key, () {
+      final context =
+          _ensureContext(chatJid: normalizedJid, chatType: chatType);
       return CalendarSyncManager(
         readModel: context.readModel,
         applyModel: context.applyModel,
@@ -99,10 +122,12 @@ class ChatCalendarSyncCoordinator {
     required String chatJid,
     required ChatType chatType,
   }) {
+    final normalizedJid = _normalizeChatJid(chatJid);
+    final key = _chatKey(normalizedJid);
     return _contexts.putIfAbsent(
-      chatJid,
+      key,
       () => _ChatCalendarSyncContext(
-        chatJid: chatJid,
+        chatJid: normalizedJid,
         chatType: chatType,
         storage: _storage,
         sendMessage: _sendMessage,
@@ -111,6 +136,12 @@ class ChatCalendarSyncCoordinator {
     )..setChatType(chatType);
   }
 }
+
+String _normalizeChatJid(String chatJid) {
+  return chatJid.trim();
+}
+
+String _chatKey(String chatJid) => chatCalendarStorageId(chatJid);
 
 class _ChatCalendarSyncContext {
   _ChatCalendarSyncContext({

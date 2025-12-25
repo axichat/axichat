@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'base_calendar_bloc.dart';
 import 'calendar_event.dart';
@@ -19,8 +22,10 @@ class CalendarBloc extends BaseCalendarBloc {
     required super.storage,
     super.storageId = 'state',
     super.reminderController,
+    CalendarAvailabilityShareCoordinator? availabilityCoordinator,
     VoidCallback? onDispose,
   })  : _syncManagerBuilder = syncManagerBuilder,
+        _availabilityCoordinator = availabilityCoordinator,
         _onDispose = onDispose,
         super(
           storagePrefix: authStoragePrefix,
@@ -34,7 +39,48 @@ class CalendarBloc extends BaseCalendarBloc {
 
   final CalendarSyncManager Function(CalendarBloc bloc) _syncManagerBuilder;
   late final CalendarSyncManager _syncManager;
+  final CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
   final VoidCallback? _onDispose;
+
+  @protected
+  CalendarAvailabilityShareSource get availabilityShareSource =>
+      const CalendarAvailabilityShareSource.personal();
+
+  @override
+  void emitModel(
+    CalendarModel model,
+    Emitter<CalendarState> emit, {
+    DateTime? selectedDate,
+    bool? isLoading,
+    DateTime? lastSyncTime,
+    bool? isSelectionMode,
+    Set<String>? selectedTaskIds,
+    String? focusedCriticalPathId,
+    bool focusedCriticalPathSpecified = false,
+  }) {
+    final bool modelChanged = model.checksum != state.model.checksum;
+    super.emitModel(
+      model,
+      emit,
+      selectedDate: selectedDate,
+      isLoading: isLoading,
+      lastSyncTime: lastSyncTime,
+      isSelectionMode: isSelectionMode,
+      selectedTaskIds: selectedTaskIds,
+      focusedCriticalPathId: focusedCriticalPathId,
+      focusedCriticalPathSpecified: focusedCriticalPathSpecified,
+    );
+    final coordinator = _availabilityCoordinator;
+    if (!modelChanged || coordinator == null) {
+      return;
+    }
+    unawaited(
+      coordinator.handleModelChanged(
+        source: availabilityShareSource,
+        model: model,
+      ),
+    );
+  }
 
   @override
   Future<void> onTaskAdded(CalendarTask task) async {

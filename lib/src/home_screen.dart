@@ -11,10 +11,13 @@ import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
@@ -88,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _railCollapsed = true;
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
+  CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
 
   @override
   void initState() {
@@ -187,6 +191,27 @@ class _HomeScreenState extends State<HomeScreen> {
       xmppService.setChatCalendarSyncCallback(
         chatCalendarCoordinator.handleInbound,
       );
+    }
+    final availabilityShareCoordinator = _availabilityShareCoordinator ??
+        (!isMessage || calendarStorage == null
+            ? null
+            : CalendarAvailabilityShareCoordinator(
+                store: CalendarAvailabilityShareStore(),
+                sendMessage: ({
+                  required String jid,
+                  required CalendarAvailabilityMessage message,
+                  required ChatType chatType,
+                }) async {
+                  await xmppService.sendAvailabilityMessage(
+                    jid: jid,
+                    message: message,
+                    chatType: chatType,
+                  );
+                },
+              ));
+    if (_availabilityShareCoordinator == null &&
+        availabilityShareCoordinator != null) {
+      _availabilityShareCoordinator = availabilityShareCoordinator;
     }
     final chatsFilters = chatsSearchFilters(l10n);
     final spamFilters = spamSearchFilters(l10n);
@@ -505,6 +530,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                       return manager;
                     },
+                    availabilityCoordinator: availabilityShareCoordinator,
                     storage: storage,
                     onDispose: xmppService.clearCalendarSyncCallback,
                   )..add(const CalendarEvent.started());
@@ -539,12 +565,20 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-    final Widget wrappedScaffold = chatCalendarCoordinator == null
-        ? scaffold
-        : RepositoryProvider<ChatCalendarSyncCoordinator>.value(
-            value: chatCalendarCoordinator,
-            child: scaffold,
-          );
+    Widget wrappedScaffold = scaffold;
+    if (chatCalendarCoordinator != null) {
+      wrappedScaffold = RepositoryProvider<ChatCalendarSyncCoordinator>.value(
+        value: chatCalendarCoordinator,
+        child: wrappedScaffold,
+      );
+    }
+    if (availabilityShareCoordinator != null) {
+      wrappedScaffold =
+          RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
+        value: availabilityShareCoordinator,
+        child: wrappedScaffold,
+      );
+    }
 
     return BlocProvider(
       create: (context) {
