@@ -417,7 +417,7 @@ class XmppService extends XmppBase
   final Capability _capability;
 
   // Calendar sync message callback
-  Future<void> Function(CalendarSyncInbound)? _calendarSyncCallback;
+  Future<bool> Function(CalendarSyncInbound)? _calendarSyncCallback;
   Future<void> Function(CalendarSyncWarning)? _calendarSyncWarningCallback;
 
   final _httpUploadSupportController =
@@ -2344,7 +2344,7 @@ class XmppService extends XmppBase
 
   /// Register a callback to handle calendar sync messages
   void setCalendarSyncCallback(
-      Future<void> Function(CalendarSyncInbound) callback) {
+      Future<bool> Function(CalendarSyncInbound) callback) {
     _calendarSyncCallback = callback;
   }
 
