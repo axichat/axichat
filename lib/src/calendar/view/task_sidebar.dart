@@ -22,8 +22,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
@@ -785,9 +785,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                           if (!state.isTaskInFocusedPath(task)) {
                             return false;
                           }
-                          if (task.deadline != null) {
-                            return false;
-                          }
                           if (settingsState.hideCompletedUnscheduled &&
                               task.isCompleted) {
                             return false;
@@ -822,11 +819,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         unscheduledOrder,
                       );
                       reminderTasks = _sortTasksByDeadline(
-                        state.unscheduledTasks.where((task) {
+                        state.reminderTasks.where((task) {
                           if (!state.isTaskInFocusedPath(task)) {
-                            return false;
-                          }
-                          if (task.deadline == null) {
                             return false;
                           }
                           if (settingsState.hideCompletedReminders &&

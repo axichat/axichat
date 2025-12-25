@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
@@ -296,6 +297,104 @@ void main() {
 
         expect(occurrences, isEmpty);
       });
+
+      test(
+        'includes shifted future occurrences when range override moves series earlier',
+        () {
+          const int baseYear = 2024;
+          const int baseMonth = 3;
+          const int baseDay = 20;
+          const int overrideDay = 1;
+          const int expectedDay = 8;
+          const int baseHour = 9;
+          const int baseMinute = 0;
+          const int baseSecond = 0;
+          const int rangeStartDay = 1;
+          const int rangeEndDay = 10;
+          const int rangeStartHour = 0;
+          const int rangeStartMinute = 0;
+          const int rangeStartSecond = 0;
+          const int rangeEndHour = 23;
+          const int rangeEndMinute = 59;
+          const int rangeEndSecond = 59;
+          const bool isAllDay = false;
+          const bool isFloating = false;
+          const Duration baseDuration = Duration(hours: 1);
+          const RecurrenceRule weeklyRule = RecurrenceRule(
+            frequency: RecurrenceFrequency.weekly,
+          );
+          const String taskTitle = 'Shifted series';
+
+          final DateTime seriesStart = DateTime(
+            baseYear,
+            baseMonth,
+            baseDay,
+            baseHour,
+            baseMinute,
+            baseSecond,
+          );
+          final DateTime overrideStart = DateTime(
+            baseYear,
+            baseMonth,
+            overrideDay,
+            baseHour,
+            baseMinute,
+            baseSecond,
+          );
+          final DateTime rangeStart = DateTime(
+            baseYear,
+            baseMonth,
+            rangeStartDay,
+            rangeStartHour,
+            rangeStartMinute,
+            rangeStartSecond,
+          );
+          final DateTime rangeEnd = DateTime(
+            baseYear,
+            baseMonth,
+            rangeEndDay,
+            rangeEndHour,
+            rangeEndMinute,
+            rangeEndSecond,
+          );
+          final DateTime expectedOccurrence = DateTime(
+            baseYear,
+            baseMonth,
+            expectedDay,
+            baseHour,
+            baseMinute,
+            baseSecond,
+          );
+          final CalendarDateTime recurrenceId = CalendarDateTime(
+            value: seriesStart,
+            tzid: null,
+            isAllDay: isAllDay,
+            isFloating: isFloating,
+          );
+          final TaskOccurrenceOverride rangeOverride = TaskOccurrenceOverride(
+            scheduledTime: overrideStart,
+            recurrenceId: recurrenceId,
+            range: RecurrenceRange.thisAndFuture,
+          );
+          final String overrideKey =
+              seriesStart.microsecondsSinceEpoch.toString();
+          final CalendarTask task = CalendarTask.create(
+            title: taskTitle,
+            scheduledTime: seriesStart,
+            duration: baseDuration,
+            recurrence: weeklyRule,
+          ).copyWith(
+            occurrenceOverrides: <String, TaskOccurrenceOverride>{
+              overrideKey: rangeOverride,
+            },
+          );
+
+          final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
+
+          expect(occurrences, hasLength(1));
+          expect(occurrences.first.scheduledTime, expectedOccurrence);
+        },
+      );
     });
 
     group('equality', () {

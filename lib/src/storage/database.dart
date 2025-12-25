@@ -414,6 +414,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> deleteBlocklist();
 
+  Future<void> replaceContacts(Map<String, String> contactsByNativeId);
+
   Stream<List<EmailBlocklistEntry>> watchEmailBlocklist();
 
   Future<List<EmailBlocklistEntry>> getEmailBlocklist();
@@ -1341,7 +1343,7 @@ WHERE file_metadata_id IS NOT NULL
             (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
           END
         )
-      ORDER BY m.timestamp DESC
+      ORDER BY m.timestamp DESC, m.stanza_i_d DESC
       LIMIT ?
       OFFSET ?
       ''',
@@ -1428,7 +1430,7 @@ WHERE file_metadata_id IS NOT NULL
                  LOWER(TRIM(ms.subject)) LIKE ? ESCAPE '\\'
           END
         )
-      ORDER BY m.timestamp $orderClause
+      ORDER BY m.timestamp $orderClause, m.stanza_i_d $orderClause
       LIMIT ?
       ''',
       variables: [
@@ -1549,6 +1551,7 @@ WHERE file_metadata_id IS NOT NULL
     final trimmedBody = message.body?.trim();
     final hasBody = trimmedBody?.isNotEmpty == true;
     final hasAttachment = message.fileMetadataID?.isNotEmpty == true;
+    final messageTimestamp = message.timestamp ?? DateTime.timestamp();
     final lastMessagePreview = await _messagePreview(
       trimmedBody: trimmedBody,
       fileMetadataId: message.fileMetadataID,
@@ -1565,7 +1568,7 @@ WHERE file_metadata_id IS NOT NULL
           type: chatType,
           unreadCount: Value((hasBody || hasAttachment).toBinary),
           lastMessage: Value.absentIfNull(lastMessagePreview),
-          lastChangeTimestamp: DateTime.timestamp(),
+          lastChangeTimestamp: messageTimestamp,
           encryptionProtocol: Value(message.encryptionProtocol),
           contactJid:
               Value(chatType == ChatType.groupChat ? null : message.chatJid),
@@ -1577,8 +1580,8 @@ WHERE file_metadata_id IS NOT NULL
               old.open.isValue(true),
               old.unreadCount + Constant((hasBody || hasAttachment).toBinary),
             ),
-            lastMessage: excluded.lastMessage,
-            lastChangeTimestamp: excluded.lastChangeTimestamp,
+            lastMessage: old.lastMessage,
+            lastChangeTimestamp: old.lastChangeTimestamp,
           ),
         ),
       );
@@ -1602,6 +1605,11 @@ WHERE file_metadata_id IS NOT NULL
           'Message insert ignored; retrying with upsert',
         );
         await into(messages).insertOnConflictUpdate(messageToSave);
+        await _updateChatSummaryIfNewer(
+          jid: message.chatJid,
+          timestamp: messageTimestamp,
+          lastMessage: lastMessagePreview,
+        );
         return;
       }
 
@@ -1618,6 +1626,11 @@ WHERE file_metadata_id IS NOT NULL
           fileMetadataId: incomingMetadataId!,
         );
       }
+      await _updateChatSummaryIfNewer(
+        jid: message.chatJid,
+        timestamp: messageTimestamp,
+        lastMessage: lastMessagePreview,
+      );
 
       final incomingBody = messageToSave.body?.trim();
       final hasIncomingBody = incomingBody?.isNotEmpty == true;
@@ -1712,6 +1725,38 @@ WHERE file_metadata_id IS NOT NULL
       return 'Attachment';
     }
     return 'Attachment: $filename';
+  }
+
+  Future<void> _updateChatSummaryIfNewer({
+    required String jid,
+    required DateTime timestamp,
+    required String? lastMessage,
+  }) async {
+    final resolvedLastMessage = lastMessage ?? '';
+    final hasLastMessage = resolvedLastMessage.trim().isNotEmpty;
+    await customStatement(
+      '''
+UPDATE chats
+SET last_change_timestamp = CASE
+      WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
+      ELSE last_change_timestamp
+    END,
+    last_message = CASE
+      WHEN ? = 0 THEN last_message
+      WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
+      ELSE last_message
+    END
+WHERE jid = ?
+''',
+      [
+        Variable<DateTime>(timestamp),
+        Variable<DateTime>(timestamp),
+        Variable<int>(hasLastMessage.toBinary),
+        Variable<DateTime>(timestamp),
+        Variable<String>(resolvedLastMessage),
+        Variable<String>(jid),
+      ],
+    );
   }
 
   @override
@@ -2983,6 +3028,22 @@ $limitClause
   Future<void> deleteBlocklist() async {
     _log.info('Deleting blocklist...');
     await blocklistAccessor.deleteAll();
+  }
+
+  @override
+  Future<void> replaceContacts(Map<String, String> contactsByNativeId) async {
+    await transaction(() async {
+      await delete(contacts).go();
+      for (final entry in contactsByNativeId.entries) {
+        await into(contacts).insert(
+          ContactsCompanion.insert(
+            nativeID: entry.key,
+            jid: entry.value,
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    });
   }
 
   @override

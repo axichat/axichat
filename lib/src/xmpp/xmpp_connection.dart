@@ -317,12 +317,38 @@ class XmppConnection extends mox.XmppConnection {
     }
   }
 
-  Future<void> triggerImmediateReconnect() =>
-      _reconnectionPolicy.triggerImmediateReconnect();
+  Future<void> requestReconnect(ReconnectTrigger trigger) =>
+      _reconnectionPolicy.requestReconnect(trigger);
 }
 
 class XmppConnectionSettings extends mox.ConnectionSettings {
   XmppConnectionSettings({required super.jid, required super.password});
+}
+
+enum ReconnectTrigger {
+  resume,
+  userAction,
+  foregroundMigration,
+  networkAvailable,
+  autoFailure,
+}
+
+extension ReconnectTriggerBehavior on ReconnectTrigger {
+  bool get shouldBypassBackoff => switch (this) {
+        ReconnectTrigger.resume => true,
+        ReconnectTrigger.userAction => true,
+        ReconnectTrigger.foregroundMigration => true,
+        ReconnectTrigger.networkAvailable => true,
+        ReconnectTrigger.autoFailure => false,
+      };
+
+  bool get shouldResetAttemptCounter => switch (this) {
+        ReconnectTrigger.resume => true,
+        ReconnectTrigger.userAction => true,
+        ReconnectTrigger.foregroundMigration => true,
+        ReconnectTrigger.networkAvailable => true,
+        ReconnectTrigger.autoFailure => false,
+      };
 }
 
 class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
@@ -337,6 +363,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   int _reconnectionAttempts = 0;
   Timer? _backoffTimer;
+  Future<void>? _reconnectAction;
 
   @override
   mox.PerformReconnectFunction? performReconnect;
@@ -388,8 +415,14 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     );
   }
 
-  Future<void> triggerImmediateReconnect() async {
+  Future<void> requestReconnect(ReconnectTrigger trigger) async {
     if (!await getShouldReconnect()) return;
+    if (trigger.shouldResetAttemptCounter) {
+      _resetAttemptCounter();
+    }
+    if (!trigger.shouldBypassBackoff) {
+      return;
+    }
     final hasBackoff = _backoffTimer != null;
     _cancelBackoff();
     if (hasBackoff) {
@@ -411,6 +444,32 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _backoffTimer = null;
   }
 
+  Future<void> _runReconnectAction(
+    Future<void> Function() action,
+  ) async {
+    final existing = _reconnectAction;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _reconnectAction = completer.future;
+    try {
+      await action();
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    } catch (error, stackTrace) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
+      rethrow;
+    } finally {
+      _reconnectAction = null;
+    }
+  }
+
   Future<void> _fireBackoffReconnect() async {
     _cancelBackoff();
     try {
@@ -423,10 +482,16 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   }
 
   Future<void> _reconnect() async {
-    _reconnectionAttempts++;
-    if (performReconnect case final reconnect?) {
-      await reconnect();
-    }
+    await _runReconnectAction(() async {
+      _reconnectionAttempts++;
+      if (performReconnect case final reconnect?) {
+        await reconnect();
+      }
+    });
+  }
+
+  void _resetAttemptCounter() {
+    _reconnectionAttempts = 0;
   }
 
   @override
@@ -526,13 +591,19 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   }
 
   List<IOEndpoint> _resolveEndpoints() {
+    final configuredEndpoints = _endpoints;
     final rawDomain = _domainProvider();
-    if (rawDomain == null) return _endpoints;
+    if (rawDomain == null) return configuredEndpoints;
     final domain = rawDomain.trim().toLowerCase();
-    if (domain.isEmpty) return _endpoints;
+    if (domain.isEmpty) return configuredEndpoints;
     final endpoint = serverLookup[domain];
-    if (endpoint == null) return _endpoints;
-    return [endpoint];
+    if (endpoint != null) {
+      return [endpoint];
+    }
+    if (configuredEndpoints.isNotEmpty) {
+      return configuredEndpoints;
+    }
+    return [IOEndpoint(domain, EndpointConfig.defaultXmppPort)];
   }
 
   bool _isOfflineSocketError(SocketException error) {

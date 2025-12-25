@@ -618,12 +618,10 @@ class _QuickFilterEvaluator {
           if (task.scheduledTime == null) return false;
           break;
         case _QuickFilter.unscheduled:
-          if (task.scheduledTime != null) return false;
+          if (!task.isUnscheduled) return false;
           break;
         case _QuickFilter.reminders:
-          if (task.deadline == null || task.scheduledTime != null) {
-            return false;
-          }
+          if (!task.isReminder) return false;
           break;
         case _QuickFilter.open:
           if (task.isCompleted) return false;
@@ -879,7 +877,7 @@ class _QueryMatcher {
       case _ScheduledFilter.scheduled:
         return task.scheduledTime != null;
       case _ScheduledFilter.unscheduled:
-        return task.scheduledTime == null;
+        return task.isUnscheduled;
       case _ScheduledFilter.today:
         final DateTime? start = task.scheduledTime;
         if (start == null) return false;

@@ -246,6 +246,18 @@ class EmailDeltaTransport implements ChatTransport {
     return await _eventConsumer?.bootstrapFromCore() ?? false;
   }
 
+  Future<void> refreshChatlistSnapshot() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    final consumer = _eventConsumer;
+    if (consumer == null) {
+      return;
+    }
+    await consumer.refreshChatlistSnapshot();
+  }
+
   Future<void> notifyNetworkAvailable() async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -282,6 +294,32 @@ class EmailDeltaTransport implements ChatTransport {
     return accounts.backgroundFetch(timeout);
   }
 
+  Future<void> backfillChatHistory({
+    required int chatId,
+    required String chatJid,
+    required int desiredWindow,
+    int? beforeMessageId,
+    DateTime? beforeTimestamp,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    final consumer = _eventConsumer;
+    if (consumer == null) {
+      return;
+    }
+    await consumer.backfillChatHistory(
+      chatId: chatId,
+      chatJid: chatJid,
+      desiredWindow: desiredWindow,
+      beforeMessageId: beforeMessageId,
+      beforeTimestamp: beforeTimestamp,
+      filter: filter,
+    );
+  }
+
   @override
   Future<int?> connectivity() async {
     if (_databasePrefix == null || _databasePassphrase == null) {
@@ -289,6 +327,20 @@ class EmailDeltaTransport implements ChatTransport {
     }
     await _ensureContextReady();
     return _context?.connectivity();
+  }
+
+  bool get accountsSupported => _accountsSupported;
+
+  bool get accountsActive => _accounts != null;
+
+  Future<String?> getCoreConfig(String key) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return null;
+    }
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return null;
+    return context.getConfig(key);
   }
 
   Future<void> registerPushToken(String token) async {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
@@ -11,6 +12,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/utils/schedule_range_utils.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'models/task_context_action.dart';
 import 'controllers/task_checklist_controller.dart';
@@ -148,10 +150,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _isUrgent = task.isUrgent || task.isCritical;
       _isCompleted = task.isCompleted;
       _startTime = task.scheduledTime;
-      _endTime = task.effectiveEndDate ??
-          task.scheduledTime?.add(
-            task.duration ?? const Duration(hours: 1),
-          );
+      final Duration fallbackDuration =
+          task.duration ?? calendarDefaultTaskDuration;
+      _endTime =
+          task.effectiveEndDate ?? task.scheduledTime?.add(fallbackDuration);
       _deadline = task.deadline;
       _recurrence = RecurrenceFormValue.fromRule(task.recurrence)
           .resolveLinkedLimits(_startTime ?? task.scheduledTime);
@@ -406,13 +408,16 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
   void _handleStartChanged(DateTime? value) {
     setState(() {
+      final DateTime? previousStart = _startTime;
+      final DateTime? previousEnd = _endTime;
       _startTime = value;
+      _endTime = shiftEndTimeWithStart(
+        previousStart: previousStart,
+        previousEnd: previousEnd,
+        nextStart: value,
+      );
       if (value == null) {
-        _endTime = null;
         return;
-      }
-      if (_endTime == null || _endTime!.isBefore(value)) {
-        _endTime = value.add(const Duration(hours: 1));
       }
       _recurrence = _normalizeRecurrence(_recurrence);
     });
@@ -420,12 +425,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
   void _handleEndChanged(DateTime? value) {
     setState(() {
-      _endTime = value;
-      if (value == null) {
+      _endTime = clampEndTime(start: _startTime, end: value);
+      if (_endTime == null) {
         return;
-      }
-      if (_startTime != null && value.isBefore(_startTime!)) {
-        _endTime = _startTime!.add(const Duration(minutes: 15));
       }
       _recurrence = _normalizeRecurrence(_recurrence);
     });

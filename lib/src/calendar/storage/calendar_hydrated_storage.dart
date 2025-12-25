@@ -1,10 +1,22 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 
+import 'package:axichat/src/storage/hive_extensions.dart';
 import 'calendar_hive_adapters.dart';
+
+const _fileNotFoundErrorCode = 2;
+
+bool _isFileNotFound(Object error) {
+  if (error is FileSystemException) {
+    final osError = error.osError;
+    return osError != null && osError.errorCode == _fileNotFoundErrorCode;
+  }
+  return false;
+}
 
 /// Hive-backed [Storage] implementation that namespaces keys so multiple
 /// hydrated blocs can share the same box without collisions.
@@ -19,27 +31,36 @@ class CalendarHydratedStorage implements Storage {
     HydratedCipher? encryptionCipher,
     HiveInterface? hive,
   }) async {
-    final logger = Logger('CalendarHydratedStorage');
-    final hiveInstance = hive ?? Hive;
+    final Logger logger = Logger('CalendarHydratedStorage');
+    final HiveInterface hiveInstance = hive ?? Hive;
 
     registerCalendarHiveAdapters(hiveInstance);
 
-    Future<Box<dynamic>> openBox() {
-      return hiveInstance.openBox<dynamic>(
+    Future<Box<dynamic>> openBoxWithRetry() {
+      return hiveInstance.openBoxWithRetry<dynamic>(
         boxName,
         encryptionCipher: encryptionCipher,
+        logger: logger,
       );
     }
 
     if (hiveInstance.isBoxOpen(boxName)) {
-      final existing = hiveInstance.box<dynamic>(boxName);
+      final Box<dynamic> existing = hiveInstance.box<dynamic>(boxName);
       return CalendarHydratedStorage._(existing, prefix);
     }
 
     try {
-      final box = await openBox();
+      final Box<dynamic> box = await openBoxWithRetry();
       return CalendarHydratedStorage._(box, prefix);
     } catch (error, stackTrace) {
+      if (isHiveLockUnavailable(error)) {
+        logger.warning(
+          'Hive box "$boxName" is locked and could not be opened.',
+          error,
+          stackTrace,
+        );
+        rethrow;
+      }
       logger.warning(
         'Failed to open Hive box "$boxName". Attempting recovery.',
         error,
@@ -48,15 +69,22 @@ class CalendarHydratedStorage implements Storage {
       try {
         await hiveInstance.deleteBoxFromDisk(boxName);
       } catch (deleteError, deleteStack) {
-        logger.severe(
-          'Unable to delete corrupted Hive box "$boxName".',
+        if (!_isFileNotFound(deleteError)) {
+          logger.severe(
+            'Unable to delete corrupted Hive box "$boxName".',
+            deleteError,
+            deleteStack,
+          );
+          rethrow;
+        }
+        logger.warning(
+          'Hive box "$boxName" cleanup skipped missing files.',
           deleteError,
           deleteStack,
         );
-        rethrow;
       }
 
-      final box = await openBox();
+      final Box<dynamic> box = await openBoxWithRetry();
       return CalendarHydratedStorage._(box, prefix);
     }
   }

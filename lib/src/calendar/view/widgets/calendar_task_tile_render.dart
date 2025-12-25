@@ -15,6 +15,17 @@ typedef TaskTileContextMenuCallback = void Function(
   Offset normalizedPosition,
 );
 
+extension PointerDeviceKindX on PointerDeviceKind {
+  bool get usesResizeLongPress => switch (this) {
+        PointerDeviceKind.touch => true,
+        PointerDeviceKind.stylus => true,
+        PointerDeviceKind.invertedStylus => true,
+        PointerDeviceKind.mouse => false,
+        PointerDeviceKind.trackpad => false,
+        PointerDeviceKind.unknown => true,
+      };
+}
+
 class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
   const CalendarTaskTileRenderRegion({
     super.key,
@@ -144,7 +155,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   double _handleExtent;
   static const double _tapSlop = 3.0;
   static const Duration _touchResizeLongPressDelay =
-      Duration(milliseconds: 260);
+      Duration(milliseconds: 200);
   static const double _touchHandleHorizontalFraction = 0.45;
   static const double _touchHandleHorizontalMax = 56.0;
   static const double _touchHandleHorizontalMin = 28.0;
@@ -180,6 +191,8 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   String? _activeHandle;
   LongPressGestureRecognizer? _resizeLongPressRecognizer;
   String? _pendingResizeHandle;
+  bool _useLongPressMoveUpdates = false;
+  Offset? _lastLongPressLocalPosition;
 
   double _totalResizeDelta = 0;
   int _lastAppliedStep = 0;
@@ -187,6 +200,9 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   double _currentDurationHours = 1;
   DateTime? _tempScheduled;
   Duration? _tempDuration;
+
+  bool get _hasMouseInput =>
+      RendererBinding.instance.mouseTracker.mouseIsConnected;
 
   CalendarTask get task => _task;
   set task(CalendarTask value) {
@@ -392,12 +408,12 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       event.localPosition,
       _normalizedFromLocal(event.localPosition),
     );
-    final bool primaryButton = event.buttons == kPrimaryButton;
+    final bool primaryButton = _isPrimaryButton(event);
     if (primaryButton) {
       onDragPointerDown?.call(_normalizedFromLocal(event.localPosition));
       final String? handle = _hitHandle(event.localPosition);
       if (_canResize && handle != null && !_resizeActive) {
-        if (_shouldDelayResizeForPointer(event.kind)) {
+        if (_shouldDelayResizeForPointer(event)) {
           _startResizeLongPressRecognizer(handle, event);
         } else {
           _beginResize(handle);
@@ -411,18 +427,21 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
+    final double slop = _pointerMoveSlop(event.kind);
     if (_resizeLongPressRecognizer != null &&
         _pendingResizeHandle != null &&
         _downLocalPosition != null &&
-        (event.localPosition - _downLocalPosition!).distance > _tapSlop) {
+        (event.localPosition - _downLocalPosition!).distance > slop) {
       _cancelResizeLongPressRecognizer();
     }
     if (_resizeActive) {
-      _updateResize(event);
+      if (!_useLongPressMoveUpdates) {
+        _updateResize(event);
+      }
       return;
     }
     if (_downLocalPosition != null &&
-        (event.localPosition - _downLocalPosition!).distance > _tapSlop) {
+        (event.localPosition - _downLocalPosition!).distance > slop) {
       _pendingTap = false;
     }
   }
@@ -460,11 +479,30 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     onTap?.call(task, bounds);
   }
 
-  bool _shouldDelayResizeForPointer(PointerDeviceKind kind) {
-    return kind == PointerDeviceKind.touch ||
-        kind == PointerDeviceKind.stylus ||
-        kind == PointerDeviceKind.invertedStylus ||
-        kind == PointerDeviceKind.unknown;
+  bool _shouldDelayResizeForPointer(PointerDownEvent event) {
+    final PointerDeviceKind kind = event.kind;
+    if (kind == PointerDeviceKind.unknown) {
+      return !_hasMouseInput;
+    }
+    return kind.usesResizeLongPress;
+  }
+
+  bool _isPrimaryButton(PointerDownEvent event) {
+    final bool primaryPressed = (event.buttons & kPrimaryButton) != 0;
+    if (primaryPressed) {
+      return true;
+    }
+    if (event.buttons != 0) {
+      return false;
+    }
+    final PointerDeviceKind kind = event.kind;
+    if (kind == PointerDeviceKind.mouse || kind == PointerDeviceKind.trackpad) {
+      return false;
+    }
+    if (kind == PointerDeviceKind.unknown && _hasMouseInput) {
+      return false;
+    }
+    return true;
   }
 
   void _startResizeLongPressRecognizer(
@@ -475,11 +513,16 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     final LongPressGestureRecognizer recognizer = LongPressGestureRecognizer(
       duration: _touchResizeLongPressDelay,
     )
-      ..onLongPressStart = (_) {
-        if (_pendingResizeHandle != null && !_resizeActive) {
-          _beginResize(_pendingResizeHandle!);
+      ..onLongPressStart = (details) {
+        final String? pendingHandle = _pendingResizeHandle;
+        if (pendingHandle == null || _resizeActive) {
+          return;
         }
+        _useLongPressMoveUpdates = true;
+        _lastLongPressLocalPosition = details.localPosition;
+        _beginResize(pendingHandle);
       }
+      ..onLongPressMoveUpdate = _handleLongPressMoveUpdate
       ..onLongPressEnd = (_) {
         _cancelResizeLongPressRecognizer();
       }
@@ -494,6 +537,8 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _pendingResizeHandle = null;
     _resizeLongPressRecognizer?.dispose();
     _resizeLongPressRecognizer = null;
+    _useLongPressMoveUpdates = false;
+    _lastLongPressLocalPosition = null;
   }
 
   @override
@@ -526,6 +571,8 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _activeHandle = null;
     _totalResizeDelta = 0;
     _lastAppliedStep = 0;
+    _useLongPressMoveUpdates = false;
+    _lastLongPressLocalPosition = null;
     cursor = SystemMouseCursors.click;
   }
 
@@ -555,6 +602,35 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   void _updateResize(PointerMoveEvent event) {
     onResizePointerMove?.call(event.position);
     _applyResizeDelta(event.delta.dy);
+  }
+
+  void _handleLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
+    if (!_resizeActive || !_useLongPressMoveUpdates) {
+      return;
+    }
+    final Offset? last = _lastLongPressLocalPosition;
+    _lastLongPressLocalPosition = details.localPosition;
+    if (last == null) {
+      return;
+    }
+    final double delta = details.localPosition.dy - last.dy;
+    if (delta == 0) {
+      return;
+    }
+    onResizePointerMove?.call(details.globalPosition);
+    _applyResizeDelta(delta);
+  }
+
+  double _pointerMoveSlop(PointerDeviceKind kind) {
+    if (kind == PointerDeviceKind.touch ||
+        kind == PointerDeviceKind.stylus ||
+        kind == PointerDeviceKind.invertedStylus) {
+      return kTouchSlop;
+    }
+    if (kind == PointerDeviceKind.unknown && !_hasMouseInput) {
+      return kTouchSlop;
+    }
+    return _tapSlop;
   }
 
   void _applyResizeDelta(double deltaDy) {

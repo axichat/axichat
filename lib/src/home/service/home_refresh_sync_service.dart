@@ -1,35 +1,114 @@
 import 'dart:async';
 
+import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:logging/logging.dart';
 
 final class HomeRefreshSyncService {
   HomeRefreshSyncService({
     required XmppService xmppService,
-  }) : _xmppService = xmppService;
+    EmailService? emailService,
+  })  : _xmppService = xmppService,
+        _emailService = emailService;
 
-  static const int _historySyncConversationLimit = 50;
   static const Duration _connectionTimeout = Duration(seconds: 20);
-  static const Duration _historySyncTimeBudget = Duration(seconds: 25);
   static const int _mamHistoryPageSize = 50;
 
   final XmppService _xmppService;
+  final EmailService? _emailService;
+  final Logger _log = Logger('HomeRefreshSyncService');
+  bool _syncInFlight = false;
+  DateTime? _lastSyncAt;
+  StreamSubscription<ConnectionState>? _xmppConnectivitySubscription;
+  StreamSubscription<EmailSyncState>? _emailSyncSubscription;
+  ConnectionState? _lastXmppState;
+  EmailSyncStatus? _lastEmailStatus;
+  var _listenersStarted = false;
+
+  void start() {
+    if (_listenersStarted) return;
+    _listenersStarted = true;
+    _lastXmppState = _xmppService.connectionState;
+    _xmppConnectivitySubscription =
+        _xmppService.connectivityStream.listen(_handleXmppConnectivity);
+    final emailService = _emailService;
+    if (emailService != null) {
+      _lastEmailStatus = emailService.syncState.status;
+      _emailSyncSubscription =
+          emailService.syncStateStream.listen(_handleEmailSyncState);
+    }
+  }
+
+  Future<void> close() async {
+    _listenersStarted = false;
+    final xmppSub = _xmppConnectivitySubscription;
+    _xmppConnectivitySubscription = null;
+    await xmppSub?.cancel();
+    final emailSub = _emailSyncSubscription;
+    _emailSyncSubscription = null;
+    await emailSub?.cancel();
+  }
+
+  Future<void> syncOnLogin() async {
+    try {
+      await refresh();
+    } on Exception {
+      _log.fine('Post-login sync failed.');
+    }
+  }
 
   Future<DateTime> refresh() async {
-    await _ensureConnected();
+    if (_syncInFlight) {
+      return _lastSyncAt ?? DateTime.timestamp();
+    }
+    _syncInFlight = true;
+    try {
+      await _healTransports();
 
-    final bookmarks = await _refreshMucBookmarks();
-    final conversationItems = await _refreshConversationIndex();
+      await _syncEmailContacts();
+      await _refreshMucBookmarks();
+      await _refreshConversationIndex();
+      await _refreshEmailHistory();
 
-    await _refreshRecentHistory(
-      bookmarks: bookmarks,
-      conversations: conversationItems,
-    );
+      await _refreshXmppHistory();
+      await _rehydrateCalendar();
+      await _refreshAvatars();
 
-    await _rehydrateCalendar();
+      _lastSyncAt = DateTime.timestamp();
+      return _lastSyncAt!;
+    } finally {
+      _syncInFlight = false;
+    }
+  }
 
-    return DateTime.timestamp();
+  void _handleXmppConnectivity(ConnectionState state) {
+    final wasConnected = _lastXmppState == ConnectionState.connected;
+    _lastXmppState = state;
+    if (!wasConnected && state == ConnectionState.connected) {
+      unawaited(_runReconnectSync());
+    }
+  }
+
+  void _handleEmailSyncState(EmailSyncState state) {
+    final wasReady = _lastEmailStatus == EmailSyncStatus.ready;
+    _lastEmailStatus = state.status;
+    if (!wasReady && state.status == EmailSyncStatus.ready) {
+      unawaited(_runReconnectSync());
+    }
+  }
+
+  Future<void> _runReconnectSync() async {
+    if (_syncInFlight) {
+      return;
+    }
+    try {
+      await refresh();
+    } on Exception {
+      _log.fine('Reconnect sync failed.');
+    }
   }
 
   Future<void> _rehydrateCalendar() async {
@@ -41,74 +120,78 @@ final class HomeRefreshSyncService {
     }
   }
 
+  Future<void> _healTransports() async {
+    await _ensureConnected();
+    await _ensureEmailConnected();
+  }
+
   Future<void> _ensureConnected() async {
     if (_xmppService.connectionState == ConnectionState.connected) return;
-    await _xmppService.triggerImmediateReconnect();
+    await _xmppService.requestReconnect(ReconnectTrigger.userAction);
     await _xmppService.connectivityStream
         .firstWhere((state) => state == ConnectionState.connected)
         .timeout(_connectionTimeout);
   }
 
+  Future<void> _ensureEmailConnected() async {
+    final emailService = _emailService;
+    if (emailService == null) return;
+    try {
+      await emailService.ensureEventChannelActive();
+      await emailService.handleNetworkAvailable();
+    } on Exception {
+      _log.fine('Email transport recovery failed.');
+    }
+  }
+
   Future<List<MucBookmark>> _refreshMucBookmarks() async {
-    final manager = _xmppService.bookmarksManager;
-    if (manager == null) return const [];
-    await manager.ensureNode();
-    await manager.subscribe();
-    final bookmarks = await manager.getBookmarks();
-    await _xmppService.applyMucBookmarks(bookmarks);
-    return bookmarks;
+    if (_xmppService.connectionState != ConnectionState.connected) {
+      return const [];
+    }
+    return _xmppService.syncMucBookmarksSnapshot();
   }
 
   Future<List<ConvItem>> _refreshConversationIndex() async {
-    final manager = _xmppService.conversationIndexManager;
-    if (manager == null) return const [];
-    await manager.ensureNode();
-    await manager.subscribe();
-    final items = await manager.fetchAll();
-    await _xmppService.applyConversationIndexItems(items);
-    return items;
+    if (_xmppService.connectionState != ConnectionState.connected) {
+      return const [];
+    }
+    return _xmppService.syncConversationIndexSnapshot();
   }
 
-  Future<void> _refreshRecentHistory({
-    required List<MucBookmark> bookmarks,
-    required List<ConvItem> conversations,
-  }) async {
-    final supportsMam = await _xmppService.resolveMamSupport();
-    if (!supportsMam) return;
-
-    final now = DateTime.timestamp();
-    final cutoff = now.add(_historySyncTimeBudget);
-
-    final rooms = bookmarks.map((bookmark) => bookmark.roomBare.toString());
-    final peers = conversations.toList(growable: false)
-      ..sort(
-        (a, b) => b.lastTimestamp.compareTo(a.lastTimestamp),
-      );
-
-    final targets = <({String jid, bool isMuc})>[];
-    for (final room in rooms) {
-      if (targets.length >= _historySyncConversationLimit) break;
-      targets.add((jid: room, isMuc: true));
+  Future<void> _refreshEmailHistory() async {
+    final emailService = _emailService;
+    if (emailService == null) return;
+    try {
+      await emailService.syncInboxAndSent();
+    } on Exception {
+      _log.fine('Email background sync failed.');
     }
-    for (final conv in peers) {
-      if (targets.length >= _historySyncConversationLimit) break;
-      targets.add((jid: conv.peerBare.toString(), isMuc: false));
-    }
+  }
 
-    for (final target in targets) {
-      if (DateTime.timestamp().isAfter(cutoff)) return;
-      if (_xmppService.connectionState != ConnectionState.connected) return;
-      try {
-        await _xmppService.fetchLatestFromArchive(
-          jid: target.jid,
-          pageSize: _mamHistoryPageSize,
-          isMuc: target.isMuc,
-        );
-      } on XmppAbortedException {
-        return;
-      } on Exception {
-        continue;
-      }
+  Future<void> _syncEmailContacts() async {
+    final emailService = _emailService;
+    if (emailService == null) return;
+    try {
+      await emailService.syncContactsFromCore();
+    } on Exception {
+      _log.fine('Email contact sync failed.');
     }
+  }
+
+  Future<void> _refreshXmppHistory() async {
+    if (_xmppService.connectionState != ConnectionState.connected) return;
+    final outcome = await _xmppService.syncGlobalMamCatchUp(
+      pageSize: _mamHistoryPageSize,
+    );
+    final includeDirect = outcome.shouldFallbackToPerChat;
+    await _xmppService.syncMessageArchiveOnLogin(
+      includeDirect: includeDirect,
+      includeMuc: true,
+    );
+  }
+
+  Future<void> _refreshAvatars() async {
+    if (_xmppService.connectionState != ConnectionState.connected) return;
+    await _xmppService.refreshAvatarsForConversationIndex();
   }
 }

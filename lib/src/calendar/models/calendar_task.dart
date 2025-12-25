@@ -6,23 +6,48 @@ import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'calendar_checklist_item.dart';
+import 'calendar_date_time.dart';
+import 'calendar_ics_meta.dart';
+import 'calendar_ics_raw.dart';
+import 'calendar_item.dart';
 import 'reminder_preferences.dart';
+
+export 'calendar_checklist_item.dart';
 
 part 'calendar_task.freezed.dart';
 part 'calendar_task.g.dart';
 
-@freezed
-@HiveType(typeId: 38)
-class TaskChecklistItem with _$TaskChecklistItem {
-  const factory TaskChecklistItem({
-    @HiveField(0) required String id,
-    @HiveField(1) required String label,
-    @HiveField(2) @Default(false) bool isCompleted,
-  }) = _TaskChecklistItem;
+const int _taskOccurrenceOverrideRecurrenceIdField = 10;
+const int _taskOccurrenceOverrideRangeField = 11;
+const int _taskOccurrenceOverrideRawPropertiesField = 12;
+const int _taskOccurrenceOverrideRawComponentsField = 13;
 
-  factory TaskChecklistItem.fromJson(Map<String, dynamic> json) =>
-      _$TaskChecklistItemFromJson(json);
-}
+const int _recurrenceRuleBySecondsField = 5;
+const int _recurrenceRuleByMinutesField = 6;
+const int _recurrenceRuleByHoursField = 7;
+const int _recurrenceRuleByDaysField = 8;
+const int _recurrenceRuleByMonthDaysField = 9;
+const int _recurrenceRuleByYearDaysField = 10;
+const int _recurrenceRuleByWeekNumbersField = 11;
+const int _recurrenceRuleByMonthsField = 12;
+const int _recurrenceRuleBySetPositionsField = 13;
+const int _recurrenceRuleWeekStartField = 14;
+const int _recurrenceRuleRDatesField = 15;
+const int _recurrenceRuleExDatesField = 16;
+const int _recurrenceRuleRawPropertiesField = 17;
+const int _recurrenceRuleUntilIsDateField = 18;
+const bool _recurrenceRuleUntilIsDateDefault = false;
+
+const int _calendarTaskIcsMetaField = 17;
+
+const List<CalendarDateTime> _emptyCalendarDateTimes = <CalendarDateTime>[];
+const List<CalendarRawProperty> _emptyCalendarRawProperties =
+    <CalendarRawProperty>[];
+const List<CalendarRawComponent> _emptyCalendarRawComponents =
+    <CalendarRawComponent>[];
+const Map<String, TaskOccurrenceOverride> _emptyTaskOccurrenceOverrides =
+    <String, TaskOccurrenceOverride>{};
 
 @freezed
 @HiveType(typeId: 36)
@@ -38,6 +63,15 @@ class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
     @HiveField(7) String? description,
     @HiveField(8) String? location,
     @HiveField(9) List<TaskChecklistItem>? checklist,
+    @HiveField(_taskOccurrenceOverrideRecurrenceIdField)
+    CalendarDateTime? recurrenceId,
+    @HiveField(_taskOccurrenceOverrideRangeField) RecurrenceRange? range,
+    @HiveField(_taskOccurrenceOverrideRawPropertiesField)
+    @Default(_emptyCalendarRawProperties)
+    List<CalendarRawProperty> rawProperties,
+    @HiveField(_taskOccurrenceOverrideRawComponentsField)
+    @Default(_emptyCalendarRawComponents)
+    List<CalendarRawComponent> rawComponents,
   }) = _TaskOccurrenceOverride;
 
   factory TaskOccurrenceOverride.fromJson(Map<String, dynamic> json) =>
@@ -66,7 +100,41 @@ class RecurrenceRule with _$RecurrenceRule {
     @HiveField(1) @Default(1) int interval,
     @HiveField(2) List<int>? byWeekdays,
     @HiveField(3) DateTime? until,
+    @HiveField(
+      _recurrenceRuleUntilIsDateField,
+      defaultValue: _recurrenceRuleUntilIsDateDefault,
+    )
+    @Default(_recurrenceRuleUntilIsDateDefault)
+    bool untilIsDate,
     @HiveField(4) int? count,
+    @HiveField(_recurrenceRuleBySecondsField) List<int>? bySeconds,
+    @HiveField(_recurrenceRuleByMinutesField) List<int>? byMinutes,
+    @HiveField(_recurrenceRuleByHoursField) List<int>? byHours,
+    @HiveField(_recurrenceRuleByDaysField) List<RecurrenceWeekday>? byDays,
+    @HiveField(_recurrenceRuleByMonthDaysField) List<int>? byMonthDays,
+    @HiveField(_recurrenceRuleByYearDaysField) List<int>? byYearDays,
+    @HiveField(_recurrenceRuleByWeekNumbersField) List<int>? byWeekNumbers,
+    @HiveField(_recurrenceRuleByMonthsField) List<int>? byMonths,
+    @HiveField(_recurrenceRuleBySetPositionsField) List<int>? bySetPositions,
+    @HiveField(_recurrenceRuleWeekStartField) CalendarWeekday? weekStart,
+    @HiveField(
+      _recurrenceRuleRDatesField,
+      defaultValue: _emptyCalendarDateTimes,
+    )
+    @Default(_emptyCalendarDateTimes)
+    List<CalendarDateTime> rDates,
+    @HiveField(
+      _recurrenceRuleExDatesField,
+      defaultValue: _emptyCalendarDateTimes,
+    )
+    @Default(_emptyCalendarDateTimes)
+    List<CalendarDateTime> exDates,
+    @HiveField(
+      _recurrenceRuleRawPropertiesField,
+      defaultValue: _emptyCalendarRawProperties,
+    )
+    @Default(_emptyCalendarRawProperties)
+    List<CalendarRawProperty> rawProperties,
   }) = _RecurrenceRule;
 
   const RecurrenceRule._();
@@ -79,6 +147,19 @@ class RecurrenceRule with _$RecurrenceRule {
     interval: 1,
     until: null,
     count: null,
+    bySeconds: null,
+    byMinutes: null,
+    byHours: null,
+    byDays: null,
+    byMonthDays: null,
+    byYearDays: null,
+    byWeekNumbers: null,
+    byMonths: null,
+    bySetPositions: null,
+    weekStart: null,
+    rDates: _emptyCalendarDateTimes,
+    exDates: _emptyCalendarDateTimes,
+    rawProperties: _emptyCalendarRawProperties,
   );
 
   bool get isNone => frequency == RecurrenceFrequency.none;
@@ -98,7 +179,7 @@ enum TaskPriority {
 
 @freezed
 @HiveType(typeId: 30)
-class CalendarTask with _$CalendarTask {
+class CalendarTask with _$CalendarTask implements CalendarItemBase {
   const factory CalendarTask({
     @HiveField(0) required String id,
     @HiveField(1) required String title,
@@ -124,10 +205,16 @@ class CalendarTask with _$CalendarTask {
     @HiveField(16, defaultValue: <TaskChecklistItem>[])
     @Default([])
     List<TaskChecklistItem> checklist,
+    @HiveField(_calendarTaskIcsMetaField) CalendarIcsMeta? icsMeta,
   }) = _CalendarTask;
 
   factory CalendarTask.fromJson(Map<String, dynamic> json) =>
       _$CalendarTaskFromJson(json);
+
+  const CalendarTask._();
+
+  @override
+  CalendarItemType get itemType => CalendarItemType.task;
 
   factory CalendarTask.create({
     required String title,
@@ -247,12 +334,23 @@ extension CalendarTaskExtensions on CalendarTask {
 
   RecurrenceRule get effectiveRecurrence => recurrence ?? RecurrenceRule.none;
 
+  bool get hasRecurrenceData {
+    final RecurrenceRule rule = effectiveRecurrence;
+    return !rule.isNone ||
+        rule.rDates.isNotEmpty ||
+        rule.exDates.isNotEmpty ||
+        rule.rawProperties.isNotEmpty ||
+        occurrenceOverrides.isNotEmpty;
+  }
+
   bool get isCritical => effectivePriority == TaskPriority.critical;
   bool get isImportant => effectivePriority == TaskPriority.important;
   bool get isUrgent => effectivePriority == TaskPriority.urgent;
 
   bool get isScheduled => scheduledTime != null;
   bool get hasDeadline => deadline != null;
+  bool get isReminder => scheduledTime == null && deadline != null;
+  bool get isUnscheduled => scheduledTime == null && deadline == null;
 
   Color get priorityColor {
     if (isCompleted) {
@@ -329,4 +427,24 @@ extension CalendarTaskExtensions on CalendarTask {
 
   ReminderPreferences get effectiveReminders =>
       (reminders ?? ReminderPreferences.defaults()).normalized();
+
+  CalendarTask forClipboardInstance() {
+    final bool hasRecurrence = hasRecurrenceData;
+    if (!hasRecurrence && occurrenceOverrides.isEmpty) {
+      return this;
+    }
+    return copyWith(
+      recurrence: null,
+      occurrenceOverrides: _emptyTaskOccurrenceOverrides,
+    );
+  }
+
+  CalendarTask forClipboardTemplate() {
+    if (occurrenceOverrides.isEmpty) {
+      return this;
+    }
+    return copyWith(
+      occurrenceOverrides: _emptyTaskOccurrenceOverrides,
+    );
+  }
 }

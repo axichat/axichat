@@ -88,7 +88,7 @@ void main() {
     });
   });
 
-  test('triggerImmediateReconnect bypasses remaining backoff', () {
+  test('requestReconnect bypasses remaining backoff', () {
     fakeAsync((async) {
       final policy = XmppReconnectionPolicy.exponential();
       var reconnectCalls = 0;
@@ -106,7 +106,7 @@ void main() {
       );
       async.flushMicrotasks();
 
-      unawaited(policy.triggerImmediateReconnect());
+      unawaited(policy.requestReconnect(ReconnectTrigger.userAction));
       async.flushMicrotasks();
 
       expect(reconnectCalls, 1);

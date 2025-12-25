@@ -16,24 +16,21 @@ class CalendarTaskTitleHoverReporter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!enabled) {
-      return child;
-    }
     final controller = CalendarHoverTitleScope.maybeOf(context);
-    if (controller == null) {
-      return child;
-    }
+    final bool shouldReport = enabled && controller != null;
 
-    void reportHover() => controller.hover(title);
+    void reportHover() {
+      controller?.hover(title);
+    }
 
     return Listener(
-      onPointerDown: (_) => controller.beginInteraction(),
-      onPointerUp: (_) => controller.endInteraction(),
-      onPointerCancel: (_) => controller.endInteraction(),
+      onPointerDown: shouldReport ? (_) => controller.beginInteraction() : null,
+      onPointerUp: shouldReport ? (_) => controller.endInteraction() : null,
+      onPointerCancel: shouldReport ? (_) => controller.endInteraction() : null,
       child: MouseRegion(
-        onEnter: (_) => reportHover(),
-        onHover: (_) => reportHover(),
-        onExit: (_) => controller.clear(),
+        onEnter: shouldReport ? (_) => reportHover() : null,
+        onHover: shouldReport ? (_) => reportHover() : null,
+        onExit: shouldReport ? (_) => controller.clear() : null,
         child: child,
       ),
     );

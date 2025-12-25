@@ -1,5 +1,8 @@
 const int calendarTaskTitleMaxLength = 300;
 
+const Duration calendarDefaultTaskDuration = Duration(hours: 1);
+const Duration calendarMinimumTaskDuration = Duration(minutes: 15);
+
 const String calendarTaskTitleLimitWarning =
     'Task titles are limited to $calendarTaskTitleMaxLength characters. Shorten this text or move details into the description before saving.';
 

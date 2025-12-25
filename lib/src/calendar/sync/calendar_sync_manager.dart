@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:axichat/src/calendar/models/calendar_exceptions.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_journal.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -20,6 +21,14 @@ const String _snapshotFallbackName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _snapshotChecksumMismatchLog =
     'Snapshot checksum mismatch - ignoring snapshot';
+const String _calendarSyncEntityTask = 'task';
+const String _calendarSyncEntityDayEvent = 'day_event';
+const String _calendarSyncEntityCriticalPath = 'critical_path';
+const String _calendarSyncEntityJournal = 'journal';
+const String _calendarSyncOperationAdd = 'add';
+const String _calendarSyncOperationUpdate = 'update';
+const String _calendarSyncOperationDelete = 'delete';
+const int _calendarSequenceDefault = 0;
 
 class CalendarSyncManager {
   CalendarSyncManager({
@@ -170,18 +179,25 @@ class CalendarSyncManager {
     if (message.data == null || message.taskId == null) return;
 
     try {
+      final String operation =
+          message.operation ?? _calendarSyncOperationUpdate;
       switch (message.entity) {
-        case 'day_event':
+        case _calendarSyncEntityDayEvent:
           final DayEvent event = DayEvent.fromJson(message.data!);
-          await _mergeDayEvent(event, message.operation ?? 'update');
+          await _mergeDayEvent(event, operation);
           break;
-        case 'critical_path':
+        case _calendarSyncEntityCriticalPath:
           final path = CalendarCriticalPath.fromJson(message.data!);
-          await _mergeCriticalPath(path, message.operation ?? 'update');
+          await _mergeCriticalPath(path, operation);
+          break;
+        case _calendarSyncEntityJournal:
+          final CalendarJournal journal =
+              CalendarJournal.fromJson(message.data!);
+          await _mergeJournal(journal, operation);
           break;
         default:
           final task = CalendarTask.fromJson(message.data!);
-          await _mergeTask(task, message.operation ?? 'update');
+          await _mergeTask(task, operation);
           break;
       }
 
@@ -225,9 +241,7 @@ class CalendarSyncManager {
     if (sendSnapshot == null) return;
 
     final model = _readModel();
-    if (model.tasks.isEmpty &&
-        model.dayEvents.isEmpty &&
-        model.criticalPaths.isEmpty) {
+    if (!model.hasCalendarData) {
       return;
     }
 
@@ -305,7 +319,7 @@ class CalendarSyncManager {
       payloadId: task.id,
       operation: operation,
       data: task.toJson(),
-      entity: 'task',
+      entity: _calendarSyncEntityTask,
     );
     await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
   }
@@ -316,7 +330,21 @@ class CalendarSyncManager {
       payloadId: event.id,
       operation: operation,
       data: event.toJson(),
-      entity: 'day_event',
+      entity: _calendarSyncEntityDayEvent,
+    );
+    await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+  }
+
+  Future<void> sendJournalUpdate(
+    CalendarJournal journal,
+    String operation,
+  ) async {
+    await _flushPendingEnvelopes();
+    await _sendUpdate(
+      payloadId: journal.id,
+      operation: operation,
+      data: journal.toJson(),
+      entity: _calendarSyncEntityJournal,
     );
     await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
   }
@@ -331,7 +359,7 @@ class CalendarSyncManager {
       payloadId: path.id,
       operation: operation,
       data: path.toJson(),
-      entity: 'critical_path',
+      entity: _calendarSyncEntityCriticalPath,
     );
     await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
   }
@@ -380,26 +408,73 @@ class CalendarSyncManager {
     return digest.toString();
   }
 
+  bool _shouldPreferRemote({
+    required DateTime localModifiedAt,
+    required DateTime remoteModifiedAt,
+    required int localSequence,
+    required int remoteSequence,
+  }) {
+    if (remoteModifiedAt.isAfter(localModifiedAt)) {
+      return true;
+    }
+    if (localModifiedAt.isAfter(remoteModifiedAt)) {
+      return false;
+    }
+    return remoteSequence > localSequence;
+  }
+
   Future<void> _mergeTask(CalendarTask remoteTask, String operation) async {
     final currentModel = _readModel();
 
     CalendarModel updatedModel;
     switch (operation) {
-      case 'add':
-      case 'update':
+      case _calendarSyncOperationAdd:
+      case _calendarSyncOperationUpdate:
         final localTask = currentModel.tasks[remoteTask.id];
-        if (localTask == null ||
-            remoteTask.modifiedAt.isAfter(localTask.modifiedAt)) {
+        if (localTask == null) {
+          final DateTime? deletedAt =
+              currentModel.deletedTaskIds[remoteTask.id];
+          if (deletedAt != null && !remoteTask.modifiedAt.isAfter(deletedAt)) {
+            return;
+          }
+          final Map<String, DateTime> updatedDeletedTaskIds = deletedAt == null
+              ? currentModel.deletedTaskIds
+              : Map<String, DateTime>.from(currentModel.deletedTaskIds)
+            ..remove(remoteTask.id);
+          final CalendarModel baseModel = deletedAt == null
+              ? currentModel
+              : currentModel.copyWith(deletedTaskIds: updatedDeletedTaskIds);
+          updatedModel = baseModel.addTask(remoteTask);
+          break;
+        }
+        final bool preferRemote = _shouldPreferRemote(
+          localModifiedAt: localTask.modifiedAt,
+          remoteModifiedAt: remoteTask.modifiedAt,
+          localSequence:
+              localTask.icsMeta?.sequence ?? _calendarSequenceDefault,
+          remoteSequence:
+              remoteTask.icsMeta?.sequence ?? _calendarSequenceDefault,
+        );
+        if (preferRemote) {
           updatedModel = currentModel.updateTask(remoteTask);
         } else {
           return;
         }
         break;
-      case 'delete':
+      case _calendarSyncOperationDelete:
         final existing = currentModel.tasks[remoteTask.id];
-        if (existing != null &&
-            existing.modifiedAt.isAfter(remoteTask.modifiedAt)) {
-          return;
+        if (existing != null) {
+          final bool preferRemote = _shouldPreferRemote(
+            localModifiedAt: existing.modifiedAt,
+            remoteModifiedAt: remoteTask.modifiedAt,
+            localSequence:
+                existing.icsMeta?.sequence ?? _calendarSequenceDefault,
+            remoteSequence:
+                remoteTask.icsMeta?.sequence ?? _calendarSequenceDefault,
+          );
+          if (!preferRemote) {
+            return;
+          }
         }
         updatedModel = currentModel.deleteTask(remoteTask.id);
         break;
@@ -416,22 +491,38 @@ class CalendarSyncManager {
 
     CalendarModel updatedModel;
     switch (operation) {
-      case 'add':
-      case 'update':
+      case _calendarSyncOperationAdd:
+      case _calendarSyncOperationUpdate:
         final DayEvent? localEvent = currentModel.dayEvents[remoteEvent.id];
         if (localEvent == null) {
           updatedModel = currentModel.addDayEvent(remoteEvent);
-        } else if (remoteEvent.modifiedAt.isAfter(localEvent.modifiedAt)) {
+        } else if (_shouldPreferRemote(
+          localModifiedAt: localEvent.modifiedAt,
+          remoteModifiedAt: remoteEvent.modifiedAt,
+          localSequence:
+              localEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
+          remoteSequence:
+              remoteEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
+        )) {
           updatedModel = currentModel.updateDayEvent(remoteEvent);
         } else {
           return;
         }
         break;
-      case 'delete':
+      case _calendarSyncOperationDelete:
         final DayEvent? existing = currentModel.dayEvents[remoteEvent.id];
-        if (existing != null &&
-            existing.modifiedAt.isAfter(remoteEvent.modifiedAt)) {
-          return;
+        if (existing != null) {
+          final bool preferRemote = _shouldPreferRemote(
+            localModifiedAt: existing.modifiedAt,
+            remoteModifiedAt: remoteEvent.modifiedAt,
+            localSequence:
+                existing.icsMeta?.sequence ?? _calendarSequenceDefault,
+            remoteSequence:
+                remoteEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
+          );
+          if (!preferRemote) {
+            return;
+          }
         }
         updatedModel = currentModel.deleteDayEvent(remoteEvent.id);
         break;
@@ -451,8 +542,8 @@ class CalendarSyncManager {
 
     CalendarModel updatedModel;
     switch (operation) {
-      case 'add':
-      case 'update':
+      case _calendarSyncOperationAdd:
+      case _calendarSyncOperationUpdate:
         final localPath = currentModel.criticalPaths[remotePath.id];
         if (localPath == null) {
           updatedModel = currentModel.addCriticalPath(remotePath);
@@ -462,7 +553,7 @@ class CalendarSyncManager {
           return;
         }
         break;
-      case 'delete':
+      case _calendarSyncOperationDelete:
         final existing = currentModel.criticalPaths[remotePath.id];
         if (existing != null &&
             existing.modifiedAt.isAfter(remotePath.modifiedAt)) {
@@ -472,6 +563,59 @@ class CalendarSyncManager {
         break;
       default:
         developer.log('Unknown critical path operation: $operation');
+        return;
+    }
+
+    await _applyModel(updatedModel);
+  }
+
+  Future<void> _mergeJournal(
+    CalendarJournal remoteJournal,
+    String operation,
+  ) async {
+    final CalendarModel currentModel = _readModel();
+
+    CalendarModel updatedModel;
+    switch (operation) {
+      case _calendarSyncOperationAdd:
+      case _calendarSyncOperationUpdate:
+        final CalendarJournal? localJournal =
+            currentModel.journals[remoteJournal.id];
+        if (localJournal == null) {
+          updatedModel = currentModel.addJournal(remoteJournal);
+        } else if (_shouldPreferRemote(
+          localModifiedAt: localJournal.modifiedAt,
+          remoteModifiedAt: remoteJournal.modifiedAt,
+          localSequence:
+              localJournal.icsMeta?.sequence ?? _calendarSequenceDefault,
+          remoteSequence:
+              remoteJournal.icsMeta?.sequence ?? _calendarSequenceDefault,
+        )) {
+          updatedModel = currentModel.updateJournal(remoteJournal);
+        } else {
+          return;
+        }
+        break;
+      case _calendarSyncOperationDelete:
+        final CalendarJournal? existing =
+            currentModel.journals[remoteJournal.id];
+        if (existing != null) {
+          final bool preferRemote = _shouldPreferRemote(
+            localModifiedAt: existing.modifiedAt,
+            remoteModifiedAt: remoteJournal.modifiedAt,
+            localSequence:
+                existing.icsMeta?.sequence ?? _calendarSequenceDefault,
+            remoteSequence:
+                remoteJournal.icsMeta?.sequence ?? _calendarSequenceDefault,
+          );
+          if (!preferRemote) {
+            return;
+          }
+        }
+        updatedModel = currentModel.deleteJournal(remoteJournal.id);
+        break;
+      default:
+        developer.log('Unknown journal operation: $operation');
         return;
     }
 

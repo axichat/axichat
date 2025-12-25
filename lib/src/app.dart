@@ -19,6 +19,7 @@ import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
@@ -39,8 +40,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:logging/logging.dart';
+import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:axichat/src/storage/hive_extensions.dart';
 import 'localization/app_localizations.dart';
 
 Timer? _pendingAuthNavigation;
@@ -87,8 +91,8 @@ class _AxichatState extends State<Axichat> {
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<CalendarStorageManager>.value(
-          value: widget._storageManager,
+        ChangeNotifierProvider<CalendarStorageManager>(
+          create: (context) => widget._storageManager,
         ),
         if (widget._xmppService == null)
           RepositoryProvider<XmppService>(
@@ -100,13 +104,15 @@ class _AxichatState extends State<Axichat> {
                         )
                       : XmppConnection(),
               buildStateStore: (prefix, passphrase) async {
+                final Logger logger = Logger('XmppStateStore');
                 await Hive.initFlutter(prefix);
                 if (!Hive.isAdapterRegistered(1)) {
                   Hive.registerAdapter(PresenceAdapter());
                 }
-                await Hive.openBox(
+                await Hive.openBoxWithRetry(
                   XmppStateStore.boxName,
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
+                  logger: logger,
                 );
                 await widget._storageManager.ensureAuthStorage(
                   passphrase: passphrase,
@@ -147,6 +153,12 @@ class _AxichatState extends State<Axichat> {
             notificationService: context.read<NotificationService>(),
           ),
         ),
+        RepositoryProvider<HomeRefreshSyncService>(
+          create: (context) => HomeRefreshSyncService(
+            xmppService: context.read<XmppService>(),
+            emailService: context.read<EmailService>(),
+          )..start(),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -158,6 +170,7 @@ class _AxichatState extends State<Axichat> {
               credentialStore: context.read<CredentialStore>(),
               xmppService: context.read<XmppService>(),
               emailService: context.read<EmailService>(),
+              homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
               notificationService: context.read<NotificationService>(),
               autoLoginOnStart:
                   context.read<AuthBootstrap>().hasStoredLoginCredentials,
@@ -174,6 +187,7 @@ class _AxichatState extends State<Axichat> {
           BlocProvider(
             create: (context) => ChatsCubit(
               xmppService: context.read<XmppService>(),
+              homeRefreshSyncService: context.read<HomeRefreshSyncService>(),
             ),
           ),
           BlocProvider(

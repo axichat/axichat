@@ -747,8 +747,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController.clearPreview();
   }
 
-  void _copyTask(CalendarTask task) {
-    _taskInteractionController.setClipboardTemplate(task);
+  void _copyTaskInstance(CalendarTask task) {
+    final CalendarTask template = task.forClipboardInstance();
+    _taskInteractionController.setClipboardTemplate(template);
+  }
+
+  void _copyTaskTemplate(CalendarTask task) {
+    final CalendarTask template = task.forClipboardTemplate();
+    _taskInteractionController.setClipboardTemplate(template);
   }
 
   Future<void> _copyTaskToClipboard(CalendarTask task) async {
@@ -1438,7 +1444,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     if (details.hitTask) {
-      _scrollToSlot(details.slotStart, allowDeferral: false);
       return;
     }
     if (widget.state.viewMode == CalendarView.day) {
@@ -2547,7 +2552,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       TaskContextAction(
         icon: Icons.copy_outlined,
         label: 'Copy Task',
-        onSelected: () => _copyTask(task),
+        onSelected: () => _copyTaskInstance(task),
       ),
       TaskContextAction(
         icon: Icons.share_outlined,
@@ -2617,7 +2622,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final Set<String> selectedIds = state.selectedTaskIds;
     final bool hasSeriesGroup = seriesIds.length > 1;
     final bool isSeriesTask =
-        hasSeriesGroup || task.isOccurrence || !task.effectiveRecurrence.isNone;
+        hasSeriesGroup || task.isOccurrence || task.hasRecurrenceData;
     final bool isOccurrenceSelected = selectedIds.contains(task.id);
     final bool isSeriesSelected =
         hasSeriesGroup && seriesIds.every(selectedIds.contains);
@@ -2721,7 +2726,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         TaskContextAction(
           icon: Icons.copy_outlined,
           label: 'Copy Template',
-          onSelected: () => _copyTask(task),
+          onSelected: () => _copyTaskTemplate(task),
         ),
       );
     }
@@ -2734,7 +2739,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           destructive: true,
           onSelected: () {
             context.read<T>().add(
-                  CalendarEvent.taskDeleted(taskId: task.baseId),
+                  CalendarEvent.taskDeleted(taskId: task.id),
                 );
             onTaskDeleted?.call();
           },
