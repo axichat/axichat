@@ -334,9 +334,12 @@ class Message with _$Message implements Insertable<Message> {
     final normalizedHtml = HtmlContentCodec.normalizeHtml(
       htmlData?.xhtmlBody,
     );
-    final fallbackText = normalizedHtml == null
-        ? ''
-        : HtmlContentCodec.toPlainText(normalizedHtml);
+    final htmlPlain = htmlData?.plainText ?? '';
+    final fallbackText = htmlPlain.isNotEmpty
+        ? htmlPlain
+        : (normalizedHtml == null
+            ? ''
+            : HtmlContentCodec.toPlainText(normalizedHtml));
     final resolvedText = event.text.isNotEmpty ? event.text : fallbackText;
 
     return Message(
@@ -774,6 +777,28 @@ class Messages extends Table {
 
   @override
   Set<Column<Object>>? get primaryKey => {stanzaID};
+}
+
+@DataClassName('MessageAttachmentData')
+class MessageAttachments extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get messageId => text()();
+
+  TextColumn get fileMetadataId => text()();
+
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  TextColumn get transportGroupId => text().nullable()();
+
+  @override
+  List<String> get customConstraints =>
+      const ['UNIQUE(message_id, file_metadata_id)'];
+
+  List<Index> get indexes => [
+        Index('idx_message_attachments_message', 'message_id'),
+        Index('idx_message_attachments_group', 'transport_group_id'),
+      ];
 }
 
 @DataClassName('MessageShareData')

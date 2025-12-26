@@ -84,9 +84,9 @@ extension MessageEvent on mox.MessageEvent {
     if (replyText != null) return replyText;
     final body = get<mox.MessageBodyData>()?.body;
     if (body != null && body.isNotEmpty) return body;
-    final html = get<XhtmlImData>()?.xhtmlBody;
-    if (html != null && html.isNotEmpty) {
-      return HtmlContentCodec.toPlainText(html);
+    final htmlPlain = get<XhtmlImData>()?.plainText;
+    if (htmlPlain != null && htmlPlain.isNotEmpty) {
+      return htmlPlain;
     }
     return '';
   }
@@ -146,6 +146,9 @@ final _mamGlobalLastSyncKey =
     XmppStateStore.registerKey(_mamGlobalLastSyncKeyName);
 final _mamGlobalDeniedUntilKey =
     XmppStateStore.registerKey(_mamGlobalDeniedUntilKeyName);
+const String _mamGlobalScopeFallback = 'default';
+const String _mamGlobalScopeSeparator = ':';
+final Map<String, RegisteredStateKey> _mamGlobalScopedKeyCache = {};
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
 const Duration _httpAttachmentGetTimeout = Duration(minutes: 2);
@@ -173,6 +176,8 @@ const String _calendarSnapshotChecksumFailedMessage =
     'Snapshot checksum verification failed';
 const String _calendarSnapshotChecksumMismatchMessage =
     'Snapshot checksum mismatch';
+const String _calendarSnapshotFallbackRequestFailedMessage =
+    'Failed to request calendar snapshot fallback';
 const Set<String> _safeHttpUploadLogHeaders = {
   HttpHeaders.contentLengthHeader,
   HttpHeaders.contentTypeHeader,
@@ -573,68 +578,158 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     );
   }
 
+  String _mamScopeToken() {
+    final prefix = _databasePrefix?.trim();
+    if (prefix != null && prefix.isNotEmpty) {
+      return _hashMamScope(prefix);
+    }
+    final jid = myJid?.trim();
+    if (jid != null && jid.isNotEmpty) {
+      return _hashMamScope(jid);
+    }
+    return _mamGlobalScopeFallback;
+  }
+
+  String _hashMamScope(String value) {
+    final bytes = utf8.encode(value);
+    return crypto.sha256.convert(bytes).toString();
+  }
+
+  RegisteredStateKey _mamScopedKey(String baseName) {
+    final scope = _mamScopeToken();
+    final scopedName = '$baseName$_mamGlobalScopeSeparator$scope';
+    return _mamGlobalScopedKeyCache.putIfAbsent(
+      scopedName,
+      () => XmppStateStore.registerKey(scopedName),
+    );
+  }
+
+  Future<String?> _readMamScopedString({
+    required String baseName,
+    required RegisteredStateKey legacyKey,
+  }) async {
+    final scopedKey = _mamScopedKey(baseName);
+    final scoped = await _dbOpReturning<XmppStateStore, String?>(
+      (ss) => ss.read(key: scopedKey) as String?,
+    );
+    final normalizedScoped = scoped?.trim();
+    if (normalizedScoped != null && normalizedScoped.isNotEmpty) {
+      return normalizedScoped;
+    }
+    final legacy = await _dbOpReturning<XmppStateStore, String?>(
+      (ss) => ss.read(key: legacyKey) as String?,
+    );
+    final normalizedLegacy = legacy?.trim();
+    if (normalizedLegacy == null || normalizedLegacy.isEmpty) {
+      return null;
+    }
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        await ss.write(key: scopedKey, value: normalizedLegacy);
+        await ss.delete(key: legacyKey);
+      },
+      awaitDatabase: true,
+    );
+    return normalizedLegacy;
+  }
+
+  Future<DateTime?> _readMamScopedTimestamp({
+    required String baseName,
+    required RegisteredStateKey legacyKey,
+  }) async {
+    final raw = await _readMamScopedString(
+      baseName: baseName,
+      legacyKey: legacyKey,
+    );
+    if (raw == null) {
+      return null;
+    }
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) {
+      return parsed;
+    }
+    final scopedKey = _mamScopedKey(baseName);
+    await _dbOp<XmppStateStore>(
+      (ss) async => ss.delete(key: scopedKey),
+      awaitDatabase: true,
+    );
+    return null;
+  }
+
   Future<String?> _loadMamGlobalLastId() async {
-    return await _dbOpReturning<XmppStateStore, String?>(
-      (ss) => ss.read(key: _mamGlobalLastIdKey) as String?,
+    return await _readMamScopedString(
+      baseName: _mamGlobalLastIdKeyName,
+      legacyKey: _mamGlobalLastIdKey,
     );
   }
 
   Future<void> _storeMamGlobalLastId(String value) async {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return;
+    final scopedKey = _mamScopedKey(_mamGlobalLastIdKeyName);
     await _dbOp<XmppStateStore>(
       (ss) async {
-        await ss.write(key: _mamGlobalLastIdKey, value: trimmed);
+        await ss.write(key: scopedKey, value: trimmed);
+        await ss.delete(key: _mamGlobalLastIdKey);
       },
       awaitDatabase: true,
     );
   }
 
   Future<DateTime?> _loadMamGlobalLastSync() async {
-    return await _dbOpReturning<XmppStateStore, DateTime?>(
-      (ss) {
-        final raw = ss.read(key: _mamGlobalLastSyncKey) as String?;
-        return raw == null ? null : DateTime.tryParse(raw);
-      },
+    return await _readMamScopedTimestamp(
+      baseName: _mamGlobalLastSyncKeyName,
+      legacyKey: _mamGlobalLastSyncKey,
     );
   }
 
   Future<void> _storeMamGlobalLastSync(DateTime timestamp) async {
+    final scopedKey = _mamScopedKey(_mamGlobalLastSyncKeyName);
     await _dbOp<XmppStateStore>(
       (ss) async {
         await ss.write(
-          key: _mamGlobalLastSyncKey,
+          key: scopedKey,
           value: timestamp.toUtc().toIso8601String(),
         );
+        await ss.delete(key: _mamGlobalLastSyncKey);
       },
       awaitDatabase: true,
     );
   }
 
   Future<DateTime?> _loadMamGlobalDeniedUntil() async {
-    if (_mamGlobalDeniedUntil != null) return _mamGlobalDeniedUntil;
-    final loaded = await _dbOpReturning<XmppStateStore, DateTime?>(
-      (ss) {
-        final raw = ss.read(key: _mamGlobalDeniedUntilKey) as String?;
-        return raw == null ? null : DateTime.tryParse(raw);
-      },
+    final scope = _mamScopeToken();
+    if (_mamGlobalDeniedUntilLoaded && _mamGlobalDeniedUntilScope == scope) {
+      return _mamGlobalDeniedUntil;
+    }
+    _mamGlobalDeniedUntilScope = scope;
+    final loaded = await _readMamScopedTimestamp(
+      baseName: _mamGlobalDeniedUntilKeyName,
+      legacyKey: _mamGlobalDeniedUntilKey,
     );
     _mamGlobalDeniedUntil = loaded;
+    _mamGlobalDeniedUntilLoaded = true;
     return loaded;
   }
 
   Future<void> _storeMamGlobalDeniedUntil(DateTime? until) async {
+    final scope = _mamScopeToken();
+    _mamGlobalDeniedUntilScope = scope;
+    _mamGlobalDeniedUntilLoaded = true;
     _mamGlobalDeniedUntil = until;
+    final scopedKey = _mamScopedKey(_mamGlobalDeniedUntilKeyName);
     await _dbOp<XmppStateStore>(
       (ss) async {
         if (until == null) {
+          await ss.delete(key: scopedKey);
           await ss.delete(key: _mamGlobalDeniedUntilKey);
           return;
         }
         await ss.write(
-          key: _mamGlobalDeniedUntilKey,
+          key: scopedKey,
           value: until.toUtc().toIso8601String(),
         );
+        await ss.delete(key: _mamGlobalDeniedUntilKey);
       },
       awaitDatabase: true,
     );
@@ -691,10 +786,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   bool _mamGlobalSyncInFlight = false;
   bool _calendarMamRehydrateInFlight = false;
   bool _calendarMamSnapshotSeen = false;
+  bool _calendarMamSnapshotUnavailableNotified = false;
   final Set<String> _mucMamUnsupportedRooms = {};
   final Set<String> _mucJoinMamSyncRooms = {};
   final Set<String> _mucJoinMamDeferredRooms = {};
   DateTime? _mamGlobalDeniedUntil;
+  String? _mamGlobalDeniedUntilScope;
+  bool _mamGlobalDeniedUntilLoaded = false;
   DateTime? _mamGlobalMaxTimestamp;
 
   final Map<String, Set<String>> _seenStableKeys = {};
@@ -1500,6 +1598,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     required EmailAttachment attachment,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     String? htmlCaption,
+    String? transportGroupId,
+    int? attachmentOrder,
     Message? quotedMessage,
     ChatType chatType = ChatType.chat,
   }) async {
@@ -1597,6 +1697,21 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     );
     const shouldStore = true;
     await _storeMessage(message, chatType: chatType);
+    if (transportGroupId != null || attachmentOrder != null) {
+      await _dbOp<XmppDatabase>((db) async {
+        final persisted = await db.getMessageByStanzaID(message.stanzaID);
+        final messageId = persisted?.id;
+        if (messageId == null || messageId.isEmpty) {
+          return;
+        }
+        await db.addMessageAttachment(
+          messageId: messageId,
+          fileMetadataId: metadata.id,
+          transportGroupId: transportGroupId,
+          sortOrder: attachmentOrder,
+        );
+      });
+    }
     _log.fine(
       'Uploading attachment $filename ($size bytes) to HTTP upload slot.',
     );
@@ -2925,6 +3040,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     final selfJid = myJid;
     final chatJid = _calendarSyncChatJid(event, selfJid);
     final chatType = _calendarSyncChatType(event);
+    final bool isSelfSender =
+        selfJid != null && senderJid.toLowerCase() == selfJid.toLowerCase();
+    final bool isSelfCalendar =
+        selfJid != null && chatJid.toLowerCase() == selfJid.toLowerCase();
 
     final syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
     if (syncMessage == null) {
@@ -2937,30 +3056,23 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       return false;
     }
 
-    final bool isSelfCalendar = selfJid != null && chatJid == selfJid;
-    if (isSelfCalendar && senderJid != selfJid) {
+    if (isSelfCalendar && !isSelfSender) {
       _log.warning('Rejected calendar sync message from unauthorized sender');
       return true;
     }
 
     _log.info('Received calendar sync message type: ${syncMessage.type}');
 
-    if (isSelfCalendar &&
-        _calendarMamRehydrateInFlight &&
-        syncMessage.type == CalendarSyncType.snapshot) {
-      _calendarMamSnapshotSeen = true;
-    }
-
     // Handle snapshot messages by downloading and decoding the file
-    if (syncMessage.type == CalendarSyncType.snapshot) {
+    if (_isSnapshotCalendarMessage(syncMessage)) {
       await _handleCalendarSnapshot(
         syncMessage,
         event,
         metadata: metadata,
+        allowSelfDownload: isSelfSender,
         onMessageDecoded: (fullMessage, decodedEvent) async {
           if (isSelfCalendar) {
-            await _invokeCalendarCallback(fullMessage, decodedEvent);
-            return;
+            return _invokeCalendarCallback(fullMessage, decodedEvent);
           }
           await _invokeChatCalendarCallback(
             fullMessage,
@@ -2969,6 +3081,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
             chatType: chatType,
             senderJid: senderJid,
           );
+          return false;
         },
       );
       return true;
@@ -2990,40 +3103,82 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     return true; // Handled - don't process as regular chat message
   }
 
+  bool _isSnapshotCalendarMessage(CalendarSyncMessage message) {
+    if (message.type == CalendarSyncType.full) {
+      return true;
+    }
+    if (message.type == CalendarSyncType.snapshot) {
+      return true;
+    }
+    if (message.isSnapshot) {
+      return true;
+    }
+    final url = message.snapshotUrl;
+    if (url == null) {
+      return false;
+    }
+    return url.trim().isNotEmpty;
+  }
+
   Future<void> _handleCalendarSnapshot(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event, {
     FileMetadataData? metadata,
-    required Future<void> Function(
+    required bool allowSelfDownload,
+    required Future<bool> Function(
       CalendarSyncMessage fullMessage,
       mox.MessageEvent event,
     ) onMessageDecoded,
   }) async {
     final url = syncMessage.snapshotUrl;
-    final hasUrl = url != null && url.isNotEmpty;
+    final hasUrl = url != null && url.trim().isNotEmpty;
+    final inlineData = syncMessage.data;
+    final hasInlineData = inlineData != null && inlineData.isNotEmpty;
+    if (!hasUrl && metadata == null && hasInlineData) {
+      final resolvedChecksum =
+          syncMessage.snapshotChecksum ?? syncMessage.checksum;
+      final inlineMessage = syncMessage.copyWith(
+        type: CalendarSyncType.snapshot,
+        isSnapshot: true,
+        snapshotChecksum: resolvedChecksum,
+      );
+      final applied = await onMessageDecoded(inlineMessage, event);
+      if (applied && _calendarMamRehydrateInFlight) {
+        _calendarMamSnapshotSeen = true;
+      }
+      return;
+    }
     if (!hasUrl && metadata == null) {
       _log.warning('Snapshot message missing URL');
+      await _maybeNotifySnapshotUnavailable(event);
       return;
     }
 
     try {
+      final bool? allowSelfOverride =
+          allowSelfDownload ? allowSelfDownload : null;
       final decoded = await _decodeSnapshotFromAttachment(
         url ?? '',
         metadata: metadata,
+        allowHttpOverride: allowSelfOverride,
+        allowInsecureHostsOverride: allowSelfOverride,
       );
       if (decoded == null) {
         _log.warning(_calendarSnapshotDecodeFailedMessage);
+        await _maybeNotifySnapshotUnavailable(event);
         return;
       }
 
       if (!CalendarSnapshotCodec.verifyChecksum(decoded)) {
         _log.warning(_calendarSnapshotChecksumFailedMessage);
+        await _maybeNotifySnapshotUnavailable(event);
         return;
       }
 
       final expectedChecksum = syncMessage.snapshotChecksum;
       if (expectedChecksum != null && expectedChecksum != decoded.checksum) {
         _log.warning(_calendarSnapshotChecksumMismatchMessage);
+        await _maybeNotifySnapshotUnavailable(event);
         return;
       }
 
@@ -3039,7 +3194,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         snapshotUrl: url ?? metadata?.sourceUrls?.first,
       );
 
-      await onMessageDecoded(fullMessage, event);
+      final applied = await onMessageDecoded(fullMessage, event);
+      if (applied && _calendarMamRehydrateInFlight) {
+        _calendarMamSnapshotSeen = true;
+      }
     } catch (e) {
       _log.warning('Failed to process calendar snapshot: $e');
     }
@@ -3048,31 +3206,49 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   Future<CalendarSnapshotResult?> _decodeSnapshotFromAttachment(
     String url, {
     FileMetadataData? metadata,
+    bool? allowHttpOverride,
+    bool? allowInsecureHostsOverride,
   }) async {
     if (metadata != null) {
-      final decoded = await _decodeSnapshotFromMetadata(metadata);
+      final decoded = await _decodeSnapshotFromMetadata(
+        metadata,
+        allowHttpOverride: allowHttpOverride,
+        allowInsecureHostsOverride: allowInsecureHostsOverride,
+      );
       if (decoded != null) {
         return decoded;
       }
     }
-    return _downloadAndDecodeSnapshot(url);
+    return _downloadAndDecodeSnapshot(
+      url,
+      allowHttpOverride: allowHttpOverride,
+      allowInsecureHostsOverride: allowInsecureHostsOverride,
+    );
   }
 
   Future<CalendarSnapshotResult?> _decodeSnapshotFromMetadata(
-    FileMetadataData metadata,
-  ) async {
+    FileMetadataData metadata, {
+    bool? allowHttpOverride,
+    bool? allowInsecureHostsOverride,
+  }) async {
     await _dbOp<XmppDatabase>(
       (db) => db.saveFileMetadata(metadata),
     );
     final path = await downloadInboundAttachment(
       metadataId: metadata.id,
+      allowHttpOverride: allowHttpOverride,
+      allowInsecureHostsOverride: allowInsecureHostsOverride,
     );
     if (path == null) return null;
     final file = File(path);
     return CalendarSnapshotCodec.decodeFile(file);
   }
 
-  Future<CalendarSnapshotResult?> _downloadAndDecodeSnapshot(String url) async {
+  Future<CalendarSnapshotResult?> _downloadAndDecodeSnapshot(
+    String url, {
+    bool? allowHttpOverride,
+    bool? allowInsecureHostsOverride,
+  }) async {
     final uri = Uri.tryParse(url);
     if (uri == null) return null;
 
@@ -3086,13 +3262,15 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       tmpFile = File(p.join(directory.path, fileName));
 
       const maxBytes = _calendarSnapshotDownloadMaxBytes;
+      final allowHttp = allowHttpOverride ?? !kReleaseMode;
+      final allowInsecureHosts = allowInsecureHostsOverride ??
+          (!kReleaseMode && kAllowInsecureXmppAttachmentDownloads);
       await _downloadUrlToFile(
         uri: uri,
         destination: tmpFile,
         maxBytes: maxBytes,
-        allowHttp: !kReleaseMode,
-        allowInsecureHosts:
-            !kReleaseMode && kAllowInsecureXmppAttachmentDownloads,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
       );
 
       final bytes = await tmpFile.readAsBytes();
@@ -3104,26 +3282,71 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
   }
 
-  Future<void> _invokeCalendarCallback(
+  Future<bool> _invokeCalendarCallback(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event,
   ) async {
     if (owner is XmppService &&
         (owner as XmppService)._calendarSyncCallback != null) {
       try {
+        final callback = (owner as XmppService)._calendarSyncCallback!;
         final inbound = CalendarSyncInbound(
           message: syncMessage,
           stanzaId: _calendarSyncStanzaId(event),
           receivedAt: _calendarSyncTimestamp(event),
           isFromMam: event.isFromMAM,
         );
-        await (owner as XmppService)._calendarSyncCallback!(inbound);
+        final applied = await callback(inbound);
         unawaited(_acknowledgeMessage(event));
+        return applied;
       } catch (e) {
         _log.warning('Calendar sync callback failed: $e');
+        return false;
       }
-    } else {
-      _log.info('No calendar sync callback registered - message ignored');
+    }
+    _log.info('No calendar sync callback registered - message ignored');
+    return false;
+  }
+
+  Future<void> _maybeNotifySnapshotUnavailable(mox.MessageEvent event) async {
+    if (!_calendarMamRehydrateInFlight && !event.isFromMAM) {
+      return;
+    }
+    await _emitCalendarSnapshotWarning();
+  }
+
+  Future<void> _emitCalendarSnapshotWarning() async {
+    if (_calendarMamSnapshotUnavailableNotified) {
+      return;
+    }
+    _calendarMamSnapshotUnavailableNotified = true;
+    if (owner is XmppService &&
+        (owner as XmppService)._calendarSyncWarningCallback != null) {
+      const warning = CalendarSyncWarning(
+        title: calendarSnapshotUnavailableWarningTitle,
+        message: calendarSnapshotUnavailableWarningMessage,
+      );
+      try {
+        await (owner as XmppService)._calendarSyncWarningCallback!(warning);
+      } catch (e) {
+        _log.warning('Calendar sync warning callback failed: $e');
+      }
+    }
+  }
+
+  Future<void> _requestCalendarSnapshotFallback(String jid) async {
+    if (connectionState != ConnectionState.connected) return;
+    final syncMessage = CalendarSyncMessage.request();
+    final messageJson = jsonEncode({
+      'calendar_sync': syncMessage.toJson(),
+    });
+    try {
+      await sendCalendarSyncMessage(
+        jid: jid,
+        outbound: CalendarSyncOutbound(envelope: messageJson),
+      );
+    } catch (e) {
+      _log.warning('$_calendarSnapshotFallbackRequestFailedMessage: $e');
     }
   }
 
@@ -3219,6 +3442,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     try {
       _calendarMamRehydrateInFlight = true;
       _calendarMamSnapshotSeen = false;
+      _calendarMamSnapshotUnavailableNotified = false;
       final state = CalendarSyncState.read();
       final lastApplied = state.lastAppliedTimestamp;
       if (lastApplied != null) {
@@ -3231,6 +3455,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       }
 
       await _backfillCalendarFromArchive(jid: selfJid);
+      if (!_calendarMamSnapshotSeen) {
+        await _emitCalendarSnapshotWarning();
+        await _requestCalendarSnapshotFallback(selfJid);
+      }
       _log.info('Calendar rehydration query complete');
       return true;
     } on Exception catch (e) {
@@ -3239,6 +3467,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     } finally {
       _calendarMamRehydrateInFlight = false;
       _calendarMamSnapshotSeen = false;
+      _calendarMamSnapshotUnavailableNotified = false;
     }
   }
 
@@ -3507,12 +3736,16 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   Future<String?> downloadInboundAttachment({
     required String metadataId,
     String? stanzaId,
+    bool? allowHttpOverride,
+    bool? allowInsecureHostsOverride,
   }) async {
     final existing = _inboundAttachmentDownloads[metadataId];
     if (existing != null) return await existing;
     final future = _downloadInboundAttachment(
       metadataId: metadataId,
       stanzaId: stanzaId,
+      allowHttpOverride: allowHttpOverride,
+      allowInsecureHostsOverride: allowInsecureHostsOverride,
     );
     _inboundAttachmentDownloads[metadataId] = future;
     try {
@@ -3527,6 +3760,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
   Future<String?> _downloadInboundAttachment({
     required String metadataId,
     String? stanzaId,
+    bool? allowHttpOverride,
+    bool? allowInsecureHostsOverride,
   }) async {
     File? tmpFile;
     File? decryptedTmp;
@@ -3570,11 +3805,14 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
           encrypted ||
           _hasExpectedSha256Hash(metadata.plainTextHashes) ||
           _hasExpectedSha256Hash(metadata.cipherTextHashes);
+      final resolvedAllowHttp = allowHttpOverride ?? allowHttp;
+      final resolvedAllowInsecureHosts =
+          allowInsecureHostsOverride ?? allowInsecureHosts;
 
       await _validateInboundAttachmentDownloadUri(
         uri,
-        allowHttp: allowHttp,
-        allowInsecureHosts: allowInsecureHosts,
+        allowHttp: resolvedAllowHttp,
+        allowInsecureHosts: resolvedAllowInsecureHosts,
       );
 
       final directory = await _attachmentCacheDirectory();
@@ -3590,8 +3828,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         uri: uri,
         destination: tmpFile,
         maxBytes: maxBytes,
-        allowHttp: allowHttp,
-        allowInsecureHosts: allowInsecureHosts,
+        allowHttp: resolvedAllowHttp,
+        allowInsecureHosts: resolvedAllowInsecureHosts,
       );
 
       late final int resolvedSizeBytes;

@@ -6,11 +6,14 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
-import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -417,7 +420,8 @@ class XmppService extends XmppBase
   final Capability _capability;
 
   // Calendar sync message callback
-  Future<void> Function(CalendarSyncInbound)? _calendarSyncCallback;
+  Future<bool> Function(CalendarSyncInbound)? _calendarSyncCallback;
+  Future<void> Function(CalendarSyncWarning)? _calendarSyncWarningCallback;
   ChatCalendarSyncHandler? _chatCalendarSyncCallback;
 
   final _httpUploadSupportController =
@@ -2344,8 +2348,14 @@ class XmppService extends XmppBase
 
   /// Register a callback to handle calendar sync messages
   void setCalendarSyncCallback(
-      Future<void> Function(CalendarSyncInbound) callback) {
+      Future<bool> Function(CalendarSyncInbound) callback) {
     _calendarSyncCallback = callback;
+  }
+
+  /// Register a callback to surface calendar sync warnings.
+  void setCalendarSyncWarningCallback(
+      Future<void> Function(CalendarSyncWarning) callback) {
+    _calendarSyncWarningCallback = callback;
   }
 
   /// Clear any calendar sync callback to avoid calling disposed handlers.
@@ -2361,6 +2371,11 @@ class XmppService extends XmppBase
   /// Clear any chat calendar sync callback to avoid calling disposed handlers.
   void clearChatCalendarSyncCallback() {
     _chatCalendarSyncCallback = null;
+  }
+
+  /// Clear any calendar sync warning callback.
+  void clearCalendarSyncWarningCallback() {
+    _calendarSyncWarningCallback = null;
   }
 
   static String generateResource() => 'axi.${generateRandomString(
