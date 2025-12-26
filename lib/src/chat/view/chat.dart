@@ -4543,15 +4543,25 @@ class _ChatState extends State<Chat> {
                                                                 }
                                                               },
                                                               request: (value) {
-                                                                final ownerJid = availabilityShareOwnersById[value
+                                                                final requestOwnerJid =
+                                                                    value
                                                                         .request
-                                                                        .shareId] ??
-                                                                    availabilityCoordinator
-                                                                        ?.ownerJidForShare(
-                                                                      value
-                                                                          .request
-                                                                          .shareId,
-                                                                    );
+                                                                        .ownerJid
+                                                                        ?.trim();
+                                                                final ownerJid = requestOwnerJid ==
+                                                                            null ||
+                                                                        requestOwnerJid
+                                                                            .isEmpty
+                                                                    ? availabilityShareOwnersById[value
+                                                                            .request
+                                                                            .shareId] ??
+                                                                        availabilityCoordinator
+                                                                            ?.ownerJidForShare(
+                                                                          value
+                                                                              .request
+                                                                              .shareId,
+                                                                        )
+                                                                    : requestOwnerJid;
                                                                 final bool isOwner = ownerJid !=
                                                                         null
                                                                     ? _bareJid(
