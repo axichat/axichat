@@ -7,9 +7,18 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
+import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
+import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/calendar/view/chat_calendar_widget.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -24,6 +33,9 @@ import 'package:axichat/src/chat/view/chat_message_details.dart';
 import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_availability_card.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_availability_request_sheet.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
@@ -68,6 +80,7 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 
 extension on MessageStatus {
   IconData get icon => switch (this) {
@@ -81,6 +94,7 @@ extension on MessageStatus {
 enum _ChatRoute {
   main,
   details,
+  calendar,
 }
 
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
@@ -119,6 +133,26 @@ const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
+const _chatCalendarActionSpacing = 4.0;
+const String _calendarFragmentShareDeniedMessage =
+    'Calendar cards are disabled for your role in this room.';
+const String _calendarFragmentPropertyKey = 'calendarFragment';
+const String _calendarAvailabilityPropertyKey = 'calendarAvailability';
+const String _availabilityRequestAccountMissingMessage =
+    'Availability requests are unavailable right now.';
+const String _availabilityRequestEmailUnsupportedMessage =
+    'Availability is unavailable for email chats.';
+const String _availabilityRequestInvalidRangeMessage =
+    'Availability request time is invalid.';
+const String _availabilityRequestCalendarUnavailableMessage =
+    'Calendar is unavailable.';
+const String _availabilityRequestChatCalendarUnavailableMessage =
+    'Chat calendar is unavailable.';
+const String _availabilityRequestTaskTitleFallback = 'Requested time';
+const Uuid _availabilityResponseIdGenerator = Uuid();
+const String _composerShareSeparator = '\n\n';
+const String _emptyText = '';
+const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 const _selectionExtrasMaxWidth = 500.0;
 const _messageAvatarSize = 36.0;
 const _messageRowAvatarReservation = 32.0;
@@ -209,6 +243,16 @@ class _MessageFilterOption {
 
   final MessageTimelineFilter filter;
   final String label;
+}
+
+class _CalendarFragmentShare {
+  const _CalendarFragmentShare({
+    required this.fragment,
+    required this.text,
+  });
+
+  final CalendarFragment? fragment;
+  final String text;
 }
 
 List<_MessageFilterOption> _messageFilterOptions(AppLocalizations l10n) => [
@@ -572,6 +616,32 @@ bool _chatMessagesShouldChain(
   return neighborDate == currentDate;
 }
 
+ChatCalendarSyncCoordinator? _maybeReadChatCalendarCoordinator(
+  BuildContext context,
+) {
+  try {
+    return RepositoryProvider.of<ChatCalendarSyncCoordinator>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
+  }
+}
+
+CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
+  BuildContext context,
+) {
+  try {
+    return RepositoryProvider.of<CalendarAvailabilityShareCoordinator>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
+  }
+}
+
 class Chat extends StatefulWidget {
   const Chat({super.key, this.readOnly = false});
 
@@ -768,6 +838,12 @@ class _ChatState extends State<Chat> {
   Offset? _selectionDismissOrigin;
   int? _selectionDismissPointer;
   var _selectionDismissMoved = false;
+  static const CalendarFragmentPolicy _calendarFragmentPolicy =
+      CalendarFragmentPolicy();
+  static const CalendarFragmentFormatter _calendarFragmentFormatter =
+      CalendarFragmentFormatter();
+  CalendarFragment? _pendingCalendarFragment;
+  String? _pendingCalendarSeedText;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
@@ -786,9 +862,25 @@ class _ChatState extends State<Chat> {
     if (hasText && _anySelectionActive) {
       _clearAllSelections();
     }
+    _maybeClearPendingCalendarFragment(text);
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
+  }
+
+  void _maybeClearPendingCalendarFragment(String text) {
+    final seedText = _pendingCalendarSeedText;
+    if (_pendingCalendarFragment == null || seedText == null) {
+      return;
+    }
+    if (text.trim() == seedText) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _pendingCalendarFragment = null;
+      _pendingCalendarSeedText = null;
+    });
   }
 
   List<String> _demoTypingParticipants(ChatState state) {
@@ -805,11 +897,15 @@ class _ChatState extends State<Chat> {
     return participants;
   }
 
-  void _appendTaskShareText(CalendarTask task) {
-    final String shareText = task.toShareText();
+  void _appendTaskShareText(
+    CalendarTask task, {
+    String? shareText,
+  }) {
+    final String resolvedShareText = shareText ?? task.toShareText();
     final String existing = _textController.text;
-    final String separator = existing.trim().isEmpty ? '' : '\n\n';
-    final String nextText = '$existing$separator$shareText';
+    final String separator =
+        existing.trim().isEmpty ? _emptyText : _composerShareSeparator;
+    final String nextText = '$existing$separator$resolvedShareText';
     _textController.value = _textController.value.copyWith(
       text: nextText,
       selection: TextSelection.collapsed(offset: nextText.length),
@@ -818,8 +914,235 @@ class _ChatState extends State<Chat> {
     _focusNode.requestFocus();
   }
 
+  _CalendarFragmentShare? _resolveCalendarFragmentShare(CalendarTask task) {
+    final chatState = context.read<ChatBloc>().state;
+    final chat = chatState.chat;
+    if (chat == null) {
+      return null;
+    }
+    final decision = _calendarFragmentPolicy.decisionForChat(
+      chat: chat,
+      roomState: chatState.roomState,
+    );
+    final CalendarFragment fragment = CalendarFragment.task(task: task);
+    final String shareText =
+        _calendarFragmentFormatter.describe(fragment).trim();
+    if (shareText.isEmpty) {
+      return null;
+    }
+    if (!decision.canWrite) {
+      _showSnackbar(_calendarFragmentShareDeniedMessage);
+      return _CalendarFragmentShare(
+        fragment: null,
+        text: shareText,
+      );
+    }
+    return _CalendarFragmentShare(
+      fragment: fragment,
+      text: shareText,
+    );
+  }
+
   void _handleTaskDrop(CalendarDragPayload payload) {
-    _appendTaskShareText(payload.snapshot);
+    final share = _resolveCalendarFragmentShare(payload.snapshot);
+    if (share == null) {
+      return;
+    }
+    if (share.fragment == null) {
+      if (_pendingCalendarFragment != null ||
+          _pendingCalendarSeedText != null) {
+        if (!mounted) return;
+        setState(() {
+          _pendingCalendarFragment = null;
+          _pendingCalendarSeedText = null;
+        });
+      }
+      _appendTaskShareText(
+        payload.snapshot,
+        shareText: share.text,
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _pendingCalendarFragment = share.fragment;
+      _pendingCalendarSeedText = share.text;
+    });
+    _appendTaskShareText(
+      payload.snapshot,
+      shareText: share.text,
+    );
+  }
+
+  Future<void> _handleAvailabilityRequest(
+    CalendarAvailabilityShare share,
+    String? requesterJid,
+  ) async {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat?.defaultTransport.isEmail == true) {
+      _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
+      return;
+    }
+    final trimmedJid = requesterJid?.trim();
+    if (trimmedJid == null || trimmedJid.isEmpty) {
+      _showSnackbar(_availabilityRequestAccountMissingMessage);
+      return;
+    }
+    final request = await showCalendarAvailabilityRequestSheet(
+      context: context,
+      share: share,
+      requesterJid: trimmedJid,
+    );
+    if (!mounted || request == null) {
+      return;
+    }
+    context.read<ChatBloc>().add(
+          ChatAvailabilityMessageSent(
+            message: CalendarAvailabilityMessage.request(request: request),
+          ),
+        );
+  }
+
+  Future<void> _handleAvailabilityAccept(
+    CalendarAvailabilityRequest request, {
+    required bool canAddToPersonalCalendar,
+    required bool canAddToChatCalendar,
+  }) async {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat?.defaultTransport.isEmail == true) {
+      _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
+      return;
+    }
+    if (!canAddToPersonalCalendar && !canAddToChatCalendar) {
+      _showSnackbar(_availabilityRequestCalendarUnavailableMessage);
+      return;
+    }
+    final decision = await showCalendarAvailabilityDecisionSheet(
+      context: context,
+      request: request,
+      canAddToPersonal: canAddToPersonalCalendar,
+      canAddToChat: canAddToChatCalendar,
+    );
+    if (!mounted || decision == null) {
+      return;
+    }
+    final draft = _availabilityTaskDraft(request);
+    if (draft == null) {
+      _showSnackbar(_availabilityRequestInvalidRangeMessage);
+      return;
+    }
+    if (decision.addToPersonal) {
+      _addAvailabilityTaskToPersonalCalendar(draft);
+    }
+    if (decision.addToChat) {
+      await _addAvailabilityTaskToChatCalendar(draft);
+    }
+    if (!mounted) {
+      return;
+    }
+    final response = CalendarAvailabilityResponse(
+      id: _availabilityResponseIdGenerator.v4(),
+      shareId: request.shareId,
+      requestId: request.id,
+      status: CalendarAvailabilityResponseStatus.accepted,
+    );
+    context.read<ChatBloc>().add(
+          ChatAvailabilityMessageSent(
+            message: CalendarAvailabilityMessage.response(response: response),
+          ),
+        );
+  }
+
+  void _handleAvailabilityDecline(CalendarAvailabilityRequest request) {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat?.defaultTransport.isEmail == true) {
+      _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
+      return;
+    }
+    final response = CalendarAvailabilityResponse(
+      id: _availabilityResponseIdGenerator.v4(),
+      shareId: request.shareId,
+      requestId: request.id,
+      status: CalendarAvailabilityResponseStatus.declined,
+    );
+    context.read<ChatBloc>().add(
+          ChatAvailabilityMessageSent(
+            message: CalendarAvailabilityMessage.response(response: response),
+          ),
+        );
+  }
+
+  void _addAvailabilityTaskToPersonalCalendar(
+    _AvailabilityTaskDraft draft,
+  ) {
+    final storageManager = context.read<CalendarStorageManager>();
+    if (!storageManager.isAuthStorageReady) {
+      _showSnackbar(_availabilityRequestCalendarUnavailableMessage);
+      return;
+    }
+    context.read<CalendarBloc>().add(
+          CalendarEvent.taskAdded(
+            title: draft.title,
+            scheduledTime: draft.start,
+            duration: draft.duration,
+            description: draft.description,
+          ),
+        );
+  }
+
+  Future<void> _addAvailabilityTaskToChatCalendar(
+    _AvailabilityTaskDraft draft,
+  ) async {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null || !chat.supportsChatCalendar) {
+      _showSnackbar(_availabilityRequestChatCalendarUnavailableMessage);
+      return;
+    }
+    final coordinator = _maybeReadChatCalendarCoordinator(context);
+    if (coordinator == null) {
+      _showSnackbar(_availabilityRequestChatCalendarUnavailableMessage);
+      return;
+    }
+    final CalendarTask task = CalendarTask.create(
+      title: draft.title,
+      description: draft.description,
+      scheduledTime: draft.start,
+      duration: draft.duration,
+    );
+    try {
+      await coordinator.addTask(
+        chatJid: chat.jid,
+        chatType: chat.type,
+        task: task,
+      );
+    } on Exception {
+      _showSnackbar(_availabilityRequestChatCalendarUnavailableMessage);
+    }
+  }
+
+  _AvailabilityTaskDraft? _availabilityTaskDraft(
+    CalendarAvailabilityRequest request,
+  ) {
+    final DateTime start = request.start.value;
+    final DateTime end = request.end.value;
+    if (!end.isAfter(start)) {
+      return null;
+    }
+    final Duration duration = end.difference(start);
+    final String? rawTitle = request.title?.trim();
+    final String? rawDescription = request.description?.trim();
+    final String title = rawTitle == null || rawTitle.isEmpty
+        ? _availabilityRequestTaskTitleFallback
+        : rawTitle;
+    final String? description = rawDescription == null || rawDescription.isEmpty
+        ? null
+        : rawDescription;
+    return _AvailabilityTaskDraft(
+      title: title,
+      description: description,
+      start: start,
+      duration: duration,
+    );
   }
 
   KeyEventResult _handleSubjectKeyEvent(FocusNode node, KeyEvent event) {
@@ -1284,7 +1607,10 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleSendMessage() {
-    final text = _textController.text.trim();
+    final rawText = _textController.text.trim();
+    final seedText = _pendingCalendarSeedText;
+    final String resolvedText =
+        rawText.isNotEmpty ? rawText : (seedText ?? _emptyText);
     final bool hasPreparingAttachments =
         context.read<ChatBloc>().state.pendingAttachments.any(
               (attachment) => attachment.isPreparing,
@@ -1296,11 +1622,23 @@ class _ChatState extends State<Chat> {
             );
     final hasSubject = _subjectController.text.trim().isNotEmpty;
     final canSend = !hasPreparingAttachments &&
-        (text.isNotEmpty || hasQueuedAttachments || hasSubject);
+        (resolvedText.isNotEmpty || hasQueuedAttachments || hasSubject);
     if (!canSend) return;
-    context.read<ChatBloc>().add(ChatMessageSent(text: text));
-    if (text.isNotEmpty) {
+    context.read<ChatBloc>().add(
+          ChatMessageSent(
+            text: resolvedText,
+            calendarFragment: _pendingCalendarFragment,
+          ),
+        );
+    if (resolvedText.isNotEmpty) {
       _textController.clear();
+    }
+    if (_pendingCalendarFragment != null || _pendingCalendarSeedText != null) {
+      if (!mounted) return;
+      setState(() {
+        _pendingCalendarFragment = null;
+        _pendingCalendarSeedText = null;
+      });
     }
     _focusNode.requestFocus();
   }
@@ -2423,6 +2761,7 @@ class _ChatState extends State<Chat> {
                 final jid = chatEntity?.jid;
                 final isDefaultEmail =
                     chatEntity?.defaultTransport.isEmail ?? false;
+                final isGroupChat = chatEntity?.type == ChatType.groupChat;
                 final currentUserId = isDefaultEmail
                     ? (emailSelfJid ?? profile?.jid ?? '')
                     : (profile?.jid ?? emailSelfJid ?? '');
@@ -2515,6 +2854,39 @@ class _ChatState extends State<Chat> {
                   return avatarPathForBareJid(bareRealJid);
                 }
 
+                final storageManager = context.watch<CalendarStorageManager>();
+                final chatCalendarCoordinator =
+                    _maybeReadChatCalendarCoordinator(context);
+                final bool personalCalendarAvailable =
+                    storageManager.isAuthStorageReady;
+                final bool supportsChatCalendar =
+                    chatEntity?.supportsChatCalendar ?? false;
+                final OccupantAffiliation calendarAffiliation =
+                    state.roomState?.myAffiliation ?? OccupantAffiliation.none;
+                final bool chatCalendarAllowed = supportsChatCalendar &&
+                    (!isGroupChat || calendarAffiliation.isMemberOrAbove);
+                final bool chatCalendarReady =
+                    storageManager.isAuthStorageReady &&
+                        chatCalendarCoordinator != null;
+                final bool chatCalendarAvailable =
+                    chatCalendarAllowed && chatCalendarReady;
+                final List<String> chatCalendarParticipants =
+                    chatCalendarAllowed
+                        ? _resolveChatCalendarParticipants(
+                            chat: chatEntity,
+                            roomState: state.roomState,
+                            currentUserId: currentUserId,
+                          )
+                        : const <String>[];
+                final chatCalendarAvatarPaths = <String, String>{};
+                for (final participant in chatCalendarParticipants) {
+                  final path = avatarPathForTypingParticipant(participant);
+                  if (path == null || path.isEmpty) {
+                    continue;
+                  }
+                  chatCalendarAvatarPaths[participant] = path;
+                }
+
                 final retryEntry = _lastReportEntryWhere(
                   fanOutReports.entries,
                   (entry) => entry.value.hasFailures,
@@ -2556,7 +2928,6 @@ class _ChatState extends State<Chat> {
                   return true;
                 }
 
-                final isGroupChat = chatEntity?.type == ChatType.groupChat;
                 final selfUserId = isGroupChat && myOccupantId != null
                     ? myOccupantId
                     : currentUserId;
@@ -2574,6 +2945,16 @@ class _ChatState extends State<Chat> {
                     !readOnly &&
                     jid != null &&
                     _chatRoute == _ChatRoute.main;
+                if (!chatCalendarAvailable &&
+                    _chatRoute == _ChatRoute.calendar) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    setState(() {
+                      _chatRoute = _ChatRoute.main;
+                      _settingsPanelExpanded = false;
+                    });
+                  });
+                }
                 return Container(
                   decoration: BoxDecoration(
                     color: context.colorScheme.background,
@@ -2808,6 +3189,24 @@ class _ChatState extends State<Chat> {
                               onPressed: _showMembers,
                             ),
                           const _ChatSearchToggleButton(),
+                          if (chatCalendarAllowed) ...[
+                            const SizedBox(
+                              width: _chatCalendarActionSpacing,
+                            ),
+                            AxiIconButton(
+                              iconData: LucideIcons.calendarClock,
+                              tooltip: context.l10n.homeRailCalendar,
+                              onPressed: () {
+                                if (!chatCalendarAvailable) {
+                                  _showSnackbar(
+                                    context.l10n.chatCalendarUnavailable,
+                                  );
+                                  return;
+                                }
+                                _openChatCalendar();
+                              },
+                            ),
+                          ],
                           if (!readOnly) ...[
                             const SizedBox(width: 4),
                             AxiIconButton(
@@ -2923,6 +3322,28 @@ class _ChatState extends State<Chat> {
                                           message.error.isNotNone ||
                                           attachments.isNotEmpty;
                                     }).toList();
+                                    final availabilityCoordinator =
+                                        _maybeReadAvailabilityShareCoordinator(
+                                      context,
+                                    );
+                                    final availabilityShareOwnersById =
+                                        <String, String>{};
+                                    for (final item in filteredItems) {
+                                      final availabilityMessage =
+                                          item.calendarAvailabilityMessage;
+                                      if (availabilityMessage == null) {
+                                        continue;
+                                      }
+                                      availabilityMessage.map(
+                                        share: (value) {
+                                          availabilityShareOwnersById[value
+                                              .share
+                                              .id] = value.share.overlay.owner;
+                                        },
+                                        request: (_) {},
+                                        response: (_) {},
+                                      );
+                                    }
                                     final isEmailChat =
                                         state.chat?.defaultTransport.isEmail ==
                                             true;
@@ -3182,6 +3603,10 @@ class _ChatState extends State<Chat> {
                                             'trusted': e.trusted,
                                             'isSelf': isSelf,
                                             'model': e,
+                                            _calendarFragmentPropertyKey:
+                                                e.calendarFragment,
+                                            _calendarAvailabilityPropertyKey:
+                                                e.calendarAvailabilityMessage,
                                             'quoted': quotedMessage,
                                             'reactions': e.reactionsPreview,
                                             'shareContext': shareContext,
@@ -3694,6 +4119,19 @@ class _ChatState extends State<Chat> {
                                                             ),
                                                           );
                                                         }
+                                                        final CalendarFragment?
+                                                            rawFragment =
+                                                            message.customProperties?[
+                                                                    _calendarFragmentPropertyKey]
+                                                                as CalendarFragment?;
+                                                        final CalendarFragment?
+                                                            displayFragment =
+                                                            rawFragment;
+                                                        final CalendarAvailabilityMessage?
+                                                            availabilityMessage =
+                                                            message.customProperties?[
+                                                                    _calendarAvailabilityPropertyKey]
+                                                                as CalendarAvailabilityMessage?;
                                                         final verification =
                                                             trusted == null
                                                                 ? null
@@ -4068,26 +4506,205 @@ class _ChatState extends State<Chat> {
                                                                           'renderedText']
                                                                       as String?) ??
                                                                   message.text;
-                                                          final hasAttachmentCaption =
+                                                          final String
+                                                              trimmedRenderedText =
                                                               rawRenderedText
-                                                                      .trim()
+                                                                  .trim();
+                                                          final String?
+                                                              fragmentFallbackText =
+                                                              displayFragment ==
+                                                                      null
+                                                                  ? null
+                                                                  : _calendarFragmentFormatter
+                                                                      .describe(
+                                                                        displayFragment,
+                                                                      )
+                                                                      .trim();
+                                                          final bool
+                                                              hideFragmentText =
+                                                              fragmentFallbackText !=
+                                                                      null &&
+                                                                  fragmentFallbackText
+                                                                      .isNotEmpty &&
+                                                                  fragmentFallbackText ==
+                                                                      trimmedRenderedText;
+                                                          final bool
+                                                              hideAvailabilityText =
+                                                              availabilityMessage !=
+                                                                      null &&
+                                                                  messageModel
+                                                                      .error
+                                                                      .isNone;
+                                                          final List<InlineSpan>
+                                                              fragmentDetails =
+                                                              <InlineSpan>[
+                                                            time,
+                                                            transportDetail,
+                                                            if (self &&
+                                                                status != null)
+                                                              status,
+                                                            if (verification !=
+                                                                null)
+                                                              verification,
+                                                          ];
+                                                          final List<InlineSpan>
+                                                              fragmentFooterDetails =
+                                                              hideFragmentText
+                                                                  ? fragmentDetails
+                                                                  : _emptyInlineSpans;
+                                                          final List<InlineSpan>
+                                                              availabilityFooterDetails =
+                                                              hideAvailabilityText
+                                                                  ? fragmentDetails
+                                                                  : _emptyInlineSpans;
+                                                          VoidCallback?
+                                                              availabilityOnRequest;
+                                                          VoidCallback?
+                                                              availabilityOnAccept;
+                                                          VoidCallback?
+                                                              availabilityOnDecline;
+                                                          if (availabilityMessage !=
+                                                              null) {
+                                                            availabilityMessage
+                                                                .map(
+                                                              share: (value) {
+                                                                final bool
+                                                                    isOwner =
+                                                                    _bareJid(
+                                                                          value
+                                                                              .share
+                                                                              .overlay
+                                                                              .owner,
+                                                                        ) ==
+                                                                        _bareJid(
+                                                                          currentUserId,
+                                                                        );
+                                                                if (!isOwner) {
+                                                                  availabilityOnRequest =
+                                                                      () =>
+                                                                          _handleAvailabilityRequest(
+                                                                            value.share,
+                                                                            currentUserId,
+                                                                          );
+                                                                }
+                                                              },
+                                                              request: (value) {
+                                                                final requestOwnerJid =
+                                                                    value
+                                                                        .request
+                                                                        .ownerJid
+                                                                        ?.trim();
+                                                                final ownerJid = requestOwnerJid ==
+                                                                            null ||
+                                                                        requestOwnerJid
+                                                                            .isEmpty
+                                                                    ? availabilityShareOwnersById[value
+                                                                            .request
+                                                                            .shareId] ??
+                                                                        availabilityCoordinator
+                                                                            ?.ownerJidForShare(
+                                                                          value
+                                                                              .request
+                                                                              .shareId,
+                                                                        )
+                                                                    : requestOwnerJid;
+                                                                final bool isOwner = ownerJid !=
+                                                                        null
+                                                                    ? _bareJid(
+                                                                          ownerJid,
+                                                                        ) ==
+                                                                        _bareJid(
+                                                                          currentUserId,
+                                                                        )
+                                                                    : (chatEntity?.type ==
+                                                                            ChatType.chat &&
+                                                                        _bareJid(
+                                                                              value.request.requesterJid,
+                                                                            ) !=
+                                                                            _bareJid(
+                                                                              currentUserId,
+                                                                            ));
+                                                                if (isOwner) {
+                                                                  availabilityOnAccept =
+                                                                      () =>
+                                                                          _handleAvailabilityAccept(
+                                                                            value.request,
+                                                                            canAddToPersonalCalendar:
+                                                                                personalCalendarAvailable,
+                                                                            canAddToChatCalendar:
+                                                                                chatCalendarAvailable,
+                                                                          );
+                                                                  availabilityOnDecline =
+                                                                      () =>
+                                                                          _handleAvailabilityDecline(
+                                                                            value.request,
+                                                                          );
+                                                                }
+                                                              },
+                                                              response: (_) {},
+                                                            );
+                                                          }
+                                                          if (availabilityMessage !=
+                                                              null) {
+                                                            bubbleChildren.add(
+                                                              CalendarAvailabilityMessageCard(
+                                                                message:
+                                                                    availabilityMessage,
+                                                                footerDetails:
+                                                                    availabilityFooterDetails,
+                                                                onRequest:
+                                                                    availabilityOnRequest,
+                                                                onAccept:
+                                                                    availabilityOnAccept,
+                                                                onDecline:
+                                                                    availabilityOnDecline,
+                                                              ),
+                                                            );
+                                                          } else if (displayFragment !=
+                                                              null) {
+                                                            bubbleChildren.add(
+                                                              CalendarFragmentCard(
+                                                                fragment:
+                                                                    displayFragment,
+                                                                footerDetails:
+                                                                    fragmentFooterDetails,
+                                                              ),
+                                                            );
+                                                          }
+                                                          final String?
+                                                              metadataIdForCaption =
+                                                              attachmentIds
+                                                                      .isNotEmpty
+                                                                  ? attachmentIds
+                                                                      .first
+                                                                  : messageModel
+                                                                      .fileMetadataID;
+                                                          final bool
+                                                              shouldRenderTextContent =
+                                                              !hideFragmentText &&
+                                                                  !hideAvailabilityText;
+                                                          final bool
+                                                              hasAttachmentCaption =
+                                                              shouldRenderTextContent &&
+                                                                  trimmedRenderedText
                                                                       .isEmpty &&
-                                                                  attachmentIds
+                                                                  metadataIdForCaption !=
+                                                                      null &&
+                                                                  metadataIdForCaption
                                                                       .isNotEmpty;
                                                           if (hasAttachmentCaption) {
-                                                            final metadataIdForCaption =
-                                                                attachmentIds
-                                                                    .first;
+                                                            final resolvedMetadataId =
+                                                                metadataIdForCaption;
                                                             bubbleChildren.add(
                                                               StreamBuilder<
                                                                   FileMetadataData?>(
                                                                 stream:
                                                                     _metadataStreamFor(
-                                                                  metadataIdForCaption,
+                                                                  resolvedMetadataId,
                                                                 ),
                                                                 initialData:
                                                                     _metadataInitialFor(
-                                                                  metadataIdForCaption,
+                                                                  resolvedMetadataId,
                                                                 ),
                                                                 builder: (context,
                                                                     snapshot) {
@@ -4152,7 +4769,8 @@ class _ChatState extends State<Chat> {
                                                                   null &&
                                                               messageModel
                                                                   .htmlBody!
-                                                                  .isNotEmpty) {
+                                                                  .isNotEmpty &&
+                                                              shouldRenderTextContent) {
                                                             // Render HTML email content
                                                             final shouldLoadImages = context
                                                                     .read<
@@ -4264,7 +4882,7 @@ class _ChatState extends State<Chat> {
                                                                 ),
                                                               ),
                                                             );
-                                                          } else {
+                                                          } else if (shouldRenderTextContent) {
                                                             bubbleChildren.add(
                                                               DynamicInlineText(
                                                                 key: ValueKey(
@@ -5663,6 +6281,14 @@ class _ChatState extends State<Chat> {
                                   },
                                 ),
                                 const ChatMessageDetails(),
+                                _ChatCalendarPanel(
+                                  key: ValueKey(chatEntity?.jid),
+                                  chat: chatEntity,
+                                  calendarAvailable: chatCalendarAvailable,
+                                  participants: chatCalendarParticipants,
+                                  avatarPaths: chatCalendarAvatarPaths,
+                                  onBackPressed: _closeChatCalendar,
+                                ),
                               ],
                             ),
                           ),
@@ -6063,6 +6689,71 @@ class _ChatState extends State<Chat> {
     });
   }
 
+  void _openChatCalendar() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.calendar;
+      _settingsPanelExpanded = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
+  }
+
+  void _closeChatCalendar() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.main;
+    });
+  }
+
+  List<String> _resolveChatCalendarParticipants({
+    required chat_models.Chat? chat,
+    required RoomState? roomState,
+    required String? currentUserId,
+  }) {
+    if (chat == null) {
+      return const <String>[];
+    }
+    final participants = <String>[];
+    final seen = <String>{};
+    void addParticipant(String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) {
+        return;
+      }
+      final normalized = trimmed.toLowerCase();
+      if (seen.contains(normalized)) {
+        return;
+      }
+      seen.add(normalized);
+      participants.add(trimmed);
+    }
+
+    if (chat.type == ChatType.groupChat) {
+      final room = roomState;
+      if (room != null) {
+        final eligible = <Occupant>[
+          ...room.owners,
+          ...room.admins,
+          ...room.members,
+        ];
+        for (final occupant in eligible) {
+          final realJid = occupant.realJid?.trim();
+          addParticipant(
+            realJid?.isNotEmpty == true ? realJid : occupant.occupantId,
+          );
+        }
+      }
+      addParticipant(currentUserId);
+      return participants;
+    }
+
+    addParticipant(currentUserId);
+    addParticipant(chat.remoteJid);
+    return participants;
+  }
+
   Future<chat_models.Chat?> _selectForwardTarget() async {
     if (!mounted) return null;
     final l10n = context.l10n;
@@ -6180,6 +6871,71 @@ class _ChatState extends State<Chat> {
     }
     return null;
   }
+}
+
+class _ChatCalendarPanel extends StatelessWidget {
+  const _ChatCalendarPanel({
+    super.key,
+    required this.chat,
+    required this.calendarAvailable,
+    required this.participants,
+    required this.avatarPaths,
+    required this.onBackPressed,
+  });
+
+  final chat_models.Chat? chat;
+  final bool calendarAvailable;
+  final List<String> participants;
+  final Map<String, String> avatarPaths;
+  final VoidCallback onBackPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChat = chat;
+    if (!calendarAvailable || resolvedChat == null) {
+      return const SizedBox.shrink();
+    }
+    final storageManager = context.read<CalendarStorageManager>();
+    final storage = storageManager.authStorage;
+    final coordinator = _maybeReadChatCalendarCoordinator(context);
+    final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
+      context,
+    );
+    if (storage == null || coordinator == null) {
+      return const SizedBox.shrink();
+    }
+    final reminderController = context.read<CalendarReminderController>();
+    return BlocProvider<ChatCalendarBloc>(
+      create: (context) => ChatCalendarBloc(
+        chatJid: resolvedChat.jid,
+        chatType: resolvedChat.type,
+        coordinator: coordinator,
+        storage: storage,
+        reminderController: reminderController,
+        availabilityCoordinator: availabilityCoordinator,
+      )..add(const CalendarEvent.started()),
+      child: ChatCalendarWidget(
+        onBackPressed: onBackPressed,
+        chat: resolvedChat,
+        participants: participants,
+        avatarPaths: avatarPaths,
+      ),
+    );
+  }
+}
+
+class _AvailabilityTaskDraft {
+  const _AvailabilityTaskDraft({
+    required this.title,
+    required this.start,
+    required this.duration,
+    this.description,
+  });
+
+  final String title;
+  final String? description;
+  final DateTime start;
+  final Duration duration;
 }
 
 final class _FileMetadataStreamEntry {
