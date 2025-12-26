@@ -7,6 +7,8 @@ import 'package:ffi/ffi.dart';
 import 'delta.dart';
 import 'src/bindings.dart';
 
+const int _zeroValue = 0;
+
 class DeltaSafe {
   DeltaSafe({DeltaChatBindings? bindings})
       : _bindings = bindings ?? deltaBindings;
@@ -742,6 +744,11 @@ class DeltaContextHandle {
     }
   }
 
+  Future<bool> probeFreshMessagesSupport() async {
+    await getFreshMessageIds();
+    return _supportsFreshMsgs == true;
+  }
+
   Future<int> getFreshMessageCount(int chatId) async {
     if (_supportsFreshMsgs == false) return 0;
     try {
@@ -839,16 +846,39 @@ class DeltaContextHandle {
       if (message == null) {
         _bindings.dc_set_draft(_context, chatId, ffi.nullptr);
       } else {
+        final filePath = message.filePath?.trim();
+        final hasFile = filePath != null && filePath.isNotEmpty;
+        final resolvedViewType = message.viewType ??
+            (hasFile ? DeltaMessageType.file : DeltaMessageType.text);
         final msg = _bindings.dc_msg_new(
           _context,
-          message.viewType ?? DeltaMessageType.text,
+          resolvedViewType,
         );
         if (msg == ffi.nullptr) return false;
         try {
-          if (message.text != null) {
-            _withCString(message.text!, (textPtr) {
+          final text = message.text;
+          if (text != null) {
+            _withCString(text, (textPtr) {
               _bindings.dc_msg_set_text(msg, textPtr);
             });
+          }
+          final normalizedHtml = message.html?.trim();
+          if (normalizedHtml != null && normalizedHtml.isNotEmpty) {
+            _setMessageHtml(msg, normalizedHtml);
+          }
+          final normalizedSubject = message.subject?.trim();
+          if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
+            _withCString(normalizedSubject, (subjectPtr) {
+              _bindings.dc_msg_set_subject(msg, subjectPtr);
+            });
+          }
+          if (filePath != null && filePath.isNotEmpty) {
+            _setFileForMessage(
+              msg,
+              filePath: filePath,
+              fileName: message.fileName,
+              mimeType: message.fileMime,
+            );
           }
           _bindings.dc_set_draft(_context, chatId, msg);
         } finally {
@@ -875,12 +905,48 @@ class DeltaContextHandle {
           _bindings.dc_msg_get_text(msgPtr),
           bindings: _bindings,
         );
+        final html = _cleanString(
+          _takeString(_bindings.dc_msg_get_html(msgPtr), bindings: _bindings),
+        );
+        final subject = _cleanString(
+          _takeString(
+            _bindings.dc_msg_get_subject(msgPtr),
+            bindings: _bindings,
+          ),
+        );
         final viewType = _bindings.dc_msg_get_viewtype(msgPtr);
+        final id = _bindings.dc_msg_get_id(msgPtr);
+        final filePath = _cleanString(
+          _takeString(_bindings.dc_msg_get_file(msgPtr), bindings: _bindings),
+        );
+        final fileName = _cleanString(
+          _takeString(
+            _bindings.dc_msg_get_filename(msgPtr),
+            bindings: _bindings,
+          ),
+        );
+        final fileMime = _cleanString(
+          _takeString(
+            _bindings.dc_msg_get_filemime(msgPtr),
+            bindings: _bindings,
+          ),
+        );
+        final fileBytes = _bindings.dc_msg_get_filebytes(msgPtr);
+        final width = _bindings.dc_msg_get_width(msgPtr);
+        final height = _bindings.dc_msg_get_height(msgPtr);
         return DeltaMessage(
-          id: 0,
+          id: id,
           chatId: chatId,
           text: text,
+          html: html,
+          subject: subject,
           viewType: viewType,
+          filePath: filePath,
+          fileName: fileName,
+          fileMime: fileMime,
+          fileSize: fileBytes == _zeroValue ? null : fileBytes,
+          width: width == _zeroValue ? null : width,
+          height: height == _zeroValue ? null : height,
         );
       } finally {
         _bindings.dc_msg_unref(msgPtr);

@@ -93,6 +93,8 @@ abstract class BaseCalendarBloc
     on<CalendarTaskFocusCleared>(_onTaskFocusCleared);
     on<CalendarTasksImported>(_onTasksImported);
     on<CalendarModelImported>(_onModelImported);
+    on<CalendarSyncWarningRaised>(_onSyncWarningRaised);
+    on<CalendarSyncWarningCleared>(_onSyncWarningCleared);
     on<CalendarCriticalPathCreated>(_onCriticalPathCreated);
     on<CalendarCriticalPathRenamed>(_onCriticalPathRenamed);
     on<CalendarCriticalPathDeleted>(_onCriticalPathDeleted);
@@ -2694,6 +2696,20 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) {
     emit(state.copyWith(error: null, syncError: null));
+  }
+
+  void _onSyncWarningRaised(
+    CalendarSyncWarningRaised event,
+    Emitter<CalendarState> emit,
+  ) {
+    emit(state.copyWith(syncWarning: event.warning));
+  }
+
+  void _onSyncWarningCleared(
+    CalendarSyncWarningCleared event,
+    Emitter<CalendarState> emit,
+  ) {
+    emit(state.copyWith(syncWarning: null));
   }
 
   Future<void> _handleError(

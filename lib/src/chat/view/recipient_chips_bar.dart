@@ -29,6 +29,11 @@ const double _expandedHeaderPadding = 4;
 const double _chipAvatarSize = 20.0;
 const double _chipStatusBadgeSize = 12.0;
 const double _chipStatusBadgeBorderWidth = 1.5;
+const double _visibilityBadgeRadius = 8.0;
+const double _visibilityBadgeFontSize = 11.0;
+const double _visibilityBadgeSpacing = 6.0;
+const EdgeInsets _visibilityBadgePadding =
+    EdgeInsets.symmetric(horizontal: 6, vertical: 2);
 const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
   4,
   0,
@@ -51,6 +56,7 @@ class RecipientChipsBar extends StatefulWidget {
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
     this.horizontalPadding = 16,
+    this.visibilityLabel,
   });
 
   final List<ComposerRecipient> recipients;
@@ -63,6 +69,7 @@ class RecipientChipsBar extends StatefulWidget {
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
   final double horizontalPadding;
+  final String? visibilityLabel;
 
   @override
   State<RecipientChipsBar> createState() => _RecipientChipsBarState();
@@ -222,6 +229,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       color: colors.onSurfaceVariant.withValues(alpha: 0.9),
       letterSpacing: 0.4,
     );
+    final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
+    final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
     final arrowIcon =
         _barCollapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up;
     return AnimatedContainer(
@@ -295,6 +304,27 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                             style: headerStyle,
                           ),
                         ),
+                        if (showVisibilityBadge) ...[
+                          Container(
+                            padding: _visibilityBadgePadding,
+                            decoration: BoxDecoration(
+                              color: colors.surfaceContainerHighest,
+                              borderRadius:
+                                  BorderRadius.circular(_visibilityBadgeRadius),
+                              border: Border.all(
+                                color: context.colorScheme.border,
+                              ),
+                            ),
+                            child: Text(
+                              normalizedVisibilityLabel,
+                              style: headerStyle?.copyWith(
+                                fontSize: _visibilityBadgeFontSize,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: _visibilityBadgeSpacing),
+                        ],
                         const SizedBox(width: 8),
                         _RecipientsCountBadge(
                           count: recipients.length,
@@ -1469,7 +1499,8 @@ final class _RecipientAutocompleteOverlayState
           final subtitleStyle = theme.bodySmall?.copyWith(
             color: colors.mutedForeground,
           );
-          final dividerColor = colors.border.withValues(alpha: 0.55);
+          final dividerColor =
+              context.colorScheme.border.withValues(alpha: 0.55);
           final hoverColor = colors.muted.withValues(alpha: 0.08);
           final highlightColor = colors.primary.withValues(alpha: 0.12);
           final trailingIconColor = colors.muted.withValues(alpha: 0.9);
@@ -1514,7 +1545,8 @@ final class _RecipientAutocompleteOverlayState
                             color: colors.card,
                             borderRadius: overlayRadius,
                             border: Border.all(
-                              color: colors.border.withValues(alpha: 0.9),
+                              color: context.colorScheme.border
+                                  .withValues(alpha: 0.9),
                               width: 1,
                             ),
                             boxShadow: [

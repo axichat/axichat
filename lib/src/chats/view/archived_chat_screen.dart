@@ -73,6 +73,7 @@ class ArchivedChatScreen extends StatelessWidget {
           create: (_) => ChatSearchCubit(
             jid: jid,
             messageService: xmppService,
+            emailService: emailService,
           ),
         ),
       ],

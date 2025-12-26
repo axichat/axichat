@@ -88,6 +88,15 @@ class _CalendarWidgetState
     if (state.error != null && mounted) {
       FeedbackSystem.showError(context, state.error!);
     }
+    final warning = state.syncWarning;
+    if (warning != null && mounted) {
+      FeedbackSystem.showWarning(
+        context,
+        warning.message,
+        title: warning.title,
+      );
+      calendarBloc.add(const CalendarEvent.syncWarningCleared());
+    }
   }
 
   @override
