@@ -91,12 +91,24 @@ const String _calendarIcsStatusInProcessIcs = 'IN-PROCESS';
 const String _calendarIcsStatusDraftIcs = 'DRAFT';
 const String _calendarIcsStatusFinalIcs = 'FINAL';
 
+const String _calendarIcsStatusTentativeLabel = 'Tentative';
+const String _calendarIcsStatusConfirmedLabel = 'Confirmed';
+const String _calendarIcsStatusCancelledLabel = 'Cancelled';
+const String _calendarIcsStatusNeedsActionLabel = 'Needs action';
+const String _calendarIcsStatusCompletedLabel = 'Completed';
+const String _calendarIcsStatusInProcessLabel = 'In process';
+const String _calendarIcsStatusDraftLabel = 'Draft';
+const String _calendarIcsStatusFinalLabel = 'Final';
+
 const String _calendarPrivacyClassPublicIcs = 'PUBLIC';
 const String _calendarPrivacyClassPrivateIcs = 'PRIVATE';
 const String _calendarPrivacyClassConfidentialIcs = 'CONFIDENTIAL';
 
 const String _calendarTransparencyOpaqueIcs = 'OPAQUE';
 const String _calendarTransparencyTransparentIcs = 'TRANSPARENT';
+
+const String _calendarTransparencyOpaqueLabel = 'Busy';
+const String _calendarTransparencyTransparentLabel = 'Free';
 
 @freezed
 @HiveType(typeId: _calendarGeoTypeId)
@@ -211,6 +223,32 @@ enum CalendarTransparency {
         _calendarTransparencyTransparentIcs => CalendarTransparency.transparent,
         _ => null,
       };
+}
+
+extension CalendarIcsStatusLabel on CalendarIcsStatus {
+  String get label => switch (this) {
+        CalendarIcsStatus.tentative => _calendarIcsStatusTentativeLabel,
+        CalendarIcsStatus.confirmed => _calendarIcsStatusConfirmedLabel,
+        CalendarIcsStatus.cancelled => _calendarIcsStatusCancelledLabel,
+        CalendarIcsStatus.needsAction => _calendarIcsStatusNeedsActionLabel,
+        CalendarIcsStatus.completed => _calendarIcsStatusCompletedLabel,
+        CalendarIcsStatus.inProcess => _calendarIcsStatusInProcessLabel,
+        CalendarIcsStatus.draft => _calendarIcsStatusDraftLabel,
+        CalendarIcsStatus.finalState => _calendarIcsStatusFinalLabel,
+      };
+}
+
+extension CalendarTransparencyLabel on CalendarTransparency {
+  String get label => switch (this) {
+        CalendarTransparency.opaque => _calendarTransparencyOpaqueLabel,
+        CalendarTransparency.transparent =>
+          _calendarTransparencyTransparentLabel,
+      };
+}
+
+extension CalendarIcsMetaJson on CalendarIcsMeta {
+  Map<String, dynamic> toJson() =>
+      _$$CalendarIcsMetaImplToJson(this as _$CalendarIcsMetaImpl);
 }
 
 @HiveType(typeId: _calendarIcsComponentTypeTypeId)

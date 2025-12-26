@@ -6,6 +6,12 @@ import 'nl_schedule_adapter.dart';
 import 'schedule_parser.dart';
 import 'time_formatter.dart';
 
+const String _recurrenceEveryYearLabel = 'every year';
+const String _recurrenceEveryOtherYearLabel = 'every other year';
+const String _recurrenceYearsLabel = 'years';
+const String _recurrenceEveryYearsPattern = r'every\s+(\d+)\s+years';
+const int _recurrenceEveryOtherYearInterval = 2;
+
 class TaskShareFormatter {
   const TaskShareFormatter._();
 
@@ -134,6 +140,15 @@ class TaskShareFormatter {
               ? 'every ${recurrence.interval} months'
               : 'every month',
         );
+        break;
+      case RecurrenceFrequency.yearly:
+        if (recurrence.interval == _recurrenceEveryOtherYearInterval) {
+          parts.add(_recurrenceEveryOtherYearLabel);
+        } else if (recurrence.interval > 1) {
+          parts.add('every ${recurrence.interval} $_recurrenceYearsLabel');
+        } else {
+          parts.add(_recurrenceEveryYearLabel);
+        }
         break;
       case RecurrenceFrequency.none:
         return null;
@@ -724,6 +739,7 @@ class TaskShareDecoder {
     ParseContext context,
   ) {
     final String lower = baseText.toLowerCase();
+    final RegExp everyYearsPattern = RegExp(_recurrenceEveryYearsPattern);
     int interval = 1;
     RecurrenceFrequency frequency = RecurrenceFrequency.none;
     List<int>? weekdays;
@@ -790,6 +806,17 @@ class TaskShareDecoder {
       if (intervalMatch != null) {
         interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
       }
+    } else if (lower.contains(_recurrenceEveryOtherYearLabel)) {
+      frequency = RecurrenceFrequency.yearly;
+      interval = _recurrenceEveryOtherYearInterval;
+    } else if (everyYearsPattern.hasMatch(lower)) {
+      frequency = RecurrenceFrequency.yearly;
+      final RegExpMatch? intervalMatch = everyYearsPattern.firstMatch(lower);
+      if (intervalMatch != null) {
+        interval = int.tryParse(intervalMatch.group(1) ?? '') ?? 1;
+      }
+    } else if (lower.contains(_recurrenceEveryYearLabel)) {
+      frequency = RecurrenceFrequency.yearly;
     } else {
       return null;
     }

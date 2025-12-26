@@ -90,6 +90,8 @@ enum RecurrenceFrequency {
   weekly,
   @HiveField(4)
   monthly,
+  @HiveField(5)
+  yearly,
 }
 
 @freezed
@@ -228,6 +230,7 @@ class CalendarTask with _$CalendarTask implements CalendarItemBase {
     RecurrenceRule? recurrence,
     ReminderPreferences? reminders,
     List<TaskChecklistItem> checklist = const [],
+    CalendarIcsMeta? icsMeta,
   }) {
     final now = DateTime.now();
     return CalendarTask(
@@ -245,6 +248,7 @@ class CalendarTask with _$CalendarTask implements CalendarItemBase {
       occurrenceOverrides: const {},
       checklist: checklist,
       reminders: reminders?.normalized() ?? ReminderPreferences.defaults(),
+      icsMeta: icsMeta,
       createdAt: now,
       modifiedAt: now,
     );

@@ -6,6 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 const _occurrenceSeparator = '::';
 const int _baseOccurrenceCount = 1;
 const int _daysPerWeek = 7;
+const int _monthsPerYear = 12;
 const Duration _zeroDuration = Duration.zero;
 
 enum RecurrenceEndUnit {
@@ -420,6 +421,12 @@ DateTime? _nextOccurrence(
       return _nextWeeklyOccurrence(current, rule, baseStart);
     case RecurrenceFrequency.monthly:
       return _addMonths(current, max(1, rule.interval), baseStart.day);
+    case RecurrenceFrequency.yearly:
+      return _addMonths(
+        current,
+        max(1, rule.interval) * _monthsPerYear,
+        baseStart.day,
+      );
   }
 }
 
@@ -482,6 +489,8 @@ DateTime? calculateRecurrenceEndDate({
         );
       }
       return (amount: effective, unit: RecurrenceEndUnit.months);
+    case RecurrenceFrequency.yearly:
+      return (amount: effective, unit: RecurrenceEndUnit.years);
     case RecurrenceFrequency.none:
       return null;
   }

@@ -387,6 +387,7 @@ abstract class BaseCalendarBloc
         recurrence: event.recurrence,
         checklist: checklist,
         reminders: event.reminders,
+        icsMeta: event.icsMeta,
       ).copyWith(modifiedAt: now);
 
       final updatedModel = state.model.addTask(task);
@@ -1008,6 +1009,7 @@ abstract class BaseCalendarBloc
         endDate: event.endDate,
         description: event.description,
         reminders: event.reminders,
+        icsMeta: event.icsMeta,
       );
 
       final CalendarModel updatedModel = state.model.addDayEvent(dayEvent);

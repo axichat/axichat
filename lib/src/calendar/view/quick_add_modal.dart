@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
@@ -23,10 +25,15 @@ import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_checklist.dart';
+import 'widgets/calendar_categories_field.dart';
+import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/ics_meta_fields.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/critical_path_panel.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+
+const List<String> _emptyCategories = <String>[];
 
 enum QuickAddModalSurface { dialog, bottomSheet }
 
@@ -191,6 +198,11 @@ class _QuickAddModalState extends State<QuickAddModal>
             onImportantChanged: _onUserImportantChanged,
             onUrgentChanged: _onUserUrgentChanged,
             onRemindersChanged: _onRemindersChanged,
+            onStatusChanged: _onStatusChanged,
+            onTransparencyChanged: _onTransparencyChanged,
+            onCategoriesChanged: _onCategoriesChanged,
+            onUrlChanged: _onUrlChanged,
+            onGeoChanged: _onGeoChanged,
             actionInsetBuilder: _quickAddActionInset,
             fallbackDate: widget.prefilledDateTime,
             onAddToCriticalPath: _queueCriticalPathForDraft,
@@ -240,6 +252,11 @@ class _QuickAddModalState extends State<QuickAddModal>
               onImportantChanged: _onUserImportantChanged,
               onUrgentChanged: _onUserUrgentChanged,
               onRemindersChanged: _onRemindersChanged,
+              onStatusChanged: _onStatusChanged,
+              onTransparencyChanged: _onTransparencyChanged,
+              onCategoriesChanged: _onCategoriesChanged,
+              onUrlChanged: _onUrlChanged,
+              onGeoChanged: _onGeoChanged,
               actionInsetBuilder: _quickAddActionInset,
               fallbackDate: widget.prefilledDateTime,
               onAddToCriticalPath: _queueCriticalPathForDraft,
@@ -426,6 +443,12 @@ class _QuickAddModalState extends State<QuickAddModal>
     if (!_remindersLocked) {
       _formController.setReminders(ReminderPreferences.defaults());
     }
+    _formController
+      ..setStatus(null)
+      ..setTransparency(null)
+      ..setCategories(_emptyCategories)
+      ..setUrl(null)
+      ..setGeo(null);
     if (!_locationLocked && _locationController.text.isNotEmpty) {
       _locationController.clear();
     }
@@ -489,6 +512,26 @@ class _QuickAddModalState extends State<QuickAddModal>
   void _onRemindersChanged(ReminderPreferences value) {
     _remindersLocked = true;
     _formController.setReminders(value);
+  }
+
+  void _onStatusChanged(CalendarIcsStatus? value) {
+    _formController.setStatus(value);
+  }
+
+  void _onTransparencyChanged(CalendarTransparency? value) {
+    _formController.setTransparency(value);
+  }
+
+  void _onCategoriesChanged(List<String> value) {
+    _formController.setCategories(value);
+  }
+
+  void _onUrlChanged(String? value) {
+    _formController.setUrl(value);
+  }
+
+  void _onGeoChanged(CalendarGeo? value) {
+    _formController.setGeo(value);
   }
 
   void _resetParserLocks() {
@@ -605,6 +648,18 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     final duration = _formController.effectiveDuration ??
         (scheduledTime != null ? const Duration(hours: 1) : null);
+    final List<String>? categories = resolveCategoryOverride(
+      base: null,
+      categories: _formController.categories,
+    );
+    final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
+      base: null,
+      status: _formController.status,
+      transparency: _formController.transparency,
+      categories: categories,
+      url: _formController.url,
+      geo: _formController.geo,
+    );
 
     // Create the task
     final task = CalendarTask(
@@ -625,6 +680,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       startHour: null,
       checklist: _checklistController.items.toList(),
       reminders: _formController.reminders.normalized(),
+      icsMeta: icsMeta,
     );
 
     widget.onTaskAdded(task);
@@ -750,6 +806,11 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.onImportantChanged,
     required this.onUrgentChanged,
     required this.onRemindersChanged,
+    required this.onStatusChanged,
+    required this.onTransparencyChanged,
+    required this.onCategoriesChanged,
+    required this.onUrlChanged,
+    required this.onGeoChanged,
     required this.actionInsetBuilder,
     required this.fallbackDate,
     required this.onAddToCriticalPath,
@@ -781,6 +842,11 @@ class _QuickAddModalContent extends StatelessWidget {
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final ValueChanged<CalendarIcsStatus?> onStatusChanged;
+  final ValueChanged<CalendarTransparency?> onTransparencyChanged;
+  final ValueChanged<List<String>> onCategoriesChanged;
+  final ValueChanged<String?> onUrlChanged;
+  final ValueChanged<CalendarGeo?> onGeoChanged;
   final double Function(BuildContext context) actionInsetBuilder;
   final DateTime? fallbackDate;
   final Future<void> Function() onAddToCriticalPath;
@@ -956,6 +1022,46 @@ class _QuickAddModalContent extends StatelessWidget {
                               reminders: formController.reminders,
                               deadline: formController.deadline,
                               onChanged: onRemindersChanged,
+                            );
+                          },
+                        ),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        AnimatedBuilder(
+                          animation: formController,
+                          builder: (context, _) {
+                            return CalendarIcsMetaFields(
+                              status: formController.status,
+                              transparency: formController.transparency,
+                              onStatusChanged: onStatusChanged,
+                              onTransparencyChanged: onTransparencyChanged,
+                            );
+                          },
+                        ),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        AnimatedBuilder(
+                          animation: formController,
+                          builder: (context, _) {
+                            return CalendarCategoriesField(
+                              categories: formController.categories,
+                              onChanged: onCategoriesChanged,
+                            );
+                          },
+                        ),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        AnimatedBuilder(
+                          animation: formController,
+                          builder: (context, _) {
+                            return CalendarLinkGeoFields(
+                              url: formController.url,
+                              geo: formController.geo,
+                              onUrlChanged: onUrlChanged,
+                              onGeoChanged: onGeoChanged,
                             );
                           },
                         ),

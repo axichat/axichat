@@ -4,6 +4,7 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 
 part 'calendar_event.freezed.dart';
@@ -26,6 +27,7 @@ class CalendarEvent with _$CalendarEvent {
     RecurrenceRule? recurrence,
     @Default([]) List<TaskChecklistItem> checklist,
     ReminderPreferences? reminders,
+    CalendarIcsMeta? icsMeta,
   }) = CalendarTaskAdded;
 
   const factory CalendarEvent.taskUpdated({
@@ -131,6 +133,7 @@ class CalendarEvent with _$CalendarEvent {
     DateTime? endDate,
     String? description,
     ReminderPreferences? reminders,
+    CalendarIcsMeta? icsMeta,
   }) = CalendarDayEventAdded;
 
   const factory CalendarEvent.dayEventUpdated({
