@@ -95,6 +95,26 @@ AlarmReminderSplit splitAlarms(List<CalendarAlarm> alarms) {
   );
 }
 
+AlarmReminderSplit splitAlarmsWithFallback({
+  required List<CalendarAlarm> alarms,
+  required ReminderPreferences fallback,
+}) {
+  if (alarms.isEmpty) {
+    return AlarmReminderSplit(
+      reminders: fallback.normalized(),
+      advancedAlarms: _emptyAlarms,
+    );
+  }
+  final AlarmReminderSplit split = splitAlarms(alarms);
+  if (split.reminders.isEnabled) {
+    return split;
+  }
+  return AlarmReminderSplit(
+    reminders: fallback.normalized(),
+    advancedAlarms: split.advancedAlarms,
+  );
+}
+
 ReminderPreferences remindersFromAlarms(List<CalendarAlarm> alarms) =>
     splitAlarms(alarms).reminders;
 
