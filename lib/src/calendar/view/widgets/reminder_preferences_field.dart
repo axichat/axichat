@@ -1,7 +1,9 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_alarms_field.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
@@ -15,8 +17,16 @@ const String _reminderBeforeStartLabel = 'Before start';
 const String _reminderBeforeDeadlineLabel = 'Before deadline';
 const String _reminderAtStartLabel = 'At start';
 const String _reminderAtDeadlineLabel = 'At deadline';
+const String _reminderAdvancedLabel = 'Advanced alarms';
+const String _reminderAdvancedActiveLabel = 'Active';
+const String _reminderAdvancedSummary = 'Advanced alarms applied';
+const double _reminderAdvancedLabelLetterSpacing = 0.4;
+const double _reminderAdvancedBadgeOpacity = 0.16;
+const double _reminderAdvancedBadgeFontSize = 11;
+const double _reminderAdvancedBadgeRadius = 10;
+const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 
-class ReminderPreferencesField extends StatelessWidget {
+class ReminderPreferencesField extends StatefulWidget {
   const ReminderPreferencesField({
     super.key,
     required this.value,
@@ -27,6 +37,10 @@ class ReminderPreferencesField extends StatelessWidget {
     this.showBothAnchors = false,
     this.startOptions = calendarReminderStartOptions,
     this.deadlineOptions = calendarReminderDeadlineOptions,
+    this.advancedAlarms,
+    this.onAdvancedAlarmsChanged,
+    this.referenceStart,
+    this.showAdvancedAlarms = true,
   });
 
   final ReminderPreferences value;
@@ -37,20 +51,55 @@ class ReminderPreferencesField extends StatelessWidget {
   final bool showBothAnchors;
   final List<Duration> startOptions;
   final List<Duration> deadlineOptions;
+  final List<CalendarAlarm>? advancedAlarms;
+  final ValueChanged<List<CalendarAlarm>>? onAdvancedAlarmsChanged;
+  final DateTime? referenceStart;
+  final bool showAdvancedAlarms;
+
+  @override
+  State<ReminderPreferencesField> createState() =>
+      _ReminderPreferencesFieldState();
+}
+
+class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
+  late bool _advancedExpanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _advancedExpanded = _shouldStartExpanded(widget);
+  }
+
+  @override
+  void didUpdateWidget(covariant ReminderPreferencesField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_advancedExpanded && _shouldStartExpanded(widget)) {
+      setState(() => _advancedExpanded = true);
+    }
+  }
+
+  bool _shouldStartExpanded(ReminderPreferencesField widget) {
+    if (!widget.showAdvancedAlarms) {
+      return false;
+    }
+    return widget.advancedAlarms?.isNotEmpty == true;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final ReminderPreferences resolvedValue =
-        showBothAnchors ? value.normalized() : value.alignedTo(anchor);
-    if (resolvedValue != value) {
+    final ReminderPreferences resolvedValue = widget.showBothAnchors
+        ? widget.value.normalized()
+        : widget.value.alignedTo(widget.anchor);
+    if (resolvedValue != widget.value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        onChanged(resolvedValue);
+        widget.onChanged(resolvedValue);
       });
     }
 
-    final bool usesDeadline = anchor.isDeadline;
+    final ValueChanged<ReminderPreferences> onChanged = widget.onChanged;
+    final bool usesDeadline = widget.anchor.isDeadline;
     final List<Duration> options =
-        usesDeadline ? deadlineOptions : startOptions;
+        usesDeadline ? widget.deadlineOptions : widget.startOptions;
     final List<Duration> selected = usesDeadline
         ? resolvedValue.deadlineOffsets
         : resolvedValue.startOffsets;
@@ -58,15 +107,25 @@ class ReminderPreferencesField extends StatelessWidget {
         usesDeadline ? _reminderBeforeDeadlineLabel : _reminderBeforeStartLabel;
     final String zeroLabel =
         usesDeadline ? _reminderAtDeadlineLabel : _reminderAtStartLabel;
+    final List<CalendarAlarm>? advancedAlarms = widget.advancedAlarms;
+    final ValueChanged<List<CalendarAlarm>>? onAdvancedChanged =
+        widget.onAdvancedAlarmsChanged;
+    final bool allowAdvanced = widget.showAdvancedAlarms &&
+        advancedAlarms != null &&
+        onAdvancedChanged != null;
+    final List<CalendarAlarm> resolvedAdvancedAlarms =
+        advancedAlarms ?? _emptyAdvancedAlarms;
+    final bool hasAdvancedData =
+        allowAdvanced && resolvedAdvancedAlarms.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(
-          title: title,
+          title: widget.title,
         ),
         const SizedBox(height: calendarGutterSm),
-        if (!showBothAnchors)
+        if (!widget.showBothAnchors)
           _ReminderSection(
             label: sectionLabel,
             options: options,
@@ -75,11 +134,11 @@ class ReminderPreferencesField extends StatelessWidget {
               _toggled(
                 resolvedValue,
                 offset,
-                anchor: anchor,
+                anchor: widget.anchor,
                 preserveOtherAnchors: false,
               ),
             ),
-            mixed: mixed,
+            mixed: widget.mixed,
             zeroLabel: zeroLabel,
             chipPadding: const EdgeInsets.symmetric(
               horizontal: calendarGutterMd,
@@ -89,7 +148,7 @@ class ReminderPreferencesField extends StatelessWidget {
         else ...[
           _ReminderSection(
             label: _reminderBeforeStartLabel,
-            options: startOptions,
+            options: widget.startOptions,
             selected: resolvedValue.startOffsets,
             onOptionToggled: (Duration offset) => onChanged(
               _toggled(
@@ -99,7 +158,7 @@ class ReminderPreferencesField extends StatelessWidget {
                 preserveOtherAnchors: true,
               ),
             ),
-            mixed: mixed,
+            mixed: widget.mixed,
             zeroLabel: _reminderAtStartLabel,
             chipPadding: const EdgeInsets.symmetric(
               horizontal: calendarGutterMd,
@@ -109,7 +168,7 @@ class ReminderPreferencesField extends StatelessWidget {
           const SizedBox(height: calendarGutterMd),
           _ReminderSection(
             label: _reminderBeforeDeadlineLabel,
-            options: deadlineOptions,
+            options: widget.deadlineOptions,
             selected: resolvedValue.deadlineOffsets,
             onOptionToggled: (Duration offset) => onChanged(
               _toggled(
@@ -119,13 +178,41 @@ class ReminderPreferencesField extends StatelessWidget {
                 preserveOtherAnchors: true,
               ),
             ),
-            mixed: mixed,
+            mixed: widget.mixed,
             zeroLabel: _reminderAtDeadlineLabel,
             chipPadding: const EdgeInsets.symmetric(
               horizontal: calendarGutterMd,
               vertical: calendarGutterSm,
             ),
           ),
+        ],
+        if (allowAdvanced) ...[
+          const SizedBox(height: calendarGutterMd),
+          _ReminderAdvancedToggle(
+            isExpanded: _advancedExpanded,
+            hasAdvancedData: hasAdvancedData,
+            onPressed: () {
+              setState(() => _advancedExpanded = !_advancedExpanded);
+            },
+          ),
+          if (_advancedExpanded) ...[
+            const SizedBox(height: calendarGutterSm),
+            CalendarAlarmsField(
+              alarms: resolvedAdvancedAlarms,
+              title: _reminderAdvancedLabel,
+              referenceStart: widget.referenceStart,
+              showReminderNote: false,
+              onChanged: onAdvancedChanged,
+            ),
+          ] else if (hasAdvancedData) ...[
+            const SizedBox(height: calendarGutterSm),
+            Text(
+              _reminderAdvancedSummary,
+              style: context.textTheme.muted.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -164,6 +251,85 @@ class ReminderPreferencesField extends StatelessWidget {
           deadlineOffsets: nextDeadline,
         )
         .normalized(forceEnabled: true);
+  }
+}
+
+class _ReminderAdvancedToggle extends StatelessWidget {
+  const _ReminderAdvancedToggle({
+    required this.isExpanded,
+    required this.hasAdvancedData,
+    required this.onPressed,
+  });
+
+  final bool isExpanded;
+  final bool hasAdvancedData;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle labelStyle = context.textTheme.small.copyWith(
+      color: calendarSubtitleColor,
+      fontWeight: FontWeight.w700,
+      letterSpacing: _reminderAdvancedLabelLetterSpacing,
+    );
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: calendarGutterSm,
+            vertical: calendarGutterSm,
+          ),
+          child: Row(
+            children: [
+              Text(
+                _reminderAdvancedLabel.toUpperCase(),
+                style: labelStyle,
+              ),
+              if (hasAdvancedData) ...[
+                const SizedBox(width: calendarInsetSm),
+                const _ReminderAdvancedActiveBadge(),
+              ],
+              const Spacer(),
+              Icon(
+                isExpanded ? Icons.expand_less : Icons.expand_more,
+                size: calendarGutterMd,
+                color: calendarSubtitleColor,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReminderAdvancedActiveBadge extends StatelessWidget {
+  const _ReminderAdvancedActiveBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final ShadColorScheme colors = context.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarInsetSm,
+        vertical: calendarInsetSm,
+      ),
+      decoration: BoxDecoration(
+        color: colors.muted.withValues(alpha: _reminderAdvancedBadgeOpacity),
+        borderRadius: BorderRadius.circular(_reminderAdvancedBadgeRadius),
+      ),
+      child: Text(
+        _reminderAdvancedActiveLabel,
+        style: TextStyle(
+          color: colors.mutedForeground,
+          fontSize: _reminderAdvancedBadgeFontSize,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }
 

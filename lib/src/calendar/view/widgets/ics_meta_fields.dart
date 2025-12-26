@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const String _icsMetaSectionTitle = 'Status & visibility';
+const String _icsMetaVisibilityTitle = 'Visibility';
 const String _icsMetaStatusLabel = 'Status';
 const String _icsMetaTransparencyLabel = 'Availability';
 const String _icsMetaDefaultLabel = 'Default';
@@ -20,6 +21,7 @@ class CalendarIcsMetaFields extends StatelessWidget {
     required this.onStatusChanged,
     required this.onTransparencyChanged,
     this.title = _icsMetaSectionTitle,
+    this.showStatus = true,
   });
 
   final CalendarIcsStatus? status;
@@ -27,9 +29,13 @@ class CalendarIcsMetaFields extends StatelessWidget {
   final ValueChanged<CalendarIcsStatus?> onStatusChanged;
   final ValueChanged<CalendarTransparency?> onTransparencyChanged;
   final String title;
+  final bool showStatus;
 
   @override
   Widget build(BuildContext context) {
+    final String resolvedTitle = showStatus || title != _icsMetaSectionTitle
+        ? title
+        : _icsMetaVisibilityTitle;
     final List<ShadOption<CalendarIcsStatus?>> statusOptions = [
       const ShadOption<CalendarIcsStatus?>(
         value: null,
@@ -58,16 +64,18 @@ class CalendarIcsMetaFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(title: title),
+        TaskSectionHeader(title: resolvedTitle),
         const SizedBox(height: calendarGutterSm),
-        _IcsSelectField<CalendarIcsStatus?>(
-          label: _icsMetaStatusLabel,
-          value: status,
-          options: statusOptions,
-          selectedLabel: (status) => status?.label ?? _icsMetaDefaultLabel,
-          onChanged: onStatusChanged,
-        ),
-        const SizedBox(height: calendarGutterMd),
+        if (showStatus) ...[
+          _IcsSelectField<CalendarIcsStatus?>(
+            label: _icsMetaStatusLabel,
+            value: status,
+            options: statusOptions,
+            selectedLabel: (status) => status?.label ?? _icsMetaDefaultLabel,
+            onChanged: onStatusChanged,
+          ),
+          const SizedBox(height: calendarGutterMd),
+        ],
         _IcsSelectField<CalendarTransparency?>(
           label: _icsMetaTransparencyLabel,
           value: transparency,
