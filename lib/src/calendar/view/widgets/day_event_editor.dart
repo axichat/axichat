@@ -114,18 +114,17 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     super.initState();
     _startDate = widget.existing?.normalizedStart ?? widget.initialDate;
     _endDate = widget.existing?.normalizedEnd ?? widget.initialDate;
+    final ReminderPreferences fallbackReminders =
+        widget.existing?.effectiveReminders ?? ReminderPreferences.defaults();
     final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
       widget.existing?.icsMeta?.alarms ?? _emptyAdvancedAlarms,
     );
-    if (existingAlarms.isNotEmpty) {
-      final AlarmReminderSplit split = splitAlarms(existingAlarms);
-      _reminders = split.reminders;
-      _advancedAlarms = split.advancedAlarms;
-    } else {
-      _reminders =
-          widget.existing?.effectiveReminders ?? ReminderPreferences.defaults();
-      _advancedAlarms = _emptyAdvancedAlarms;
-    }
+    final AlarmReminderSplit split = splitAlarmsWithFallback(
+      alarms: existingAlarms,
+      fallback: fallbackReminders,
+    );
+    _reminders = split.reminders;
+    _advancedAlarms = split.advancedAlarms;
     _status = widget.existing?.icsMeta?.status;
     _transparency = widget.existing?.icsMeta?.transparency;
     _categories = List<String>.from(
