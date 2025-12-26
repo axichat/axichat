@@ -504,6 +504,12 @@ class EmailService {
       _transport.addEventListener(_eventListener);
       _listenerAttached = true;
     }
+    final isInitialized =
+        _databasePrefix != null && _databasePassphrase != null;
+    if (!isInitialized) {
+      _log.fine('Email transport start skipped; not provisioned.');
+      return;
+    }
     if (!_running) {
       await start();
     }

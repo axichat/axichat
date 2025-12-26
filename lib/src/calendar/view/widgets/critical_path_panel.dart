@@ -110,9 +110,13 @@ class CriticalPathPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: calendarInsetSm),
-                  Text(
-                    context.l10n.calendarCriticalPathsTitle.toUpperCase(),
-                    style: headerStyle,
+                  Flexible(
+                    child: Text(
+                      context.l10n.calendarCriticalPathsTitle.toUpperCase(),
+                      style: headerStyle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   const Spacer(),
                   if (showingSinglePath && onCloseOrdering != null) ...[
