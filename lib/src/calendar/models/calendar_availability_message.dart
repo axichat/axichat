@@ -25,6 +25,7 @@ class CalendarAvailabilityRequest with _$CalendarAvailabilityRequest {
     required String id,
     required String shareId,
     required String requesterJid,
+    String? ownerJid,
     required CalendarDateTime start,
     required CalendarDateTime end,
     String? title,
