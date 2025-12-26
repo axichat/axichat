@@ -28,6 +28,15 @@ typedef CalendarSearchTileBuilder = Widget Function(
   bool allowContextMenu,
 });
 
+const String _searchHintText =
+    'title:, desc:, location:, category:work, priority:urgent, status:done';
+const String _searchSubtitleText =
+    'Search titles, descriptions, locations, categories, priorities, and deadlines.';
+const String _queryKeyCategory = 'category';
+const String _queryKeyCategoryShort = 'cat';
+const String _queryKeyTag = 'tag';
+const String _queryKeyTags = 'tags';
+
 Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
   required BuildContext context,
   required B bloc,
@@ -141,7 +150,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
         targetPath != null ? 'Add to ${targetPath.name}' : 'Search tasks';
     final String subtitle = targetPath != null
         ? 'Tap a task to append it to the critical path order.'
-        : 'Search titles, descriptions, locations, priorities, and deadlines.';
+        : _searchSubtitleText;
     return BlocBuilder<B, CalendarState>(
       bloc: widget.bloc,
       builder: (context, state) {
@@ -201,8 +210,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                           TaskTextField(
                             controller: _queryController,
                             focusNode: _queryFocusNode,
-                            hintText:
-                                'title:, desc:, location:, priority:urgent, status:done',
+                            hintText: _searchHintText,
                             textInputAction: TextInputAction.search,
                             onSubmitted: _handleSubmitted,
                             onChanged: (_) => setState(() {}),
@@ -641,6 +649,7 @@ class _ParsedQuery {
     required this.titleTerms,
     required this.descriptionTerms,
     required this.locationTerms,
+    required this.categoryTerms,
     required this.priority,
     required this.statusCompleted,
     required this.scheduledFilter,
@@ -654,6 +663,7 @@ class _ParsedQuery {
   final List<String> titleTerms;
   final List<String> descriptionTerms;
   final List<String> locationTerms;
+  final List<String> categoryTerms;
   final TaskPriority? priority;
   final bool? statusCompleted;
   final _ScheduledFilter? scheduledFilter;
@@ -673,6 +683,7 @@ class _ParsedQuery {
         titleTerms: <String>[],
         descriptionTerms: <String>[],
         locationTerms: <String>[],
+        categoryTerms: <String>[],
         priority: null,
         statusCompleted: null,
         scheduledFilter: null,
@@ -687,6 +698,7 @@ class _ParsedQuery {
     final List<String> title = <String>[];
     final List<String> desc = <String>[];
     final List<String> location = <String>[];
+    final List<String> categories = <String>[];
     final List<String> path = <String>[];
     final List<String> ids = <String>[];
     TaskPriority? priority;
@@ -723,6 +735,12 @@ class _ParsedQuery {
           case 'location':
           case 'loc':
             location.add(value);
+            break;
+          case _queryKeyCategory:
+          case _queryKeyCategoryShort:
+          case _queryKeyTag:
+          case _queryKeyTags:
+            categories.add(value);
             break;
           case 'priority':
           case 'p':
@@ -768,6 +786,7 @@ class _ParsedQuery {
       titleTerms: title,
       descriptionTerms: desc,
       locationTerms: location,
+      categoryTerms: categories,
       priority: priority,
       statusCompleted: completed,
       scheduledFilter: scheduleFilter,
@@ -796,6 +815,9 @@ class _QueryMatcher {
     if (!_textMatches(task.location, query.locationTerms)) {
       return false;
     }
+    if (!_categoryMatches(task, query.categoryTerms)) {
+      return false;
+    }
     if (!_priorityMatches(task.priority, query.priority)) {
       return false;
     }
@@ -820,7 +842,8 @@ class _QueryMatcher {
 
     final bool hasScopedTextTerms = query.titleTerms.isNotEmpty ||
         query.descriptionTerms.isNotEmpty ||
-        query.locationTerms.isNotEmpty;
+        query.locationTerms.isNotEmpty ||
+        query.categoryTerms.isNotEmpty;
     final Iterable<String?> defaultFields = <String?>[
       task.title,
       task.description,
@@ -831,6 +854,7 @@ class _QueryMatcher {
       task.deadline?.toIso8601String(),
       task.scheduledTime?.toIso8601String(),
       task.priority?.name,
+      _categoryHaystack(task),
     ];
 
     if (!_matchesAnyField(
@@ -848,6 +872,38 @@ class _QueryMatcher {
     }
     final String haystack = (value ?? '').toLowerCase();
     return terms.every(haystack.contains);
+  }
+
+  static bool _categoryMatches(CalendarTask task, List<String> terms) {
+    if (terms.isEmpty) {
+      return true;
+    }
+    final List<String> categories =
+        task.icsMeta?.categories ?? const <String>[];
+    if (categories.isEmpty) {
+      return false;
+    }
+    final String haystack = categories
+        .map((category) => category.trim().toLowerCase())
+        .where((category) => category.isNotEmpty)
+        .join(' ');
+    if (haystack.isEmpty) {
+      return false;
+    }
+    return terms.every(haystack.contains);
+  }
+
+  static String? _categoryHaystack(CalendarTask task) {
+    final List<String> categories =
+        task.icsMeta?.categories ?? const <String>[];
+    if (categories.isEmpty) {
+      return null;
+    }
+    final String joined = categories
+        .map((category) => category.trim())
+        .where((category) => category.isNotEmpty)
+        .join(' ');
+    return joined.isEmpty ? null : joined;
   }
 
   static bool _priorityMatches(TaskPriority? value, TaskPriority? query) {
