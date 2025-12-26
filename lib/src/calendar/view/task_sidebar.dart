@@ -24,10 +24,12 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
@@ -50,8 +52,11 @@ import 'layout/calendar_layout.dart';
 import 'models/task_context_action.dart';
 import 'widgets/calendar_drag_target.dart';
 import 'widgets/calendar_sidebar_draggable.dart';
+import 'widgets/calendar_categories_field.dart';
+import 'widgets/calendar_link_geo_fields.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
+import 'widgets/ics_meta_fields.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_field_character_hint.dart';
@@ -189,7 +194,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _draftController.recurrence.isActive ||
       _draftController.isImportant ||
       _draftController.isUrgent ||
-      _draftController.reminders != ReminderPreferences.defaults();
+      _draftController.reminders != ReminderPreferences.defaults() ||
+      _draftController.status != null ||
+      _draftController.transparency != null ||
+      _draftController.categories.isNotEmpty ||
+      _draftController.url != null ||
+      _draftController.geo != null;
 
   void handleExternalGridDragStarted({required bool isTouchMode}) {
     if (_externalGridDragActive) {
@@ -412,6 +422,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (!_remindersLocked) {
       _draftController.setReminders(ReminderPreferences.defaults());
     }
+    _draftController
+      ..setStatus(null)
+      ..setTransparency(null)
+      ..setCategories(_emptyCategories)
+      ..setUrl(null)
+      ..setGeo(null);
     if (!_locationLocked && _locationController.text.isNotEmpty) {
       _locationController.clear();
     }
@@ -475,6 +491,26 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _onRemindersChanged(ReminderPreferences value) {
     _remindersLocked = true;
     _draftController.setReminders(value);
+  }
+
+  void _onStatusChanged(CalendarIcsStatus? value) {
+    _draftController.setStatus(value);
+  }
+
+  void _onTransparencyChanged(CalendarTransparency? value) {
+    _draftController.setTransparency(value);
+  }
+
+  void _onCategoriesChanged(List<String> value) {
+    _draftController.setCategories(value);
+  }
+
+  void _onUrlChanged(String? value) {
+    _draftController.setUrl(value);
+  }
+
+  void _onGeoChanged(CalendarGeo? value) {
+    _draftController.setGeo(value);
   }
 
   void _resetParserLocks() {
@@ -880,6 +916,11 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onScheduleCleared: _onUserScheduleCleared,
                         onRecurrenceChanged: _onUserRecurrenceChanged,
                         onRemindersChanged: _onRemindersChanged,
+                        onStatusChanged: _onStatusChanged,
+                        onTransparencyChanged: _onTransparencyChanged,
+                        onCategoriesChanged: _onCategoriesChanged,
+                        onUrlChanged: _onUrlChanged,
+                        onGeoChanged: _onGeoChanged,
                         queuedCriticalPaths: queuedCriticalPaths,
                         onRemoveQueuedCriticalPath: _removeQueuedCriticalPath,
                         onAddTask: () {
@@ -1031,6 +1072,39 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         file: file,
         subject: l10n.calendarExportSelected,
         text: '${l10n.calendarExportSelected} (${format.label})',
+      );
+      if (!mounted) return;
+      FeedbackSystem.showSuccess(
+        context,
+        calendarShareSuccessMessage(
+          outcome: shareOutcome,
+          filePath: file.path,
+          sharedText: l10n.calendarExportReady,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      FeedbackSystem.showError(
+        context,
+        l10n.calendarExportFailed('$error'),
+      );
+    }
+  }
+
+  Future<void> _exportTaskIcs(CalendarTask task) async {
+    final l10n = context.l10n;
+    try {
+      final File file = await _transferService.exportTaskIcs(
+        task: task,
+      );
+      final String trimmedTitle = task.title.trim();
+      final String subject = trimmedTitle.isEmpty
+          ? l10n.calendarExportFormatIcsTitle
+          : trimmedTitle;
+      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        file: file,
+        subject: subject,
+        text: '$subject (${l10n.calendarExportFormatIcsTitle})',
       );
       if (!mounted) return;
       FeedbackSystem.showSuccess(
@@ -1972,6 +2046,11 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         onSelected: () => _copyTaskShareText(task),
       ),
       TaskContextAction(
+        icon: Icons.file_download_outlined,
+        label: context.l10n.calendarExportFormatIcsTitle,
+        onSelected: () => _exportTaskIcs(task),
+      ),
+      TaskContextAction(
         icon: Icons.route,
         label: 'Add to critical path',
         onSelected: () => _showAddToCriticalPathPicker(task),
@@ -2394,6 +2473,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                           priority: updatedTask.priority,
                           isCompleted: updatedTask.isCompleted,
                           checklist: updatedTask.checklist,
+                          icsMeta: updatedTask.icsMeta,
                           modifiedAt: DateTime.now(),
                         );
 
@@ -2649,6 +2729,18 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final hasSchedule =
         _draftController.startTime != null && _draftController.endTime != null;
     final hasRecurrence = _advancedRecurrence.isActive;
+    final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
+      base: null,
+      status: _draftController.status,
+      transparency: _draftController.transparency,
+      categories: resolveCategoryOverride(
+        base: null,
+        categories: _draftController.categories,
+      ),
+      url: _draftController.url,
+      geo: _draftController.geo,
+    );
+    final bool hasIcsMeta = icsMeta != null;
 
     final List<String> queuedPathIds =
         List<String>.from(_queuedCriticalPathIds);
@@ -2658,7 +2750,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         ? locate<B>().state.model.tasks.keys.toSet()
         : null;
 
-    if (!hasLocation && !hasSchedule && !hasRecurrence) {
+    if (!hasLocation && !hasSchedule && !hasRecurrence && !hasIcsMeta) {
       locate<B>().add(
         CalendarEvent.quickTaskAdded(
           text: title,
@@ -2697,6 +2789,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
           recurrence: recurrence,
           checklist: _checklistController.items.toList(),
           reminders: _draftController.reminders,
+          icsMeta: icsMeta,
         ),
       );
     }
@@ -3908,6 +4001,8 @@ final TextStyle _sidebarSectionHeaderStyle = const TextStyle(
   letterSpacing: 0.6,
 ).copyWith(color: calendarSubtitleColor);
 
+const List<String> _emptyCategories = <String>[];
+
 class _AddTaskSection extends StatelessWidget {
   const _AddTaskSection({
     required this.uiState,
@@ -3938,6 +4033,11 @@ class _AddTaskSection extends StatelessWidget {
     required this.addTask,
     required this.onAddToCriticalPath,
     required this.onRemindersChanged,
+    required this.onStatusChanged,
+    required this.onTransparencyChanged,
+    required this.onCategoriesChanged,
+    required this.onUrlChanged,
+    required this.onGeoChanged,
     required this.queuedCriticalPaths,
     required this.onRemoveQueuedCriticalPath,
   });
@@ -3970,6 +4070,11 @@ class _AddTaskSection extends StatelessWidget {
   final VoidCallback addTask;
   final Future<void> Function() onAddToCriticalPath;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final ValueChanged<CalendarIcsStatus?> onStatusChanged;
+  final ValueChanged<CalendarTransparency?> onTransparencyChanged;
+  final ValueChanged<List<String>> onCategoriesChanged;
+  final ValueChanged<String?> onUrlChanged;
+  final ValueChanged<CalendarGeo?> onGeoChanged;
   final List<CalendarCriticalPath> queuedCriticalPaths;
   final ValueChanged<String> onRemoveQueuedCriticalPath;
 
@@ -4071,6 +4176,11 @@ class _AddTaskSection extends StatelessWidget {
                       titleController: titleController,
                       onAddToCriticalPath: onAddToCriticalPath,
                       onRemindersChanged: onRemindersChanged,
+                      onStatusChanged: onStatusChanged,
+                      onTransparencyChanged: onTransparencyChanged,
+                      onCategoriesChanged: onCategoriesChanged,
+                      onUrlChanged: onUrlChanged,
+                      onGeoChanged: onGeoChanged,
                       queuedPaths: queuedCriticalPaths,
                       onRemoveQueuedPath: onRemoveQueuedCriticalPath,
                     )
@@ -4134,6 +4244,11 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
     required this.onRemindersChanged,
+    required this.onStatusChanged,
+    required this.onTransparencyChanged,
+    required this.onCategoriesChanged,
+    required this.onUrlChanged,
+    required this.onGeoChanged,
     required this.onAddTask,
     required this.onAddToCriticalPath,
     required this.queuedCriticalPaths,
@@ -4185,6 +4300,11 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final ValueChanged<CalendarIcsStatus?> onStatusChanged;
+  final ValueChanged<CalendarTransparency?> onTransparencyChanged;
+  final ValueChanged<List<String>> onCategoriesChanged;
+  final ValueChanged<String?> onUrlChanged;
+  final ValueChanged<CalendarGeo?> onGeoChanged;
   final VoidCallback onAddTask;
   final Future<void> Function() onAddToCriticalPath;
   final List<CalendarCriticalPath> queuedCriticalPaths;
@@ -4253,6 +4373,11 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             addTask: onAddTask,
             onAddToCriticalPath: onAddToCriticalPath,
             onRemindersChanged: onRemindersChanged,
+            onStatusChanged: onStatusChanged,
+            onTransparencyChanged: onTransparencyChanged,
+            onCategoriesChanged: onCategoriesChanged,
+            onUrlChanged: onUrlChanged,
+            onGeoChanged: onGeoChanged,
             queuedCriticalPaths: queuedCriticalPaths,
             onRemoveQueuedCriticalPath: onRemoveQueuedCriticalPath,
           ),
@@ -5577,6 +5702,11 @@ class _AdvancedOptions extends StatelessWidget {
     required this.titleController,
     required this.onAddToCriticalPath,
     required this.onRemindersChanged,
+    required this.onStatusChanged,
+    required this.onTransparencyChanged,
+    required this.onCategoriesChanged,
+    required this.onUrlChanged,
+    required this.onGeoChanged,
     required this.queuedPaths,
     required this.onRemoveQueuedPath,
   });
@@ -5594,6 +5724,11 @@ class _AdvancedOptions extends StatelessWidget {
   final TextEditingController titleController;
   final Future<void> Function() onAddToCriticalPath;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final ValueChanged<CalendarIcsStatus?> onStatusChanged;
+  final ValueChanged<CalendarTransparency?> onTransparencyChanged;
+  final ValueChanged<List<String>> onCategoriesChanged;
+  final ValueChanged<String?> onUrlChanged;
+  final ValueChanged<CalendarGeo?> onGeoChanged;
   final List<CalendarCriticalPath> queuedPaths;
   final ValueChanged<String> onRemoveQueuedPath;
 
@@ -5663,6 +5798,40 @@ class _AdvancedOptions extends StatelessWidget {
           _AdvancedRecurrenceSection(
             draftController: draftController,
             onChanged: onRecurrenceChanged,
+          ),
+          const TaskSectionDivider(),
+          AnimatedBuilder(
+            animation: draftController,
+            builder: (context, _) {
+              return CalendarIcsMetaFields(
+                status: draftController.status,
+                transparency: draftController.transparency,
+                onStatusChanged: onStatusChanged,
+                onTransparencyChanged: onTransparencyChanged,
+              );
+            },
+          ),
+          const TaskSectionDivider(),
+          AnimatedBuilder(
+            animation: draftController,
+            builder: (context, _) {
+              return CalendarCategoriesField(
+                categories: draftController.categories,
+                onChanged: onCategoriesChanged,
+              );
+            },
+          ),
+          const TaskSectionDivider(),
+          AnimatedBuilder(
+            animation: draftController,
+            builder: (context, _) {
+              return CalendarLinkGeoFields(
+                url: draftController.url,
+                geo: draftController.geo,
+                onUrlChanged: onUrlChanged,
+                onGeoChanged: onGeoChanged,
+              );
+            },
           ),
           const TaskSectionDivider(
             verticalPadding: calendarGutterLg,

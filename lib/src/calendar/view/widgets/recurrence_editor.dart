@@ -10,6 +10,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const String _recurrenceFrequencyYearlyLabel = 'Yearly';
+const String _recurrenceIntervalYearLabel = 'year(s)';
+
 class RecurrenceFormValue {
   const RecurrenceFormValue({
     this.frequency = RecurrenceFrequency.none,
@@ -131,6 +134,13 @@ class RecurrenceFormValue {
       case RecurrenceFrequency.monthly:
         return RecurrenceRule(
           frequency: RecurrenceFrequency.monthly,
+          interval: normalized.interval,
+          until: effectiveUntil,
+          count: normalized.count,
+        );
+      case RecurrenceFrequency.yearly:
+        return RecurrenceRule(
+          frequency: RecurrenceFrequency.yearly,
           interval: normalized.interval,
           until: effectiveUntil,
           count: normalized.count,
@@ -351,6 +361,8 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
         return 'Weekly';
       case RecurrenceFrequency.monthly:
         return 'Monthly';
+      case RecurrenceFrequency.yearly:
+        return _recurrenceFrequencyYearlyLabel;
     }
   }
 
@@ -358,6 +370,8 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     switch (frequency) {
       case RecurrenceFrequency.monthly:
         return 'month(s)';
+      case RecurrenceFrequency.yearly:
+        return _recurrenceIntervalYearLabel;
       case RecurrenceFrequency.weekly:
       case RecurrenceFrequency.weekdays:
         return 'week(s)';
@@ -658,12 +672,14 @@ class _RecurrenceLimitSolver {
             : (value.weekdays.isNotEmpty
                 ? Set<int>.from(value.weekdays)
                 : {anchor.weekday}),
-        _anchorDay = anchor.day;
+        _anchorDay = anchor.day,
+        _anchorMonth = anchor.month;
 
   final DateTime anchor;
   final RecurrenceFormValue value;
   final Set<int> _effectiveWeekdays;
   final int _anchorDay;
+  final int _anchorMonth;
 
   static const int _maxIterations = 5000;
 
@@ -709,6 +725,8 @@ class _RecurrenceLimitSolver {
         return _advanceWeekly(current);
       case RecurrenceFrequency.monthly:
         return _advanceMonthly(current);
+      case RecurrenceFrequency.yearly:
+        return _advanceYearly(current);
     }
   }
 
@@ -739,6 +757,22 @@ class _RecurrenceLimitSolver {
     return DateTime(
       year,
       month,
+      day,
+      current.hour,
+      current.minute,
+      current.second,
+      current.millisecond,
+      current.microsecond,
+    );
+  }
+
+  DateTime _advanceYearly(DateTime current) {
+    final int intervalYears = math.max(value.interval, 1);
+    final int year = current.year + intervalYears;
+    final int day = _clampDay(_anchorDay, year, _anchorMonth);
+    return DateTime(
+      year,
+      _anchorMonth,
       day,
       current.hour,
       current.minute,

@@ -265,6 +265,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
           checklist: task.checklist,
           endDate: task.endDate,
           reminders: task.reminders,
+          icsMeta: task.icsMeta,
         ),
       ),
     );

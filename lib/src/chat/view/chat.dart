@@ -1263,8 +1263,8 @@ class _ChatState extends State<Chat> {
     try {
       final parsed = mox.JID.fromString(trimmed);
       final bare = parsed.toBare().toString().toLowerCase();
-      final resource = parsed.resource?.trim();
-      if (resource == null || resource.isEmpty) {
+      final resource = parsed.resource.trim();
+      if (resource.isEmpty) {
         return bare;
       }
       return '$bare$_jidResourceSeparator${resource.toLowerCase()}';
@@ -2933,9 +2933,7 @@ class _ChatState extends State<Chat> {
                     context
                         .read<ChatBloc>()
                         .add(const ChatMessageFocused(null));
-                    context
-                        .read<ChatsCubit?>()
-                        ?.setChatCalendarOpen(open: false);
+                    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
                     setState(() {
                       _chatRoute = _ChatRoute.main;
                       _settingsPanelExpanded = false;
@@ -2980,9 +2978,7 @@ class _ChatState extends State<Chat> {
                     _chatRoute == _ChatRoute.calendar) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
-                    context
-                        .read<ChatsCubit?>()
-                        ?.setChatCalendarOpen(open: false);
+                    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
                     setState(() {
                       _chatRoute = _ChatRoute.main;
                       _settingsPanelExpanded = false;
@@ -6737,7 +6733,7 @@ class _ChatState extends State<Chat> {
 
   void _openChatCalendar() {
     if (!mounted) return;
-    context.read<ChatsCubit?>()?.setChatCalendarOpen(open: true);
+    context.read<ChatsCubit>().setChatCalendarOpen(open: true);
     setState(() {
       _chatRoute = _ChatRoute.calendar;
       _settingsPanelExpanded = false;
@@ -6749,7 +6745,7 @@ class _ChatState extends State<Chat> {
 
   void _closeChatCalendar() {
     if (!mounted) return;
-    context.read<ChatsCubit?>()?.setChatCalendarOpen(open: false);
+    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
     setState(() {
       _chatRoute = _ChatRoute.main;
     });
