@@ -36,7 +36,7 @@ class AccessibilityActionState extends Equatable {
         activeChatJid = null,
         discardWarningActive = false,
         messageInitialIndex = null,
-        attachments = const {};
+        attachments = const <String, List<FileMetadataData>>{};
 
   final bool visible;
   final List<AccessibilityStepEntry> stack;
@@ -51,7 +51,7 @@ class AccessibilityActionState extends Equatable {
   final String? activeChatJid;
   final bool discardWarningActive;
   final int? messageInitialIndex;
-  final Map<String, FileMetadataData> attachments;
+  final Map<String, List<FileMetadataData>> attachments;
 
   AccessibilityStepEntry get currentEntry => stack.last;
 
@@ -69,7 +69,7 @@ class AccessibilityActionState extends Equatable {
     Object? activeChatJid = _unset,
     bool? discardWarningActive,
     Object? messageInitialIndex = _unset,
-    Map<String, FileMetadataData>? attachments,
+    Map<String, List<FileMetadataData>>? attachments,
   }) =>
       AccessibilityActionState(
         visible: visible ?? this.visible,

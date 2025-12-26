@@ -68,15 +68,20 @@ final class XhtmlImManager extends mox.XmppManagerBase {
         htmlNode.firstTag(_xhtmlImBodyTag);
     if (bodyNode == null) return state;
     final markup = _xhtmlBodyMarkup(bodyNode);
-    if (markup.isEmpty) return state;
+    final markupPlain = HtmlContentCodec.toPlainText(markup);
+    final fallbackPlain = _plainBodyText(message);
+    final resolvedPlain = markupPlain.isNotEmpty ? markupPlain : fallbackPlain;
+    final resolvedMarkup = (markupPlain.isNotEmpty || fallbackPlain.isEmpty)
+        ? markup
+        : HtmlContentCodec.fromPlainText(fallbackPlain);
+    if (resolvedPlain.isEmpty && resolvedMarkup.isEmpty) return state;
     final lang = bodyNode.attributes[_xmlLangAttr]?.toString() ??
         bodyNode.attributes[_langAttr]?.toString();
-    final plainText = HtmlContentCodec.toPlainText(markup);
     return state
       ..extensions.set(
         XhtmlImData(
-          xhtmlBody: markup,
-          plainText: plainText,
+          xhtmlBody: resolvedMarkup,
+          plainText: resolvedPlain,
           lang: lang?.isNotEmpty == true ? lang : null,
         ),
       );
@@ -103,22 +108,7 @@ final class XhtmlImManager extends mox.XmppManagerBase {
   bool _shouldIncludePlainBody(
     mox.TypedMap<mox.StanzaHandlerExtension> extensions,
   ) {
-    if (extensions.get<mox.ReplyData>() != null) {
-      return false;
-    }
-    if (extensions.get<mox.MessageBodyData>() == null) {
-      return true;
-    }
-    if (extensions.get<mox.OOBData>() != null) {
-      return true;
-    }
-    if (extensions.get<mox.StatelessFileSharingData>() != null) {
-      return true;
-    }
-    if (extensions.get<mox.StickersData>() != null) {
-      return true;
-    }
-    return false;
+    return extensions.get<mox.MessageBodyData>() == null;
   }
 
   String _xhtmlBodyMarkup(mox.XMLNode body) {
@@ -131,6 +121,12 @@ final class XhtmlImManager extends mox.XmppManagerBase {
       buffer.write(child.toXml());
     }
     return buffer.toString().trim();
+  }
+
+  String _plainBodyText(mox.Stanza message) {
+    final bodyNode = message.firstTag(_xhtmlImBodyTag);
+    if (bodyNode == null) return '';
+    return bodyNode.innerText().trim();
   }
 
   @override

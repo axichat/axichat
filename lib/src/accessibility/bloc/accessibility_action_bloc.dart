@@ -149,7 +149,7 @@ class AccessibilityActionBloc
       activeChatJid: null,
       discardWarningActive: false,
       recipients: const [],
-      attachments: const {},
+      attachments: const <String, List<FileMetadataData>>{},
     );
     emit(nextState);
     _rebuildSections(emit, nextState);
@@ -194,7 +194,9 @@ class AccessibilityActionBloc
       newContactInput: '',
       recipients: nextStack.last.recipients,
       discardWarningActive: false,
-      attachments: keepChatMessages ? state.attachments : const {},
+      attachments: keepChatMessages
+          ? state.attachments
+          : const <String, List<FileMetadataData>>{},
     );
     emit(nextState);
     _rebuildSections(emit, nextState);
@@ -217,7 +219,7 @@ class AccessibilityActionBloc
       activeChatJid: null,
       discardWarningActive: false,
       recipients: const [],
-      attachments: const {},
+      attachments: const <String, List<FileMetadataData>>{},
     );
     emit(nextState);
     _rebuildSections(emit, nextState);
@@ -967,7 +969,7 @@ class AccessibilityActionBloc
       recipients: [contact],
       activeChatJid: contact.jid,
       messages: const [],
-      attachments: const {},
+      attachments: const <String, List<FileMetadataData>>{},
       statusMessage: null,
       errorMessage: null,
       discardWarningActive: false,
@@ -1030,30 +1032,76 @@ class AccessibilityActionBloc
     _rebuildSections(emit, nextState);
   }
 
-  Future<Map<String, FileMetadataData>> _loadAttachments(
+  Future<Map<String, List<FileMetadataData>>> _loadAttachments(
     List<Message> messages,
   ) async {
-    final pairs = <String, String>{};
-    for (final message in messages) {
-      final metadataId = message.fileMetadataID;
-      if (metadataId != null && metadataId.isNotEmpty) {
-        pairs[_messageId(message)] = metadataId;
-      }
+    if (messages.isEmpty) {
+      return const <String, List<FileMetadataData>>{};
     }
-    if (pairs.isEmpty) return const {};
     try {
       final db = await _messageService.database;
-      final results = <String, FileMetadataData>{};
-      for (final entry in pairs.entries) {
-        final metadata = await db.getFileMetadata(entry.value);
-        if (metadata != null) {
-          results[entry.key] = metadata;
+      final messageIds = <String>[];
+      final messageKeys = <String, String>{};
+      for (final message in messages) {
+        final messageId = message.id;
+        if (messageId == null || messageId.isEmpty) {
+          continue;
+        }
+        messageIds.add(messageId);
+        messageKeys[messageId] = _messageId(message);
+      }
+      final metadataCache = <String, FileMetadataData?>{};
+      Future<FileMetadataData?> resolveMetadata(String metadataId) async {
+        if (metadataCache.containsKey(metadataId)) {
+          return metadataCache[metadataId];
+        }
+        final resolved = await db.getFileMetadata(metadataId);
+        metadataCache[metadataId] = resolved;
+        return resolved;
+      }
+
+      final attachmentsByMessage = <String, List<FileMetadataData>>{};
+      if (messageIds.isNotEmpty) {
+        final attachments =
+            await db.getMessageAttachmentsForMessages(messageIds);
+        for (final entry in attachments.entries) {
+          final ordered = entry.value
+              .whereType<MessageAttachmentData>()
+              .toList(growable: false)
+            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          final resolved = <FileMetadataData>[];
+          for (final attachment in ordered) {
+            final metadata = await resolveMetadata(attachment.fileMetadataId);
+            if (metadata != null) {
+              resolved.add(metadata);
+            }
+          }
+          if (resolved.isEmpty) {
+            continue;
+          }
+          final key = messageKeys[entry.key] ?? entry.key;
+          attachmentsByMessage[key] = resolved;
         }
       }
-      return results;
+
+      for (final message in messages) {
+        final key = _messageId(message);
+        if (attachmentsByMessage.containsKey(key)) {
+          continue;
+        }
+        final fallbackId = message.fileMetadataID?.trim();
+        if (fallbackId == null || fallbackId.isEmpty) {
+          continue;
+        }
+        final metadata = await resolveMetadata(fallbackId);
+        if (metadata != null) {
+          attachmentsByMessage[key] = [metadata];
+        }
+      }
+      return attachmentsByMessage;
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to load attachment metadata', error, stackTrace);
-      return const {};
+      return const <String, List<FileMetadataData>>{};
     }
   }
 
@@ -1410,9 +1458,11 @@ class AccessibilityActionBloc
     for (final message in messages) {
       final senderLabel = _senderLabelFor(message);
       final timestampLabel = _formatTimestamp(message.timestamp);
-      final attachment = attachmentIndex[_messageId(message)];
+      final attachments = attachmentIndex[_messageId(message)] ?? const [];
+      final attachment = attachments.isNotEmpty ? attachments.first : null;
       final body = (message.body ?? '').trim();
-      final attachmentNote = _attachmentLabelFor(message, metadata: attachment);
+      final attachmentNote =
+          _attachmentLabelFor(message, metadata: attachments);
       final fullBody = body.isNotEmpty
           ? body
           : (attachmentNote ?? _l10n.accessibilityMessageNoContent);
@@ -1610,13 +1660,15 @@ class AccessibilityActionBloc
 
   String? _attachmentLabelFor(
     Message message, {
-    FileMetadataData? metadata,
+    List<FileMetadataData>? metadata,
   }) {
-    final filename = metadata?.filename.trim();
+    final resolvedMetadata =
+        metadata == null || metadata.isEmpty ? null : metadata.first;
+    final filename = resolvedMetadata?.filename.trim();
     if (filename != null && filename.isNotEmpty) {
       return _l10n.accessibilityAttachmentWithName(filename);
     }
-    if (message.fileMetadataID != null) {
+    if (metadata?.isNotEmpty == true || message.fileMetadataID != null) {
       return _l10n.accessibilityAttachmentGeneric;
     }
     if (message.isFileUploadNotification) {
