@@ -94,18 +94,18 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       initialItems: widget.editingTask?.checklist ?? const [],
     );
     _titleController.addListener(_handleTitleChanged);
+    final ReminderPreferences fallbackReminders =
+        widget.editingTask?.effectiveReminders ??
+            ReminderPreferences.defaults();
     final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
       widget.editingTask?.icsMeta?.alarms ?? _emptyAdvancedAlarms,
     );
-    if (existingAlarms.isNotEmpty) {
-      final AlarmReminderSplit split = splitAlarms(existingAlarms);
-      _reminders = split.reminders;
-      _advancedAlarms = split.advancedAlarms;
-    } else {
-      _reminders = widget.editingTask?.effectiveReminders ??
-          ReminderPreferences.defaults();
-      _advancedAlarms = _emptyAdvancedAlarms;
-    }
+    final AlarmReminderSplit split = splitAlarmsWithFallback(
+      alarms: existingAlarms,
+      fallback: fallbackReminders,
+    );
+    _reminders = split.reminders;
+    _advancedAlarms = split.advancedAlarms;
     _status = widget.editingTask?.icsMeta?.status;
     _transparency = widget.editingTask?.icsMeta?.transparency;
     _categories = List<String>.from(

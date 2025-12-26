@@ -203,17 +203,16 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _deadline = task.deadline;
       _recurrence = RecurrenceFormValue.fromRule(task.recurrence)
           .resolveLinkedLimits(_startTime ?? task.scheduledTime);
+      final ReminderPreferences fallbackReminders = task.effectiveReminders;
       final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
         task.icsMeta?.alarms ?? _emptyAdvancedAlarms,
       );
-      if (existingAlarms.isNotEmpty) {
-        final AlarmReminderSplit split = splitAlarms(existingAlarms);
-        _reminders = split.reminders;
-        _advancedAlarms = split.advancedAlarms;
-      } else {
-        _reminders = task.effectiveReminders;
-        _advancedAlarms = _emptyAdvancedAlarms;
-      }
+      final AlarmReminderSplit split = splitAlarmsWithFallback(
+        alarms: existingAlarms,
+        fallback: fallbackReminders,
+      );
+      _reminders = split.reminders;
+      _advancedAlarms = split.advancedAlarms;
       _status = task.icsMeta?.status;
       _transparency = task.icsMeta?.transparency;
       _categories =
