@@ -1,12 +1,25 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/models/calendar_attachment.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/calendar_share.dart';
+import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_attachments_field.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_categories_field.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_link_geo_fields.dart';
+import 'package:axichat/src/calendar/view/widgets/ics_meta_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+
+const List<String> _emptyCategories = <String>[];
+const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 
 class DayEventDraft {
   const DayEventDraft({
@@ -15,6 +28,7 @@ class DayEventDraft {
     required this.endDate,
     this.description,
     required this.reminders,
+    this.icsMeta,
   });
 
   final String title;
@@ -22,6 +36,7 @@ class DayEventDraft {
   final DateTime endDate;
   final String? description;
   final ReminderPreferences reminders;
+  final CalendarIcsMeta? icsMeta;
 }
 
 class DayEventEditorResult {
@@ -75,12 +90,20 @@ class _DayEventEditorForm extends StatefulWidget {
 
 class _DayEventEditorFormState extends State<_DayEventEditorForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final CalendarTransferService _transferService =
+      const CalendarTransferService();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   final FocusNode _titleFocusNode = FocusNode();
   late DateTime _startDate;
   late DateTime _endDate;
   late ReminderPreferences _reminders;
+  CalendarIcsStatus? _status;
+  CalendarTransparency? _transparency;
+  List<String> _categories = _emptyCategories;
+  String? _url;
+  CalendarGeo? _geo;
+  List<CalendarAttachment> _attachments = _emptyAttachments;
 
   @override
   void initState() {
@@ -89,6 +112,16 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     _endDate = widget.existing?.normalizedEnd ?? widget.initialDate;
     _reminders =
         widget.existing?.effectiveReminders ?? ReminderPreferences.defaults();
+    _status = widget.existing?.icsMeta?.status;
+    _transparency = widget.existing?.icsMeta?.transparency;
+    _categories = List<String>.from(
+      widget.existing?.icsMeta?.categories ?? _emptyCategories,
+    );
+    _url = widget.existing?.icsMeta?.url;
+    _geo = widget.existing?.icsMeta?.geo;
+    _attachments = List<CalendarAttachment>.from(
+      widget.existing?.icsMeta?.attachments ?? _emptyAttachments,
+    );
     _titleController = TextEditingController(text: widget.existing?.title);
     _descriptionController =
         TextEditingController(text: widget.existing?.description);
@@ -134,6 +167,11 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                   const DayEventEditorResult.deleted(),
                 ),
               ),
+            TaskSecondaryButton(
+              label: context.l10n.calendarExportFormatIcsTitle,
+              icon: Icons.file_download_outlined,
+              onPressed: canSubmit ? _exportIcs : null,
+            ),
             TaskSecondaryButton(
               label: context.l10n.commonCancel,
               onPressed: () => Navigator.of(context).maybePop(),
@@ -262,6 +300,45 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       title: 'Reminder',
                       anchor: ReminderAnchor.start,
                     ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarIcsMetaFields(
+                      status: _status,
+                      transparency: _transparency,
+                      onStatusChanged: (value) =>
+                          setState(() => _status = value),
+                      onTransparencyChanged: (value) =>
+                          setState(() => _transparency = value),
+                    ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarCategoriesField(
+                      categories: _categories,
+                      onChanged: (value) => setState(() => _categories = value),
+                    ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarLinkGeoFields(
+                      url: _url,
+                      geo: _geo,
+                      onUrlChanged: (value) => setState(() => _url = value),
+                      onGeoChanged: (value) => setState(() => _geo = value),
+                    ),
+                    if (_attachments.isNotEmpty) ...[
+                      TaskSectionDivider(
+                        color: colors.border,
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarAttachmentsField(
+                        attachments: _attachments,
+                      ),
+                    ],
                     if (keyboardOpen) ...[
                       const SizedBox(height: calendarGutterMd),
                       actions,
@@ -284,17 +361,25 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
 
   void _handleTitleChanged(String value) {}
 
-  void _submit() {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      _titleFocusNode.requestFocus();
-      return;
-    }
+  DayEventDraft _currentDraft() {
     final String title = _titleController.text.trim();
     final DateTime normalizedStart =
         DateTime(_startDate.year, _startDate.month, _startDate.day);
     final DateTime normalizedEnd =
         DateTime(_endDate.year, _endDate.month, _endDate.day);
-    final DayEventDraft draft = DayEventDraft(
+    final List<String>? categories = resolveCategoryOverride(
+      base: widget.existing?.icsMeta,
+      categories: _categories,
+    );
+    final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
+      base: widget.existing?.icsMeta,
+      status: _status,
+      transparency: _transparency,
+      categories: categories,
+      url: _url,
+      geo: _geo,
+    );
+    return DayEventDraft(
       title: title,
       description: _descriptionController.text.trim().isEmpty
           ? null
@@ -302,7 +387,72 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       startDate: normalizedStart,
       endDate: normalizedEnd,
       reminders: _reminders.normalized(),
+      icsMeta: icsMeta,
     );
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _titleFocusNode.requestFocus();
+      return;
+    }
+    final DayEventDraft draft = _currentDraft();
     Navigator.of(context).pop(DayEventEditorResult.save(draft));
+  }
+
+  Future<void> _exportIcs() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _titleFocusNode.requestFocus();
+      return;
+    }
+    final DayEventDraft draft = _currentDraft();
+    final DayEvent event = widget.existing == null
+        ? DayEvent.create(
+            title: draft.title,
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            description: draft.description,
+            reminders: draft.reminders,
+            icsMeta: draft.icsMeta,
+          )
+        : widget.existing!.normalizedCopy(
+            title: draft.title,
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            description: draft.description,
+            reminders: draft.reminders,
+            icsMeta: draft.icsMeta,
+            modifiedAt: DateTime.now(),
+          );
+    final l10n = context.l10n;
+    final String trimmedTitle = draft.title.trim();
+    final String subject =
+        trimmedTitle.isEmpty ? l10n.calendarExportFormatIcsTitle : trimmedTitle;
+    final String shareText = '$subject (${l10n.calendarExportFormatIcsTitle})';
+
+    try {
+      final file = await _transferService.exportDayEventIcs(event: event);
+      if (!mounted) return;
+      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        file: file,
+        subject: subject,
+        text: shareText,
+      );
+      if (!mounted) return;
+      FeedbackSystem.showSuccess(
+        context,
+        calendarShareSuccessMessage(
+          outcome: shareOutcome,
+          filePath: file.path,
+          sharedText: l10n.calendarExportReady,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      FeedbackSystem.showError(
+        context,
+        l10n.calendarExportFailed('$error'),
+      );
+    }
   }
 }

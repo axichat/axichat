@@ -30,6 +30,8 @@ const String _icsComponentVfreebusy = 'VFREEBUSY';
 const String _icsComponentVavailability = 'VAVAILABILITY';
 const String _icsComponentAvailable = 'AVAILABLE';
 
+const String _icsFrequencyYearly = 'YEARLY';
+
 const String _icsPropertyBegin = 'BEGIN';
 const String _icsPropertyEnd = 'END';
 const String _icsPropertyProdId = 'PRODID';
@@ -2496,6 +2498,8 @@ RecurrenceFrequency _parseFrequency(
       return RecurrenceFrequency.weekly;
     case 'MONTHLY':
       return RecurrenceFrequency.monthly;
+    case _icsFrequencyYearly:
+      return RecurrenceFrequency.yearly;
     default:
       return RecurrenceFrequency.none;
   }
@@ -3283,6 +3287,14 @@ void _writeDayEventComponent(_IcsWriter writer, DayEvent event) {
     defaultPrivacyClass: _defaultPrivacyClass,
     defaultTransparency: _defaultDayEventTransparency,
   );
+  final CalendarIcsStatus? status = meta?.status;
+  if (status != null) {
+    writer.writeProperty(
+      _icsPropertyStatus,
+      status.icsValue,
+      escapeText: false,
+    );
+  }
   writer.writeProperty(_icsPropertySummary, event.title);
   if (event.description != null && event.description!.isNotEmpty) {
     writer.writeProperty(_icsPropertyDescription, event.description!);
@@ -4051,6 +4063,8 @@ String _frequencyValue(RecurrenceRule rule) {
       return 'WEEKLY';
     case RecurrenceFrequency.monthly:
       return 'MONTHLY';
+    case RecurrenceFrequency.yearly:
+      return _icsFrequencyYearly;
     case RecurrenceFrequency.none:
       return 'DAILY';
   }

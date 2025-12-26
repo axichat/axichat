@@ -7,8 +7,11 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_attachment.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/controllers/task_checklist_controller.dart';
@@ -16,11 +19,18 @@ import 'package:axichat/src/calendar/view/widgets/task_checklist.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'widgets/calendar_categories_field.dart';
+import 'widgets/calendar_attachments_field.dart';
+import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/ics_meta_fields.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'error_display.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_field_character_hint.dart';
+
+const List<String> _emptyCategories = <String>[];
+const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 
 class UnifiedTaskInput<T extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarTask? editingTask;
@@ -44,6 +54,12 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   late final TextEditingController _descriptionController;
   late final TaskChecklistController _checklistController;
   late ReminderPreferences _reminders;
+  CalendarIcsStatus? _status;
+  CalendarTransparency? _transparency;
+  List<String> _categories = _emptyCategories;
+  String? _url;
+  CalendarGeo? _geo;
+  List<CalendarAttachment> _attachments = _emptyAttachments;
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -76,6 +92,16 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     _titleController.addListener(_handleTitleChanged);
     _reminders = widget.editingTask?.effectiveReminders ??
         ReminderPreferences.defaults();
+    _status = widget.editingTask?.icsMeta?.status;
+    _transparency = widget.editingTask?.icsMeta?.transparency;
+    _categories = List<String>.from(
+      widget.editingTask?.icsMeta?.categories ?? _emptyCategories,
+    );
+    _url = widget.editingTask?.icsMeta?.url;
+    _geo = widget.editingTask?.icsMeta?.geo;
+    _attachments = List<CalendarAttachment>.from(
+      widget.editingTask?.icsMeta?.attachments ?? _emptyAttachments,
+    );
 
     if (widget.editingTask != null) {
       _selectedDate = widget.editingTask!.scheduledTime != null
@@ -142,6 +168,17 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
           _reminders = value;
         });
       },
+      status: _status,
+      transparency: _transparency,
+      onStatusChanged: (value) => setState(() => _status = value),
+      onTransparencyChanged: (value) => setState(() => _transparency = value),
+      categories: _categories,
+      onCategoriesChanged: (value) => setState(() => _categories = value),
+      url: _url,
+      geo: _geo,
+      onUrlChanged: (value) => setState(() => _url = value),
+      onGeoChanged: (value) => setState(() => _geo = value),
+      attachments: _attachments,
     );
     final Widget saveButton = _UnifiedTaskSaveButton<T>(
       isSubmitting: _isSubmitting,
@@ -237,6 +274,19 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       );
     }
 
+    final List<String>? categories = resolveCategoryOverride(
+      base: widget.editingTask?.icsMeta,
+      categories: _categories,
+    );
+    final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
+      base: widget.editingTask?.icsMeta,
+      status: _status,
+      transparency: _transparency,
+      categories: categories,
+      url: _url,
+      geo: _geo,
+    );
+
     // Clear any previous errors
     context.read<T>().add(const CalendarEvent.errorCleared());
 
@@ -249,6 +299,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
         modifiedAt: DateTime.now(),
         checklist: checklist,
         reminders: _reminders.normalized(),
+        icsMeta: icsMeta,
       );
 
       context.read<T>().add(
@@ -263,6 +314,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
               duration: _selectedDuration,
               checklist: checklist,
               reminders: _reminders.normalized(),
+              icsMeta: icsMeta,
             ),
           );
     }
@@ -418,6 +470,17 @@ class _UnifiedTaskForm extends StatelessWidget {
     required this.checklistController,
     required this.reminders,
     required this.onRemindersChanged,
+    required this.status,
+    required this.transparency,
+    required this.onStatusChanged,
+    required this.onTransparencyChanged,
+    required this.categories,
+    required this.onCategoriesChanged,
+    required this.url,
+    required this.geo,
+    required this.onUrlChanged,
+    required this.onGeoChanged,
+    required this.attachments,
   });
 
   final GlobalKey<FormState> formKey;
@@ -436,6 +499,17 @@ class _UnifiedTaskForm extends StatelessWidget {
   final String Function(Duration) formatDuration;
   final ReminderPreferences reminders;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final CalendarIcsStatus? status;
+  final CalendarTransparency? transparency;
+  final ValueChanged<CalendarIcsStatus?> onStatusChanged;
+  final ValueChanged<CalendarTransparency?> onTransparencyChanged;
+  final List<String> categories;
+  final ValueChanged<List<String>> onCategoriesChanged;
+  final String? url;
+  final CalendarGeo? geo;
+  final ValueChanged<String?> onUrlChanged;
+  final ValueChanged<CalendarGeo?> onGeoChanged;
+  final List<CalendarAttachment> attachments;
 
   @override
   Widget build(BuildContext context) {
@@ -476,6 +550,31 @@ class _UnifiedTaskForm extends StatelessWidget {
               value: reminders,
               onChanged: onRemindersChanged,
             ),
+            const SizedBox(height: calendarGutterLg),
+            CalendarIcsMetaFields(
+              status: status,
+              transparency: transparency,
+              onStatusChanged: onStatusChanged,
+              onTransparencyChanged: onTransparencyChanged,
+            ),
+            const SizedBox(height: calendarGutterLg),
+            CalendarCategoriesField(
+              categories: categories,
+              onChanged: onCategoriesChanged,
+            ),
+            const SizedBox(height: calendarGutterLg),
+            CalendarLinkGeoFields(
+              url: url,
+              geo: geo,
+              onUrlChanged: onUrlChanged,
+              onGeoChanged: onGeoChanged,
+            ),
+            if (attachments.isNotEmpty) ...[
+              const SizedBox(height: calendarGutterLg),
+              CalendarAttachmentsField(
+                attachments: attachments,
+              ),
+            ],
           ],
         ),
       ),

@@ -8,8 +8,11 @@ import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_attachment.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/schedule_range_utils.dart';
@@ -18,11 +21,18 @@ import 'models/task_context_action.dart';
 import 'controllers/task_checklist_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/critical_path_panel.dart';
+import 'widgets/ics_meta_fields.dart';
+import 'widgets/calendar_categories_field.dart';
+import 'widgets/calendar_attachments_field.dart';
+import 'widgets/calendar_link_geo_fields.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/reminder_preferences_field.dart';
+
+const List<String> _emptyCategories = <String>[];
+const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 
 class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   const EditTaskDropdown({
@@ -76,6 +86,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
   RecurrenceFormValue _recurrence = const RecurrenceFormValue();
   ReminderPreferences _reminders = ReminderPreferences.defaults();
+  CalendarIcsStatus? _status;
+  CalendarTransparency? _transparency;
+  List<String> _categories = _emptyCategories;
+  String? _url;
+  CalendarGeo? _geo;
+  List<CalendarAttachment> _attachments = _emptyAttachments;
 
   @override
   void initState() {
@@ -158,6 +174,15 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _recurrence = RecurrenceFormValue.fromRule(task.recurrence)
           .resolveLinkedLimits(_startTime ?? task.scheduledTime);
       _reminders = task.effectiveReminders;
+      _status = task.icsMeta?.status;
+      _transparency = task.icsMeta?.transparency;
+      _categories =
+          List<String>.from(task.icsMeta?.categories ?? _emptyCategories);
+      _url = task.icsMeta?.url;
+      _geo = task.icsMeta?.geo;
+      _attachments = List<CalendarAttachment>.from(
+        task.icsMeta?.attachments ?? _emptyAttachments,
+      );
     }
 
     if (rebuild && mounted) {
@@ -305,6 +330,41 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       fallbackWeekday: _recurrenceFallbackWeekday,
                       onChanged: _handleRecurrenceChanged,
                     ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarIcsMetaFields(
+                      status: _status,
+                      transparency: _transparency,
+                      onStatusChanged: (value) =>
+                          setState(() => _status = value),
+                      onTransparencyChanged: (value) =>
+                          setState(() => _transparency = value),
+                    ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarCategoriesField(
+                      categories: _categories,
+                      onChanged: (value) => setState(() => _categories = value),
+                    ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarLinkGeoFields(
+                      url: _url,
+                      geo: _geo,
+                      onUrlChanged: (value) => setState(() => _url = value),
+                      onGeoChanged: (value) => setState(() => _geo = value),
+                    ),
+                    if (_attachments.isNotEmpty) ...[
+                      const TaskSectionDivider(
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarAttachmentsField(
+                        attachments: _attachments,
+                      ),
+                    ],
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
                     ),
@@ -489,6 +549,19 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             .toRule(start: recurrenceAnchor)
         : null;
 
+    final List<String>? categories = resolveCategoryOverride(
+      base: widget.task.icsMeta,
+      categories: _categories,
+    );
+    final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
+      base: widget.task.icsMeta,
+      status: _status,
+      transparency: _transparency,
+      categories: categories,
+      url: _url,
+      geo: _geo,
+    );
+
     final updatedTask = widget.task.copyWith(
       title: title,
       description: _descriptionController.text.trim().isEmpty
@@ -506,6 +579,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       recurrence: recurrence?.isNone == true ? null : recurrence,
       checklist: _checklistController.items.toList(),
       reminders: _reminders,
+      icsMeta: icsMeta,
     );
 
     if (widget.task.isOccurrence && widget.onOccurrenceUpdated != null) {

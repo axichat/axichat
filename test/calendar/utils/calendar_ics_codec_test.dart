@@ -1,3 +1,4 @@
+import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
@@ -27,7 +28,6 @@ void main() {
     const String uidLabel = 'UID:';
     const String summaryLabel = 'SUMMARY:';
     const String rruleLabel = 'RRULE:';
-    const String rruleName = 'RRULE';
     const String dtStampLine = 'DTSTAMP:20240101T000000Z';
     const String allDayStartLine = 'DTSTART;VALUE=DATE:20240101';
     const String allDayEndLine = 'DTEND;VALUE=DATE:20240103';
@@ -86,6 +86,30 @@ void main() {
     const String allDaySummary = 'All Day';
     const String todoUid = 'todo-1';
     const String todoSummary = 'After Alarm';
+    const String metaEventUid = 'event-meta';
+    const String metaEventSummary = 'Meta Event';
+    const String metaStatusLine = 'STATUS:CONFIRMED';
+    const String metaTransparencyLine = 'TRANSP:TRANSPARENT';
+    const String metaCategoryWork = 'Work';
+    const String metaCategoryPersonal = 'Personal';
+    const String metaCategoriesLine =
+        'CATEGORIES:$metaCategoryWork,$metaCategoryPersonal';
+    const List<String> metaCategories = <String>[
+      metaCategoryWork,
+      metaCategoryPersonal,
+    ];
+    const String metaUrl = 'https://example.com/meet';
+    const String metaUrlLine = 'URL:$metaUrl';
+    const String metaGeoLatText = '37.7749';
+    const String metaGeoLonText = '-122.4194';
+    const String metaGeoLine = 'GEO:$metaGeoLatText;$metaGeoLonText';
+    const String metaAttachmentValue = 'https://example.com/agenda.pdf';
+    const String metaAttachmentFmtType = 'application/pdf';
+    const String metaAttachmentEncoding = 'BASE64';
+    const String metaAttachmentLabel = 'Agenda';
+    const String metaAttachmentLine = 'ATTACH;FMTTYPE=$metaAttachmentFmtType;'
+        'ENCODING=$metaAttachmentEncoding;'
+        'LABEL=$metaAttachmentLabel:$metaAttachmentValue';
     const int singleItemCount = 1;
     const List<String> expectedCriticalPathOrder = <String>[
       criticalPathTaskFirstId,
@@ -289,10 +313,9 @@ void main() {
       expect(path.taskIds, equals(expectedCriticalPathOrder));
     });
 
-    test('stores unsupported RRULE as raw props and treats task as recurring',
-        () {
-      const String rawUid = 'todo-raw';
-      const String rawSummary = 'Unsupported rule';
+    test('parses yearly RRULE into recurrence fields', () {
+      const String rawUid = 'todo-yearly';
+      const String rawSummary = 'Yearly rule';
       final String ics = <String>[
         calendarStart,
         versionLine,
@@ -314,14 +337,10 @@ void main() {
       final RecurrenceRule? recurrence = task.recurrence;
       expect(recurrence, isNotNull);
       expect(task.hasRecurrenceData, isTrue);
-      CalendarRawProperty? rawRule;
-      for (final CalendarRawProperty property in recurrence!.rawProperties) {
-        if (property.name == rruleName && property.value == yearlyRuleValue) {
-          rawRule = property;
-          break;
-        }
-      }
-      expect(rawRule, isNotNull);
+      expect(recurrence!.frequency, RecurrenceFrequency.yearly);
+      expect(recurrence.byMonths, equals(const <int>[2]));
+      expect(recurrence.byWeekdays, equals(const <int>[DateTime.monday]));
+      expect(recurrence.rawProperties, isEmpty);
     });
 
     test('marks METHOD:CANCEL overrides as cancelled', () {
@@ -359,6 +378,49 @@ void main() {
       final TaskOccurrenceOverride override =
           task.occurrenceOverrides.values.first;
       expect(override.isCancelled, isTrue);
+    });
+
+    test(
+        'parses meta fields for status/transparency/categories/url/geo/attachments',
+        () {
+      final String ics = <String>[
+        calendarStart,
+        versionLine,
+        prodIdLine,
+        eventStart,
+        '$uidLabel$metaEventUid',
+        dtStampLine,
+        allDayStartLine,
+        allDayEndLine,
+        '$summaryLabel$metaEventSummary',
+        metaStatusLine,
+        metaTransparencyLine,
+        metaCategoriesLine,
+        metaUrlLine,
+        metaGeoLine,
+        metaAttachmentLine,
+        eventEnd,
+        calendarEnd,
+      ].join(lineBreak);
+
+      final CalendarModel model = const CalendarIcsCodec().decode(ics);
+
+      expect(model.dayEvents, hasLength(singleItemCount));
+      final DayEvent event = model.dayEvents.values.first;
+      final CalendarIcsMeta? meta = event.icsMeta;
+      expect(meta, isNotNull);
+      expect(meta!.status, CalendarIcsStatus.confirmed);
+      expect(meta.transparency, CalendarTransparency.transparent);
+      expect(meta.categories, equals(metaCategories));
+      expect(meta.url, metaUrl);
+      expect(meta.geo?.latitude, double.parse(metaGeoLatText));
+      expect(meta.geo?.longitude, double.parse(metaGeoLonText));
+      expect(meta.attachments, hasLength(singleItemCount));
+      final CalendarAttachment attachment = meta.attachments.first;
+      expect(attachment.value, metaAttachmentValue);
+      expect(attachment.formatType, metaAttachmentFmtType);
+      expect(attachment.encoding, metaAttachmentEncoding);
+      expect(attachment.label, metaAttachmentLabel);
     });
   });
 
@@ -453,6 +515,25 @@ void main() {
     const String criticalPathOrderFirstLine = 'X-AXICHAT-PATH-ORDER:0';
     const String criticalPathOrderSecondLine = 'X-AXICHAT-PATH-ORDER:1';
     const String criticalPathIdLine = 'X-AXICHAT-PATH-ID:$criticalPathId';
+    const String metaStatusLine = 'STATUS:CONFIRMED';
+    const String metaTransparencyLine = 'TRANSP:TRANSPARENT';
+    const String metaCategoryWork = 'Work';
+    const String metaCategoryPersonal = 'Personal';
+    const String metaCategoriesLine =
+        'CATEGORIES:$metaCategoryWork,$metaCategoryPersonal';
+    const String metaUrl = 'https://example.com/meet';
+    const String metaUrlLine = 'URL:$metaUrl';
+    const double metaGeoLatitude = 37.7749;
+    const double metaGeoLongitude = -122.4194;
+    const String metaGeoLine = 'GEO:$metaGeoLatitude;$metaGeoLongitude';
+    const String metaAttachmentValue = 'https://example.com/agenda.pdf';
+    const String metaAttachmentFmtType = 'application/pdf';
+    const String metaAttachmentEncoding = 'BASE64';
+    const String metaAttachmentLabel = 'Agenda';
+    const String metaAttachmentPrefix = 'ATTACH;FMTTYPE=$metaAttachmentFmtType;'
+        'ENCODING=$metaAttachmentEncoding;'
+        'LABEL=$metaAttachmentLabel:';
+    const String icsFoldedLinePattern = r'\r?\n[ \t]';
 
     test('emits EXDATE for cancelled override without RECURRENCE-ID', () {
       final DateTime scheduledStart = DateTime.utc(
@@ -853,6 +934,63 @@ void main() {
       expect(encoded.contains(criticalPathIdLine), isTrue);
       expect(encoded.contains(criticalPathOrderFirstLine), isTrue);
       expect(encoded.contains(criticalPathOrderSecondLine), isTrue);
+    });
+
+    test('writes meta fields for day events', () {
+      final DateTime baseDate = DateTime(
+        dayEventStartYear,
+        dayEventStartMonth,
+        dayEventStartDay,
+      );
+      const CalendarIcsMeta meta = CalendarIcsMeta(
+        status: CalendarIcsStatus.confirmed,
+        transparency: CalendarTransparency.transparent,
+        categories: <String>[
+          metaCategoryWork,
+          metaCategoryPersonal,
+        ],
+        url: metaUrl,
+        geo: CalendarGeo(
+          latitude: metaGeoLatitude,
+          longitude: metaGeoLongitude,
+        ),
+        attachments: <CalendarAttachment>[
+          CalendarAttachment(
+            value: metaAttachmentValue,
+            formatType: metaAttachmentFmtType,
+            encoding: metaAttachmentEncoding,
+            label: metaAttachmentLabel,
+          ),
+        ],
+      );
+      final DayEvent event = DayEvent(
+        id: dayEventId,
+        title: dayEventTitle,
+        startDate: baseDate,
+        endDate: DateTime(
+          dayEventStartYear,
+          dayEventStartMonth,
+          dayEventEndDay,
+        ),
+        description: null,
+        reminders: null,
+        createdAt: baseDate,
+        modifiedAt: baseDate,
+        icsMeta: meta,
+      );
+      final CalendarModel model = CalendarModel.empty().addDayEvent(event);
+
+      final String encoded = const CalendarIcsCodec().encode(model);
+
+      expect(encoded.contains(metaStatusLine), isTrue);
+      expect(encoded.contains(metaTransparencyLine), isTrue);
+      expect(encoded.contains(metaCategoriesLine), isTrue);
+      expect(encoded.contains(metaUrlLine), isTrue);
+      expect(encoded.contains(metaGeoLine), isTrue);
+      final String normalized =
+          encoded.replaceAll(RegExp(icsFoldedLinePattern), '');
+      const String attachmentLine = '$metaAttachmentPrefix$metaAttachmentValue';
+      expect(normalized.contains(attachmentLine), isTrue);
     });
   });
 }
