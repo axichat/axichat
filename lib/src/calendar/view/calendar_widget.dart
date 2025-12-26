@@ -10,8 +10,12 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/view/calendar_availability_share_sheet.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'calendar_task_search.dart';
 import 'calendar_experience_state.dart';
 import 'feedback_system.dart';
@@ -46,6 +50,24 @@ class CalendarNavSurface extends StatelessWidget {
       color: color,
       child: SizedBox(width: double.infinity, child: child),
     );
+  }
+}
+
+const double _calendarShareActionSpacing = 8.0;
+const String _calendarAvailabilityShareTooltip = 'Share availability';
+const String _calendarAvailabilityShareMissingJidMessage =
+    'Calendar sharing is unavailable.';
+
+CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
+  BuildContext context,
+) {
+  try {
+    return RepositoryProvider.of<CalendarAvailabilityShareCoordinator>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
   }
 }
 
@@ -173,6 +195,9 @@ class _CalendarWidgetState
     Widget layout,
   ) {
     final Widget tintedLayout = CalendarNavSurface(child: layout);
+    final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
+      context,
+    );
     return CalendarHoverTitleScope(
       controller: _hoverTitleController,
       child: Column(
@@ -181,6 +206,12 @@ class _CalendarWidgetState
           _CalendarAppBar(
             state: state,
             onBackPressed: _handleCalendarBackPressed,
+            onShareAvailability: availabilityCoordinator == null
+                ? null
+                : () => _openAvailabilityShareSheet(
+                      state,
+                      availabilityCoordinator,
+                    ),
           ),
           Expanded(child: tintedLayout),
         ],
@@ -230,6 +261,28 @@ class _CalendarWidgetState
     );
   }
 
+  Future<void> _openAvailabilityShareSheet(
+    CalendarState state,
+    CalendarAvailabilityShareCoordinator coordinator,
+  ) async {
+    final xmpp = context.read<XmppService>();
+    final ownerJid = xmpp.myJid?.trim();
+    if (ownerJid == null || ownerJid.isEmpty) {
+      FeedbackSystem.showError(
+        context,
+        _calendarAvailabilityShareMissingJidMessage,
+      );
+      return;
+    }
+    await showCalendarAvailabilityShareSheet(
+      context: context,
+      coordinator: coordinator,
+      source: const CalendarAvailabilityShareSource.personal(),
+      model: state.model,
+      ownerJid: ownerJid,
+    );
+  }
+
   @override
   Color resolveSurfaceColor(BuildContext context) =>
       CalendarNavSurface.backgroundColor(context);
@@ -272,10 +325,12 @@ class _CalendarAppBar extends StatelessWidget {
   const _CalendarAppBar({
     required this.state,
     required this.onBackPressed,
+    this.onShareAvailability,
   });
 
   final CalendarState state;
   final VoidCallback onBackPressed;
+  final VoidCallback? onShareAvailability;
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +361,16 @@ class _CalendarAppBar extends StatelessWidget {
                 onPressed: onBackPressed,
               ),
               const Spacer(),
+              if (onShareAvailability != null) ...[
+                AxiIconButton(
+                  iconData: LucideIcons.share2,
+                  tooltip: _calendarAvailabilityShareTooltip,
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  onPressed: onShareAvailability,
+                ),
+                const SizedBox(width: _calendarShareActionSpacing),
+              ],
               SyncControls(state: state),
             ],
           ),
