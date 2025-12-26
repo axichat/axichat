@@ -688,6 +688,7 @@ abstract class BaseCalendarBloc
         endDate: event.endDate ?? baseOverride.endDate,
         isCancelled: event.isCancelled ?? baseOverride.isCancelled,
         checklist: event.checklist ?? baseOverride.checklist,
+        range: event.range,
       );
 
       if (_isOccurrenceOverrideEmpty(updatedOverride)) {
@@ -2903,6 +2904,8 @@ bool _isOccurrenceOverrideEmpty(TaskOccurrenceOverride override) {
       override.title == null &&
       override.description == null &&
       override.location == null &&
+      override.recurrenceId == null &&
+      override.range == null &&
       (override.checklist == null || override.checklist!.isEmpty) &&
       override.rawProperties.isEmpty &&
       override.rawComponents.isEmpty;
