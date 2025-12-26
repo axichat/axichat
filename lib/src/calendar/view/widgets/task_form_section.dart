@@ -536,6 +536,7 @@ class TaskRecurrenceSection extends StatelessWidget {
     this.headerTrailing,
     this.enabled = true,
     this.fallbackWeekday,
+    this.referenceStart,
     this.spacingConfig = const RecurrenceEditorSpacing(
       chipSpacing: 6,
       chipRunSpacing: 6,
@@ -544,6 +545,8 @@ class TaskRecurrenceSection extends StatelessWidget {
       endSpacing: 14,
       fieldGap: 12,
     ),
+    this.showAdvancedToggle = true,
+    this.forceAdvanced = false,
     this.chipPadding,
     this.weekdayChipPadding,
     this.intervalSelectWidth,
@@ -558,7 +561,10 @@ class TaskRecurrenceSection extends StatelessWidget {
   final Widget? headerTrailing;
   final bool enabled;
   final int? fallbackWeekday;
+  final DateTime? referenceStart;
   final RecurrenceEditorSpacing spacingConfig;
+  final bool showAdvancedToggle;
+  final bool forceAdvanced;
   final EdgeInsets? chipPadding;
   final EdgeInsets? weekdayChipPadding;
   final double? intervalSelectWidth;
@@ -581,7 +587,10 @@ class TaskRecurrenceSection extends StatelessWidget {
             onChanged: onChanged,
             enabled: enabled,
             fallbackWeekday: fallbackWeekday,
+            referenceStart: referenceStart,
             spacing: spacingConfig,
+            showAdvancedToggle: showAdvancedToggle,
+            forceAdvanced: forceAdvanced,
             chipPadding: chipPadding ??
                 const EdgeInsets.symmetric(
                     horizontal: calendarGutterMd, vertical: calendarGutterSm),

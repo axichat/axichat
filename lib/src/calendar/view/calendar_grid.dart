@@ -1367,7 +1367,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   );
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
-                    ? (updatedTask) {
+                    ? (updatedTask, scope) {
                         locate<T>().add(
                           CalendarEvent.taskOccurrenceUpdated(
                             taskId: baseId,
@@ -1376,6 +1376,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                             duration: updatedTask.duration,
                             endDate: updatedTask.endDate,
                             checklist: updatedTask.checklist,
+                            range: scope.range,
                           ),
                         );
 
@@ -1387,6 +1388,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           priority: updatedTask.priority,
                           isCompleted: updatedTask.isCompleted,
                           checklist: updatedTask.checklist,
+                          recurrence: updatedTask.recurrence,
+                          reminders: updatedTask.reminders,
+                          icsMeta: updatedTask.icsMeta,
                           modifiedAt: DateTime.now(),
                         );
 
@@ -2144,7 +2148,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                 );
                           },
                           onOccurrenceUpdated: shouldUpdateOccurrence
-                              ? (updatedTask) {
+                              ? (updatedTask, scope) {
                                   context.read<T>().add(
                                         CalendarEvent.taskOccurrenceUpdated(
                                           taskId: baseId,
@@ -2154,6 +2158,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                           duration: updatedTask.duration,
                                           endDate: updatedTask.endDate,
                                           checklist: updatedTask.checklist,
+                                          range: scope.range,
                                         ),
                                       );
 
@@ -2165,6 +2170,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                     priority: updatedTask.priority,
                                     isCompleted: updatedTask.isCompleted,
                                     checklist: updatedTask.checklist,
+                                    recurrence: updatedTask.recurrence,
+                                    reminders: updatedTask.reminders,
+                                    icsMeta: updatedTask.icsMeta,
                                     modifiedAt: DateTime.now(),
                                   );
 

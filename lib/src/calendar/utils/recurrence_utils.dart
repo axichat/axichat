@@ -56,6 +56,18 @@ extension RecurrenceRuleYearlyExpansionX on RecurrenceRule {
   }
 }
 
+extension RecurrenceRuleMonthlyExpansionX on RecurrenceRule {
+  bool get usesMonthlyExpansion {
+    if (frequency != RecurrenceFrequency.monthly) {
+      return false;
+    }
+    return _hasRuleValues(byMonths) ||
+        _hasRuleValues(byMonthDays) ||
+        _hasRuleValues(byDays) ||
+        _hasRuleValues(bySetPositions);
+  }
+}
+
 extension CalendarTaskInstanceX on CalendarTask {
   /// True if this task represents a generated occurrence rather than the
   /// persisted base record.
@@ -222,11 +234,17 @@ extension CalendarTaskInstanceX on CalendarTask {
               rule: recurrence,
               rangeEnd: rangeLimit,
             )
-          : _simpleOccurrencesWithin(
-              baseStart: scheduled,
-              rule: recurrence,
-              rangeEnd: rangeLimit,
-            );
+          : recurrence.usesMonthlyExpansion
+              ? _monthlyOccurrencesWithin(
+                  baseStart: scheduled,
+                  rule: recurrence,
+                  rangeEnd: rangeLimit,
+                )
+              : _simpleOccurrencesWithin(
+                  baseStart: scheduled,
+                  rule: recurrence,
+                  rangeEnd: rangeLimit,
+                );
 
       var generatedCount = _baseOccurrenceCount;
       for (final DateTime next in generated) {
@@ -334,9 +352,9 @@ extension CalendarTaskInstanceX on CalendarTask {
   }
 
   DateTime? _originalStartForKey(String key) {
-    final micros = int.tryParse(key);
-    if (micros != null) {
-      return DateTime.fromMicrosecondsSinceEpoch(micros);
+    final DateTime? resolved = _dateTimeFromOccurrenceKey(key);
+    if (resolved != null) {
+      return resolved;
     }
     if (baseOccurrenceKey != null && key == baseOccurrenceKey) {
       return scheduledTime;
@@ -414,13 +432,18 @@ Duration _futureRangeBackwardShift(
   Map<String, TaskOccurrenceOverride> overrides,
 ) {
   var maxShift = _zeroDuration;
-  for (final TaskOccurrenceOverride override in overrides.values) {
+  for (final MapEntry<String, TaskOccurrenceOverride> entry
+      in overrides.entries) {
+    final TaskOccurrenceOverride override = entry.value;
     final RecurrenceRange? range = override.range;
     if (range == null || !range.isThisAndFuture) {
       continue;
     }
     final DateTime? overrideStart = override.scheduledTime;
-    final DateTime? originalStart = override.recurrenceId?.value;
+    final DateTime? originalStart = _rangeOriginalStart(
+      key: entry.key,
+      override: override,
+    );
     if (overrideStart == null || originalStart == null) {
       continue;
     }
@@ -479,6 +502,45 @@ Iterable<DateTime> _simpleOccurrencesWithin({
   return results;
 }
 
+Iterable<DateTime> _monthlyOccurrencesWithin({
+  required DateTime baseStart,
+  required RecurrenceRule rule,
+  required DateTime rangeEnd,
+}) {
+  final int interval = max(_minInterval, rule.interval);
+  final List<int>? allowedMonths = _resolveMonthlyMonths(rule.byMonths);
+  final List<DateTime> results = <DateTime>[];
+  var current = baseStart;
+
+  while (!current.isAfter(rangeEnd)) {
+    final int year = current.year;
+    final int month = current.month;
+    if (allowedMonths == null || allowedMonths.contains(month)) {
+      final List<DateTime> candidates = _monthlyCandidatesForMonth(
+        year: year,
+        month: month,
+        rule: rule,
+        baseStart: baseStart,
+      );
+      for (final DateTime candidate in candidates) {
+        final bool isBaseMonth =
+            year == baseStart.year && month == baseStart.month;
+        if (isBaseMonth && !candidate.isAfter(baseStart)) {
+          continue;
+        }
+        if (candidate.isAfter(rangeEnd)) {
+          continue;
+        }
+        results.add(candidate);
+      }
+    }
+    current = _addMonths(current, interval, baseStart.day);
+  }
+
+  results.sort();
+  return results;
+}
+
 Iterable<DateTime> _yearlyOccurrencesWithin({
   required DateTime baseStart,
   required RecurrenceRule rule,
@@ -507,6 +569,45 @@ Iterable<DateTime> _yearlyOccurrencesWithin({
   }
 
   return results;
+}
+
+List<int>? _resolveMonthlyMonths(List<int>? byMonths) {
+  if (!_hasRuleValues(byMonths)) {
+    return null;
+  }
+  final Set<int> seen = <int>{};
+  for (final int month in byMonths!) {
+    if (month < _firstMonthIndex || month > _monthsPerYear) {
+      continue;
+    }
+    seen.add(month);
+  }
+  if (seen.isEmpty) {
+    return null;
+  }
+  final List<int> resolved = seen.toList()..sort();
+  return resolved;
+}
+
+List<DateTime> _monthlyCandidatesForMonth({
+  required int year,
+  required int month,
+  required RecurrenceRule rule,
+  required DateTime baseStart,
+}) {
+  final List<DateTime> candidates = <DateTime>[];
+  _addMonthCandidates(
+    candidates: candidates,
+    year: year,
+    month: month,
+    rule: rule,
+    baseStart: baseStart,
+  );
+  final List<DateTime> sorted = _uniqueSortedDates(candidates);
+  if (_hasRuleValues(rule.bySetPositions)) {
+    return _applySetPositions(sorted, rule.bySetPositions!);
+  }
+  return sorted;
 }
 
 List<DateTime> _yearlyCandidatesForYear({
@@ -1212,6 +1313,21 @@ String? occurrenceKeyFrom(String taskId) {
 String _occurrenceKeyFromDateTime(DateTime dateTime) =>
     dateTime.microsecondsSinceEpoch.toString();
 
+DateTime? _dateTimeFromOccurrenceKey(String key) {
+  final int? micros = int.tryParse(key);
+  if (micros == null) {
+    return null;
+  }
+  return DateTime.fromMicrosecondsSinceEpoch(micros);
+}
+
+DateTime? _rangeOriginalStart({
+  required String key,
+  required TaskOccurrenceOverride override,
+}) {
+  return override.recurrenceId?.value ?? _dateTimeFromOccurrenceKey(key);
+}
+
 Set<String> _calendarDateTimeKeys(List<CalendarDateTime> dates) {
   final Set<String> keys = <String>{};
   for (final CalendarDateTime date in dates) {
@@ -1318,7 +1434,10 @@ _RangeOverrideSelection? _selectRangeOverride(
     if (range == null) {
       return;
     }
-    final DateTime? originalStart = override.recurrenceId?.value;
+    final DateTime? originalStart = _rangeOriginalStart(
+      key: key,
+      override: override,
+    );
     if (originalStart == null) {
       return;
     }

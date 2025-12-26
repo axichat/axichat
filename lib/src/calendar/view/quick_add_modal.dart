@@ -1443,6 +1443,7 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
           spacing: calendarGutterSm,
           value: formController.recurrence,
           fallbackWeekday: fallbackWeekday,
+          referenceStart: formController.startTime,
           spacingConfig: calendarRecurrenceSpacingCompact,
           onChanged: onChanged,
         );
