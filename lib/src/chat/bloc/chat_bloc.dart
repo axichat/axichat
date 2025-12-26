@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:async/async.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
@@ -15,6 +14,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
@@ -33,17 +33,11 @@ import 'package:flutter/scheduler.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 part 'chat_bloc.freezed.dart';
 part 'chat_event.dart';
 part 'chat_state.dart';
 
-const _attachmentBundleDirName = 'email_attachments';
-const _attachmentBundleNamePrefix = 'attachments_';
-const _attachmentBundleExtension = '.zip';
-const _attachmentBundleMimeType = 'application/zip';
 const _attachmentSendFailureMessage =
     'Unable to send attachment. Please try again.';
 const _sendSignatureSeparator = '::';
@@ -160,6 +154,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatAvailabilityMessageSent>(_onChatAvailabilityMessageSent);
     on<ChatMuted>(_onChatMuted);
     on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
+    on<ChatAttachmentAutoDownloadToggled>(
+      _onChatAttachmentAutoDownloadToggled,
+    );
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
@@ -1550,6 +1547,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             attachmentsViaEmail && queuedAttachments.length > 1;
         EmailAttachment? bundledEmailAttachment;
         if (shouldBundleEmailAttachments) {
+          _markPendingAttachmentsPreparing(
+            queuedAttachments,
+            emit,
+            preparing: true,
+          );
           try {
             bundledEmailAttachment = await _bundlePendingAttachments(
               attachments: queuedAttachments,
@@ -1568,6 +1570,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ),
             );
             return;
+          } finally {
+            _markPendingAttachmentsPreparing(
+              queuedAttachments,
+              emit,
+              preparing: false,
+            );
           }
         }
         final shouldSendEmailText = emailBody != null && !attachmentsViaEmail;
@@ -1792,6 +1800,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(
       state.copyWith(
         chat: chat.copyWith(shareSignatureEnabled: event.enabled),
+      ),
+    );
+  }
+
+  Future<void> _onChatAttachmentAutoDownloadToggled(
+    ChatAttachmentAutoDownloadToggled event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) return;
+    await _chatsService.toggleChatAttachmentAutoDownload(
+      jid: chat.jid,
+      enabled: event.enabled,
+    );
+    final value = event.enabled
+        ? AttachmentAutoDownload.allowed
+        : AttachmentAutoDownload.blocked;
+    emit(
+      state.copyWith(
+        chat: chat.copyWith(attachmentAutoDownload: value),
       ),
     );
   }
@@ -2044,6 +2072,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null) return;
     final recipients = _resolveComposerRecipients(chat);
+    final split = _splitRecipientsForSend(
+      recipients: recipients,
+      forceEmail: false,
+    );
+    final requiresXmpp = split.xmppRecipients.isNotEmpty;
     final shouldUseEmail =
         _shouldSendAttachmentsViaEmail(chat: chat, recipients: recipients);
     final service = _emailService;
@@ -2098,6 +2131,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           await EmailAttachmentOptimizer.optimize(preparedAttachment);
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to optimize attachment', error, stackTrace);
+    }
+    final uploadLimitBytes = requiresXmpp
+        ? _messageService.httpUploadSupport.maxFileSizeBytes
+        : null;
+    final sizeBytes = preparedAttachment.sizeBytes;
+    if (uploadLimitBytes != null &&
+        uploadLimitBytes > 0 &&
+        sizeBytes > uploadLimitBytes) {
+      final message = _attachmentTooLargeMessage(uploadLimitBytes);
+      _replacePendingAttachment(
+        placeholder.copyWith(
+          attachment: preparedAttachment,
+          status: PendingAttachmentStatus.failed,
+          isPreparing: false,
+          errorMessage: message,
+        ),
+        emit,
+      );
+      emit(state.copyWith(composerError: message));
+      return;
     }
     _replacePendingAttachment(
       placeholder.copyWith(
@@ -2402,7 +2455,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<PendingAttachment> attachments,
     required String? caption,
   }) async {
-    return _createAttachmentBundle(
+    return EmailAttachmentBundler.bundle(
       attachments: attachments.map((pending) => pending.attachment),
       caption: caption,
     );
@@ -2413,57 +2466,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required String? caption,
   }) async {
     if (attachments.length <= 1) return attachments;
-    final bundled = await _createAttachmentBundle(
+    final bundled = await EmailAttachmentBundler.bundle(
       attachments: attachments,
       caption: caption,
     );
     return [bundled];
-  }
-
-  Future<EmailAttachment> _createAttachmentBundle({
-    required Iterable<EmailAttachment> attachments,
-    required String? caption,
-  }) async {
-    final tempDir = await getTemporaryDirectory();
-    final bundleDir = Directory(p.join(tempDir.path, _attachmentBundleDirName));
-    if (!await bundleDir.exists()) {
-      await bundleDir.create(recursive: true);
-    }
-    final timestamp = DateTime.now().microsecondsSinceEpoch;
-    final zipName =
-        '$_attachmentBundleNamePrefix$timestamp$_attachmentBundleExtension';
-    final zipPath = p.join(bundleDir.path, zipName);
-    final archive = Archive();
-    for (final attachment in attachments) {
-      final file = File(attachment.path);
-      if (!await file.exists()) {
-        throw FileSystemException('Attachment missing', attachment.path);
-      }
-      final bytes = await file.readAsBytes();
-      final filename = attachment.fileName.isNotEmpty
-          ? attachment.fileName
-          : p.basename(attachment.path);
-      archive.addFile(
-        ArchiveFile(
-          filename,
-          bytes.length,
-          bytes,
-        ),
-      );
-    }
-    final encoded = ZipEncoder().encode(archive);
-    if (encoded == null) {
-      throw const FileSystemException('Failed to bundle attachments');
-    }
-    final zipFile = File(zipPath);
-    await zipFile.writeAsBytes(encoded, flush: true);
-    return EmailAttachment(
-      path: zipFile.path,
-      fileName: zipName,
-      sizeBytes: encoded.length,
-      mimeType: _attachmentBundleMimeType,
-      caption: caption,
-    );
   }
 
   Future<bool> _sendQueuedAttachments({
@@ -2653,6 +2660,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       _replacePendingAttachment(current, emit);
       try {
+        XmppAttachmentUpload? upload;
         for (final target in targets.values) {
           final quote = quotedDraft != null &&
                   quotedDraft.chatJid == target.jid &&
@@ -2660,7 +2668,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? quotedDraft
               : null;
           final groupId = attachmentGroupIds[target.jid];
-          await _messageService.sendAttachment(
+          upload = await _messageService.sendAttachment(
             jid: target.jid,
             attachment: current.attachment,
             encryptionProtocol: target.encryptionProtocol,
@@ -2669,15 +2677,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             htmlCaption: shouldApplyCaption ? htmlCaption : null,
             transportGroupId: groupId,
             attachmentOrder: index,
+            upload: upload,
           );
         }
         _removePendingAttachment(current.id, emit);
       } on XmppFileTooBigException catch (error) {
-        final limit = error.maxBytes;
-        final readableLimit = limit == null ? null : _formatBytes(limit);
-        final message = readableLimit == null
-            ? 'Attachment exceeds the server limit.'
-            : 'Attachment exceeds the server limit ($readableLimit).';
+        final message = _attachmentTooLargeMessage(error.maxBytes);
         _markPendingAttachmentFailed(
           current.id,
           emit,
@@ -3221,6 +3226,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return '${value.toStringAsFixed(precision)} ${units[index]}';
   }
 
+  String _attachmentTooLargeMessage(int? limitBytes) {
+    final bytes = limitBytes ?? 0;
+    if (bytes <= 0) {
+      return 'Attachment exceeds the server limit.';
+    }
+    final readableLimit = _formatBytes(bytes);
+    return 'Attachment exceeds the server limit ($readableLimit).';
+  }
+
   String _composeXmppBody({
     required String body,
     required String? subject,
@@ -3541,6 +3555,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         status: PendingAttachmentStatus.uploading,
         clearErrorMessage: true,
       );
+    }).toList();
+    if (!hasChanges) return;
+    emit(state.copyWith(pendingAttachments: updated));
+  }
+
+  void _markPendingAttachmentsPreparing(
+    Iterable<PendingAttachment> attachments,
+    Emitter<ChatState> emit, {
+    required bool preparing,
+  }) {
+    final ids = attachments.map((attachment) => attachment.id).toSet();
+    if (ids.isEmpty) return;
+    var hasChanges = false;
+    final updated = state.pendingAttachments.map((pending) {
+      if (!ids.contains(pending.id)) return pending;
+      if (pending.isPreparing == preparing) return pending;
+      hasChanges = true;
+      return pending.copyWith(isPreparing: preparing);
     }).toList();
     if (!hasChanges) return;
     emit(state.copyWith(pendingAttachments: updated));

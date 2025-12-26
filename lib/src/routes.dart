@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:axichat/src/attachments/view/attachment_gallery_screen.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_widget.dart';
 import 'package:axichat/src/chats/view/archived_chat_screen.dart';
 import 'package:axichat/src/chats/view/archives_screen.dart';
@@ -26,6 +27,7 @@ final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const ProfileRoute().location: const ProfileRoute(),
   const AvatarEditorRoute().location: const AvatarEditorRoute(),
   const ArchivesRoute().location: const ArchivesRoute(),
+  const AttachmentGalleryRoute().location: const AttachmentGalleryRoute(),
   const GuestCalendarRoute().location: const GuestCalendarRoute(),
   const LoginRoute().location: const LoginRoute(),
   const EmailDemoRoute().location: const EmailDemoRoute(),
@@ -57,6 +59,9 @@ class TransitionGoRouteData extends GoRouteData {
           routes: [
             TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path),
           ],
+        ),
+        TypedGoRoute<AttachmentGalleryRoute>(
+          path: AttachmentGalleryRoute.path,
         ),
       ],
     ),
@@ -113,6 +118,20 @@ class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
   Widget build(BuildContext context, GoRouterState state) => ArchivesScreen(
         locate: state.extra! as T Function<T>(),
       );
+}
+
+class AttachmentGalleryRoute extends TransitionGoRouteData
+    with AuthenticationRouteData {
+  const AttachmentGalleryRoute();
+
+  static const path = 'attachments';
+
+  @override
+  bool get authenticationRequired => true;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      AttachmentGalleryScreen(locate: state.extra! as T Function<T>());
 }
 
 class ArchivedChatRoute extends TransitionGoRouteData

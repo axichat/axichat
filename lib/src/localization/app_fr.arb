@@ -146,6 +146,17 @@
   "draftDiscarded": "Brouillon supprimé.",
   "draftSendFailed": "Échec de l’envoi du brouillon.",
   "draftSent": "Envoyé",
+  "draftLimitWarning": "La synchronisation des brouillons conserve jusqu’à {limit} brouillons. Vous en avez {count}.",
+  "@draftLimitWarning": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "draftValidationNoContent": "Ajoutez un objet, un message ou une pièce jointe",
   "draftFileMissing": "Le fichier n’existe plus à {path}.",
   "draftAttachmentPreview": "Aperçu",

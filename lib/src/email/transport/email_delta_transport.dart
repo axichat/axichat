@@ -343,6 +343,19 @@ class EmailDeltaTransport implements ChatTransport {
     return context.getConfig(key);
   }
 
+  Future<void> setCoreConfig({
+    required String key,
+    required String value,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return;
+    await context.setConfig(key: key, value: value);
+  }
+
   Future<void> registerPushToken(String token) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;

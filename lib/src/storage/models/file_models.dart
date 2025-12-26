@@ -9,6 +9,79 @@ part 'file_models.freezed.dart';
 
 const String draftSyncIdFallback = '';
 const String draftSourceLegacyId = 'legacy';
+const String draftRecipientsFallbackJson = '[]';
+const String _draftRecipientJidKey = 'jid';
+const String _draftRecipientRoleKey = 'role';
+const String _draftRecipientRoleFallback = 'to';
+
+final class DraftRecipientData {
+  const DraftRecipientData({
+    required this.jid,
+    required this.role,
+  });
+
+  final String jid;
+  final String role;
+
+  DraftRecipientData copyWith({
+    String? jid,
+    String? role,
+  }) {
+    return DraftRecipientData(
+      jid: jid ?? this.jid,
+      role: role ?? this.role,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        _draftRecipientJidKey: jid,
+        _draftRecipientRoleKey: role,
+      };
+
+  static DraftRecipientData? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    final rawJid = json[_draftRecipientJidKey];
+    if (rawJid is! String) return null;
+    final trimmedJid = rawJid.trim();
+    if (trimmedJid.isEmpty) return null;
+    final rawRole = json[_draftRecipientRoleKey];
+    final role = rawRole is String && rawRole.trim().isNotEmpty
+        ? rawRole.trim()
+        : _draftRecipientRoleFallback;
+    return DraftRecipientData(
+      jid: trimmedJid,
+      role: role,
+    );
+  }
+}
+
+class DraftRecipientListConverter
+    extends TypeConverter<List<DraftRecipientData>, String> {
+  const DraftRecipientListConverter();
+
+  static final ListConverter<Map<String, dynamic>> _listConverter =
+      ListConverter<Map<String, dynamic>>();
+
+  @override
+  List<DraftRecipientData> fromSql(String fromDb) {
+    final List<Map<String, dynamic>> decoded = _listConverter.fromSql(fromDb);
+    final recipients = <DraftRecipientData>[];
+    for (final entry in decoded) {
+      final DraftRecipientData? recipient = DraftRecipientData.fromJson(entry);
+      if (recipient != null) {
+        recipients.add(recipient);
+      }
+    }
+    return List<DraftRecipientData>.unmodifiable(recipients);
+  }
+
+  @override
+  String toSql(List<DraftRecipientData> value) {
+    final List<Map<String, dynamic>> encoded =
+        value.map((recipient) => recipient.toJson()).toList(growable: false);
+    return _listConverter.toSql(encoded);
+  }
+}
 
 @Freezed(toJson: false, fromJson: false)
 class FileMetadataData
@@ -162,6 +235,7 @@ class Draft with _$Draft implements Insertable<Draft> {
     required String draftSyncId,
     required DateTime draftUpdatedAt,
     required String draftSourceId,
+    @Default(<DraftRecipientData>[]) List<DraftRecipientData> draftRecipients,
     String? body,
     String? subject,
     @Default(<String>[]) List<String> attachmentMetadataIds,
@@ -177,6 +251,7 @@ class Draft with _$Draft implements Insertable<Draft> {
         draftSyncId: Value(draftSyncId),
         draftUpdatedAt: Value(draftUpdatedAt),
         draftSourceId: Value(draftSourceId),
+        draftRecipients: Value(draftRecipients),
         body: Value.absentIfNull(body),
         subject: Value.absentIfNull(subject),
         attachmentMetadataIds: Value(attachmentMetadataIds),
@@ -197,6 +272,10 @@ class Drafts extends Table {
 
   TextColumn get draftSourceId =>
       text().withDefault(const Constant(draftSourceLegacyId))();
+
+  TextColumn get draftRecipients => text()
+      .map(const DraftRecipientListConverter())
+      .withDefault(const Constant(draftRecipientsFallbackJson))();
 
   TextColumn get body => text().nullable()();
 

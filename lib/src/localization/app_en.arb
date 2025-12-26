@@ -190,6 +190,17 @@
   "draftDiscarded": "Draft discarded.",
   "draftSendFailed": "Failed to send draft.",
   "draftSent": "Sent",
+  "draftLimitWarning": "Draft sync keeps up to {limit} drafts. You're at {count}.",
+  "@draftLimitWarning": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "draftValidationNoContent": "Add a subject, message, or attachment",
   "draftFileMissing": "File no longer exists at {path}.",
   "@draftFileMissing": {

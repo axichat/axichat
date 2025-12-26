@@ -461,6 +461,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get draftSent => 'Enviado';
 
   @override
+  String draftLimitWarning(int limit, int count) {
+    return 'La sincronización de borradores admite hasta $limit borradores. Ya tienes $count.';
+  }
+
+  @override
   String get draftValidationNoContent => 'Agrega un asunto, mensaje o adjunto';
 
   @override
