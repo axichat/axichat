@@ -146,6 +146,17 @@
   "draftDiscarded": "Borrador descartado.",
   "draftSendFailed": "No se pudo enviar el borrador.",
   "draftSent": "Enviado",
+  "draftLimitWarning": "La sincronización de borradores admite hasta {limit} borradores. Ya tienes {count}.",
+  "@draftLimitWarning": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "draftValidationNoContent": "Agrega un asunto, mensaje o adjunto",
   "draftFileMissing": "El archivo ya no existe en {path}.",
   "draftAttachmentPreview": "Vista previa",

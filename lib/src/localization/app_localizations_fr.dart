@@ -462,6 +462,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get draftSent => 'Envoyé';
 
   @override
+  String draftLimitWarning(int limit, int count) {
+    return 'La synchronisation des brouillons conserve jusqu’à $limit brouillons. Vous en avez $count.';
+  }
+
+  @override
   String get draftValidationNoContent =>
       'Ajoutez un objet, un message ou une pièce jointe';
 

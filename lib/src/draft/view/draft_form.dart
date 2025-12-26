@@ -11,6 +11,7 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -647,6 +648,7 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _handleSaveDraft() async {
     if (context.read<DraftCubit?>() == null) return;
+    final wasNewDraft = id == null;
     final attachmentIds =
         _pendingAttachments.map((pending) => pending.id).toList();
     final DraftSaveResult result = await context.read<DraftCubit>().saveDraft(
@@ -658,6 +660,16 @@ class _DraftFormState extends State<DraftForm> {
         );
     if (!mounted) return;
     setState(() => id = result.draftId);
+    if (wasNewDraft && result.draftCount >= draftSyncWarningThreshold) {
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.warning(
+          message: context.l10n.draftLimitWarning(
+            draftSyncMaxItems,
+            result.draftCount,
+          ),
+        ),
+      );
+    }
     await _applyAttachmentMetadataIds(
       metadataIds: result.attachmentMetadataIds,
       expectedAttachmentIds: attachmentIds,

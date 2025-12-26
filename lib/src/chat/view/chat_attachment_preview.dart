@@ -7,11 +7,15 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart' show XmppService;
+import 'package:axichat/src/xmpp/xmpp_service.dart'
+    show XmppFileTooBigException, XmppService;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 
 class _AttachmentSpinner extends StatelessWidget {
   const _AttachmentSpinner({
@@ -37,6 +41,32 @@ class _AttachmentSpinner extends StatelessWidget {
   }
 }
 
+const double _attachmentPreviewCornerRadius = 18.0;
+const double _attachmentActionSpacing = 8.0;
+const double _attachmentOverlayIconSize = 16.0;
+const double _attachmentVideoIconSize = 20.0;
+const double _attachmentOverlayPadding = 8.0;
+const double _attachmentVideoSpinnerSize = 32.0;
+const double _attachmentVideoFallbackAspectRatio = 16 / 9;
+const double _attachmentRemoteIconSize = 18.0;
+const double _attachmentRemoteSpacing = 8.0;
+const double _attachmentRemoteBodySpacing = 12.0;
+const double _attachmentUnknownMaxWidth = 420.0;
+const double _attachmentMaxWidthFraction = 0.9;
+const String _attachmentTooLargeMessageDefault =
+    'Attachment exceeds the server limit.';
+const String _attachmentTooLargeMessagePrefix =
+    'Attachment exceeds the server limit (';
+const String _attachmentTooLargeMessageSuffix = ').';
+
+class AttachmentDownloadDelegate {
+  const AttachmentDownloadDelegate(this._download);
+
+  final Future<bool> Function() _download;
+
+  Future<bool> download() => _download();
+}
+
 class ChatAttachmentPreview extends StatelessWidget {
   const ChatAttachmentPreview({
     super.key,
@@ -46,6 +76,7 @@ class ChatAttachmentPreview extends StatelessWidget {
     required this.allowed,
     this.autoDownload = false,
     this.autoDownloadUserInitiated = false,
+    this.downloadDelegate,
     this.onAllowPressed,
   });
 
@@ -55,6 +86,7 @@ class ChatAttachmentPreview extends StatelessWidget {
   final bool allowed;
   final bool autoDownload;
   final bool autoDownloadUserInitiated;
+  final AttachmentDownloadDelegate? downloadDelegate;
   final VoidCallback? onAllowPressed;
 
   @override
@@ -88,10 +120,7 @@ class ChatAttachmentPreview extends StatelessWidget {
             );
           }
 
-          final path = metadata.path?.trim();
-          final localFile = path == null || path.isEmpty ? null : File(path);
-          final hasLocalFile = localFile?.existsSync() ?? false;
-          if (!allowed && !hasLocalFile) {
+          if (!allowed) {
             return _BlockedAttachment(
               metadata: metadata,
               onAllowPressed: onAllowPressed,
@@ -103,6 +132,16 @@ class ChatAttachmentPreview extends StatelessWidget {
               stanzaId: stanzaId,
               autoDownload: autoDownload,
               autoDownloadUserInitiated: autoDownloadUserInitiated,
+              downloadDelegate: downloadDelegate,
+            );
+          }
+          if (_isVideo(metadata)) {
+            return _VideoAttachment(
+              metadata: metadata,
+              stanzaId: stanzaId,
+              autoDownload: autoDownload,
+              autoDownloadUserInitiated: autoDownloadUserInitiated,
+              downloadDelegate: downloadDelegate,
             );
           }
           return _FileAttachment(
@@ -110,6 +149,7 @@ class ChatAttachmentPreview extends StatelessWidget {
             stanzaId: stanzaId,
             autoDownload: autoDownload,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
+            downloadDelegate: downloadDelegate,
           );
         },
       ),
@@ -175,12 +215,14 @@ class _ImageAttachment extends StatefulWidget {
     required this.stanzaId,
     required this.autoDownload,
     required this.autoDownloadUserInitiated,
+    this.downloadDelegate,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
   final bool autoDownload;
   final bool autoDownloadUserInitiated;
+  final AttachmentDownloadDelegate? downloadDelegate;
 
   @override
   State<_ImageAttachment> createState() => _ImageAttachmentState();
@@ -202,21 +244,22 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     final path = metadata.path;
     final localFile = path == null ? null : File(path);
     final hasLocalFile = localFile?.existsSync() ?? false;
-    if (!hasLocalFile && url == null) {
+    final canDownload = url != null || widget.downloadDelegate != null;
+    if (!hasLocalFile && !canDownload) {
       return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
     }
     if (widget.autoDownload &&
         !_autoDownloadRequested &&
         !_downloading &&
         !hasLocalFile &&
-        url != null) {
+        canDownload) {
       _autoDownloadRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _downloadAttachment(showFeedback: widget.autoDownloadUserInitiated);
       });
     }
-    final radius = BorderRadius.circular(18);
+    final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
     if (!hasLocalFile) {
       if (_encrypted) {
         return _EncryptedAttachment(
@@ -242,7 +285,11 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final targetWidth = _resolveWidth(constraints, context);
+        final targetWidth = _resolveAttachmentWidth(
+          constraints,
+          context,
+          intrinsicWidth: widget.metadata.width?.toDouble(),
+        );
         return Align(
           alignment: Alignment.centerLeft,
           widthFactor: 1,
@@ -279,21 +326,28 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
-      final xmpp = context.read<XmppService>();
-      final downloadedPath = await xmpp.downloadInboundAttachment(
-        metadataId: widget.metadata.id,
-        stanzaId: widget.stanzaId,
-      );
+      final downloadDelegate = widget.downloadDelegate;
+      final downloaded = downloadDelegate == null
+          ? await _downloadViaXmpp()
+          : await downloadDelegate.download();
       if (!mounted) return;
-      if (downloadedPath == null || downloadedPath.trim().isEmpty) {
-        if (showFeedback) {
-          _showToast(
-            l10n,
-            toaster,
-            l10n.chatAttachmentUnavailable,
-            destructive: true,
-          );
-        }
+      if (!downloaded && showFeedback) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+      }
+    } on XmppFileTooBigException catch (error) {
+      if (!mounted) return;
+      if (showFeedback) {
+        _showToast(
+          l10n,
+          toaster,
+          _attachmentTooLargeMessage(l10n, error.maxBytes),
+          destructive: true,
+        );
       }
     } on Exception {
       if (!mounted) return;
@@ -314,16 +368,13 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     }
   }
 
-  double _resolveWidth(BoxConstraints constraints, BuildContext context) {
-    final availableWidth = constraints.maxWidth.isFinite
-        ? constraints.maxWidth
-        : MediaQuery.sizeOf(context).width;
-    const maxUnknownWidth = 420.0;
-    final intrinsicWidth = widget.metadata.width?.toDouble();
-    final targetWidth = intrinsicWidth != null && intrinsicWidth > 0
-        ? intrinsicWidth
-        : math.min(maxUnknownWidth, availableWidth);
-    return math.min(targetWidth, availableWidth * 0.9);
+  Future<bool> _downloadViaXmpp() async {
+    final xmpp = context.read<XmppService>();
+    final downloadedPath = await xmpp.downloadInboundAttachment(
+      metadataId: widget.metadata.id,
+      stanzaId: widget.stanzaId,
+    );
+    return downloadedPath?.trim().isNotEmpty == true;
   }
 
   double _aspectRatio(FileMetadataData metadata) {
@@ -333,6 +384,314 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     }
     return 4 / 3;
   }
+}
+
+class _VideoAttachment extends StatefulWidget {
+  const _VideoAttachment({
+    required this.metadata,
+    required this.stanzaId,
+    required this.autoDownload,
+    required this.autoDownloadUserInitiated,
+    this.downloadDelegate,
+  });
+
+  final FileMetadataData metadata;
+  final String stanzaId;
+  final bool autoDownload;
+  final bool autoDownloadUserInitiated;
+  final AttachmentDownloadDelegate? downloadDelegate;
+
+  @override
+  State<_VideoAttachment> createState() => _VideoAttachmentState();
+}
+
+class _VideoAttachmentState extends State<_VideoAttachment> {
+  var _downloading = false;
+  var _autoDownloadRequested = false;
+  VideoPlayerController? _controller;
+
+  bool get _encrypted =>
+      widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideoIfAvailable();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoAttachment oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldPath = oldWidget.metadata.path?.trim();
+    final nextPath = widget.metadata.path?.trim();
+    if (oldPath != nextPath) {
+      _resetController();
+      _initializeVideoIfAvailable();
+    }
+  }
+
+  @override
+  void dispose() {
+    _resetController();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metadata = widget.metadata;
+    final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
+        ? null
+        : metadata.sourceUrls!.first;
+    final path = metadata.path?.trim();
+    final localFile = path == null || path.isEmpty ? null : File(path);
+    final hasLocalFile = localFile?.existsSync() ?? false;
+    final canDownload = url != null || widget.downloadDelegate != null;
+    if (!hasLocalFile && !canDownload) {
+      return _AttachmentError(message: context.l10n.chatAttachmentUnavailable);
+    }
+    if (widget.autoDownload &&
+        !_autoDownloadRequested &&
+        !_downloading &&
+        !hasLocalFile &&
+        canDownload) {
+      _autoDownloadRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _downloadAttachment(showFeedback: widget.autoDownloadUserInitiated);
+      });
+    }
+    final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
+    if (!hasLocalFile) {
+      if (_encrypted) {
+        return _EncryptedAttachment(
+          filename: metadata.filename,
+          downloading: _downloading,
+          onPressed: _downloading
+              ? null
+              : () => _downloadAttachment(showFeedback: true),
+        );
+      }
+      return _RemoteVideoAttachment(
+        filename: metadata.filename,
+        downloading: _downloading,
+        onPressed:
+            _downloading ? null : () => _downloadAttachment(showFeedback: true),
+      );
+    }
+
+    final colors = context.colorScheme;
+    final controller = _controller;
+    final initialized = controller?.value.isInitialized == true;
+    final playing = controller?.value.isPlaying == true;
+    final aspectRatio = _videoAspectRatio(
+      metadata: metadata,
+      controller: controller,
+    );
+    final saveButton = Positioned(
+      top: _attachmentOverlayPadding,
+      right: _attachmentOverlayPadding,
+      child: ShadButton.ghost(
+        size: ShadButtonSize.sm,
+        onPressed: _downloading
+            ? null
+            : () async {
+                if (localFile == null) return;
+                await _saveAttachmentToDevice(
+                  context,
+                  file: localFile,
+                  filename: metadata.filename,
+                );
+              },
+        child: const Icon(
+          LucideIcons.save,
+          size: _attachmentOverlayIconSize,
+        ),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final targetWidth = _resolveAttachmentWidth(
+          constraints,
+          context,
+          intrinsicWidth: metadata.width?.toDouble(),
+        );
+        return Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: 1,
+          heightFactor: 1,
+          child: SizedBox(
+            width: targetWidth,
+            child: _AttachmentSurface(
+              padding: EdgeInsets.zero,
+              backgroundColor: Colors.transparent,
+              borderSide: BorderSide.none,
+              child: ClipRRect(
+                borderRadius: radius,
+                child: AspectRatio(
+                  aspectRatio: aspectRatio,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      DecoratedBox(
+                        decoration: ShapeDecoration(
+                          color: colors.card,
+                          shape: const RoundedRectangleBorder(),
+                        ),
+                      ),
+                      if (initialized && controller != null)
+                        VideoPlayer(controller)
+                      else
+                        Center(
+                          child: _AttachmentSpinner(
+                            size: _attachmentVideoSpinnerSize,
+                            color: colors.primary,
+                          ),
+                        ),
+                      if (initialized && controller != null)
+                        Center(
+                          child: ShadButton.ghost(
+                            size: ShadButtonSize.sm,
+                            onPressed: _togglePlayback,
+                            child: Icon(
+                              playing ? LucideIcons.pause : LucideIcons.play,
+                              size: _attachmentVideoIconSize,
+                            ),
+                          ),
+                        ),
+                      if (initialized) saveButton,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _downloadAttachment({required bool showFeedback}) async {
+    if (_downloading) return;
+    setState(() {
+      _downloading = true;
+    });
+    final l10n = context.l10n;
+    final toaster = ShadToaster.maybeOf(context);
+    try {
+      final downloadDelegate = widget.downloadDelegate;
+      final downloaded = downloadDelegate == null
+          ? await _downloadViaXmpp()
+          : await downloadDelegate.download();
+      if (!mounted) return;
+      if (!downloaded && showFeedback) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+      }
+    } on XmppFileTooBigException catch (error) {
+      if (!mounted) return;
+      if (showFeedback) {
+        _showToast(
+          l10n,
+          toaster,
+          _attachmentTooLargeMessage(l10n, error.maxBytes),
+          destructive: true,
+        );
+      }
+    } on Exception {
+      if (!mounted) return;
+      if (showFeedback) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _downloadViaXmpp() async {
+    final xmpp = context.read<XmppService>();
+    final downloadedPath = await xmpp.downloadInboundAttachment(
+      metadataId: widget.metadata.id,
+      stanzaId: widget.stanzaId,
+    );
+    return downloadedPath?.trim().isNotEmpty == true;
+  }
+
+  void _togglePlayback() {
+    final controller = _controller;
+    if (controller == null) return;
+    final playing = controller.value.isPlaying;
+    if (playing) {
+      controller.pause();
+    } else {
+      controller.play();
+    }
+    setState(() {});
+  }
+
+  void _initializeVideoIfAvailable() {
+    final path = widget.metadata.path?.trim();
+    if (path == null || path.isEmpty) return;
+    final file = File(path);
+    if (!file.existsSync()) return;
+    final controller = VideoPlayerController.file(file);
+    _controller = controller;
+    controller.initialize().then((_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  void _resetController() {
+    final controller = _controller;
+    if (controller == null) return;
+    controller.dispose();
+    _controller = null;
+  }
+
+  double _videoAspectRatio({
+    required FileMetadataData metadata,
+    required VideoPlayerController? controller,
+  }) {
+    final controllerValue = controller?.value;
+    final controllerRatio = controllerValue?.aspectRatio;
+    if (controllerRatio != null && controllerRatio > 0) {
+      return controllerRatio;
+    }
+    final width = metadata.width;
+    final height = metadata.height;
+    if (width != null && height != null && width > 0 && height > 0) {
+      return width / height;
+    }
+    return _attachmentVideoFallbackAspectRatio;
+  }
+}
+
+double _resolveAttachmentWidth(
+  BoxConstraints constraints,
+  BuildContext context, {
+  required double? intrinsicWidth,
+}) {
+  final availableWidth = constraints.maxWidth.isFinite
+      ? constraints.maxWidth
+      : MediaQuery.sizeOf(context).width;
+  final targetWidth = intrinsicWidth != null && intrinsicWidth > 0
+      ? intrinsicWidth
+      : math.min(_attachmentUnknownMaxWidth, availableWidth);
+  return math.min(targetWidth, availableWidth * _attachmentMaxWidthFraction);
 }
 
 Future<void> _openImagePreview(
@@ -375,7 +734,7 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
       maxHeight: maxHeight,
     );
     final colors = context.colorScheme;
-    final radius = BorderRadius.circular(18);
+    final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
     final borderSide = BorderSide(color: colors.border);
     return ShadDialog(
       padding: const EdgeInsets.all(12),
@@ -415,10 +774,33 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
           Positioned(
             top: 4,
             right: 4,
-            child: ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Icon(LucideIcons.x, size: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ShadButton.ghost(
+                  size: ShadButtonSize.sm,
+                  onPressed: () async {
+                    await _saveAttachmentToDevice(
+                      context,
+                      file: file,
+                      filename: metadata.filename,
+                    );
+                  },
+                  child: const Icon(
+                    LucideIcons.save,
+                    size: _attachmentOverlayIconSize,
+                  ),
+                ),
+                const SizedBox(width: _attachmentActionSpacing),
+                ShadButton.ghost(
+                  size: ShadButtonSize.sm,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Icon(
+                    LucideIcons.x,
+                    size: _attachmentOverlayIconSize,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -465,12 +847,14 @@ class _FileAttachment extends StatefulWidget {
     required this.stanzaId,
     required this.autoDownload,
     required this.autoDownloadUserInitiated,
+    this.downloadDelegate,
   });
 
   final FileMetadataData metadata;
   final String stanzaId;
   final bool autoDownload;
   final bool autoDownloadUserInitiated;
+  final AttachmentDownloadDelegate? downloadDelegate;
 
   @override
   State<_FileAttachment> createState() => _FileAttachmentState();
@@ -491,11 +875,12 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final path = metadata.path?.trim();
     final localFile = path == null || path.isEmpty ? null : File(path);
     final hasLocalFile = localFile?.existsSync() ?? false;
+    final canDownload = url != null || widget.downloadDelegate != null;
     if (widget.autoDownload &&
         !_autoDownloadRequested &&
         !_downloading &&
         !hasLocalFile &&
-        url != null) {
+        canDownload) {
       _autoDownloadRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -559,18 +944,78 @@ class _FileAttachmentState extends State<_FileAttachment> {
               ),
             )
           else
-            AxiIconButton(
-              iconData: LucideIcons.download,
-              tooltip: l10n.chatAttachmentDownload,
-              onPressed: url == null && metadata.path == null
-                  ? null
-                  : () => _downloadAndOpen(
-                        existingPath: metadata.path,
-                      ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AxiIconButton(
+                  iconData: LucideIcons.save,
+                  tooltip: l10n.commonSave,
+                  onPressed:
+                      hasLocalFile || canDownload ? _saveAttachment : null,
+                ),
+                const SizedBox(width: _attachmentActionSpacing),
+                AxiIconButton(
+                  iconData: LucideIcons.download,
+                  tooltip: l10n.chatAttachmentDownload,
+                  onPressed: hasLocalFile || canDownload
+                      ? () => _downloadAndOpen(existingPath: metadata.path)
+                      : null,
+                ),
+              ],
             ),
         ],
       ),
     );
+  }
+
+  Future<void> _saveAttachment() async {
+    if (_downloading) return;
+    setState(() {
+      _downloading = true;
+    });
+    final l10n = context.l10n;
+    final toaster = ShadToaster.maybeOf(context);
+    try {
+      final path = await _resolveLocalPath(existingPath: widget.metadata.path);
+      if (!mounted) return;
+      if (path == null || path.trim().isEmpty) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+        return;
+      }
+      final file = File(path);
+      await _saveAttachmentToDevice(
+        context,
+        file: file,
+        filename: widget.metadata.filename,
+      );
+    } on XmppFileTooBigException catch (error) {
+      if (!mounted) return;
+      _showToast(
+        l10n,
+        toaster,
+        _attachmentTooLargeMessage(l10n, error.maxBytes),
+        destructive: true,
+      );
+    } on Exception {
+      if (!mounted) return;
+      _showToast(
+        l10n,
+        toaster,
+        l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+        });
+      }
+    }
   }
 
   Future<void> _downloadAndOpen({
@@ -583,15 +1028,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
-      final xmpp = context.read<XmppService>();
-      final downloadedPath = await xmpp.downloadInboundAttachment(
-        metadataId: widget.metadata.id,
-        stanzaId: widget.stanzaId,
-      );
+      final resolvedPath = await _resolveLocalPath(existingPath: existingPath);
       if (!mounted) return;
-      final resolvedPath = downloadedPath?.trim().isNotEmpty == true
-          ? downloadedPath
-          : existingPath;
       if (resolvedPath == null || resolvedPath.trim().isEmpty) {
         _showToast(
           l10n,
@@ -602,6 +1040,14 @@ class _FileAttachmentState extends State<_FileAttachment> {
         return;
       }
       await _openAttachment(context, path: resolvedPath);
+    } on XmppFileTooBigException catch (error) {
+      if (!mounted) return;
+      _showToast(
+        l10n,
+        toaster,
+        _attachmentTooLargeMessage(l10n, error.maxBytes),
+        destructive: true,
+      );
     } on Exception {
       if (!mounted) return;
       _showToast(
@@ -627,11 +1073,28 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
-      final xmpp = context.read<XmppService>();
-      await xmpp.downloadInboundAttachment(
-        metadataId: widget.metadata.id,
-        stanzaId: widget.stanzaId,
-      );
+      final resolvedPath =
+          await _resolveLocalPath(existingPath: widget.metadata.path);
+      final downloaded = resolvedPath?.trim().isNotEmpty == true;
+      if (!mounted) return;
+      if (!downloaded && showFeedback) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+      }
+    } on XmppFileTooBigException catch (error) {
+      if (!mounted) return;
+      if (showFeedback) {
+        _showToast(
+          l10n,
+          toaster,
+          _attachmentTooLargeMessage(l10n, error.maxBytes),
+          destructive: true,
+        );
+      }
     } on Exception {
       if (!mounted) return;
       if (showFeedback) {
@@ -649,6 +1112,41 @@ class _FileAttachmentState extends State<_FileAttachment> {
         });
       }
     }
+  }
+
+  Future<String?> _downloadViaXmpp() async {
+    final xmpp = context.read<XmppService>();
+    return xmpp.downloadInboundAttachment(
+      metadataId: widget.metadata.id,
+      stanzaId: widget.stanzaId,
+    );
+  }
+
+  Future<String?> _resolveLocalPath({
+    required String? existingPath,
+  }) async {
+    final resolvedExisting = existingPath?.trim();
+    final existingFile = resolvedExisting == null || resolvedExisting.isEmpty
+        ? null
+        : File(resolvedExisting);
+    if (existingFile?.existsSync() ?? false) return existingFile!.path;
+    final downloadDelegate = widget.downloadDelegate;
+    if (downloadDelegate != null) {
+      final downloaded = await downloadDelegate.download();
+      if (!downloaded) return null;
+      final refreshed = await _reloadMetadata();
+      final refreshedPath = refreshed?.path?.trim();
+      if (refreshedPath == null || refreshedPath.isEmpty) return null;
+      final refreshedFile = File(refreshedPath);
+      return refreshedFile.existsSync() ? refreshedFile.path : null;
+    }
+    return _downloadViaXmpp();
+  }
+
+  Future<FileMetadataData?> _reloadMetadata() async {
+    final xmpp = context.read<XmppService>();
+    final db = await xmpp.database;
+    return db.getFileMetadata(widget.metadata.id);
   }
 }
 
@@ -683,16 +1181,16 @@ class _EncryptedAttachment extends StatelessWidget {
               backgroundColor: colors.card,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 12,
+                spacing: _attachmentRemoteBodySpacing,
                 children: [
                   Row(
                     children: [
                       Icon(
                         LucideIcons.lock,
-                        size: 18,
+                        size: _attachmentRemoteIconSize,
                         color: colors.mutedForeground,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: _attachmentRemoteSpacing),
                       Expanded(
                         child: Text(
                           filename,
@@ -764,16 +1262,97 @@ class _RemoteImageAttachment extends StatelessWidget {
               backgroundColor: colors.card,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 12,
+                spacing: _attachmentRemoteBodySpacing,
                 children: [
                   Row(
                     children: [
                       Icon(
                         LucideIcons.image,
-                        size: 18,
+                        size: _attachmentRemoteIconSize,
                         color: colors.mutedForeground,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: _attachmentRemoteSpacing),
+                      Expanded(
+                        child: Text(
+                          filename,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.textTheme.small.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ShadButton(
+                      onPressed: onPressed,
+                      enabled: onPressed != null,
+                      leading: downloading
+                          ? _AttachmentSpinner(
+                              size: 16,
+                              color: colors.primaryForeground,
+                            )
+                          : null,
+                      child: Text(
+                        downloading
+                            ? l10n.chatAttachmentLoading
+                            : l10n.chatAttachmentDownload,
+                      ),
+                    ).withTapBounce(enabled: onPressed != null),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RemoteVideoAttachment extends StatelessWidget {
+  const _RemoteVideoAttachment({
+    required this.filename,
+    required this.downloading,
+    required this.onPressed,
+  });
+
+  final String filename;
+  final bool downloading;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final width = availableWidth * 0.9;
+        return Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: 1,
+          heightFactor: 1,
+          child: SizedBox(
+            width: width,
+            child: _AttachmentSurface(
+              backgroundColor: colors.card,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: _attachmentRemoteBodySpacing,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.video,
+                        size: _attachmentRemoteIconSize,
+                        color: colors.mutedForeground,
+                      ),
+                      const SizedBox(width: _attachmentRemoteSpacing),
                       Expanded(
                         child: Text(
                           filename,
@@ -931,6 +1510,46 @@ Future<void> _openAttachment(
   }
 }
 
+Future<void> _saveAttachmentToDevice(
+  BuildContext context, {
+  required File file,
+  required String filename,
+}) async {
+  final l10n = context.l10n;
+  final toaster = ShadToaster.maybeOf(context);
+  if (!await file.exists()) {
+    _showToast(
+      l10n,
+      toaster,
+      l10n.chatAttachmentUnavailableDevice,
+      destructive: true,
+    );
+    return;
+  }
+  final trimmedName = filename.trim();
+  final resolvedName =
+      trimmedName.isNotEmpty ? trimmedName : p.basename(file.path);
+  final savePath = await FilePicker.platform.saveFile(
+    fileName: resolvedName,
+  );
+  if (savePath == null || savePath.trim().isEmpty) return;
+  try {
+    final destination = File(savePath);
+    if (p.equals(destination.path, file.path)) return;
+    if (await destination.exists()) {
+      await destination.delete();
+    }
+    await file.copy(destination.path);
+  } on Exception {
+    _showToast(
+      l10n,
+      toaster,
+      l10n.chatAttachmentUnavailable,
+      destructive: true,
+    );
+  }
+}
+
 void _showToast(
   AppLocalizations l10n,
   ShadToasterState? toaster,
@@ -965,6 +1584,25 @@ bool _isImage(FileMetadataData metadata) {
   return extensions.any(name.endsWith);
 }
 
+bool _isVideo(FileMetadataData metadata) {
+  final mime = metadata.mimeType?.toLowerCase();
+  if (mime?.startsWith('video/') ?? false) return true;
+  final name = metadata.filename.toLowerCase();
+  const extensions = [
+    '.mp4',
+    '.mov',
+    '.m4v',
+    '.webm',
+    '.mkv',
+    '.avi',
+    '.mpeg',
+    '.mpg',
+    '.3gp',
+    '.3gpp',
+  ];
+  return extensions.any(name.endsWith);
+}
+
 String _formatSize(int? bytes, AppLocalizations l10n) {
   if (bytes == null || bytes <= 0) return l10n.chatAttachmentUnknownSize;
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -975,4 +1613,16 @@ String _formatSize(int? bytes, AppLocalizations l10n) {
     unit++;
   }
   return '${value.toStringAsFixed(value >= 10 || unit == 0 ? 0 : 1)} ${units[unit]}';
+}
+
+String _attachmentTooLargeMessage(
+  AppLocalizations l10n,
+  int? maxBytes,
+) {
+  final resolvedLimit =
+      maxBytes == null || maxBytes <= 0 ? null : _formatSize(maxBytes, l10n);
+  if (resolvedLimit == null) {
+    return _attachmentTooLargeMessageDefault;
+  }
+  return '$_attachmentTooLargeMessagePrefix$resolvedLimit$_attachmentTooLargeMessageSuffix';
 }

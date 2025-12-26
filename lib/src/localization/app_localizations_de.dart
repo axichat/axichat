@@ -462,6 +462,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get draftSent => 'Gesendet';
 
   @override
+  String draftLimitWarning(int limit, int count) {
+    return 'Die Entwurfssynchronisierung behält bis zu $limit Entwürfe. Du hast $count.';
+  }
+
+  @override
   String get draftValidationNoContent =>
       'Betreff, Nachricht oder Anhang hinzufügen';
 

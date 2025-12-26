@@ -146,6 +146,17 @@
   "draftDiscarded": "Entwurf verworfen.",
   "draftSendFailed": "Entwurf konnte nicht gesendet werden.",
   "draftSent": "Gesendet",
+  "draftLimitWarning": "Die Entwurfssynchronisierung behält bis zu {limit} Entwürfe. Du hast {count}.",
+  "@draftLimitWarning": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "draftValidationNoContent": "Betreff, Nachricht oder Anhang hinzufügen",
   "draftFileMissing": "Datei existiert unter {path} nicht mehr.",
   "draftAttachmentPreview": "Vorschau",

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -25,6 +26,7 @@ import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chat/view/chat_bubble_surface.dart';
@@ -94,6 +96,7 @@ extension on MessageStatus {
 enum _ChatRoute {
   main,
   details,
+  attachments,
   calendar,
 }
 
@@ -114,6 +117,9 @@ const _cutoutMaxWidthFraction = 1.0;
 const _compactBubbleWidthFraction = 0.7;
 const _regularBubbleWidthFraction = 0.7;
 const _reactionOverflowGlyphWidth = 18.0;
+const String _chatAttachmentPanelKeyPrefix = 'chat-attachments-';
+const String _chatCalendarPanelKeyPrefix = 'chat-calendar-';
+const String _chatPanelKeyFallback = '';
 const _recipientCutoutDepth = 16.0;
 const _recipientCutoutRadius = 18.0;
 const _recipientCutoutPadding = EdgeInsets.fromLTRB(10, 4, 10, 6);
@@ -133,7 +139,7 @@ const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
-const _chatCalendarActionSpacing = 4.0;
+const _chatHeaderActionSpacing = 4.0;
 const String _calendarFragmentShareDeniedMessage =
     'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
@@ -714,89 +720,6 @@ class _RoomMembersDrawerContent extends StatelessWidget {
   }
 }
 
-final class _AttachmentApprovalDecision {
-  const _AttachmentApprovalDecision({
-    required this.approved,
-    required this.autoTrust,
-  });
-
-  final bool approved;
-  final bool autoTrust;
-}
-
-class _AttachmentApprovalDialog extends StatefulWidget {
-  const _AttachmentApprovalDialog({
-    required this.title,
-    required this.message,
-    required this.confirmLabel,
-    required this.cancelLabel,
-    required this.showAutoTrustToggle,
-    required this.autoTrustLabel,
-    required this.autoTrustHint,
-  });
-
-  final String title;
-  final String message;
-  final String confirmLabel;
-  final String cancelLabel;
-  final bool showAutoTrustToggle;
-  final String autoTrustLabel;
-  final String autoTrustHint;
-
-  @override
-  State<_AttachmentApprovalDialog> createState() =>
-      _AttachmentApprovalDialogState();
-}
-
-class _AttachmentApprovalDialogState extends State<_AttachmentApprovalDialog> {
-  var _autoTrust = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final pop = Navigator.of(context).pop;
-    return ShadDialog(
-      title: Text(
-        widget.title,
-        style: context.modalHeaderTextStyle,
-      ),
-      actions: [
-        ShadButton.outline(
-          onPressed: () => pop(const _AttachmentApprovalDecision(
-            approved: false,
-            autoTrust: false,
-          )),
-          child: Text(widget.cancelLabel),
-        ).withTapBounce(),
-        ShadButton(
-          onPressed: () => pop(_AttachmentApprovalDecision(
-            approved: true,
-            autoTrust: _autoTrust,
-          )),
-          child: Text(widget.confirmLabel),
-        ).withTapBounce(),
-      ],
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 12,
-        children: [
-          if (widget.showAutoTrustToggle)
-            AxiCheckboxFormField(
-              initialValue: _autoTrust,
-              inputLabel: Text(widget.autoTrustLabel),
-              inputSublabel: Text(widget.autoTrustHint),
-              onChanged: (value) {
-                setState(() {
-                  _autoTrust = value;
-                });
-              },
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ChatState extends State<Chat> {
   late final ShadPopoverController _emojiPopoverController;
   late final FocusNode _focusNode;
@@ -812,6 +735,8 @@ class _ChatState extends State<Chat> {
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   var _chatOpenedAt = DateTime.now();
+  static final RegExp _axiDomainPattern =
+      RegExp(r'@(?:[\\w-]+\\.)*axi\\.im$', caseSensitive: false);
   static final Map<String, double> _scrollOffsetCache = {};
   String? _lastScrollStorageKey;
 
@@ -1488,14 +1413,50 @@ class _ChatState extends State<Chat> {
     return _metadataEntryFor(id).latestOrNull;
   }
 
+  bool _isEmailOnlyAddress(String? value) {
+    if (value == null) return false;
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (!normalized.contains('@')) {
+      return false;
+    }
+    return !_axiDomainPattern.hasMatch(normalized);
+  }
+
+  bool _hasEmailAttachmentTarget({
+    required chat_models.Chat chat,
+    required List<ComposerRecipient> recipients,
+  }) {
+    if (chat.defaultTransport.isEmail) {
+      return true;
+    }
+    for (final recipient in recipients) {
+      final targetChat = recipient.target.chat;
+      if (targetChat != null && targetChat.defaultTransport.isEmail) {
+        return true;
+      }
+      if (_isEmailOnlyAddress(recipient.target.address)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool _shouldAllowAttachment({
     required String senderJid,
     required bool isSelf,
     required Set<String> knownContacts,
-    required bool isEmailChat,
+    required chat_models.Chat? chat,
   }) {
     if (isSelf) return true;
-    if (isEmailChat) return true;
+    if (chat == null) return false;
+    final isGroupChat = chat.type == ChatType.groupChat;
+    final isEmailChat = chat.defaultTransport.isEmail;
+    if (isEmailChat || isGroupChat) {
+      return chat.attachmentAutoDownload.isAllowed;
+    }
     final bareSender = _bareJid(senderJid);
     final normalizedSender =
         bareSender?.trim().isNotEmpty == true ? bareSender! : senderJid;
@@ -1510,6 +1471,7 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _approveAttachment({
+    required Message message,
     required String senderJid,
     required String stanzaId,
     required String metadataId,
@@ -1521,8 +1483,10 @@ class _ChatState extends State<Chat> {
     final l10n = context.l10n;
     final displaySender =
         senderEmail?.isNotEmpty == true ? senderEmail! : senderJid;
-    const autoTrustLabel = "Automatically download files from this user";
-    const autoTrustHint = "You can turn this off later in chat settings.";
+    const rosterTrustLabel = 'Automatically download files from this user';
+    const rosterTrustHint = 'You can turn this off later in chat settings.';
+    const chatTrustLabel = 'Always allow attachments in this chat';
+    const chatTrustHint = 'You can turn this off later in chat settings.';
     final senderBare = _bareJid(senderJid) ?? senderJid;
     final isSelf = context.read<XmppService>().myJid?.toLowerCase() ==
         senderBare.toLowerCase();
@@ -1531,16 +1495,20 @@ class _ChatState extends State<Chat> {
         !isGroupChat &&
         senderBare.isValidJid &&
         senderBare.isNotEmpty;
-    final decision = await showShadDialog<_AttachmentApprovalDecision>(
+    final canTrustChat = !isSelf && (isEmailChat || isGroupChat);
+    final showAutoTrustToggle = canAddToRoster || canTrustChat;
+    final autoTrustLabel = canAddToRoster ? rosterTrustLabel : chatTrustLabel;
+    final autoTrustHint = canAddToRoster ? rosterTrustHint : chatTrustHint;
+    final decision = await showShadDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        return _AttachmentApprovalDialog(
+        return AttachmentApprovalDialog(
           title: l10n.chatAttachmentConfirmTitle,
           message: l10n.chatAttachmentConfirmMessage(displaySender),
           confirmLabel: l10n.chatAttachmentConfirmButton,
           cancelLabel: l10n.commonCancel,
-          showAutoTrustToggle: canAddToRoster,
+          showAutoTrustToggle: showAutoTrustToggle,
           autoTrustLabel: autoTrustLabel,
           autoTrustHint: autoTrustHint,
         );
@@ -1550,8 +1518,10 @@ class _ChatState extends State<Chat> {
     if (decision == null || !decision.approved) return;
 
     final xmpp = context.read<XmppService>();
+    final chatBloc = context.read<ChatBloc>();
+    final emailService = RepositoryProvider.of<EmailService?>(context);
     final showToast = ShadToaster.maybeOf(context)?.show;
-    if (decision.autoTrust && canAddToRoster) {
+    if (decision.alwaysAllow && canAddToRoster) {
       try {
         await xmpp.addToRoster(jid: senderBare);
       } on Exception {
@@ -1559,6 +1529,14 @@ class _ChatState extends State<Chat> {
         const message =
             'Downloaded this attachment once, but automatic downloads are still disabled.';
         showToast?.call(FeedbackToast.error(title: title, message: message));
+      }
+    }
+    if (decision.alwaysAllow && canTrustChat) {
+      chatBloc.add(const ChatAttachmentAutoDownloadToggled(true));
+    }
+    if (isEmailChat) {
+      if (emailService != null) {
+        await emailService.downloadFullMessage(message);
       }
     }
 
@@ -1837,27 +1815,41 @@ class _ChatState extends State<Chat> {
     });
     try {
       final result = await FilePicker.platform.pickFiles(
-        allowMultiple: false,
+        allowMultiple: true,
         withReadStream: false,
       );
       if (result == null || result.files.isEmpty || !mounted) {
         return;
       }
-      final file = result.files.single;
-      final path = file.path;
-      if (path == null) {
-        _showSnackbar(l10n.chatAttachmentInaccessible);
+      final attachments = <EmailAttachment>[];
+      var hasInvalidPath = false;
+      for (final file in result.files) {
+        final path = file.path;
+        if (path == null) {
+          hasInvalidPath = true;
+          continue;
+        }
+        final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
+        attachments.add(
+          EmailAttachment(
+            path: path,
+            fileName: file.name.isNotEmpty ? file.name : path.split('/').last,
+            sizeBytes: file.size > 0 ? file.size : 0,
+            mimeType: mimeType,
+          ),
+        );
+      }
+      if (attachments.isEmpty) {
+        if (hasInvalidPath) {
+          _showSnackbar(l10n.chatAttachmentInaccessible);
+        }
         return;
       }
-      final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
-      final attachment = EmailAttachment(
-        path: path,
-        fileName: file.name.isNotEmpty ? file.name : path.split('/').last,
-        sizeBytes: file.size > 0 ? file.size : 0,
-        mimeType: mimeType,
-      );
       if (!mounted) return;
-      context.read<ChatBloc>().add(ChatAttachmentPicked(attachment));
+      final chatBloc = context.read<ChatBloc>();
+      for (final attachment in attachments) {
+        chatBloc.add(ChatAttachmentPicked(attachment));
+      }
       _focusNode.requestFocus();
     } on PlatformException catch (error) {
       _showSnackbar(error.message ?? l10n.chatAttachmentFailed);
@@ -2773,6 +2765,14 @@ class _ChatState extends State<Chat> {
                 final shareReplies = state.shareReplies;
                 final recipients = state.recipients;
                 final pendingAttachments = state.pendingAttachments;
+                final canSendEmailAttachments = emailService != null &&
+                    chatEntity != null &&
+                    _hasEmailAttachmentTarget(
+                      chat: chatEntity,
+                      recipients: recipients,
+                    );
+                final attachmentsEnabled =
+                    state.supportsHttpFileUpload || canSendEmailAttachments;
                 final latestStatuses = _latestRecipientStatuses(state);
                 final fanOutReports = state.fanOutReports;
                 final warningEntry = fanOutReports.entries.isEmpty
@@ -3189,9 +3189,15 @@ class _ChatState extends State<Chat> {
                               onPressed: _showMembers,
                             ),
                           const _ChatSearchToggleButton(),
+                          const SizedBox(width: _chatHeaderActionSpacing),
+                          AxiIconButton(
+                            iconData: LucideIcons.paperclip,
+                            tooltip: context.l10n.chatAttachmentTooltip,
+                            onPressed: _openChatAttachments,
+                          ),
                           if (chatCalendarAllowed) ...[
                             const SizedBox(
-                              width: _chatCalendarActionSpacing,
+                              width: _chatHeaderActionSpacing,
                             ),
                             AxiIconButton(
                               iconData: LucideIcons.calendarClock,
@@ -3208,7 +3214,7 @@ class _ChatState extends State<Chat> {
                             ),
                           ],
                           if (!readOnly) ...[
-                            const SizedBox(width: 4),
+                            const SizedBox(width: _chatHeaderActionSpacing),
                             AxiIconButton(
                               iconData: showSettingsPanel
                                   ? LucideIcons.x
@@ -4942,7 +4948,7 @@ class _ChatState extends State<Chat> {
                                                               ),
                                                             );
                                                           }
-                                                          final allowAttachmentByRoster =
+                                                          final allowAttachmentByTrust =
                                                               _shouldAllowAttachment(
                                                             senderJid:
                                                                 messageModel
@@ -4952,8 +4958,7 @@ class _ChatState extends State<Chat> {
                                                                 .watch<
                                                                     RosterCubit>()
                                                                 .contacts,
-                                                            isEmailChat:
-                                                                isEmailChat,
+                                                            chat: state.chat,
                                                           );
                                                           final allowAttachmentOnce =
                                                               _isOneTimeAttachmentAllowed(
@@ -4961,8 +4966,30 @@ class _ChatState extends State<Chat> {
                                                                 .stanzaID,
                                                           );
                                                           final allowAttachment =
-                                                              allowAttachmentByRoster ||
+                                                              allowAttachmentByTrust ||
                                                                   allowAttachmentOnce;
+                                                          final emailService =
+                                                              RepositoryProvider.of<
+                                                                  EmailService?>(
+                                                            context,
+                                                          );
+                                                          final emailDownloadDelegate =
+                                                              isEmailChat &&
+                                                                      emailService !=
+                                                                          null
+                                                                  ? AttachmentDownloadDelegate(
+                                                                      () => emailService
+                                                                          .downloadFullMessage(
+                                                                        messageModel,
+                                                                      ),
+                                                                    )
+                                                                  : null;
+                                                          final autoDownload =
+                                                              allowAttachment &&
+                                                                  !isEmailChat;
+                                                          final autoDownloadUserInitiated =
+                                                              allowAttachmentOnce &&
+                                                                  !isEmailChat;
                                                           for (var index = 0;
                                                               index <
                                                                   attachmentIds
@@ -4996,14 +5023,17 @@ class _ChatState extends State<Chat> {
                                                                 allowed:
                                                                     allowAttachment,
                                                                 autoDownload:
-                                                                    allowAttachment,
+                                                                    autoDownload,
                                                                 autoDownloadUserInitiated:
-                                                                    allowAttachmentOnce,
+                                                                    autoDownloadUserInitiated,
+                                                                downloadDelegate:
+                                                                    emailDownloadDelegate,
                                                                 onAllowPressed:
                                                                     allowAttachment
                                                                         ? null
                                                                         : () =>
                                                                             _approveAttachment(
+                                                                              message: messageModel,
                                                                               senderJid: messageModel.senderJid,
                                                                               stanzaId: messageModel.stanzaID,
                                                                               metadataId: attachmentId,
@@ -6269,8 +6299,8 @@ class _ChatState extends State<Chat> {
                                                   ({required bool canSend}) =>
                                                       _composerAccessories(
                                                 canSend: canSend,
-                                                attachmentsEnabled: state
-                                                    .supportsHttpFileUpload,
+                                                attachmentsEnabled:
+                                                    attachmentsEnabled,
                                               ),
                                               onTaskDropped: _handleTaskDrop,
                                               onSend: _handleSendMessage,
@@ -6281,8 +6311,18 @@ class _ChatState extends State<Chat> {
                                   },
                                 ),
                                 const ChatMessageDetails(),
+                                AttachmentGalleryPanel(
+                                  key: ValueKey(
+                                    '$_chatAttachmentPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                                  ),
+                                  title: context.l10n.draftAttachmentsLabel,
+                                  onClose: _closeChatAttachments,
+                                  chat: chatEntity,
+                                ),
                                 _ChatCalendarPanel(
-                                  key: ValueKey(chatEntity?.jid),
+                                  key: ValueKey(
+                                    '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                                  ),
                                   chat: chatEntity,
                                   calendarAvailable: chatCalendarAvailable,
                                   participants: chatCalendarParticipants,
@@ -6700,7 +6740,25 @@ class _ChatState extends State<Chat> {
     });
   }
 
+  void _openChatAttachments() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.attachments;
+      _settingsPanelExpanded = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
+  }
+
   void _closeChatCalendar() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.main;
+    });
+  }
+
+  void _closeChatAttachments() {
     if (!mounted) return;
     setState(() {
       _chatRoute = _ChatRoute.main;
@@ -9180,8 +9238,10 @@ class _ChatSettingsButtons extends StatelessWidget {
         ? l10n.chatSignatureHintEnabled
         : l10n.chatSignatureHintDisabled;
     final signatureWarning = l10n.chatSignatureHintWarning;
-    final showAttachmentTrustToggle =
+    final showRosterAttachmentToggle =
         chat.type == ChatType.chat && chat.defaultTransport.isXmpp;
+    final showChatAttachmentToggle =
+        chat.type == ChatType.groupChat || chat.defaultTransport.isEmail;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -9230,12 +9290,16 @@ class _ChatSettingsButtons extends StatelessWidget {
             ),
           ],
         ),
-        if (showAttachmentTrustToggle) ...[
+        if (showRosterAttachmentToggle) ...[
           const SizedBox(height: 12),
           _ChatAttachmentAutoDownloadToggle(
             jid: chat.jid,
             displayName: chat.displayName,
           ),
+        ],
+        if (showChatAttachmentToggle) ...[
+          const SizedBox(height: 12),
+          _ChatAttachmentTrustToggle(chat: chat),
         ],
         if (chat.supportsEmail) ...[
           const SizedBox(height: 12),
@@ -9368,6 +9432,35 @@ class _ChatAttachmentAutoDownloadToggleState
     return ShadSwitch(
       value: effectiveEnabled,
       onChanged: _saving ? null : update,
+      label: const Text(label),
+      sublabel: Text(
+        hint,
+        style: context.textTheme.muted,
+      ),
+    );
+  }
+}
+
+class _ChatAttachmentTrustToggle extends StatelessWidget {
+  const _ChatAttachmentTrustToggle({
+    required this.chat,
+  });
+
+  final chat_models.Chat chat;
+
+  @override
+  Widget build(BuildContext context) {
+    const label = 'Automatically download attachments in this chat';
+    const hintOn = 'Attachments in this chat will download automatically.';
+    const hintOff = 'Attachments are blocked until you approve them.';
+
+    final enabled = chat.attachmentAutoDownload.isAllowed;
+    final hint = enabled ? hintOn : hintOff;
+    return ShadSwitch(
+      value: enabled,
+      onChanged: (value) => context
+          .read<ChatBloc>()
+          .add(ChatAttachmentAutoDownloadToggled(value)),
       label: const Text(label),
       sublabel: Text(
         hint,
