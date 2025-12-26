@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -22,6 +23,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/calendar_alarms_field.dart';
 import 'widgets/ics_meta_fields.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'error_display.dart';
@@ -31,6 +33,7 @@ import 'widgets/task_field_character_hint.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
+const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
 
 class UnifiedTaskInput<T extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarTask? editingTask;
@@ -60,6 +63,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   String? _url;
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
+  List<CalendarAlarm> _alarms = _emptyAlarms;
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -101,6 +105,9 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     _geo = widget.editingTask?.icsMeta?.geo;
     _attachments = List<CalendarAttachment>.from(
       widget.editingTask?.icsMeta?.attachments ?? _emptyAttachments,
+    );
+    _alarms = List<CalendarAlarm>.from(
+      widget.editingTask?.icsMeta?.alarms ?? _emptyAlarms,
     );
 
     if (widget.editingTask != null) {
@@ -166,6 +173,12 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       onRemindersChanged: (value) {
         setState(() {
           _reminders = value;
+        });
+      },
+      alarms: _alarms,
+      onAlarmsChanged: (value) {
+        setState(() {
+          _alarms = value;
         });
       },
       status: _status,
@@ -278,6 +291,10 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       base: widget.editingTask?.icsMeta,
       categories: _categories,
     );
+    final List<CalendarAlarm>? alarms = resolveAlarmOverride(
+      base: widget.editingTask?.icsMeta,
+      alarms: _alarms,
+    );
     final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
       base: widget.editingTask?.icsMeta,
       status: _status,
@@ -285,6 +302,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       categories: categories,
       url: _url,
       geo: _geo,
+      alarms: alarms,
     );
 
     // Clear any previous errors
@@ -470,6 +488,8 @@ class _UnifiedTaskForm extends StatelessWidget {
     required this.checklistController,
     required this.reminders,
     required this.onRemindersChanged,
+    required this.alarms,
+    required this.onAlarmsChanged,
     required this.status,
     required this.transparency,
     required this.onStatusChanged,
@@ -499,6 +519,8 @@ class _UnifiedTaskForm extends StatelessWidget {
   final String Function(Duration) formatDuration;
   final ReminderPreferences reminders;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final List<CalendarAlarm> alarms;
+  final ValueChanged<List<CalendarAlarm>> onAlarmsChanged;
   final CalendarIcsStatus? status;
   final CalendarTransparency? transparency;
   final ValueChanged<CalendarIcsStatus?> onStatusChanged;
@@ -549,6 +571,20 @@ class _UnifiedTaskForm extends StatelessWidget {
             ReminderPreferencesField(
               value: reminders,
               onChanged: onRemindersChanged,
+            ),
+            const SizedBox(height: calendarGutterLg),
+            CalendarAlarmsField(
+              alarms: alarms,
+              referenceStart: selectedDate != null && selectedTime != null
+                  ? DateTime(
+                      selectedDate!.year,
+                      selectedDate!.month,
+                      selectedDate!.day,
+                      selectedTime!.hour,
+                      selectedTime!.minute,
+                    )
+                  : null,
+              onChanged: onAlarmsChanged,
             ),
             const SizedBox(height: calendarGutterLg),
             CalendarIcsMetaFields(

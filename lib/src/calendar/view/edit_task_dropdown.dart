@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
@@ -27,6 +28,7 @@ import 'widgets/ics_meta_fields.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/calendar_alarms_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
@@ -35,6 +37,7 @@ import 'widgets/reminder_preferences_field.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
+const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
 const String _occurrenceScopeTitle = 'Apply changes to';
 const String _occurrenceScopeInstanceLabel = 'This instance';
 const String _occurrenceScopeFutureLabel = 'This and future';
@@ -117,6 +120,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   String? _url;
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
+  List<CalendarAlarm> _alarms = _emptyAlarms;
 
   @override
   void initState() {
@@ -208,6 +212,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _geo = task.icsMeta?.geo;
       _attachments = List<CalendarAttachment>.from(
         task.icsMeta?.attachments ?? _emptyAttachments,
+      );
+      _alarms = List<CalendarAlarm>.from(
+        task.icsMeta?.alarms ?? _emptyAlarms,
       );
     }
 
@@ -359,6 +366,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onChanged: (value) => setState(() {
                         _reminders = value;
                       }),
+                    ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarAlarmsField(
+                      alarms: _alarms,
+                      referenceStart: _startTime,
+                      onChanged: (value) => setState(() => _alarms = value),
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -592,6 +607,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       base: widget.task.icsMeta,
       categories: _categories,
     );
+    final List<CalendarAlarm>? alarms = resolveAlarmOverride(
+      base: widget.task.icsMeta,
+      alarms: _alarms,
+    );
     final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
       base: widget.task.icsMeta,
       status: _status,
@@ -599,6 +618,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       categories: categories,
       url: _url,
       geo: _geo,
+      alarms: alarms,
     );
 
     final updatedTask = widget.task.copyWith(
