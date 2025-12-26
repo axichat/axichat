@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
@@ -27,6 +28,7 @@ import 'widgets/task_form_section.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/calendar_alarms_field.dart';
 import 'widgets/ics_meta_fields.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -34,6 +36,7 @@ import 'widgets/critical_path_panel.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 
 const List<String> _emptyCategories = <String>[];
+const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
 
 enum QuickAddModalSurface { dialog, bottomSheet }
 
@@ -198,6 +201,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             onImportantChanged: _onUserImportantChanged,
             onUrgentChanged: _onUserUrgentChanged,
             onRemindersChanged: _onRemindersChanged,
+            onAlarmsChanged: _onAlarmsChanged,
             onStatusChanged: _onStatusChanged,
             onTransparencyChanged: _onTransparencyChanged,
             onCategoriesChanged: _onCategoriesChanged,
@@ -252,6 +256,7 @@ class _QuickAddModalState extends State<QuickAddModal>
               onImportantChanged: _onUserImportantChanged,
               onUrgentChanged: _onUserUrgentChanged,
               onRemindersChanged: _onRemindersChanged,
+              onAlarmsChanged: _onAlarmsChanged,
               onStatusChanged: _onStatusChanged,
               onTransparencyChanged: _onTransparencyChanged,
               onCategoriesChanged: _onCategoriesChanged,
@@ -448,7 +453,8 @@ class _QuickAddModalState extends State<QuickAddModal>
       ..setTransparency(null)
       ..setCategories(_emptyCategories)
       ..setUrl(null)
-      ..setGeo(null);
+      ..setGeo(null)
+      ..setAlarms(_emptyAlarms);
     if (!_locationLocked && _locationController.text.isNotEmpty) {
       _locationController.clear();
     }
@@ -512,6 +518,10 @@ class _QuickAddModalState extends State<QuickAddModal>
   void _onRemindersChanged(ReminderPreferences value) {
     _remindersLocked = true;
     _formController.setReminders(value);
+  }
+
+  void _onAlarmsChanged(List<CalendarAlarm> value) {
+    _formController.setAlarms(value);
   }
 
   void _onStatusChanged(CalendarIcsStatus? value) {
@@ -652,6 +662,10 @@ class _QuickAddModalState extends State<QuickAddModal>
       base: null,
       categories: _formController.categories,
     );
+    final List<CalendarAlarm>? alarms = resolveAlarmOverride(
+      base: null,
+      alarms: _formController.alarms,
+    );
     final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
       base: null,
       status: _formController.status,
@@ -659,6 +673,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       categories: categories,
       url: _formController.url,
       geo: _formController.geo,
+      alarms: alarms,
     );
 
     // Create the task
@@ -806,6 +821,7 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.onImportantChanged,
     required this.onUrgentChanged,
     required this.onRemindersChanged,
+    required this.onAlarmsChanged,
     required this.onStatusChanged,
     required this.onTransparencyChanged,
     required this.onCategoriesChanged,
@@ -842,6 +858,7 @@ class _QuickAddModalContent extends StatelessWidget {
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final ValueChanged<List<CalendarAlarm>> onAlarmsChanged;
   final ValueChanged<CalendarIcsStatus?> onStatusChanged;
   final ValueChanged<CalendarTransparency?> onTransparencyChanged;
   final ValueChanged<List<String>> onCategoriesChanged;
@@ -1022,6 +1039,19 @@ class _QuickAddModalContent extends StatelessWidget {
                               reminders: formController.reminders,
                               deadline: formController.deadline,
                               onChanged: onRemindersChanged,
+                            );
+                          },
+                        ),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        AnimatedBuilder(
+                          animation: formController,
+                          builder: (context, _) {
+                            return CalendarAlarmsField(
+                              alarms: formController.alarms,
+                              referenceStart: formController.startTime,
+                              onChanged: onAlarmsChanged,
                             );
                           },
                         ),

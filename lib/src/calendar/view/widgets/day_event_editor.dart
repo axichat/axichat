@@ -1,4 +1,5 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
@@ -7,6 +8,7 @@ import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_attachments_field.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_alarms_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_categories_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_link_geo_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/ics_meta_fields.dart';
@@ -20,6 +22,7 @@ import 'package:flutter/material.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
+const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
 
 class DayEventDraft {
   const DayEventDraft({
@@ -104,6 +107,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
   String? _url;
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
+  List<CalendarAlarm> _alarms = _emptyAlarms;
 
   @override
   void initState() {
@@ -121,6 +125,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     _geo = widget.existing?.icsMeta?.geo;
     _attachments = List<CalendarAttachment>.from(
       widget.existing?.icsMeta?.attachments ?? _emptyAttachments,
+    );
+    _alarms = List<CalendarAlarm>.from(
+      widget.existing?.icsMeta?.alarms ?? _emptyAlarms,
     );
     _titleController = TextEditingController(text: widget.existing?.title);
     _descriptionController =
@@ -304,6 +311,15 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       color: colors.border,
                       verticalPadding: calendarGutterMd,
                     ),
+                    CalendarAlarmsField(
+                      alarms: _alarms,
+                      referenceStart: _startDate,
+                      onChanged: (value) => setState(() => _alarms = value),
+                    ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
                     CalendarIcsMetaFields(
                       status: _status,
                       transparency: _transparency,
@@ -371,6 +387,10 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       base: widget.existing?.icsMeta,
       categories: _categories,
     );
+    final List<CalendarAlarm>? alarms = resolveAlarmOverride(
+      base: widget.existing?.icsMeta,
+      alarms: _alarms,
+    );
     final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
       base: widget.existing?.icsMeta,
       status: _status,
@@ -378,6 +398,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       categories: categories,
       url: _url,
       geo: _geo,
+      alarms: alarms,
     );
     return DayEventDraft(
       title: title,

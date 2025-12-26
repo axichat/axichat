@@ -22,6 +22,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
@@ -54,6 +55,7 @@ import 'widgets/calendar_drag_target.dart';
 import 'widgets/calendar_sidebar_draggable.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/calendar_alarms_field.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/ics_meta_fields.dart';
@@ -427,7 +429,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       ..setTransparency(null)
       ..setCategories(_emptyCategories)
       ..setUrl(null)
-      ..setGeo(null);
+      ..setGeo(null)
+      ..setAlarms(_emptyAlarms);
     if (!_locationLocked && _locationController.text.isNotEmpty) {
       _locationController.clear();
     }
@@ -491,6 +494,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _onRemindersChanged(ReminderPreferences value) {
     _remindersLocked = true;
     _draftController.setReminders(value);
+  }
+
+  void _onAlarmsChanged(List<CalendarAlarm> value) {
+    _draftController.setAlarms(value);
   }
 
   void _onStatusChanged(CalendarIcsStatus? value) {
@@ -916,6 +923,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onScheduleCleared: _onUserScheduleCleared,
                         onRecurrenceChanged: _onUserRecurrenceChanged,
                         onRemindersChanged: _onRemindersChanged,
+                        onAlarmsChanged: _onAlarmsChanged,
                         onStatusChanged: _onStatusChanged,
                         onTransparencyChanged: _onTransparencyChanged,
                         onCategoriesChanged: _onCategoriesChanged,
@@ -2742,6 +2750,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       ),
       url: _draftController.url,
       geo: _draftController.geo,
+      alarms: resolveAlarmOverride(
+        base: null,
+        alarms: _draftController.alarms,
+      ),
     );
     final bool hasIcsMeta = icsMeta != null;
 
@@ -4005,6 +4017,7 @@ final TextStyle _sidebarSectionHeaderStyle = const TextStyle(
 ).copyWith(color: calendarSubtitleColor);
 
 const List<String> _emptyCategories = <String>[];
+const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
 
 class _AddTaskSection extends StatelessWidget {
   const _AddTaskSection({
@@ -4036,6 +4049,7 @@ class _AddTaskSection extends StatelessWidget {
     required this.addTask,
     required this.onAddToCriticalPath,
     required this.onRemindersChanged,
+    required this.onAlarmsChanged,
     required this.onStatusChanged,
     required this.onTransparencyChanged,
     required this.onCategoriesChanged,
@@ -4073,6 +4087,7 @@ class _AddTaskSection extends StatelessWidget {
   final VoidCallback addTask;
   final Future<void> Function() onAddToCriticalPath;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final ValueChanged<List<CalendarAlarm>> onAlarmsChanged;
   final ValueChanged<CalendarIcsStatus?> onStatusChanged;
   final ValueChanged<CalendarTransparency?> onTransparencyChanged;
   final ValueChanged<List<String>> onCategoriesChanged;
@@ -4179,6 +4194,7 @@ class _AddTaskSection extends StatelessWidget {
                       titleController: titleController,
                       onAddToCriticalPath: onAddToCriticalPath,
                       onRemindersChanged: onRemindersChanged,
+                      onAlarmsChanged: onAlarmsChanged,
                       onStatusChanged: onStatusChanged,
                       onTransparencyChanged: onTransparencyChanged,
                       onCategoriesChanged: onCategoriesChanged,
@@ -4247,6 +4263,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
     required this.onRemindersChanged,
+    required this.onAlarmsChanged,
     required this.onStatusChanged,
     required this.onTransparencyChanged,
     required this.onCategoriesChanged,
@@ -4303,6 +4320,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final ValueChanged<List<CalendarAlarm>> onAlarmsChanged;
   final ValueChanged<CalendarIcsStatus?> onStatusChanged;
   final ValueChanged<CalendarTransparency?> onTransparencyChanged;
   final ValueChanged<List<String>> onCategoriesChanged;
@@ -4376,6 +4394,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             addTask: onAddTask,
             onAddToCriticalPath: onAddToCriticalPath,
             onRemindersChanged: onRemindersChanged,
+            onAlarmsChanged: onAlarmsChanged,
             onStatusChanged: onStatusChanged,
             onTransparencyChanged: onTransparencyChanged,
             onCategoriesChanged: onCategoriesChanged,
@@ -5709,6 +5728,7 @@ class _AdvancedOptions extends StatelessWidget {
     required this.titleController,
     required this.onAddToCriticalPath,
     required this.onRemindersChanged,
+    required this.onAlarmsChanged,
     required this.onStatusChanged,
     required this.onTransparencyChanged,
     required this.onCategoriesChanged,
@@ -5731,6 +5751,7 @@ class _AdvancedOptions extends StatelessWidget {
   final TextEditingController titleController;
   final Future<void> Function() onAddToCriticalPath;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final ValueChanged<List<CalendarAlarm>> onAlarmsChanged;
   final ValueChanged<CalendarIcsStatus?> onStatusChanged;
   final ValueChanged<CalendarTransparency?> onTransparencyChanged;
   final ValueChanged<List<String>> onCategoriesChanged;
@@ -5799,6 +5820,17 @@ class _AdvancedOptions extends StatelessWidget {
                     ? ReminderAnchor.start
                     : ReminderAnchor.deadline,
                 showBothAnchors: draftController.deadline != null,
+              );
+            },
+          ),
+          const TaskSectionDivider(),
+          AnimatedBuilder(
+            animation: draftController,
+            builder: (context, _) {
+              return CalendarAlarmsField(
+                alarms: draftController.alarms,
+                referenceStart: draftController.startTime,
+                onChanged: onAlarmsChanged,
               );
             },
           ),
