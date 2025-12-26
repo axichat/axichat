@@ -186,6 +186,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   DateTime? _hoveredSlot;
   bool _desktopDayPinned = false;
   bool _autoScrollPending = false;
+  bool _viewportRequestScheduled = false;
   DateTime? _pendingScrollSlot;
   TaskFocusRequest? _pendingFocusRequest;
   Offset? _contextMenuAnchor;
@@ -391,7 +392,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!mounted) {
       return;
     }
-    _processViewportRequests();
+    _scheduleViewportRequests();
   }
 
   void _handleClipboardChanged() {
@@ -433,7 +434,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _scheduleAutoScroll() {
     _autoScrollPending = true;
-    _maybeAutoScroll();
+    _scheduleViewportRequests();
+  }
+
+  void _scheduleViewportRequests() {
+    if (_viewportRequestScheduled) {
+      return;
+    }
+    _viewportRequestScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportRequestScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _processViewportRequests();
+    });
   }
 
   void _processViewportRequests() {
@@ -3202,7 +3217,7 @@ class _CalendarWeekView extends StatelessWidget {
                               availableHeight,
                               isDayView: isDayView,
                             );
-                            gridState._processViewportRequests();
+                            gridState._scheduleViewportRequests();
                             return Container(
                               decoration: BoxDecoration(
                                 color: calendarStripedSlotColor,
