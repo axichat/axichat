@@ -2453,7 +2453,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                   );
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
-                    ? (updatedTask) {
+                    ? (updatedTask, scope) {
                         locate<B>().add(
                           CalendarEvent.taskOccurrenceUpdated(
                             taskId: baseId,
@@ -2462,6 +2462,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                             duration: updatedTask.duration,
                             endDate: updatedTask.endDate,
                             checklist: updatedTask.checklist,
+                            range: scope.range,
                           ),
                         );
 
@@ -2473,6 +2474,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                           priority: updatedTask.priority,
                           isCompleted: updatedTask.isCompleted,
                           checklist: updatedTask.checklist,
+                          recurrence: updatedTask.recurrence,
+                          reminders: updatedTask.reminders,
                           icsMeta: updatedTask.icsMeta,
                           modifiedAt: DateTime.now(),
                         );
@@ -5418,7 +5421,7 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                                       );
                                 },
                                 onOccurrenceUpdated: shouldUpdateOccurrence
-                                    ? (updatedTask) {
+                                    ? (updatedTask, scope) {
                                         context.read<B>().add(
                                               CalendarEvent
                                                   .taskOccurrenceUpdated(
@@ -5430,6 +5433,7 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                                                 endDate: updatedTask.endDate,
                                                 checklist:
                                                     updatedTask.checklist,
+                                                range: scope.range,
                                               ),
                                             );
 
@@ -5442,6 +5446,9 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                                           priority: updatedTask.priority,
                                           isCompleted: updatedTask.isCompleted,
                                           checklist: updatedTask.checklist,
+                                          recurrence: updatedTask.recurrence,
+                                          reminders: updatedTask.reminders,
+                                          icsMeta: updatedTask.icsMeta,
                                           modifiedAt: DateTime.now(),
                                         );
 
@@ -5909,6 +5916,9 @@ class _AdvancedRecurrenceSection extends StatelessWidget {
           spacing: calendarInsetLg,
           value: draftController.recurrence,
           fallbackWeekday: fallbackWeekday,
+          referenceStart: referenceStart,
+          showAdvancedToggle: false,
+          forceAdvanced: true,
           spacingConfig: const RecurrenceEditorSpacing(
             chipSpacing: 8,
             chipRunSpacing: 8,

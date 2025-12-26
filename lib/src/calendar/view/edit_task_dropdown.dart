@@ -2,6 +2,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
@@ -9,6 +10,7 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
+import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
@@ -33,6 +35,27 @@ import 'widgets/reminder_preferences_field.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
+const String _occurrenceScopeTitle = 'Apply changes to';
+const String _occurrenceScopeInstanceLabel = 'This instance';
+const String _occurrenceScopeFutureLabel = 'This and future';
+const String _occurrenceScopeHint = 'Schedule edits affect the selected range.';
+
+enum OccurrenceUpdateScope {
+  thisInstance,
+  thisAndFuture;
+
+  bool get isThisInstance => this == OccurrenceUpdateScope.thisInstance;
+
+  bool get isThisAndFuture => this == OccurrenceUpdateScope.thisAndFuture;
+
+  RecurrenceRange? get range =>
+      isThisAndFuture ? RecurrenceRange.thisAndFuture : null;
+
+  String get label => switch (this) {
+        OccurrenceUpdateScope.thisInstance => _occurrenceScopeInstanceLabel,
+        OccurrenceUpdateScope.thisAndFuture => _occurrenceScopeFutureLabel,
+      };
+}
 
 class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   const EditTaskDropdown({
@@ -55,7 +78,8 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   final void Function(CalendarTask task) onTaskUpdated;
   final void Function(String taskId) onTaskDeleted;
   final double maxHeight;
-  final void Function(CalendarTask task)? onOccurrenceUpdated;
+  final void Function(CalendarTask task, OccurrenceUpdateScope scope)?
+      onOccurrenceUpdated;
   final ScaffoldMessengerState? scaffoldMessenger;
   final bool isSheet;
   final List<TaskContextAction> Function(CalendarState state)?
@@ -79,6 +103,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   bool _isImportant = false;
   bool _isUrgent = false;
   bool _isCompleted = false;
+  OccurrenceUpdateScope _occurrenceScope = OccurrenceUpdateScope.thisInstance;
 
   DateTime? _startTime;
   DateTime? _endTime;
@@ -165,6 +190,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _isImportant = task.isImportant || task.isCritical;
       _isUrgent = task.isUrgent || task.isCritical;
       _isCompleted = task.isCompleted;
+      _occurrenceScope = OccurrenceUpdateScope.thisInstance;
       _startTime = task.scheduledTime;
       final Duration fallbackDuration =
           task.duration ?? calendarDefaultTaskDuration;
@@ -268,6 +294,18 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       inlineActionsBloc: widget.inlineActionsBloc,
                       inlineActionsBuilder: widget.inlineActionsBuilder,
                     ),
+                    if (widget.task.isOccurrence &&
+                        widget.onOccurrenceUpdated != null) ...[
+                      const SizedBox(height: calendarFormGap),
+                      _EditTaskOccurrenceScopeSection(
+                        scope: _occurrenceScope,
+                        onChanged: (scope) =>
+                            setState(() => _occurrenceScope = scope),
+                      ),
+                      const TaskSectionDivider(
+                        verticalPadding: calendarGutterMd,
+                      ),
+                    ],
                     _EditTaskTitleField(
                       controller: _titleController,
                       validator: (value) =>
@@ -328,6 +366,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     _EditTaskRecurrenceSection(
                       value: _recurrence,
                       fallbackWeekday: _recurrenceFallbackWeekday,
+                      referenceStart: _startTime,
                       onChanged: _handleRecurrenceChanged,
                     ),
                     const TaskSectionDivider(
@@ -583,7 +622,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     );
 
     if (widget.task.isOccurrence && widget.onOccurrenceUpdated != null) {
-      widget.onOccurrenceUpdated!(updatedTask);
+      widget.onOccurrenceUpdated!(updatedTask, _occurrenceScope);
     } else {
       widget.onTaskUpdated(updatedTask);
     }
@@ -844,6 +883,91 @@ class _EditTaskScheduleSection extends StatelessWidget {
   }
 }
 
+class _EditTaskOccurrenceScopeSection extends StatelessWidget {
+  const _EditTaskOccurrenceScopeSection({
+    required this.scope,
+    required this.onChanged,
+  });
+
+  final OccurrenceUpdateScope scope;
+  final ValueChanged<OccurrenceUpdateScope> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle hintStyle = context.textTheme.muted.copyWith(
+      fontWeight: FontWeight.w500,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const TaskSectionHeader(title: _occurrenceScopeTitle),
+        const SizedBox(height: calendarInsetSm),
+        Text(
+          _occurrenceScopeHint,
+          style: hintStyle,
+        ),
+        const SizedBox(height: calendarGutterSm),
+        Wrap(
+          spacing: calendarGutterSm,
+          runSpacing: calendarGutterSm,
+          children: OccurrenceUpdateScope.values
+              .map(
+                (option) => _OccurrenceScopeChip(
+                  label: option.label,
+                  isSelected: option == scope,
+                  onPressed: () => onChanged(option),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ],
+    );
+  }
+}
+
+class _OccurrenceScopeChip extends StatelessWidget {
+  const _OccurrenceScopeChip({
+    required this.label,
+    required this.isSelected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShadButton.raw(
+      variant:
+          isSelected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
+      size: ShadButtonSize.sm,
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterMd,
+        vertical: calendarGutterSm,
+      ),
+      backgroundColor:
+          isSelected ? calendarPrimaryColor : calendarContainerColor,
+      hoverBackgroundColor: isSelected
+          ? calendarPrimaryHoverColor
+          : calendarPrimaryColor.withValues(alpha: 0.08),
+      foregroundColor: isSelected
+          ? context.colorScheme.primaryForeground
+          : calendarPrimaryColor,
+      hoverForegroundColor: isSelected
+          ? context.colorScheme.primaryForeground
+          : calendarPrimaryHoverColor,
+      onPressed: onPressed,
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ).withTapBounce();
+  }
+}
+
 class _EditTaskDeadlineField extends StatelessWidget {
   const _EditTaskDeadlineField({
     required this.deadline,
@@ -895,11 +1019,13 @@ class _EditTaskRecurrenceSection extends StatelessWidget {
   const _EditTaskRecurrenceSection({
     required this.value,
     required this.fallbackWeekday,
+    required this.referenceStart,
     required this.onChanged,
   });
 
   final RecurrenceFormValue value;
   final int fallbackWeekday;
+  final DateTime? referenceStart;
   final ValueChanged<RecurrenceFormValue> onChanged;
 
   @override
@@ -908,6 +1034,7 @@ class _EditTaskRecurrenceSection extends StatelessWidget {
       spacing: calendarInsetMd,
       value: value,
       fallbackWeekday: fallbackWeekday,
+      referenceStart: referenceStart,
       spacingConfig: const RecurrenceEditorSpacing(
         chipSpacing: 6,
         chipRunSpacing: 6,
