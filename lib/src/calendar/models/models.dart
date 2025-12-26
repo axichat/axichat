@@ -8,6 +8,8 @@ export 'calendar_acl.dart';
 export 'calendar_alarm.dart';
 export 'calendar_attachment.dart';
 export 'calendar_availability.dart';
+export 'calendar_availability_message.dart';
+export 'calendar_availability_share_state.dart';
 export 'calendar_checklist_item.dart';
 export 'calendar_collection.dart';
 export 'calendar_date_time.dart';

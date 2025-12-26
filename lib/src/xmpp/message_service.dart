@@ -9,6 +9,12 @@ const String _messageStatusSyncEnvelopeVersionKey = 'v';
 const String _messageStatusSyncEnvelopeAckedKey = 'acked';
 const String _messageStatusSyncEnvelopeReceivedKey = 'received';
 const String _messageStatusSyncEnvelopeDisplayedKey = 'displayed';
+const String _availabilityShareFallbackText = 'Shared availability';
+const String _availabilityRequestFallbackText = 'Availability request';
+const String _availabilityResponseAcceptedFallbackText =
+    'Availability accepted';
+const String _availabilityResponseDeclinedFallbackText =
+    'Availability declined';
 
 final class _MessageStatusSyncEnvelope {
   const _MessageStatusSyncEnvelope({
@@ -1380,6 +1386,8 @@ mixin MessageService
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     String? htmlBody,
     Message? quotedMessage,
+    CalendarFragment? calendarFragment,
+    CalendarAvailabilityMessage? calendarAvailabilityMessage,
     bool? storeLocally,
     bool noStore = false,
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
@@ -1413,6 +1421,31 @@ mixin MessageService
         : (normalizedHtml == null
             ? ''
             : HtmlContentCodec.toPlainText(normalizedHtml));
+    final CalendarFragmentPayload? fragmentPayload = calendarFragment == null
+        ? null
+        : CalendarFragmentPayload(fragment: calendarFragment);
+    final CalendarAvailabilityMessagePayload? availabilityPayload =
+        calendarAvailabilityMessage == null
+            ? null
+            : CalendarAvailabilityMessagePayload(
+                message: calendarAvailabilityMessage,
+              );
+    final List<mox.StanzaHandlerExtension> resolvedExtensions =
+        List<mox.StanzaHandlerExtension>.from(extraExtensions);
+    if (fragmentPayload != null) {
+      resolvedExtensions.add(fragmentPayload);
+    }
+    if (availabilityPayload != null) {
+      resolvedExtensions.add(availabilityPayload);
+    }
+    final Map<String, dynamic>? fragmentData = calendarFragment?.toJson();
+    final Map<String, dynamic>? availabilityData =
+        calendarAvailabilityMessage?.toJson();
+    final PseudoMessageType? resolvedPseudoType =
+        _calendarAvailabilityPseudoType(calendarAvailabilityMessage) ??
+            (fragmentData == null ? null : PseudoMessageType.calendarFragment);
+    final Map<String, dynamic>? pseudoMessageData =
+        availabilityData ?? fragmentData;
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -1427,6 +1460,8 @@ mixin MessageService
       acked: offlineDemo,
       received: offlineDemo,
       displayed: offlineDemo,
+      pseudoMessageType: resolvedPseudoType,
+      pseudoMessageData: pseudoMessageData,
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${resolvedText.length} chars)',
@@ -1444,7 +1479,7 @@ mixin MessageService
       final stanza = _buildOutgoingMessageEvent(
         message: message,
         quotedMessage: quotedMessage,
-        extraExtensions: extraExtensions,
+        extraExtensions: resolvedExtensions,
         chatType: chatType,
       );
       final sent = await _connection.sendMessage(
@@ -1533,6 +1568,29 @@ mixin MessageService
         archived: chat?.archived ?? false,
         mutedUntil: mutedUntil,
       ),
+    );
+  }
+
+  PseudoMessageType? _calendarAvailabilityPseudoType(
+    CalendarAvailabilityMessage? message,
+  ) {
+    if (message == null) {
+      return null;
+    }
+    return message.map(
+      share: (_) => PseudoMessageType.calendarAvailabilityShare,
+      request: (_) => PseudoMessageType.calendarAvailabilityRequest,
+      response: (_) => PseudoMessageType.calendarAvailabilityResponse,
+    );
+  }
+
+  String _availabilityFallbackText(CalendarAvailabilityMessage message) {
+    return message.map(
+      share: (_) => _availabilityShareFallbackText,
+      request: (_) => _availabilityRequestFallbackText,
+      response: (value) => value.response.status.isAccepted
+          ? _availabilityResponseAcceptedFallbackText
+          : _availabilityResponseDeclinedFallbackText,
     );
   }
 
@@ -1781,6 +1839,7 @@ mixin MessageService
   Future<void> sendCalendarSyncMessage({
     required String jid,
     required CalendarSyncOutbound outbound,
+    ChatType chatType = ChatType.chat,
   }) async {
     const hint = mox.MessageProcessingHintData(
       [mox.MessageProcessingHint.store],
@@ -1793,8 +1852,25 @@ mixin MessageService
     await sendMessage(
       jid: jid,
       text: outbound.envelope,
+      encryptionProtocol: EncryptionProtocol.none,
       storeLocally: false,
       extraExtensions: extensions,
+      chatType: chatType,
+    );
+  }
+
+  Future<void> sendAvailabilityMessage({
+    required String jid,
+    required CalendarAvailabilityMessage message,
+    ChatType chatType = ChatType.chat,
+  }) async {
+    final fallbackText = _availabilityFallbackText(message);
+    await sendMessage(
+      jid: jid,
+      text: fallbackText,
+      encryptionProtocol: EncryptionProtocol.none,
+      calendarAvailabilityMessage: message,
+      chatType: chatType,
     );
   }
 
@@ -2192,6 +2268,9 @@ mixin MessageService
     if (message == null || (resolvedBody.isEmpty && normalizedHtml == null)) {
       return;
     }
+    final CalendarFragment? fragment = message.calendarFragment;
+    final CalendarAvailabilityMessage? availabilityMessage =
+        message.calendarAvailabilityMessage;
     final resolvedChatType = chatType ??
         await _dbOpReturning<XmppDatabase, ChatType?>(
           (db) async => (await db.getChat(message.chatJid))?.type,
@@ -2209,6 +2288,8 @@ mixin MessageService
       htmlBody: normalizedHtml,
       encryptionProtocol: message.encryptionProtocol,
       quotedMessage: quoted,
+      calendarFragment: fragment,
+      calendarAvailabilityMessage: availabilityMessage,
       chatType: resolvedChatType,
     );
   }
@@ -2973,8 +3054,12 @@ mixin MessageService
 
     final senderJid = event.from.toBare().toString();
     final selfJid = myJid;
-    final isSelfSender =
+    final chatJid = _calendarSyncChatJid(event, selfJid);
+    final chatType = _calendarSyncChatType(event);
+    final bool isSelfSender =
         selfJid != null && senderJid.toLowerCase() == selfJid.toLowerCase();
+    final bool isSelfCalendar =
+        selfJid != null && chatJid.toLowerCase() == selfJid.toLowerCase();
 
     final syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
     if (syncMessage == null) {
@@ -2987,9 +3072,9 @@ mixin MessageService
       return false;
     }
 
-    if (selfJid != null && !isSelfSender) {
+    if (isSelfCalendar && !isSelfSender) {
       _log.warning('Rejected calendar sync message from unauthorized sender');
-      return true; // Handled - don't process as regular chat message
+      return true;
     }
 
     _log.info('Received calendar sync message type: ${syncMessage.type}');
@@ -3001,12 +3086,35 @@ mixin MessageService
         event,
         metadata: metadata,
         allowSelfDownload: isSelfSender,
+        onMessageDecoded: (fullMessage, decodedEvent) async {
+          if (isSelfCalendar) {
+            return _invokeCalendarCallback(fullMessage, decodedEvent);
+          }
+          await _invokeChatCalendarCallback(
+            fullMessage,
+            decodedEvent,
+            chatJid: chatJid,
+            chatType: chatType,
+            senderJid: senderJid,
+          );
+          return false;
+        },
       );
       return true;
     }
 
-    // Route to CalendarSyncManager for processing
-    await _invokeCalendarCallback(syncMessage, event);
+    if (isSelfCalendar) {
+      // Route to CalendarSyncManager for processing
+      await _invokeCalendarCallback(syncMessage, event);
+    } else {
+      await _invokeChatCalendarCallback(
+        syncMessage,
+        event,
+        chatJid: chatJid,
+        chatType: chatType,
+        senderJid: senderJid,
+      );
+    }
 
     return true; // Handled - don't process as regular chat message
   }
@@ -3030,6 +3138,10 @@ mixin MessageService
     mox.MessageEvent event, {
     FileMetadataData? metadata,
     required bool allowSelfDownload,
+    required Future<bool> Function(
+      CalendarSyncMessage fullMessage,
+      mox.MessageEvent event,
+    ) onMessageDecoded,
   }) async {
     final url = syncMessage.snapshotUrl;
     final hasUrl = url != null && url.trim().isNotEmpty;
@@ -3043,7 +3155,7 @@ mixin MessageService
         isSnapshot: true,
         snapshotChecksum: resolvedChecksum,
       );
-      final applied = await _invokeCalendarCallback(inlineMessage, event);
+      final applied = await onMessageDecoded(inlineMessage, event);
       if (applied && _calendarMamRehydrateInFlight) {
         _calendarMamSnapshotSeen = true;
       }
@@ -3095,7 +3207,7 @@ mixin MessageService
         snapshotUrl: url ?? metadata?.sourceUrls?.first,
       );
 
-      final applied = await _invokeCalendarCallback(fullMessage, event);
+      final applied = await onMessageDecoded(fullMessage, event);
       if (applied && _calendarMamRehydrateInFlight) {
         _calendarMamSnapshotSeen = true;
       }
@@ -3251,6 +3363,38 @@ mixin MessageService
     }
   }
 
+  Future<void> _invokeChatCalendarCallback(
+    CalendarSyncMessage syncMessage,
+    mox.MessageEvent event, {
+    required String chatJid,
+    required ChatType chatType,
+    required String senderJid,
+  }) async {
+    if (owner is XmppService &&
+        (owner as XmppService)._chatCalendarSyncCallback != null) {
+      try {
+        final inbound = CalendarSyncInbound(
+          message: syncMessage,
+          stanzaId: _calendarSyncStanzaId(event),
+          receivedAt: _calendarSyncTimestamp(event),
+          isFromMam: event.isFromMAM,
+        );
+        final envelope = ChatCalendarSyncEnvelope(
+          chatJid: chatJid,
+          chatType: chatType,
+          senderJid: senderJid,
+          inbound: inbound,
+        );
+        await (owner as XmppService)._chatCalendarSyncCallback!(envelope);
+        unawaited(_acknowledgeMessage(event));
+      } catch (e) {
+        _log.warning('Chat calendar sync callback failed: $e');
+      }
+    } else {
+      _log.info('No chat calendar sync callback registered - message ignored');
+    }
+  }
+
   String? _calendarSyncStanzaId(mox.MessageEvent event) {
     final stableIdData = event.extensions.get<mox.StableIdData>();
     final stanzaIds = stableIdData?.stanzaIds;
@@ -3262,6 +3406,25 @@ mixin MessageService
 
   DateTime? _calendarSyncTimestamp(mox.MessageEvent event) {
     return event.extensions.get<mox.DelayedDeliveryData>()?.timestamp;
+  }
+
+  String _calendarSyncChatJid(mox.MessageEvent event, String? accountJid) {
+    final isGroupChat = event.type == 'groupchat';
+    final to = event.to.toBare().toString();
+    final from = event.from.toBare().toString();
+    if (isGroupChat) {
+      return from;
+    }
+    if (accountJid != null && accountJid.isNotEmpty) {
+      if (from.toLowerCase() == accountJid.toLowerCase()) {
+        return to;
+      }
+    }
+    return from;
+  }
+
+  ChatType _calendarSyncChatType(mox.MessageEvent event) {
+    return event.type == 'groupchat' ? ChatType.groupChat : ChatType.chat;
   }
 
   /// Rehydrates calendar data from MAM (Message Archive Management).

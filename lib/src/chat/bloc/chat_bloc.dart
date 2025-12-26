@@ -4,6 +4,9 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:async/async.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
+import 'package:axichat/src/calendar/models/calendar_fragment.dart';
+import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/event_transform.dart';
@@ -22,7 +25,6 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/database.dart' show MessageAttachmentData;
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -118,6 +120,9 @@ class ChatToast extends Equatable {
 
 enum MamPageDirection { before, after }
 
+const String _availabilitySendFailureLog =
+    'Failed to send availability message';
+
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static final Set<String> _seededDemoPendingAttachmentJids = <String>{};
 
@@ -152,6 +157,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
     );
+    on<ChatAvailabilityMessageSent>(_onChatAvailabilityMessageSent);
     on<ChatMuted>(_onChatMuted);
     on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
@@ -232,6 +238,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static const messageBatchSize = 50;
   static final RegExp _axiDomainPattern =
       RegExp(r'@(?:[\\w-]+\\.)*axi\\.im$', caseSensitive: false);
+  static const CalendarFragmentPolicy _calendarFragmentPolicy =
+      CalendarFragmentPolicy();
   bool _isEmailOnlyAddress(String? value) {
     if (value == null) return false;
     final normalized = value.trim().toLowerCase();
@@ -346,7 +354,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<int> _archivedMessageCount(Chat chat) {
     if (_messageService.messageStorageMode.isServerOnly) {
       final visibleMessages = state.items.where(
-        (message) => message.pseudoMessageType == null,
+        (message) =>
+            message.pseudoMessageType == null ||
+            message.pseudoMessageType!.isCalendarFragment,
       );
       return Future<int>.value(visibleMessages.length);
     }
@@ -1374,6 +1384,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null) return;
     final trimmedText = event.text.trim();
+    final CalendarFragment? requestedFragment = event.calendarFragment;
+    final CalendarFragmentShareDecision fragmentDecision =
+        _calendarFragmentPolicy.decisionForChat(
+      chat: chat,
+      roomState: state.roomState,
+    );
+    final CalendarFragment? effectiveFragment =
+        requestedFragment == null || !fragmentDecision.canWrite
+            ? null
+            : requestedFragment;
     final attachments = List<PendingAttachment>.from(state.pendingAttachments);
     final queuedAttachments = attachments
         .where((attachment) =>
@@ -1429,6 +1449,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     final hasXmppBody = xmppBody.isNotEmpty;
     final shouldSendXmppBody = hasXmppBody && !rawAttachmentsViaXmpp;
+    final CalendarFragment? fragmentForXmpp =
+        hasQueuedAttachments ? null : effectiveFragment;
+    final Chat? soleRecipientChat =
+        xmppRecipients.length == 1 ? xmppRecipients.first.target.chat : null;
+    final CalendarFragment? fanOutFragment =
+        soleRecipientChat?.jid == chat.jid ? fragmentForXmpp : null;
     final quoteId = quotedDraft == null ? null : _messageKey(quotedDraft);
     final emailSignature = rawRequiresEmail
         ? _sendSignature(
@@ -1638,6 +1664,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _sendXmppFanOut(
           recipients: xmppRecipients,
           body: xmppBody,
+          calendarFragment: fanOutFragment,
           quotedDraft: quotedDraft,
         );
         xmppBodySent = true;
@@ -1651,6 +1678,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           text: xmppBody,
           encryptionProtocol: chat.encryptionProtocol,
           quotedMessage: sameChatQuote,
+          calendarFragment: fragmentForXmpp,
           chatType: chat.type,
         );
         xmppBodySent = true;
@@ -1716,6 +1744,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (shouldClearComposer && (state.emailSubject?.isNotEmpty ?? false)) {
         _clearEmailSubject(emit);
       }
+    }
+  }
+
+  Future<void> _onChatAvailabilityMessageSent(
+    ChatAvailabilityMessageSent event,
+    Emitter<ChatState> emit,
+  ) async {
+    _stopTyping();
+    emit(state.copyWith(typing: false));
+    final chat = state.chat;
+    if (chat == null || _isEmailChat) {
+      return;
+    }
+    if (chat.type == ChatType.groupChat) {
+      await _ensureMucMembership(chat);
+    }
+    try {
+      await _messageService.sendAvailabilityMessage(
+        jid: chat.jid,
+        message: event.message,
+        chatType: chat.type,
+      );
+    } catch (error, stackTrace) {
+      _log.warning(_availabilitySendFailureLog, error, stackTrace);
     }
   }
 
@@ -3181,6 +3233,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _sendXmppFanOut({
     required List<ComposerRecipient> recipients,
     required String body,
+    CalendarFragment? calendarFragment,
     required Message? quotedDraft,
   }) async {
     final processed = <String>{};
@@ -3199,6 +3252,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         text: body,
         encryptionProtocol: targetChat.encryptionProtocol,
         quotedMessage: quote,
+        calendarFragment: calendarFragment,
         chatType: targetChat.type,
       );
     }
