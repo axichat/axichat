@@ -886,6 +886,7 @@ class _EditTaskReminderSection extends StatelessWidget {
       value: reminders,
       onChanged: onChanged,
       anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
+      showBothAnchors: deadline != null,
     );
   }
 }

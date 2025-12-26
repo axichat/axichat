@@ -5791,6 +5791,7 @@ class _AdvancedOptions extends StatelessWidget {
                 anchor: draftController.deadline == null
                     ? ReminderAnchor.start
                     : ReminderAnchor.deadline,
+                showBothAnchors: draftController.deadline != null,
               );
             },
           ),
