@@ -12,7 +12,7 @@ import 'package:axichat/src/calendar/utils/schedule_range_utils.dart';
 /// deadline, or recurrence inputs change.
 class TaskDraftController extends ChangeNotifier {
   static const List<String> _emptyCategories = <String>[];
-  static const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
+  static const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 
   TaskDraftController({
     DateTime? initialStart,
@@ -27,7 +27,7 @@ class TaskDraftController extends ChangeNotifier {
     List<String> initialCategories = _emptyCategories,
     String? initialUrl,
     CalendarGeo? initialGeo,
-    List<CalendarAlarm> initialAlarms = _emptyAlarms,
+    List<CalendarAlarm> initialAdvancedAlarms = _emptyAdvancedAlarms,
   })  : _startTime = initialStart,
         _endTime = initialEnd,
         _deadline = initialDeadline,
@@ -41,7 +41,7 @@ class TaskDraftController extends ChangeNotifier {
         _categories = _normalizeCategories(initialCategories),
         _url = _normalizeUrl(initialUrl),
         _geo = initialGeo,
-        _alarms = List<CalendarAlarm>.from(initialAlarms);
+        _advancedAlarms = List<CalendarAlarm>.from(initialAdvancedAlarms);
 
   bool _isImportant;
   bool _isUrgent;
@@ -55,7 +55,7 @@ class TaskDraftController extends ChangeNotifier {
   List<String> _categories;
   String? _url;
   CalendarGeo? _geo;
-  List<CalendarAlarm> _alarms;
+  List<CalendarAlarm> _advancedAlarms;
 
   bool get isImportant => _isImportant;
   bool get isUrgent => _isUrgent;
@@ -69,7 +69,8 @@ class TaskDraftController extends ChangeNotifier {
   List<String> get categories => List<String>.unmodifiable(_categories);
   String? get url => _url;
   CalendarGeo? get geo => _geo;
-  List<CalendarAlarm> get alarms => List<CalendarAlarm>.unmodifiable(_alarms);
+  List<CalendarAlarm> get advancedAlarms =>
+      List<CalendarAlarm>.unmodifiable(_advancedAlarms);
 
   void setImportant(bool value) {
     if (_isImportant == value) return;
@@ -197,11 +198,11 @@ class TaskDraftController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setAlarms(List<CalendarAlarm> value) {
-    if (listEquals(_alarms, value)) {
+  void setAdvancedAlarms(List<CalendarAlarm> value) {
+    if (listEquals(_advancedAlarms, value)) {
       return;
     }
-    _alarms = List<CalendarAlarm>.from(value);
+    _advancedAlarms = List<CalendarAlarm>.from(value);
     notifyListeners();
   }
 
@@ -250,7 +251,7 @@ class TaskDraftController extends ChangeNotifier {
         _categories.isNotEmpty ||
         _url != null ||
         _geo != null ||
-        _alarms.isNotEmpty;
+        _advancedAlarms.isNotEmpty;
 
     _isImportant = false;
     _isUrgent = false;
@@ -264,7 +265,7 @@ class TaskDraftController extends ChangeNotifier {
     _categories = _emptyCategories;
     _url = null;
     _geo = null;
-    _alarms = _emptyAlarms;
+    _advancedAlarms = _emptyAdvancedAlarms;
 
     if (didChange) {
       notifyListeners();

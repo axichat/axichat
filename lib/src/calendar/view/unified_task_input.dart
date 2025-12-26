@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
 import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -23,7 +24,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
-import 'widgets/calendar_alarms_field.dart';
 import 'widgets/ics_meta_fields.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'error_display.dart';
@@ -33,7 +33,7 @@ import 'widgets/task_field_character_hint.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
-const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
+const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 
 class UnifiedTaskInput<T extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarTask? editingTask;
@@ -63,7 +63,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   String? _url;
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
-  List<CalendarAlarm> _alarms = _emptyAlarms;
+  List<CalendarAlarm> _advancedAlarms = _emptyAdvancedAlarms;
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -94,8 +94,18 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       initialItems: widget.editingTask?.checklist ?? const [],
     );
     _titleController.addListener(_handleTitleChanged);
-    _reminders = widget.editingTask?.effectiveReminders ??
-        ReminderPreferences.defaults();
+    final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
+      widget.editingTask?.icsMeta?.alarms ?? _emptyAdvancedAlarms,
+    );
+    if (existingAlarms.isNotEmpty) {
+      final AlarmReminderSplit split = splitAlarms(existingAlarms);
+      _reminders = split.reminders;
+      _advancedAlarms = split.advancedAlarms;
+    } else {
+      _reminders = widget.editingTask?.effectiveReminders ??
+          ReminderPreferences.defaults();
+      _advancedAlarms = _emptyAdvancedAlarms;
+    }
     _status = widget.editingTask?.icsMeta?.status;
     _transparency = widget.editingTask?.icsMeta?.transparency;
     _categories = List<String>.from(
@@ -105,9 +115,6 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     _geo = widget.editingTask?.icsMeta?.geo;
     _attachments = List<CalendarAttachment>.from(
       widget.editingTask?.icsMeta?.attachments ?? _emptyAttachments,
-    );
-    _alarms = List<CalendarAlarm>.from(
-      widget.editingTask?.icsMeta?.alarms ?? _emptyAlarms,
     );
 
     if (widget.editingTask != null) {
@@ -175,10 +182,10 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
           _reminders = value;
         });
       },
-      alarms: _alarms,
-      onAlarmsChanged: (value) {
+      advancedAlarms: _advancedAlarms,
+      onAdvancedAlarmsChanged: (value) {
         setState(() {
-          _alarms = value;
+          _advancedAlarms = value;
         });
       },
       status: _status,
@@ -291,9 +298,13 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       base: widget.editingTask?.icsMeta,
       categories: _categories,
     );
+    final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
+      advancedAlarms: _advancedAlarms,
+      reminders: _reminders,
+    );
     final List<CalendarAlarm>? alarms = resolveAlarmOverride(
       base: widget.editingTask?.icsMeta,
-      alarms: _alarms,
+      alarms: mergedAlarms,
     );
     final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
       base: widget.editingTask?.icsMeta,
@@ -488,8 +499,8 @@ class _UnifiedTaskForm extends StatelessWidget {
     required this.checklistController,
     required this.reminders,
     required this.onRemindersChanged,
-    required this.alarms,
-    required this.onAlarmsChanged,
+    required this.advancedAlarms,
+    required this.onAdvancedAlarmsChanged,
     required this.status,
     required this.transparency,
     required this.onStatusChanged,
@@ -519,8 +530,8 @@ class _UnifiedTaskForm extends StatelessWidget {
   final String Function(Duration) formatDuration;
   final ReminderPreferences reminders;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
-  final List<CalendarAlarm> alarms;
-  final ValueChanged<List<CalendarAlarm>> onAlarmsChanged;
+  final List<CalendarAlarm> advancedAlarms;
+  final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
   final CalendarIcsStatus? status;
   final CalendarTransparency? transparency;
   final ValueChanged<CalendarIcsStatus?> onStatusChanged;
@@ -571,10 +582,8 @@ class _UnifiedTaskForm extends StatelessWidget {
             ReminderPreferencesField(
               value: reminders,
               onChanged: onRemindersChanged,
-            ),
-            const SizedBox(height: calendarGutterLg),
-            CalendarAlarmsField(
-              alarms: alarms,
+              advancedAlarms: advancedAlarms,
+              onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
               referenceStart: selectedDate != null && selectedTime != null
                   ? DateTime(
                       selectedDate!.year,
@@ -584,12 +593,12 @@ class _UnifiedTaskForm extends StatelessWidget {
                       selectedTime!.minute,
                     )
                   : null,
-              onChanged: onAlarmsChanged,
             ),
             const SizedBox(height: calendarGutterLg),
             CalendarIcsMetaFields(
               status: status,
               transparency: transparency,
+              showStatus: false,
               onStatusChanged: onStatusChanged,
               onTransparencyChanged: onTransparencyChanged,
             ),

@@ -4,11 +4,11 @@ import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
 import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_attachments_field.dart';
-import 'package:axichat/src/calendar/view/widgets/calendar_alarms_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_categories_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_link_geo_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/ics_meta_fields.dart';
@@ -22,7 +22,7 @@ import 'package:flutter/material.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
-const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
+const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 
 class DayEventDraft {
   const DayEventDraft({
@@ -107,15 +107,25 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
   String? _url;
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
-  List<CalendarAlarm> _alarms = _emptyAlarms;
+  List<CalendarAlarm> _advancedAlarms = _emptyAdvancedAlarms;
 
   @override
   void initState() {
     super.initState();
     _startDate = widget.existing?.normalizedStart ?? widget.initialDate;
     _endDate = widget.existing?.normalizedEnd ?? widget.initialDate;
-    _reminders =
-        widget.existing?.effectiveReminders ?? ReminderPreferences.defaults();
+    final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
+      widget.existing?.icsMeta?.alarms ?? _emptyAdvancedAlarms,
+    );
+    if (existingAlarms.isNotEmpty) {
+      final AlarmReminderSplit split = splitAlarms(existingAlarms);
+      _reminders = split.reminders;
+      _advancedAlarms = split.advancedAlarms;
+    } else {
+      _reminders =
+          widget.existing?.effectiveReminders ?? ReminderPreferences.defaults();
+      _advancedAlarms = _emptyAdvancedAlarms;
+    }
     _status = widget.existing?.icsMeta?.status;
     _transparency = widget.existing?.icsMeta?.transparency;
     _categories = List<String>.from(
@@ -125,9 +135,6 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     _geo = widget.existing?.icsMeta?.geo;
     _attachments = List<CalendarAttachment>.from(
       widget.existing?.icsMeta?.attachments ?? _emptyAttachments,
-    );
-    _alarms = List<CalendarAlarm>.from(
-      widget.existing?.icsMeta?.alarms ?? _emptyAlarms,
     );
     _titleController = TextEditingController(text: widget.existing?.title);
     _descriptionController =
@@ -304,17 +311,12 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                           _reminders = next;
                         });
                       },
+                      advancedAlarms: _advancedAlarms,
+                      onAdvancedAlarmsChanged: (value) =>
+                          setState(() => _advancedAlarms = value),
+                      referenceStart: _startDate,
                       title: 'Reminder',
                       anchor: ReminderAnchor.start,
-                    ),
-                    TaskSectionDivider(
-                      color: colors.border,
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    CalendarAlarmsField(
-                      alarms: _alarms,
-                      referenceStart: _startDate,
-                      onChanged: (value) => setState(() => _alarms = value),
                     ),
                     TaskSectionDivider(
                       color: colors.border,
@@ -387,9 +389,13 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       base: widget.existing?.icsMeta,
       categories: _categories,
     );
+    final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
+      advancedAlarms: _advancedAlarms,
+      reminders: _reminders,
+    );
     final List<CalendarAlarm>? alarms = resolveAlarmOverride(
       base: widget.existing?.icsMeta,
-      alarms: _alarms,
+      alarms: mergedAlarms,
     );
     final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
       base: widget.existing?.icsMeta,
