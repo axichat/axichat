@@ -1234,10 +1234,10 @@ WHERE subject_token IS NOT NULL
           await customStatement(
             '''
 INSERT INTO message_attachments(message_id, file_metadata_id, sort_order)
-SELECT id, file_metadata_id, 0
+SELECT id, file_metadata_i_d, 0
 FROM messages
-WHERE file_metadata_id IS NOT NULL
-  AND trim(file_metadata_id) != ''
+WHERE file_metadata_i_d IS NOT NULL
+  AND trim(file_metadata_i_d) != ''
 ''',
           );
         }
