@@ -10,14 +10,21 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 /// Declarative reminder selector that exposes start/deadline offsets as a set
 /// of toggleable chips. Designed to be reused by quick add, sidebar, and
 /// day-event composers.
+const String _reminderSectionTitle = 'Reminders';
+const String _reminderBeforeStartLabel = 'Before start';
+const String _reminderBeforeDeadlineLabel = 'Before deadline';
+const String _reminderAtStartLabel = 'At start';
+const String _reminderAtDeadlineLabel = 'At deadline';
+
 class ReminderPreferencesField extends StatelessWidget {
   const ReminderPreferencesField({
     super.key,
     required this.value,
     required this.onChanged,
-    this.title = 'Reminders',
+    this.title = _reminderSectionTitle,
     this.anchor = ReminderAnchor.start,
     this.mixed = false,
+    this.showBothAnchors = false,
     this.startOptions = calendarReminderStartOptions,
     this.deadlineOptions = calendarReminderDeadlineOptions,
   });
@@ -27,26 +34,30 @@ class ReminderPreferencesField extends StatelessWidget {
   final String title;
   final ReminderAnchor anchor;
   final bool mixed;
+  final bool showBothAnchors;
   final List<Duration> startOptions;
   final List<Duration> deadlineOptions;
 
   @override
   Widget build(BuildContext context) {
-    final ReminderPreferences alignedValue = value.alignedTo(anchor);
-    if (alignedValue != value) {
+    final ReminderPreferences resolvedValue =
+        showBothAnchors ? value.normalized() : value.alignedTo(anchor);
+    if (resolvedValue != value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        onChanged(alignedValue);
+        onChanged(resolvedValue);
       });
     }
 
     final bool usesDeadline = anchor.isDeadline;
     final List<Duration> options =
         usesDeadline ? deadlineOptions : startOptions;
-    final List<Duration> selected =
-        usesDeadline ? alignedValue.deadlineOffsets : alignedValue.startOffsets;
+    final List<Duration> selected = usesDeadline
+        ? resolvedValue.deadlineOffsets
+        : resolvedValue.startOffsets;
     final String sectionLabel =
-        usesDeadline ? 'Before deadline' : 'Before start';
-    final String zeroLabel = usesDeadline ? 'At deadline' : 'At start';
+        usesDeadline ? _reminderBeforeDeadlineLabel : _reminderBeforeStartLabel;
+    final String zeroLabel =
+        usesDeadline ? _reminderAtDeadlineLabel : _reminderAtStartLabel;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,42 +65,103 @@ class ReminderPreferencesField extends StatelessWidget {
         TaskSectionHeader(
           title: title,
         ),
-        const SizedBox(height: 8),
-        _ReminderSection(
-          label: sectionLabel,
-          options: options,
-          selected: selected,
-          onOptionToggled: (Duration offset) =>
-              onChanged(_toggled(alignedValue, offset)),
-          mixed: mixed,
-          zeroLabel: zeroLabel,
-          chipPadding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterSm,
+        const SizedBox(height: calendarGutterSm),
+        if (!showBothAnchors)
+          _ReminderSection(
+            label: sectionLabel,
+            options: options,
+            selected: selected,
+            onOptionToggled: (Duration offset) => onChanged(
+              _toggled(
+                resolvedValue,
+                offset,
+                anchor: anchor,
+                preserveOtherAnchors: false,
+              ),
+            ),
+            mixed: mixed,
+            zeroLabel: zeroLabel,
+            chipPadding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd,
+              vertical: calendarGutterSm,
+            ),
+          )
+        else ...[
+          _ReminderSection(
+            label: _reminderBeforeStartLabel,
+            options: startOptions,
+            selected: resolvedValue.startOffsets,
+            onOptionToggled: (Duration offset) => onChanged(
+              _toggled(
+                resolvedValue,
+                offset,
+                anchor: ReminderAnchor.start,
+                preserveOtherAnchors: true,
+              ),
+            ),
+            mixed: mixed,
+            zeroLabel: _reminderAtStartLabel,
+            chipPadding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd,
+              vertical: calendarGutterSm,
+            ),
           ),
-        ),
+          const SizedBox(height: calendarGutterMd),
+          _ReminderSection(
+            label: _reminderBeforeDeadlineLabel,
+            options: deadlineOptions,
+            selected: resolvedValue.deadlineOffsets,
+            onOptionToggled: (Duration offset) => onChanged(
+              _toggled(
+                resolvedValue,
+                offset,
+                anchor: ReminderAnchor.deadline,
+                preserveOtherAnchors: true,
+              ),
+            ),
+            mixed: mixed,
+            zeroLabel: _reminderAtDeadlineLabel,
+            chipPadding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd,
+              vertical: calendarGutterSm,
+            ),
+          ),
+        ],
       ],
     );
   }
 
   ReminderPreferences _toggled(
     ReminderPreferences prefs,
-    Duration offset,
-  ) {
-    final bool usesDeadline = anchor.isDeadline;
-    final List<Duration> nextOffsets = List<Duration>.from(
-      usesDeadline ? prefs.deadlineOffsets : prefs.startOffsets,
-    );
-    if (nextOffsets.contains(offset)) {
-      nextOffsets.remove(offset);
+    Duration offset, {
+    required ReminderAnchor anchor,
+    required bool preserveOtherAnchors,
+  }) {
+    final List<Duration> nextStart = List<Duration>.from(prefs.startOffsets);
+    final List<Duration> nextDeadline =
+        List<Duration>.from(prefs.deadlineOffsets);
+    final List<Duration> targetOffsets =
+        anchor.isDeadline ? nextDeadline : nextStart;
+
+    if (targetOffsets.contains(offset)) {
+      targetOffsets.remove(offset);
     } else {
-      nextOffsets.add(offset);
+      targetOffsets.add(offset);
     }
+
+    if (!preserveOtherAnchors) {
+      if (anchor.isDeadline) {
+        nextStart.clear();
+      } else {
+        nextDeadline.clear();
+      }
+    }
+
     return prefs
         .copyWith(
           enabled: true,
-          startOffsets: usesDeadline ? const <Duration>[] : nextOffsets,
-          deadlineOffsets: usesDeadline ? nextOffsets : const <Duration>[],
+          startOffsets: nextStart,
+          deadlineOffsets: nextDeadline,
         )
         .normalized(forceEnabled: true);
   }

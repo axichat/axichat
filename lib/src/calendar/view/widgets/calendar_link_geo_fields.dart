@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/calendar/view/widgets/task_text_field.dart';
@@ -12,6 +13,8 @@ const String _latitudeFieldLabel = 'Latitude';
 const String _latitudeFieldHint = '0.0000';
 const String _longitudeFieldLabel = 'Longitude';
 const String _longitudeFieldHint = '0.0000';
+const String _geoSeparator = ', ';
+const int _geoPrecision = 4;
 
 class CalendarLinkGeoFields extends StatefulWidget {
   const CalendarLinkGeoFields({
@@ -112,16 +115,58 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
     widget.onGeoChanged(CalendarGeo(latitude: lat, longitude: lon));
   }
 
+  String _formatUrlLabel(String value) {
+    final Uri? uri = Uri.tryParse(value);
+    if (uri == null) {
+      return value;
+    }
+    return uri.host.isNotEmpty ? uri.host : value;
+  }
+
+  String _formatChipCoordinate(double value) {
+    return value.toStringAsFixed(_geoPrecision);
+  }
+
   @override
   Widget build(BuildContext context) {
     const TextInputType geoKeyboard =
         TextInputType.numberWithOptions(decimal: true, signed: true);
+    final List<Widget> chips = <Widget>[];
+    final String? url = widget.url?.trim();
+    if (url != null && url.isNotEmpty) {
+      chips.add(
+        _LinkGeoChip(
+          icon: Icons.link,
+          label: _formatUrlLabel(url),
+        ),
+      );
+    }
+    final CalendarGeo? geo = widget.geo;
+    if (geo != null) {
+      final String lat = _formatChipCoordinate(geo.latitude);
+      final String lon = _formatChipCoordinate(geo.longitude);
+      chips.add(
+        _LinkGeoChip(
+          icon: Icons.place_outlined,
+          label: '$lat$_geoSeparator$lon',
+        ),
+      );
+    }
+    final bool hasChips = chips.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: widget.title),
         const SizedBox(height: calendarGutterSm),
+        if (hasChips) ...[
+          Wrap(
+            spacing: calendarInsetSm,
+            runSpacing: calendarInsetSm,
+            children: chips,
+          ),
+          const SizedBox(height: calendarGutterSm),
+        ],
         TaskTextField(
           controller: _urlController,
           labelText: _linkFieldLabel,
@@ -160,6 +205,53 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _LinkGeoChip extends StatelessWidget {
+  const _LinkGeoChip({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle labelStyle = context.textTheme.small.copyWith(
+      color: calendarTitleColor,
+      fontWeight: FontWeight.w600,
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterSm,
+        vertical: calendarInsetMd,
+      ),
+      decoration: BoxDecoration(
+        color: calendarContainerColor,
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        border: Border.all(color: calendarBorderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: calendarGutterLg,
+            color: calendarSubtitleColor,
+          ),
+          const SizedBox(width: calendarInsetMd),
+          Flexible(
+            child: Text(
+              label,
+              style: labelStyle,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

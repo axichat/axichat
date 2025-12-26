@@ -25,6 +25,8 @@ import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/calendar_share.dart';
+import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
@@ -112,6 +114,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
   static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
   static const double _autoScrollHorizontalSlop = 32.0;
+  final CalendarTransferService _transferService =
+      const CalendarTransferService();
 
   double get _edgeScrollFastBandHeight => _layoutTheme.edgeScrollFastBandHeight;
   double get _edgeScrollSlowBandHeight => _layoutTheme.edgeScrollSlowBandHeight;
@@ -809,6 +813,44 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     FeedbackSystem.showSuccess(context, 'Task copied to clipboard');
+  }
+
+  Future<void> _exportTaskIcs(CalendarTask task) async {
+    final l10n = context.l10n;
+    final String trimmedTitle = task.title.trim();
+    final String subject =
+        trimmedTitle.isEmpty ? l10n.calendarExportFormatIcsTitle : trimmedTitle;
+    final String shareText = '$subject (${l10n.calendarExportFormatIcsTitle})';
+    try {
+      final file = await _transferService.exportTaskIcs(task: task);
+      if (!mounted) {
+        return;
+      }
+      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        file: file,
+        subject: subject,
+        text: shareText,
+      );
+      if (!mounted) {
+        return;
+      }
+      FeedbackSystem.showSuccess(
+        context,
+        calendarShareSuccessMessage(
+          outcome: shareOutcome,
+          filePath: file.path,
+          sharedText: l10n.calendarExportReady,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      FeedbackSystem.showError(
+        context,
+        l10n.calendarExportFailed('$error'),
+      );
+    }
   }
 
   void _pasteTask(DateTime slotTime) {
@@ -2598,6 +2640,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         icon: Icons.copy_outlined,
         label: 'Copy Task',
         onSelected: () => _copyTaskInstance(task),
+      ),
+      TaskContextAction(
+        icon: Icons.file_download_outlined,
+        label: context.l10n.calendarExportFormatIcsTitle,
+        onSelected: () => _exportTaskIcs(task),
       ),
       TaskContextAction(
         icon: Icons.share_outlined,

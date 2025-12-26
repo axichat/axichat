@@ -1409,6 +1409,7 @@ class _QuickAddReminderSection extends StatelessWidget {
       onChanged: onChanged,
       title: context.l10n.calendarRemindersSection,
       anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
+      showBothAnchors: deadline != null,
     );
   }
 }
