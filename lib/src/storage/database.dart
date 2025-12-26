@@ -207,6 +207,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Draft>> getDrafts({required int start, required int end});
 
+  Future<int> countDrafts();
+
   Future<Draft?> getDraft(int id);
 
   Future<Draft?> getDraftBySyncId(String syncId);
@@ -218,6 +220,7 @@ abstract interface class XmppDatabase implements Database {
     required String draftSyncId,
     required DateTime draftUpdatedAt,
     required String draftSourceId,
+    required List<DraftRecipientData> draftRecipients,
     String? subject,
     List<String> attachmentMetadataIds = const [],
   });
@@ -234,6 +237,7 @@ abstract interface class XmppDatabase implements Database {
     required List<String> jids,
     required DateTime draftUpdatedAt,
     required String draftSourceId,
+    required List<DraftRecipientData> draftRecipients,
     String? body,
     String? subject,
     List<String> attachmentMetadataIds = const [],
@@ -329,6 +333,11 @@ abstract interface class XmppDatabase implements Database {
   Future<void> setChatShareSignature({
     required String jid,
     required bool enabled,
+  });
+
+  Future<void> setChatAttachmentAutoDownload({
+    required String jid,
+    required AttachmentAutoDownload value,
   });
 
   Future<void> markChatFavorited({
@@ -1162,7 +1171,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration {
@@ -1287,6 +1296,12 @@ WHERE file_metadata_id IS NOT NULL
           await customStatement(_draftSyncIdUpdateSql);
           await customStatement(_draftUpdatedAtUpdateSql);
           await customStatement(_draftSourceIdUpdateSql, [draftSourceLegacyId]);
+        }
+        if (from < 20) {
+          await m.addColumn(drafts, drafts.draftRecipients);
+        }
+        if (from < 21) {
+          await m.addColumn(chats, chats.attachmentAutoDownload);
         }
       },
       beforeOpen: (_) async {
@@ -2208,6 +2223,14 @@ WHERE jid = ?
   }
 
   @override
+  Future<int> countDrafts() async {
+    final countExpression = drafts.id.count();
+    final query = selectOnly(drafts)..addColumns([countExpression]);
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
+  }
+
+  @override
   Future<Draft?> getDraft(int id) => draftsAccessor.selectOne(id);
 
   @override
@@ -2227,6 +2250,7 @@ WHERE jid = ?
     required String draftSyncId,
     required DateTime draftUpdatedAt,
     required String draftSourceId,
+    required List<DraftRecipientData> draftRecipients,
     String? subject,
     List<String> attachmentMetadataIds = const [],
   }) =>
@@ -2237,6 +2261,7 @@ WHERE jid = ?
         draftSyncId: Value(draftSyncId),
         draftUpdatedAt: Value(draftUpdatedAt),
         draftSourceId: Value(draftSourceId),
+        draftRecipients: Value(draftRecipients),
         subject: Value.absentIfNull(subject),
         attachmentMetadataIds: Value(attachmentMetadataIds),
       ));
@@ -2264,6 +2289,7 @@ WHERE jid = ?
     required List<String> jids,
     required DateTime draftUpdatedAt,
     required String draftSourceId,
+    required List<DraftRecipientData> draftRecipients,
     String? body,
     String? subject,
     List<String> attachmentMetadataIds = const [],
@@ -2278,6 +2304,7 @@ WHERE jid = ?
           draftSyncId: Value(normalized),
           draftUpdatedAt: Value(draftUpdatedAt),
           draftSourceId: Value(draftSourceId),
+          draftRecipients: Value(draftRecipients),
           body: Value(body),
           subject: Value(subject),
           attachmentMetadataIds: Value(attachmentMetadataIds),
@@ -2291,6 +2318,7 @@ WHERE jid = ?
         draftSyncId: Value(normalized),
         draftUpdatedAt: Value(draftUpdatedAt),
         draftSourceId: Value(draftSourceId),
+        draftRecipients: Value(draftRecipients),
         body: Value(body),
         subject: Value(subject),
         attachmentMetadataIds: Value(attachmentMetadataIds),
@@ -2733,6 +2761,17 @@ $limitClause
     _log.info('Updating chat share signature');
     await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
       ChatsCompanion(shareSignatureEnabled: Value(enabled)),
+    );
+  }
+
+  @override
+  Future<void> setChatAttachmentAutoDownload({
+    required String jid,
+    required AttachmentAutoDownload value,
+  }) async {
+    _log.info('Updating chat attachment auto-download state');
+    await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
+      ChatsCompanion(attachmentAutoDownload: Value(value)),
     );
   }
 

@@ -156,6 +156,7 @@ const int _xmppAttachmentDownloadLimitFallbackBytes = 50 * 1024 * 1024;
 const int _xmppAttachmentDownloadMaxRedirects = 5;
 const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
+const int _attachmentSizeFallbackBytes = 0;
 const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
 const int _emptyMessageCount = 0;
@@ -217,6 +218,40 @@ class _PeerCapabilities {
     supportsMarkers: true,
     supportsReceipts: true,
   );
+}
+
+class XmppAttachmentUpload {
+  const XmppAttachmentUpload._({
+    required this.metadata,
+    required this.getUrl,
+    required String putUrl,
+    required List<XmppUploadHeader> headers,
+    required String contentType,
+    required int sizeBytes,
+    required File file,
+  })  : _putUrl = putUrl,
+        _headers = headers,
+        _contentType = contentType,
+        _sizeBytes = sizeBytes,
+        _file = file;
+
+  final FileMetadataData metadata;
+  final String getUrl;
+  final String _putUrl;
+  final List<XmppUploadHeader> _headers;
+  final String _contentType;
+  final int _sizeBytes;
+  final File _file;
+}
+
+class XmppUploadHeader {
+  const XmppUploadHeader({
+    required this.name,
+    required this.value,
+  });
+
+  final String name;
+  final String value;
 }
 
 mixin MessageService
@@ -947,7 +982,7 @@ mixin MessageService
             chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
           );
         }
-        if (metadata != null && !isGroupChat) {
+        if (metadata != null) {
           unawaited(
             _autoDownloadTrustedInboundAttachment(
               message: message,
@@ -1594,7 +1629,7 @@ mixin MessageService
     );
   }
 
-  Future<void> sendAttachment({
+  Future<XmppAttachmentUpload> sendAttachment({
     required String jid,
     required EmailAttachment attachment,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
@@ -1603,6 +1638,7 @@ mixin MessageService
     int? attachmentOrder,
     Message? quotedMessage,
     ChatType chatType = ChatType.chat,
+    XmppAttachmentUpload? upload,
   }) async {
     final accountJid = myJid;
     if (accountJid == null) {
@@ -1616,60 +1652,11 @@ mixin MessageService
       _log.warning('Blocked XMPP attachment send to foreign domain.');
       throw XmppForeignDomainException();
     }
-    final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
-    if (uploadManager == null) {
-      _log.warning('HTTP upload manager unavailable; ensure it is registered.');
-      throw XmppMessageException();
-    }
-    final uploadSupport = httpUploadSupport;
-    _log.fine(
-      'HTTP upload support snapshot: supported=${uploadSupport.supported} '
-      'maxSize=${uploadSupport.maxFileSizeBytes ?? 'unspecified'}',
-    );
-    if (!await uploadManager.isSupported()) {
-      _log.warning('Server does not advertise HTTP file upload support.');
-      throw XmppUploadNotSupportedException();
-    }
-    final file = File(attachment.path);
-    if (!await file.exists()) {
-      _log.warning('Attachment missing on disk.');
-      throw XmppMessageException();
-    }
-    final actualSize = await file.length();
-    _log.fine(
-      'Attachment size check: declared=${attachment.sizeBytes} '
-      'actual=$actualSize',
-    );
-    if (attachment.sizeBytes > 0 && attachment.sizeBytes != actualSize) {
-      _log.fine(
-        'Attachment size mismatch; declared=${attachment.sizeBytes} '
-        'actual=$actualSize. Using actual size.',
-      );
-    }
-    final size = actualSize;
-    final filename = attachment.fileName.isEmpty
-        ? p.basename(file.path)
-        : p.normalize(attachment.fileName);
-    final contentType = attachment.mimeType?.isNotEmpty == true
-        ? attachment.mimeType!
-        : 'application/octet-stream';
-    final slot = await _requestHttpUploadSlot(
-      filename: filename,
-      sizeBytes: size,
-      contentType: contentType,
-    );
-    final getUrl = slot.getUrl;
-    final putUrl = slot.putUrl;
-    final metadata = FileMetadataData(
-      id: attachment.metadataId ?? uuid.v4(),
-      filename: filename,
-      path: file.path,
-      mimeType: contentType,
-      sizeBytes: size,
-      width: attachment.width,
-      height: attachment.height,
-      sourceUrls: [getUrl],
-    );
+    final resolvedUpload = upload ?? await _uploadAttachment(attachment);
+    final metadata = resolvedUpload.metadata;
+    final getUrl = resolvedUpload.getUrl;
+    final size = metadata.sizeBytes ?? _attachmentSizeFallbackBytes;
+    final filename = metadata.filename;
     await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
     final captionText = attachment.caption?.trim() ?? '';
@@ -1713,40 +1700,25 @@ mixin MessageService
         );
       });
     }
-    _log.fine(
-      'Uploading attachment $filename ($size bytes) to HTTP upload slot.',
-    );
-    try {
-      await _uploadFileToSlot(
-        slot,
-        file,
-        sizeBytes: size,
-        putUrl: putUrl,
-        contentType: contentType,
+    if (upload == null) {
+      await _uploadAttachmentFile(
+        upload: resolvedUpload,
+        metadata: metadata,
+        stanzaId: message.stanzaID,
+        shouldStore: shouldStore,
       );
-      _log.fine('Upload complete for attachment $filename');
-    } catch (error, stackTrace) {
-      _log.warning(
-        'Failed to upload attachment $filename',
-        error,
-        stackTrace,
-      );
-      if (shouldStore) {
-        await _dbOp<XmppDatabase>(
-          (db) => db.saveMessageError(
-            stanzaID: message.stanzaID,
-            error: MessageError.fileUploadFailure,
-          ),
-        );
-      }
-      throw XmppMessageException();
     }
 
     try {
-      final extraExtensions = [
+      final sfsData = _sfsDataForAttachment(
+        metadata: metadata,
+        url: getUrl,
+      );
+      final extraExtensions = <mox.StanzaHandlerExtension>[
         const mox.MessageProcessingHintData(
           [mox.MessageProcessingHint.store],
         ),
+        sfsData,
         mox.OOBData(getUrl, filename),
       ];
       final stanza = _buildOutgoingMessageEvent(
@@ -1789,6 +1761,169 @@ mixin MessageService
       throw XmppMessageException();
     }
     await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
+    return resolvedUpload;
+  }
+
+  @override
+  Future<XmppAttachmentUpload> _uploadDraftAttachment(
+    EmailAttachment attachment,
+  ) =>
+      _uploadAttachment(attachment);
+
+  @override
+  Future<void> _uploadDraftAttachmentFile({
+    required XmppAttachmentUpload upload,
+    required FileMetadataData metadata,
+    required String stanzaId,
+    required bool shouldStore,
+  }) =>
+      _uploadAttachmentFile(
+        upload: upload,
+        metadata: metadata,
+        stanzaId: stanzaId,
+        shouldStore: shouldStore,
+      );
+
+  Future<XmppAttachmentUpload> _uploadAttachment(
+    EmailAttachment attachment,
+  ) async {
+    final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
+    if (uploadManager == null) {
+      _log.warning('HTTP upload manager unavailable; ensure it is registered.');
+      throw XmppMessageException();
+    }
+    final uploadSupport = httpUploadSupport;
+    _log.fine(
+      'HTTP upload support snapshot: supported=${uploadSupport.supported} '
+      'maxSize=${uploadSupport.maxFileSizeBytes ?? 'unspecified'}',
+    );
+    if (!await uploadManager.isSupported()) {
+      _log.warning('Server does not advertise HTTP file upload support.');
+      throw XmppUploadNotSupportedException();
+    }
+    final file = File(attachment.path);
+    if (!await file.exists()) {
+      _log.warning('Attachment missing on disk.');
+      throw XmppMessageException();
+    }
+    final actualSize = await file.length();
+    _log.fine(
+      'Attachment size check: declared=${attachment.sizeBytes} '
+      'actual=$actualSize',
+    );
+    if (attachment.sizeBytes > 0 && attachment.sizeBytes != actualSize) {
+      _log.fine(
+        'Attachment size mismatch; declared=${attachment.sizeBytes} '
+        'actual=$actualSize. Using actual size.',
+      );
+    }
+    final size = actualSize;
+    final filename = attachment.fileName.isEmpty
+        ? p.basename(file.path)
+        : p.normalize(attachment.fileName);
+    final contentType = attachment.mimeType?.isNotEmpty == true
+        ? attachment.mimeType!
+        : 'application/octet-stream';
+    final slot = await _requestHttpUploadSlot(
+      filename: filename,
+      sizeBytes: size,
+      contentType: contentType,
+    );
+    final getUrl = slot.getUrl;
+    final metadata = FileMetadataData(
+      id: attachment.metadataId ?? uuid.v4(),
+      filename: filename,
+      path: file.path,
+      mimeType: contentType,
+      sizeBytes: size,
+      width: attachment.width,
+      height: attachment.height,
+      sourceUrls: [getUrl],
+    );
+    final headers = slot.headers
+        .map(
+          (header) => XmppUploadHeader(
+            name: header.name,
+            value: header.value,
+          ),
+        )
+        .toList(growable: false);
+    return XmppAttachmentUpload._(
+      metadata: metadata,
+      getUrl: getUrl,
+      putUrl: slot.putUrl,
+      headers: headers,
+      contentType: contentType,
+      sizeBytes: size,
+      file: file,
+    );
+  }
+
+  Future<void> _uploadAttachmentFile({
+    required XmppAttachmentUpload upload,
+    required FileMetadataData metadata,
+    required String stanzaId,
+    required bool shouldStore,
+  }) async {
+    _log.fine(
+      'Uploading attachment ${metadata.filename} (${upload._sizeBytes} bytes) '
+      'to HTTP upload slot.',
+    );
+    try {
+      await _uploadFileToSlot(
+        _UploadSlot(
+          getUrl: upload.getUrl,
+          putUrl: upload._putUrl,
+          headers: upload._headers
+              .map(
+                (header) => _UploadSlotHeader(
+                  name: header.name,
+                  value: header.value,
+                ),
+              )
+              .toList(growable: false),
+        ),
+        upload._file,
+        sizeBytes: upload._sizeBytes,
+        putUrl: upload._putUrl,
+        contentType: upload._contentType,
+      );
+      _log.fine('Upload complete for attachment ${metadata.filename}');
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to upload attachment ${metadata.filename}',
+        error,
+        stackTrace,
+      );
+      if (shouldStore) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: stanzaId,
+            error: MessageError.fileUploadFailure,
+          ),
+        );
+      }
+      throw XmppMessageException();
+    }
+  }
+
+  mox.StatelessFileSharingData _sfsDataForAttachment({
+    required FileMetadataData metadata,
+    required String url,
+  }) {
+    final sfsMetadata = mox.FileMetadataData(
+      thumbnails: const [],
+      mediaType: metadata.mimeType,
+      width: metadata.width,
+      height: metadata.height,
+      name: metadata.filename,
+      size: metadata.sizeBytes,
+      hashes: metadata.plainTextHashes ?? const {},
+    );
+    return mox.StatelessFileSharingData(
+      sfsMetadata,
+      [mox.StatelessFileSharingUrlSource(url)],
+    );
   }
 
   Future<_UploadSlot> _requestHttpUploadSlot({
@@ -2431,6 +2566,11 @@ mixin MessageService
           );
     final previousMetadataIds =
         existingDraft?.attachmentMetadataIds ?? const <String>[];
+    final draftRecipients = await _resolveDraftRecipientRecords(
+      jids: jids,
+      existingRecipients:
+          existingDraft?.draftRecipients ?? const <DraftRecipientData>[],
+    );
     final resolvedSyncId = existingDraft?.draftSyncId.trim().isNotEmpty == true
         ? existingDraft!.draftSyncId
         : uuid.v4();
@@ -2449,6 +2589,7 @@ mixin MessageService
         draftSyncId: resolvedSyncId,
         draftUpdatedAt: resolvedUpdatedAt,
         draftSourceId: resolvedSourceId,
+        draftRecipients: draftRecipients,
         subject: subject,
         attachmentMetadataIds: metadataIds,
       ),
@@ -2465,9 +2606,13 @@ mixin MessageService
     if (savedDraft != null) {
       unawaited(publishDraftSync(savedDraft));
     }
+    final draftCount = await _dbOpReturning<XmppDatabase, int>(
+      (db) => db.countDrafts(),
+    );
     return DraftSaveResult(
       draftId: savedId,
       attachmentMetadataIds: List.unmodifiable(metadataIds),
+      draftCount: draftCount,
     );
   }
 
@@ -2475,35 +2620,56 @@ mixin MessageService
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    return await _dbOpReturning<XmppDatabase, List<EmailAttachment>>(
-      (db) async {
-        final attachments = <EmailAttachment>[];
-        for (final metadataId in metadataIds) {
-          final metadata = await db.getFileMetadata(metadataId);
-          final path = metadata?.path;
-          if (metadata == null || path == null || path.isEmpty) {
-            continue;
-          }
-          final file = File(path);
-          if (!await file.exists()) {
-            continue;
-          }
-          final size = metadata.sizeBytes ?? await file.length();
-          attachments.add(
-            EmailAttachment(
-              path: path,
-              fileName: metadata.filename,
-              sizeBytes: size,
-              mimeType: metadata.mimeType,
-              width: metadata.width,
-              height: metadata.height,
-              metadataId: metadata.id,
-            ),
-          );
+    final attachments = <EmailAttachment>[];
+    for (final metadataId in metadataIds) {
+      final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+        (db) => db.getFileMetadata(metadataId),
+      );
+      if (metadata == null) {
+        continue;
+      }
+      var path = metadata.path;
+      if (path == null || path.trim().isEmpty) {
+        try {
+          path = await downloadInboundAttachment(metadataId: metadata.id);
+        } on Exception {
+          continue;
         }
-        return attachments;
-      },
-    );
+      }
+      if (path == null || path.trim().isEmpty) {
+        continue;
+      }
+      final file = File(path);
+      if (!await file.exists()) {
+        try {
+          final downloaded = await downloadInboundAttachment(
+            metadataId: metadata.id,
+          );
+          if (downloaded != null && downloaded.trim().isNotEmpty) {
+            path = downloaded;
+          }
+        } on Exception {
+          continue;
+        }
+      }
+      final resolvedFile = File(path);
+      if (!await resolvedFile.exists()) {
+        continue;
+      }
+      final size = metadata.sizeBytes ?? await resolvedFile.length();
+      attachments.add(
+        EmailAttachment(
+          path: path,
+          fileName: metadata.filename,
+          sizeBytes: size,
+          mimeType: metadata.mimeType,
+          width: metadata.width,
+          height: metadata.height,
+          metadataId: metadata.id,
+        ),
+      );
+    }
+    return attachments;
   }
 
   Future<void> deleteDraft({required int id}) async {
@@ -2533,15 +2699,33 @@ mixin MessageService
   }
 
   Future<String> _persistDraftAttachmentMetadata(
-      EmailAttachment attachment) async {
+    EmailAttachment attachment,
+  ) async {
+    final resolvedId = attachment.metadataId ?? uuid.v4();
+    final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+      (db) => db.getFileMetadata(resolvedId),
+    );
+    final resolvedFilename = attachment.fileName.isNotEmpty
+        ? attachment.fileName
+        : existing?.filename ?? p.basename(attachment.path);
+    final resolvedSizeBytes =
+        attachment.sizeBytes > 0 ? attachment.sizeBytes : existing?.sizeBytes;
     final metadata = FileMetadataData(
-      id: attachment.metadataId ?? uuid.v4(),
-      filename: attachment.fileName,
+      id: resolvedId,
+      filename: resolvedFilename,
       path: attachment.path,
-      mimeType: attachment.mimeType,
-      sizeBytes: attachment.sizeBytes,
-      width: attachment.width,
-      height: attachment.height,
+      sourceUrls: existing?.sourceUrls,
+      mimeType: attachment.mimeType ?? existing?.mimeType,
+      sizeBytes: resolvedSizeBytes,
+      width: attachment.width ?? existing?.width,
+      height: attachment.height ?? existing?.height,
+      encryptionKey: existing?.encryptionKey,
+      encryptionIV: existing?.encryptionIV,
+      encryptionScheme: existing?.encryptionScheme,
+      cipherTextHashes: existing?.cipherTextHashes,
+      plainTextHashes: existing?.plainTextHashes,
+      thumbnailType: existing?.thumbnailType,
+      thumbnailData: existing?.thumbnailData,
     );
     await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     return metadata.id;
@@ -4260,7 +4444,13 @@ mixin MessageService
       var isTrusted = isSelf;
       if (!isTrusted) {
         isTrusted = await _dbOpReturning<XmppDatabase, bool>(
-          (db) async => (await db.getRosterItem(message.chatJid)) != null,
+          (db) async {
+            final chat = await db.getChat(message.chatJid);
+            if (chat != null && chat.type == ChatType.groupChat) {
+              return chat.attachmentAutoDownload.isAllowed;
+            }
+            return (await db.getRosterItem(message.chatJid)) != null;
+          },
         );
       }
       if (!isTrusted) return;

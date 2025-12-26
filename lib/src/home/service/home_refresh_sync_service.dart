@@ -196,7 +196,7 @@ final class HomeRefreshSyncService {
       await emailService.performBackgroundFetch(
         timeout: _emailHistoryFetchTimeout,
       );
-      await emailService.syncInboxAndSent();
+      await emailService.refreshChatlistFromCore();
     } on Exception {
       _log.fine('Email background sync failed.');
     }

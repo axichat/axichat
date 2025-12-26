@@ -255,7 +255,18 @@ class Invites extends Table {
   Set<Column<Object>>? get primaryKey => {jid};
 }
 
+const int attachmentAutoDownloadDefaultIndex = 0;
+
 enum ChatType { chat, groupChat, note }
+
+enum AttachmentAutoDownload {
+  blocked,
+  allowed;
+
+  bool get isBlocked => this == blocked;
+
+  bool get isAllowed => this == allowed;
+}
 
 @Freezed(toJson: false, fromJson: false)
 class Chat with _$Chat implements Insertable<Chat> {
@@ -278,6 +289,8 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(false) bool spam,
     @Default(true) bool markerResponsive,
     @Default(true) bool shareSignatureEnabled,
+    @Default(AttachmentAutoDownload.blocked)
+    AttachmentAutoDownload attachmentAutoDownload,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
     String? contactDisplayName,
@@ -308,6 +321,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required bool spam,
     required bool markerResponsive,
     required bool shareSignatureEnabled,
+    required AttachmentAutoDownload attachmentAutoDownload,
     required EncryptionProtocol encryptionProtocol,
     required String? contactID,
     required String? contactDisplayName,
@@ -346,6 +360,7 @@ class Chat with _$Chat implements Insertable<Chat> {
       'spam': Variable<bool>(spam),
       'marker_responsive': Variable<bool>(markerResponsive),
       'share_signature_enabled': Variable<bool>(shareSignatureEnabled),
+      'attachment_auto_download': Variable<int>(attachmentAutoDownload.index),
       'encryption_protocol': Variable<int>(encryptionProtocol.index),
     };
     if (myNickname != null) {
@@ -427,6 +442,9 @@ class Chats extends Table {
 
   BoolColumn get shareSignatureEnabled =>
       boolean().withDefault(const Constant(true))();
+
+  IntColumn get attachmentAutoDownload => intEnum<AttachmentAutoDownload>()
+      .withDefault(const Constant(attachmentAutoDownloadDefaultIndex))();
 
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(1))();

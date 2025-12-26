@@ -38,6 +38,8 @@ const _connectivityConnectingMin = 2000;
 const _coreDraftMessageId = 0;
 const _defaultImapPort = '993';
 const _defaultSecurityMode = 'ssl';
+const _emailDownloadLimitKey = 'download_limit';
+const _emailDownloadLimitDisabledValue = '0';
 const _unknownEmailPassword = '';
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
 const _notificationAttachmentLabel = 'Attachment';
@@ -492,6 +494,7 @@ class EmailService {
     if (_running) return;
     await _transport.start();
     _running = true;
+    await _applyDownloadLimit();
     _startImapSyncLoop();
   }
 
@@ -1963,6 +1966,21 @@ class EmailService {
     }
   }
 
+  Future<void> _applyDownloadLimit() async {
+    try {
+      final current = await _transport.getCoreConfig(_emailDownloadLimitKey);
+      if (current?.trim() == _emailDownloadLimitDisabledValue) {
+        return;
+      }
+      await _transport.setCoreConfig(
+        key: _emailDownloadLimitKey,
+        value: _emailDownloadLimitDisabledValue,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to update email download limit', error, stackTrace);
+    }
+  }
+
   Future<String?> _notificationBody({
     required XmppDatabase db,
     required Message message,
@@ -2119,7 +2137,7 @@ class EmailService {
       'send_security': _defaultSecurityMode,
       'send_user': localPart,
       'show_emails': '2',
-      'download_limit': '40000000',
+      _emailDownloadLimitKey: _emailDownloadLimitDisabledValue,
       'mdns_enabled': '1',
     };
   }

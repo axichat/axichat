@@ -146,6 +146,17 @@
   "draftDiscarded": "草稿已捨棄。",
   "draftSendFailed": "無法傳送草稿。",
   "draftSent": "已傳送",
+  "draftLimitWarning": "草稿同步最多保留 {limit} 個草稿。你已有 {count} 個。",
+  "@draftLimitWarning": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "draftValidationNoContent": "請新增主旨、訊息或附件",
   "draftFileMissing": "檔案在 {path} 已不存在。",
   "draftAttachmentPreview": "預覽",

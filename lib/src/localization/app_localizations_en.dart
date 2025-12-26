@@ -455,6 +455,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get draftSent => 'Sent';
 
   @override
+  String draftLimitWarning(int limit, int count) {
+    return 'Draft sync keeps up to $limit drafts. You\'re at $count.';
+  }
+
+  @override
   String get draftValidationNoContent =>
       'Add a subject, message, or attachment';
 

@@ -448,6 +448,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftSent => '已发送';
 
   @override
+  String draftLimitWarning(int limit, int count) {
+    return '草稿同步最多保留 $limit 条草稿。你已拥有 $count 条。';
+  }
+
+  @override
   String get draftValidationNoContent => '请添加主题、消息或附件';
 
   @override
@@ -3278,6 +3283,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get draftSent => '已傳送';
+
+  @override
+  String draftLimitWarning(int limit, int count) {
+    return '草稿同步最多保留 $limit 個草稿。你已有 $count 個。';
+  }
 
   @override
   String get draftValidationNoContent => '請新增主旨、訊息或附件';

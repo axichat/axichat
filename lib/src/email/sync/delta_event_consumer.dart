@@ -471,6 +471,11 @@ class DeltaEventConsumer {
       message: message,
       chatJid: resolvedChat.jid,
     );
+    if (!isOutgoing &&
+        msg.hasFile &&
+        resolvedChat.attachmentAutoDownload.isAllowed) {
+      unawaited(_context.downloadFullMessage(msg.id));
+    }
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }
 

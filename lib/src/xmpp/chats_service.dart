@@ -448,6 +448,18 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     );
   }
 
+  Future<void> toggleChatAttachmentAutoDownload({
+    required String jid,
+    required bool enabled,
+  }) async {
+    final value = enabled
+        ? AttachmentAutoDownload.allowed
+        : AttachmentAutoDownload.blocked;
+    await _dbOp<XmppDatabase>(
+      (db) => db.setChatAttachmentAutoDownload(jid: jid, value: value),
+    );
+  }
+
   Future<void> toggleChatFavorited({
     required String jid,
     required bool favorited,

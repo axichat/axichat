@@ -132,6 +132,15 @@ final class ChatShareSignatureToggled extends ChatEvent {
   List<Object?> get props => [enabled];
 }
 
+final class ChatAttachmentAutoDownloadToggled extends ChatEvent {
+  const ChatAttachmentAutoDownloadToggled(this.enabled);
+
+  final bool enabled;
+
+  @override
+  List<Object?> get props => [enabled];
+}
+
 final class ChatResponsivityChanged extends ChatEvent {
   const ChatResponsivityChanged(this.responsive);
 

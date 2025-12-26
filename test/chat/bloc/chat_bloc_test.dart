@@ -190,6 +190,7 @@ void main() {
       (_) async => const DraftSaveResult(
         draftId: 1,
         attachmentMetadataIds: [],
+        draftCount: 1,
       ),
     );
   });

@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/storage/models/file_models.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
@@ -17,7 +18,6 @@ const String _recipientsTag = 'recipients';
 const String _recipientTag = 'recipient';
 const String _recipientJidAttr = 'jid';
 const String _recipientRoleAttr = 'role';
-const String _recipientTransportAttr = 'transport';
 const String _recipientRoleDefault = 'to';
 const String _subjectTag = 'subject';
 const String _bodyTag = 'body';
@@ -25,9 +25,16 @@ const String _htmlTag = 'html';
 const String _attachmentsTag = 'attachments';
 const String _attachmentTag = 'attachment';
 const String _attachmentIdAttr = 'id';
+const String _attachmentUrlAttr = 'url';
+const String _attachmentNameAttr = 'name';
+const String _attachmentMimeAttr = 'mime';
+const String _attachmentSizeAttr = 'size';
+const String _attachmentWidthAttr = 'width';
+const String _attachmentHeightAttr = 'height';
 const String _publishModelPublishers = 'publishers';
 const String _sendLastOnSubscribe = 'on_subscribe';
-const String _defaultMaxItems = '200';
+const String _defaultMaxItems = '$draftSyncMaxItems';
+const String _draftSourceIdFallback = draftSourceLegacyId;
 const bool _notifyEnabled = true;
 const bool _deliverNotificationsEnabled = true;
 const bool _deliverPayloadsEnabled = true;
@@ -38,22 +45,18 @@ final class DraftRecipient {
   const DraftRecipient({
     required this.jid,
     required this.role,
-    required this.transport,
   });
 
   final String jid;
   final String role;
-  final MessageTransport transport;
 
   DraftRecipient copyWith({
     String? jid,
     String? role,
-    MessageTransport? transport,
   }) {
     return DraftRecipient(
       jid: jid ?? this.jid,
       role: role ?? this.role,
-      transport: transport ?? this.transport,
     );
   }
 
@@ -62,17 +65,11 @@ final class DraftRecipient {
     final rawJid = node.attributes[_recipientJidAttr]?.toString().trim();
     if (rawJid == null || rawJid.isEmpty) return null;
     final rawRole = node.attributes[_recipientRoleAttr]?.toString().trim();
-    final rawTransport =
-        node.attributes[_recipientTransportAttr]?.toString().trim();
     final resolvedRole =
         rawRole == null || rawRole.isEmpty ? _recipientRoleDefault : rawRole;
-    final resolvedTransport = rawTransport == null || rawTransport.isEmpty
-        ? MessageTransport.xmpp
-        : MessageTransportCodec.fromWireValue(rawTransport);
     return DraftRecipient(
       jid: rawJid,
       role: resolvedRole,
-      transport: resolvedTransport,
     );
   }
 
@@ -82,9 +79,104 @@ final class DraftRecipient {
       attributes: {
         _recipientJidAttr: jid,
         _recipientRoleAttr: role,
-        _recipientTransportAttr: transport.wireValue,
       },
     );
+  }
+}
+
+final class DraftAttachmentRef {
+  const DraftAttachmentRef({
+    required this.id,
+    this.url,
+    this.filename,
+    this.mimeType,
+    this.sizeBytes,
+    this.width,
+    this.height,
+  });
+
+  final String id;
+  final String? url;
+  final String? filename;
+  final String? mimeType;
+  final int? sizeBytes;
+  final int? width;
+  final int? height;
+
+  DraftAttachmentRef copyWith({
+    String? id,
+    String? url,
+    String? filename,
+    String? mimeType,
+    int? sizeBytes,
+    int? width,
+    int? height,
+  }) {
+    return DraftAttachmentRef(
+      id: id ?? this.id,
+      url: url ?? this.url,
+      filename: filename ?? this.filename,
+      mimeType: mimeType ?? this.mimeType,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      width: width ?? this.width,
+      height: height ?? this.height,
+    );
+  }
+
+  static DraftAttachmentRef? fromXml(mox.XMLNode node) {
+    if (node.tag != _attachmentTag) return null;
+    final rawId = node.attributes[_attachmentIdAttr]?.toString().trim();
+    if (rawId == null || rawId.isEmpty) return null;
+    final url = _normalizeAttr(node.attributes[_attachmentUrlAttr]);
+    final filename = _normalizeAttr(node.attributes[_attachmentNameAttr]);
+    final mimeType = _normalizeAttr(node.attributes[_attachmentMimeAttr]);
+    final sizeBytes = _parseIntAttr(node.attributes[_attachmentSizeAttr]);
+    final width = _parseIntAttr(node.attributes[_attachmentWidthAttr]);
+    final height = _parseIntAttr(node.attributes[_attachmentHeightAttr]);
+    return DraftAttachmentRef(
+      id: rawId,
+      url: url,
+      filename: filename,
+      mimeType: mimeType,
+      sizeBytes: sizeBytes,
+      width: width,
+      height: height,
+    );
+  }
+
+  mox.XMLNode toXml() {
+    final normalizedUrl = url?.trim();
+    final normalizedName = filename?.trim();
+    final normalizedMime = mimeType?.trim();
+    return mox.XMLNode(
+      tag: _attachmentTag,
+      attributes: {
+        _attachmentIdAttr: id,
+        if (normalizedUrl != null && normalizedUrl.isNotEmpty)
+          _attachmentUrlAttr: normalizedUrl,
+        if (normalizedName != null && normalizedName.isNotEmpty)
+          _attachmentNameAttr: normalizedName,
+        if (normalizedMime != null && normalizedMime.isNotEmpty)
+          _attachmentMimeAttr: normalizedMime,
+        if (sizeBytes != null && sizeBytes! > 0)
+          _attachmentSizeAttr: sizeBytes.toString(),
+        if (width != null && width! > 0) _attachmentWidthAttr: width.toString(),
+        if (height != null && height! > 0)
+          _attachmentHeightAttr: height.toString(),
+      },
+    );
+  }
+
+  static String? _normalizeAttr(Object? value) {
+    final normalized = value?.toString().trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
+  }
+
+  static int? _parseIntAttr(Object? value) {
+    final normalized = value?.toString().trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return int.tryParse(normalized);
   }
 }
 
@@ -97,7 +189,7 @@ final class DraftSyncPayload {
     this.subject,
     this.body,
     this.html,
-    this.attachmentMetadataIds = const <String>[],
+    this.attachments = const <DraftAttachmentRef>[],
   });
 
   final String syncId;
@@ -107,10 +199,13 @@ final class DraftSyncPayload {
   final String? subject;
   final String? body;
   final String? html;
-  final List<String> attachmentMetadataIds;
+  final List<DraftAttachmentRef> attachments;
 
   List<String> get recipientJids =>
       recipients.map((recipient) => recipient.jid).toList(growable: false);
+
+  List<String> get attachmentMetadataIds =>
+      attachments.map((attachment) => attachment.id).toList(growable: false);
 
   DraftSyncPayload copyWith({
     String? syncId,
@@ -120,7 +215,7 @@ final class DraftSyncPayload {
     String? subject,
     String? body,
     String? html,
-    List<String>? attachmentMetadataIds,
+    List<DraftAttachmentRef>? attachments,
   }) {
     return DraftSyncPayload(
       syncId: syncId ?? this.syncId,
@@ -130,8 +225,7 @@ final class DraftSyncPayload {
       subject: subject ?? this.subject,
       body: body ?? this.body,
       html: html ?? this.html,
-      attachmentMetadataIds:
-          attachmentMetadataIds ?? this.attachmentMetadataIds,
+      attachments: attachments ?? this.attachments,
     );
   }
 
@@ -156,8 +250,9 @@ final class DraftSyncPayload {
     if (parsedUpdatedAt == null) return null;
 
     final rawSourceId = node.attributes[_draftSourceIdAttr]?.toString().trim();
-    final resolvedSourceId =
-        rawSourceId == null || rawSourceId.isEmpty ? '' : rawSourceId;
+    final resolvedSourceId = rawSourceId == null || rawSourceId.isEmpty
+        ? _draftSourceIdFallback
+        : rawSourceId;
 
     final recipientsNode = node.firstTag(_recipientsTag);
     final recipients = recipientsNode
@@ -172,14 +267,12 @@ final class DraftSyncPayload {
     final html = _normalizeText(node.firstTag(_htmlTag)?.innerText());
 
     final attachmentsNode = node.firstTag(_attachmentsTag);
-    final attachmentIds = attachmentsNode
+    final attachments = attachmentsNode
             ?.findTags(_attachmentTag)
-            .map((child) => child.attributes[_attachmentIdAttr]?.toString())
-            .whereType<String>()
-            .map((value) => value.trim())
-            .where((value) => value.isNotEmpty)
+            .map(DraftAttachmentRef.fromXml)
+            .whereType<DraftAttachmentRef>()
             .toList(growable: false) ??
-        const <String>[];
+        const <DraftAttachmentRef>[];
 
     return DraftSyncPayload(
       syncId: resolvedSyncId,
@@ -189,7 +282,7 @@ final class DraftSyncPayload {
       subject: subject,
       body: body,
       html: html,
-      attachmentMetadataIds: attachmentIds,
+      attachments: attachments,
     );
   }
 
@@ -214,17 +307,11 @@ final class DraftSyncPayload {
           mox.XMLNode(tag: _subjectTag, text: value),
         if (body case final value?) mox.XMLNode(tag: _bodyTag, text: value),
         if (html case final value?) mox.XMLNode(tag: _htmlTag, text: value),
-        if (attachmentMetadataIds.isNotEmpty)
+        if (attachments.isNotEmpty)
           mox.XMLNode(
             tag: _attachmentsTag,
-            children: attachmentMetadataIds
-                .map(
-                  (id) => mox.XMLNode(
-                    tag: _attachmentTag,
-                    attributes: {_attachmentIdAttr: id},
-                  ),
-                )
-                .toList(),
+            children:
+                attachments.map((attachment) => attachment.toXml()).toList(),
           ),
       ],
     );
@@ -274,6 +361,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   static const String managerId = 'axi.drafts';
 
   final String _maxItems;
+  var _accessModel = mox.AccessModel.whitelist;
 
   final StreamController<DraftSyncUpdate> _updatesController =
       StreamController<DraftSyncUpdate>.broadcast();
@@ -347,7 +435,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       _nodeConfig(accessModel).toNodeConfig();
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
-        accessModel: mox.AccessModel.whitelist.value,
+        accessModel: _accessModel.value,
         maxItems: _maxItems,
         persistItems: _persistItemsEnabled,
         publishModel: _publishModelPublishers,
@@ -377,6 +465,16 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     return int.parse(_defaultMaxItems);
   }
 
+  bool _isSnapshotComplete({
+    required int itemsCount,
+    required int maxItems,
+  }) =>
+      itemsCount < maxItems;
+
+  void _setAccessModel(mox.AccessModel accessModel) {
+    _accessModel = accessModel;
+  }
+
   Future<void> ensureNode() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
@@ -389,6 +487,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       primaryConfig,
     );
     if (!configured.isType<mox.PubSubError>()) {
+      _setAccessModel(mox.AccessModel.whitelist);
       return;
     }
 
@@ -399,6 +498,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       fallbackConfig,
     );
     if (!fallbackConfigured.isType<mox.PubSubError>()) {
+      _setAccessModel(mox.AccessModel.authorize);
       return;
     }
 
@@ -409,8 +509,36 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         nodeId: draftsPubSubNode,
       );
       if (created != null) {
-        await pubsub.configureNode(host, draftsPubSubNode, primaryConfig);
-        return;
+        final applied = await pubsub.configureNode(
+          host,
+          draftsPubSubNode,
+          primaryConfig,
+        );
+        if (!applied.isType<mox.PubSubError>()) {
+          _setAccessModel(mox.AccessModel.whitelist);
+          return;
+        }
+      }
+    } on Exception {
+      // ignore and retry below
+    }
+
+    try {
+      final created = await pubsub.createNodeWithConfig(
+        host,
+        _createNodeConfig(mox.AccessModel.authorize),
+        nodeId: draftsPubSubNode,
+      );
+      if (created != null) {
+        final applied = await pubsub.configureNode(
+          host,
+          draftsPubSubNode,
+          fallbackConfig,
+        );
+        if (!applied.isType<mox.PubSubError>()) {
+          _setAccessModel(mox.AccessModel.authorize);
+          return;
+        }
       }
     } on Exception {
       // ignore and retry below
@@ -419,7 +547,23 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     try {
       final created = await pubsub.createNode(host, nodeId: draftsPubSubNode);
       if (created == null) return;
-      await pubsub.configureNode(host, draftsPubSubNode, primaryConfig);
+      final appliedPrimary = await pubsub.configureNode(
+        host,
+        draftsPubSubNode,
+        primaryConfig,
+      );
+      if (!appliedPrimary.isType<mox.PubSubError>()) {
+        _setAccessModel(mox.AccessModel.whitelist);
+        return;
+      }
+      final appliedFallback = await pubsub.configureNode(
+        host,
+        draftsPubSubNode,
+        fallbackConfig,
+      );
+      if (!appliedFallback.isType<mox.PubSubError>()) {
+        _setAccessModel(mox.AccessModel.authorize);
+      }
     } on Exception {
       return;
     }
@@ -453,10 +597,11 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       );
     }
 
+    final fetchLimit = _resolveFetchLimit();
     final result = await pubsub.getItems(
       host,
       draftsPubSubNode,
-      maxItems: _resolveFetchLimit(),
+      maxItems: fetchLimit,
     );
     if (result.isType<mox.PubSubError>()) {
       final error = result.get<mox.PubSubError>();
@@ -492,14 +637,17 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     return PubSubFetchResult(
       items: List<DraftSyncPayload>.unmodifiable(parsed),
       isSuccess: true,
-      isComplete: true,
+      isComplete: _isSnapshotComplete(
+        itemsCount: parsed.length,
+        maxItems: fetchLimit,
+      ),
     );
   }
 
-  Future<void> publishDraft(DraftSyncPayload payload) async {
+  Future<bool> publishDraft(DraftSyncPayload payload) async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
-    if (pubsub == null || host == null) return;
+    if (pubsub == null || host == null) return false;
     final result = await pubsub.publish(
       host,
       draftsPubSubNode,
@@ -507,28 +655,30 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       id: payload.syncId,
       options: _publishOptions(),
       autoCreate: true,
-      createNodeConfig: _createNodeConfig(mox.AccessModel.whitelist),
+      createNodeConfig: _createNodeConfig(_accessModel),
     );
-    if (result.isType<mox.PubSubError>()) return;
+    if (result.isType<mox.PubSubError>()) return false;
     _cache[payload.syncId] = payload;
     _emitUpdate(payload);
+    return true;
   }
 
-  Future<void> retractDraft(String syncId) async {
+  Future<bool> retractDraft(String syncId) async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
-    if (pubsub == null || host == null) return;
+    if (pubsub == null || host == null) return false;
     final normalized = syncId.trim();
-    if (normalized.isEmpty) return;
+    if (normalized.isEmpty) return false;
     final result = await pubsub.retract(
       host,
       draftsPubSubNode,
       normalized,
       notify: _notifyEnabled,
     );
-    if (result.isType<mox.PubSubError>()) return;
+    if (result.isType<mox.PubSubError>()) return false;
     _cache.remove(normalized);
     _emitRetraction(normalized);
+    return true;
   }
 
   void _emitUpdate(DraftSyncPayload payload) {

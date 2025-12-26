@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:io';
-
-import 'package:archive/archive.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
@@ -17,15 +15,9 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 part 'draft_state.dart';
 
-const _attachmentBundleDirName = 'email_attachments';
-const _attachmentBundleNamePrefix = 'attachments_';
-const _attachmentBundleExtension = '.zip';
-const _attachmentBundleMimeType = 'application/zip';
 const int _coreDraftRecipientLimit = 1;
 const String _jidSeparator = '@';
 const String _axiDomainPatternSource = r'@(?:[\\w-]+\\.)*axi\\.im$';
@@ -373,6 +365,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final db = await _messageService.database;
     final attachmentGroupId =
         hasAttachments && attachments.length > 1 ? uuid.v4() : null;
+    final uploads =
+        List<XmppAttachmentUpload?>.filled(attachments.length, null);
     for (final jid in jids) {
       final chat = await db.getChat(jid);
       final encryption = chat?.encryptionProtocol ?? EncryptionProtocol.omemo;
@@ -391,14 +385,17 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         final resolvedAttachment = shouldApplyCaption
             ? attachment.copyWith(caption: trimmedBody)
             : attachment;
-        await _messageService.sendAttachment(
+        final upload = uploads[index];
+        final resolvedUpload = await _messageService.sendAttachment(
           jid: jid,
           attachment: resolvedAttachment,
           encryptionProtocol: encryption,
           chatType: chatType,
           transportGroupId: attachmentGroupId,
           attachmentOrder: index,
+          upload: upload,
         );
+        uploads[index] = resolvedUpload;
       }
     }
   }
@@ -408,57 +405,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required String? caption,
   }) async {
     if (attachments.length <= 1) return attachments;
-    final bundled = await _createAttachmentBundle(
+    final bundled = await EmailAttachmentBundler.bundle(
       attachments: attachments,
       caption: caption,
     );
     return [bundled];
-  }
-
-  Future<EmailAttachment> _createAttachmentBundle({
-    required Iterable<EmailAttachment> attachments,
-    required String? caption,
-  }) async {
-    final tempDir = await getTemporaryDirectory();
-    final bundleDir = Directory(p.join(tempDir.path, _attachmentBundleDirName));
-    if (!await bundleDir.exists()) {
-      await bundleDir.create(recursive: true);
-    }
-    final timestamp = DateTime.now().microsecondsSinceEpoch;
-    final zipName =
-        '$_attachmentBundleNamePrefix$timestamp$_attachmentBundleExtension';
-    final zipPath = p.join(bundleDir.path, zipName);
-    final archive = Archive();
-    for (final attachment in attachments) {
-      final file = File(attachment.path);
-      if (!await file.exists()) {
-        throw FileSystemException('Attachment missing', attachment.path);
-      }
-      final bytes = await file.readAsBytes();
-      final filename = attachment.fileName.isNotEmpty
-          ? attachment.fileName
-          : p.basename(attachment.path);
-      archive.addFile(
-        ArchiveFile(
-          filename,
-          bytes.length,
-          bytes,
-        ),
-      );
-    }
-    final encoded = ZipEncoder().encode(archive);
-    if (encoded == null) {
-      throw const FileSystemException('Failed to bundle attachments');
-    }
-    final zipFile = File(zipPath);
-    await zipFile.writeAsBytes(encoded, flush: true);
-    return EmailAttachment(
-      path: zipFile.path,
-      fileName: zipName,
-      sizeBytes: encoded.length,
-      mimeType: _attachmentBundleMimeType,
-      caption: caption,
-    );
   }
 
   void _throwIfFanOutFailed(

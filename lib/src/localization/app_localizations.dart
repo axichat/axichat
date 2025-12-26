@@ -927,6 +927,12 @@ abstract class AppLocalizations {
   /// **'Sent'**
   String get draftSent;
 
+  /// No description provided for @draftLimitWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft sync keeps up to {limit} drafts. You\'re at {count}.'**
+  String draftLimitWarning(int limit, int count);
+
   /// No description provided for @draftValidationNoContent.
   ///
   /// In en, this message translates to:
