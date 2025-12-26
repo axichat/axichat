@@ -1749,12 +1749,12 @@ SET last_change_timestamp = CASE
 WHERE jid = ?
 ''',
       [
-        Variable<DateTime>(timestamp),
-        Variable<DateTime>(timestamp),
-        Variable<int>(hasLastMessage.toBinary),
-        Variable<DateTime>(timestamp),
-        Variable<String>(resolvedLastMessage),
-        Variable<String>(jid),
+        timestamp,
+        timestamp,
+        hasLastMessage.toBinary,
+        timestamp,
+        resolvedLastMessage,
+        jid,
       ],
     );
   }

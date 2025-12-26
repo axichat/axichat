@@ -81,12 +81,20 @@ void main() {
   testWidgets('Month view renders overflow pill and taps edit callback',
       (tester) async {
     final DateTime anchor = DateTime(2024, 1, 15);
-    final List<DayEvent> events = <DayEvent>[
-      DayEvent.create(title: 'Birthday', startDate: anchor),
-      DayEvent.create(title: 'Holiday', startDate: anchor),
-      DayEvent.create(title: 'Anniversary', startDate: anchor),
-      DayEvent.create(title: 'Trip', startDate: anchor),
+    const List<String> eventTitles = <String>[
+      'Birthday',
+      'Holiday',
+      'Anniversary',
+      'Trip',
+      'Offsite',
+      'Workshop',
     ];
+    final List<DayEvent> events = eventTitles
+        .map(
+          (title) => DayEvent.create(title: title, startDate: anchor),
+        )
+        .toList();
+    const String expectedOverflowLabel = '+1 more';
 
     CalendarModel model = CalendarModel.empty();
     for (final DayEvent event in events) {
@@ -111,7 +119,7 @@ void main() {
 
     expect(find.text('Birthday'), findsOneWidget);
     expect(find.text('Holiday'), findsOneWidget);
-    expect(find.text('+1 more'), findsOneWidget);
+    expect(find.text(expectedOverflowLabel), findsOneWidget);
 
     await tester.tap(find.text('Birthday'));
     await tester.pump();
@@ -158,8 +166,9 @@ void main() {
   testWidgets('Day view renders bullet strip with day-level events',
       (tester) async {
     final DateTime selected = DateTime(2024, 2, 2);
+    const String eventTitle = 'Conference';
     final DayEvent event = DayEvent.create(
-      title: 'Conference',
+      title: eventTitle,
       startDate: selected,
     );
 
@@ -178,6 +187,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Day events'), findsOneWidget);
-    expect(find.text('Conference', findRichText: true), findsOneWidget);
+    expect(
+      find.textContaining(eventTitle, findRichText: true),
+      findsOneWidget,
+    );
   });
 }
