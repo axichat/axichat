@@ -15,6 +15,7 @@ import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
 import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
@@ -28,7 +29,6 @@ import 'widgets/ics_meta_fields.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
-import 'widgets/calendar_alarms_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
@@ -37,7 +37,7 @@ import 'widgets/reminder_preferences_field.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
-const List<CalendarAlarm> _emptyAlarms = <CalendarAlarm>[];
+const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 const String _occurrenceScopeTitle = 'Apply changes to';
 const String _occurrenceScopeInstanceLabel = 'This instance';
 const String _occurrenceScopeFutureLabel = 'This and future';
@@ -120,7 +120,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   String? _url;
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
-  List<CalendarAlarm> _alarms = _emptyAlarms;
+  List<CalendarAlarm> _advancedAlarms = _emptyAdvancedAlarms;
 
   @override
   void initState() {
@@ -203,7 +203,17 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _deadline = task.deadline;
       _recurrence = RecurrenceFormValue.fromRule(task.recurrence)
           .resolveLinkedLimits(_startTime ?? task.scheduledTime);
-      _reminders = task.effectiveReminders;
+      final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
+        task.icsMeta?.alarms ?? _emptyAdvancedAlarms,
+      );
+      if (existingAlarms.isNotEmpty) {
+        final AlarmReminderSplit split = splitAlarms(existingAlarms);
+        _reminders = split.reminders;
+        _advancedAlarms = split.advancedAlarms;
+      } else {
+        _reminders = task.effectiveReminders;
+        _advancedAlarms = _emptyAdvancedAlarms;
+      }
       _status = task.icsMeta?.status;
       _transparency = task.icsMeta?.transparency;
       _categories =
@@ -212,9 +222,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _geo = task.icsMeta?.geo;
       _attachments = List<CalendarAttachment>.from(
         task.icsMeta?.attachments ?? _emptyAttachments,
-      );
-      _alarms = List<CalendarAlarm>.from(
-        task.icsMeta?.alarms ?? _emptyAlarms,
       );
     }
 
@@ -363,17 +370,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     _EditTaskReminderSection(
                       reminders: _reminders,
                       deadline: _deadline,
+                      referenceStart: _startTime,
+                      advancedAlarms: _advancedAlarms,
                       onChanged: (value) => setState(() {
                         _reminders = value;
                       }),
-                    ),
-                    const TaskSectionDivider(
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    CalendarAlarmsField(
-                      alarms: _alarms,
-                      referenceStart: _startTime,
-                      onChanged: (value) => setState(() => _alarms = value),
+                      onAdvancedAlarmsChanged: (value) => setState(() {
+                        _advancedAlarms = value;
+                      }),
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -390,6 +394,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     CalendarIcsMetaFields(
                       status: _status,
                       transparency: _transparency,
+                      showStatus: false,
                       onStatusChanged: (value) =>
                           setState(() => _status = value),
                       onTransparencyChanged: (value) =>
@@ -607,9 +612,13 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       base: widget.task.icsMeta,
       categories: _categories,
     );
+    final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
+      advancedAlarms: _advancedAlarms,
+      reminders: _reminders,
+    );
     final List<CalendarAlarm>? alarms = resolveAlarmOverride(
       base: widget.task.icsMeta,
-      alarms: _alarms,
+      alarms: mergedAlarms,
     );
     final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
       base: widget.task.icsMeta,
@@ -1017,18 +1026,27 @@ class _EditTaskReminderSection extends StatelessWidget {
   const _EditTaskReminderSection({
     required this.reminders,
     required this.deadline,
+    required this.referenceStart,
+    required this.advancedAlarms,
     required this.onChanged,
+    required this.onAdvancedAlarmsChanged,
   });
 
   final ReminderPreferences reminders;
   final DateTime? deadline;
+  final DateTime? referenceStart;
+  final List<CalendarAlarm> advancedAlarms;
   final ValueChanged<ReminderPreferences> onChanged;
+  final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
 
   @override
   Widget build(BuildContext context) {
     return ReminderPreferencesField(
       value: reminders,
       onChanged: onChanged,
+      advancedAlarms: advancedAlarms,
+      onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
+      referenceStart: referenceStart,
       anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
       showBothAnchors: deadline != null,
     );
