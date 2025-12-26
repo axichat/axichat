@@ -308,6 +308,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     final String? openJid = chatsState?.openJid;
                     final bool openCalendar =
                         hasCalendarBloc && (chatsState?.openCalendar ?? false);
+                    final bool openChatCalendar =
+                        chatsState?.openChatCalendar ?? false;
+                    final bool chatCalendarExpanded =
+                        openChatCalendar && openJid != null;
                     final navRail = navPlacement == NavPlacement.rail
                         ? _HomeNavigationRail(
                             tabs: tabs,
@@ -334,95 +338,97 @@ class _HomeScreenState extends State<HomeScreen> {
                           )
                         : null;
 
-                    Widget chatLayout() => Row(
+                    final Widget chatPane = openJid == null
+                        ? constrainSecondary(const chat_view.GuestChat())
+                        : constrainSecondary(
+                            MultiBlocProvider(
+                              providers: [
+                                BlocProvider(
+                                  key: Key(
+                                    openJid,
+                                  ),
+                                  create: (context) => ChatBloc(
+                                    jid: openJid,
+                                    messageService: context.read<XmppService>(),
+                                    chatsService: context.read<XmppService>(),
+                                    mucService: context.read<XmppService>(),
+                                    notificationService:
+                                        context.read<NotificationService>(),
+                                    emailService: context.read<EmailService>(),
+                                    omemoService: isOmemo
+                                        ? context.read<XmppService>()
+                                            as OmemoService
+                                        : null,
+                                    settingsCubit:
+                                        context.read<SettingsCubit>(),
+                                  ),
+                                ),
+                                BlocProvider(
+                                  create: (context) => ChatSearchCubit(
+                                    jid: openJid,
+                                    messageService: context.read<XmppService>(),
+                                    emailService: context.read<EmailService>(),
+                                  ),
+                                ),
+                                /* Verification flow temporarily disabled
+                                if (isOmemo)
+                                  BlocProvider(
+                                    create: (context) =>
+                                        VerificationCubit(
+                                      jid: openJid,
+                                      omemoService:
+                                          context.read<XmppService>()
+                                              as OmemoService,
+                                    ),
+                                  ),
+                                */
+                              ],
+                              child: const chat_view.Chat(),
+                            ),
+                          );
+
+                    Widget chatLayout() {
+                      if (chatCalendarExpanded) {
+                        return Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (navRail != null) navRail,
-                            Expanded(
-                              child: AxiAdaptiveLayout(
-                                invertPriority: openJid != null,
-                                centerSecondary: false,
-                                centerPrimary: false,
-                                primaryAlignment: Alignment.topLeft,
-                                secondaryAlignment: Alignment.topLeft,
-                                secondaryPadding: const EdgeInsets.only(
-                                  left: _secondaryPaneGutter,
-                                ),
-                                primaryChild: Nexus(
-                                  tabs: tabs,
-                                  navPlacement: navPlacement,
-                                  showNavigationRail:
-                                      navPlacement != NavPlacement.rail,
-                                  navRailCollapsed: _railCollapsed,
-                                  onToggleNavRail: () {
-                                    setState(() {
-                                      _railCollapsed = !_railCollapsed;
-                                    });
-                                  },
-                                ),
-                                secondaryChild: openJid == null
-                                    ? constrainSecondary(
-                                        const chat_view.GuestChat(),
-                                      )
-                                    : constrainSecondary(
-                                        MultiBlocProvider(
-                                          providers: [
-                                            BlocProvider(
-                                              key: Key(
-                                                openJid,
-                                              ),
-                                              create: (context) => ChatBloc(
-                                                jid: openJid,
-                                                messageService:
-                                                    context.read<XmppService>(),
-                                                chatsService:
-                                                    context.read<XmppService>(),
-                                                mucService:
-                                                    context.read<XmppService>(),
-                                                notificationService:
-                                                    context.read<
-                                                        NotificationService>(),
-                                                emailService: context
-                                                    .read<EmailService>(),
-                                                omemoService: isOmemo
-                                                    ? context
-                                                            .read<XmppService>()
-                                                        as OmemoService
-                                                    : null,
-                                                settingsCubit: context
-                                                    .read<SettingsCubit>(),
-                                              ),
-                                            ),
-                                            BlocProvider(
-                                              create: (context) =>
-                                                  ChatSearchCubit(
-                                                jid: openJid,
-                                                messageService:
-                                                    context.read<XmppService>(),
-                                                emailService: context
-                                                    .read<EmailService>(),
-                                              ),
-                                            ),
-                                            /* Verification flow temporarily disabled
-                                            if (isOmemo)
-                                              BlocProvider(
-                                                create: (context) =>
-                                                    VerificationCubit(
-                                                  jid: openJid,
-                                                  omemoService:
-                                                      context.read<XmppService>()
-                                                          as OmemoService,
-                                                ),
-                                              ),
-                                            */
-                                          ],
-                                          child: const chat_view.Chat(),
-                                        ),
-                                      ),
-                              ),
-                            ),
+                            Expanded(child: chatPane),
                           ],
                         );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (navRail != null) navRail,
+                          Expanded(
+                            child: AxiAdaptiveLayout(
+                              invertPriority: openJid != null,
+                              centerSecondary: false,
+                              centerPrimary: false,
+                              primaryAlignment: Alignment.topLeft,
+                              secondaryAlignment: Alignment.topLeft,
+                              secondaryPadding: const EdgeInsets.only(
+                                left: _secondaryPaneGutter,
+                              ),
+                              primaryChild: Nexus(
+                                tabs: tabs,
+                                navPlacement: navPlacement,
+                                showNavigationRail:
+                                    navPlacement != NavPlacement.rail,
+                                navRailCollapsed: _railCollapsed,
+                                onToggleNavRail: () {
+                                  setState(() {
+                                    _railCollapsed = !_railCollapsed;
+                                  });
+                                },
+                              ),
+                              secondaryChild: chatPane,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
 
                     Widget calendarLayout() => Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,

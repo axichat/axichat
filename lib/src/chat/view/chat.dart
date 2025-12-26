@@ -152,6 +152,7 @@ const String _availabilityRequestTaskTitleFallback = 'Requested time';
 const Uuid _availabilityResponseIdGenerator = Uuid();
 const String _composerShareSeparator = '\n\n';
 const String _emptyText = '';
+const String _jidResourceSeparator = '/';
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 const _selectionExtrasMaxWidth = 500.0;
 const _messageAvatarSize = 36.0;
@@ -1254,6 +1255,33 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  String? _normalizeOccupantId(String? jid) {
+    final trimmed = jid?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    try {
+      final parsed = mox.JID.fromString(trimmed);
+      final bare = parsed.toBare().toString().toLowerCase();
+      final resource = parsed.resource?.trim();
+      if (resource == null || resource.isEmpty) {
+        return bare;
+      }
+      return '$bare$_jidResourceSeparator${resource.toLowerCase()}';
+    } on Exception {
+      return trimmed.toLowerCase();
+    }
+  }
+
+  bool _isSameOccupantId(String? first, String? second) {
+    final normalizedFirst = _normalizeOccupantId(first);
+    final normalizedSecond = _normalizeOccupantId(second);
+    if (normalizedFirst == null || normalizedSecond == null) {
+      return false;
+    }
+    return normalizedFirst == normalizedSecond;
+  }
+
   bool _isQuotedMessageFromSelf({
     required Message quotedMessage,
     required bool isGroupChat,
@@ -1261,12 +1289,12 @@ class _ChatState extends State<Chat> {
     required String? currentUserId,
   }) {
     if (isGroupChat && myOccupantId != null) {
-      if (quotedMessage.senderJid == myOccupantId) {
+      if (_isSameOccupantId(quotedMessage.senderJid, myOccupantId)) {
         return true;
       }
       final quotedOccupantId = quotedMessage.occupantID;
       if (quotedOccupantId != null && quotedOccupantId.isNotEmpty) {
-        return quotedOccupantId == myOccupantId;
+        return _isSameOccupantId(quotedOccupantId, myOccupantId);
       }
     }
     return _bareJid(quotedMessage.senderJid) == _bareJid(currentUserId);
@@ -2905,6 +2933,9 @@ class _ChatState extends State<Chat> {
                     context
                         .read<ChatBloc>()
                         .add(const ChatMessageFocused(null));
+                    context
+                        .read<ChatsCubit?>()
+                        ?.setChatCalendarOpen(open: false);
                     setState(() {
                       _chatRoute = _ChatRoute.main;
                       _settingsPanelExpanded = false;
@@ -2949,6 +2980,9 @@ class _ChatState extends State<Chat> {
                     _chatRoute == _ChatRoute.calendar) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
+                    context
+                        .read<ChatsCubit?>()
+                        ?.setChatCalendarOpen(open: false);
                     setState(() {
                       _chatRoute = _ChatRoute.main;
                       _settingsPanelExpanded = false;
@@ -3189,7 +3223,7 @@ class _ChatState extends State<Chat> {
                               onPressed: _showMembers,
                             ),
                           const _ChatSearchToggleButton(),
-                          if (chatCalendarAllowed) ...[
+                          if (supportsChatCalendar) ...[
                             const SizedBox(
                               width: _chatCalendarActionSpacing,
                             ),
@@ -3197,6 +3231,12 @@ class _ChatState extends State<Chat> {
                               iconData: LucideIcons.calendarClock,
                               tooltip: context.l10n.homeRailCalendar,
                               onPressed: () {
+                                if (!chatCalendarAllowed) {
+                                  _showSnackbar(
+                                    _calendarFragmentShareDeniedMessage,
+                                  );
+                                  return;
+                                }
                                 if (!chatCalendarAvailable) {
                                   _showSnackbar(
                                     context.l10n.chatCalendarUnavailable,
@@ -3426,8 +3466,14 @@ class _ChatState extends State<Chat> {
                                           emailSelfJid != null &&
                                           senderBare == _bareJid(emailSelfJid);
                                       final isMucSelf = isGroupChat &&
-                                          e.senderJid ==
-                                              state.roomState?.myOccupantId;
+                                          (_isSameOccupantId(
+                                                e.senderJid,
+                                                myOccupantId,
+                                              ) ||
+                                              _isSameOccupantId(
+                                                e.occupantID,
+                                                myOccupantId,
+                                              ));
                                       final isSelf = isSelfXmpp ||
                                           isSelfEmail ||
                                           isMucSelf;
@@ -6691,6 +6737,7 @@ class _ChatState extends State<Chat> {
 
   void _openChatCalendar() {
     if (!mounted) return;
+    context.read<ChatsCubit?>()?.setChatCalendarOpen(open: true);
     setState(() {
       _chatRoute = _ChatRoute.calendar;
       _settingsPanelExpanded = false;
@@ -6702,6 +6749,7 @@ class _ChatState extends State<Chat> {
 
   void _closeChatCalendar() {
     if (!mounted) return;
+    context.read<ChatsCubit?>()?.setChatCalendarOpen(open: false);
     setState(() {
       _chatRoute = _ChatRoute.main;
     });
