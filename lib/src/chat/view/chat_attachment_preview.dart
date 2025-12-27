@@ -1523,11 +1523,10 @@ Future<void> _openAttachment(
           declaredMimeType: declaredMimeType,
           fileName: fileName,
         );
+    if (!context.mounted) return;
     final declaredLabel = report.declaredLabel;
     final detectedLabel = report.detectedLabel;
-    if (report.hasMismatch &&
-        declaredLabel != null &&
-        detectedLabel != null) {
+    if (report.hasMismatch && declaredLabel != null && detectedLabel != null) {
       final approved = await confirm(
         context,
         title: l10n.chatAttachmentTypeMismatchTitle,

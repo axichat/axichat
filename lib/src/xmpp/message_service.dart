@@ -1437,7 +1437,11 @@ mixin MessageService
       throw XmppMessageException();
     }
     if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
-      _log.warning('Blocked XMPP send to foreign domain: $jid');
+      _log.warning(
+        SafeLogging.sanitizeMessage(
+          'Blocked XMPP send to foreign domain: $jid',
+        ),
+      );
       throw XmppForeignDomainException();
     }
     if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
