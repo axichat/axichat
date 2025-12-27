@@ -5,6 +5,7 @@ import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 
@@ -145,6 +146,10 @@ class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.dayEventDeleted({
     required String eventId,
   }) = CalendarDayEventDeleted;
+
+  const factory CalendarEvent.availabilityUpdated({
+    required CalendarAvailability availability,
+  }) = CalendarAvailabilityUpdated;
 
   const factory CalendarEvent.quickTaskAdded({
     required String text,

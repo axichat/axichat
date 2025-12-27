@@ -19,6 +19,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
@@ -3004,6 +3005,36 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       });
   }
 
+  List<CalendarAvailabilityWindow> _resolveAvailabilityWindows() {
+    final Map<String, CalendarAvailability> availability =
+        widget.state.model.availability;
+    if (availability.isEmpty) {
+      return const <CalendarAvailabilityWindow>[];
+    }
+    final List<CalendarAvailabilityWindow> windows =
+        <CalendarAvailabilityWindow>[];
+    for (final CalendarAvailability entry in availability.values) {
+      if (entry.windows.isEmpty) {
+        windows.add(
+          CalendarAvailabilityWindow(
+            start: entry.start,
+            end: entry.end,
+            summary: entry.summary,
+            description: entry.description,
+          ),
+        );
+        continue;
+      }
+      windows.addAll(entry.windows);
+    }
+    return windows;
+  }
+
+  List<CalendarAvailabilityOverlay> _resolveAvailabilityOverlays() {
+    return widget.state.model.availabilityOverlays.values
+        .toList(growable: false);
+  }
+
   bool _isTaskVisible(CalendarTask task) {
     if (_hideCompletedScheduled && task.isCompleted) {
       return false;
@@ -3647,6 +3678,11 @@ class _CalendarGridContent extends StatelessWidget {
       gridState.widget.state.weekEnd.day,
     );
 
+    final List<CalendarAvailabilityWindow> availabilityWindows =
+        gridState._resolveAvailabilityWindows();
+    final List<CalendarAvailabilityOverlay> availabilityOverlays =
+        gridState._resolveAvailabilityOverlays();
+
     final Widget renderSurface = CalendarRenderSurface(
       key: gridState._surfaceKey,
       columns: columnSpecs,
@@ -3662,6 +3698,8 @@ class _CalendarGridContent extends StatelessWidget {
       verticalScrollController: gridState._verticalController,
       minutesPerStep: gridState._minutesPerStep,
       interactionController: gridState._taskInteractionController,
+      availabilityWindows: availabilityWindows,
+      availabilityOverlays: availabilityOverlays,
       hoveredSlot: hoveredSlot,
       onTap: gridState._handleSurfaceTap,
       dragPreview: gridState._taskInteractionController.preview.value,

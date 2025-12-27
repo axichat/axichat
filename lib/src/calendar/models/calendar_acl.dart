@@ -20,6 +20,10 @@ const String _calendarChatRoleVisitorValue = 'visitor';
 const String _calendarChatRoleParticipantValue = 'participant';
 const String _calendarChatRoleModeratorValue = 'moderator';
 const String _calendarChatRoleNoneValue = 'none';
+const String _calendarChatRoleVisitorLabel = 'Visitor';
+const String _calendarChatRoleParticipantLabel = 'Participant';
+const String _calendarChatRoleModeratorLabel = 'Moderator';
+const String _calendarChatRoleNoneLabel = 'None';
 
 @HiveType(typeId: _calendarChatRoleTypeId)
 enum CalendarChatRole {
@@ -49,6 +53,15 @@ enum CalendarChatRole {
         _calendarChatRoleParticipantValue => CalendarChatRole.participant,
         _calendarChatRoleModeratorValue => CalendarChatRole.moderator,
         _ => CalendarChatRole.none,
+      };
+}
+
+extension CalendarChatRoleLabelX on CalendarChatRole {
+  String get label => switch (this) {
+        CalendarChatRole.visitor => _calendarChatRoleVisitorLabel,
+        CalendarChatRole.participant => _calendarChatRoleParticipantLabel,
+        CalendarChatRole.moderator => _calendarChatRoleModeratorLabel,
+        CalendarChatRole.none => _calendarChatRoleNoneLabel,
       };
 }
 

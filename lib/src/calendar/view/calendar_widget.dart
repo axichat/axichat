@@ -280,6 +280,9 @@ class _CalendarWidgetState
       source: const CalendarAvailabilityShareSource.personal(),
       model: state.model,
       ownerJid: ownerJid,
+      onAvailabilitySaved: (availability) => calendarBloc.add(
+        CalendarEvent.availabilityUpdated(availability: availability),
+      ),
     );
   }
 

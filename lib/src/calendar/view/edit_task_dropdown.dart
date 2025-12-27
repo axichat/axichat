@@ -29,6 +29,7 @@ import 'controllers/task_checklist_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/calendar_invitation_status_field.dart';
+import 'widgets/calendar_ics_diagnostics_section.dart';
 import 'widgets/ics_meta_fields.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
@@ -269,14 +270,16 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           ];
     final B resolvedBloc = widget.inlineActionsBloc ?? context.read<B>();
     final CalendarMethod? method = resolvedBloc.state.model.collection?.method;
+    final CalendarIcsMeta? icsMeta = widget.task.icsMeta;
     final List<CalendarRawProperty> rawProperties =
-        widget.task.icsMeta?.rawProperties ?? _emptyRawProperties;
-    final int? sequence = widget.task.icsMeta?.sequence;
+        icsMeta?.rawProperties ?? _emptyRawProperties;
+    final int? sequence = icsMeta?.sequence;
     final bool showInvitationStatus = hasInvitationStatusData(
       method: method,
       sequence: sequence,
       rawProperties: rawProperties,
     );
+    final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
     Widget buildBody({
       required double keyboardInset,
       required double safeBottom,
@@ -466,6 +469,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       CalendarAttachmentsField(
                         attachments: _attachments,
                       ),
+                    ],
+                    if (showDiagnostics) ...[
+                      const TaskSectionDivider(
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
                     ],
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,

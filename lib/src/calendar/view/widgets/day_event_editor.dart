@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_attachments_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_categories_field.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_ics_diagnostics_section.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_invitation_status_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_link_geo_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_participants_field.dart';
@@ -168,14 +169,16 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final bool keyboardOpen = keyboardInset > safeBottom;
+    final CalendarIcsMeta? icsMeta = widget.existing?.icsMeta;
     final List<CalendarRawProperty> rawProperties =
-        widget.existing?.icsMeta?.rawProperties ?? _emptyRawProperties;
-    final int? sequence = widget.existing?.icsMeta?.sequence;
+        icsMeta?.rawProperties ?? _emptyRawProperties;
+    final int? sequence = icsMeta?.sequence;
     final bool showInvitationStatus = hasInvitationStatusData(
       method: null,
       sequence: sequence,
       rawProperties: rawProperties,
     );
+    final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
     final double scrollBottomPadding = calendarGutterMd + keyboardInset;
     final Widget actions = ValueListenableBuilder<TextEditingValue>(
       valueListenable: _titleController,
@@ -398,6 +401,13 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       CalendarAttachmentsField(
                         attachments: _attachments,
                       ),
+                    ],
+                    if (showDiagnostics) ...[
+                      TaskSectionDivider(
+                        color: colors.border,
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
                     ],
                     if (keyboardOpen) ...[
                       const SizedBox(height: calendarGutterMd),
