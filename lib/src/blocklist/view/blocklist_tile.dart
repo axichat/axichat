@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -9,19 +10,20 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class BlocklistTile extends StatelessWidget {
-  const BlocklistTile({super.key, required this.jid});
+  const BlocklistTile({super.key, required this.entry});
 
-  final String jid;
+  final BlocklistEntry entry;
 
   @override
   Widget build(BuildContext context) {
     final rosterCubit = context.read<RosterCubit?>();
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
-          state is BlocklistLoading && (state.jid == jid || state.jid == null),
+          state is BlocklistLoading &&
+          (state.jid == entry.address || state.jid == null),
       builder: (context, disabled) {
         final Widget avatar = rosterCubit == null
-            ? AxiAvatar(jid: jid)
+            ? AxiAvatar(jid: entry.address)
             : BlocBuilder<RosterCubit, RosterState>(
                 buildWhen: (_, current) => current is RosterAvailable,
                 builder: (context, rosterState) {
@@ -29,7 +31,7 @@ class BlocklistTile extends StatelessWidget {
                       ? rosterState.items
                       : context.read<RosterCubit>()['items']
                           as List<RosterItem>?;
-                  final normalizedJid = jid.trim().toLowerCase();
+                  final normalizedJid = entry.address.trim().toLowerCase();
                   String? avatarPath;
                   if (cachedItems != null) {
                     for (final item in cachedItems) {
@@ -40,19 +42,20 @@ class BlocklistTile extends StatelessWidget {
                     }
                   }
                   return AxiAvatar(
-                    jid: jid,
+                    jid: entry.address,
                     avatarPath: avatarPath,
                   );
                 },
               );
         return AxiListTile(
           leading: avatar,
-          title: jid,
+          title: entry.address,
           actions: [
             ShadButton.ghost(
               onPressed: disabled
                   ? null
-                  : () => context.read<BlocklistCubit?>()?.unblock(jid: jid),
+                  : () =>
+                      context.read<BlocklistCubit?>()?.unblock(entry: entry),
               foregroundColor: context.colorScheme.destructive,
               child: Text(context.l10n.blocklistUnblock),
             ).withTapBounce(enabled: !disabled),

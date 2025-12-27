@@ -1,12 +1,15 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
+import 'package:axichat/src/calendar/view/calendar_availability_editor_sheet.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_availability_preview.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -34,6 +37,17 @@ const String _availabilityShareSubtitle =
     'Pick a range and choose who can view it.';
 const String _availabilityShareTargetLabel = 'Share with';
 const String _availabilityShareRangeLabel = 'Range';
+const String _availabilityShareWindowsLabel = 'Availability windows';
+const String _availabilityShareWindowsEmptyLabel = 'No windows defined yet.';
+const String _availabilityShareWindowsCountPrefix = 'Windows: ';
+const String _availabilityShareWindowSingularLabel = 'window';
+const String _availabilityShareWindowPluralLabel = 'windows';
+const String _availabilityShareEditWindowsLabel = 'Edit windows';
+const String _availabilitySharePreviewLabel = 'Preview';
+const String _availabilitySharePreviewEmptyLabel = 'Select a range to preview.';
+const String _availabilityShareRedactionLabel = 'Share free slots only';
+const String _availabilityShareRedactionHint =
+    'Busy and tentative slots stay hidden.';
 const String _availabilityShareButtonLabel = 'Share';
 const String _availabilityShareMissingChatsMessage =
     'No eligible chats available.';
@@ -45,6 +59,7 @@ const String _availabilityShareTargetRequiredMessage =
     'Select a chat to share with.';
 const String _availabilityShareSuccessMessage = 'Availability shared.';
 const String _availabilityShareFailureMessage = 'Failed to share availability.';
+const String _availabilityShareOwnerFallback = 'owner';
 const String _availabilityChatTypeDirectLabel = 'Direct chat';
 const String _availabilityChatTypeGroupLabel = 'Group chat';
 const String _availabilityChatTypeNoteLabel = 'Notes';
@@ -60,6 +75,7 @@ Future<void> showCalendarAvailabilityShareSheet({
   required CalendarAvailabilityShareSource source,
   required CalendarModel model,
   required String ownerJid,
+  ValueChanged<CalendarAvailability>? onAvailabilitySaved,
   Chat? initialChat,
 }) async {
   final List<Chat> chats =
@@ -79,6 +95,7 @@ Future<void> showCalendarAvailabilityShareSheet({
       model: model,
       ownerJid: ownerJid,
       availableChats: available,
+      onAvailabilitySaved: onAvailabilitySaved,
       initialChat: initialChat,
     ),
   );
@@ -96,6 +113,7 @@ class CalendarAvailabilityShareSheet extends StatefulWidget {
     required this.model,
     required this.ownerJid,
     required this.availableChats,
+    this.onAvailabilitySaved,
     this.initialChat,
   });
 
@@ -104,6 +122,7 @@ class CalendarAvailabilityShareSheet extends StatefulWidget {
   final CalendarModel model;
   final String ownerJid;
   final List<Chat> availableChats;
+  final ValueChanged<CalendarAvailability>? onAvailabilitySaved;
   final Chat? initialChat;
 
   @override
@@ -115,8 +134,10 @@ class _CalendarAvailabilityShareSheetState
     extends State<CalendarAvailabilityShareSheet> {
   late DateTime? _rangeStart;
   late DateTime? _rangeEnd;
+  late CalendarModel _localModel;
   Chat? _selectedChat;
   bool _isSending = false;
+  bool _isRedacted = true;
 
   @override
   void initState() {
@@ -125,12 +146,24 @@ class _CalendarAvailabilityShareSheetState
     final start = _normalizeRangeStart(now);
     _rangeStart = start;
     _rangeEnd = _addMonths(start, _availabilityDefaultRangeMonths);
+    _localModel = widget.model;
     _selectedChat = widget.initialChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
   }
 
   @override
+  void didUpdateWidget(covariant CalendarAvailabilityShareSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.model != widget.model) {
+      _localModel = widget.model;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final CalendarAvailabilityOverlay? previewOverlay =
+        _resolvePreviewOverlay();
+    final int windowCount = _availabilityWindowCount(_localModel.availability);
     final header = AxiSheetHeader(
       title: const Text(_availabilityShareTitle),
       subtitle: const Text(_availabilityShareSubtitle),
@@ -146,6 +179,23 @@ class _CalendarAvailabilityShareSheetState
           end: _rangeEnd,
           onStartChanged: _handleRangeStartChanged,
           onEndChanged: _handleRangeEndChanged,
+        ),
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        const _AvailabilitySheetSectionLabel(
+          text: _availabilityShareWindowsLabel,
+        ),
+        _AvailabilityWindowsSection(
+          windowCount: windowCount,
+          onEditPressed: _handleEditAvailabilityPressed,
+        ),
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        const _AvailabilitySheetSectionLabel(
+          text: _availabilitySharePreviewLabel,
+        ),
+        _AvailabilityPreviewSection(
+          overlay: previewOverlay,
+          isRedacted: _isRedacted,
+          onRedactionChanged: _handleRedactionChanged,
         ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
         const _AvailabilitySheetSectionLabel(
@@ -194,6 +244,27 @@ class _CalendarAvailabilityShareSheetState
     });
   }
 
+  void _handleRedactionChanged(bool value) {
+    setState(() {
+      _isRedacted = value;
+    });
+  }
+
+  Future<void> _handleEditAvailabilityPressed() async {
+    final CalendarAvailability? availability =
+        await showCalendarAvailabilityEditorSheet(
+      context: context,
+      model: _localModel,
+    );
+    if (availability == null || !mounted) {
+      return;
+    }
+    widget.onAvailabilitySaved?.call(availability);
+    setState(() {
+      _localModel = _localModel.upsertAvailability(availability);
+    });
+  }
+
   Future<void> _handleSharePressed() async {
     if (_isSending) {
       return;
@@ -219,7 +290,7 @@ class _CalendarAvailabilityShareSheetState
       _isSending = true;
     });
     try {
-      final tzid = _resolveTimeZone(widget.model);
+      final tzid = _resolveTimeZone(_localModel);
       final CalendarDateTime rangeStart = CalendarDateTime(
         value: start,
         tzid: tzid,
@@ -230,12 +301,13 @@ class _CalendarAvailabilityShareSheetState
       );
       final record = await widget.coordinator.createShare(
         source: widget.source,
-        model: widget.model,
+        model: _localModel,
         ownerJid: ownerJid,
         chatJid: targetChat.jid,
         chatType: targetChat.type,
         rangeStart: rangeStart,
         rangeEnd: rangeEnd,
+        isRedacted: _isRedacted,
       );
       if (!mounted) {
         return;
@@ -257,6 +329,25 @@ class _CalendarAvailabilityShareSheetState
         });
       }
     }
+  }
+
+  CalendarAvailabilityOverlay? _resolvePreviewOverlay() {
+    final DateTime? start = _rangeStart;
+    final DateTime? end = _rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      return null;
+    }
+    final String ownerJid = widget.ownerJid.trim();
+    final String resolvedOwner =
+        ownerJid.isEmpty ? _availabilityShareOwnerFallback : ownerJid;
+    final String? tzid = _resolveTimeZone(_localModel);
+    final CalendarAvailabilityOverlay base = CalendarAvailabilityOverlay(
+      owner: resolvedOwner,
+      rangeStart: CalendarDateTime(value: start, tzid: tzid),
+      rangeEnd: CalendarDateTime(value: end, tzid: tzid),
+      isRedacted: _isRedacted,
+    );
+    return deriveAvailabilityOverlay(model: _localModel, base: base);
   }
 }
 
@@ -296,6 +387,78 @@ class _AvailabilitySheetEmptyMessage extends StatelessWidget {
           color: context.colorScheme.mutedForeground,
         ),
       ),
+    );
+  }
+}
+
+class _AvailabilityWindowsSection extends StatelessWidget {
+  const _AvailabilityWindowsSection({
+    required this.windowCount,
+    required this.onEditPressed,
+  });
+
+  final int windowCount;
+  final VoidCallback onEditPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle labelStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
+    );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Text(
+            _availabilityWindowCountLabel(windowCount),
+            style: labelStyle,
+          ),
+        ),
+        ShadButton.ghost(
+          size: ShadButtonSize.sm,
+          onPressed: onEditPressed,
+          child: const Text(_availabilityShareEditWindowsLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class _AvailabilityPreviewSection extends StatelessWidget {
+  const _AvailabilityPreviewSection({
+    required this.overlay,
+    required this.isRedacted,
+    required this.onRedactionChanged,
+  });
+
+  final CalendarAvailabilityOverlay? overlay;
+  final bool isRedacted;
+  final ValueChanged<bool> onRedactionChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle hintStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
+    );
+    final CalendarAvailabilityOverlay? previewOverlay = overlay;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ShadSwitch(
+          label: const Text(_availabilityShareRedactionLabel),
+          value: isRedacted,
+          onChanged: onRedactionChanged,
+        ),
+        const SizedBox(height: _availabilitySheetSectionGap),
+        Text(_availabilityShareRedactionHint, style: hintStyle),
+        const SizedBox(height: _availabilitySheetSectionGap),
+        if (previewOverlay == null)
+          const _AvailabilitySheetEmptyMessage(
+            message: _availabilitySharePreviewEmptyLabel,
+          )
+        else
+          CalendarAvailabilityPreview(overlay: previewOverlay),
+      ],
     );
   }
 }
@@ -387,6 +550,30 @@ DateTime _normalizeRangeStart(DateTime now) {
     now.hour,
     now.minute,
   );
+}
+
+int _availabilityWindowCount(
+  Map<String, CalendarAvailability> availability,
+) {
+  var count = 0;
+  for (final CalendarAvailability entry in availability.values) {
+    if (entry.windows.isEmpty) {
+      count += 1;
+    } else {
+      count += entry.windows.length;
+    }
+  }
+  return count;
+}
+
+String _availabilityWindowCountLabel(int count) {
+  if (count == 0) {
+    return _availabilityShareWindowsEmptyLabel;
+  }
+  final String unit = count == 1
+      ? _availabilityShareWindowSingularLabel
+      : _availabilityShareWindowPluralLabel;
+  return '$_availabilityShareWindowsCountPrefix$count $unit';
 }
 
 DateTime _addMonths(DateTime start, int months) {

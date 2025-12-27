@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/jid_transport.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
@@ -287,6 +288,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(false) bool archived,
     @Default(false) bool hidden,
     @Default(false) bool spam,
+    DateTime? spamUpdatedAt,
     @Default(true) bool markerResponsive,
     @Default(true) bool shareSignatureEnabled,
     @Default(AttachmentAutoDownload.blocked)
@@ -319,6 +321,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required bool archived,
     required bool hidden,
     required bool spam,
+    required DateTime? spamUpdatedAt,
     required bool markerResponsive,
     required bool shareSignatureEnabled,
     required AttachmentAutoDownload attachmentAutoDownload,
@@ -399,6 +402,9 @@ class Chat with _$Chat implements Insertable<Chat> {
     if (emailAddress != null) {
       map['email_address'] = Variable<String>(emailAddress);
     }
+    if (spamUpdatedAt != null) {
+      map['spam_updated_at'] = Variable<DateTime>(spamUpdatedAt!);
+    }
     return map;
   }
 }
@@ -436,6 +442,8 @@ class Chats extends Table {
   BoolColumn get hidden => boolean().withDefault(const Constant(false))();
 
   BoolColumn get spam => boolean().withDefault(const Constant(false))();
+
+  DateTimeColumn get spamUpdatedAt => dateTime().nullable()();
 
   BoolColumn get markerResponsive =>
       boolean().withDefault(const Constant(true))();
@@ -485,34 +493,24 @@ extension ChatThreadExtension on Chat {
 }
 
 extension ChatTransportExtension on Chat {
-  static final _axiDomainPattern = RegExp(r'@axi\.im$', caseSensitive: false);
-
   bool get supportsEmail => isEmailOnlyContact;
 
   bool get isAxiContact {
-    final remote = remoteJid.toLowerCase();
-    if (!remote.contains('@')) {
-      return false;
-    }
-    return _axiDomainPattern.hasMatch(remote);
+    return remoteJid.isAxiJid;
   }
 
   bool get isEmailOnlyContact {
     if (type != ChatType.chat) {
       return false;
     }
-    final remote = remoteJid.toLowerCase();
-    if (!remote.contains('@')) {
-      return false;
-    }
-    return !_axiDomainPattern.hasMatch(remote);
+    return remoteJid.isEmailJid;
   }
 
   MessageTransport get defaultTransport {
     if (type != ChatType.chat) {
       return MessageTransport.xmpp;
     }
-    return isEmailOnlyContact ? MessageTransport.email : MessageTransport.xmpp;
+    return remoteJid.inferredTransport;
   }
 
   MessageTransport get transport => defaultTransport;
@@ -566,18 +564,24 @@ extension ChatLabelExtension on Chat {
 class BlocklistData with _$BlocklistData implements Insertable<BlocklistData> {
   const factory BlocklistData({
     required String jid,
+    required DateTime blockedAt,
   }) = _BlocklistData;
 
   const BlocklistData._();
 
   @override
-  Map<String, Expression> toColumns(bool nullToAbsent) =>
-      {'jid': Variable<String>(jid)};
+  Map<String, Expression> toColumns(bool nullToAbsent) => {
+        'jid': Variable<String>(jid),
+        'blocked_at': Variable<DateTime>(blockedAt),
+      };
 }
 
 @UseRowClass(BlocklistData)
 class Blocklist extends Table {
   TextColumn get jid => text()();
+
+  DateTimeColumn get blockedAt =>
+      dateTime().clientDefault(() => DateTime.timestamp())();
 
   @override
   Set<Column> get primaryKey => {jid};
@@ -592,6 +596,7 @@ class EmailBlocklistEntry
     required DateTime blockedAt,
     @Default(0) int blockedMessageCount,
     DateTime? lastBlockedMessageAt,
+    String? sourceId,
   }) = _EmailBlocklistEntry;
 
   const EmailBlocklistEntry._();
@@ -605,6 +610,9 @@ class EmailBlocklistEntry
     };
     if (lastBlockedMessageAt != null) {
       map['last_blocked_message_at'] = Variable<DateTime>(lastBlockedMessageAt);
+    }
+    if (sourceId != null) {
+      map['source_id'] = Variable<String>(sourceId!);
     }
     return map;
   }
@@ -622,6 +630,8 @@ class EmailBlocklist extends Table {
 
   DateTimeColumn get lastBlockedMessageAt => dateTime().nullable()();
 
+  TextColumn get sourceId => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {address};
 }
@@ -633,6 +643,7 @@ class EmailSpamEntry
   const factory EmailSpamEntry({
     required String address,
     required DateTime flaggedAt,
+    String? sourceId,
   }) = _EmailSpamEntry;
 
   const EmailSpamEntry._();
@@ -641,6 +652,7 @@ class EmailSpamEntry
   Map<String, Expression> toColumns(bool nullToAbsent) => {
         'address': Variable<String>(address),
         'flagged_at': Variable<DateTime>(flaggedAt),
+        if (sourceId != null) 'source_id': Variable<String>(sourceId!),
       };
 }
 
@@ -650,6 +662,8 @@ class EmailSpamlist extends Table {
 
   DateTimeColumn get flaggedAt =>
       dateTime().clientDefault(() => DateTime.timestamp())();
+
+  TextColumn get sourceId => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {address};

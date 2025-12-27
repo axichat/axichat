@@ -92,7 +92,8 @@ void main() {
     expect(find.byType(CalendarRenderSurface), findsOneWidget);
   });
 
-  testWidgets('CalendarGrid defaults to week view on desktop', (tester) async {
+  testWidgets('CalendarGrid preserves explicit day view on desktop',
+      (tester) async {
     final state = CalendarTestData.dayView();
     await tester.binding.setSurfaceSize(const Size(1600, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -111,6 +112,6 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(requestedViews, contains(CalendarView.week));
+    expect(requestedViews, isEmpty);
   });
 }

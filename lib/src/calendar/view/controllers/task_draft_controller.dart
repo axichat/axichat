@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/widgets/recurrence_editor.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
@@ -9,6 +12,10 @@ import 'package:axichat/src/calendar/utils/schedule_range_utils.dart';
 /// Widgets can listen to this controller to rebuild when priority, schedule,
 /// deadline, or recurrence inputs change.
 class TaskDraftController extends ChangeNotifier {
+  static const List<String> _emptyCategories = <String>[];
+  static const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
+  static const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
+
   TaskDraftController({
     DateTime? initialStart,
     DateTime? initialEnd,
@@ -17,6 +24,14 @@ class TaskDraftController extends ChangeNotifier {
     bool initialImportant = false,
     bool initialUrgent = false,
     ReminderPreferences? initialReminders,
+    CalendarIcsStatus? initialStatus,
+    CalendarTransparency? initialTransparency,
+    List<String> initialCategories = _emptyCategories,
+    String? initialUrl,
+    CalendarGeo? initialGeo,
+    List<CalendarAlarm> initialAdvancedAlarms = _emptyAdvancedAlarms,
+    CalendarOrganizer? initialOrganizer,
+    List<CalendarAttendee> initialAttendees = _emptyAttendees,
   })  : _startTime = initialStart,
         _endTime = initialEnd,
         _deadline = initialDeadline,
@@ -24,7 +39,15 @@ class TaskDraftController extends ChangeNotifier {
         _isImportant = initialImportant,
         _isUrgent = initialUrgent,
         _reminders =
-            (initialReminders ?? ReminderPreferences.defaults()).normalized();
+            (initialReminders ?? ReminderPreferences.defaults()).normalized(),
+        _status = initialStatus,
+        _transparency = initialTransparency,
+        _categories = _normalizeCategories(initialCategories),
+        _url = _normalizeUrl(initialUrl),
+        _geo = initialGeo,
+        _advancedAlarms = List<CalendarAlarm>.from(initialAdvancedAlarms),
+        _organizer = initialOrganizer,
+        _attendees = List<CalendarAttendee>.from(initialAttendees);
 
   bool _isImportant;
   bool _isUrgent;
@@ -33,6 +56,14 @@ class TaskDraftController extends ChangeNotifier {
   DateTime? _deadline;
   RecurrenceFormValue _recurrence;
   ReminderPreferences _reminders;
+  CalendarIcsStatus? _status;
+  CalendarTransparency? _transparency;
+  List<String> _categories;
+  String? _url;
+  CalendarGeo? _geo;
+  List<CalendarAlarm> _advancedAlarms;
+  CalendarOrganizer? _organizer;
+  List<CalendarAttendee> _attendees;
 
   bool get isImportant => _isImportant;
   bool get isUrgent => _isUrgent;
@@ -41,6 +72,16 @@ class TaskDraftController extends ChangeNotifier {
   DateTime? get deadline => _deadline;
   RecurrenceFormValue get recurrence => _recurrence;
   ReminderPreferences get reminders => _reminders;
+  CalendarIcsStatus? get status => _status;
+  CalendarTransparency? get transparency => _transparency;
+  List<String> get categories => List<String>.unmodifiable(_categories);
+  String? get url => _url;
+  CalendarGeo? get geo => _geo;
+  List<CalendarAlarm> get advancedAlarms =>
+      List<CalendarAlarm>.unmodifiable(_advancedAlarms);
+  CalendarOrganizer? get organizer => _organizer;
+  List<CalendarAttendee> get attendees =>
+      List<CalendarAttendee>.unmodifiable(_attendees);
 
   void setImportant(bool value) {
     if (_isImportant == value) return;
@@ -126,6 +167,72 @@ class TaskDraftController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setStatus(CalendarIcsStatus? value) {
+    if (_status == value) {
+      return;
+    }
+    _status = value;
+    notifyListeners();
+  }
+
+  void setTransparency(CalendarTransparency? value) {
+    if (_transparency == value) {
+      return;
+    }
+    _transparency = value;
+    notifyListeners();
+  }
+
+  void setCategories(List<String> value) {
+    final List<String> normalized = _normalizeCategories(value);
+    if (listEquals(_categories, normalized)) {
+      return;
+    }
+    _categories = normalized;
+    notifyListeners();
+  }
+
+  void setUrl(String? value) {
+    final String? normalized = _normalizeUrl(value);
+    if (_url == normalized) {
+      return;
+    }
+    _url = normalized;
+    notifyListeners();
+  }
+
+  void setGeo(CalendarGeo? value) {
+    if (_geo == value) {
+      return;
+    }
+    _geo = value;
+    notifyListeners();
+  }
+
+  void setAdvancedAlarms(List<CalendarAlarm> value) {
+    if (listEquals(_advancedAlarms, value)) {
+      return;
+    }
+    _advancedAlarms = List<CalendarAlarm>.from(value);
+    notifyListeners();
+  }
+
+  void setOrganizer(CalendarOrganizer? value) {
+    if (_organizer == value) {
+      return;
+    }
+    _organizer = value;
+    notifyListeners();
+  }
+
+  void setAttendees(List<CalendarAttendee> value) {
+    if (listEquals(_attendees, value)) {
+      return;
+    }
+    _attendees = List<CalendarAttendee>.from(value);
+    notifyListeners();
+  }
+
   TaskPriority get selectedPriority {
     if (_isImportant && _isUrgent) {
       return TaskPriority.critical;
@@ -165,7 +272,15 @@ class TaskDraftController extends ChangeNotifier {
         _endTime != null ||
         _deadline != null ||
         _recurrence.isActive ||
-        _reminders != ReminderPreferences.defaults();
+        _reminders != ReminderPreferences.defaults() ||
+        _status != null ||
+        _transparency != null ||
+        _categories.isNotEmpty ||
+        _url != null ||
+        _geo != null ||
+        _advancedAlarms.isNotEmpty ||
+        _organizer != null ||
+        _attendees.isNotEmpty;
 
     _isImportant = false;
     _isUrgent = false;
@@ -174,10 +289,46 @@ class TaskDraftController extends ChangeNotifier {
     _deadline = null;
     _recurrence = const RecurrenceFormValue();
     _reminders = ReminderPreferences.defaults();
+    _status = null;
+    _transparency = null;
+    _categories = _emptyCategories;
+    _url = null;
+    _geo = null;
+    _advancedAlarms = _emptyAdvancedAlarms;
+    _organizer = null;
+    _attendees = _emptyAttendees;
 
     if (didChange) {
       notifyListeners();
     }
     return didChange;
+  }
+
+  static List<String> _normalizeCategories(List<String> categories) {
+    if (categories.isEmpty) {
+      return _emptyCategories;
+    }
+    final List<String> normalized = <String>[];
+    final Set<String> seen = <String>{};
+    for (final String category in categories) {
+      final String trimmed = category.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final String key = trimmed.toLowerCase();
+      if (!seen.add(key)) {
+        continue;
+      }
+      normalized.add(trimmed);
+    }
+    return normalized;
+  }
+
+  static String? _normalizeUrl(String? value) {
+    final String trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
   }
 }

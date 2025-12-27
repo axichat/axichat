@@ -45,6 +45,10 @@ const String _participantRoleChairIcs = 'CHAIR';
 const String _participantRoleRequiredIcs = 'REQ-PARTICIPANT';
 const String _participantRoleOptionalIcs = 'OPT-PARTICIPANT';
 const String _participantRoleNonParticipantIcs = 'NON-PARTICIPANT';
+const String _participantRoleChairLabel = 'Chair';
+const String _participantRoleRequiredLabel = 'Required';
+const String _participantRoleOptionalLabel = 'Optional';
+const String _participantRoleNonParticipantLabel = 'Non-participant';
 
 const String _participantStatusNeedsActionIcs = 'NEEDS-ACTION';
 const String _participantStatusAcceptedIcs = 'ACCEPTED';
@@ -53,12 +57,24 @@ const String _participantStatusTentativeIcs = 'TENTATIVE';
 const String _participantStatusDelegatedIcs = 'DELEGATED';
 const String _participantStatusCompletedIcs = 'COMPLETED';
 const String _participantStatusInProcessIcs = 'IN-PROCESS';
+const String _participantStatusNeedsActionLabel = 'Needs action';
+const String _participantStatusAcceptedLabel = 'Accepted';
+const String _participantStatusDeclinedLabel = 'Declined';
+const String _participantStatusTentativeLabel = 'Tentative';
+const String _participantStatusDelegatedLabel = 'Delegated';
+const String _participantStatusCompletedLabel = 'Completed';
+const String _participantStatusInProcessLabel = 'In process';
 
 const String _participantTypeIndividualIcs = 'INDIVIDUAL';
 const String _participantTypeGroupIcs = 'GROUP';
 const String _participantTypeResourceIcs = 'RESOURCE';
 const String _participantTypeRoomIcs = 'ROOM';
 const String _participantTypeUnknownIcs = 'UNKNOWN';
+const String _participantTypeIndividualLabel = 'Individual';
+const String _participantTypeGroupLabel = 'Group';
+const String _participantTypeResourceLabel = 'Resource';
+const String _participantTypeRoomLabel = 'Room';
+const String _participantTypeUnknownLabel = 'Unknown';
 
 const List<String> _emptyParticipantAddresses = <String>[];
 const bool _calendarParticipantDefaultRsvp = false;
@@ -99,6 +115,18 @@ enum CalendarParticipantRole {
         _participantRoleNonParticipantIcs =>
           CalendarParticipantRole.nonParticipant,
         _ => null,
+      };
+}
+
+extension CalendarParticipantRoleLabelX on CalendarParticipantRole {
+  String get label => switch (this) {
+        CalendarParticipantRole.chair => _participantRoleChairLabel,
+        CalendarParticipantRole.requiredParticipant =>
+          _participantRoleRequiredLabel,
+        CalendarParticipantRole.optionalParticipant =>
+          _participantRoleOptionalLabel,
+        CalendarParticipantRole.nonParticipant =>
+          _participantRoleNonParticipantLabel,
       };
 }
 
@@ -152,6 +180,19 @@ enum CalendarParticipantStatus {
       };
 }
 
+extension CalendarParticipantStatusLabelX on CalendarParticipantStatus {
+  String get label => switch (this) {
+        CalendarParticipantStatus.needsAction =>
+          _participantStatusNeedsActionLabel,
+        CalendarParticipantStatus.accepted => _participantStatusAcceptedLabel,
+        CalendarParticipantStatus.declined => _participantStatusDeclinedLabel,
+        CalendarParticipantStatus.tentative => _participantStatusTentativeLabel,
+        CalendarParticipantStatus.delegated => _participantStatusDelegatedLabel,
+        CalendarParticipantStatus.completed => _participantStatusCompletedLabel,
+        CalendarParticipantStatus.inProcess => _participantStatusInProcessLabel,
+      };
+}
+
 @HiveType(typeId: _calendarParticipantTypeTypeId)
 enum CalendarParticipantType {
   @HiveField(_calendarParticipantTypeIndividualField)
@@ -188,6 +229,28 @@ enum CalendarParticipantType {
         _participantTypeUnknownIcs => CalendarParticipantType.unknown,
         _ => null,
       };
+}
+
+extension CalendarParticipantTypeLabelX on CalendarParticipantType {
+  String get label => switch (this) {
+        CalendarParticipantType.individual => _participantTypeIndividualLabel,
+        CalendarParticipantType.group => _participantTypeGroupLabel,
+        CalendarParticipantType.resource => _participantTypeResourceLabel,
+        CalendarParticipantType.room => _participantTypeRoomLabel,
+        CalendarParticipantType.unknown => _participantTypeUnknownLabel,
+      };
+}
+
+extension CalendarOrganizerDisplayX on CalendarOrganizer {
+  String get displayName => commonName != null && commonName!.trim().isNotEmpty
+      ? commonName!.trim()
+      : address;
+}
+
+extension CalendarAttendeeDisplayX on CalendarAttendee {
+  String get displayName => commonName != null && commonName!.trim().isNotEmpty
+      ? commonName!.trim()
+      : address;
 }
 
 @freezed

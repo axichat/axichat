@@ -202,6 +202,28 @@ void main() {
       expect(mapped.until, wallTime(recurrence.until!));
     });
 
+    test('maps recurrence rule to yearly cadence', () {
+      const int interval = 3;
+      const int untilYear = 2026;
+      const int untilMonth = 1;
+      const int untilDay = 15;
+      const String rrule = 'FREQ=YEARLY;INTERVAL=$interval';
+      const String recurrenceText = 'Every 3 years';
+      final tz.TZDateTime until = zoned(untilYear, untilMonth, untilDay);
+      final Recurrence recurrence = Recurrence(
+        rrule: rrule,
+        text: recurrenceText,
+        until: until,
+      );
+
+      final RecurrenceRule? mapped = baseAdapter.mapRecurrence(recurrence);
+
+      expect(mapped, isNotNull);
+      expect(mapped!.frequency, RecurrenceFrequency.yearly);
+      expect(mapped.interval, interval);
+      expect(mapped.until, wallTime(until));
+    });
+
     test('detects weekday-only recurrence', () {
       const recurrence = Recurrence(
         rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',

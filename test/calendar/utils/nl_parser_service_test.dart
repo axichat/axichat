@@ -148,6 +148,44 @@ void main() {
     expect(parsedOverride?.location, sourceOverride.location);
   });
 
+  test('round-trips yearly recurrence share text', () async {
+    tzdata.initializeTimeZones();
+    final DateTime reference = DateTime.utc(2024, 1, 1);
+    final ParseContext ctx = ParseContext(
+      location: tz.UTC,
+      timezoneId: 'UTC',
+      reference: reference,
+    );
+    final DateTime start = DateTime.utc(2024, 6, 1, 9);
+    const Duration duration = Duration(hours: 2);
+    const int interval = 2;
+    const String taskId = 'yearly-task';
+    const String title = 'Annual review';
+
+    final CalendarTask task = CalendarTask(
+      id: taskId,
+      title: title,
+      scheduledTime: start,
+      duration: duration,
+      createdAt: reference,
+      modifiedAt: reference,
+      recurrence: const RecurrenceRule(
+        frequency: RecurrenceFrequency.yearly,
+        interval: interval,
+      ),
+    );
+
+    final String shareText = task.toShareText(now: reference);
+    final NlScheduleParserService service = NlScheduleParserService();
+    final NlAdapterResult result = await service.parse(shareText, context: ctx);
+
+    expect(result.task.scheduledTime, task.scheduledTime);
+    expect(result.task.title, task.title);
+    expect(
+        result.task.effectiveRecurrence.frequency, RecurrenceFrequency.yearly);
+    expect(result.task.effectiveRecurrence.interval, interval);
+  });
+
   test('round-trips omitted-year share text in current year', () async {
     tzdata.initializeTimeZones();
     final DateTime reference = DateTime.utc(2024, 5, 1);

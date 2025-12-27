@@ -170,6 +170,18 @@ class CalendarBloc extends BaseCalendarBloc {
   }
 
   @override
+  Future<void> onAvailabilityChanged(CalendarModel model) async {
+    try {
+      await _syncManager.pushFullSync();
+    } catch (error) {
+      developer.log(
+        'Failed to sync availability change: $error',
+        name: 'CalendarBloc',
+      );
+    }
+  }
+
+  @override
   Future<void> onCriticalPathAdded(CalendarCriticalPath path) async {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'add');

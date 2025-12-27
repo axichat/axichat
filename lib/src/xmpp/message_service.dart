@@ -1,6 +1,7 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 final RegExp _crlfPattern = RegExp(r'[\r\n]');
+const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
 
 const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
 const int _messageStatusSyncEnvelopeVersion = 1;
@@ -1422,6 +1423,7 @@ mixin MessageService
     String? htmlBody,
     Message? quotedMessage,
     CalendarFragment? calendarFragment,
+    CalendarTask? calendarTaskIcs,
     CalendarAvailabilityMessage? calendarAvailabilityMessage,
     bool? storeLocally,
     bool noStore = false,
@@ -1459,6 +1461,11 @@ mixin MessageService
     final CalendarFragmentPayload? fragmentPayload = calendarFragment == null
         ? null
         : CalendarFragmentPayload(fragment: calendarFragment);
+    final CalendarTaskIcsPayload? taskIcsPayload = calendarTaskIcs == null
+        ? null
+        : CalendarTaskIcsPayload(
+            ics: _calendarTaskIcsCodec.encode(calendarTaskIcs),
+          );
     final CalendarAvailabilityMessagePayload? availabilityPayload =
         calendarAvailabilityMessage == null
             ? null
@@ -1470,17 +1477,25 @@ mixin MessageService
     if (fragmentPayload != null) {
       resolvedExtensions.add(fragmentPayload);
     }
+    if (taskIcsPayload != null) {
+      resolvedExtensions.add(taskIcsPayload);
+    }
     if (availabilityPayload != null) {
       resolvedExtensions.add(availabilityPayload);
     }
     final Map<String, dynamic>? fragmentData = calendarFragment?.toJson();
+    final Map<String, dynamic>? taskData = calendarTaskIcs?.toJson();
     final Map<String, dynamic>? availabilityData =
         calendarAvailabilityMessage?.toJson();
     final PseudoMessageType? resolvedPseudoType =
         _calendarAvailabilityPseudoType(calendarAvailabilityMessage) ??
-            (fragmentData == null ? null : PseudoMessageType.calendarFragment);
+            (taskData == null
+                ? (fragmentData == null
+                    ? null
+                    : PseudoMessageType.calendarFragment)
+                : PseudoMessageType.calendarTaskIcs);
     final Map<String, dynamic>? pseudoMessageData =
-        availabilityData ?? fragmentData;
+        availabilityData ?? taskData ?? fragmentData;
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -2404,6 +2419,7 @@ mixin MessageService
       return;
     }
     final CalendarFragment? fragment = message.calendarFragment;
+    final CalendarTask? taskIcs = message.calendarTaskIcs;
     final CalendarAvailabilityMessage? availabilityMessage =
         message.calendarAvailabilityMessage;
     final resolvedChatType = chatType ??
@@ -2424,6 +2440,7 @@ mixin MessageService
       encryptionProtocol: message.encryptionProtocol,
       quotedMessage: quoted,
       calendarFragment: fragment,
+      calendarTaskIcs: taskIcs,
       calendarAvailabilityMessage: availabilityMessage,
       chatType: resolvedChatType,
     );

@@ -1,11 +1,11 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_tile.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -14,8 +14,8 @@ class BlocklistList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cachedItems = context.select<BlocklistCubit, List<BlocklistData>?>(
-      (cubit) => cubit['items'] as List<BlocklistData>?,
+    final cachedItems = context.select<BlocklistCubit, List<BlocklistEntry>?>(
+      (cubit) => cubit[blocklistItemsCacheKey] as List<BlocklistEntry>?,
     );
 
     return BlocBuilder<BlocklistCubit, BlocklistState>(
@@ -49,7 +49,7 @@ class _BlocklistListBody extends StatelessWidget {
     this.searchState,
   });
 
-  final List<BlocklistData> items;
+  final List<BlocklistEntry> items;
   final HomeSearchState? searchState;
 
   @override
@@ -60,7 +60,7 @@ class _BlocklistListBody extends StatelessWidget {
         searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
     final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
 
-    var visibleItems = List<BlocklistData>.from(items);
+    var visibleItems = List<BlocklistEntry>.from(items);
 
     if (query.isNotEmpty) {
       visibleItems = visibleItems
@@ -70,8 +70,8 @@ class _BlocklistListBody extends StatelessWidget {
 
     visibleItems.sort(
       (a, b) => sortOrder.isNewestFirst
-          ? a.jid.toLowerCase().compareTo(b.jid.toLowerCase())
-          : b.jid.toLowerCase().compareTo(a.jid.toLowerCase()),
+          ? b.blockedAt.compareTo(a.blockedAt)
+          : a.blockedAt.compareTo(b.blockedAt),
     );
 
     if (visibleItems.isEmpty) {
@@ -99,7 +99,7 @@ class _BlocklistListBody extends StatelessWidget {
           final item = visibleItems[index - 1];
           return ListItemPadding(
             child: BlocklistTile(
-              jid: item.jid,
+              entry: item,
             ),
           );
         },
@@ -108,7 +108,7 @@ class _BlocklistListBody extends StatelessWidget {
   }
 }
 
-bool _blockMatchesQuery(BlocklistData item, String query) {
+bool _blockMatchesQuery(BlocklistEntry item, String query) {
   final lower = query.toLowerCase();
-  return item.jid.toLowerCase().contains(lower);
+  return item.address.toLowerCase().contains(lower);
 }

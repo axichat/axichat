@@ -4,8 +4,10 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
-import 'package:axichat/src/calendar/models/calendar_fragment.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
+import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/event_transform.dart';
@@ -25,6 +27,7 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/database.dart' show MessageAttachmentData;
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -33,6 +36,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:path/path.dart' as p;
 
 part 'chat_bloc.freezed.dart';
 part 'chat_event.dart';
@@ -40,6 +44,11 @@ part 'chat_state.dart';
 
 const _attachmentSendFailureMessage =
     'Unable to send attachment. Please try again.';
+const _calendarTaskIcsAttachmentMimeType = 'text/calendar';
+const _calendarTaskIcsAttachmentSendFailureMessage =
+    'Unable to send calendar invite. Please try again.';
+const _calendarTaskIcsAttachmentSendFailureLogMessage =
+    'Failed to send calendar task attachment';
 const _sendSignatureSeparator = '::';
 const _sendSignatureSubjectTag = '::subject:';
 const _sendSignatureAttachmentTag = '::attachments:';
@@ -353,7 +362,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final visibleMessages = state.items.where(
         (message) =>
             message.pseudoMessageType == null ||
-            message.pseudoMessageType!.isCalendarFragment,
+            message.pseudoMessageType!.isCalendarFragment ||
+            message.pseudoMessageType!.isCalendarTaskIcs ||
+            message.pseudoMessageType!.isCalendarAvailability,
       );
       return Future<int>.value(visibleMessages.length);
     }
@@ -1381,16 +1392,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null) return;
     final trimmedText = event.text.trim();
-    final CalendarFragment? requestedFragment = event.calendarFragment;
+    final CalendarTask? requestedTask = event.calendarTaskIcs;
     final CalendarFragmentShareDecision fragmentDecision =
         _calendarFragmentPolicy.decisionForChat(
       chat: chat,
       roomState: state.roomState,
     );
-    final CalendarFragment? effectiveFragment =
-        requestedFragment == null || !fragmentDecision.canWrite
+    final CalendarTask? effectiveTaskForXmpp =
+        requestedTask == null || !fragmentDecision.canWrite
             ? null
-            : requestedFragment;
+            : requestedTask;
+    final CalendarTask? effectiveTaskForEmail = requestedTask;
     final attachments = List<PendingAttachment>.from(state.pendingAttachments);
     final queuedAttachments = attachments
         .where((attachment) =>
@@ -1398,6 +1410,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             !attachment.isPreparing)
         .toList();
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
+    final bool hasCalendarTaskIcs = effectiveTaskForEmail != null;
     final hasSubject = state.emailSubject?.trim().isNotEmpty == true;
     final quotedDraft = state.quoting;
     final hasBody = trimmedText.isNotEmpty;
@@ -1412,7 +1425,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     };
     final emailReplyHtmlBody =
         hasBody ? HtmlContentCodec.fromPlainText(trimmedText) : null;
-    if (trimmedText.isEmpty && !hasQueuedAttachments && !hasSubject) {
+    if (trimmedText.isEmpty &&
+        !hasQueuedAttachments &&
+        !hasSubject &&
+        !hasCalendarTaskIcs) {
       emit(
         state.copyWith(
           composerError: 'Message cannot be empty.',
@@ -1434,7 +1450,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailRecipients = split.emailRecipients;
     final xmppRecipients = split.xmppRecipients;
     final rawAttachmentsViaEmail =
-        hasQueuedAttachments && emailRecipients.isNotEmpty;
+        (hasQueuedAttachments || hasCalendarTaskIcs) &&
+            emailRecipients.isNotEmpty;
     final rawAttachmentsViaXmpp =
         hasQueuedAttachments && xmppRecipients.isNotEmpty;
     final rawRequiresEmail =
@@ -1446,12 +1463,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     final hasXmppBody = xmppBody.isNotEmpty;
     final shouldSendXmppBody = hasXmppBody && !rawAttachmentsViaXmpp;
-    final CalendarFragment? fragmentForXmpp =
-        hasQueuedAttachments ? null : effectiveFragment;
+    final CalendarTask? taskForXmpp =
+        hasQueuedAttachments ? null : effectiveTaskForXmpp;
     final Chat? soleRecipientChat =
         xmppRecipients.length == 1 ? xmppRecipients.first.target.chat : null;
-    final CalendarFragment? fanOutFragment =
-        soleRecipientChat?.jid == chat.jid ? fragmentForXmpp : null;
+    final CalendarTask? fanOutTask =
+        soleRecipientChat?.jid == chat.jid ? taskForXmpp : null;
     final quoteId = quotedDraft == null ? null : _messageKey(quotedDraft);
     final emailSignature = rawRequiresEmail
         ? _sendSignature(
@@ -1541,8 +1558,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
           return;
         }
+        final EmailService emailService = service!;
         var emailTextSent = false;
         var emailAttachmentsSent = !attachmentsViaEmail;
+        final bool hasQueuedEmailAttachments = queuedAttachments.isNotEmpty;
+        final bool shouldSendCalendarTaskAttachment = hasCalendarTaskIcs;
         final shouldBundleEmailAttachments =
             attachmentsViaEmail && queuedAttachments.length > 1;
         EmailAttachment? bundledEmailAttachment;
@@ -1596,7 +1616,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             final shouldUseCoreReply =
                 quotedDraft != null && quotedDraft.deltaMsgId != null;
             if (shouldUseCoreReply) {
-              await service!.sendReply(
+              await emailService.sendReply(
                 chat: chat,
                 body: trimmedText,
                 quotedMessage: quotedDraft,
@@ -1604,7 +1624,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 htmlBody: emailReplyHtmlBody,
               );
             } else {
-              await service!.sendMessage(
+              await emailService.sendMessage(
                 chat: chat,
                 body: emailBody,
                 subject: state.emailSubject,
@@ -1619,32 +1639,54 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               emailBodyTrimmed?.isNotEmpty == true ? emailBody : null;
           final htmlCaptionForAttachments =
               captionForAttachments == null ? null : emailHtmlBody;
-          final attachmentsSent = shouldBundleEmailAttachments
-              ? await _sendBundledEmailAttachments(
-                  attachments: queuedAttachments,
-                  bundledAttachment: bundledEmailAttachment!,
-                  chat: chat,
-                  service: service!,
-                  recipients: emailRecipients,
-                  emit: emit,
-                  retainOnSuccess: attachmentsViaXmpp,
-                  captionForBundle: captionForAttachments,
-                  htmlCaptionForBundle: htmlCaptionForAttachments,
-                )
-              : await _sendQueuedAttachments(
-                  attachments: queuedAttachments,
-                  chat: chat,
-                  service: service!,
-                  recipients: emailRecipients,
-                  emit: emit,
-                  retainOnSuccess: attachmentsViaXmpp,
-                  captionForFirstAttachment: captionForAttachments,
-                  htmlCaptionForFirstAttachment: htmlCaptionForAttachments,
-                );
-          if (!attachmentsSent) {
-            return;
+          final calendarTaskCaption =
+              captionForAttachments ?? effectiveTaskForEmail?.toShareText();
+          var queuedAttachmentsSent = !hasQueuedEmailAttachments;
+          if (hasQueuedEmailAttachments) {
+            final attachmentsSent = shouldBundleEmailAttachments
+                ? await _sendBundledEmailAttachments(
+                    attachments: queuedAttachments,
+                    bundledAttachment: bundledEmailAttachment!,
+                    chat: chat,
+                    service: emailService,
+                    recipients: emailRecipients,
+                    emit: emit,
+                    retainOnSuccess: attachmentsViaXmpp,
+                    captionForBundle: captionForAttachments,
+                    htmlCaptionForBundle: htmlCaptionForAttachments,
+                  )
+                : await _sendQueuedAttachments(
+                    attachments: queuedAttachments,
+                    chat: chat,
+                    service: emailService,
+                    recipients: emailRecipients,
+                    emit: emit,
+                    retainOnSuccess: attachmentsViaXmpp,
+                    captionForFirstAttachment: captionForAttachments,
+                    htmlCaptionForFirstAttachment: htmlCaptionForAttachments,
+                  );
+            if (!attachmentsSent) {
+              return;
+            }
+            queuedAttachmentsSent = true;
           }
-          emailAttachmentsSent = true;
+          var calendarTaskSent = !shouldSendCalendarTaskAttachment;
+          if (shouldSendCalendarTaskAttachment) {
+            final sent = await _sendCalendarTaskEmailAttachment(
+              task: effectiveTaskForEmail,
+              chat: chat,
+              service: emailService,
+              recipients: emailRecipients,
+              emit: emit,
+              caption: calendarTaskCaption,
+              htmlCaption: htmlCaptionForAttachments,
+            );
+            if (!sent) {
+              return;
+            }
+            calendarTaskSent = true;
+          }
+          emailAttachmentsSent = queuedAttachmentsSent && calendarTaskSent;
         }
         emailSendSucceeded =
             (!shouldSendEmailText || emailTextSent) && emailAttachmentsSent;
@@ -1672,7 +1714,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _sendXmppFanOut(
           recipients: xmppRecipients,
           body: xmppBody,
-          calendarFragment: fanOutFragment,
+          calendarTaskIcs: fanOutTask,
           quotedDraft: quotedDraft,
         );
         xmppBodySent = true;
@@ -1686,7 +1728,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           text: xmppBody,
           encryptionProtocol: chat.encryptionProtocol,
           quotedMessage: sameChatQuote,
-          calendarFragment: fragmentForXmpp,
+          calendarTaskIcs: taskForXmpp,
           chatType: chat.type,
         );
         xmppBodySent = true;
@@ -2201,10 +2243,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     _replacePendingAttachment(updated, emit);
     if (requiresEmail) {
+      final EmailService emailService = service!;
       final emailSent = await _sendPendingAttachment(
         pending: updated,
         chat: chat,
-        service: service!,
+        service: emailService,
         recipients: emailRecipients,
         emit: emit,
         retainOnSuccess: requiresXmpp,
@@ -2449,6 +2492,97 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     return false;
+  }
+
+  Future<EmailAttachment?> _buildCalendarTaskEmailAttachment(
+    CalendarTask task,
+  ) async {
+    try {
+      const CalendarTransferService transferService = CalendarTransferService();
+      final File file = await transferService.exportTaskIcs(task: task);
+      final int sizeBytes = await file.length();
+      final String fileName = p.basename(file.path);
+      return EmailAttachment(
+        path: file.path,
+        fileName: fileName,
+        sizeBytes: sizeBytes,
+        mimeType: _calendarTaskIcsAttachmentMimeType,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        _calendarTaskIcsAttachmentSendFailureLogMessage,
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<bool> _sendCalendarTaskEmailAttachment({
+    required CalendarTask task,
+    required Chat chat,
+    required EmailService service,
+    required List<ComposerRecipient> recipients,
+    required Emitter<ChatState> emit,
+    String? caption,
+    String? htmlCaption,
+  }) async {
+    final EmailAttachment? attachment =
+        await _buildCalendarTaskEmailAttachment(task);
+    if (attachment == null) {
+      emit(
+        state.copyWith(
+          composerError: _calendarTaskIcsAttachmentSendFailureMessage,
+        ),
+      );
+      return false;
+    }
+    final EmailAttachment resolvedAttachment =
+        caption == null ? attachment : attachment.copyWith(caption: caption);
+    if (_shouldFanOut(recipients, chat)) {
+      final succeeded = await _sendFanOut(
+        recipients: recipients,
+        attachment: resolvedAttachment,
+        htmlCaption: htmlCaption,
+        subject: state.emailSubject,
+        emit: emit,
+      );
+      if (!succeeded) {
+        return false;
+      }
+      return true;
+    }
+    try {
+      await service.sendAttachment(
+        chat: chat,
+        attachment: resolvedAttachment,
+        subject: state.emailSubject,
+        htmlCaption: htmlCaption,
+      );
+      return true;
+    } on DeltaChatException catch (error, stackTrace) {
+      _log.warning(
+        _calendarTaskIcsAttachmentSendFailureLogMessage,
+        error,
+        stackTrace,
+      );
+      final mappedError = DeltaErrorMapper.resolve(error.message);
+      final readableMessage = mappedError.asString;
+      emit(state.copyWith(composerError: readableMessage));
+      return false;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        _calendarTaskIcsAttachmentSendFailureLogMessage,
+        error,
+        stackTrace,
+      );
+      emit(
+        state.copyWith(
+          composerError: _calendarTaskIcsAttachmentSendFailureMessage,
+        ),
+      );
+      return false;
+    }
   }
 
   Future<EmailAttachment> _bundlePendingAttachments({
@@ -3247,7 +3381,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _sendXmppFanOut({
     required List<ComposerRecipient> recipients,
     required String body,
-    CalendarFragment? calendarFragment,
+    CalendarTask? calendarTaskIcs,
     required Message? quotedDraft,
   }) async {
     final processed = <String>{};
@@ -3266,7 +3400,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         text: body,
         encryptionProtocol: targetChat.encryptionProtocol,
         quotedMessage: quote,
-        calendarFragment: calendarFragment,
+        calendarTaskIcs: calendarTaskIcs,
         chatType: targetChat.type,
       );
     }

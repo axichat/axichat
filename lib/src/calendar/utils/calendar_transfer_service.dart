@@ -11,6 +11,8 @@ import 'package:axichat/src/calendar/utils/calendar_ics_codec.dart';
 
 /// Current version of the full-fidelity JSON export format.
 const int kCalendarJsonExportVersion = 2;
+const String _taskIcsExportPrefix = 'axichat_task';
+const String _dayEventIcsExportPrefix = 'axichat_event';
 
 enum CalendarExportFormat { ics, json }
 
@@ -90,6 +92,28 @@ class CalendarTransferService {
     return file;
   }
 
+  Future<File> exportTaskIcs({
+    required CalendarTask task,
+    String? fileNamePrefix,
+  }) async {
+    return exportTasks(
+      tasks: <CalendarTask>[task],
+      format: CalendarExportFormat.ics,
+      fileNamePrefix: fileNamePrefix ?? _taskIcsExportPrefix,
+    );
+  }
+
+  Future<File> exportDayEventIcs({
+    required DayEvent event,
+    String? fileNamePrefix,
+  }) async {
+    final CalendarModel model = _modelFromDayEvents(<DayEvent>[event]);
+    return exportIcs(
+      model: model,
+      fileNamePrefix: fileNamePrefix ?? _dayEventIcsExportPrefix,
+    );
+  }
+
   /// Exports the full calendar model in iCalendar format.
   Future<File> exportIcs({
     required CalendarModel model,
@@ -117,6 +141,19 @@ class CalendarTransferService {
     final DateTime now = DateTime.now();
     final CalendarModel model = CalendarModel(
       tasks: mapped,
+      lastModified: now,
+      checksum: '',
+    );
+    return model.copyWith(checksum: model.calculateChecksum());
+  }
+
+  CalendarModel _modelFromDayEvents(Iterable<DayEvent> events) {
+    final Map<String, DayEvent> mapped = Map<String, DayEvent>.fromEntries(
+      events.map((event) => MapEntry(event.id, event)),
+    );
+    final DateTime now = DateTime.now();
+    final CalendarModel model = CalendarModel(
+      dayEvents: mapped,
       lastModified: now,
       checksum: '',
     );
