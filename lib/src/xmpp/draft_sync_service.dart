@@ -37,8 +37,11 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) return;
         if (connectionState != ConnectionState.connected) return;
+        if (event.resumed) {
+          unawaited(_flushPendingDraftSync());
+          return;
+        }
         unawaited(syncDraftsOnLogin());
       })
       ..registerHandler<DraftSyncUpdatedEvent>((event) async {
@@ -161,6 +164,9 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (syncId.isEmpty) {
       return;
     }
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
     if (connectionState != ConnectionState.connected) {
       await _queueDraftPublish(syncId);
       return;
@@ -192,6 +198,9 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
   Future<void> retractDraftSync(String syncId) async {
     final normalized = syncId.trim();
     if (normalized.isEmpty) {
+      return;
+    }
+    if (!_connection.hasConnectionSettings) {
       return;
     }
     if (connectionState != ConnectionState.connected) {
