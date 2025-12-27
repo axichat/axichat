@@ -38,6 +38,7 @@ const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
 const _coreDraftMessageId = 0;
+const int _deltaEventMessageUnset = 0;
 const _defaultImapPort = '993';
 const _defaultSecurityMode = 'ssl';
 const _emailDownloadLimitKey = 'download_limit';
@@ -410,9 +411,10 @@ class EmailService {
           error,
           operation: 'configure email account',
         );
+        final errorType = error.runtimeType;
         _log.warning(
-          'Failed to configure email account',
-          error,
+          'Failed to configure email account ($errorType)',
+          null,
           stackTrace,
         );
         final shouldClearCredentials =
@@ -1458,18 +1460,18 @@ class EmailService {
       case DeltaEventType.errorSelfNotInGroup:
         _handleSelfNotInGroup(event.data2Text);
         break;
-      case DeltaEventType.incomingMsg:
-        _queueNotification(chatId: event.data1, msgId: event.data2);
-        break;
       case DeltaEventType.incomingMsgBunch:
         await _flushQueuedNotifications();
         break;
       case DeltaEventType.msgsChanged:
-      case DeltaEventType.chatModified:
+        if (event.data2 > _deltaEventMessageUnset) {
+          _queueNotification(chatId: event.data1, msgId: event.data2);
+        }
         break;
-      case DeltaEventType.msgDelivered:
-      case DeltaEventType.msgFailed:
-      case DeltaEventType.msgRead:
+      case DeltaEventType.msgsNoticed:
+        await _handleMessagesNoticed(event.data1);
+        break;
+      case DeltaEventType.chatModified:
         break;
       case DeltaEventType.accountsBackgroundFetchDone:
         _handleBackgroundFetchDone();
@@ -1507,6 +1509,18 @@ class EmailService {
     for (final entry in pending) {
       await _notifyIncoming(chatId: entry.chatId, msgId: entry.msgId);
     }
+  }
+
+  Future<void> _handleMessagesNoticed(int chatId) async {
+    await _flushQueuedNotifications();
+    final notificationService = _notificationService;
+    if (notificationService == null) return;
+    final db = await _databaseBuilder();
+    final chat = await db.getChatByDeltaChatId(chatId);
+    if (chat == null) return;
+    await notificationService.dismissMessageNotification(
+      threadKey: chat.jid,
+    );
   }
 
   Future<void> _notifyIncoming({

@@ -2,6 +2,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -101,7 +102,9 @@ class ChatMessageDetails extends StatelessWidget {
                                   state.loadedImageMessageIds
                                       .contains(messageId));
                           return html_widget.Html(
-                            data: message.htmlBody,
+                            data: HtmlContentCodec.sanitizeHtml(
+                              message.htmlBody ?? '',
+                            ),
                             extensions: [
                               createEmailImageExtension(
                                 shouldLoad: shouldLoadImages,
