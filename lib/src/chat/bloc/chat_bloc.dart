@@ -1562,6 +1562,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
           return;
         }
+        final EmailService emailService = service!;
         var emailTextSent = false;
         var emailAttachmentsSent = !attachmentsViaEmail;
         final bool hasQueuedEmailAttachments = queuedAttachments.isNotEmpty;
@@ -1608,7 +1609,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             final shouldUseCoreReply =
                 quotedDraft != null && quotedDraft.deltaMsgId != null;
             if (shouldUseCoreReply) {
-              await service!.sendReply(
+              await emailService.sendReply(
                 chat: chat,
                 body: trimmedText,
                 quotedMessage: quotedDraft,
@@ -1616,7 +1617,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 htmlBody: emailReplyHtmlBody,
               );
             } else {
-              await service!.sendMessage(
+              await emailService.sendMessage(
                 chat: chat,
                 body: emailBody,
                 subject: state.emailSubject,
@@ -1640,7 +1641,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                     attachments: queuedAttachments,
                     bundledAttachment: bundledEmailAttachment!,
                     chat: chat,
-                    service: service!,
+                    service: emailService,
                     recipients: emailRecipients,
                     emit: emit,
                     retainOnSuccess: attachmentsViaXmpp,
@@ -1650,7 +1651,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 : await _sendQueuedAttachments(
                     attachments: queuedAttachments,
                     chat: chat,
-                    service: service!,
+                    service: emailService,
                     recipients: emailRecipients,
                     emit: emit,
                     retainOnSuccess: attachmentsViaXmpp,
@@ -1665,9 +1666,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           var calendarTaskSent = !shouldSendCalendarTaskAttachment;
           if (shouldSendCalendarTaskAttachment) {
             final sent = await _sendCalendarTaskEmailAttachment(
-              task: effectiveTaskForEmail!,
+              task: effectiveTaskForEmail,
               chat: chat,
-              service: service!,
+              service: emailService,
               recipients: emailRecipients,
               emit: emit,
               caption: calendarTaskCaption,
@@ -2190,10 +2191,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     _replacePendingAttachment(updated, emit);
     if (requiresEmail) {
+      final EmailService emailService = service!;
       final emailSent = await _sendPendingAttachment(
         pending: updated,
         chat: chat,
-        service: service!,
+        service: emailService,
         recipients: emailRecipients,
         emit: emit,
         retainOnSuccess: requiresXmpp,
@@ -2444,8 +2446,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     CalendarTask task,
   ) async {
     try {
-      final CalendarTransferService transferService =
-          const CalendarTransferService();
+      const CalendarTransferService transferService = CalendarTransferService();
       final File file = await transferService.exportTaskIcs(task: task);
       final int sizeBytes = await file.length();
       final String fileName = p.basename(file.path);
@@ -2484,9 +2485,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return false;
     }
-    final EmailAttachment resolvedAttachment = caption == null
-        ? attachment
-        : attachment.copyWith(caption: caption);
+    final EmailAttachment resolvedAttachment =
+        caption == null ? attachment : attachment.copyWith(caption: caption);
     if (_shouldFanOut(recipients, chat)) {
       final succeeded = await _sendFanOut(
         recipients: recipients,
