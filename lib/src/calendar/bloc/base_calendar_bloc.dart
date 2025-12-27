@@ -1919,14 +1919,11 @@ abstract class BaseCalendarBloc
     ReminderPreferences? parsed,
   ) {
     final ReminderPreferences? explicitNormalized = explicit?.normalized();
-    if (explicitNormalized?.isEnabled ?? false) {
-      return explicitNormalized!;
+    if (explicitNormalized != null) {
+      return explicitNormalized;
     }
     final ReminderPreferences? parsedNormalized = parsed?.normalized();
-    if (parsedNormalized?.isEnabled ?? false) {
-      return parsedNormalized!;
-    }
-    return ReminderPreferences.defaults();
+    return parsedNormalized ?? ReminderPreferences.defaults();
   }
 
   bool _checklistsEqual(
