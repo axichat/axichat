@@ -35,13 +35,6 @@ const String _emptyText = '';
 
 const int _fragmentChecklistPreviewLimit = 4;
 
-const List<OccupantAffiliation> _calendarAffiliationsAllowed =
-    <OccupantAffiliation>[
-  OccupantAffiliation.member,
-  OccupantAffiliation.admin,
-  OccupantAffiliation.owner,
-];
-
 class CalendarFragmentShareDecision {
   const CalendarFragmentShareDecision({required this.canWrite});
 
@@ -58,23 +51,12 @@ class CalendarFragmentPolicy {
     if (chat == null || !chat.supportsChatCalendar) {
       return const CalendarFragmentShareDecision(canWrite: false);
     }
-    if (chat.type != ChatType.groupChat) {
-      return const CalendarFragmentShareDecision(canWrite: true);
-    }
-    final OccupantAffiliation affiliation =
-        roomState?.myAffiliation ?? OccupantAffiliation.none;
-    final bool canWrite = affiliation.isMemberOrAbove;
-    return CalendarFragmentShareDecision(canWrite: canWrite);
+    return const CalendarFragmentShareDecision(canWrite: true);
   }
 }
 
-extension OccupantAffiliationCalendarX on OccupantAffiliation {
-  bool get isMemberOrAbove => _calendarAffiliationsAllowed.contains(this);
-}
-
 extension ChatCalendarSupportX on Chat {
-  bool get supportsChatCalendar =>
-      defaultTransport.isXmpp && type != ChatType.note;
+  bool get supportsChatCalendar => defaultTransport.isXmpp;
 }
 
 extension CalendarFreeBusyTypeLabelX on CalendarFreeBusyType {

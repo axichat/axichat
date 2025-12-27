@@ -19,6 +19,7 @@ class ScheduleRangeFields extends StatelessWidget {
     this.showTimeSelectors = true,
     this.minDate,
     this.maxDate,
+    this.enabled = true,
   });
 
   final DateTime? start;
@@ -32,6 +33,7 @@ class ScheduleRangeFields extends StatelessWidget {
   final bool showTimeSelectors;
   final DateTime? minDate;
   final DateTime? maxDate;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +48,7 @@ class ScheduleRangeFields extends StatelessWidget {
           showTimeSelectors: showTimeSelectors,
           minDate: minDate,
           maxDate: maxDate,
+          enabled: enabled,
         );
         final Widget endField = _ScheduleField(
           label: endLabel,
@@ -55,6 +58,7 @@ class ScheduleRangeFields extends StatelessWidget {
           showTimeSelectors: showTimeSelectors,
           minDate: start ?? minDate,
           maxDate: maxDate,
+          enabled: enabled,
         );
 
         if (shouldStack) {
@@ -89,6 +93,7 @@ class _ScheduleField extends StatelessWidget {
     required this.showTimeSelectors,
     this.minDate,
     this.maxDate,
+    required this.enabled,
   });
 
   final String label;
@@ -98,6 +103,7 @@ class _ScheduleField extends StatelessWidget {
   final bool showTimeSelectors;
   final DateTime? minDate;
   final DateTime? maxDate;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +128,7 @@ class _ScheduleField extends StatelessWidget {
           minDate: minDate,
           maxDate: maxDate,
           onChanged: onChanged,
+          enabled: enabled,
         ),
       ],
     );

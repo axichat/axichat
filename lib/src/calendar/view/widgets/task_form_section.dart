@@ -304,6 +304,7 @@ class TaskTitleField extends StatelessWidget {
     this.labelText,
     this.textInputAction,
     this.autofocus = false,
+    this.enabled = true,
     this.validator,
     this.autovalidateMode,
     this.onChanged,
@@ -318,6 +319,7 @@ class TaskTitleField extends StatelessWidget {
   final String? labelText;
   final TextInputAction? textInputAction;
   final bool autofocus;
+  final bool enabled;
   final FormFieldValidator<String>? validator;
   final AutovalidateMode? autovalidateMode;
   final ValueChanged<String>? onChanged;
@@ -337,6 +339,7 @@ class TaskTitleField extends StatelessWidget {
       textInputAction: textInputAction,
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted == null ? null : (_) => onSubmitted!(),
+      enabled: enabled,
       validator: validator,
       autovalidateMode: autovalidateMode,
       borderRadius: calendarBorderRadius,
@@ -440,6 +443,7 @@ class TaskScheduleSection extends StatelessWidget {
     this.minDate,
     this.maxDate,
     this.onClear,
+    this.enabled = true,
   });
 
   final DateTime? start;
@@ -459,11 +463,13 @@ class TaskScheduleSection extends StatelessWidget {
   final DateTime? minDate;
   final DateTime? maxDate;
   final VoidCallback? onClear;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final bool hasSelection = start != null || end != null;
-    final VoidCallback? clearHandler = hasSelection
+    final bool allowClear = enabled && hasSelection;
+    final VoidCallback? clearHandler = allowClear
         ? onClear ??
             () {
               onStartChanged(null);
@@ -516,6 +522,7 @@ class TaskScheduleSection extends StatelessWidget {
             showTimeSelectors: showTimeSelectors,
             minDate: minDate,
             maxDate: maxDate,
+            enabled: enabled,
           ),
         ],
       ),
@@ -977,6 +984,7 @@ class TaskDescriptionField extends StatelessWidget {
     this.maxLines,
     this.textCapitalization = TextCapitalization.sentences,
     this.autofocus = false,
+    this.enabled = true,
     this.onChanged,
     this.borderRadius,
     this.focusBorderColor,
@@ -991,6 +999,7 @@ class TaskDescriptionField extends StatelessWidget {
   final int? maxLines;
   final TextCapitalization textCapitalization;
   final bool autofocus;
+  final bool enabled;
   final ValueChanged<String>? onChanged;
   final double? borderRadius;
   final Color? focusBorderColor;
@@ -1008,6 +1017,7 @@ class TaskDescriptionField extends StatelessWidget {
       textCapitalization: textCapitalization,
       autofocus: autofocus,
       onChanged: onChanged,
+      enabled: enabled,
       borderRadius: borderRadius,
       focusBorderColor: focusBorderColor,
       contentPadding: contentPadding ??

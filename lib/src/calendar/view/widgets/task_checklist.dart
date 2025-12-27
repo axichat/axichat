@@ -16,11 +16,13 @@ class TaskChecklist extends StatefulWidget {
     this.label = 'Checklist',
     this.addPlaceholder =
         'Add checklist item', // Note: overridden by callers with l10n
+    this.enabled = true,
   });
 
   final TaskChecklistController controller;
   final String label;
   final String addPlaceholder;
+  final bool enabled;
 
   @override
   State<TaskChecklist> createState() => _TaskChecklistState();
@@ -102,7 +104,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
           growable: false,
         )..sort();
 
-        return Column(
+        final Widget content = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const TaskSectionDivider(),
@@ -182,6 +184,12 @@ class _TaskChecklistState extends State<TaskChecklist> {
               ),
             ),
           ],
+        );
+        if (widget.enabled) {
+          return content;
+        }
+        return IgnorePointer(
+          child: content,
         );
       },
     );
