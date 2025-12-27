@@ -236,6 +236,246 @@ void main() {
         );
       });
 
+      test('expands yearly rules with month and weekday filters', () {
+        const String title = 'Yearly review';
+        const int baseYear = 2024;
+        const int baseMonth = 2;
+        const int baseDay = 12;
+        const int baseHour = 9;
+        const int taskDurationHours = 1;
+        const Duration taskDuration = Duration(hours: taskDurationHours);
+        const int rangeStartDay = 1;
+        const int rangeEndDay = 28;
+        const int rangeEndHour = 23;
+        const int rangeEndMinute = 59;
+        const int rangeEndSecond = 59;
+        const int firstExpectedDay = 19;
+        const int secondExpectedDay = 26;
+        const RecurrenceRule recurrence = RecurrenceRule(
+          frequency: RecurrenceFrequency.yearly,
+          byMonths: <int>[baseMonth],
+          byDays: <RecurrenceWeekday>[
+            RecurrenceWeekday(weekday: CalendarWeekday.monday),
+          ],
+        );
+
+        final DateTime baseStart = DateTime(
+          baseYear,
+          baseMonth,
+          baseDay,
+          baseHour,
+        );
+        final DateTime rangeStart = DateTime(
+          baseYear,
+          baseMonth,
+          rangeStartDay,
+        );
+        final DateTime rangeEnd = DateTime(
+          baseYear,
+          baseMonth,
+          rangeEndDay,
+          rangeEndHour,
+          rangeEndMinute,
+          rangeEndSecond,
+        );
+        final CalendarTask task = CalendarTask.create(
+          title: title,
+          scheduledTime: baseStart,
+          duration: taskDuration,
+          recurrence: recurrence,
+        );
+
+        final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
+        final List<DateTime?> occurrenceTimes =
+            occurrences.map((occurrence) => occurrence.scheduledTime).toList();
+
+        final DateTime firstExpected = DateTime(
+          baseYear,
+          baseMonth,
+          firstExpectedDay,
+          baseHour,
+        );
+        final DateTime secondExpected = DateTime(
+          baseYear,
+          baseMonth,
+          secondExpectedDay,
+          baseHour,
+        );
+
+        expect(occurrenceTimes, equals([firstExpected, secondExpected]));
+      });
+
+      test('expands yearly rules with weekday positions', () {
+        const String title = 'First Tuesday';
+        const int baseYear = 2024;
+        const int baseMonth = 4;
+        const int baseDay = 2;
+        const int baseHour = 8;
+        const int taskDurationHours = 1;
+        const Duration taskDuration = Duration(hours: taskDurationHours);
+        const int rangeYear = 2025;
+        const int rangeMonth = baseMonth;
+        const int rangeStartDay = 1;
+        const int rangeEndDay = 30;
+        const int rangeEndHour = 23;
+        const int rangeEndMinute = 59;
+        const int rangeEndSecond = 59;
+        const int firstPosition = 1;
+        const RecurrenceRule recurrence = RecurrenceRule(
+          frequency: RecurrenceFrequency.yearly,
+          byMonths: <int>[baseMonth],
+          byDays: <RecurrenceWeekday>[
+            RecurrenceWeekday(
+              weekday: CalendarWeekday.tuesday,
+              position: firstPosition,
+            ),
+          ],
+        );
+
+        final DateTime baseStart = DateTime(
+          baseYear,
+          baseMonth,
+          baseDay,
+          baseHour,
+        );
+        final DateTime rangeStart = DateTime(
+          rangeYear,
+          rangeMonth,
+          rangeStartDay,
+        );
+        final DateTime rangeEnd = DateTime(
+          rangeYear,
+          rangeMonth,
+          rangeEndDay,
+          rangeEndHour,
+          rangeEndMinute,
+          rangeEndSecond,
+        );
+        final CalendarTask task = CalendarTask.create(
+          title: title,
+          scheduledTime: baseStart,
+          duration: taskDuration,
+          recurrence: recurrence,
+        );
+
+        final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
+        const int expectedOccurrences = 1;
+
+        expect(occurrences, hasLength(expectedOccurrences));
+        expect(
+          occurrences.first.scheduledTime,
+          DateTime(rangeYear, rangeMonth, rangeStartDay, baseHour),
+        );
+      });
+
+      test('expands monthly rules with weekday positions', () {
+        const String title = 'Monthly sync';
+        const int baseYear = 2024;
+        const int baseMonth = 1;
+        const int baseDay = 1;
+        const int baseHour = 9;
+        const int taskDurationHours = 1;
+        const Duration taskDuration = Duration(hours: taskDurationHours);
+        const int rangeYear = 2024;
+        const int rangeMonth = 2;
+        const int rangeStartDay = 1;
+        const int rangeEndDay = 29;
+        const int rangeEndHour = 23;
+        const int rangeEndMinute = 59;
+        const int rangeEndSecond = 59;
+        const int expectedDay = 9;
+        const int ordinalPosition = 2;
+        const RecurrenceRule recurrence = RecurrenceRule(
+          frequency: RecurrenceFrequency.monthly,
+          byDays: <RecurrenceWeekday>[
+            RecurrenceWeekday(
+              weekday: CalendarWeekday.friday,
+              position: ordinalPosition,
+            ),
+          ],
+        );
+
+        final DateTime baseStart = DateTime(
+          baseYear,
+          baseMonth,
+          baseDay,
+          baseHour,
+        );
+        final DateTime rangeStart = DateTime(
+          rangeYear,
+          rangeMonth,
+          rangeStartDay,
+        );
+        final DateTime rangeEnd = DateTime(
+          rangeYear,
+          rangeMonth,
+          rangeEndDay,
+          rangeEndHour,
+          rangeEndMinute,
+          rangeEndSecond,
+        );
+        final CalendarTask task = CalendarTask.create(
+          title: title,
+          scheduledTime: baseStart,
+          duration: taskDuration,
+          recurrence: recurrence,
+        );
+
+        final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
+
+        expect(occurrences, hasLength(1));
+        expect(
+          occurrences.first.scheduledTime,
+          DateTime(rangeYear, rangeMonth, expectedDay, baseHour),
+        );
+      });
+
+      test('honors yearly count limits before the range start', () {
+        const String title = 'New year';
+        const int baseYear = 2020;
+        const int baseMonth = 1;
+        const int baseDay = 1;
+        const int baseHour = 9;
+        const int taskDurationHours = 1;
+        const Duration taskDuration = Duration(hours: taskDurationHours);
+        const int occurrenceCount = 2;
+        const int rangeStartYear = baseYear + 2;
+        const int rangeEndYear = baseYear + 3;
+        const RecurrenceRule recurrence = RecurrenceRule(
+          frequency: RecurrenceFrequency.yearly,
+          count: occurrenceCount,
+          byMonths: <int>[baseMonth],
+          byMonthDays: <int>[baseDay],
+        );
+
+        final DateTime baseStart = DateTime(
+          baseYear,
+          baseMonth,
+          baseDay,
+          baseHour,
+        );
+        final DateTime rangeStart = DateTime(
+          rangeStartYear,
+          baseMonth,
+          baseDay,
+        );
+        final DateTime rangeEnd = DateTime(
+          rangeEndYear,
+          baseMonth,
+          baseDay,
+        );
+        final CalendarTask task = CalendarTask.create(
+          title: title,
+          scheduledTime: baseStart,
+          duration: taskDuration,
+          recurrence: recurrence,
+        );
+
+        final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
+
+        expect(occurrences, isEmpty);
+      });
+
       test('applies overrides for individual occurrences', () {
         final baseTask = CalendarTask.create(
           title: 'Shift',
@@ -374,6 +614,95 @@ void main() {
           final TaskOccurrenceOverride rangeOverride = TaskOccurrenceOverride(
             scheduledTime: overrideStart,
             recurrenceId: recurrenceId,
+            range: RecurrenceRange.thisAndFuture,
+          );
+          final String overrideKey =
+              seriesStart.microsecondsSinceEpoch.toString();
+          final CalendarTask task = CalendarTask.create(
+            title: taskTitle,
+            scheduledTime: seriesStart,
+            duration: baseDuration,
+            recurrence: weeklyRule,
+          ).copyWith(
+            occurrenceOverrides: <String, TaskOccurrenceOverride>{
+              overrideKey: rangeOverride,
+            },
+          );
+
+          final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
+
+          expect(occurrences, hasLength(1));
+          expect(occurrences.first.scheduledTime, expectedOccurrence);
+        },
+      );
+
+      test(
+        'uses override key when range override omits recurrenceId',
+        () {
+          const int baseYear = 2024;
+          const int baseMonth = 3;
+          const int baseDay = 20;
+          const int overrideDay = 1;
+          const int expectedDay = 8;
+          const int baseHour = 9;
+          const int baseMinute = 0;
+          const int baseSecond = 0;
+          const int rangeStartDay = 1;
+          const int rangeEndDay = 10;
+          const int rangeStartHour = 0;
+          const int rangeStartMinute = 0;
+          const int rangeStartSecond = 0;
+          const int rangeEndHour = 23;
+          const int rangeEndMinute = 59;
+          const int rangeEndSecond = 59;
+          const Duration baseDuration = Duration(hours: 1);
+          const RecurrenceRule weeklyRule = RecurrenceRule(
+            frequency: RecurrenceFrequency.weekly,
+          );
+          const String taskTitle = 'Shifted series';
+
+          final DateTime seriesStart = DateTime(
+            baseYear,
+            baseMonth,
+            baseDay,
+            baseHour,
+            baseMinute,
+            baseSecond,
+          );
+          final DateTime overrideStart = DateTime(
+            baseYear,
+            baseMonth,
+            overrideDay,
+            baseHour,
+            baseMinute,
+            baseSecond,
+          );
+          final DateTime rangeStart = DateTime(
+            baseYear,
+            baseMonth,
+            rangeStartDay,
+            rangeStartHour,
+            rangeStartMinute,
+            rangeStartSecond,
+          );
+          final DateTime rangeEnd = DateTime(
+            baseYear,
+            baseMonth,
+            rangeEndDay,
+            rangeEndHour,
+            rangeEndMinute,
+            rangeEndSecond,
+          );
+          final DateTime expectedOccurrence = DateTime(
+            baseYear,
+            baseMonth,
+            expectedDay,
+            baseHour,
+            baseMinute,
+            baseSecond,
+          );
+          final TaskOccurrenceOverride rangeOverride = TaskOccurrenceOverride(
+            scheduledTime: overrideStart,
             range: RecurrenceRange.thisAndFuture,
           );
           final String overrideKey =

@@ -1,12 +1,35 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
+import 'package:axichat/src/calendar/models/calendar_attachment.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
+import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
+import 'package:axichat/src/calendar/utils/calendar_share.dart';
+import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_attachments_field.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_categories_field.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_ics_diagnostics_section.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_invitation_status_field.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_link_geo_fields.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_participants_field.dart';
+import 'package:axichat/src/calendar/view/widgets/ics_meta_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+
+const List<String> _emptyCategories = <String>[];
+const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
+const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
+const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
+const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
 
 class DayEventDraft {
   const DayEventDraft({
@@ -15,6 +38,7 @@ class DayEventDraft {
     required this.endDate,
     this.description,
     required this.reminders,
+    this.icsMeta,
   });
 
   final String title;
@@ -22,6 +46,7 @@ class DayEventDraft {
   final DateTime endDate;
   final String? description;
   final ReminderPreferences reminders;
+  final CalendarIcsMeta? icsMeta;
 }
 
 class DayEventEditorResult {
@@ -75,20 +100,54 @@ class _DayEventEditorForm extends StatefulWidget {
 
 class _DayEventEditorFormState extends State<_DayEventEditorForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final CalendarTransferService _transferService =
+      const CalendarTransferService();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   final FocusNode _titleFocusNode = FocusNode();
   late DateTime _startDate;
   late DateTime _endDate;
   late ReminderPreferences _reminders;
+  CalendarIcsStatus? _status;
+  CalendarTransparency? _transparency;
+  List<String> _categories = _emptyCategories;
+  String? _url;
+  CalendarGeo? _geo;
+  List<CalendarAttachment> _attachments = _emptyAttachments;
+  List<CalendarAlarm> _advancedAlarms = _emptyAdvancedAlarms;
+  CalendarOrganizer? _organizer;
+  List<CalendarAttendee> _attendees = _emptyAttendees;
 
   @override
   void initState() {
     super.initState();
     _startDate = widget.existing?.normalizedStart ?? widget.initialDate;
     _endDate = widget.existing?.normalizedEnd ?? widget.initialDate;
-    _reminders =
+    final ReminderPreferences fallbackReminders =
         widget.existing?.effectiveReminders ?? ReminderPreferences.defaults();
+    final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
+      widget.existing?.icsMeta?.alarms ?? _emptyAdvancedAlarms,
+    );
+    final AlarmReminderSplit split = splitAlarmsWithFallback(
+      alarms: existingAlarms,
+      fallback: fallbackReminders,
+    );
+    _reminders = split.reminders;
+    _advancedAlarms = split.advancedAlarms;
+    _status = widget.existing?.icsMeta?.status;
+    _transparency = widget.existing?.icsMeta?.transparency;
+    _categories = List<String>.from(
+      widget.existing?.icsMeta?.categories ?? _emptyCategories,
+    );
+    _url = widget.existing?.icsMeta?.url;
+    _geo = widget.existing?.icsMeta?.geo;
+    _attachments = List<CalendarAttachment>.from(
+      widget.existing?.icsMeta?.attachments ?? _emptyAttachments,
+    );
+    _organizer = widget.existing?.icsMeta?.organizer;
+    _attendees = List<CalendarAttendee>.from(
+      widget.existing?.icsMeta?.attendees ?? _emptyAttendees,
+    );
     _titleController = TextEditingController(text: widget.existing?.title);
     _descriptionController =
         TextEditingController(text: widget.existing?.description);
@@ -110,6 +169,16 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final bool keyboardOpen = keyboardInset > safeBottom;
+    final CalendarIcsMeta? icsMeta = widget.existing?.icsMeta;
+    final List<CalendarRawProperty> rawProperties =
+        icsMeta?.rawProperties ?? _emptyRawProperties;
+    final int? sequence = icsMeta?.sequence;
+    final bool showInvitationStatus = hasInvitationStatusData(
+      method: null,
+      sequence: sequence,
+      rawProperties: rawProperties,
+    );
+    final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
     final double scrollBottomPadding = calendarGutterMd + keyboardInset;
     final Widget actions = ValueListenableBuilder<TextEditingValue>(
       valueListenable: _titleController,
@@ -134,6 +203,11 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                   const DayEventEditorResult.deleted(),
                 ),
               ),
+            TaskSecondaryButton(
+              label: context.l10n.calendarExportFormatIcsTitle,
+              icon: Icons.file_download_outlined,
+              onPressed: canSubmit ? _exportIcs : null,
+            ),
             TaskSecondaryButton(
               label: context.l10n.commonCancel,
               onPressed: () => Navigator.of(context).maybePop(),
@@ -259,9 +333,82 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                           _reminders = next;
                         });
                       },
+                      advancedAlarms: _advancedAlarms,
+                      onAdvancedAlarmsChanged: (value) =>
+                          setState(() => _advancedAlarms = value),
+                      referenceStart: _startDate,
                       title: 'Reminder',
                       anchor: ReminderAnchor.start,
                     ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarIcsMetaFields(
+                      status: _status,
+                      transparency: _transparency,
+                      onStatusChanged: (value) =>
+                          setState(() => _status = value),
+                      onTransparencyChanged: (value) =>
+                          setState(() => _transparency = value),
+                    ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarCategoriesField(
+                      categories: _categories,
+                      onChanged: (value) => setState(() => _categories = value),
+                    ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarLinkGeoFields(
+                      url: _url,
+                      geo: _geo,
+                      onUrlChanged: (value) => setState(() => _url = value),
+                      onGeoChanged: (value) => setState(() => _geo = value),
+                    ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarParticipantsField(
+                      organizer: _organizer,
+                      attendees: _attendees,
+                      onOrganizerChanged: (value) =>
+                          setState(() => _organizer = value),
+                      onAttendeesChanged: (value) =>
+                          setState(() => _attendees = value),
+                    ),
+                    if (showInvitationStatus) ...[
+                      TaskSectionDivider(
+                        color: colors.border,
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarInvitationStatusField(
+                        method: null,
+                        sequence: sequence,
+                        rawProperties: rawProperties,
+                      ),
+                    ],
+                    if (_attachments.isNotEmpty) ...[
+                      TaskSectionDivider(
+                        color: colors.border,
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarAttachmentsField(
+                        attachments: _attachments,
+                      ),
+                    ],
+                    if (showDiagnostics) ...[
+                      TaskSectionDivider(
+                        color: colors.border,
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
+                    ],
                     if (keyboardOpen) ...[
                       const SizedBox(height: calendarGutterMd),
                       actions,
@@ -284,17 +431,44 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
 
   void _handleTitleChanged(String value) {}
 
-  void _submit() {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      _titleFocusNode.requestFocus();
-      return;
-    }
+  DayEventDraft _currentDraft() {
     final String title = _titleController.text.trim();
     final DateTime normalizedStart =
         DateTime(_startDate.year, _startDate.month, _startDate.day);
     final DateTime normalizedEnd =
         DateTime(_endDate.year, _endDate.month, _endDate.day);
-    final DayEventDraft draft = DayEventDraft(
+    final List<String>? categories = resolveCategoryOverride(
+      base: widget.existing?.icsMeta,
+      categories: _categories,
+    );
+    final CalendarOrganizer? organizer = resolveOrganizerOverride(
+      base: widget.existing?.icsMeta,
+      organizer: _organizer,
+    );
+    final List<CalendarAttendee>? attendees = resolveAttendeeOverride(
+      base: widget.existing?.icsMeta,
+      attendees: _attendees,
+    );
+    final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
+      advancedAlarms: _advancedAlarms,
+      reminders: _reminders,
+    );
+    final List<CalendarAlarm>? alarms = resolveAlarmOverride(
+      base: widget.existing?.icsMeta,
+      alarms: mergedAlarms,
+    );
+    final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
+      base: widget.existing?.icsMeta,
+      status: _status,
+      transparency: _transparency,
+      categories: categories,
+      url: _url,
+      geo: _geo,
+      organizer: organizer,
+      attendees: attendees,
+      alarms: alarms,
+    );
+    return DayEventDraft(
       title: title,
       description: _descriptionController.text.trim().isEmpty
           ? null
@@ -302,7 +476,72 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       startDate: normalizedStart,
       endDate: normalizedEnd,
       reminders: _reminders.normalized(),
+      icsMeta: icsMeta,
     );
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _titleFocusNode.requestFocus();
+      return;
+    }
+    final DayEventDraft draft = _currentDraft();
     Navigator.of(context).pop(DayEventEditorResult.save(draft));
+  }
+
+  Future<void> _exportIcs() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _titleFocusNode.requestFocus();
+      return;
+    }
+    final DayEventDraft draft = _currentDraft();
+    final DayEvent event = widget.existing == null
+        ? DayEvent.create(
+            title: draft.title,
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            description: draft.description,
+            reminders: draft.reminders,
+            icsMeta: draft.icsMeta,
+          )
+        : widget.existing!.normalizedCopy(
+            title: draft.title,
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            description: draft.description,
+            reminders: draft.reminders,
+            icsMeta: draft.icsMeta,
+            modifiedAt: DateTime.now(),
+          );
+    final l10n = context.l10n;
+    final String trimmedTitle = draft.title.trim();
+    final String subject =
+        trimmedTitle.isEmpty ? l10n.calendarExportFormatIcsTitle : trimmedTitle;
+    final String shareText = '$subject (${l10n.calendarExportFormatIcsTitle})';
+
+    try {
+      final file = await _transferService.exportDayEventIcs(event: event);
+      if (!mounted) return;
+      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        file: file,
+        subject: subject,
+        text: shareText,
+      );
+      if (!mounted) return;
+      FeedbackSystem.showSuccess(
+        context,
+        calendarShareSuccessMessage(
+          outcome: shareOutcome,
+          filePath: file.path,
+          sharedText: l10n.calendarExportReady,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      FeedbackSystem.showError(
+        context,
+        l10n.calendarExportFailed('$error'),
+      );
+    }
   }
 }

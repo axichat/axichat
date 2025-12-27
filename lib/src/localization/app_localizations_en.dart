@@ -198,6 +198,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatAttachmentConfirmButton => 'Load';
 
   @override
+  String get attachmentGalleryRosterTrustLabel =>
+      'Automatically download files from this user';
+
+  @override
+  String get attachmentGalleryRosterTrustHint =>
+      'You can turn this off later in chat settings.';
+
+  @override
+  String get attachmentGalleryChatTrustLabel =>
+      'Always allow attachments in this chat';
+
+  @override
+  String get attachmentGalleryChatTrustHint =>
+      'You can turn this off later in chat settings.';
+
+  @override
+  String get attachmentGalleryRosterErrorTitle => 'Unable to add contact';
+
+  @override
+  String get attachmentGalleryRosterErrorMessage =>
+      'Downloaded this attachment once, but automatic downloads are still disabled.';
+
+  @override
+  String get attachmentGalleryErrorMessage => 'Unable to load attachments.';
+
+  @override
+  String get attachmentGalleryAllLabel => 'All';
+
+  @override
+  String get attachmentGalleryImagesLabel => 'Images';
+
+  @override
+  String get attachmentGalleryVideosLabel => 'Videos';
+
+  @override
+  String get attachmentGalleryFilesLabel => 'Files';
+
+  @override
+  String get attachmentGallerySentLabel => 'Sent';
+
+  @override
+  String get attachmentGalleryReceivedLabel => 'Received';
+
+  @override
+  String get attachmentGallerySortNameAscLabel => 'Name A-Z';
+
+  @override
+  String get attachmentGallerySortNameDescLabel => 'Name Z-A';
+
+  @override
+  String get attachmentGallerySortSizeAscLabel => 'Size small to large';
+
+  @override
+  String get attachmentGallerySortSizeDescLabel => 'Size large to small';
+
+  @override
   String get chatOpenLinkTitle => 'Open external link?';
 
   @override

@@ -53,7 +53,8 @@ class BlocklistAddButton extends StatelessWidget {
                 ),
                 callback: jid.isEmpty
                     ? null
-                    : () => context.read<BlocklistCubit?>()?.block(jid: jid),
+                    : () =>
+                        context.read<BlocklistCubit?>()?.block(address: jid),
               );
             },
           ),

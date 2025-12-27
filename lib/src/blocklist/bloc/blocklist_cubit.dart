@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
+import 'package:axichat/src/common/jid_transport.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -9,79 +12,202 @@ import 'package:equatable/equatable.dart';
 
 part 'blocklist_state.dart';
 
+const String blocklistItemsCacheKey = 'items';
+const String _invalidJidMessage = 'Enter a valid jid';
+const String _blockingUnsupportedMessage = 'Server does not support blocking.';
+const String _unblockingUnsupportedMessage =
+    'Server does not support unblocking.';
+const String _spamReportUnsupportedMessage =
+    'Server does not support spam reporting.';
+const String _spamReportFailedMessage =
+    'Failed to report spam. Try again later.';
+const String _unblockAllFailedMessage =
+    'Failed to unblock users. Try again later.';
+const String _unblockAllSuccessMessage = 'Unblocked all.';
+
+String _blockFailedMessage(String address) =>
+    'Failed to block $address. Try again later.';
+
+String _unblockFailedMessage(String address) =>
+    'Failed to unblock $address. Try again later.';
+
+String _blockedMessage(String address) => 'Blocked $address';
+
+String _unblockedMessage(String address) => 'Unblocked $address';
+
 class BlocklistCubit extends Cubit<BlocklistState>
     with BlocCache<BlocklistState> {
-  BlocklistCubit({required BlockingService blockingService})
-      : _blockingService = blockingService,
+  BlocklistCubit({required XmppService xmppService})
+      : _xmppService = xmppService,
         super(const BlocklistAvailable(items: null)) {
-    _blocklistSubscription = _blockingService
-        .blocklistStream()
-        .listen((items) => emit(BlocklistAvailable(items: items)));
+    _xmppBlocklistSubscription =
+        _xmppService.blocklistStream().listen(_handleXmppBlocklist);
+    _emailBlocklistSubscription =
+        _xmppService.emailBlocklistStream().listen(_handleEmailBlocklist);
   }
 
-  final BlockingService _blockingService;
+  final XmppService _xmppService;
+  List<BlocklistData>? _xmppBlocklist;
+  List<EmailBlocklistEntry>? _emailBlocklist;
 
-  late final StreamSubscription<List<BlocklistData>> _blocklistSubscription;
+  late final StreamSubscription<List<BlocklistData>> _xmppBlocklistSubscription;
+  late final StreamSubscription<List<EmailBlocklistEntry>>
+      _emailBlocklistSubscription;
 
   @override
   void onChange(Change<BlocklistState> change) {
     super.onChange(change);
     final current = change.currentState;
     if (current is BlocklistAvailable) {
-      cache['items'] = current.items;
+      cache[blocklistItemsCacheKey] = current.items;
     }
   }
 
   @override
   Future<void> close() async {
-    await _blocklistSubscription.cancel();
+    await _xmppBlocklistSubscription.cancel();
+    await _emailBlocklistSubscription.cancel();
     return super.close();
   }
 
-  Future<void> block({required String jid}) async {
-    if (!jid.isValidJid) {
-      emit(const BlocklistFailure('Enter a valid jid'));
+  Future<void> block({
+    required String address,
+    MessageTransport? transport,
+    SpamReportReason? reportReason,
+  }) async {
+    final normalized = address.trim();
+    if (normalized.isEmpty) {
+      emit(const BlocklistFailure(_invalidJidMessage));
       return;
     }
-    emit(BlocklistLoading(jid: jid));
+    final resolvedTransport = transport ?? normalized.inferredTransport;
+    emit(BlocklistLoading(jid: normalized));
+    if (resolvedTransport.isEmail) {
+      try {
+        await _xmppService.setEmailBlockStatus(
+          address: normalized,
+          blocked: true,
+        );
+      } on Exception {
+        emit(BlocklistFailure(_blockFailedMessage(normalized)));
+        return;
+      }
+      emit(BlocklistSuccess(_blockedMessage(normalized)));
+      return;
+    }
+    if (!normalized.isValidJid) {
+      emit(const BlocklistFailure(_invalidJidMessage));
+      return;
+    }
     try {
-      await _blockingService.block(jid: jid);
+      if (reportReason != null) {
+        await _xmppService.blockAndReport(
+          jid: normalized,
+          reason: reportReason,
+        );
+      } else {
+        await _xmppService.block(jid: normalized);
+      }
+    } on XmppSpamReportUnsupportedException catch (_) {
+      emit(const BlocklistFailure(_spamReportUnsupportedMessage));
+      return;
+    } on XmppSpamReportException catch (_) {
+      emit(const BlocklistFailure(_spamReportFailedMessage));
+      return;
     } on XmppBlockUnsupportedException catch (_) {
-      emit(const BlocklistFailure('Server does not support blocking.'));
+      emit(const BlocklistFailure(_blockingUnsupportedMessage));
       return;
     } on XmppBlocklistException catch (_) {
-      emit(BlocklistFailure('Failed to block $jid. ' 'Try again later.'));
+      emit(BlocklistFailure(_blockFailedMessage(normalized)));
       return;
     }
-
-    emit(BlocklistSuccess('Blocked $jid'));
+    emit(BlocklistSuccess(_blockedMessage(normalized)));
   }
 
-  Future<void> unblock({required String jid}) async {
-    emit(BlocklistLoading(jid: jid));
-    try {
-      await _blockingService.unblock(jid: jid);
-    } on XmppBlockUnsupportedException catch (_) {
-      emit(const BlocklistFailure('Server does not support unblocking.'));
-      return;
-    } on XmppBlocklistException catch (_) {
-      emit(BlocklistFailure('Failed to unblock $jid. ' 'Try again later.'));
+  Future<void> unblock({required BlocklistEntry entry}) async {
+    final normalized = entry.address.trim();
+    if (normalized.isEmpty) {
       return;
     }
-    emit(BlocklistSuccess('Unblocked $jid'));
+    emit(BlocklistLoading(jid: normalized));
+    if (entry.transport.isEmail) {
+      try {
+        await _xmppService.setEmailBlockStatus(
+          address: normalized,
+          blocked: false,
+        );
+      } on Exception {
+        emit(BlocklistFailure(_unblockFailedMessage(normalized)));
+        return;
+      }
+      emit(BlocklistSuccess(_unblockedMessage(normalized)));
+      return;
+    }
+    try {
+      await _xmppService.unblock(jid: normalized);
+    } on XmppBlockUnsupportedException catch (_) {
+      emit(const BlocklistFailure(_unblockingUnsupportedMessage));
+      return;
+    } on XmppBlocklistException catch (_) {
+      emit(BlocklistFailure(_unblockFailedMessage(normalized)));
+      return;
+    }
+    emit(BlocklistSuccess(_unblockedMessage(normalized)));
   }
 
   Future<void> unblockAll() async {
     emit(const BlocklistLoading(jid: null));
+    var failed = false;
     try {
-      await _blockingService.unblockAll();
+      await _xmppService.unblockAll();
     } on XmppBlockUnsupportedException catch (_) {
-      emit(const BlocklistFailure('Server does not support unblocking.'));
-      return;
+      failed = true;
     } on XmppBlocklistException catch (_) {
-      emit(const BlocklistFailure('Failed to unblock users. Try again later.'));
+      failed = true;
+    }
+    try {
+      await _xmppService.clearEmailBlocklist();
+    } on Exception {
+      failed = true;
+    }
+    if (failed) {
+      emit(const BlocklistFailure(_unblockAllFailedMessage));
       return;
     }
-    emit(const BlocklistSuccess('Unblocked all.'));
+    emit(const BlocklistSuccess(_unblockAllSuccessMessage));
+  }
+
+  void _handleXmppBlocklist(List<BlocklistData> items) {
+    _xmppBlocklist = items;
+    _emitMerged();
+  }
+
+  void _handleEmailBlocklist(List<EmailBlocklistEntry> items) {
+    _emailBlocklist = items;
+    _emitMerged();
+  }
+
+  void _emitMerged() {
+    if (_xmppBlocklist == null && _emailBlocklist == null) {
+      emit(const BlocklistAvailable(items: null));
+      return;
+    }
+    final entries = <BlocklistEntry>[
+      if (_xmppBlocklist != null)
+        for (final item in _xmppBlocklist!)
+          BlocklistEntry(
+            address: item.jid,
+            blockedAt: item.blockedAt,
+            transport: MessageTransport.xmpp,
+          ),
+      if (_emailBlocklist != null)
+        for (final item in _emailBlocklist!)
+          BlocklistEntry(
+            address: item.address,
+            blockedAt: item.blockedAt,
+            transport: MessageTransport.email,
+          ),
+    ];
+    emit(BlocklistAvailable(items: entries));
   }
 }

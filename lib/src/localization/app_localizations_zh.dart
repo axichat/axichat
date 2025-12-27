@@ -196,6 +196,57 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentConfirmButton => '加载';
 
   @override
+  String get attachmentGalleryRosterTrustLabel => '自动下载来自此用户的文件';
+
+  @override
+  String get attachmentGalleryRosterTrustHint => '你可以稍后在聊天设置中关闭。';
+
+  @override
+  String get attachmentGalleryChatTrustLabel => '始终允许此聊天中的附件';
+
+  @override
+  String get attachmentGalleryChatTrustHint => '你可以稍后在聊天设置中关闭。';
+
+  @override
+  String get attachmentGalleryRosterErrorTitle => '无法添加联系人';
+
+  @override
+  String get attachmentGalleryRosterErrorMessage => '已下载此附件一次，但自动下载仍被禁用。';
+
+  @override
+  String get attachmentGalleryErrorMessage => '无法加载附件。';
+
+  @override
+  String get attachmentGalleryAllLabel => '全部';
+
+  @override
+  String get attachmentGalleryImagesLabel => '图片';
+
+  @override
+  String get attachmentGalleryVideosLabel => '视频';
+
+  @override
+  String get attachmentGalleryFilesLabel => '文件';
+
+  @override
+  String get attachmentGallerySentLabel => '已发送';
+
+  @override
+  String get attachmentGalleryReceivedLabel => '已接收';
+
+  @override
+  String get attachmentGallerySortNameAscLabel => '名称 A-Z';
+
+  @override
+  String get attachmentGallerySortNameDescLabel => '名称 Z-A';
+
+  @override
+  String get attachmentGallerySortSizeAscLabel => '大小从小到大';
+
+  @override
+  String get attachmentGallerySortSizeDescLabel => '大小从大到小';
+
+  @override
   String get chatOpenLinkTitle => '打开外部链接？';
 
   @override
@@ -3031,6 +3082,57 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatAttachmentConfirmButton => '載入';
+
+  @override
+  String get attachmentGalleryRosterTrustLabel => '自動下載來自此用戶的檔案';
+
+  @override
+  String get attachmentGalleryRosterTrustHint => '你可以稍後在聊天設定中關閉。';
+
+  @override
+  String get attachmentGalleryChatTrustLabel => '一律允許此聊天中的附件';
+
+  @override
+  String get attachmentGalleryChatTrustHint => '你可以稍後在聊天設定中關閉。';
+
+  @override
+  String get attachmentGalleryRosterErrorTitle => '無法加入聯絡人';
+
+  @override
+  String get attachmentGalleryRosterErrorMessage => '已下載此附件一次，但自動下載仍被停用。';
+
+  @override
+  String get attachmentGalleryErrorMessage => '無法載入附件。';
+
+  @override
+  String get attachmentGalleryAllLabel => '全部';
+
+  @override
+  String get attachmentGalleryImagesLabel => '圖片';
+
+  @override
+  String get attachmentGalleryVideosLabel => '影片';
+
+  @override
+  String get attachmentGalleryFilesLabel => '檔案';
+
+  @override
+  String get attachmentGallerySentLabel => '已傳送';
+
+  @override
+  String get attachmentGalleryReceivedLabel => '已接收';
+
+  @override
+  String get attachmentGallerySortNameAscLabel => '名稱 A-Z';
+
+  @override
+  String get attachmentGallerySortNameDescLabel => '名稱 Z-A';
+
+  @override
+  String get attachmentGallerySortSizeAscLabel => '大小由小到大';
+
+  @override
+  String get attachmentGallerySortSizeDescLabel => '大小由大到小';
 
   @override
   String get chatOpenLinkTitle => '開啟外部連結？';

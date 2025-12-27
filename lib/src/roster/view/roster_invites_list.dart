@@ -110,6 +110,7 @@ class _RosterInvitesBody extends StatelessWidget {
                       },
                     ),
                     BlockMenuItem(jid: invite.jid),
+                    ReportSpamMenuItem(jid: invite.jid),
                   ],
                   leading: AxiAvatar(jid: invite.jid),
                   title: invite.title,

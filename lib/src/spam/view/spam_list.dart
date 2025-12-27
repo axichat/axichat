@@ -5,7 +5,6 @@ import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
 import 'package:axichat/src/home/home_search_models.dart';
@@ -87,8 +86,10 @@ class _SpamListBody extends StatelessWidget {
 
     visibleItems.sort(
       (a, b) => sortOrder.isNewestFirst
-          ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
-          : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
+          ? (b.spamUpdatedAt ?? b.lastChangeTimestamp)
+              .compareTo(a.spamUpdatedAt ?? a.lastChangeTimestamp)
+          : (a.spamUpdatedAt ?? a.lastChangeTimestamp)
+              .compareTo(b.spamUpdatedAt ?? b.lastChangeTimestamp),
     );
 
     if (visibleItems.isEmpty) {
@@ -149,13 +150,8 @@ bool _chatMatchesQuery(Chat chat, String query) {
 Future<void> _moveToInbox(BuildContext context, Chat chat) async {
   final l10n = context.l10n;
   final xmppService = context.read<XmppService?>();
-  final emailService = RepositoryProvider.of<EmailService?>(context);
   final toaster = ShadToaster.maybeOf(context);
-  await xmppService?.toggleChatSpam(jid: chat.jid, spam: false);
-  final address = chat.emailAddress?.trim();
-  if (chat.transport.isEmail && address?.isNotEmpty == true) {
-    await emailService?.spam.unmark(address!);
-  }
+  await xmppService?.setSpamStatus(jid: chat.jid, spam: false);
   toaster?.show(
     FeedbackToast.success(
       title: l10n.spamMoveToastTitle,

@@ -9,10 +9,12 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
+import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
@@ -21,6 +23,7 @@ import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -40,12 +43,14 @@ import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/email_blocklist_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
 import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
+import 'package:axichat/src/xmpp/spam_pubsub_manager.dart';
 import 'package:crypto/crypto.dart' show sha1, sha256;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
@@ -72,6 +77,10 @@ import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 part 'base_stream_service.dart';
 
 part 'blocking_service.dart';
+
+part 'spam_sync_service.dart';
+
+part 'email_blocklist_sync_service.dart';
 
 part 'chats_service.dart';
 
@@ -140,6 +149,10 @@ final class XmppPresenceException extends XmppException {}
 final class XmppBlocklistException extends XmppException {}
 
 final class XmppBlockUnsupportedException extends XmppException {}
+
+final class XmppSpamReportUnsupportedException extends XmppException {}
+
+final class XmppSpamReportException extends XmppException {}
 
 final class ForegroundServiceUnavailableException extends XmppException {
   ForegroundServiceUnavailableException([super.wrapped]);
@@ -295,6 +308,11 @@ abstract interface class XmppBase {
 
   void _notifySelfAvatarUpdated(StoredAvatar? avatar);
 
+  Future<void> Function(anti_abuse.SpamSyncUpdate)? get emailSpamSyncCallback;
+
+  Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate)?
+      get emailBlocklistSyncCallback;
+
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
@@ -377,7 +395,9 @@ class XmppService extends XmppBase
         // OmemoService,
         RosterService,
         PresenceService,
-        BlockingService {
+        BlockingService,
+        SpamSyncService,
+        EmailBlocklistSyncService {
   XmppService._(
     this._connectionFactory,
     this._stateStoreFactory,
@@ -427,6 +447,9 @@ class XmppService extends XmppBase
   Future<bool> Function(CalendarSyncInbound)? _calendarSyncCallback;
   Future<void> Function(CalendarSyncWarning)? _calendarSyncWarningCallback;
   ChatCalendarSyncHandler? _chatCalendarSyncCallback;
+  Future<void> Function(anti_abuse.SpamSyncUpdate)? _emailSpamSyncCallback;
+  Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate)?
+      _emailBlocklistSyncCallback;
 
   final _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
@@ -464,6 +487,14 @@ class XmppService extends XmppBase
 
   @override
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
+
+  @override
+  Future<void> Function(anti_abuse.SpamSyncUpdate)? get emailSpamSyncCallback =>
+      _emailSpamSyncCallback;
+
+  @override
+  Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate)?
+      get emailBlocklistSyncCallback => _emailBlocklistSyncCallback;
 
   @override
   void _notifyDatabaseReloaded() {
@@ -633,6 +664,8 @@ class XmppService extends XmppBase
             BookmarksManager.bookmarksNotifyFeature,
             conversationIndexNotifyFeature,
             draftsNotifyFeature,
+            spamNotifyFeature,
+            emailBlocklistNotifyFeature,
           ])),
         mox.PingManager(const Duration(minutes: 3)),
         mox.EntityCapabilitiesManager(_capabilityHashBase),
@@ -645,6 +678,8 @@ class XmppService extends XmppBase
         BookmarksManager(),
         ConversationIndexManager(),
         DraftsPubSubManager(),
+        SpamPubSubManager(),
+        EmailBlocklistPubSubManager(),
       ]);
 
     return managers;
@@ -2384,6 +2419,26 @@ class XmppService extends XmppBase
   /// Clear any calendar sync warning callback.
   void clearCalendarSyncWarningCallback() {
     _calendarSyncWarningCallback = null;
+  }
+
+  void setEmailSpamSyncCallback(
+    Future<void> Function(anti_abuse.SpamSyncUpdate) callback,
+  ) {
+    _emailSpamSyncCallback = callback;
+  }
+
+  void clearEmailSpamSyncCallback() {
+    _emailSpamSyncCallback = null;
+  }
+
+  void setEmailBlocklistSyncCallback(
+    Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate) callback,
+  ) {
+    _emailBlocklistSyncCallback = callback;
+  }
+
+  void clearEmailBlocklistSyncCallback() {
+    _emailBlocklistSyncCallback = null;
   }
 
   static String generateResource() => 'axi.${generateRandomString(

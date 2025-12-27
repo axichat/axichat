@@ -27,6 +27,7 @@ class ChatsCubit extends Cubit<ChatsState> {
             openStack: <String>[],
             forwardStack: <String>[],
             openCalendar: false,
+            openChatCalendar: false,
             items: null,
             creationStatus: RequestStatus.none,
           ),
@@ -65,6 +66,8 @@ class ChatsCubit extends Cubit<ChatsState> {
             if (fallbackOpen != null && availableJids.contains(fallbackOpen))
               fallbackOpen,
           ];
+    final shouldKeepChatCalendar =
+        state.openChatCalendar && seededStack.isNotEmpty;
     emit(
       state.copyWith(
         openStack: seededStack,
@@ -72,6 +75,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         openJid: seededStack.isEmpty ? null : seededStack.last,
         items: items,
         selectedJids: retainedSelection,
+        openChatCalendar: shouldKeepChatCalendar,
       ),
     );
   }
@@ -89,6 +93,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         openStack: <String>[jid],
         forwardStack: const <String>[],
         openJid: jid,
+        openChatCalendar: false,
       ),
     );
     await _chatsService.openChat(jid);
@@ -101,7 +106,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     }
     // Close calendar when opening chat
     if (state.openCalendar) {
-      emit(state.copyWith(openCalendar: false));
+      emit(state.copyWith(openCalendar: false, openChatCalendar: false));
     }
     await openChat(jid: jid);
   }
@@ -120,6 +125,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         openStack: nextStack,
         forwardStack: const <String>[],
         openJid: jid,
+        openChatCalendar: false,
       ),
     );
     await _chatsService.openChat(jid);
@@ -136,6 +142,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         openStack: nextStack,
         forwardStack: nextForward,
         openJid: nextOpen,
+        openChatCalendar: false,
       ),
     );
     if (nextOpen == null) {
@@ -157,6 +164,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         forwardStack: nextForward,
         openStack: filteredStack,
         openJid: restored,
+        openChatCalendar: false,
       ),
     );
     await _chatsService.openChat(restored);
@@ -169,6 +177,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         openStack: const <String>[],
         forwardStack: const <String>[],
         openJid: null,
+        openChatCalendar: false,
       ),
     );
     await _chatsService.closeChat();
@@ -176,10 +185,22 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   void toggleCalendar() {
     if (state.openCalendar) {
-      emit(state.copyWith(openCalendar: false));
+      emit(state.copyWith(openCalendar: false, openChatCalendar: false));
     } else {
-      emit(state.copyWith(openCalendar: true));
+      emit(state.copyWith(openCalendar: true, openChatCalendar: false));
     }
+  }
+
+  void setChatCalendarOpen({required bool open}) {
+    if (state.openChatCalendar == open) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        openChatCalendar: open,
+        openCalendar: open ? false : state.openCalendar,
+      ),
+    );
   }
 
   Future<void> toggleFavorited({

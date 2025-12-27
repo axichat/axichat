@@ -74,6 +74,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
           endDate: draft.endDate,
           description: draft.description,
           reminders: draft.reminders,
+          icsMeta: draft.icsMeta,
         ),
       );
       return;
@@ -85,6 +86,7 @@ class CalendarMonthHost<B extends BaseCalendarBloc> extends StatelessWidget {
       endDate: draft.endDate,
       description: draft.description,
       reminders: draft.reminders,
+      icsMeta: draft.icsMeta,
       modifiedAt: DateTime.now(),
     );
     targetBloc.add(CalendarEvent.dayEventUpdated(event: updated));

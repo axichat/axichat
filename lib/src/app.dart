@@ -224,6 +224,9 @@ class MaterialAxichat extends StatefulWidget {
 }
 
 class _MaterialAxichatState extends State<MaterialAxichat> {
+  late final XmppService _xmppService;
+  late final EmailService _emailService;
+
   late final GoRouter _router = GoRouter(
     restorationScopeId: 'app',
     redirect: (context, routerState) {
@@ -248,7 +251,22 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    _xmppService = context.read<XmppService>();
+    _emailService = context.read<EmailService>();
+    _xmppService
+      ..setEmailSpamSyncCallback(_emailService.applySpamSyncUpdate)
+      ..setEmailBlocklistSyncCallback(
+        _emailService.applyEmailBlocklistSyncUpdate,
+      );
+  }
+
+  @override
   void dispose() {
+    _xmppService
+      ..clearEmailSpamSyncCallback()
+      ..clearEmailBlocklistSyncCallback();
     _router.dispose();
     super.dispose();
   }

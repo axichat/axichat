@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
+import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/jid_transport.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
@@ -509,6 +511,12 @@ class EmailService {
     if (!_listenerAttached) {
       _transport.addEventListener(_eventListener);
       _listenerAttached = true;
+    }
+    final isInitialized =
+        _databasePrefix != null && _databasePassphrase != null;
+    if (!isInitialized) {
+      _log.fine('Email transport start skipped; not provisioned.');
+      return;
     }
     if (!_running) {
       await start();
@@ -1215,6 +1223,43 @@ class EmailService {
     }
     for (final address in toRemove) {
       await db.removeEmailBlock(address);
+    }
+  }
+
+  Future<void> applySpamSyncUpdate(SpamSyncUpdate update) async {
+    final normalized = normalizeEmailAddress(update.address);
+    if (normalized.isEmpty || !normalized.isEmailJid) {
+      return;
+    }
+    try {
+      await _ensureReady();
+      if (update.isSpam) {
+        await _transport.blockContact(normalized);
+      } else {
+        await _transport.unblockContact(normalized);
+      }
+    } on Exception {
+      _log.fine('Failed to apply spam sync update to DeltaChat core.');
+    }
+  }
+
+  Future<void> applyEmailBlocklistSyncUpdate(
+    EmailBlocklistSyncUpdate update,
+  ) async {
+    final normalized = normalizeEmailAddress(update.address);
+    if (normalized.isEmpty || !normalized.isEmailJid) {
+      return;
+    }
+    try {
+      await _ensureReady();
+      if (update.blocked) {
+        await _transport.blockContact(normalized);
+      } else {
+        await _transport.unblockContact(normalized);
+      }
+    } on Exception {
+      _log.fine(
+          'Failed to apply email blocklist sync update to DeltaChat core.');
     }
   }
 

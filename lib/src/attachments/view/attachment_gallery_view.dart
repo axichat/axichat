@@ -39,28 +39,6 @@ const double _attachmentGalleryMetaSpacing = 4.0;
 const int _attachmentGalleryFilenameMaxLines = 2;
 const int _attachmentGalleryMetaMaxLines = 1;
 const String _attachmentGalleryMetaSeparator = ' - ';
-const String _attachmentGalleryRosterTrustLabel =
-    'Automatically download files from this user';
-const String _attachmentGalleryRosterTrustHint =
-    'You can turn this off later in chat settings.';
-const String _attachmentGalleryChatTrustLabel =
-    'Always allow attachments in this chat';
-const String _attachmentGalleryChatTrustHint =
-    'You can turn this off later in chat settings.';
-const String _attachmentGalleryRosterErrorTitle = 'Unable to add contact';
-const String _attachmentGalleryRosterErrorMessage =
-    'Downloaded this attachment once, but automatic downloads are still disabled.';
-const String _attachmentGalleryErrorMessage = 'Unable to load attachments.';
-const String _attachmentGalleryAllLabel = 'All';
-const String _attachmentGalleryImagesLabel = 'Images';
-const String _attachmentGalleryVideosLabel = 'Videos';
-const String _attachmentGalleryFilesLabel = 'Files';
-const String _attachmentGallerySentLabel = 'Sent';
-const String _attachmentGalleryReceivedLabel = 'Received';
-const String _attachmentGallerySortNameAscLabel = 'Name A-Z';
-const String _attachmentGallerySortNameDescLabel = 'Name Z-A';
-const String _attachmentGallerySortSizeAscLabel = 'Size small to large';
-const String _attachmentGallerySortSizeDescLabel = 'Size large to small';
 const int _attachmentGallerySortBefore = -1;
 const int _attachmentGallerySortAfter = 1;
 const int _attachmentGalleryFallbackEpochMs = 0;
@@ -95,13 +73,13 @@ extension AttachmentGallerySortOptionLabels on AttachmentGallerySortOption {
       AttachmentGallerySortOption.newestFirst => l10n.chatSearchSortNewestFirst,
       AttachmentGallerySortOption.oldestFirst => l10n.chatSearchSortOldestFirst,
       AttachmentGallerySortOption.nameAscending =>
-        _attachmentGallerySortNameAscLabel,
+        l10n.attachmentGallerySortNameAscLabel,
       AttachmentGallerySortOption.nameDescending =>
-        _attachmentGallerySortNameDescLabel,
+        l10n.attachmentGallerySortNameDescLabel,
       AttachmentGallerySortOption.sizeAscending =>
-        _attachmentGallerySortSizeAscLabel,
+        l10n.attachmentGallerySortSizeAscLabel,
       AttachmentGallerySortOption.sizeDescending =>
-        _attachmentGallerySortSizeDescLabel,
+        l10n.attachmentGallerySortSizeDescLabel,
     };
   }
 
@@ -191,12 +169,12 @@ int _compareBySize(
 }
 
 extension AttachmentGalleryTypeFilterLabels on AttachmentGalleryTypeFilter {
-  String get label {
+  String label(AppLocalizations l10n) {
     return switch (this) {
-      AttachmentGalleryTypeFilter.all => _attachmentGalleryAllLabel,
-      AttachmentGalleryTypeFilter.images => _attachmentGalleryImagesLabel,
-      AttachmentGalleryTypeFilter.videos => _attachmentGalleryVideosLabel,
-      AttachmentGalleryTypeFilter.files => _attachmentGalleryFilesLabel,
+      AttachmentGalleryTypeFilter.all => l10n.attachmentGalleryAllLabel,
+      AttachmentGalleryTypeFilter.images => l10n.attachmentGalleryImagesLabel,
+      AttachmentGalleryTypeFilter.videos => l10n.attachmentGalleryVideosLabel,
+      AttachmentGalleryTypeFilter.files => l10n.attachmentGalleryFilesLabel,
     };
   }
 
@@ -212,11 +190,12 @@ extension AttachmentGalleryTypeFilterLabels on AttachmentGalleryTypeFilter {
 }
 
 extension AttachmentGallerySourceFilterLabels on AttachmentGallerySourceFilter {
-  String get label {
+  String label(AppLocalizations l10n) {
     return switch (this) {
-      AttachmentGallerySourceFilter.all => _attachmentGalleryAllLabel,
-      AttachmentGallerySourceFilter.sent => _attachmentGallerySentLabel,
-      AttachmentGallerySourceFilter.received => _attachmentGalleryReceivedLabel,
+      AttachmentGallerySourceFilter.all => l10n.attachmentGalleryAllLabel,
+      AttachmentGallerySourceFilter.sent => l10n.attachmentGallerySentLabel,
+      AttachmentGallerySourceFilter.received =>
+        l10n.attachmentGalleryReceivedLabel,
     };
   }
 
@@ -380,11 +359,11 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
         !isSelf && chat != null && (isEmailChat || isGroupChat);
     final showAutoTrustToggle = canAddToRoster || canTrustChat;
     final autoTrustLabel = canAddToRoster
-        ? _attachmentGalleryRosterTrustLabel
-        : _attachmentGalleryChatTrustLabel;
+        ? l10n.attachmentGalleryRosterTrustLabel
+        : l10n.attachmentGalleryChatTrustLabel;
     final autoTrustHint = canAddToRoster
-        ? _attachmentGalleryRosterTrustHint
-        : _attachmentGalleryChatTrustHint;
+        ? l10n.attachmentGalleryRosterTrustHint
+        : l10n.attachmentGalleryChatTrustHint;
     final decision = await showShadDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
@@ -414,8 +393,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
         } on Exception {
           showToast?.call(
             FeedbackToast.error(
-              title: _attachmentGalleryRosterErrorTitle,
-              message: _attachmentGalleryRosterErrorMessage,
+              title: l10n.attachmentGalleryRosterErrorTitle,
+              message: l10n.attachmentGalleryRosterErrorMessage,
             ),
           );
         }
@@ -463,6 +442,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     final knownContacts = context.watch<RosterCubit>().contacts;
     final xmppService = context.read<XmppService>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
+    final l10n = context.l10n;
     final chatOverride = widget.chatOverride;
     final showChatLabel = widget.showChatLabel;
     final chatLookup = <String, Chat>{
@@ -483,7 +463,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
           if (state.status.isFailure) {
             return Center(
               child: Text(
-                _attachmentGalleryErrorMessage,
+                l10n.attachmentGalleryErrorMessage,
                 style: context.textTheme.muted,
                 textAlign: TextAlign.center,
               ),
@@ -798,18 +778,19 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
         final typeSelect = AttachmentGallerySelect<AttachmentGalleryTypeFilter>(
           value: typeFilter,
           onChanged: onTypeFilterChanged,
-          labelBuilder: (value) => value.label,
+          labelBuilder: (value) => value.label(l10n),
           options: AttachmentGalleryTypeFilter.values,
         );
         final sourceSelect =
             AttachmentGallerySelect<AttachmentGallerySourceFilter>(
           value: sourceFilter,
           onChanged: onSourceFilterChanged,
-          labelBuilder: (value) => value.label,
+          labelBuilder: (value) => value.label(l10n),
           options: AttachmentGallerySourceFilter.values,
         );
         if (constraints.maxWidth < _attachmentGalleryControlsBreakpoint) {
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: _attachmentGalleryControlRowSpacing,
             children: [
               sortSelect,
