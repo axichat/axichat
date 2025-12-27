@@ -137,6 +137,7 @@ const _chatCalendarActionSpacing = 4.0;
 const String _calendarFragmentShareDeniedMessage =
     'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
+const String _calendarTaskIcsPropertyKey = 'calendarTaskIcs';
 const String _calendarAvailabilityPropertyKey = 'calendarAvailability';
 const String _availabilityRequestAccountMissingMessage =
     'Availability requests are unavailable right now.';
@@ -246,13 +247,13 @@ class _MessageFilterOption {
   final String label;
 }
 
-class _CalendarFragmentShare {
-  const _CalendarFragmentShare({
-    required this.fragment,
+class _CalendarTaskShare {
+  const _CalendarTaskShare({
+    required this.task,
     required this.text,
   });
 
-  final CalendarFragment? fragment;
+  final CalendarTask? task;
   final String text;
 }
 
@@ -808,6 +809,8 @@ class _ChatState extends State<Chat> {
   late final ScrollController _scrollController;
   bool _composerHasText = false;
   String _lastSubjectValue = '';
+  ChatCalendarBloc? _chatCalendarBloc;
+  String? _chatCalendarJid;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _fileMetadataStreamEntries = <String, _FileMetadataStreamEntry>{};
   final _animatedMessageIds = <String>{};
@@ -843,7 +846,7 @@ class _ChatState extends State<Chat> {
       CalendarFragmentPolicy();
   static const CalendarFragmentFormatter _calendarFragmentFormatter =
       CalendarFragmentFormatter();
-  CalendarFragment? _pendingCalendarFragment;
+  CalendarTask? _pendingCalendarTaskIcs;
   String? _pendingCalendarSeedText;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
@@ -863,15 +866,15 @@ class _ChatState extends State<Chat> {
     if (hasText && _anySelectionActive) {
       _clearAllSelections();
     }
-    _maybeClearPendingCalendarFragment(text);
+    _maybeClearPendingCalendarTaskIcs(text);
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
   }
 
-  void _maybeClearPendingCalendarFragment(String text) {
+  void _maybeClearPendingCalendarTaskIcs(String text) {
     final seedText = _pendingCalendarSeedText;
-    if (_pendingCalendarFragment == null || seedText == null) {
+    if (_pendingCalendarTaskIcs == null || seedText == null) {
       return;
     }
     if (text.trim() == seedText) {
@@ -879,7 +882,7 @@ class _ChatState extends State<Chat> {
     }
     if (!mounted) return;
     setState(() {
-      _pendingCalendarFragment = null;
+      _pendingCalendarTaskIcs = null;
       _pendingCalendarSeedText = null;
     });
   }
@@ -896,6 +899,52 @@ class _ChatState extends State<Chat> {
         .where((jid) => jid.isNotEmpty)
         .toList(growable: false);
     return participants;
+  }
+
+  void _disposeChatCalendarBloc() {
+    final bloc = _chatCalendarBloc;
+    if (bloc == null) {
+      return;
+    }
+    bloc.close();
+    _chatCalendarBloc = null;
+    _chatCalendarJid = null;
+  }
+
+  ChatCalendarBloc? _resolveChatCalendarBloc({
+    required chat_models.Chat? chat,
+    required bool calendarAvailable,
+  }) {
+    final resolvedChat = chat;
+    if (!calendarAvailable || resolvedChat == null) {
+      _disposeChatCalendarBloc();
+      return null;
+    }
+    if (_chatCalendarBloc != null && _chatCalendarJid == resolvedChat.jid) {
+      return _chatCalendarBloc;
+    }
+    _disposeChatCalendarBloc();
+    final storageManager = context.read<CalendarStorageManager>();
+    final storage = storageManager.authStorage;
+    final coordinator = _maybeReadChatCalendarCoordinator(context);
+    if (storage == null || coordinator == null) {
+      return null;
+    }
+    final reminderController = context.read<CalendarReminderController>();
+    final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
+      context,
+    );
+    final bloc = ChatCalendarBloc(
+      chatJid: resolvedChat.jid,
+      chatType: resolvedChat.type,
+      coordinator: coordinator,
+      storage: storage,
+      reminderController: reminderController,
+      availabilityCoordinator: availabilityCoordinator,
+    )..add(const CalendarEvent.started());
+    _chatCalendarBloc = bloc;
+    _chatCalendarJid = resolvedChat.jid;
+    return bloc;
   }
 
   void _appendTaskShareText(
@@ -915,7 +964,7 @@ class _ChatState extends State<Chat> {
     _focusNode.requestFocus();
   }
 
-  _CalendarFragmentShare? _resolveCalendarFragmentShare(CalendarTask task) {
+  _CalendarTaskShare? _resolveCalendarTaskShare(CalendarTask task) {
     final chatState = context.read<ChatBloc>().state;
     final chat = chatState.chat;
     if (chat == null) {
@@ -925,36 +974,36 @@ class _ChatState extends State<Chat> {
       chat: chat,
       roomState: chatState.roomState,
     );
-    final CalendarFragment fragment = CalendarFragment.task(task: task);
-    final String shareText =
-        _calendarFragmentFormatter.describe(fragment).trim();
+    final String shareText = task.toShareText().trim();
     if (shareText.isEmpty) {
       return null;
     }
-    if (!decision.canWrite) {
+    final bool canShareIcs =
+        decision.canWrite || chat.defaultTransport.isEmail;
+    if (!canShareIcs) {
       _showSnackbar(_calendarFragmentShareDeniedMessage);
-      return _CalendarFragmentShare(
-        fragment: null,
+      return _CalendarTaskShare(
+        task: null,
         text: shareText,
       );
     }
-    return _CalendarFragmentShare(
-      fragment: fragment,
+    return _CalendarTaskShare(
+      task: task,
       text: shareText,
     );
   }
 
   void _handleTaskDrop(CalendarDragPayload payload) {
-    final share = _resolveCalendarFragmentShare(payload.snapshot);
+    final share = _resolveCalendarTaskShare(payload.snapshot);
     if (share == null) {
       return;
     }
-    if (share.fragment == null) {
-      if (_pendingCalendarFragment != null ||
+    if (share.task == null) {
+      if (_pendingCalendarTaskIcs != null ||
           _pendingCalendarSeedText != null) {
         if (!mounted) return;
         setState(() {
-          _pendingCalendarFragment = null;
+          _pendingCalendarTaskIcs = null;
           _pendingCalendarSeedText = null;
         });
       }
@@ -966,7 +1015,7 @@ class _ChatState extends State<Chat> {
     }
     if (!mounted) return;
     setState(() {
-      _pendingCalendarFragment = share.fragment;
+      _pendingCalendarTaskIcs = share.task;
       _pendingCalendarSeedText = share.text;
     });
     _appendTaskShareText(
@@ -1655,16 +1704,16 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(
           ChatMessageSent(
             text: resolvedText,
-            calendarFragment: _pendingCalendarFragment,
+            calendarTaskIcs: _pendingCalendarTaskIcs,
           ),
         );
     if (resolvedText.isNotEmpty) {
       _textController.clear();
     }
-    if (_pendingCalendarFragment != null || _pendingCalendarSeedText != null) {
+    if (_pendingCalendarTaskIcs != null || _pendingCalendarSeedText != null) {
       if (!mounted) return;
       setState(() {
-        _pendingCalendarFragment = null;
+        _pendingCalendarTaskIcs = null;
         _pendingCalendarSeedText = null;
       });
     }
@@ -2671,6 +2720,7 @@ class _ChatState extends State<Chat> {
     _attachmentButtonFocusNode.dispose();
     _emojiPopoverController.dispose();
     _bubbleRegionRegistry.clear();
+    _disposeChatCalendarBloc();
     super.dispose();
   }
 
@@ -2898,6 +2948,11 @@ class _ChatState extends State<Chat> {
                         chatCalendarCoordinator != null;
                 final bool chatCalendarAvailable =
                     chatCalendarAllowed && chatCalendarReady;
+                final ChatCalendarBloc? chatCalendarBloc =
+                    _resolveChatCalendarBloc(
+                  chat: chatEntity,
+                  calendarAvailable: chatCalendarAvailable,
+                );
                 final List<String> chatCalendarParticipants =
                     chatCalendarAllowed
                         ? _resolveChatCalendarParticipants(
@@ -2985,16 +3040,9 @@ class _ChatState extends State<Chat> {
                     });
                   });
                 }
-                return Container(
-                  decoration: BoxDecoration(
-                    color: context.colorScheme.background,
-                    border: Border(
-                      left: BorderSide(color: context.colorScheme.border),
-                    ),
-                  ),
-                  child: Scaffold(
-                    backgroundColor: context.colorScheme.background,
-                    appBar: AppBar(
+                final scaffold = Scaffold(
+                  backgroundColor: context.colorScheme.background,
+                  appBar: AppBar(
                       scrolledUnderElevation: 0,
                       forceMaterialTransparency: true,
                       shape: Border(
@@ -3259,36 +3307,36 @@ class _ChatState extends State<Chat> {
                           const SizedBox.shrink(),
                       ],
                     ),
-                    body: Column(
-                      children: [
-                        _ChatSettingsPanel(
-                          visible: showSettingsPanel,
-                          child: _ChatSettingsButtons(
-                            state: state,
-                            onViewFilterChanged: _setViewFilter,
-                            onToggleNotifications: _toggleNotifications,
-                            onSpamToggle: (sendToSpam) =>
-                                _handleSpamToggle(sendToSpam: sendToSpam),
-                          ),
+                  body: Column(
+                    children: [
+                      _ChatSettingsPanel(
+                        visible: showSettingsPanel,
+                        child: _ChatSettingsButtons(
+                          state: state,
+                          onViewFilterChanged: _setViewFilter,
+                          onToggleNotifications: _toggleNotifications,
+                          onSpamToggle: (sendToSpam) =>
+                              _handleSpamToggle(sendToSpam: sendToSpam),
                         ),
-                        const ChatAlert(),
-                        const _ChatSearchPanel(),
-                        Expanded(
-                          child: AnimatedSwitcher(
-                            duration: context
-                                .watch<SettingsCubit>()
-                                .animationDuration,
-                            reverseDuration: context
-                                .watch<SettingsCubit>()
-                                .animationDuration,
-                            switchInCurve: Curves.easeIn,
-                            switchOutCurve: Curves.easeOut,
-                            child: IndexedStack(
-                              key: ValueKey(_chatRoute.index),
-                              index: _chatRoute.index,
-                              children: [
-                                LayoutBuilder(
-                                  builder: (context, constraints) {
+                      ),
+                      const ChatAlert(),
+                      const _ChatSearchPanel(),
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: context
+                              .watch<SettingsCubit>()
+                              .animationDuration,
+                          reverseDuration: context
+                              .watch<SettingsCubit>()
+                              .animationDuration,
+                          switchInCurve: Curves.easeIn,
+                          switchOutCurve: Curves.easeOut,
+                          child: IndexedStack(
+                            key: ValueKey(_chatRoute.index),
+                            index: _chatRoute.index,
+                            children: [
+                              LayoutBuilder(
+                                builder: (context, constraints) {
                                     final rawContentWidth =
                                         math.max(0.0, constraints.maxWidth);
                                     final availableWidth = math.max(
@@ -3647,6 +3695,8 @@ class _ChatState extends State<Chat> {
                                             'model': e,
                                             _calendarFragmentPropertyKey:
                                                 e.calendarFragment,
+                                            _calendarTaskIcsPropertyKey:
+                                                e.calendarTaskIcs,
                                             _calendarAvailabilityPropertyKey:
                                                 e.calendarAvailabilityMessage,
                                             'quoted': quotedMessage,
@@ -4169,6 +4219,11 @@ class _ChatState extends State<Chat> {
                                                         final CalendarFragment?
                                                             displayFragment =
                                                             rawFragment;
+                                                        final CalendarTask?
+                                                            calendarTaskIcs =
+                                                            message.customProperties?[
+                                                                    _calendarTaskIcsPropertyKey]
+                                                                as CalendarTask?;
                                                         final CalendarAvailabilityMessage?
                                                             availabilityMessage =
                                                             message.customProperties?[
@@ -4553,6 +4608,11 @@ class _ChatState extends State<Chat> {
                                                               rawRenderedText
                                                                   .trim();
                                                           final String?
+                                                              taskShareText =
+                                                              calendarTaskIcs
+                                                                  ?.toShareText()
+                                                                  .trim();
+                                                          final String?
                                                               fragmentFallbackText =
                                                               displayFragment ==
                                                                       null
@@ -4577,6 +4637,14 @@ class _ChatState extends State<Chat> {
                                                                   messageModel
                                                                       .error
                                                                       .isNone;
+                                                          final bool
+                                                              hideTaskText =
+                                                              taskShareText !=
+                                                                      null &&
+                                                                  taskShareText
+                                                                      .isNotEmpty &&
+                                                                  taskShareText ==
+                                                                      trimmedRenderedText;
                                                           final List<InlineSpan>
                                                               fragmentDetails =
                                                               <InlineSpan>[
@@ -4597,6 +4665,11 @@ class _ChatState extends State<Chat> {
                                                           final List<InlineSpan>
                                                               availabilityFooterDetails =
                                                               hideAvailabilityText
+                                                                  ? fragmentDetails
+                                                                  : _emptyInlineSpans;
+                                                          final List<InlineSpan>
+                                                              taskFooterDetails =
+                                                              hideTaskText
                                                                   ? fragmentDetails
                                                                   : _emptyInlineSpans;
                                                           VoidCallback?
@@ -4702,6 +4775,16 @@ class _ChatState extends State<Chat> {
                                                                     availabilityOnDecline,
                                                               ),
                                                             );
+                                                          } else if (calendarTaskIcs !=
+                                                              null) {
+                                                            bubbleChildren.add(
+                                                              ChatCalendarTaskCard(
+                                                                task:
+                                                                    calendarTaskIcs,
+                                                                footerDetails:
+                                                                    taskFooterDetails,
+                                                              ),
+                                                            );
                                                           } else if (displayFragment !=
                                                               null) {
                                                             bubbleChildren.add(
@@ -4724,7 +4807,8 @@ class _ChatState extends State<Chat> {
                                                           final bool
                                                               shouldRenderTextContent =
                                                               !hideFragmentText &&
-                                                                  !hideAvailabilityText;
+                                                                  !hideAvailabilityText &&
+                                                                  !hideTaskText;
                                                           final bool
                                                               hasAttachmentCaption =
                                                               shouldRenderTextContent &&
@@ -6322,22 +6406,37 @@ class _ChatState extends State<Chat> {
                                     );
                                   },
                                 ),
-                                const ChatMessageDetails(),
-                                _ChatCalendarPanel(
-                                  key: ValueKey(chatEntity?.jid),
-                                  chat: chatEntity,
-                                  calendarAvailable: chatCalendarAvailable,
-                                  participants: chatCalendarParticipants,
-                                  avatarPaths: chatCalendarAvatarPaths,
-                                  onBackPressed: _closeChatCalendar,
-                                ),
-                              ],
-                            ),
+                              const ChatMessageDetails(),
+                              _ChatCalendarPanel(
+                                key: ValueKey(chatEntity?.jid),
+                                chat: chatEntity,
+                                calendarAvailable: chatCalendarAvailable,
+                                participants: chatCalendarParticipants,
+                                avatarPaths: chatCalendarAvatarPaths,
+                                onBackPressed: _closeChatCalendar,
+                                calendarBloc: chatCalendarBloc,
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                );
+                final Widget content = chatCalendarBloc == null
+                    ? scaffold
+                    : BlocProvider<ChatCalendarBloc>.value(
+                        value: chatCalendarBloc,
+                        child: scaffold,
+                      );
+                return Container(
+                  decoration: BoxDecoration(
+                    color: context.colorScheme.background,
+                    border: Border(
+                      left: BorderSide(color: context.colorScheme.border),
                     ),
                   ),
+                  child: content,
                 );
               },
             ),
@@ -6925,6 +7024,7 @@ class _ChatCalendarPanel extends StatelessWidget {
     required this.participants,
     required this.avatarPaths,
     required this.onBackPressed,
+    required this.calendarBloc,
   });
 
   final chat_models.Chat? chat;
@@ -6932,32 +7032,17 @@ class _ChatCalendarPanel extends StatelessWidget {
   final List<String> participants;
   final Map<String, String> avatarPaths;
   final VoidCallback onBackPressed;
+  final ChatCalendarBloc? calendarBloc;
 
   @override
   Widget build(BuildContext context) {
     final resolvedChat = chat;
-    if (!calendarAvailable || resolvedChat == null) {
+    final resolvedBloc = calendarBloc;
+    if (!calendarAvailable || resolvedChat == null || resolvedBloc == null) {
       return const SizedBox.shrink();
     }
-    final storageManager = context.read<CalendarStorageManager>();
-    final storage = storageManager.authStorage;
-    final coordinator = _maybeReadChatCalendarCoordinator(context);
-    final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
-      context,
-    );
-    if (storage == null || coordinator == null) {
-      return const SizedBox.shrink();
-    }
-    final reminderController = context.read<CalendarReminderController>();
-    return BlocProvider<ChatCalendarBloc>(
-      create: (context) => ChatCalendarBloc(
-        chatJid: resolvedChat.jid,
-        chatType: resolvedChat.type,
-        coordinator: coordinator,
-        storage: storage,
-        reminderController: reminderController,
-        availabilityCoordinator: availabilityCoordinator,
-      )..add(const CalendarEvent.started()),
+    return BlocProvider<ChatCalendarBloc>.value(
+      value: resolvedBloc,
       child: ChatCalendarWidget(
         onBackPressed: onBackPressed,
         chat: resolvedChat,
