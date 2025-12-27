@@ -41,6 +41,7 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
 import 'calendar_task_search.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
@@ -71,6 +72,8 @@ import 'widgets/critical_path_panel.dart';
 import 'widgets/calendar_completion_checkbox.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'task_edit_session_tracker.dart';
+
+const String _taskShareIcsActionLabel = 'Share as .ics';
 
 class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   const TaskSidebar({
@@ -2059,6 +2062,11 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         onSelected: () => _copyTaskDetails(task),
       ),
       TaskContextAction(
+        icon: Icons.send,
+        label: _taskShareIcsActionLabel,
+        onSelected: () => _shareTaskIcs(task),
+      ),
+      TaskContextAction(
         icon: Icons.share_outlined,
         label: context.l10n.calendarCopyToClipboardAction,
         onSelected: () => _copyTaskShareText(task),
@@ -2115,6 +2123,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         context.l10n.calendarTaskCopiedClipboard,
       );
     }
+  }
+
+  Future<void> _shareTaskIcs(CalendarTask task) async {
+    await showCalendarTaskShareSheet(
+      context: context,
+      task: task,
+    );
   }
 
   Future<void> _handleCreateCriticalPath({String? taskId}) async {
@@ -2384,6 +2399,11 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         leading: const Icon(Icons.copy_outlined),
         onPressed: () => _copyTaskDetails(task),
         child: Text(context.l10n.calendarCopyTask),
+      ),
+      ShadContextMenuItem(
+        leading: const Icon(Icons.send),
+        onPressed: () => _shareTaskIcs(task),
+        child: const Text(_taskShareIcsActionLabel),
       ),
       ShadContextMenuItem(
         leading: const Icon(Icons.share_outlined),
