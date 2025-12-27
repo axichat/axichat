@@ -227,6 +227,22 @@ class CalendarModel with _$CalendarModel {
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
 
+  CalendarModel upsertAvailability(CalendarAvailability availability) {
+    final String id = availability.id.trim();
+    if (id.isEmpty) {
+      return this;
+    }
+    final Map<String, CalendarAvailability> updatedAvailability =
+        Map<String, CalendarAvailability>.from(this.availability)
+          ..[id] = availability;
+    final DateTime now = DateTime.now();
+    final CalendarModel updated = copyWith(
+      availability: updatedAvailability,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
   CalendarModel addJournal(CalendarJournal journal) {
     final updatedJournals = <String, CalendarJournal>{
       ...journals,
