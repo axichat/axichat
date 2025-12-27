@@ -725,6 +725,8 @@
     }
   },
   "chatAttachmentTypeMismatchConfirm": "Open anyway",
+  "chatAttachmentHighRiskTitle": "Potentially unsafe file",
+  "chatAttachmentHighRiskMessage": "This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?",
   "chatAttachmentUnknownSize": "大小未知",
   "chatAttachmentErrorTooltip": "{message}（{fileName}）",
   "@chatAttachmentErrorTooltip": {

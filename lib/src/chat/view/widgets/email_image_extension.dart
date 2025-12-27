@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,11 @@ import 'package:flutter_html/flutter_html.dart';
 import 'package:mime/mime.dart';
 
 const Duration _emailImageDownloadTimeout = Duration(seconds: 8);
+const Duration _emailImageDecodeTimeout = Duration(seconds: 2);
 const int _emailImageMaxBytes = 4 * 1024 * 1024;
+const int _emailImageMaxPixels = 16 * 1024 * 1024;
+const int _emailImageMaxFrames = 60;
+const int _emailImageMinDimension = 1;
 const int _emailImageMaxRedirects = 3;
 const double _emailImageLoadingSize = 24.0;
 const double _emailImageLoadingStroke = 2.0;
@@ -29,16 +34,16 @@ TagExtension createEmailImageExtension({
   return TagExtension(
     tagsToExtend: {'img'},
     builder: (extensionContext) {
+      final src = extensionContext.attributes['src'];
+      final uri = src == null || src.isEmpty ? null : _safeEmailImageUri(src);
       if (shouldLoad) {
-        final src = extensionContext.attributes['src'];
-        if (src == null || src.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final uri = _safeEmailImageUri(src);
         if (uri == null) {
           return const EmailImagePlaceholder(isError: true);
         }
         return EmailImageLoader(uri: uri);
+      }
+      if (uri == null) {
+        return const EmailImagePlaceholder();
       }
       return EmailImagePlaceholder(onTap: onLoadRequested);
     },
@@ -169,6 +174,10 @@ Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
           !detectedMime.startsWith(_emailImageMimePrefix)) {
         return null;
       }
+      final allowed = await _passesEmailImageSafetyChecks(bytes);
+      if (!allowed) {
+        return null;
+      }
       return bytes;
     }
   } finally {
@@ -187,6 +196,41 @@ Future<Uint8List?> _readResponseBytes(HttpClientResponse response) async {
     sink.add(chunk);
   }
   return sink.takeBytes();
+}
+
+Future<bool> _passesEmailImageSafetyChecks(Uint8List bytes) async {
+  try {
+    final codec =
+        await ui.instantiateImageCodec(bytes).timeout(_emailImageDecodeTimeout);
+    try {
+      if (codec.frameCount <= 0 || codec.frameCount > _emailImageMaxFrames) {
+        return false;
+      }
+      final frame = await codec.getNextFrame().timeout(
+            _emailImageDecodeTimeout,
+          );
+      final image = frame.image;
+      try {
+        final width = image.width;
+        final height = image.height;
+        if (width < _emailImageMinDimension ||
+            height < _emailImageMinDimension) {
+          return false;
+        }
+        final pixelCount = width * height;
+        if (pixelCount > _emailImageMaxPixels) {
+          return false;
+        }
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      codec.dispose();
+    }
+    return true;
+  } on Exception {
+    return false;
+  }
 }
 
 bool _isRedirectStatusCode(int statusCode) => switch (statusCode) {

@@ -1526,7 +1526,9 @@ Future<void> _openAttachment(
     if (!context.mounted) return;
     final declaredLabel = report.declaredLabel;
     final detectedLabel = report.detectedLabel;
-    if (report.hasMismatch && declaredLabel != null && detectedLabel != null) {
+    final hasMismatchWarning =
+        report.hasMismatch && declaredLabel != null && detectedLabel != null;
+    if (hasMismatchWarning) {
       final approved = await confirm(
         context,
         title: l10n.chatAttachmentTypeMismatchTitle,
@@ -1538,6 +1540,22 @@ Future<void> _openAttachment(
         destructiveConfirm: true,
       );
       if (approved != true) return;
+      if (!context.mounted) return;
+    }
+    final risk = assessFileOpenRisk(
+      report: report,
+      fileName: fileName ?? path,
+    );
+    if (!hasMismatchWarning && risk.isWarning) {
+      final approved = await confirm(
+        context,
+        title: l10n.chatAttachmentHighRiskTitle,
+        message: l10n.chatAttachmentHighRiskMessage,
+        confirmLabel: l10n.chatAttachmentTypeMismatchConfirm,
+        destructiveConfirm: true,
+      );
+      if (approved != true) return;
+      if (!context.mounted) return;
     }
     final launched = await launchUrl(
       Uri.file(file.path),

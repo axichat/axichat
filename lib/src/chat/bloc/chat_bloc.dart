@@ -413,10 +413,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         direction: MamPageDirection.before,
       );
     } on Exception catch (error, stackTrace) {
-      _log.fine(
-        SafeLogging.sanitizeMessage(
-          'Failed to load older MAM page for ${chat.jid}',
-        ),
+      _log.safeFine(
+        'Failed to load older MAM page for ${chat.jid}',
         error,
         stackTrace,
       );
@@ -494,10 +492,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         afterId = nextAfter;
       }
     } on Exception catch (error, stackTrace) {
-      _log.fine(
-        SafeLogging.sanitizeMessage(
-          'Failed to catch up via MAM for ${chat.jid}',
-        ),
+      _log.safeFine(
+        'Failed to catch up via MAM for ${chat.jid}',
         error,
         stackTrace,
       );
@@ -513,10 +509,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final filter = await _chatsService.loadChatViewFilter(jid!);
       add(ChatViewFilterChanged(filter: filter, persist: false));
     } on Exception catch (error, stackTrace) {
-      _log.fine(
-        SafeLogging.sanitizeMessage(
-          'Failed to load view filter for $jid',
-        ),
+      _log.safeFine(
+        'Failed to load view filter for $jid',
         error,
         stackTrace,
       );
@@ -552,10 +546,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         direction: MamPageDirection.before,
       );
     } on Exception catch (error, stackTrace) {
-      _log.fine(
-        SafeLogging.sanitizeMessage(
-          'Failed to hydrate MAM for chat ${chat.jid}',
-        ),
+      _log.safeFine(
+        'Failed to hydrate MAM for chat ${chat.jid}',
         error,
         stackTrace,
       );
@@ -601,10 +593,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         nickname: chat.myNickname,
       );
     } on Exception catch (error, stackTrace) {
-      _log.fine(
-        SafeLogging.sanitizeMessage(
-          'Failed to ensure membership for ${chat.jid}',
-        ),
+      _log.safeFine(
+        'Failed to ensure membership for ${chat.jid}',
         error,
         stackTrace,
       );
@@ -773,10 +763,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (state.roomState != null) return;
         add(_RoomStateUpdated(warmed));
       } on Exception catch (error, stackTrace) {
-        _log.fine(
-          SafeLogging.sanitizeMessage(
-            'Failed to warm room state for ${chat.jid}',
-          ),
+        _log.safeFine(
+          'Failed to warm room state for ${chat.jid}',
           error,
           stackTrace,
         );
@@ -1127,10 +1115,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning(
-        SafeLogging.sanitizeMessage(
-          'Failed to change nickname for $chatJid',
-        ),
+      _log.safeWarning(
+        'Failed to change nickname for $chatJid',
         error,
         stackTrace,
       );
@@ -1169,10 +1155,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning(
-        SafeLogging.sanitizeMessage(
-          'Failed to rename contact ${chat.jid}',
-        ),
+      _log.safeWarning(
+        'Failed to rename contact ${chat.jid}',
         error,
         stackTrace,
       );
@@ -1771,10 +1755,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _lastXmppSendSignature = xmppSignature;
       }
     } on DeltaChatException catch (error, stackTrace) {
-      _log.warning(
-        SafeLogging.sanitizeMessage(
-          'Failed to send email message for chat ${chat.jid}',
-        ),
+      _log.safeWarning(
+        'Failed to send email message for chat ${chat.jid}',
         error,
         stackTrace,
       );
@@ -1798,10 +1780,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emit: emit,
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning(
-        SafeLogging.sanitizeMessage(
-          'Failed to send message for chat ${chat.jid}',
-        ),
+      _log.safeWarning(
+        'Failed to send message for chat ${chat.jid}',
         error,
         stackTrace,
       );
@@ -2502,10 +2482,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return true;
     } on DeltaChatException catch (error, stackTrace) {
-      _log.warning(
-        SafeLogging.sanitizeMessage(
-          'Failed to send attachment for chat ${chat.jid}',
-        ),
+      _log.safeWarning(
+        'Failed to send attachment for chat ${chat.jid}',
         error,
         stackTrace,
       );
@@ -2518,10 +2496,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       emit(state.copyWith(composerError: readableMessage));
     } on Exception catch (error, stackTrace) {
-      _log.warning(
-        SafeLogging.sanitizeMessage(
-          'Failed to send attachment for chat ${chat.jid}',
-        ),
+      _log.safeWarning(
+        'Failed to send attachment for chat ${chat.jid}',
         error,
         stackTrace,
       );
@@ -2939,10 +2915,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
         return false;
       } on Exception catch (error, stackTrace) {
-        _log.warning(
-          SafeLogging.sanitizeMessage(
-            'Failed to send XMPP attachment for chat ${chat.jid}',
-          ),
+        _log.safeWarning(
+          'Failed to send XMPP attachment for chat ${chat.jid}',
           error,
           stackTrace,
         );
@@ -3039,10 +3013,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning(
-        SafeLogging.sanitizeMessage(
-          'Failed to save offline email draft for chat ${chat.jid}',
-        ),
+      _log.safeWarning(
+        'Failed to save offline email draft for chat ${chat.jid}',
         error,
         stackTrace,
       );
@@ -3890,10 +3862,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } catch (error, stackTrace) {
-      _log.fine(
-        SafeLogging.sanitizeMessage(
-          'Failed to save XMPP draft for chat ${chat.jid}',
-        ),
+      _log.safeFine(
+        'Failed to save XMPP draft for chat ${chat.jid}',
         error,
         stackTrace,
       );

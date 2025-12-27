@@ -19,19 +19,44 @@ import 'chat_transport.dart';
 
 const _selfDomain = 'user.delta.chat';
 const _deltaConfigClearedValue = '';
+const _deltaConfigKeyAddress = 'addr';
+const _deltaConfigKeyMailPassword = 'mail_pw';
+const _deltaConfigKeySendPassword = 'send_pw';
+const _deltaConfigKeyDisplayName = 'displayname';
+const _deltaConfigKeyMailServer = 'mail_server';
+const _deltaConfigKeyMailPort = 'mail_port';
+const _deltaConfigKeyMailSecurity = 'mail_security';
+const _deltaConfigKeyMailUser = 'mail_user';
+const _deltaConfigKeySendServer = 'send_server';
+const _deltaConfigKeySendPort = 'send_port';
+const _deltaConfigKeySendSecurity = 'send_security';
+const _deltaConfigKeySendUser = 'send_user';
+
 const _deltaCredentialConfigKeys = <String>[
-  'addr',
-  'mail_pw',
-  'send_pw',
-  'displayname',
-  'mail_server',
-  'mail_port',
-  'mail_security',
-  'mail_user',
-  'send_server',
-  'send_port',
-  'send_security',
-  'send_user',
+  _deltaConfigKeyAddress,
+  _deltaConfigKeyMailPassword,
+  _deltaConfigKeySendPassword,
+  _deltaConfigKeyDisplayName,
+  _deltaConfigKeyMailServer,
+  _deltaConfigKeyMailPort,
+  _deltaConfigKeyMailSecurity,
+  _deltaConfigKeyMailUser,
+  _deltaConfigKeySendServer,
+  _deltaConfigKeySendPort,
+  _deltaConfigKeySendSecurity,
+  _deltaConfigKeySendUser,
+];
+
+const _deltaOverrideConfigKeys = <String>[
+  _deltaConfigKeySendPassword,
+  _deltaConfigKeyMailServer,
+  _deltaConfigKeyMailPort,
+  _deltaConfigKeyMailSecurity,
+  _deltaConfigKeyMailUser,
+  _deltaConfigKeySendServer,
+  _deltaConfigKeySendPort,
+  _deltaConfigKeySendSecurity,
+  _deltaConfigKeySendUser,
 ];
 
 class EmailDeltaTransport implements ChatTransport {
@@ -143,6 +168,12 @@ class EmailDeltaTransport implements ChatTransport {
     await _ensureContextReady();
     _accountAddress = address;
     final context = _context!;
+    final overrideKeys = additional.keys.toSet();
+    for (final key in _deltaOverrideConfigKeys) {
+      if (!overrideKeys.contains(key)) {
+        await context.setConfig(key: key, value: _deltaConfigClearedValue);
+      }
+    }
     final completer = Completer<void>();
     late final StreamSubscription<DeltaCoreEvent> subscription;
     subscription = context.events().listen((event) {
