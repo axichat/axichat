@@ -51,6 +51,25 @@ const String _occurrenceScopeInstanceLabel = 'This instance';
 const String _occurrenceScopeFutureLabel = 'This and future';
 const String _occurrenceScopeHint = 'Schedule edits affect the selected range.';
 
+enum TaskEditMode {
+  full,
+  checklistOnly,
+  readOnly;
+
+  bool get allowsAnyEdits => this != TaskEditMode.readOnly;
+
+  bool get allowsChecklistEdits =>
+      this == TaskEditMode.full || this == TaskEditMode.checklistOnly;
+
+  bool get allowsFullEdits => this == TaskEditMode.full;
+
+  bool get isReadOnly => this == TaskEditMode.readOnly;
+
+  bool get isChecklistOnly => this == TaskEditMode.checklistOnly;
+}
+
+const TaskEditMode _defaultTaskEditMode = TaskEditMode.full;
+
 enum OccurrenceUpdateScope {
   thisInstance,
   thisAndFuture;
@@ -81,7 +100,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
     this.isSheet = false,
     this.inlineActionsBuilder,
     this.inlineActionsBloc,
-    this.readOnly = false,
+    this.editMode = _defaultTaskEditMode,
     required this.locationHelper,
   });
 
@@ -97,7 +116,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   final List<TaskContextAction> Function(CalendarState state)?
       inlineActionsBuilder;
   final B? inlineActionsBloc;
-  final bool readOnly;
+  final TaskEditMode editMode;
   final LocationAutocompleteHelper locationHelper;
 
   @override
@@ -250,7 +269,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   @override
   Widget build(BuildContext context) {
     final bool isSheet = widget.isSheet;
-    final bool isReadOnly = widget.readOnly;
+    final TaskEditMode editMode = widget.editMode;
+    final bool allowsAnyEdits = editMode.allowsAnyEdits;
+    final bool allowsChecklistEdits = editMode.allowsChecklistEdits;
+    final bool allowsFullEdits = editMode.allowsFullEdits;
     final BorderRadius radius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(8);
@@ -289,7 +311,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     }) {
       final bool keyboardOpen = keyboardInset > safeBottom;
       Widget? actionRow({required bool includeTopBorder}) {
-        if (isReadOnly) {
+        if (!allowsAnyEdits) {
           return null;
         }
         return ValueListenableBuilder<TextEditingValue>(
@@ -307,10 +329,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               onSave: _handleSave,
               canSave: canSave,
               includeTopBorder: includeTopBorder,
+              showDelete: allowsFullEdits,
             );
           },
         );
       }
+
       final Widget? keyboardActionRow = actionRow(includeTopBorder: true);
       final Widget? footerActionRow = actionRow(includeTopBorder: false);
 
@@ -346,7 +370,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       const SizedBox(height: calendarFormGap),
                       _EditTaskOccurrenceScopeSection(
                         scope: _occurrenceScope,
-                        enabled: !isReadOnly,
+                        enabled: allowsAnyEdits,
                         onChanged: (scope) =>
                             setState(() => _occurrenceScope = scope),
                       ),
@@ -361,24 +385,24 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onChanged: _handleTitleChanged,
                       focusNode: _titleFocusNode,
                       autovalidateMode: AutovalidateMode.disabled,
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const SizedBox(height: calendarFormGap),
                     _EditTaskDescriptionField(
                       controller: _descriptionController,
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const SizedBox(height: calendarFormGap),
                     _EditTaskLocationField(
                       controller: _locationController,
                       locationHelper: widget.locationHelper,
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const SizedBox(height: calendarFormGap),
                     _EditTaskPriorityRow(
                       isImportant: _isImportant,
                       isUrgent: _isUrgent,
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                       onImportantChanged: (value) =>
                           setState(() => _isImportant = value),
                       onUrgentChanged: (value) =>
@@ -387,7 +411,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     const SizedBox(height: calendarFormGap),
                     TaskChecklist(
                       controller: _checklistController,
-                      enabled: !isReadOnly,
+                      enabled: allowsChecklistEdits,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -397,7 +421,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       end: _endTime,
                       onStartChanged: _handleStartChanged,
                       onEndChanged: _handleEndChanged,
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -405,7 +429,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     _EditTaskDeadlineField(
                       deadline: _deadline,
                       onChanged: (value) => setState(() => _deadline = value),
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -421,7 +445,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onAdvancedAlarmsChanged: (value) => setState(() {
                         _advancedAlarms = value;
                       }),
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -431,7 +455,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       fallbackWeekday: _recurrenceFallbackWeekday,
                       referenceStart: _startTime,
                       onChanged: _handleRecurrenceChanged,
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -444,7 +468,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                           setState(() => _status = value),
                       onTransparencyChanged: (value) =>
                           setState(() => _transparency = value),
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -452,7 +476,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     CalendarCategoriesField(
                       categories: _categories,
                       onChanged: (value) => setState(() => _categories = value),
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -462,7 +486,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       geo: _geo,
                       onUrlChanged: (value) => setState(() => _url = value),
                       onGeoChanged: (value) => setState(() => _geo = value),
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -474,7 +498,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                           setState(() => _organizer = value),
                       onAttendeesChanged: (value) =>
                           setState(() => _attendees = value),
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                     ),
                     if (showInvitationStatus) ...[
                       const TaskSectionDivider(
@@ -505,12 +529,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     ),
                     _EditTaskCompletionToggle(
                       value: _isCompleted,
-                      enabled: !isReadOnly,
+                      enabled: allowsFullEdits,
                       onChanged: (value) =>
                           setState(() => _isCompleted = value),
                     ),
                     const SizedBox(height: calendarFormGap),
-                    if (isReadOnly)
+                    if (!allowsFullEdits)
                       IgnorePointer(
                         child: _TaskCriticalPathMembership<B>(
                           task: widget.task,
@@ -529,7 +553,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                 ),
               ),
             ),
-            if (!keyboardOpen && !isReadOnly && footerActionRow != null)
+            if (!keyboardOpen && allowsAnyEdits && footerActionRow != null)
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -650,6 +674,22 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   }
 
   void _handleSave() {
+    final TaskEditMode editMode = widget.editMode;
+    if (editMode.isChecklistOnly) {
+      final CalendarTask updatedTask = widget.task.copyWith(
+        checklist: _checklistController.items.toList(),
+      );
+      if (widget.task.isOccurrence && widget.onOccurrenceUpdated != null) {
+        widget.onOccurrenceUpdated!(updatedTask, _occurrenceScope);
+      } else {
+        widget.onTaskUpdated(updatedTask);
+      }
+      widget.onClose();
+      return;
+    }
+    if (!editMode.allowsAnyEdits) {
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? false)) {
       _titleFocusNode.requestFocus();
       return;
@@ -1307,6 +1347,7 @@ class _EditTaskActionsRow extends StatelessWidget {
     required this.onSave,
     required this.canSave,
     required this.includeTopBorder,
+    required this.showDelete,
   });
 
   final CalendarTask task;
@@ -1315,6 +1356,7 @@ class _EditTaskActionsRow extends StatelessWidget {
   final VoidCallback onSave;
   final bool canSave;
   final bool includeTopBorder;
+  final bool showDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1323,10 +1365,11 @@ class _EditTaskActionsRow extends StatelessWidget {
       padding: calendarPaddingLg,
       gap: 8,
       children: [
-        TaskDestructiveButton(
-          label: context.l10n.commonDelete,
-          onPressed: onDelete,
-        ),
+        if (showDelete)
+          TaskDestructiveButton(
+            label: context.l10n.commonDelete,
+            onPressed: onDelete,
+          ),
         const Spacer(),
         TaskSecondaryButton(
           label: context.l10n.commonCancel,

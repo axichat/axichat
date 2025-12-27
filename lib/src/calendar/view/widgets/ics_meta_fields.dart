@@ -124,29 +124,32 @@ class _IcsSelectField<T> extends StatelessWidget {
       children: [
         Text(label.toUpperCase(), style: labelStyle),
         const SizedBox(height: calendarGutterSm),
-        ShadSelect<T>(
-          initialValue: value,
-          onChanged: onChanged,
-          options: options,
-          selectedOptionBuilder: (context, selected) => Text(
-            selected == null ? _icsMetaDefaultLabel : selectedLabel(selected),
-          ),
-          decoration: ShadDecoration(
-            color: calendarContainerColor,
-            border: ShadBorder.all(
-              color: calendarBorderColor,
-              radius: BorderRadius.circular(calendarBorderRadius),
-              width: 1,
+        IgnorePointer(
+          ignoring: !enabled,
+          child: ShadSelect<T>(
+            initialValue: value,
+            onChanged: onChanged,
+            options: options,
+            selectedOptionBuilder: (context, selected) => Text(
+              selected == null ? _icsMetaDefaultLabel : selectedLabel(selected),
             ),
-          ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterSm,
-          ),
-          trailing: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: _icsMetaSelectIconSize,
-            color: calendarSubtitleColor,
+            decoration: ShadDecoration(
+              color: calendarContainerColor,
+              border: ShadBorder.all(
+                color: calendarBorderColor,
+                radius: BorderRadius.circular(calendarBorderRadius),
+                width: 1,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd,
+              vertical: calendarGutterSm,
+            ),
+            trailing: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: _icsMetaSelectIconSize,
+              color: calendarSubtitleColor,
+            ),
           ),
         ),
       ],

@@ -34,6 +34,7 @@ const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
 const _foregroundKeepaliveInterval = Duration(seconds: 45);
 const _foregroundFetchTimeout = Duration(seconds: 8);
 const _notificationFlushDelay = Duration(milliseconds: 500);
+const _contactsSyncDebounce = Duration(seconds: 2);
 const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
@@ -223,6 +224,7 @@ class EmailService {
   int _foregroundKeepaliveOperationId = 0;
   final List<_PendingNotification> _pendingNotifications = [];
   Timer? _notificationFlushTimer;
+  Timer? _contactsSyncTimer;
   String? _pendingPushToken;
   final _syncStateController =
       StreamController<EmailSyncState>.broadcast(sync: true);
@@ -243,6 +245,7 @@ class EmailService {
   var _imapSyncInFlight = false;
   var _reconnectCatchUpInFlight = false;
   var _contactsSyncInFlight = false;
+  var _contactsSyncPending = false;
   var _chatlistSyncInFlight = false;
 
   void updateEndpointConfig(EndpointConfig config) {
@@ -523,6 +526,8 @@ class EmailService {
     await _transport.stop();
     _running = false;
     _stopImapSyncLoop();
+    _cancelContactsSyncTimer();
+    _contactsSyncPending = false;
   }
 
   Future<void> ensureEventChannelActive() async {
@@ -1159,7 +1164,11 @@ class EmailService {
   }
 
   Future<void> syncContactsFromCore() async {
-    if (_contactsSyncInFlight) return;
+    if (_contactsSyncInFlight) {
+      _contactsSyncPending = true;
+      return;
+    }
+    _cancelContactsSyncTimer();
     _contactsSyncInFlight = true;
     try {
       await _ensureReady();
@@ -1194,6 +1203,10 @@ class EmailService {
       );
     } finally {
       _contactsSyncInFlight = false;
+      if (_contactsSyncPending) {
+        _contactsSyncPending = false;
+        _scheduleContactsSyncFromCore();
+      }
     }
   }
 
@@ -1506,6 +1519,9 @@ class EmailService {
       case DeltaEventType.chatDeleted:
         await _handleChatDeleted(event.data1);
         break;
+      case DeltaEventType.contactsChanged:
+        _scheduleContactsSyncFromCore();
+        break;
       case DeltaEventType.accountsBackgroundFetchDone:
         _handleBackgroundFetchDone();
         unawaited(_bootstrapActiveAccountIfNeeded());
@@ -1531,6 +1547,25 @@ class EmailService {
       _notificationFlushTimer = null;
       unawaited(_flushQueuedNotifications());
     });
+  }
+
+  void _scheduleContactsSyncFromCore() {
+    if (_contactsSyncInFlight) {
+      _contactsSyncPending = true;
+      return;
+    }
+    if (_contactsSyncTimer != null) {
+      return;
+    }
+    _contactsSyncTimer = Timer(_contactsSyncDebounce, () {
+      _contactsSyncTimer = null;
+      unawaited(syncContactsFromCore());
+    });
+  }
+
+  void _cancelContactsSyncTimer() {
+    _contactsSyncTimer?.cancel();
+    _contactsSyncTimer = null;
   }
 
   Future<void> _flushQueuedNotifications() async {

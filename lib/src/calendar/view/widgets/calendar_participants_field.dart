@@ -174,7 +174,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.none,
                 onChanged: (_) => _handleChange(),
-                enabled: widget.enabled,
+                enabled: enabled,
               ),
             ),
             const SizedBox(width: calendarGutterSm),
@@ -186,7 +186,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.words,
                 onChanged: (_) => _handleChange(),
-                enabled: widget.enabled,
+                enabled: enabled,
               ),
             ),
           ],
@@ -290,6 +290,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
 
   @override
   Widget build(BuildContext context) {
+    final bool enabled = widget.enabled;
     final TextStyle labelStyle = context.textTheme.small.copyWith(
       color: calendarSubtitleColor,
       fontWeight: FontWeight.w600,

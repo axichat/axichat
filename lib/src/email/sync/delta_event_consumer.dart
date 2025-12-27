@@ -38,6 +38,7 @@ enum DeltaEventType {
   msgRead(DeltaEventCode.msgRead),
   chatModified(DeltaEventCode.chatModified),
   chatDeleted(DeltaEventCode.chatDeleted),
+  contactsChanged(DeltaEventCode.contactsChanged),
   configureProgress(DeltaEventCode.configureProgress),
   accountsBackgroundFetchDone(DeltaEventCode.accountsBackgroundFetchDone),
   connectivityChanged(DeltaEventCode.connectivityChanged),
