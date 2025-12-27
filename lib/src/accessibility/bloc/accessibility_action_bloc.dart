@@ -992,10 +992,8 @@ class AccessibilityActionBloc
         AccessibilityMessagesUpdated(jid: jid, messages: messages),
       ),
       onError: (error, stackTrace) {
-        _log.warning(
-          SafeLogging.sanitizeMessage(
-            'Message stream error for $jid',
-          ),
+        _log.safeWarning(
+          'Message stream error for $jid',
           error,
           stackTrace,
         );

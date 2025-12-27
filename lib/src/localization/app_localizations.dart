@@ -3350,6 +3350,18 @@ abstract class AppLocalizations {
   /// **'Open anyway'**
   String get chatAttachmentTypeMismatchConfirm;
 
+  /// No description provided for @chatAttachmentHighRiskTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Potentially unsafe file'**
+  String get chatAttachmentHighRiskTitle;
+
+  /// No description provided for @chatAttachmentHighRiskMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?'**
+  String get chatAttachmentHighRiskMessage;
+
   /// No description provided for @chatAttachmentUnknownSize.
   ///
   /// In en, this message translates to:

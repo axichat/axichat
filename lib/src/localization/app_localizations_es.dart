@@ -1859,6 +1859,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatAttachmentTypeMismatchConfirm => 'Open anyway';
 
   @override
+  String get chatAttachmentHighRiskTitle => 'Potentially unsafe file';
+
+  @override
+  String get chatAttachmentHighRiskMessage =>
+      'This file type can be dangerous to open. We recommend saving it and '
+      'scanning it before opening. Continue?';
+
+  @override
   String get chatAttachmentUnknownSize => 'Tamaño desconocido';
 
   @override
