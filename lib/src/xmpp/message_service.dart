@@ -3390,6 +3390,7 @@ mixin MessageService
         metadata: metadata,
         allowHttpOverride: allowSelfOverride,
         allowInsecureHostsOverride: allowSelfOverride,
+        allowRemoteDownload: allowSelfDownload,
       );
       if (decoded == null) {
         _log.warning(_calendarSnapshotDecodeFailedMessage);
@@ -3436,16 +3437,21 @@ mixin MessageService
     FileMetadataData? metadata,
     bool? allowHttpOverride,
     bool? allowInsecureHostsOverride,
+    required bool allowRemoteDownload,
   }) async {
     if (metadata != null) {
       final decoded = await _decodeSnapshotFromMetadata(
         metadata,
         allowHttpOverride: allowHttpOverride,
         allowInsecureHostsOverride: allowInsecureHostsOverride,
+        allowRemoteDownload: allowRemoteDownload,
       );
       if (decoded != null) {
         return decoded;
       }
+    }
+    if (!allowRemoteDownload) {
+      return null;
     }
     return _downloadAndDecodeSnapshot(
       url,
@@ -3458,10 +3464,21 @@ mixin MessageService
     FileMetadataData metadata, {
     bool? allowHttpOverride,
     bool? allowInsecureHostsOverride,
+    required bool allowRemoteDownload,
   }) async {
     await _dbOp<XmppDatabase>(
       (db) => db.saveFileMetadata(metadata),
     );
+    final existingPath = metadata.path?.trim();
+    final existingFile = existingPath == null || existingPath.isEmpty
+        ? null
+        : File(existingPath);
+    if (existingFile?.existsSync() ?? false) {
+      return CalendarSnapshotCodec.decodeFile(existingFile!);
+    }
+    if (!allowRemoteDownload) {
+      return null;
+    }
     final path = await downloadInboundAttachment(
       metadataId: metadata.id,
       allowHttpOverride: allowHttpOverride,
