@@ -18,6 +18,8 @@ class QuickAddController extends TaskDraftController {
     super.initialUrl,
     super.initialGeo,
     super.initialAdvancedAlarms,
+    super.initialOrganizer,
+    super.initialAttendees,
   }) : _isSubmitting = false;
 
   bool _isSubmitting;

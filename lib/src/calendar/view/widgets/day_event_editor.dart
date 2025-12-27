@@ -2,6 +2,8 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
+import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
@@ -10,7 +12,9 @@ import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_attachments_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_categories_field.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_invitation_status_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_link_geo_fields.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_participants_field.dart';
 import 'package:axichat/src/calendar/view/widgets/ics_meta_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
@@ -23,6 +27,8 @@ import 'package:flutter/material.dart';
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
+const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
+const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
 
 class DayEventDraft {
   const DayEventDraft({
@@ -108,6 +114,8 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
   List<CalendarAlarm> _advancedAlarms = _emptyAdvancedAlarms;
+  CalendarOrganizer? _organizer;
+  List<CalendarAttendee> _attendees = _emptyAttendees;
 
   @override
   void initState() {
@@ -135,6 +143,10 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     _attachments = List<CalendarAttachment>.from(
       widget.existing?.icsMeta?.attachments ?? _emptyAttachments,
     );
+    _organizer = widget.existing?.icsMeta?.organizer;
+    _attendees = List<CalendarAttendee>.from(
+      widget.existing?.icsMeta?.attendees ?? _emptyAttendees,
+    );
     _titleController = TextEditingController(text: widget.existing?.title);
     _descriptionController =
         TextEditingController(text: widget.existing?.description);
@@ -156,6 +168,14 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final bool keyboardOpen = keyboardInset > safeBottom;
+    final List<CalendarRawProperty> rawProperties =
+        widget.existing?.icsMeta?.rawProperties ?? _emptyRawProperties;
+    final int? sequence = widget.existing?.icsMeta?.sequence;
+    final bool showInvitationStatus = hasInvitationStatusData(
+      method: null,
+      sequence: sequence,
+      rawProperties: rawProperties,
+    );
     final double scrollBottomPadding = calendarGutterMd + keyboardInset;
     final Widget actions = ValueListenableBuilder<TextEditingValue>(
       valueListenable: _titleController,
@@ -347,6 +367,29 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       onUrlChanged: (value) => setState(() => _url = value),
                       onGeoChanged: (value) => setState(() => _geo = value),
                     ),
+                    TaskSectionDivider(
+                      color: colors.border,
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarParticipantsField(
+                      organizer: _organizer,
+                      attendees: _attendees,
+                      onOrganizerChanged: (value) =>
+                          setState(() => _organizer = value),
+                      onAttendeesChanged: (value) =>
+                          setState(() => _attendees = value),
+                    ),
+                    if (showInvitationStatus) ...[
+                      TaskSectionDivider(
+                        color: colors.border,
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarInvitationStatusField(
+                        method: null,
+                        sequence: sequence,
+                        rawProperties: rawProperties,
+                      ),
+                    ],
                     if (_attachments.isNotEmpty) ...[
                       TaskSectionDivider(
                         color: colors.border,
@@ -388,6 +431,14 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       base: widget.existing?.icsMeta,
       categories: _categories,
     );
+    final CalendarOrganizer? organizer = resolveOrganizerOverride(
+      base: widget.existing?.icsMeta,
+      organizer: _organizer,
+    );
+    final List<CalendarAttendee>? attendees = resolveAttendeeOverride(
+      base: widget.existing?.icsMeta,
+      attendees: _attendees,
+    );
     final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
       advancedAlarms: _advancedAlarms,
       reminders: _reminders,
@@ -403,6 +454,8 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       categories: categories,
       url: _url,
       geo: _geo,
+      organizer: organizer,
+      attendees: attendees,
       alarms: alarms,
     );
     return DayEventDraft(
