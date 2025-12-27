@@ -189,6 +189,16 @@ class ChatsCubit extends Cubit<ChatsState> {
     await _chatsService.toggleChatFavorited(jid: jid, favorited: favorited);
   }
 
+  Future<void> toggleAttachmentAutoDownload({
+    required String jid,
+    required bool enabled,
+  }) async {
+    await _chatsService.toggleChatAttachmentAutoDownload(
+      jid: jid,
+      enabled: enabled,
+    );
+  }
+
   Future<void> toggleArchived({
     required String jid,
     required bool archived,

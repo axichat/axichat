@@ -664,6 +664,8 @@ class XmppService extends XmppBase
 
   bool get connected => connectionState == mox.XmppConnectionState.connected;
 
+  bool get hasConnectionSettings => _connection.hasConnectionSettings;
+
   bool get databasesInitialized =>
       _stateStore.isCompleted && _database.isCompleted;
 

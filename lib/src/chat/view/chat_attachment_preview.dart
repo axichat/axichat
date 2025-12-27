@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -126,7 +127,7 @@ class ChatAttachmentPreview extends StatelessWidget {
               onAllowPressed: onAllowPressed,
             );
           }
-          if (_isImage(metadata)) {
+          if (metadata.isImage) {
             return _ImageAttachment(
               metadata: metadata,
               stanzaId: stanzaId,
@@ -135,7 +136,7 @@ class ChatAttachmentPreview extends StatelessWidget {
               downloadDelegate: downloadDelegate,
             );
           }
-          if (_isVideo(metadata)) {
+          if (metadata.isVideo) {
             return _VideoAttachment(
               metadata: metadata,
               stanzaId: stanzaId,
@@ -408,6 +409,7 @@ class _VideoAttachment extends StatefulWidget {
 class _VideoAttachmentState extends State<_VideoAttachment> {
   var _downloading = false;
   var _autoDownloadRequested = false;
+  var _initFailed = false;
   VideoPlayerController? _controller;
 
   bool get _encrypted =>
@@ -476,6 +478,15 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         downloading: _downloading,
         onPressed:
             _downloading ? null : () => _downloadAttachment(showFeedback: true),
+      );
+    }
+    if (_initFailed) {
+      return _FileAttachment(
+        metadata: metadata,
+        stanzaId: widget.stanzaId,
+        autoDownload: widget.autoDownload,
+        autoDownloadUserInitiated: widget.autoDownloadUserInitiated,
+        downloadDelegate: widget.downloadDelegate,
       );
     }
 
@@ -643,6 +654,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   }
 
   void _initializeVideoIfAvailable() {
+    _initFailed = false;
     final path = widget.metadata.path?.trim();
     if (path == null || path.isEmpty) return;
     final file = File(path);
@@ -652,6 +664,15 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     controller.initialize().then((_) {
       if (!mounted) return;
       setState(() {});
+    }).catchError((_) {
+      if (!mounted) return;
+      controller.dispose();
+      if (identical(_controller, controller)) {
+        _controller = null;
+      }
+      setState(() {
+        _initFailed = true;
+      });
     });
   }
 
@@ -660,6 +681,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     if (controller == null) return;
     controller.dispose();
     _controller = null;
+    _initFailed = false;
   }
 
   double _videoAspectRatio({
@@ -1566,41 +1588,6 @@ void _showToast(
           message: message,
         );
   toaster?.show(toast);
-}
-
-bool _isImage(FileMetadataData metadata) {
-  final mime = metadata.mimeType?.toLowerCase();
-  if (mime?.startsWith('image/') ?? false) return true;
-  final name = metadata.filename.toLowerCase();
-  const extensions = [
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.webp',
-    '.bmp',
-    '.heic',
-  ];
-  return extensions.any(name.endsWith);
-}
-
-bool _isVideo(FileMetadataData metadata) {
-  final mime = metadata.mimeType?.toLowerCase();
-  if (mime?.startsWith('video/') ?? false) return true;
-  final name = metadata.filename.toLowerCase();
-  const extensions = [
-    '.mp4',
-    '.mov',
-    '.m4v',
-    '.webm',
-    '.mkv',
-    '.avi',
-    '.mpeg',
-    '.mpg',
-    '.3gp',
-    '.3gpp',
-  ];
-  return extensions.any(name.endsWith);
 }
 
 String _formatSize(int? bytes, AppLocalizations l10n) {
