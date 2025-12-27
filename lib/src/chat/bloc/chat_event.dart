@@ -94,13 +94,15 @@ final class ChatMessageSent extends ChatEvent {
   const ChatMessageSent({
     required this.text,
     this.calendarTaskIcs,
+    this.calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
   });
 
   final String text;
   final CalendarTask? calendarTaskIcs;
+  final bool calendarTaskIcsReadOnly;
 
   @override
-  List<Object?> get props => [text, calendarTaskIcs];
+  List<Object?> get props => [text, calendarTaskIcs, calendarTaskIcsReadOnly];
 }
 
 final class ChatAvailabilityMessageSent extends ChatEvent {

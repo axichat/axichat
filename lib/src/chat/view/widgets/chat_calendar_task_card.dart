@@ -19,10 +19,12 @@ class ChatCalendarTaskCard extends StatefulWidget {
   const ChatCalendarTaskCard({
     super.key,
     required this.task,
+    required this.readOnly,
     this.footerDetails = _emptyInlineSpans,
   });
 
   final CalendarTask task;
+  final bool readOnly;
   final List<InlineSpan> footerDetails;
 
   @override
@@ -36,12 +38,22 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       builder: (context, state) {
         final CalendarTask resolvedTask =
             state.model.tasks[widget.task.id] ?? widget.task;
+        final bool taskInCalendar =
+            state.model.tasks.containsKey(widget.task.id);
+        final bool tileReadOnly = widget.readOnly || !taskInCalendar;
+        final VoidCallback? tapAction = widget.readOnly
+            ? null
+            : () {
+                _ensureTaskImported(resolvedTask);
+                _showTaskEditSheet(context, resolvedTask);
+              };
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ChatCalendarTaskTile(
               task: resolvedTask,
-              onTap: () => _showTaskEditSheet(context, resolvedTask),
+              readOnly: tileReadOnly,
+              onTap: tapAction,
             ),
             if (widget.footerDetails.isNotEmpty)
               Padding(
@@ -61,6 +73,9 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     BuildContext context,
     CalendarTask task,
   ) async {
+    if (widget.readOnly) {
+      return;
+    }
     if (!TaskEditSessionTracker.instance.begin(task.id, this)) {
       return;
     }
@@ -159,6 +174,18 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       TaskEditSessionTracker.instance.end(task.id, this);
     }
   }
+
+  void _ensureTaskImported(CalendarTask task) {
+    final ChatCalendarBloc bloc = context.read<ChatCalendarBloc>();
+    if (bloc.state.model.tasks.containsKey(task.id)) {
+      return;
+    }
+    bloc.add(
+      CalendarEvent.tasksImported(
+        tasks: <CalendarTask>[task],
+      ),
+    );
+  }
 }
 
 class ChatCalendarTaskTile extends BaseTaskTile<ChatCalendarBloc> {
@@ -166,9 +193,11 @@ class ChatCalendarTaskTile extends BaseTaskTile<ChatCalendarBloc> {
     super.key,
     required super.task,
     super.onTap,
+    bool readOnly = false,
   }) : super(
           isGuestMode: false,
           compact: true,
+          isReadOnly: readOnly,
         );
 
   @override
@@ -177,39 +206,6 @@ class ChatCalendarTaskTile extends BaseTaskTile<ChatCalendarBloc> {
 
 class _ChatCalendarTaskTileState
     extends BaseTaskTileState<ChatCalendarTaskTile, ChatCalendarBloc> {
-  bool _imported = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _ensureTaskImported();
-  }
-
-  @override
-  void didUpdateWidget(covariant ChatCalendarTaskTile oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.task.id != widget.task.id) {
-      _imported = false;
-    }
-  }
-
-  void _ensureTaskImported() {
-    if (_imported) {
-      return;
-    }
-    final ChatCalendarBloc bloc = context.read<ChatCalendarBloc>();
-    if (bloc.state.model.tasks.containsKey(widget.task.id)) {
-      _imported = true;
-      return;
-    }
-    bloc.add(
-      CalendarEvent.tasksImported(
-        tasks: <CalendarTask>[widget.task],
-      ),
-    );
-    _imported = true;
-  }
-
   @override
   void showEditTaskInput(BuildContext context, CalendarTask task) {
     widget.onTap?.call();

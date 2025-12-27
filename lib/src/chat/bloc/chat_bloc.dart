@@ -6,6 +6,7 @@ import 'package:archive/archive.dart';
 import 'package:async/async.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
@@ -1397,6 +1398,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null) return;
     final trimmedText = event.text.trim();
     final CalendarTask? requestedTask = event.calendarTaskIcs;
+    final bool taskReadOnly = event.calendarTaskIcsReadOnly;
     final CalendarFragmentShareDecision fragmentDecision =
         _calendarFragmentPolicy.decisionForChat(
       chat: chat,
@@ -1708,6 +1710,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           recipients: xmppRecipients,
           body: xmppBody,
           calendarTaskIcs: fanOutTask,
+          calendarTaskIcsReadOnly: taskReadOnly,
           quotedDraft: quotedDraft,
         );
         xmppBodySent = true;
@@ -1722,6 +1725,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           encryptionProtocol: chat.encryptionProtocol,
           quotedMessage: sameChatQuote,
           calendarTaskIcs: taskForXmpp,
+          calendarTaskIcsReadOnly: taskReadOnly,
           chatType: chat.type,
         );
         xmppBodySent = true;
@@ -3369,6 +3373,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required String body,
     CalendarTask? calendarTaskIcs,
+    bool calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
     required Message? quotedDraft,
   }) async {
     final processed = <String>{};
@@ -3388,6 +3393,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         encryptionProtocol: targetChat.encryptionProtocol,
         quotedMessage: quote,
         calendarTaskIcs: calendarTaskIcs,
+        calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
         chatType: targetChat.type,
       );
     }
