@@ -41,6 +41,7 @@ class ReminderPreferencesField extends StatefulWidget {
     this.onAdvancedAlarmsChanged,
     this.referenceStart,
     this.showAdvancedAlarms = true,
+    this.enabled = true,
   });
 
   final ReminderPreferences value;
@@ -55,6 +56,7 @@ class ReminderPreferencesField extends StatefulWidget {
   final ValueChanged<List<CalendarAlarm>>? onAdvancedAlarmsChanged;
   final DateTime? referenceStart;
   final bool showAdvancedAlarms;
+  final bool enabled;
 
   @override
   State<ReminderPreferencesField> createState() =>
@@ -87,16 +89,18 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
 
   @override
   Widget build(BuildContext context) {
+    final bool enabled = widget.enabled;
     final ReminderPreferences resolvedValue = widget.showBothAnchors
         ? widget.value.normalized()
         : widget.value.alignedTo(widget.anchor);
-    if (resolvedValue != widget.value) {
+    if (enabled && resolvedValue != widget.value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         widget.onChanged(resolvedValue);
       });
     }
 
-    final ValueChanged<ReminderPreferences> onChanged = widget.onChanged;
+    final ValueChanged<ReminderPreferences> onChanged =
+        enabled ? widget.onChanged : (_) {};
     final bool usesDeadline = widget.anchor.isDeadline;
     final List<Duration> options =
         usesDeadline ? widget.deadlineOptions : widget.startOptions;
@@ -109,7 +113,7 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
         usesDeadline ? _reminderAtDeadlineLabel : _reminderAtStartLabel;
     final List<CalendarAlarm>? advancedAlarms = widget.advancedAlarms;
     final ValueChanged<List<CalendarAlarm>>? onAdvancedChanged =
-        widget.onAdvancedAlarmsChanged;
+        enabled ? widget.onAdvancedAlarmsChanged : null;
     final bool allowAdvanced = widget.showAdvancedAlarms &&
         advancedAlarms != null &&
         onAdvancedChanged != null;
@@ -118,7 +122,7 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
     final bool hasAdvancedData =
         allowAdvanced && resolvedAdvancedAlarms.isNotEmpty;
 
-    return Column(
+    final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(
@@ -216,6 +220,10 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
         ],
       ],
     );
+    if (enabled) {
+      return content;
+    }
+    return IgnorePointer(child: content);
   }
 
   ReminderPreferences _toggled(

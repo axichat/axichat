@@ -307,12 +307,14 @@ class CalendarBloc extends BaseCalendarBloc {
           emit,
           lastSyncTime: DateTime.now(),
         );
+        await propagateLinkedTaskUpdate(event.task);
       case 'delete':
         emitModel(
           state.model.deleteTask(event.task.id),
           emit,
           lastSyncTime: DateTime.now(),
         );
+        await propagateLinkedTaskDelete(event.task);
       default:
         developer.log('Unknown remote operation: ${event.operation}',
             name: 'CalendarBloc');
