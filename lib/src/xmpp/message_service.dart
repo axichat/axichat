@@ -1388,6 +1388,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     Message? quotedMessage,
     CalendarFragment? calendarFragment,
     CalendarTask? calendarTaskIcs,
+    bool calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
     CalendarAvailabilityMessage? calendarAvailabilityMessage,
     bool? storeLocally,
     bool noStore = false,
@@ -1429,6 +1430,13 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
         ? null
         : CalendarTaskIcsPayload(
             ics: _calendarTaskIcsCodec.encode(calendarTaskIcs),
+            readOnly: calendarTaskIcsReadOnly,
+          );
+    final CalendarTaskIcsMessage? taskIcsMessage = calendarTaskIcs == null
+        ? null
+        : CalendarTaskIcsMessage(
+            task: calendarTaskIcs,
+            readOnly: calendarTaskIcsReadOnly,
           );
     final CalendarAvailabilityMessagePayload? availabilityPayload =
         calendarAvailabilityMessage == null
@@ -1448,7 +1456,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       resolvedExtensions.add(availabilityPayload);
     }
     final Map<String, dynamic>? fragmentData = calendarFragment?.toJson();
-    final Map<String, dynamic>? taskData = calendarTaskIcs?.toJson();
+    final Map<String, dynamic>? taskData = taskIcsMessage?.toJson();
     final Map<String, dynamic>? availabilityData =
         calendarAvailabilityMessage?.toJson();
     final PseudoMessageType? resolvedPseudoType =
@@ -2284,6 +2292,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
     }
     final CalendarFragment? fragment = message.calendarFragment;
     final CalendarTask? taskIcs = message.calendarTaskIcs;
+    final bool taskIcsReadOnly = message.calendarTaskIcsReadOnly;
     final CalendarAvailabilityMessage? availabilityMessage =
         message.calendarAvailabilityMessage;
     final resolvedChatType = chatType ??
@@ -2305,6 +2314,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService, ChatsService {
       quotedMessage: quoted,
       calendarFragment: fragment,
       calendarTaskIcs: taskIcs,
+      calendarTaskIcsReadOnly: taskIcsReadOnly,
       calendarAvailabilityMessage: availabilityMessage,
       chatType: resolvedChatType,
     );

@@ -10,6 +10,10 @@ const _calendarTaskIcsTag = 'calendar-task-ics';
 const _calendarTaskIcsPayloadTag = 'payload';
 const _calendarTaskIcsVersionAttr = 'version';
 const _calendarTaskIcsVersionValue = '1';
+const _calendarTaskIcsReadOnlyAttr = 'read-only';
+const _calendarTaskIcsReadOnlyTrueValue = 'true';
+const _calendarTaskIcsReadOnlyFalseValue = 'false';
+const bool _calendarTaskIcsReadOnlyDefault = true;
 const _calendarAvailabilityXmlns = 'urn:axichat:calendar-availability:1';
 const _calendarAvailabilityTag = 'calendar-availability';
 const _calendarAvailabilityPayloadTag = 'payload';
@@ -205,17 +209,23 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
 }
 
 final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
-  const CalendarTaskIcsPayload({required this.ics});
+  const CalendarTaskIcsPayload({
+    required this.ics,
+    this.readOnly = _calendarTaskIcsReadOnlyDefault,
+  });
 
   final String ics;
+  final bool readOnly;
 
   mox.XMLNode toXml() {
     final payload = ics.trim();
     return mox.XMLNode.xmlns(
       tag: _calendarTaskIcsTag,
       xmlns: _calendarTaskIcsXmlns,
-      attributes: const {
+      attributes: {
         _calendarTaskIcsVersionAttr: _calendarTaskIcsVersionValue,
+        if (readOnly != _calendarTaskIcsReadOnlyDefault)
+          _calendarTaskIcsReadOnlyAttr: _calendarTaskIcsReadOnlyFalseValue,
       },
       children: [
         mox.XMLNode(
@@ -238,7 +248,22 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
     if (payloadText.isEmpty) {
       return null;
     }
-    return CalendarTaskIcsPayload(ics: payloadText);
+    final readOnlyAttr =
+        node.attributes[_calendarTaskIcsReadOnlyAttr]?.toString();
+    final bool readOnly = _parseReadOnly(readOnlyAttr);
+    return CalendarTaskIcsPayload(
+      ics: payloadText,
+      readOnly: readOnly,
+    );
+  }
+
+  static bool _parseReadOnly(String? raw) {
+    final normalized = raw?.trim().toLowerCase();
+    return switch (normalized) {
+      _calendarTaskIcsReadOnlyTrueValue => true,
+      _calendarTaskIcsReadOnlyFalseValue => false,
+      _ => _calendarTaskIcsReadOnlyDefault,
+    };
   }
 }
 

@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
@@ -139,7 +140,10 @@ const String _calendarFragmentShareDeniedMessage =
     'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
 const String _calendarTaskIcsPropertyKey = 'calendarTaskIcs';
+const String _calendarTaskIcsReadOnlyPropertyKey = 'calendarTaskIcsReadOnly';
 const String _calendarAvailabilityPropertyKey = 'calendarAvailability';
+const bool _calendarTaskIcsReadOnlyFallback =
+    CalendarTaskIcsMessage.defaultReadOnly;
 const String _availabilityRequestAccountMissingMessage =
     'Availability requests are unavailable right now.';
 const String _availabilityRequestEmailUnsupportedMessage =
@@ -1704,6 +1708,7 @@ class _ChatState extends State<Chat> {
           ChatMessageSent(
             text: resolvedText,
             calendarTaskIcs: _pendingCalendarTaskIcs,
+            calendarTaskIcsReadOnly: _calendarTaskIcsReadOnlyFallback,
           ),
         );
     if (resolvedText.isNotEmpty) {
@@ -3679,6 +3684,8 @@ class _ChatState extends State<Chat> {
                                               e.calendarFragment,
                                           _calendarTaskIcsPropertyKey:
                                               e.calendarTaskIcs,
+                                          _calendarTaskIcsReadOnlyPropertyKey:
+                                              e.calendarTaskIcsReadOnly,
                                           _calendarAvailabilityPropertyKey:
                                               e.calendarAvailabilityMessage,
                                           'quoted': quotedMessage,
@@ -4187,6 +4194,12 @@ class _ChatState extends State<Chat> {
                                                           message.customProperties?[
                                                                   _calendarTaskIcsPropertyKey]
                                                               as CalendarTask?;
+                                                      final bool
+                                                          calendarTaskIcsReadOnly =
+                                                          (message.customProperties?[
+                                                                      _calendarTaskIcsReadOnlyPropertyKey]
+                                                                  as bool?) ??
+                                                              _calendarTaskIcsReadOnlyFallback;
                                                       final CalendarAvailabilityMessage?
                                                           availabilityMessage =
                                                           message.customProperties?[
@@ -4748,6 +4761,8 @@ class _ChatState extends State<Chat> {
                                                                 : ChatCalendarTaskCard(
                                                                     task:
                                                                         calendarTaskIcs,
+                                                                    readOnly:
+                                                                        calendarTaskIcsReadOnly,
                                                                     footerDetails:
                                                                         taskFooterDetails,
                                                                   ),
