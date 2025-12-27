@@ -1,19 +1,31 @@
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/base_task_tile.dart';
 import 'package:axichat/src/calendar/view/edit_task_dropdown.dart';
+import 'package:axichat/src/calendar/view/feedback_system.dart';
+import 'package:axichat/src/calendar/view/models/task_context_action.dart';
 import 'package:axichat/src/calendar/view/task_edit_session_tracker.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_task_copy_sheet.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_task_view_sheet.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 const double _taskFooterPaddingTop = 4.0;
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
+const String _taskCopyActionLabel = 'Copy to calendar';
+const String _taskCopyUnavailableMessage = 'Calendar is unavailable.';
+const String _taskCopyAlreadyAddedMessage = 'Task already added.';
+const String _taskCopySuccessMessage = 'Task copied.';
 
 class ChatCalendarTaskCard extends StatefulWidget {
   const ChatCalendarTaskCard({
@@ -41,8 +53,8 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
         final bool taskInCalendar =
             state.model.tasks.containsKey(widget.task.id);
         final bool tileReadOnly = widget.readOnly || !taskInCalendar;
-        final VoidCallback? tapAction = widget.readOnly
-            ? null
+        final VoidCallback tapAction = widget.readOnly
+            ? () => _showTaskViewSheet(context, resolvedTask)
             : () {
                 _ensureTaskImported(resolvedTask);
                 _showTaskEditSheet(context, resolvedTask);
@@ -111,10 +123,13 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                 task: displayTask,
                 maxHeight: maxHeight,
                 isSheet: true,
+                inlineActionsBloc: locate<ChatCalendarBloc>(),
+                inlineActionsBuilder: (_) => _inlineActionsForTask(displayTask),
                 onClose: () => Navigator.of(sheetContext).maybePop(),
                 scaffoldMessenger: scaffoldMessenger,
                 locationHelper: LocationAutocompleteHelper.fromState(
-                    locate<ChatCalendarBloc>().state),
+                  locate<ChatCalendarBloc>().state,
+                ),
                 onTaskUpdated: (updatedTask) {
                   locate<ChatCalendarBloc>().add(
                     CalendarEvent.taskUpdated(
@@ -172,6 +187,133 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       );
     } finally {
       TaskEditSessionTracker.instance.end(task.id, this);
+    }
+  }
+
+  Future<void> _showTaskViewSheet(
+    BuildContext context,
+    CalendarTask task,
+  ) async {
+    await showAdaptiveBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => CalendarTaskViewSheet(
+        task: task,
+        onCopyPressed: () {
+          Navigator.of(sheetContext).maybePop();
+          unawaited(
+            _handleCopyTask(
+              task: task,
+              style: CalendarTaskCopyStyle.shallowClone,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<TaskContextAction> _inlineActionsForTask(CalendarTask task) {
+    return <TaskContextAction>[
+      TaskContextAction(
+        icon: Icons.copy,
+        label: _taskCopyActionLabel,
+        onSelected: () => unawaited(
+          _handleCopyTask(
+            task: task,
+            style: CalendarTaskCopyStyle.linked,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Future<void> _handleCopyTask({
+    required CalendarTask task,
+    required CalendarTaskCopyStyle style,
+  }) async {
+    final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc();
+    final ChatCalendarBloc? chatBloc = _maybeReadChatCalendarBloc();
+    final CalendarStorageManager storageManager =
+        context.read<CalendarStorageManager>();
+    final bool canAddToPersonal =
+        storageManager.isAuthStorageReady && personalBloc != null;
+    final bool canAddToChat = chatBloc != null;
+
+    if (!canAddToPersonal && !canAddToChat) {
+      FeedbackSystem.showInfo(context, _taskCopyUnavailableMessage);
+      return;
+    }
+
+    final CalendarTaskCopyDecision? decision = await showCalendarTaskCopySheet(
+      context: context,
+      task: task,
+      canAddToPersonal: canAddToPersonal,
+      canAddToChat: canAddToChat,
+    );
+    if (!mounted || decision == null) {
+      return;
+    }
+
+    bool didCopy = false;
+    if (decision.addToPersonal && personalBloc != null) {
+      final CalendarTask personalTask = task.copyForCalendar(style);
+      final bool copied = _copyTaskToCalendar(
+        task: personalTask,
+        style: style,
+        state: personalBloc.state,
+        dispatch: personalBloc.add,
+      );
+      didCopy = didCopy || copied;
+    }
+    if (decision.addToChat && chatBloc != null) {
+      final CalendarTask chatTask = task.copyForCalendar(style);
+      final bool copied = _copyTaskToCalendar(
+        task: chatTask,
+        style: style,
+        state: chatBloc.state,
+        dispatch: chatBloc.add,
+      );
+      didCopy = didCopy || copied;
+    }
+
+    if (didCopy) {
+      FeedbackSystem.showSuccess(context, _taskCopySuccessMessage);
+    }
+  }
+
+  bool _copyTaskToCalendar({
+    required CalendarTask task,
+    required CalendarTaskCopyStyle style,
+    required CalendarState state,
+    required void Function(CalendarEvent event) dispatch,
+  }) {
+    final bool alreadyAdded = state.model.tasks.containsKey(task.id);
+    if (style.isLinked && alreadyAdded) {
+      FeedbackSystem.showInfo(context, _taskCopyAlreadyAddedMessage);
+      return false;
+    }
+    final List<CalendarTask> tasks = <CalendarTask>[task];
+    dispatch(
+      CalendarEvent.tasksImported(
+        tasks: tasks,
+      ),
+    );
+    return true;
+  }
+
+  CalendarBloc? _maybeReadPersonalCalendarBloc() {
+    try {
+      return context.read<CalendarBloc>();
+    } on FlutterError {
+      return null;
+    }
+  }
+
+  ChatCalendarBloc? _maybeReadChatCalendarBloc() {
+    try {
+      return context.read<ChatCalendarBloc>();
+    } on FlutterError {
+      return null;
     }
   }
 

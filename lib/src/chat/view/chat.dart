@@ -4893,12 +4893,12 @@ class _ChatState extends State<Chat> {
                                                             html_widget.Html(
                                                               key: ValueKey(
                                                                   bubbleContentKey),
-                                                                data: HtmlContentCodec
-                                                                    .sanitizeHtml(
-                                                                  messageModel
-                                                                          .htmlBody ??
-                                                                      '',
-                                                                ),
+                                                              data: HtmlContentCodec
+                                                                  .sanitizeHtml(
+                                                                messageModel
+                                                                        .htmlBody ??
+                                                                    '',
+                                                              ),
                                                               extensions: [
                                                                 createEmailImageExtension(
                                                                   shouldLoad:

@@ -90,7 +90,6 @@ class HtmlContentCodec {
     'xmpp',
   };
   static const Set<String> _sanitizedImageSchemes = <String>{
-    'http',
     'https',
   };
   static const String _hrefAttribute = 'href';
@@ -274,8 +273,7 @@ class HtmlContentCodec {
     String tag,
     Map<Object?, String> attributes,
   ) {
-    final allowed =
-        _sanitizedAllowedAttributes[tag] ?? const <String>{};
+    final allowed = _sanitizedAllowedAttributes[tag] ?? const <String>{};
     if (allowed.isEmpty) return const <String, String>{};
     final sanitized = <String, String>{};
     for (final entry in attributes.entries) {
@@ -283,16 +281,14 @@ class HtmlContentCodec {
       if (!allowed.contains(name)) continue;
       final rawValue = entry.value;
       if (name == _hrefAttribute) {
-        final safeValue =
-            _sanitizeUriValue(rawValue, _sanitizedLinkSchemes);
+        final safeValue = _sanitizeUriValue(rawValue, _sanitizedLinkSchemes);
         if (safeValue != null) {
           sanitized[name] = safeValue;
         }
         continue;
       }
       if (name == _srcAttribute) {
-        final safeValue =
-            _sanitizeUriValue(rawValue, _sanitizedImageSchemes);
+        final safeValue = _sanitizeUriValue(rawValue, _sanitizedImageSchemes);
         if (safeValue != null) {
           sanitized[name] = safeValue;
         }

@@ -1127,7 +1127,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to change nickname for $chatJid', error, stackTrace);
+      _log.warning(
+        SafeLogging.sanitizeMessage(
+          'Failed to change nickname for $chatJid',
+        ),
+        error,
+        stackTrace,
+      );
       emit(
         state.copyWith(
           toast: const ChatToast(
@@ -3034,7 +3040,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to save offline email draft for chat ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to save offline email draft for chat ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -3883,7 +3891,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } catch (error, stackTrace) {
       _log.fine(
-        'Failed to save XMPP draft for chat ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to save XMPP draft for chat ${chat.jid}',
+        ),
         error,
         stackTrace,
       );

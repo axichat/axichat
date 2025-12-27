@@ -716,6 +716,15 @@
       "target": {}
     }
   },
+  "chatAttachmentTypeMismatchTitle": "Attachment type mismatch",
+  "chatAttachmentTypeMismatchMessage": "This attachment says it is {declared}, but the file looks like {detected}. Opening it could be unsafe. Continue?",
+  "@chatAttachmentTypeMismatchMessage": {
+    "placeholders": {
+      "declared": {},
+      "detected": {}
+    }
+  },
+  "chatAttachmentTypeMismatchConfirm": "Open anyway",
   "chatAttachmentUnknownSize": "Taille inconnue",
   "chatAttachmentErrorTooltip": "{message} ({fileName})",
   "@chatAttachmentErrorTooltip": {

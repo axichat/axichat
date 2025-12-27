@@ -1847,6 +1847,18 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get chatAttachmentTypeMismatchTitle => 'Attachment type mismatch';
+
+  @override
+  String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
+    return 'This attachment says it is $declared, but the file looks like '
+        '$detected. Opening it could be unsafe. Continue?';
+  }
+
+  @override
+  String get chatAttachmentTypeMismatchConfirm => 'Open anyway';
+
+  @override
   String get chatAttachmentUnknownSize => 'Tamaño desconocido';
 
   @override

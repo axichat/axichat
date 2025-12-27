@@ -102,47 +102,205 @@ final class _DeltaOptionalConfig {
 final _DeltaOptionalConfig _deltaOptionalConfig = _DeltaOptionalConfig();
 
 class DeltaMessageType {
-  static const int text = 10;
-  static const int image = 20;
-  static const int gif = 21;
-  static const int audio = 40;
-  static const int voice = 41;
-  static const int video = 50;
-  static const int file = 60;
+  static const int undefined = DC_MSG_UNDEFINED;
+  static const int text = DC_MSG_TEXT;
+  static const int image = DC_MSG_IMAGE;
+  static const int gif = DC_MSG_GIF;
+  static const int sticker = DC_MSG_STICKER;
+  static const int audio = DC_MSG_AUDIO;
+  static const int voice = DC_MSG_VOICE;
+  static const int video = DC_MSG_VIDEO;
+  static const int file = DC_MSG_FILE;
+  static const int call = DC_MSG_CALL;
+  static const int webxdc = DC_MSG_WEBXDC;
+  static const int vcard = DC_MSG_VCARD;
+}
+
+class DeltaMessageInfo {
+  static const int unknown = DC_INFO_UNKNOWN;
+  static const int groupNameChanged = DC_INFO_GROUP_NAME_CHANGED;
+  static const int groupImageChanged = DC_INFO_GROUP_IMAGE_CHANGED;
+  static const int memberAddedToGroup = DC_INFO_MEMBER_ADDED_TO_GROUP;
+  static const int memberRemovedFromGroup = DC_INFO_MEMBER_REMOVED_FROM_GROUP;
+  static const int autocryptSetupMessage = DC_INFO_AUTOCRYPT_SETUP_MESSAGE;
+  static const int secureJoinMessage = DC_INFO_SECURE_JOIN_MESSAGE;
+  static const int locationStreamingEnabled = DC_INFO_LOCATIONSTREAMING_ENABLED;
+  static const int locationOnly = DC_INFO_LOCATION_ONLY;
+  static const int ephemeralTimerChanged = DC_INFO_EPHEMERAL_TIMER_CHANGED;
+  static const int protectionEnabled = DC_INFO_PROTECTION_ENABLED;
+  static const int invalidUnencryptedMail = DC_INFO_INVALID_UNENCRYPTED_MAIL;
+  static const int webxdcInfoMessage = DC_INFO_WEBXDC_INFO_MESSAGE;
+  static const int chatE2ee = DC_INFO_CHAT_E2EE;
+}
+
+class DeltaMessageState {
+  static const int undefined = DC_STATE_UNDEFINED;
+  static const int inFresh = DC_STATE_IN_FRESH;
+  static const int inNoticed = DC_STATE_IN_NOTICED;
+  static const int inSeen = DC_STATE_IN_SEEN;
+  static const int outPreparing = DC_STATE_OUT_PREPARING;
+  static const int outDraft = DC_STATE_OUT_DRAFT;
+  static const int outPending = DC_STATE_OUT_PENDING;
+  static const int outFailed = DC_STATE_OUT_FAILED;
+  static const int outDelivered = DC_STATE_OUT_DELIVERED;
+  static const int outMdnRcvd = DC_STATE_OUT_MDN_RCVD;
+}
+
+class DeltaMessageId {
+  static const int none = DC_MSG_NO_ID;
+  static const int marker1 = DC_MSG_ID_MARKER1;
+  static const int dayMarker = DC_MSG_ID_DAYMARKER;
+}
+
+class DeltaVideoChatType {
+  static const int unknown = DC_VIDEOCHATTYPE_UNKNOWN;
+  static const int basicWebrtc = DC_VIDEOCHATTYPE_BASICWEBRTC;
 }
 
 class DeltaDownloadState {
-  static const int done = 0;
-  static const int available = 10;
-  static const int failure = 20;
-  static const int undecipherable = 30;
-  static const int inProgress = 1000;
+  static const int done = DC_DOWNLOAD_DONE;
+  static const int available = DC_DOWNLOAD_AVAILABLE;
+  static const int failure = DC_DOWNLOAD_FAILURE;
+  static const int undecipherable = DC_DOWNLOAD_UNDECIPHERABLE;
+  static const int inProgress = DC_DOWNLOAD_IN_PROGRESS;
+}
+
+class DeltaChatType {
+  static const int undefined = DC_CHAT_TYPE_UNDEFINED;
+  static const int single = DC_CHAT_TYPE_SINGLE;
+  static const int group = DC_CHAT_TYPE_GROUP;
+  static const int mailingList = DC_CHAT_TYPE_MAILINGLIST;
+  static const int outBroadcast = DC_CHAT_TYPE_OUT_BROADCAST;
+  static const int inBroadcast = DC_CHAT_TYPE_IN_BROADCAST;
+}
+
+class DeltaChatId {
+  static const int none = DC_CHAT_NO_CHAT;
+  static const int archivedLink = DC_CHAT_ID_ARCHIVED_LINK;
+  static const int allDoneHint = DC_CHAT_ID_ALLDONE_HINT;
+  static const int lastSpecial = DC_CHAT_ID_LAST_SPECIAL;
 }
 
 class DeltaChatVisibility {
-  static const int normal = 0;
-  static const int archived = 1;
-  static const int pinned = 2;
+  static const int normal = DC_CHAT_VISIBILITY_NORMAL;
+  static const int archived = DC_CHAT_VISIBILITY_ARCHIVED;
+  static const int pinned = DC_CHAT_VISIBILITY_PINNED;
+}
+
+class DeltaContactId {
+  static const int self = DC_CONTACT_ID_SELF;
+  static const int info = DC_CONTACT_ID_INFO;
+  static const int device = DC_CONTACT_ID_DEVICE;
+  static const int lastSpecial = DC_CONTACT_ID_LAST_SPECIAL;
+}
+
+class DeltaImexMode {
+  static const int exportSelfKeys = DC_IMEX_EXPORT_SELF_KEYS;
+  static const int importSelfKeys = DC_IMEX_IMPORT_SELF_KEYS;
+  static const int exportBackup = DC_IMEX_EXPORT_BACKUP;
+  static const int importBackup = DC_IMEX_IMPORT_BACKUP;
+}
+
+class DeltaChatMessageFlags {
+  static const int addDayMarker = DC_GCM_ADDDAYMARKER;
+}
+
+class DeltaQrCodeType {
+  static const int askVerifyContact = DC_QR_ASK_VERIFYCONTACT;
+  static const int askVerifyGroup = DC_QR_ASK_VERIFYGROUP;
+  static const int askJoinBroadcast = DC_QR_ASK_JOIN_BROADCAST;
+  static const int fingerprintOk = DC_QR_FPR_OK;
+  static const int fingerprintMismatch = DC_QR_FPR_MISMATCH;
+  static const int fingerprintWithoutAddr = DC_QR_FPR_WITHOUT_ADDR;
+  static const int account = DC_QR_ACCOUNT;
+  static const int backup2 = DC_QR_BACKUP2;
+  static const int backupTooNew = DC_QR_BACKUP_TOO_NEW;
+  static const int webRtc = DC_QR_WEBRTC;
+  static const int proxy = DC_QR_PROXY;
+  static const int address = DC_QR_ADDR;
+  static const int text = DC_QR_TEXT;
+  static const int url = DC_QR_URL;
+  static const int error = DC_QR_ERROR;
+  static const int withdrawVerifyContact = DC_QR_WITHDRAW_VERIFYCONTACT;
+  static const int withdrawVerifyGroup = DC_QR_WITHDRAW_VERIFYGROUP;
+  static const int withdrawJoinBroadcast = DC_QR_WITHDRAW_JOINBROADCAST;
+  static const int reviveVerifyContact = DC_QR_REVIVE_VERIFYCONTACT;
+  static const int reviveVerifyGroup = DC_QR_REVIVE_VERIFYGROUP;
+  static const int reviveJoinBroadcast = DC_QR_REVIVE_JOINBROADCAST;
+  static const int login = DC_QR_LOGIN;
+}
+
+class DeltaSocketMode {
+  static const int auto = DC_SOCKET_AUTO;
+  static const int ssl = DC_SOCKET_SSL;
+  static const int starttls = DC_SOCKET_STARTTLS;
+  static const int plain = DC_SOCKET_PLAIN;
+}
+
+class DeltaShowEmails {
+  static const int off = DC_SHOW_EMAILS_OFF;
+  static const int acceptedContacts = DC_SHOW_EMAILS_ACCEPTED_CONTACTS;
+  static const int all = DC_SHOW_EMAILS_ALL;
+}
+
+class DeltaMediaQuality {
+  static const int balanced = DC_MEDIA_QUALITY_BALANCED;
+  static const int worse = DC_MEDIA_QUALITY_WORSE;
 }
 
 class DeltaEventCode {
+  static const int info = DC_EVENT_INFO;
+  static const int warning = DC_EVENT_WARNING;
   static const int error = DC_EVENT_ERROR;
   static const int errorSelfNotInGroup = DC_EVENT_ERROR_SELF_NOT_IN_GROUP;
-  static const int configureProgress = DC_EVENT_CONFIGURE_PROGRESS;
+  static const int msgsChanged = DC_EVENT_MSGS_CHANGED;
+  static const int reactionsChanged = DC_EVENT_REACTIONS_CHANGED;
+  static const int incomingReaction = DC_EVENT_INCOMING_REACTION;
+  static const int incomingWebxdcNotify = DC_EVENT_INCOMING_WEBXDC_NOTIFY;
+  static const int msgsNoticed = DC_EVENT_MSGS_NOTICED;
+  static const int incomingMsg = DC_EVENT_INCOMING_MSG;
   static const int incomingMsgBunch = DC_EVENT_INCOMING_MSG_BUNCH;
+  static const int msgDelivered = DC_EVENT_MSG_DELIVERED;
+  static const int msgFailed = DC_EVENT_MSG_FAILED;
+  static const int msgRead = DC_EVENT_MSG_READ;
+  static const int chatModified = DC_EVENT_CHAT_MODIFIED;
+  static const int chatEphemeralTimerModified =
+      DC_EVENT_CHAT_EPHEMERAL_TIMER_MODIFIED;
+  static const int chatDeleted = DC_EVENT_CHAT_DELETED;
+  static const int contactsChanged = DC_EVENT_CONTACTS_CHANGED;
+  static const int locationChanged = DC_EVENT_LOCATION_CHANGED;
+  static const int configureProgress = DC_EVENT_CONFIGURE_PROGRESS;
+  static const int imexProgress = DC_EVENT_IMEX_PROGRESS;
+  static const int imexFileWritten = DC_EVENT_IMEX_FILE_WRITTEN;
+  static const int securejoinInviterProgress =
+      DC_EVENT_SECUREJOIN_INVITER_PROGRESS;
+  static const int securejoinJoinerProgress =
+      DC_EVENT_SECUREJOIN_JOINER_PROGRESS;
+  static const int connectivityChanged = DC_EVENT_CONNECTIVITY_CHANGED;
+  static const int selfavatarChanged = DC_EVENT_SELFAVATAR_CHANGED;
+  static const int webxdcStatusUpdate = DC_EVENT_WEBXDC_STATUS_UPDATE;
+  static const int webxdcInstanceDeleted = DC_EVENT_WEBXDC_INSTANCE_DELETED;
+  static const int webxdcRealtimeData = DC_EVENT_WEBXDC_REALTIME_DATA;
   static const int accountsBackgroundFetchDone =
       DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE;
-  static const int connectivityChanged = DC_EVENT_CONNECTIVITY_CHANGED;
   static const int channelOverflow = DC_EVENT_CHANNEL_OVERFLOW;
-  static const int msgsChanged = DC_EVENT_MSGS_CHANGED;
-  static const int chatModified = DC_EVENT_CHAT_MODIFIED;
-  static const int msgsNoticed = DC_EVENT_MSGS_NOTICED;
+  static const int incomingCall = DC_EVENT_INCOMING_CALL;
+  static const int incomingCallAccepted = DC_EVENT_INCOMING_CALL_ACCEPTED;
+  static const int outgoingCallAccepted = DC_EVENT_OUTGOING_CALL_ACCEPTED;
+  static const int callEnded = DC_EVENT_CALL_ENDED;
 }
 
 class DeltaContactListFlags {
-  static const int addSelf = 0x1;
-  static const int verifiedOnly = 0x2;
-  static const int addRecent = 0x4;
+  static const int verifiedOnly = DC_GCL_VERIFIED_ONLY;
+  static const int addSelf = DC_GCL_ADD_SELF;
+  static const int address = DC_GCL_ADDRESS;
+}
+
+class DeltaChatlistFlags {
+  static const int archivedOnly = DC_GCL_ARCHIVED_ONLY;
+  static const int noSpecials = DC_GCL_NO_SPECIALS;
+  static const int addAllDoneHint = DC_GCL_ADD_ALLDONE_HINT;
+  static const int forForwarding = DC_GCL_FOR_FORWARDING;
 }
 
 class DeltaChatlistEntry {
@@ -155,7 +313,7 @@ class DeltaChatlistEntry {
   final int msgId;
 }
 
-const int _deltaMessageIdInitial = 0;
+const int _deltaMessageIdInitial = DeltaMessageId.none;
 const int _freshMessageCountDefault = 0;
 
 class DeltaFreshMessageCount {
@@ -170,26 +328,6 @@ class DeltaFreshMessageCount {
 
   final int count;
   final bool supported;
-}
-
-class DeltaMessageState {
-  static const int undefined = 0;
-  static const int inFresh = 10;
-  static const int inNoticed = 13;
-  static const int inSeen = 16;
-  static const int outPreparing = 18;
-  static const int outDraft = 19;
-  static const int outPending = 20;
-  static const int outFailed = 24;
-  static const int outDelivered = 26;
-  static const int outMdnRcvd = 28;
-}
-
-class DeltaChatType {
-  static const int single = 100;
-  static const int group = 200;
-  static const int verifiedGroup = 300;
-  static const int broadcast = 400;
 }
 
 class DeltaContextHandle {
@@ -210,7 +348,7 @@ class DeltaContextHandle {
   final DeltaAccountsHandle? _accountsOwner;
   final int? _accountId;
   final bool _ownsContext;
-  static const _lastSpecialContactId = 9;
+  static const _lastSpecialContactId = DeltaContactId.lastSpecial;
 
   _DeltaEventLoop? _eventLoop;
 

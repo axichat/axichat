@@ -47,10 +47,13 @@ const _unknownEmailPassword = '';
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
 const _notificationAttachmentLabel = 'Attachment';
 const _notificationAttachmentPrefix = 'Attachment: ';
+const _reactionNotificationFallback = 'New reaction';
+const _reactionNotificationPrefix = 'Reaction: ';
+const _webxdcNotificationFallback = 'New update';
 const List<EmailAttachment> _emptyEmailAttachments = <EmailAttachment>[];
 const _deltaContactIdPrefix = 'delta_contact_';
 const _deltaContactListFlags =
-    DeltaContactListFlags.addSelf | DeltaContactListFlags.addRecent;
+    DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
 const _imapIdleConfigKey = 'imap_idle';
 const _imapIdleTimeoutConfigKey = 'imap_idle_timeout';
 const _imapMaxConnectionsConfigKey = 'imap_max_connections';
@@ -1460,18 +1463,35 @@ class EmailService {
       case DeltaEventType.errorSelfNotInGroup:
         _handleSelfNotInGroup(event.data2Text);
         break;
-      case DeltaEventType.incomingMsgBunch:
-        await _flushQueuedNotifications();
-        break;
-      case DeltaEventType.msgsChanged:
+      case DeltaEventType.incomingMsg:
         if (event.data2 > _deltaEventMessageUnset) {
           _queueNotification(chatId: event.data1, msgId: event.data2);
         }
+        break;
+      case DeltaEventType.incomingMsgBunch:
+        await _flushQueuedNotifications();
+        break;
+      case DeltaEventType.incomingReaction:
+        await _handleIncomingReaction(
+          chatId: event.data1,
+          msgId: event.data2,
+          reaction: event.data2Text,
+        );
+        break;
+      case DeltaEventType.incomingWebxdcNotify:
+        await _handleIncomingWebxdcNotify(
+          chatId: event.data1,
+          msgId: event.data2,
+          text: event.data2Text,
+        );
         break;
       case DeltaEventType.msgsNoticed:
         await _handleMessagesNoticed(event.data1);
         break;
       case DeltaEventType.chatModified:
+        break;
+      case DeltaEventType.chatDeleted:
+        await _handleChatDeleted(event.data1);
         break;
       case DeltaEventType.accountsBackgroundFetchDone:
         _handleBackgroundFetchDone();
@@ -1523,6 +1543,45 @@ class EmailService {
     );
   }
 
+  Future<void> _handleChatDeleted(int chatId) async {
+    await _flushQueuedNotifications();
+    final notificationService = _notificationService;
+    if (notificationService == null) return;
+    final db = await _databaseBuilder();
+    final chat = await db.getChatByDeltaChatId(chatId);
+    if (chat == null) return;
+    await notificationService.dismissMessageNotification(
+      threadKey: chat.jid,
+    );
+  }
+
+  Future<_DeltaNotificationContext?> _notificationContextForMessage({
+    required XmppDatabase db,
+    required int msgId,
+    int? chatId,
+  }) async {
+    final message = await db.getMessageByStanzaID(_stanzaId(msgId));
+    if (message == null) {
+      return null;
+    }
+    if (message.warning == MessageWarning.emailSpamQuarantined) {
+      return null;
+    }
+    String bare(String value) => value.split('/').first;
+    final selfJid = selfSenderJid;
+    if (selfJid != null && bare(message.senderJid) == bare(selfJid)) {
+      return null;
+    }
+    var chat = await db.getChat(message.chatJid);
+    if (chat == null && chatId != null) {
+      chat = await db.getChatByDeltaChatId(chatId);
+    }
+    if (chat?.muted ?? false) {
+      return null;
+    }
+    return _DeltaNotificationContext(message: message, chat: chat);
+  }
+
   Future<void> _notifyIncoming({
     required int chatId,
     required int msgId,
@@ -1531,36 +1590,100 @@ class EmailService {
     if (notificationService == null) return;
     try {
       final db = await _databaseBuilder();
-      final message = await db.getMessageByStanzaID(_stanzaId(msgId));
-      if (message == null) {
-        return;
-      }
-      if (message.warning == MessageWarning.emailSpamQuarantined) {
-        return;
-      }
-      String bare(String value) => value.split('/').first;
-      final selfJid = selfSenderJid;
-      if (selfJid != null && bare(message.senderJid) == bare(selfJid)) {
+      final context = await _notificationContextForMessage(
+        db: db,
+        msgId: msgId,
+        chatId: chatId,
+      );
+      if (context == null) {
         return;
       }
       final notificationBody =
-          await _notificationBody(db: db, message: message);
+          await _notificationBody(db: db, message: context.message);
       if (notificationBody == null) {
         return;
       }
-      final chat = await db.getChat(message.chatJid);
-      if (chat?.muted ?? false) {
-        return;
-      }
       await notificationService.sendMessageNotification(
-        title: chat?.title ?? message.senderJid,
+        title: context.chat?.title ?? context.message.senderJid,
         body: notificationBody,
-        payload: chat?.jid,
-        threadKey: message.chatJid,
+        payload: context.chat?.jid,
+        threadKey: context.message.chatJid,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to raise notification for email message ${_stanzaId(msgId)}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _handleIncomingReaction({
+    required int chatId,
+    required int msgId,
+    String? reaction,
+  }) async {
+    final notificationService = _notificationService;
+    if (notificationService == null) return;
+    try {
+      final db = await _databaseBuilder();
+      final context = await _notificationContextForMessage(
+        db: db,
+        msgId: msgId,
+        chatId: chatId,
+      );
+      if (context == null) {
+        return;
+      }
+      final normalizedReaction = reaction?.trim();
+      final body = normalizedReaction == null || normalizedReaction.isEmpty
+          ? _reactionNotificationFallback
+          : '$_reactionNotificationPrefix$normalizedReaction';
+      await notificationService.sendMessageNotification(
+        title: context.chat?.title ?? context.message.senderJid,
+        body: body,
+        payload: context.chat?.jid,
+        threadKey: context.message.chatJid,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to raise reaction notification for email message ${_stanzaId(msgId)}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _handleIncomingWebxdcNotify({
+    required int chatId,
+    required int msgId,
+    String? text,
+  }) async {
+    final notificationService = _notificationService;
+    if (notificationService == null) return;
+    try {
+      final db = await _databaseBuilder();
+      final context = await _notificationContextForMessage(
+        db: db,
+        msgId: msgId,
+        chatId: chatId,
+      );
+      if (context == null) {
+        return;
+      }
+      final normalizedText = text?.trim();
+      final body = normalizedText == null || normalizedText.isEmpty
+          ? _webxdcNotificationFallback
+          : normalizedText;
+      await notificationService.sendMessageNotification(
+        title: context.chat?.title ?? context.message.senderJid,
+        body: body,
+        payload: context.chat?.jid,
+        threadKey: context.message.chatJid,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to raise webxdc notification for email message ${_stanzaId(msgId)}',
         error,
         stackTrace,
       );
@@ -2706,4 +2829,14 @@ class _PendingNotification {
 
   final int chatId;
   final int msgId;
+}
+
+class _DeltaNotificationContext {
+  const _DeltaNotificationContext({
+    required this.message,
+    required this.chat,
+  });
+
+  final Message message;
+  final Chat? chat;
 }

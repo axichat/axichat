@@ -26,6 +26,7 @@ import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
 import 'package:axichat/src/common/network_safety.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
