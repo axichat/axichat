@@ -13,6 +13,7 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -413,7 +414,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.fine(
-        'Failed to load older MAM page for ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to load older MAM page for ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -492,7 +495,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     } on Exception catch (error, stackTrace) {
       _log.fine(
-        'Failed to catch up via MAM for ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to catch up via MAM for ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -508,7 +513,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final filter = await _chatsService.loadChatViewFilter(jid!);
       add(ChatViewFilterChanged(filter: filter, persist: false));
     } on Exception catch (error, stackTrace) {
-      _log.fine('Failed to load view filter for $jid', error, stackTrace);
+      _log.fine(
+        SafeLogging.sanitizeMessage(
+          'Failed to load view filter for $jid',
+        ),
+        error,
+        stackTrace,
+      );
     }
   }
 
@@ -542,7 +553,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.fine(
-        'Failed to hydrate MAM for chat ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to hydrate MAM for chat ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -589,7 +602,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.fine(
-        'Failed to ensure membership for ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to ensure membership for ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -759,7 +774,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         add(_RoomStateUpdated(warmed));
       } on Exception catch (error, stackTrace) {
         _log.fine(
-          'Failed to warm room state for ${chat.jid}',
+          SafeLogging.sanitizeMessage(
+            'Failed to warm room state for ${chat.jid}',
+          ),
           error,
           stackTrace,
         );
@@ -1146,7 +1163,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to rename contact ${chat.jid}', error, stackTrace);
+      _log.warning(
+        SafeLogging.sanitizeMessage(
+          'Failed to rename contact ${chat.jid}',
+        ),
+        error,
+        stackTrace,
+      );
       emit(
         state.copyWith(
           toast: ChatToast(
@@ -1743,7 +1766,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
-        'Failed to send email message for chat ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to send email message for chat ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -1768,7 +1793,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to send message for chat ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to send message for chat ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -2470,7 +2497,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return true;
     } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
-        'Failed to send attachment for chat ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to send attachment for chat ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -2484,7 +2513,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.copyWith(composerError: readableMessage));
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to send attachment for chat ${chat.jid}',
+        SafeLogging.sanitizeMessage(
+          'Failed to send attachment for chat ${chat.jid}',
+        ),
         error,
         stackTrace,
       );
@@ -2903,7 +2934,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return false;
       } on Exception catch (error, stackTrace) {
         _log.warning(
-          'Failed to send XMPP attachment for chat ${chat.jid}',
+          SafeLogging.sanitizeMessage(
+            'Failed to send XMPP attachment for chat ${chat.jid}',
+          ),
           error,
           stackTrace,
         );

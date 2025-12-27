@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
@@ -1590,9 +1591,11 @@ class _ChatState extends State<Chat> {
     final chatBloc = context.read<ChatBloc>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
     final showToast = ShadToaster.maybeOf(context)?.show;
+    var shouldEnableAutoDownload = false;
     if (decision.alwaysAllow && canAddToRoster) {
       try {
         await xmpp.addToRoster(jid: senderBare);
+        shouldEnableAutoDownload = true;
       } on Exception {
         const title = 'Unable to add contact';
         const message =
@@ -1601,6 +1604,9 @@ class _ChatState extends State<Chat> {
       }
     }
     if (decision.alwaysAllow && canTrustChat) {
+      shouldEnableAutoDownload = true;
+    }
+    if (shouldEnableAutoDownload) {
       chatBloc.add(const ChatAttachmentAutoDownloadToggled(true));
     }
     if (isEmailChat) {
@@ -4887,8 +4893,12 @@ class _ChatState extends State<Chat> {
                                                             html_widget.Html(
                                                               key: ValueKey(
                                                                   bubbleContentKey),
-                                                              data: messageModel
-                                                                  .htmlBody,
+                                                                data: HtmlContentCodec
+                                                                    .sanitizeHtml(
+                                                                  messageModel
+                                                                          .htmlBody ??
+                                                                      '',
+                                                                ),
                                                               extensions: [
                                                                 createEmailImageExtension(
                                                                   shouldLoad:
@@ -5076,10 +5086,13 @@ class _ChatState extends State<Chat> {
                                                                 : null;
                                                         final autoDownload =
                                                             allowAttachment &&
-                                                                !isEmailChat;
+                                                                (state
+                                                                        .chat
+                                                                        ?.attachmentAutoDownload
+                                                                        .isAllowed ??
+                                                                    false);
                                                         final autoDownloadUserInitiated =
-                                                            allowAttachmentOnce &&
-                                                                !isEmailChat;
+                                                            allowAttachmentOnce;
                                                         for (var index = 0;
                                                             index <
                                                                 attachmentIds

@@ -572,6 +572,7 @@ class EmailDeltaTransport implements ChatTransport {
     _eventSubscription = null;
     _eventConsumer = null;
     _contextOpened = false;
+    await _context?.close();
     _context = null;
     if (_accounts != null) {
       await _accounts!.dispose();

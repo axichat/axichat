@@ -125,6 +125,20 @@ class DeltaChatVisibility {
   static const int pinned = 2;
 }
 
+class DeltaEventCode {
+  static const int error = DC_EVENT_ERROR;
+  static const int errorSelfNotInGroup = DC_EVENT_ERROR_SELF_NOT_IN_GROUP;
+  static const int configureProgress = DC_EVENT_CONFIGURE_PROGRESS;
+  static const int incomingMsgBunch = DC_EVENT_INCOMING_MSG_BUNCH;
+  static const int accountsBackgroundFetchDone =
+      DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE;
+  static const int connectivityChanged = DC_EVENT_CONNECTIVITY_CHANGED;
+  static const int channelOverflow = DC_EVENT_CHANNEL_OVERFLOW;
+  static const int msgsChanged = DC_EVENT_MSGS_CHANGED;
+  static const int chatModified = DC_EVENT_CHAT_MODIFIED;
+  static const int msgsNoticed = DC_EVENT_MSGS_NOTICED;
+}
+
 class DeltaContactListFlags {
   static const int addSelf = 0x1;
   static const int verifiedOnly = 0x2;
@@ -682,6 +696,9 @@ class DeltaContextHandle {
     }
     try {
       final viewType = _bindings.dc_msg_get_viewtype(msgPtr);
+      final state = _bindings.dc_msg_get_state(msgPtr);
+      final normalizedState =
+          state == DeltaMessageState.undefined ? null : state;
       final text =
           _takeString(_bindings.dc_msg_get_text(msgPtr), bindings: _bindings);
       final html = _cleanString(
@@ -721,6 +738,7 @@ class DeltaContextHandle {
         html: html,
         subject: subject,
         viewType: viewType,
+        state: normalizedState,
         filePath: filePath,
         fileName: fileName,
         fileMime: fileMime,
@@ -1465,6 +1483,7 @@ class DeltaMessage {
     this.html,
     this.subject,
     this.viewType,
+    this.state,
     this.filePath,
     this.fileName,
     this.fileMime,
@@ -1483,6 +1502,7 @@ class DeltaMessage {
   final String? html;
   final String? subject;
   final int? viewType;
+  final int? state;
   final String? filePath;
   final String? fileName;
   final String? fileMime;

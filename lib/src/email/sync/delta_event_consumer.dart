@@ -17,26 +17,21 @@ import 'package:path/path.dart' as p;
 const _deltaDomain = 'delta.chat';
 const _deltaSelfJid = 'dc-self@$_deltaDomain';
 const _deltaChatLastSpecialId = 9;
-const _deltaChatlistArchivedOnlyFlag = 0x01;
 const _bootstrapYieldEveryMessages = 40;
 const int _deltaMessageIdUnset = 0;
 const int _minimumHistoryWindow = 1;
 
 enum DeltaEventType {
-  info(100),
-  error(300),
-  errorSelfNotInGroup(410),
-  msgsChanged(2000),
-  incomingMsg(2005),
-  incomingMsgBunch(2006),
-  msgDelivered(2010),
-  msgFailed(2012),
-  msgRead(2015),
-  chatModified(2020),
-  configureProgress(2041),
-  accountsBackgroundFetchDone(2200),
-  connectivityChanged(2100),
-  channelOverflow(2400);
+  error(DeltaEventCode.error),
+  errorSelfNotInGroup(DeltaEventCode.errorSelfNotInGroup),
+  msgsChanged(DeltaEventCode.msgsChanged),
+  msgsNoticed(DeltaEventCode.msgsNoticed),
+  incomingMsgBunch(DeltaEventCode.incomingMsgBunch),
+  chatModified(DeltaEventCode.chatModified),
+  configureProgress(DeltaEventCode.configureProgress),
+  accountsBackgroundFetchDone(DeltaEventCode.accountsBackgroundFetchDone),
+  connectivityChanged(DeltaEventCode.connectivityChanged),
+  channelOverflow(DeltaEventCode.channelOverflow);
 
   const DeltaEventType(this.code);
 
@@ -50,6 +45,23 @@ enum DeltaEventType {
     }
     return null;
   }
+}
+
+extension DeltaMessageStateChecks on DeltaMessage {
+  bool get hasKnownState => state != null;
+
+  bool get isOutgoingDelivered =>
+      isOutgoing &&
+      (state == DeltaMessageState.outDelivered ||
+          state == DeltaMessageState.outMdnRcvd);
+
+  bool get isOutgoingRead =>
+      isOutgoing && state == DeltaMessageState.outMdnRcvd;
+
+  bool get isOutgoingFailed =>
+      isOutgoing && state == DeltaMessageState.outFailed;
+
+  bool get isIncomingSeen => !isOutgoing && state == DeltaMessageState.inSeen;
 }
 
 class DeltaEventConsumer {
@@ -78,18 +90,10 @@ class DeltaEventConsumer {
   String get _selfJid => _selfJidProvider?.call() ?? _deltaSelfJid;
 
   Future<bool> bootstrapFromCore() async {
-    final unarchived = await _context.getChatlist();
-    final archived = await _context.getChatlist(
-      flags: _deltaChatlistArchivedOnlyFlag,
-    );
-    if (unarchived.isEmpty && archived.isEmpty) {
+    final chatlist = await _context.getChatlist();
+    if (chatlist.isEmpty) {
       return false;
     }
-
-    final archivedChatIds = <int>{
-      for (final entry in archived)
-        if (entry.chatId > _deltaChatLastSpecialId) entry.chatId,
-    };
 
     final entriesByChatId = <int, DeltaChatlistEntry>{};
     void register(Iterable<DeltaChatlistEntry> entries) {
@@ -103,8 +107,7 @@ class DeltaEventConsumer {
       }
     }
 
-    register(unarchived);
-    register(archived);
+    register(chatlist);
 
     final db = await _db();
     var didBootstrap = false;
@@ -116,11 +119,7 @@ class DeltaEventConsumer {
       }
       didBootstrap = true;
       final chat = await _ensureChat(chatId);
-      final shouldArchive = archivedChatIds.contains(chatId);
       var updated = chat;
-      if (updated.archived != shouldArchive) {
-        updated = updated.copyWith(archived: shouldArchive);
-      }
       if (entry.msgId > 0) {
         final last = await _context.getMessage(entry.msgId);
         final timestamp = last?.timestamp;
@@ -188,18 +187,10 @@ class DeltaEventConsumer {
   }
 
   Future<void> refreshChatlistSnapshot() async {
-    final unarchived = await _context.getChatlist();
-    final archived = await _context.getChatlist(
-      flags: _deltaChatlistArchivedOnlyFlag,
-    );
-    if (unarchived.isEmpty && archived.isEmpty) {
+    final chatlist = await _context.getChatlist();
+    if (chatlist.isEmpty) {
       return;
     }
-
-    final archivedChatIds = <int>{
-      for (final entry in archived)
-        if (entry.chatId > _deltaChatLastSpecialId) entry.chatId,
-    };
 
     final entriesByChatId = <int, DeltaChatlistEntry>{};
     void register(Iterable<DeltaChatlistEntry> entries) {
@@ -213,8 +204,7 @@ class DeltaEventConsumer {
       }
     }
 
-    register(unarchived);
-    register(archived);
+    register(chatlist);
 
     final db = await _db();
     var processed = 0;
@@ -224,11 +214,7 @@ class DeltaEventConsumer {
         continue;
       }
       final chat = await _ensureChat(chatId);
-      final shouldArchive = archivedChatIds.contains(chatId);
       var updated = chat;
-      if (updated.archived != shouldArchive) {
-        updated = updated.copyWith(archived: shouldArchive);
-      }
       if (entry.msgId > 0) {
         final last = await _context.getMessage(entry.msgId);
         final timestamp = last?.timestamp;
@@ -351,25 +337,11 @@ class DeltaEventConsumer {
       return;
     }
     switch (eventType) {
-      case DeltaEventType.incomingMsg:
-        await _handleIncoming(event.data1, event.data2);
-        break;
       case DeltaEventType.msgsChanged:
-        if (event.data2 > 0) {
-          await _hydrateMessage(event.data1, event.data2);
-        }
+        await _handleMessagesChanged(event.data1, event.data2);
         break;
-      case DeltaEventType.msgDelivered:
-        await _markAcked(event.data2);
-        break;
-      case DeltaEventType.msgFailed:
-        await _markFailed(
-          msgId: event.data2,
-          reason: event.data2Text,
-        );
-        break;
-      case DeltaEventType.msgRead:
-        await _markDisplayed(event.data2);
+      case DeltaEventType.msgsNoticed:
+        await _handleMessagesNoticed(event.data1);
         break;
       case DeltaEventType.chatModified:
         await _refreshChat(event.data1);
@@ -379,19 +351,43 @@ class DeltaEventConsumer {
     }
   }
 
-  Future<void> _handleIncoming(int chatId, int msgId) async {
-    final msg = await _context.getMessage(msgId);
-    if (msg == null) {
-      _log.warning('Incoming event for missing msgId=$msgId');
-      return;
-    }
-    await _ingestDeltaMessage(chatId: chatId, msg: msg);
-  }
-
   Future<void> _hydrateMessage(int chatId, int msgId) async {
     final msg = await _context.getMessage(msgId);
     if (msg == null) return;
     await _ingestDeltaMessage(chatId: chatId, msg: msg);
+  }
+
+  Future<void> _handleMessagesChanged(int chatId, int msgId) async {
+    if (msgId > _deltaMessageIdUnset) {
+      await _hydrateMessage(chatId, msgId);
+      return;
+    }
+    if (chatId <= _deltaChatLastSpecialId) {
+      return;
+    }
+    await _refreshChat(chatId);
+    await _updateUnreadCount(chatId);
+  }
+
+  Future<void> _handleMessagesNoticed(int chatId) async {
+    if (chatId <= _deltaChatLastSpecialId) {
+      return;
+    }
+    await _updateUnreadCount(chatId);
+  }
+
+  Future<void> _updateUnreadCount(int chatId) async {
+    final supportsFreshMessages = await _context.probeFreshMessagesSupport();
+    if (!supportsFreshMessages) {
+      return;
+    }
+    final db = await _db();
+    final chat = await db.getChatByDeltaChatId(chatId);
+    if (chat == null) return;
+    final freshCount = await _context.getFreshMessageCount(chatId);
+    if (freshCount != chat.unreadCount) {
+      await db.updateChat(chat.copyWith(unreadCount: freshCount));
+    }
   }
 
   Future<void> hydrateMessage(int msgId) async {
@@ -416,6 +412,7 @@ class DeltaEventConsumer {
     final db = await _db();
     final existing = await db.getMessageByStanzaID(stanzaId);
     if (existing != null) {
+      await _updateExistingMessage(existing: existing, msg: msg);
       return;
     }
     final timestamp = msg.timestamp ?? DateTime.timestamp();
@@ -481,6 +478,28 @@ class DeltaEventConsumer {
       unawaited(_context.downloadFullMessage(msg.id));
     }
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
+  }
+
+  Future<void> _updateExistingMessage({
+    required Message existing,
+    required DeltaMessage msg,
+  }) async {
+    if (!msg.hasKnownState) {
+      return;
+    }
+    final msgId = msg.id;
+    if (msg.isOutgoingDelivered && !existing.acked) {
+      await _markAcked(msgId);
+    }
+    if (msg.isOutgoingRead && !existing.displayed) {
+      await _markDisplayed(msgId);
+    }
+    if (msg.isOutgoingFailed && existing.error == MessageError.none) {
+      await _markFailed(msgId: msgId, reason: msg.error);
+    }
+    if (msg.isIncomingSeen && !existing.displayed) {
+      await _markDisplayed(msgId);
+    }
   }
 
   Future<void> _markAcked(int msgId) async {

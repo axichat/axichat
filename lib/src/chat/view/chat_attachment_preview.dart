@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -48,6 +49,7 @@ const double _attachmentOverlayIconSize = 16.0;
 const double _attachmentVideoIconSize = 20.0;
 const double _attachmentOverlayPadding = 8.0;
 const double _attachmentVideoSpinnerSize = 32.0;
+const double _attachmentSpinnerSize = 32.0;
 const double _attachmentVideoFallbackAspectRatio = 16 / 9;
 const double _attachmentRemoteIconSize = 18.0;
 const double _attachmentRemoteSpacing = 8.0;
@@ -110,7 +112,7 @@ class ChatAttachmentPreview extends StatelessWidget {
               return _AttachmentSurface(
                 child: Center(
                   child: _AttachmentSpinner(
-                    size: 32,
+                    size: _attachmentSpinnerSize,
                     color: colors.primary,
                   ),
                 ),
@@ -121,6 +123,57 @@ class ChatAttachmentPreview extends StatelessWidget {
             );
           }
 
+          final path = metadata.path?.trim();
+          final localFile = path == null || path.isEmpty ? null : File(path);
+          final hasLocalFile = localFile?.existsSync() ?? false;
+          if (hasLocalFile) {
+            return FutureBuilder<FileTypeReport>(
+              future: inspectFileType(
+                file: localFile!,
+                declaredMimeType: metadata.mimeType,
+                fileName: metadata.filename,
+              ),
+              builder: (context, typeSnapshot) {
+                if (typeSnapshot.connectionState != ConnectionState.done) {
+                  return _AttachmentSurface(
+                    child: Center(
+                      child: _AttachmentSpinner(
+                        size: _attachmentSpinnerSize,
+                        color: colors.primary,
+                      ),
+                    ),
+                  );
+                }
+                final report = typeSnapshot.data;
+                if (report?.isDetectedImage ?? false) {
+                  return _ImageAttachment(
+                    metadata: metadata,
+                    stanzaId: stanzaId,
+                    autoDownload: autoDownload,
+                    autoDownloadUserInitiated: autoDownloadUserInitiated,
+                    downloadDelegate: downloadDelegate,
+                  );
+                }
+                if (report?.isDetectedVideo ?? false) {
+                  return _VideoAttachment(
+                    metadata: metadata,
+                    stanzaId: stanzaId,
+                    autoDownload: autoDownload,
+                    autoDownloadUserInitiated: autoDownloadUserInitiated,
+                    downloadDelegate: downloadDelegate,
+                  );
+                }
+                return _FileAttachment(
+                  metadata: metadata,
+                  stanzaId: stanzaId,
+                  autoDownload: autoDownload,
+                  autoDownloadUserInitiated: autoDownloadUserInitiated,
+                  downloadDelegate: downloadDelegate,
+                  typeReport: report,
+                );
+              },
+            );
+          }
           if (!allowed) {
             return _BlockedAttachment(
               metadata: metadata,
@@ -870,6 +923,7 @@ class _FileAttachment extends StatefulWidget {
     required this.autoDownload,
     required this.autoDownloadUserInitiated,
     this.downloadDelegate,
+    this.typeReport,
   });
 
   final FileMetadataData metadata;
@@ -877,6 +931,7 @@ class _FileAttachment extends StatefulWidget {
   final bool autoDownload;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final FileTypeReport? typeReport;
 
   @override
   State<_FileAttachment> createState() => _FileAttachmentState();
@@ -977,11 +1032,23 @@ class _FileAttachmentState extends State<_FileAttachment> {
                 ),
                 const SizedBox(width: _attachmentActionSpacing),
                 AxiIconButton(
-                  iconData: LucideIcons.download,
-                  tooltip: l10n.chatAttachmentDownload,
-                  onPressed: hasLocalFile || canDownload
-                      ? () => _downloadAndOpen(existingPath: metadata.path)
-                      : null,
+                  iconData: hasLocalFile
+                      ? LucideIcons.externalLink
+                      : LucideIcons.download,
+                  tooltip: hasLocalFile
+                      ? l10n.chatAttachmentView
+                      : l10n.chatAttachmentDownload,
+                  onPressed: hasLocalFile
+                      ? () => _openAttachment(
+                            context,
+                            path: metadata.path,
+                            declaredMimeType: metadata.mimeType,
+                            fileName: metadata.filename,
+                            typeReport: widget.typeReport,
+                          )
+                      : canDownload
+                          ? () => _downloadOnly(showFeedback: true)
+                          : null,
                 ),
               ],
             ),
@@ -1015,53 +1082,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
         file: file,
         filename: widget.metadata.filename,
       );
-    } on XmppFileTooBigException catch (error) {
-      if (!mounted) return;
-      _showToast(
-        l10n,
-        toaster,
-        _attachmentTooLargeMessage(l10n, error.maxBytes),
-        destructive: true,
-      );
-    } on Exception {
-      if (!mounted) return;
-      _showToast(
-        l10n,
-        toaster,
-        l10n.chatAttachmentUnavailable,
-        destructive: true,
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _downloading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _downloadAndOpen({
-    required String? existingPath,
-  }) async {
-    if (_downloading) return;
-    setState(() {
-      _downloading = true;
-    });
-    final l10n = context.l10n;
-    final toaster = ShadToaster.maybeOf(context);
-    try {
-      final resolvedPath = await _resolveLocalPath(existingPath: existingPath);
-      if (!mounted) return;
-      if (resolvedPath == null || resolvedPath.trim().isEmpty) {
-        _showToast(
-          l10n,
-          toaster,
-          l10n.chatAttachmentUnavailable,
-          destructive: true,
-        );
-        return;
-      }
-      await _openAttachment(context, path: resolvedPath);
     } on XmppFileTooBigException catch (error) {
       if (!mounted) return;
       _showToast(
@@ -1480,6 +1500,9 @@ Future<void> _openAttachment(
   BuildContext context, {
   String? url,
   String? path,
+  String? declaredMimeType,
+  String? fileName,
+  FileTypeReport? typeReport,
 }) async {
   final l10n = context.l10n;
   final toaster = ShadToaster.maybeOf(context);
@@ -1493,6 +1516,29 @@ Future<void> _openAttachment(
         destructive: true,
       );
       return;
+    }
+    final report = typeReport ??
+        await inspectFileType(
+          file: file,
+          declaredMimeType: declaredMimeType,
+          fileName: fileName,
+        );
+    final declaredLabel = report.declaredLabel;
+    final detectedLabel = report.detectedLabel;
+    if (report.hasMismatch &&
+        declaredLabel != null &&
+        detectedLabel != null) {
+      final approved = await confirm(
+        context,
+        title: l10n.chatAttachmentTypeMismatchTitle,
+        message: l10n.chatAttachmentTypeMismatchMessage(
+          declaredLabel,
+          detectedLabel,
+        ),
+        confirmLabel: l10n.chatAttachmentTypeMismatchConfirm,
+        destructiveConfirm: true,
+      );
+      if (approved != true) return;
     }
     final launched = await launchUrl(
       Uri.file(file.path),

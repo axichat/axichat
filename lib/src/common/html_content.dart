@@ -41,6 +41,79 @@ class HtmlContentCodec {
     'br',
     'hr',
   };
+  static const Set<String> _sanitizedAllowedTags = <String>{
+    'a',
+    'b',
+    'blockquote',
+    'br',
+    'code',
+    'div',
+    'em',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'hr',
+    'i',
+    'img',
+    'li',
+    'ol',
+    'p',
+    'pre',
+    'span',
+    'strong',
+    'table',
+    'tbody',
+    'td',
+    'th',
+    'thead',
+    'tfoot',
+    'tr',
+    'u',
+    'ul',
+  };
+  static const Set<String> _sanitizedVoidTags = <String>{
+    'br',
+    'hr',
+    'img',
+  };
+  static const Set<String> _sanitizedLinkSchemes = <String>{
+    'http',
+    'https',
+    'mailto',
+    'xmpp',
+  };
+  static const Set<String> _sanitizedHostOptionalSchemes = <String>{
+    'mailto',
+    'xmpp',
+  };
+  static const Set<String> _sanitizedImageSchemes = <String>{
+    'http',
+    'https',
+  };
+  static const String _hrefAttribute = 'href';
+  static const String _srcAttribute = 'src';
+  static const String _titleAttribute = 'title';
+  static const String _altAttribute = 'alt';
+  static const String _widthAttribute = 'width';
+  static const String _heightAttribute = 'height';
+  static const String _colspanAttribute = 'colspan';
+  static const String _rowspanAttribute = 'rowspan';
+  static const Map<String, Set<String>> _sanitizedAllowedAttributes =
+      <String, Set<String>>{
+    'a': <String>{_hrefAttribute, _titleAttribute},
+    'img': <String>{
+      _srcAttribute,
+      _altAttribute,
+      _titleAttribute,
+      _widthAttribute,
+      _heightAttribute,
+    },
+    'td': <String>{_colspanAttribute, _rowspanAttribute},
+    'th': <String>{_colspanAttribute, _rowspanAttribute},
+  };
   static const String _lineBreak = '\n';
   static const String _doubleLineBreak = '\n\n';
   static final RegExp _spaceCollapse = RegExp(r'[ \t]+');
@@ -56,6 +129,17 @@ class HtmlContentCodec {
     if (trimmed.isEmpty) return '';
     final escaped = _escapeHtml(trimmed);
     return escaped.replaceAll(_lineBreak, '<br />$_lineBreak');
+  }
+
+  static String sanitizeHtml(String html) {
+    final trimmed = html.trim();
+    if (trimmed.isEmpty) return '';
+    final fragment = html_parser.parseFragment(trimmed);
+    final buffer = StringBuffer();
+    for (final node in fragment.nodes) {
+      _appendSanitizedHtml(buffer, node);
+    }
+    return buffer.toString().trim();
   }
 
   static String toPlainText(String html) {
@@ -135,6 +219,106 @@ class HtmlContentCodec {
     for (final child in node.nodes) {
       _appendXml(builder, child);
     }
+  }
+
+  static void _appendSanitizedHtml(
+    StringBuffer buffer,
+    dom.Node node,
+  ) {
+    if (node is dom.Text) {
+      buffer.write(_escapeHtml(node.text));
+      return;
+    }
+    if (node is dom.Element) {
+      final tag = (node.localName ?? '').toLowerCase();
+      if (!_sanitizedAllowedTags.contains(tag)) {
+        for (final child in node.nodes) {
+          _appendSanitizedHtml(buffer, child);
+        }
+        return;
+      }
+      final attributes = _sanitizeAttributes(tag, node.attributes);
+      buffer
+        ..write('<')
+        ..write(tag);
+      for (final entry in attributes.entries) {
+        buffer
+          ..write(' ')
+          ..write(entry.key)
+          ..write('="')
+          ..write(_escapeHtml(entry.value))
+          ..write('"');
+      }
+      if (_sanitizedVoidTags.contains(tag)) {
+        buffer.write(' />');
+        return;
+      }
+      buffer.write('>');
+      for (final child in node.nodes) {
+        _appendSanitizedHtml(buffer, child);
+      }
+      buffer
+        ..write('</')
+        ..write(tag)
+        ..write('>');
+      return;
+    }
+    if (node.nodes.isNotEmpty) {
+      for (final child in node.nodes) {
+        _appendSanitizedHtml(buffer, child);
+      }
+    }
+  }
+
+  static Map<String, String> _sanitizeAttributes(
+    String tag,
+    Map<Object?, String> attributes,
+  ) {
+    final allowed =
+        _sanitizedAllowedAttributes[tag] ?? const <String>{};
+    if (allowed.isEmpty) return const <String, String>{};
+    final sanitized = <String, String>{};
+    for (final entry in attributes.entries) {
+      final name = entry.key.toString().toLowerCase();
+      if (!allowed.contains(name)) continue;
+      final rawValue = entry.value;
+      if (name == _hrefAttribute) {
+        final safeValue =
+            _sanitizeUriValue(rawValue, _sanitizedLinkSchemes);
+        if (safeValue != null) {
+          sanitized[name] = safeValue;
+        }
+        continue;
+      }
+      if (name == _srcAttribute) {
+        final safeValue =
+            _sanitizeUriValue(rawValue, _sanitizedImageSchemes);
+        if (safeValue != null) {
+          sanitized[name] = safeValue;
+        }
+        continue;
+      }
+      sanitized[name] = rawValue;
+    }
+    return sanitized;
+  }
+
+  static String? _sanitizeUriValue(
+    String value,
+    Set<String> allowedSchemes,
+  ) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) return null;
+    final scheme = uri.scheme.toLowerCase();
+    if (!allowedSchemes.contains(scheme)) return null;
+    if (uri.userInfo.trim().isNotEmpty) return null;
+    if (uri.host.trim().isEmpty &&
+        !_sanitizedHostOptionalSchemes.contains(scheme)) {
+      return null;
+    }
+    return trimmed;
   }
 
   static void _appendLineBreak(StringBuffer buffer) {
