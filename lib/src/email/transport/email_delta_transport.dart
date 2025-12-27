@@ -202,9 +202,17 @@ class EmailDeltaTransport implements ChatTransport {
     }
     _eventSubscription ??= _context!.events().listen((event) async {
       try {
+        final notifyBeforeHandle = event.type == DeltaEventCode.chatDeleted;
+        if (notifyBeforeHandle) {
+          for (final listener in List.of(_eventListeners)) {
+            listener(event);
+          }
+        }
         await _eventConsumer?.handle(event);
-        for (final listener in List.of(_eventListeners)) {
-          listener(event);
+        if (!notifyBeforeHandle) {
+          for (final listener in List.of(_eventListeners)) {
+            listener(event);
+          }
         }
       } on Exception catch (error, stackTrace) {
         _log.severe('Failed to handle Delta event', error, stackTrace);
@@ -827,7 +835,9 @@ class EmailDeltaTransport implements ChatTransport {
   ChatType _mapChatType(int? type) {
     switch (type) {
       case DeltaChatType.group:
-      case DeltaChatType.verifiedGroup:
+      case DeltaChatType.mailingList:
+      case DeltaChatType.outBroadcast:
+      case DeltaChatType.inBroadcast:
         return ChatType.groupChat;
       default:
         return ChatType.chat;

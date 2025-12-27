@@ -13,10 +13,8 @@ const double _emailImageLoadingSize = 24.0;
 const double _emailImageLoadingStroke = 2.0;
 const String _emailImageMimePrefix = 'image/';
 const String _emailImageMimeDetectPlaceholder = 'email-image';
-const String _emailImageHttpScheme = 'http';
 const String _emailImageHttpsScheme = 'https';
 const Set<String> _emailImageAllowedSchemes = <String>{
-  _emailImageHttpScheme,
   _emailImageHttpsScheme,
 };
 
@@ -121,7 +119,8 @@ Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
       final request =
           await client.getUrl(current).timeout(_emailImageDownloadTimeout)
             ..followRedirects = false
-            ..maxRedirects = 0;
+            ..maxRedirects = 0
+            ..headers.removeAll(HttpHeaders.cookieHeader);
       final response =
           await request.close().timeout(_emailImageDownloadTimeout);
       final statusCode = response.statusCode;
@@ -138,10 +137,6 @@ Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
         final redirected = current.resolve(location.trim());
         final redirectedScheme = redirected.scheme.toLowerCase();
         if (!_emailImageAllowedSchemes.contains(redirectedScheme)) {
-          return null;
-        }
-        if (current.scheme.toLowerCase() == _emailImageHttpsScheme &&
-            redirectedScheme == _emailImageHttpScheme) {
           return null;
         }
         final safeRedirect = await isSafeHostForRemoteConnection(

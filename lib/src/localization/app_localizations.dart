@@ -3332,6 +3332,24 @@ abstract class AppLocalizations {
   /// **'Could not open {target}'**
   String chatAttachmentOpenFailed(Object target);
 
+  /// No description provided for @chatAttachmentTypeMismatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment type mismatch'**
+  String get chatAttachmentTypeMismatchTitle;
+
+  /// No description provided for @chatAttachmentTypeMismatchMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This attachment says it is {declared}, but the file looks like {detected}. Opening it could be unsafe. Continue?'**
+  String chatAttachmentTypeMismatchMessage(Object declared, Object detected);
+
+  /// No description provided for @chatAttachmentTypeMismatchConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Open anyway'**
+  String get chatAttachmentTypeMismatchConfirm;
+
   /// No description provided for @chatAttachmentUnknownSize.
   ///
   /// In en, this message translates to:
