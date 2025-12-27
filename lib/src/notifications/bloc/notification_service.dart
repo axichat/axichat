@@ -245,6 +245,12 @@ class NotificationService {
     );
   }
 
+  Future<void> dismissMessageNotification({required String threadKey}) async {
+    final normalized = threadKey.trim();
+    if (normalized.isEmpty) return;
+    await cancelNotification(_stableNotificationId(normalized));
+  }
+
   Future<void> dismissNotifications() async {
     await _ensureInitialized();
     await _plugin.cancelAll();

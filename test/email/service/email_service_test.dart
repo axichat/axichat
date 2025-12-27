@@ -209,7 +209,7 @@ void main() {
 
     listener(
       DeltaCoreEvent(
-        type: DeltaEventType.incomingMsg.code,
+        type: DeltaEventType.msgsChanged.code,
         data1: chatId,
         data2: msgId,
       ),
@@ -284,7 +284,7 @@ void main() {
 
       listener(
         DeltaCoreEvent(
-          type: DeltaEventType.incomingMsg.code,
+          type: DeltaEventType.msgsChanged.code,
           data1: chatId,
           data2: msgId,
         ),
