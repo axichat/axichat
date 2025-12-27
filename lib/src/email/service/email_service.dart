@@ -50,6 +50,19 @@ const _notificationAttachmentPrefix = 'Attachment: ';
 const _reactionNotificationFallback = 'New reaction';
 const _reactionNotificationPrefix = 'Reaction: ';
 const _webxdcNotificationFallback = 'New update';
+const _showEmailsConfigKey = 'show_emails';
+const _showEmailsAllValue = '2';
+const _mdnsEnabledConfigKey = 'mdns_enabled';
+const _mdnsEnabledValue = '1';
+const _mailServerConfigKey = 'mail_server';
+const _mailPortConfigKey = 'mail_port';
+const _mailSecurityConfigKey = 'mail_security';
+const _mailUserConfigKey = 'mail_user';
+const _sendServerConfigKey = 'send_server';
+const _sendPortConfigKey = 'send_port';
+const _sendSecurityConfigKey = 'send_security';
+const _sendUserConfigKey = 'send_user';
+const _portUnsetValue = 0;
 const List<EmailAttachment> _emptyEmailAttachments = <EmailAttachment>[];
 const _deltaContactIdPrefix = 'delta_contact_';
 const _deltaContactListFlags =
@@ -2304,58 +2317,29 @@ class EmailService {
     String address,
     EndpointConfig config,
   ) {
-    final host = _connectionHostFor(address, config);
-    final localPart = _localPartFromAddress(address) ?? address;
-    return {
-      'mail_server': host,
-      'mail_port': _defaultImapPort,
-      'mail_security': _defaultSecurityMode,
-      'mail_user': localPart,
-      'send_server': host,
-      'send_port': (config.smtpPort > 0
+    final configValues = <String, String>{
+      _showEmailsConfigKey: _showEmailsAllValue,
+      _emailDownloadLimitKey: _emailDownloadLimitDisabledValue,
+      _mdnsEnabledConfigKey: _mdnsEnabledValue,
+    };
+    final smtpHost = config.smtpHost?.trim();
+    if (smtpHost == null || smtpHost.isEmpty) {
+      return configValues;
+    }
+    final normalizedAddress = address.trim();
+    configValues
+      ..[_mailServerConfigKey] = smtpHost
+      ..[_mailPortConfigKey] = _defaultImapPort
+      ..[_mailSecurityConfigKey] = _defaultSecurityMode
+      ..[_mailUserConfigKey] = normalizedAddress
+      ..[_sendServerConfigKey] = smtpHost
+      ..[_sendPortConfigKey] = (config.smtpPort > _portUnsetValue
               ? config.smtpPort
               : EndpointConfig.defaultSmtpPort)
-          .toString(),
-      'send_security': _defaultSecurityMode,
-      'send_user': localPart,
-      'show_emails': '2',
-      _emailDownloadLimitKey: _emailDownloadLimitDisabledValue,
-      'mdns_enabled': '1',
-    };
-  }
-
-  static String _connectionHostFor(String address, EndpointConfig config) {
-    final customHost = config.smtpHost?.trim();
-    if (customHost != null && customHost.isNotEmpty) {
-      return customHost;
-    }
-    final domain = _domainFromAddress(address) ?? config.domain;
-    if (domain.isEmpty) {
-      throw StateError('Unable to resolve email server host.');
-    }
-    return domain;
-  }
-
-  static String? _domainFromAddress(String address) {
-    final parts = address.split('@');
-    if (parts.length != 2) {
-      return null;
-    }
-    final domain = parts[1].trim().toLowerCase();
-    return domain.isEmpty ? null : domain;
-  }
-
-  static String? _localPartFromAddress(String address) {
-    if (address.isEmpty) {
-      return null;
-    }
-    final index = address.indexOf('@');
-    final localPart =
-        index == -1 ? address.trim() : address.substring(0, index).trim();
-    if (localPart.isEmpty) {
-      return null;
-    }
-    return localPart;
+          .toString()
+      ..[_sendSecurityConfigKey] = _defaultSecurityMode
+      ..[_sendUserConfigKey] = normalizedAddress;
+    return configValues;
   }
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)

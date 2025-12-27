@@ -1,5 +1,4 @@
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';

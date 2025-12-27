@@ -5085,12 +5085,13 @@ class _ChatState extends State<Chat> {
                                                                   )
                                                                 : null;
                                                         final autoDownload =
-                                                            allowAttachment &&
-                                                                (state
-                                                                        .chat
-                                                                        ?.attachmentAutoDownload
-                                                                        .isAllowed ??
-                                                                    false);
+                                                            allowAttachmentOnce ||
+                                                                (allowAttachment &&
+                                                                    (state
+                                                                            .chat
+                                                                            ?.attachmentAutoDownload
+                                                                            .isAllowed ??
+                                                                        false));
                                                         final autoDownloadUserInitiated =
                                                             allowAttachmentOnce;
                                                         for (var index = 0;
