@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
@@ -56,6 +59,40 @@ const double _attachmentRemoteSpacing = 8.0;
 const double _attachmentRemoteBodySpacing = 12.0;
 const double _attachmentUnknownMaxWidth = 420.0;
 const double _attachmentMaxWidthFraction = 0.9;
+const int _attachmentImagePreviewMaxBytes = 16 * 1024 * 1024;
+const int _attachmentImageMaxPixels = 16 * 1024 * 1024;
+const int _attachmentImageMaxFrames = 60;
+const int _attachmentImageMinDimension = 1;
+const int _attachmentImageMinBytes = 1;
+const int _attachmentImageMinFrameCount = 1;
+const int _attachmentVideoPreviewMaxBytes = 64 * 1024 * 1024;
+const int _attachmentVideoMaxPixels = 32 * 1024 * 1024;
+const int _attachmentVideoMinDimensionPixels = 1;
+const int _attachmentVideoMinBytes = 1;
+const double _attachmentVideoMinDimension = 1.0;
+const Duration _attachmentImageDecodeTimeout = Duration(seconds: 2);
+const Duration _attachmentVideoInitTimeout = Duration(seconds: 3);
+const int _attachmentMillisecondsPerSecond = 1000;
+const int _attachmentMacOsQuarantineRadix = 16;
+const String _attachmentMacOsQuarantineAgent = appDisplayName;
+const String _attachmentMacOsQuarantineCommand = 'xattr';
+const String _attachmentMacOsQuarantineWriteArg = '-w';
+const String _attachmentMacOsQuarantineAttribute = 'com.apple.quarantine';
+const String _attachmentMacOsQuarantineFlags = '0083';
+const String _attachmentMacOsQuarantineSeparator = ';';
+const String _attachmentMacOsQuarantineOrigin = '';
+const String _attachmentWindowsZoneIdentifierSuffix = ':Zone.Identifier';
+const String _attachmentWindowsZoneTransferHeader = '[ZoneTransfer]';
+const String _attachmentWindowsZoneEntrySeparator = '\r\n';
+const String _attachmentWindowsZoneIdLabel = 'ZoneId';
+const String _attachmentWindowsZoneIdInternetValue = '3';
+const String _attachmentWindowsZoneIdEntry =
+    '$_attachmentWindowsZoneIdLabel=$_attachmentWindowsZoneIdInternetValue';
+const String _attachmentWindowsZoneIdentifierContent =
+    '$_attachmentWindowsZoneTransferHeader'
+    '$_attachmentWindowsZoneEntrySeparator'
+    '$_attachmentWindowsZoneIdEntry'
+    '$_attachmentWindowsZoneEntrySeparator';
 const String _attachmentTooLargeMessageDefault =
     'Attachment exceeds the server limit.';
 const String _attachmentTooLargeMessagePrefix =
@@ -152,6 +189,7 @@ class ChatAttachmentPreview extends StatelessWidget {
                     autoDownload: autoDownload,
                     autoDownloadUserInitiated: autoDownloadUserInitiated,
                     downloadDelegate: downloadDelegate,
+                    typeReport: report,
                   );
                 }
                 if (report?.isDetectedVideo ?? false) {
@@ -161,6 +199,7 @@ class ChatAttachmentPreview extends StatelessWidget {
                     autoDownload: autoDownload,
                     autoDownloadUserInitiated: autoDownloadUserInitiated,
                     downloadDelegate: downloadDelegate,
+                    typeReport: report,
                   );
                 }
                 return _FileAttachment(
@@ -270,6 +309,7 @@ class _ImageAttachment extends StatefulWidget {
     required this.autoDownload,
     required this.autoDownloadUserInitiated,
     this.downloadDelegate,
+    this.typeReport,
   });
 
   final FileMetadataData metadata;
@@ -277,6 +317,7 @@ class _ImageAttachment extends StatefulWidget {
   final bool autoDownload;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final FileTypeReport? typeReport;
 
   @override
   State<_ImageAttachment> createState() => _ImageAttachmentState();
@@ -285,12 +326,26 @@ class _ImageAttachment extends StatefulWidget {
 class _ImageAttachmentState extends State<_ImageAttachment> {
   var _downloading = false;
   var _autoDownloadRequested = false;
+  Future<bool>? _previewAllowed;
+  String? _previewPath;
 
   bool get _encrypted =>
       widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
 
   @override
+  void didUpdateWidget(covariant _ImageAttachment oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldPath = oldWidget.metadata.path?.trim();
+    final nextPath = widget.metadata.path?.trim();
+    if (oldPath != nextPath) {
+      _previewAllowed = null;
+      _previewPath = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     final metadata = widget.metadata;
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
@@ -331,45 +386,88 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
             _downloading ? null : () => _downloadAttachment(showFeedback: true),
       );
     }
-    final image = Image.file(
-      localFile!,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) =>
-          const Center(child: Icon(Icons.broken_image_outlined)),
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final targetWidth = _resolveAttachmentWidth(
-          constraints,
-          context,
-          intrinsicWidth: widget.metadata.width?.toDouble(),
+    final previewFile = localFile!;
+    final previewAllowedFuture = _resolvePreviewAllowed(previewFile);
+    return FutureBuilder<bool>(
+      future: previewAllowedFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return _AttachmentSurface(
+            child: Center(
+              child: _AttachmentSpinner(
+                size: _attachmentSpinnerSize,
+                color: colors.primary,
+              ),
+            ),
+          );
+        }
+        final allowed = snapshot.data ?? false;
+        if (!allowed) {
+          return _FileAttachment(
+            metadata: metadata,
+            stanzaId: widget.stanzaId,
+            autoDownload: widget.autoDownload,
+            autoDownloadUserInitiated: widget.autoDownloadUserInitiated,
+            downloadDelegate: widget.downloadDelegate,
+            typeReport: widget.typeReport,
+          );
+        }
+        final image = Image.file(
+          previewFile,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              const Center(child: Icon(Icons.broken_image_outlined)),
         );
-        return Align(
-          alignment: Alignment.centerLeft,
-          widthFactor: 1,
-          heightFactor: 1,
-          child: SizedBox(
-            width: targetWidth,
-            child: _AttachmentSurface(
-              padding: EdgeInsets.zero,
-              backgroundColor: Colors.transparent,
-              borderSide: BorderSide.none,
-              child: ClipRRect(
-                borderRadius: radius,
-                child: GestureDetector(
-                  onTap: () => _openImagePreview(context,
-                      file: localFile, metadata: metadata),
-                  child: AspectRatio(
-                    aspectRatio: _aspectRatio(metadata),
-                    child: image,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final targetWidth = _resolveAttachmentWidth(
+              constraints,
+              context,
+              intrinsicWidth: widget.metadata.width?.toDouble(),
+            );
+            return Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: 1,
+              heightFactor: 1,
+              child: SizedBox(
+                width: targetWidth,
+                child: _AttachmentSurface(
+                  padding: EdgeInsets.zero,
+                  backgroundColor: Colors.transparent,
+                  borderSide: BorderSide.none,
+                  child: ClipRRect(
+                    borderRadius: radius,
+                    child: GestureDetector(
+                      onTap: () => _openImagePreview(
+                        context,
+                        file: previewFile,
+                        metadata: metadata,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: _aspectRatio(metadata),
+                        child: image,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
+  }
+
+  Future<bool> _resolvePreviewAllowed(File file) {
+    final path = file.path;
+    final cachedFuture = _previewAllowed;
+    if (cachedFuture != null && _previewPath == path) {
+      return cachedFuture;
+    }
+    _previewPath = path;
+    final nextFuture = _isImagePreviewAllowed(file);
+    _previewAllowed = nextFuture;
+    return nextFuture;
   }
 
   Future<void> _downloadAttachment({required bool showFeedback}) async {
@@ -447,6 +545,7 @@ class _VideoAttachment extends StatefulWidget {
     required this.autoDownload,
     required this.autoDownloadUserInitiated,
     this.downloadDelegate,
+    this.typeReport,
   });
 
   final FileMetadataData metadata;
@@ -454,6 +553,7 @@ class _VideoAttachment extends StatefulWidget {
   final bool autoDownload;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final FileTypeReport? typeReport;
 
   @override
   State<_VideoAttachment> createState() => _VideoAttachmentState();
@@ -540,6 +640,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         autoDownload: widget.autoDownload,
         autoDownloadUserInitiated: widget.autoDownloadUserInitiated,
         downloadDelegate: widget.downloadDelegate,
+        typeReport: widget.typeReport,
       );
     }
 
@@ -712,21 +813,89 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     if (path == null || path.isEmpty) return;
     final file = File(path);
     if (!file.existsSync()) return;
+    if (!_isVideoMetadataAllowed(widget.metadata)) {
+      _markVideoInitFailed();
+      return;
+    }
+    final length = _safeFileLength(file);
+    if (length == null || length < _attachmentVideoMinBytes) {
+      _markVideoInitFailed();
+      return;
+    }
+    if (length > _attachmentVideoPreviewMaxBytes) {
+      _markVideoInitFailed();
+      return;
+    }
     final controller = VideoPlayerController.file(file);
     _controller = controller;
-    controller.initialize().then((_) {
+    controller.initialize().timeout(_attachmentVideoInitTimeout).then((_) {
       if (!mounted) return;
+      final size = controller.value.size;
+      if (!_isVideoFrameAllowed(size)) {
+        _disposeVideoController(controller);
+        _markVideoInitFailed();
+        return;
+      }
       setState(() {});
     }).catchError((_) {
       if (!mounted) return;
-      controller.dispose();
-      if (identical(_controller, controller)) {
-        _controller = null;
-      }
-      setState(() {
-        _initFailed = true;
-      });
+      _disposeVideoController(controller);
+      _markVideoInitFailed();
     });
+  }
+
+  int? _safeFileLength(File file) {
+    try {
+      return file.lengthSync();
+    } on Exception {
+      return null;
+    }
+  }
+
+  bool _isVideoMetadataAllowed(FileMetadataData metadata) {
+    final sizeBytes = metadata.sizeBytes;
+    if (sizeBytes != null && sizeBytes > _attachmentVideoPreviewMaxBytes) {
+      return false;
+    }
+    final width = metadata.width;
+    final height = metadata.height;
+    if (width == null || height == null) {
+      return true;
+    }
+    if (width < _attachmentVideoMinDimensionPixels ||
+        height < _attachmentVideoMinDimensionPixels) {
+      return true;
+    }
+    final pixelCount = width * height;
+    return pixelCount <= _attachmentVideoMaxPixels;
+  }
+
+  bool _isVideoFrameAllowed(Size size) {
+    final width = size.width;
+    final height = size.height;
+    if (width < _attachmentVideoMinDimension ||
+        height < _attachmentVideoMinDimension) {
+      return false;
+    }
+    final pixelCount = width * height;
+    return pixelCount <= _attachmentVideoMaxPixels.toDouble();
+  }
+
+  void _markVideoInitFailed() {
+    if (!mounted) {
+      _initFailed = true;
+      return;
+    }
+    setState(() {
+      _initFailed = true;
+    });
+  }
+
+  void _disposeVideoController(VideoPlayerController controller) {
+    controller.dispose();
+    if (identical(_controller, controller)) {
+      _controller = null;
+    }
   }
 
   void _resetController() {
@@ -916,6 +1085,62 @@ Size _fitWithinBounds({
   return Size(width, height);
 }
 
+Future<bool> _isImagePreviewAllowed(File file) async {
+  try {
+    final length = await file.length();
+    if (length < _attachmentImageMinBytes) {
+      return false;
+    }
+    if (length > _attachmentImagePreviewMaxBytes) {
+      return false;
+    }
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty || bytes.length > _attachmentImagePreviewMaxBytes) {
+      return false;
+    }
+    return _passesImageDecodeSafety(bytes);
+  } on Exception {
+    return false;
+  }
+}
+
+Future<bool> _passesImageDecodeSafety(Uint8List bytes) async {
+  try {
+    final codec = await ui
+        .instantiateImageCodec(bytes)
+        .timeout(_attachmentImageDecodeTimeout);
+    try {
+      final frameCount = codec.frameCount;
+      if (frameCount < _attachmentImageMinFrameCount ||
+          frameCount > _attachmentImageMaxFrames) {
+        return false;
+      }
+      final frame =
+          await codec.getNextFrame().timeout(_attachmentImageDecodeTimeout);
+      final image = frame.image;
+      try {
+        final width = image.width;
+        final height = image.height;
+        if (width < _attachmentImageMinDimension ||
+            height < _attachmentImageMinDimension) {
+          return false;
+        }
+        final pixelCount = width * height;
+        if (pixelCount > _attachmentImageMaxPixels) {
+          return false;
+        }
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      codec.dispose();
+    }
+    return true;
+  } on Exception {
+    return false;
+  }
+}
+
 class _FileAttachment extends StatefulWidget {
   const _FileAttachment({
     required this.metadata,
@@ -946,6 +1171,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final metadata = widget.metadata;
+    final report = widget.typeReport;
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
@@ -953,6 +1179,35 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final localFile = path == null || path.isEmpty ? null : File(path);
     final hasLocalFile = localFile?.existsSync() ?? false;
     final canDownload = url != null || widget.downloadDelegate != null;
+    final risk = report == null
+        ? FileOpenRisk.safe
+        : assessFileOpenRisk(
+            report: report,
+            fileName: metadata.filename,
+          );
+    final showWarningOpen = hasLocalFile && risk.isWarning;
+    final IconData openIconData = showWarningOpen
+        ? Icons.warning_amber_outlined
+        : hasLocalFile
+            ? LucideIcons.externalLink
+            : LucideIcons.download;
+    final String openTooltip = showWarningOpen
+        ? l10n.chatAttachmentTypeMismatchConfirm
+        : hasLocalFile
+            ? l10n.chatAttachmentView
+            : l10n.chatAttachmentDownload;
+    final Color? openColor = showWarningOpen ? colors.destructive : null;
+    final VoidCallback? openAction = hasLocalFile
+        ? () => _openAttachment(
+              context,
+              path: metadata.path,
+              declaredMimeType: metadata.mimeType,
+              fileName: metadata.filename,
+              typeReport: widget.typeReport,
+            )
+        : canDownload
+            ? () => _downloadOnly(showFeedback: true)
+            : null;
     if (widget.autoDownload &&
         !_autoDownloadRequested &&
         !_downloading &&
@@ -1032,23 +1287,10 @@ class _FileAttachmentState extends State<_FileAttachment> {
                 ),
                 const SizedBox(width: _attachmentActionSpacing),
                 AxiIconButton(
-                  iconData: hasLocalFile
-                      ? LucideIcons.externalLink
-                      : LucideIcons.download,
-                  tooltip: hasLocalFile
-                      ? l10n.chatAttachmentView
-                      : l10n.chatAttachmentDownload,
-                  onPressed: hasLocalFile
-                      ? () => _openAttachment(
-                            context,
-                            path: metadata.path,
-                            declaredMimeType: metadata.mimeType,
-                            fileName: metadata.filename,
-                            typeReport: widget.typeReport,
-                          )
-                      : canDownload
-                          ? () => _downloadOnly(showFeedback: true)
-                          : null,
+                  iconData: openIconData,
+                  tooltip: openTooltip,
+                  color: openColor,
+                  onPressed: openAction,
                 ),
               ],
             ),
@@ -1625,6 +1867,7 @@ Future<void> _saveAttachmentToDevice(
       await destination.delete();
     }
     await file.copy(destination.path);
+    await _applyDownloadProtections(destination);
   } on Exception {
     _showToast(
       l10n,
@@ -1633,6 +1876,60 @@ Future<void> _saveAttachmentToDevice(
       destructive: true,
     );
   }
+}
+
+Future<void> _applyDownloadProtections(File destination) async {
+  if (!await destination.exists()) {
+    return;
+  }
+  if (Platform.isMacOS) {
+    await _applyMacOsQuarantine(destination);
+  }
+  if (Platform.isWindows) {
+    await _applyWindowsZoneIdentifier(destination);
+  }
+}
+
+Future<void> _applyMacOsQuarantine(File destination) async {
+  try {
+    final value = _buildMacOsQuarantineValue();
+    await Process.run(
+      _attachmentMacOsQuarantineCommand,
+      [
+        _attachmentMacOsQuarantineWriteArg,
+        _attachmentMacOsQuarantineAttribute,
+        value,
+        destination.path,
+      ],
+    );
+  } on Exception {
+    return;
+  }
+}
+
+Future<void> _applyWindowsZoneIdentifier(File destination) async {
+  try {
+    final zonePath =
+        '${destination.path}$_attachmentWindowsZoneIdentifierSuffix';
+    final zoneFile = File(zonePath);
+    await zoneFile.writeAsString(_attachmentWindowsZoneIdentifierContent);
+  } on Exception {
+    return;
+  }
+}
+
+String _buildMacOsQuarantineValue() {
+  final timestampSeconds =
+      DateTime.now().millisecondsSinceEpoch ~/ _attachmentMillisecondsPerSecond;
+  final timestampHex =
+      timestampSeconds.toRadixString(_attachmentMacOsQuarantineRadix);
+  final parts = <String>[
+    _attachmentMacOsQuarantineFlags,
+    timestampHex,
+    _attachmentMacOsQuarantineAgent,
+    _attachmentMacOsQuarantineOrigin,
+  ];
+  return parts.join(_attachmentMacOsQuarantineSeparator);
 }
 
 void _showToast(

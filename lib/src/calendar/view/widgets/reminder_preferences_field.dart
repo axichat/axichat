@@ -112,8 +112,13 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
     final String zeroLabel =
         usesDeadline ? _reminderAtDeadlineLabel : _reminderAtStartLabel;
     final List<CalendarAlarm>? advancedAlarms = widget.advancedAlarms;
-    final ValueChanged<List<CalendarAlarm>>? onAdvancedChanged =
-        enabled ? widget.onAdvancedAlarmsChanged : null;
+    final ValueChanged<List<CalendarAlarm>>? baseAdvancedChanged =
+        widget.onAdvancedAlarmsChanged;
+    final ValueChanged<List<CalendarAlarm>>? onAdvancedChanged = enabled
+        ? baseAdvancedChanged
+        : baseAdvancedChanged == null
+            ? null
+            : (_) {};
     final bool allowAdvanced = widget.showAdvancedAlarms &&
         advancedAlarms != null &&
         onAdvancedChanged != null;
