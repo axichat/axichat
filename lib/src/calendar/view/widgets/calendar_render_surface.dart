@@ -7,10 +7,12 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/layout/calendar_layout.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/utils/calendar_free_busy_style.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_surface.dart';
 
@@ -209,6 +211,8 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
     required this.verticalScrollController,
     required this.minutesPerStep,
     required this.interactionController,
+    required this.availabilityWindows,
+    required this.availabilityOverlays,
     this.hoveredSlot,
     this.onTap,
     this.dragPreview,
@@ -234,6 +238,8 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
   final ScrollController verticalScrollController;
   final int minutesPerStep;
   final TaskInteractionController interactionController;
+  final List<CalendarAvailabilityWindow> availabilityWindows;
+  final List<CalendarAvailabilityOverlay> availabilityOverlays;
   final DateTime? hoveredSlot;
   final ValueChanged<CalendarSurfaceTapDetails>? onTap;
   final DragPreview? dragPreview;
@@ -261,6 +267,8 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       verticalScrollController: verticalScrollController,
       minutesPerStep: minutesPerStep,
       interactionController: interactionController,
+      availabilityWindows: availabilityWindows,
+      availabilityOverlays: availabilityOverlays,
       hoveredSlot: hoveredSlot,
       devicePixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
       onTap: onTap,
@@ -294,6 +302,8 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       ..verticalScrollController = verticalScrollController
       ..minutesPerStep = minutesPerStep
       ..interactionController = interactionController
+      ..availabilityWindows = availabilityWindows
+      ..availabilityOverlays = availabilityOverlays
       ..hoveredSlot = hoveredSlot
       ..devicePixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0
       ..onTap = onTap
@@ -420,6 +430,8 @@ class RenderCalendarSurface extends RenderBox
     required ScrollController verticalScrollController,
     required int minutesPerStep,
     required TaskInteractionController interactionController,
+    required List<CalendarAvailabilityWindow> availabilityWindows,
+    required List<CalendarAvailabilityOverlay> availabilityOverlays,
     DateTime? hoveredSlot,
     required double devicePixelRatio,
     this.onTap,
@@ -444,6 +456,8 @@ class RenderCalendarSurface extends RenderBox
         _verticalScrollController = verticalScrollController,
         _minutesPerStep = minutesPerStep,
         _interactionController = interactionController,
+        _availabilityWindows = availabilityWindows,
+        _availabilityOverlays = availabilityOverlays,
         _hoveredSlot = hoveredSlot,
         _devicePixelRatio = devicePixelRatio,
         _dragPreview = dragPreview;
@@ -562,6 +576,28 @@ class RenderCalendarSurface extends RenderBox
     markNeedsPaint();
   }
 
+  List<CalendarAvailabilityWindow> get availabilityWindows =>
+      _availabilityWindows;
+  List<CalendarAvailabilityWindow> _availabilityWindows;
+  set availabilityWindows(List<CalendarAvailabilityWindow> value) {
+    if (identical(_availabilityWindows, value)) {
+      return;
+    }
+    _availabilityWindows = value;
+    markNeedsPaint();
+  }
+
+  List<CalendarAvailabilityOverlay> get availabilityOverlays =>
+      _availabilityOverlays;
+  List<CalendarAvailabilityOverlay> _availabilityOverlays;
+  set availabilityOverlays(List<CalendarAvailabilityOverlay> value) {
+    if (identical(_availabilityOverlays, value)) {
+      return;
+    }
+    _availabilityOverlays = value;
+    markNeedsPaint();
+  }
+
   DateTime? get hoveredSlot => _hoveredSlot;
   DateTime? _hoveredSlot;
   set hoveredSlot(DateTime? value) {
@@ -607,6 +643,13 @@ class RenderCalendarSurface extends RenderBox
   final List<_DayColumnGeometry> _dayGeometries = <_DayColumnGeometry>[];
   static const double _tapTolerance = 12.0;
   static const double _scrollTapSuppressionThreshold = 1.0;
+  static const double _availabilityOverlayAlpha = 0.08;
+  static const double _availabilityWindowAlpha = 0.12;
+  static const double _availabilityOverlayInset = 1.0;
+  static const double _availabilityOverlayMinHeight = 1.0;
+  static const double _availabilityOverlayMinWidth = 0.0;
+  static const Duration _availabilityOverlayEndEpsilon =
+      Duration(microseconds: 1);
   int? _activePointerId;
   Offset? _pointerDownLocal;
   DateTime? _pointerDownSlot;
@@ -1589,6 +1632,8 @@ class RenderCalendarSurface extends RenderBox
 
     final CalendarLayoutMetrics resolvedMetrics = _metrics!;
     _paintDayColumns(canvas, offset, resolvedMetrics);
+    _paintAvailabilityWindows(canvas, offset, resolvedMetrics);
+    _paintAvailabilityOverlays(canvas, offset, resolvedMetrics);
     _paintGridLines(canvas, offset, resolvedMetrics);
     _paintVerticalDividers(canvas, offset);
     _paintTimeColumnLabels(canvas, offset, resolvedMetrics);
@@ -1632,6 +1677,127 @@ class RenderCalendarSurface extends RenderBox
       }
     }
   }
+
+  void _paintAvailabilityWindows(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+  ) {
+    if (_availabilityWindows.isEmpty || _dayGeometries.isEmpty) {
+      return;
+    }
+    final Paint paint = Paint()
+      ..color =
+          calendarPrimaryColor.withValues(alpha: _availabilityWindowAlpha);
+    for (final _DayColumnGeometry column in _dayGeometries) {
+      for (final CalendarAvailabilityWindow window in _availabilityWindows) {
+        _paintAvailabilityInterval(
+          canvas,
+          offset,
+          metrics,
+          column,
+          window.start.value,
+          window.end.value,
+          paint,
+        );
+      }
+    }
+  }
+
+  void _paintAvailabilityOverlays(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+  ) {
+    if (_availabilityOverlays.isEmpty || _dayGeometries.isEmpty) {
+      return;
+    }
+    for (final CalendarAvailabilityOverlay overlay in _availabilityOverlays) {
+      for (final CalendarFreeBusyInterval interval in overlay.intervals) {
+        final Paint paint = Paint()
+          ..color = interval.type.baseColor
+              .withValues(alpha: _availabilityOverlayAlpha);
+        for (final _DayColumnGeometry column in _dayGeometries) {
+          _paintAvailabilityInterval(
+            canvas,
+            offset,
+            metrics,
+            column,
+            interval.start.value,
+            interval.end.value,
+            paint,
+          );
+        }
+      }
+    }
+  }
+
+  void _paintAvailabilityInterval(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+    _DayColumnGeometry column,
+    DateTime start,
+    DateTime end,
+    Paint paint,
+  ) {
+    final DateTime dayStart = DateTime(
+      column.date.year,
+      column.date.month,
+      column.date.day,
+      startHour,
+    );
+    final DateTime dayEnd = DateTime(
+      column.date.year,
+      column.date.month,
+      column.date.day,
+      endHour,
+    );
+    final DateTime clippedStart = _maxDateTime(start, dayStart);
+    final DateTime clippedEnd = _minDateTime(end, dayEnd);
+    final DateTime resolvedEnd = _normalizeOverlayEnd(clippedStart, clippedEnd);
+    if (!resolvedEnd.isAfter(clippedStart)) {
+      return;
+    }
+    final double startMinutes =
+        clippedStart.difference(dayStart).inMicroseconds /
+            Duration.microsecondsPerMinute;
+    final double endMinutes = resolvedEnd.difference(dayStart).inMicroseconds /
+        Duration.microsecondsPerMinute;
+    final double top = metrics.verticalOffsetForMinutes(startMinutes);
+    final double height = math.max(_availabilityOverlayMinHeight,
+        metrics.verticalOffsetForMinutes(endMinutes) - top);
+    const double inset = _availabilityOverlayInset;
+    final double width = math.max(
+      _availabilityOverlayMinWidth,
+      column.bounds.width - (inset * 2),
+    );
+    final Rect rect = Rect.fromLTWH(
+      offset.dx + column.bounds.left + inset,
+      offset.dy + top,
+      width,
+      height,
+    );
+    canvas.drawRect(rect, paint);
+  }
+
+  DateTime _normalizeOverlayEnd(DateTime start, DateTime candidate) {
+    if (_isExactMidnight(candidate) && candidate.isAfter(start)) {
+      return candidate.subtract(_availabilityOverlayEndEpsilon);
+    }
+    return candidate;
+  }
+
+  bool _isExactMidnight(DateTime value) =>
+      value.hour == 0 &&
+      value.minute == 0 &&
+      value.second == 0 &&
+      value.millisecond == 0 &&
+      value.microsecond == 0;
+
+  DateTime _maxDateTime(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
+
+  DateTime _minDateTime(DateTime a, DateTime b) => a.isBefore(b) ? a : b;
 
   void _paintGridLines(
     Canvas canvas,

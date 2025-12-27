@@ -27,6 +27,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
 import 'widgets/calendar_invitation_status_field.dart';
+import 'widgets/calendar_ics_diagnostics_section.dart';
 import 'widgets/calendar_link_geo_fields.dart';
 import 'widgets/calendar_participants_field.dart';
 import 'widgets/ics_meta_fields.dart';
@@ -224,6 +225,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       invitationMethod: method,
       invitationSequence: sequence,
       invitationRawProperties: rawProperties,
+      icsMeta: widget.editingTask?.icsMeta,
     );
     final Widget saveButton = _UnifiedTaskSaveButton<T>(
       isSubmitting: _isSubmitting,
@@ -554,6 +556,7 @@ class _UnifiedTaskForm extends StatelessWidget {
     required this.invitationMethod,
     required this.invitationSequence,
     required this.invitationRawProperties,
+    required this.icsMeta,
   });
 
   final GlobalKey<FormState> formKey;
@@ -592,6 +595,7 @@ class _UnifiedTaskForm extends StatelessWidget {
   final CalendarMethod? invitationMethod;
   final int? invitationSequence;
   final List<CalendarRawProperty> invitationRawProperties;
+  final CalendarIcsMeta? icsMeta;
 
   @override
   Widget build(BuildContext context) {
@@ -600,6 +604,7 @@ class _UnifiedTaskForm extends StatelessWidget {
       sequence: invitationSequence,
       rawProperties: invitationRawProperties,
     );
+    final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
     return SingleChildScrollView(
       padding: calendarPaddingXl,
       child: Form(
@@ -688,6 +693,10 @@ class _UnifiedTaskForm extends StatelessWidget {
               CalendarAttachmentsField(
                 attachments: attachments,
               ),
+            ],
+            if (showDiagnostics) ...[
+              const SizedBox(height: calendarGutterLg),
+              CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
             ],
           ],
         ),

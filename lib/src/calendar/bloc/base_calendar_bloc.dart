@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_exceptions.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
@@ -66,6 +67,7 @@ abstract class BaseCalendarBloc
     on<CalendarDayEventAdded>(_onDayEventAdded);
     on<CalendarDayEventUpdated>(_onDayEventUpdated);
     on<CalendarDayEventDeleted>(_onDayEventDeleted);
+    on<CalendarAvailabilityUpdated>(_onAvailabilityUpdated);
     on<CalendarQuickTaskAdded>(_onQuickTaskAdded);
     on<CalendarViewChanged>(_onViewChanged);
     on<CalendarDayViewSelected>(_onDayViewSelected);
@@ -1138,6 +1140,34 @@ abstract class BaseCalendarBloc
         _restoreLastUndoSnapshot(emit);
       }
       await _handleError(error, 'Failed to delete day event', emit);
+    }
+  }
+
+  Future<void> _onAvailabilityUpdated(
+    CalendarAvailabilityUpdated event,
+    Emitter<CalendarState> emit,
+  ) async {
+    bool snapshotRecorded = false;
+    try {
+      final CalendarAvailability availability = event.availability;
+      if (!availability.end.value.isAfter(availability.start.value)) {
+        throw const CalendarValidationException(
+          'availability',
+          'End date must be after the start date',
+        );
+      }
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      snapshotRecorded = true;
+      final CalendarModel updatedModel =
+          state.model.upsertAvailability(availability);
+      emitModel(updatedModel, emit, isLoading: false);
+      await onAvailabilityChanged(updatedModel);
+    } catch (error) {
+      if (snapshotRecorded) {
+        _restoreLastUndoSnapshot(emit);
+      }
+      await _handleError(error, 'Failed to update availability', emit);
     }
   }
 
@@ -2977,6 +3007,10 @@ abstract class BaseCalendarBloc
   /// Called when any critical path changes. Override for bulk sync fallback.
   @protected
   Future<void> onCriticalPathsChanged(CalendarModel model) async {}
+
+  /// Called when availability windows change.
+  @protected
+  Future<void> onAvailabilityChanged(CalendarModel model) async {}
 
   /// Called when a new critical path is created.
   @protected
