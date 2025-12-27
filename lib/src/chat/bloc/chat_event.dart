@@ -93,14 +93,14 @@ final class _TypingParticipantsUpdated extends ChatEvent {
 final class ChatMessageSent extends ChatEvent {
   const ChatMessageSent({
     required this.text,
-    this.calendarFragment,
+    this.calendarTaskIcs,
   });
 
   final String text;
-  final CalendarFragment? calendarFragment;
+  final CalendarTask? calendarTaskIcs;
 
   @override
-  List<Object?> get props => [text, calendarFragment];
+  List<Object?> get props => [text, calendarTaskIcs];
 }
 
 final class ChatAvailabilityMessageSent extends ChatEvent {

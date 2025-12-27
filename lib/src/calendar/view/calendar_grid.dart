@@ -30,6 +30,7 @@ import 'package:axichat/src/calendar/utils/calendar_share.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
 import 'edit_task_dropdown.dart';
 import 'models/task_context_action.dart';
 import 'layout/calendar_layout.dart'
@@ -59,6 +60,7 @@ import 'calendar_navigation.dart' show calendarUnitLabel, shiftedCalendarDate;
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
 const double _headerNavButtonExtent = 44.0;
+const String _taskShareIcsActionLabel = 'Share as .ics';
 
 class _CalendarScrollController extends ScrollController {
   _CalendarScrollController({required this.onAttached});
@@ -814,6 +816,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     FeedbackSystem.showSuccess(context, 'Task copied to clipboard');
+  }
+
+  Future<void> _shareTaskIcs(CalendarTask task) async {
+    await showCalendarTaskShareSheet(
+      context: context,
+      task: task,
+    );
   }
 
   Future<void> _exportTaskIcs(CalendarTask task) async {
@@ -2649,6 +2658,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         icon: Icons.copy_outlined,
         label: 'Copy Task',
         onSelected: () => _copyTaskInstance(task),
+      ),
+      TaskContextAction(
+        icon: Icons.send,
+        label: _taskShareIcsActionLabel,
+        onSelected: () => _shareTaskIcs(task),
       ),
       TaskContextAction(
         icon: Icons.file_download_outlined,

@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -14,6 +16,7 @@ import 'package:uuid/uuid.dart';
 part 'message_models.freezed.dart';
 
 const uuid = Uuid();
+const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
 
 // ENUMS WARNING: New values must only be added to the end of the list.
 // If not, the database will break
@@ -158,6 +161,7 @@ enum PseudoMessageType {
   mucInvite,
   mucInviteRevocation,
   calendarFragment,
+  calendarTaskIcs,
   calendarAvailabilityShare,
   calendarAvailabilityRequest,
   calendarAvailabilityResponse,
@@ -169,6 +173,8 @@ extension PseudoMessageTypeX on PseudoMessageType {
       this == PseudoMessageType.mucInviteRevocation;
 
   bool get isCalendarFragment => this == PseudoMessageType.calendarFragment;
+
+  bool get isCalendarTaskIcs => this == PseudoMessageType.calendarTaskIcs;
 
   bool get isCalendarAvailability =>
       this == PseudoMessageType.calendarAvailabilityShare ||
@@ -321,15 +327,25 @@ class Message with _$Message implements Insertable<Message> {
     final senderJid = isGroupChat ? event.from.toString() : from;
     final invite = _ParsedInvite.fromEvent(event, to: to);
     final fragmentPayload = get<CalendarFragmentPayload>();
+    final taskIcsPayload = get<CalendarTaskIcsPayload>();
+    final CalendarTask? calendarTaskIcs = taskIcsPayload == null
+        ? null
+        : _calendarTaskIcsCodec.decode(taskIcsPayload.ics);
     final availabilityPayload = get<CalendarAvailabilityMessagePayload>();
     final PseudoMessageType? availabilityType =
         _availabilityPseudoMessageType(availabilityPayload);
     final PseudoMessageType? pseudoMessageType = invite?.type ??
         availabilityType ??
-        (fragmentPayload == null ? null : PseudoMessageType.calendarFragment);
+        (calendarTaskIcs == null
+            ? (fragmentPayload == null
+                ? null
+                : PseudoMessageType.calendarFragment)
+            : PseudoMessageType.calendarTaskIcs);
     final Map<String, dynamic>? pseudoMessageData = invite?.data ??
         availabilityPayload?.message.toJson() ??
-        fragmentPayload?.fragment.toJson();
+        (calendarTaskIcs == null
+            ? fragmentPayload?.fragment.toJson()
+            : calendarTaskIcs.toJson());
     final htmlData = get<XhtmlImData>();
     final normalizedHtml = HtmlContentCodec.normalizeHtml(
       htmlData?.xhtmlBody,
@@ -551,6 +567,23 @@ extension MessageCalendarFragmentX on Message {
       return CalendarFragment.fromJson(
         Map<String, dynamic>.from(payload),
       );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+extension MessageCalendarTaskIcsX on Message {
+  CalendarTask? get calendarTaskIcs {
+    if (pseudoMessageType != PseudoMessageType.calendarTaskIcs) {
+      return null;
+    }
+    final payload = pseudoMessageData;
+    if (payload == null || payload.isEmpty) {
+      return null;
+    }
+    try {
+      return CalendarTask.fromJson(Map<String, dynamic>.from(payload));
     } catch (_) {
       return null;
     }
