@@ -35,6 +35,12 @@ const EdgeInsets _taskShareChatTilePadding = EdgeInsets.symmetric(
 const String _taskShareTitle = 'Share task';
 const String _taskShareSubtitle = 'Send a task to a chat as .ics.';
 const String _taskShareTargetLabel = 'Share with';
+const String _taskShareEditAccessLabel = 'Edit access';
+const String _taskShareAllowEditsLabel = 'Allow edits';
+const String _taskShareAllowEditsHint =
+    'Let chat members update this task in the shared calendar.';
+const String _taskShareAllowEditsDisabledHint =
+    'Editing is only available for chat calendars.';
 const String _taskShareButtonLabel = 'Share';
 const String _taskShareMissingChatsMessage = 'No chats available.';
 const String _taskShareMissingRecipientMessage = 'Select a chat to share with.';
@@ -48,6 +54,7 @@ const String _taskShareIcsMimeType = 'text/calendar';
 const String _taskShareChatTypeDirectLabel = 'Direct chat';
 const String _taskShareChatTypeGroupLabel = 'Group chat';
 const String _taskShareChatTypeNoteLabel = 'Notes';
+const bool _taskShareAllowEditsDefault = false;
 
 Future<void> showCalendarTaskShareSheet({
   required BuildContext context,
@@ -96,6 +103,7 @@ class CalendarTaskShareSheet extends StatefulWidget {
 class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   Chat? _selectedChat;
   bool _isSending = false;
+  bool _allowEdits = _taskShareAllowEditsDefault;
 
   @override
   void initState() {
@@ -106,6 +114,11 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final bool allowEditsEnabled =
+        _selectedChat?.defaultTransport.isEmail != true;
+    final String allowEditsHint = allowEditsEnabled
+        ? _taskShareAllowEditsHint
+        : _taskShareAllowEditsDisabledHint;
     final header = AxiSheetHeader(
       title: const Text(_taskShareTitle),
       subtitle: const Text(_taskShareSubtitle),
@@ -124,6 +137,14 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             onSelected: _handleChatSelected,
           ),
         const SizedBox(height: _taskShareSectionSpacing),
+        const _TaskShareSectionLabel(text: _taskShareEditAccessLabel),
+        _TaskShareEditAccessToggle(
+          value: _allowEdits,
+          isEnabled: allowEditsEnabled,
+          hint: allowEditsHint,
+          onChanged: _handleAllowEditsChanged,
+        ),
+        const SizedBox(height: _taskShareSectionSpacing),
         _TaskShareActionRow(
           isBusy: _isSending,
           onPressed: _handleSharePressed,
@@ -137,6 +158,16 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     if (!mounted) return;
     setState(() {
       _selectedChat = chat;
+      if (chat.defaultTransport.isEmail) {
+        _allowEdits = _taskShareAllowEditsDefault;
+      }
+    });
+  }
+
+  void _handleAllowEditsChanged(bool value) {
+    if (!mounted) return;
+    setState(() {
+      _allowEdits = value;
     });
   }
 
@@ -151,6 +182,8 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     }
     setState(() => _isSending = true);
     final String shareText = widget.task.toShareText();
+    final bool allowEdits = _allowEdits && !selected.defaultTransport.isEmail;
+    final bool readOnly = !allowEdits;
     final XmppService? xmppService = _maybeReadXmppService(context);
     final EmailService? emailService =
         RepositoryProvider.of<EmailService?>(context);
@@ -194,6 +227,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
           text: shareText,
           encryptionProtocol: selected.encryptionProtocol,
           calendarTaskIcs: widget.task,
+          calendarTaskIcsReadOnly: readOnly,
           chatType: selected.type,
         );
       }
@@ -225,6 +259,39 @@ class _TaskShareSectionLabel extends StatelessWidget {
       letterSpacing: _taskShareLabelLetterSpacing,
     );
     return Text(text.toUpperCase(), style: style);
+  }
+}
+
+class _TaskShareEditAccessToggle extends StatelessWidget {
+  const _TaskShareEditAccessToggle({
+    required this.value,
+    required this.isEnabled,
+    required this.hint,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final bool isEnabled;
+  final String hint;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle hintStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ShadSwitch(
+          label: const Text(_taskShareAllowEditsLabel),
+          value: value,
+          onChanged: isEnabled ? onChanged : null,
+        ),
+        const SizedBox(height: _taskShareSectionGap),
+        Text(hint, style: hintStyle),
+      ],
+    );
   }
 }
 

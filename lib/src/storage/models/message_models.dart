@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
@@ -331,6 +332,13 @@ class Message with _$Message implements Insertable<Message> {
     final CalendarTask? calendarTaskIcs = taskIcsPayload == null
         ? null
         : _calendarTaskIcsCodec.decode(taskIcsPayload.ics);
+    final CalendarTaskIcsMessage? taskIcsMessage = calendarTaskIcs == null
+        ? null
+        : CalendarTaskIcsMessage(
+            task: calendarTaskIcs,
+            readOnly: taskIcsPayload?.readOnly ??
+                CalendarTaskIcsMessage.defaultReadOnly,
+          );
     final availabilityPayload = get<CalendarAvailabilityMessagePayload>();
     final PseudoMessageType? availabilityType =
         _availabilityPseudoMessageType(availabilityPayload);
@@ -343,9 +351,9 @@ class Message with _$Message implements Insertable<Message> {
             : PseudoMessageType.calendarTaskIcs);
     final Map<String, dynamic>? pseudoMessageData = invite?.data ??
         availabilityPayload?.message.toJson() ??
-        (calendarTaskIcs == null
+        (taskIcsMessage == null
             ? fragmentPayload?.fragment.toJson()
-            : calendarTaskIcs.toJson());
+            : taskIcsMessage.toJson());
     final htmlData = get<XhtmlImData>();
     final normalizedHtml = HtmlContentCodec.normalizeHtml(
       htmlData?.xhtmlBody,
@@ -574,7 +582,7 @@ extension MessageCalendarFragmentX on Message {
 }
 
 extension MessageCalendarTaskIcsX on Message {
-  CalendarTask? get calendarTaskIcs {
+  CalendarTaskIcsMessage? get calendarTaskIcsMessage {
     if (pseudoMessageType != PseudoMessageType.calendarTaskIcs) {
       return null;
     }
@@ -582,12 +590,16 @@ extension MessageCalendarTaskIcsX on Message {
     if (payload == null || payload.isEmpty) {
       return null;
     }
-    try {
-      return CalendarTask.fromJson(Map<String, dynamic>.from(payload));
-    } catch (_) {
-      return null;
-    }
+    return CalendarTaskIcsMessage.tryParse(
+      Map<String, dynamic>.from(payload),
+    );
   }
+
+  CalendarTask? get calendarTaskIcs => calendarTaskIcsMessage?.task;
+
+  bool get calendarTaskIcsReadOnly =>
+      calendarTaskIcsMessage?.readOnly ??
+      CalendarTaskIcsMessage.defaultReadOnly;
 }
 
 extension MessageCalendarAvailabilityX on Message {
