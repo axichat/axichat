@@ -24,12 +24,14 @@ abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
     required this.task,
     required this.isGuestMode,
     this.onTap,
+    this.isReadOnly = false,
     this.compact = false,
   });
 
   final CalendarTask task;
   final bool isGuestMode;
   final VoidCallback? onTap;
+  final bool isReadOnly;
   final bool compact;
 }
 
@@ -66,6 +68,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                 : ResponsiveHelper.spec(context);
             final EdgeInsets margin = _tileMargin(spec);
             final CalendarTask task = widget.task;
+            final bool isReadOnly = widget.isReadOnly;
             final Color taskColor = _getTaskColor(task);
             final Color statusColor = _getStatusColor(context);
             final String statusText = _getStatusText(l10n);
@@ -78,10 +81,22 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
             final Color timeColor = _getTimeColor(context);
             final FontWeight? timeFontWeight =
                 _isOverdue() ? FontWeight.bold : null;
-            void handleEdit() => showEditTaskInput(context, task);
-            void handleDelete() => _showDeleteConfirmation(context);
-            void handleToggleCompletion(bool completed) =>
-                _toggleTaskCompletion(context, completed);
+            void handleEdit() {
+              showEditTaskInput(context, task);
+            }
+
+            void handleDelete() {
+              _showDeleteConfirmation(context);
+            }
+
+            void handleToggleCompletion(bool completed) {
+              _toggleTaskCompletion(context, completed);
+            }
+
+            final VoidCallback? editAction = isReadOnly ? null : handleEdit;
+            final VoidCallback? deleteAction = isReadOnly ? null : handleDelete;
+            final ValueChanged<bool>? toggleAction =
+                isReadOnly ? null : handleToggleCompletion;
 
             late final Widget tile;
             switch (spec.sizeClass) {
@@ -92,12 +107,12 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                   onTap: widget.onTap,
                   taskColor: taskColor,
                   isUpdating: _isUpdating,
-                  onToggleCompletion: handleToggleCompletion,
+                  onToggleCompletion: toggleAction,
                   timeLabel: timeLabel,
                   timeColor: timeColor,
                   timeFontWeight: timeFontWeight,
-                  onEdit: handleEdit,
-                  onDelete: handleDelete,
+                  onEdit: editAction,
+                  onDelete: deleteAction,
                 );
               case CalendarSizeClass.medium:
                 tile = _MediumTaskTile(
@@ -106,11 +121,11 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                   onTap: widget.onTap,
                   taskColor: taskColor,
                   isUpdating: _isUpdating,
-                  onToggleCompletion: handleToggleCompletion,
+                  onToggleCompletion: toggleAction,
                   timeLabel: timeLabel,
                   timeFontWeight: timeFontWeight,
-                  onEdit: handleEdit,
-                  onDelete: handleDelete,
+                  onEdit: editAction,
+                  onDelete: deleteAction,
                 );
               case CalendarSizeClass.expanded:
                 tile = _FullTaskTile(
@@ -118,15 +133,15 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                   margin: margin,
                   onTap: widget.onTap,
                   isUpdating: _isUpdating,
-                  onToggleCompletion: handleToggleCompletion,
+                  onToggleCompletion: toggleAction,
                   statusColor: statusColor,
                   statusText: statusText,
                   timeLabel: timeLabel,
                   timeColor: timeColor,
                   timeFontWeight: timeFontWeight,
                   durationLabel: durationLabel,
-                  onEdit: handleEdit,
-                  onDelete: handleDelete,
+                  onEdit: editAction,
+                  onDelete: deleteAction,
                 );
             }
             return CalendarTaskTitleHoverReporter(
@@ -256,18 +271,19 @@ class _CompactTaskTile extends StatelessWidget {
   final VoidCallback? onTap;
   final Color taskColor;
   final bool isUpdating;
-  final ValueChanged<bool> onToggleCompletion;
+  final ValueChanged<bool>? onToggleCompletion;
   final String? timeLabel;
   final Color timeColor;
   final FontWeight? timeFontWeight;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final Color indicatorColor =
         task.isCompleted ? taskCompletedColor : taskColor;
     final colors = context.colorScheme;
+    final bool showActions = onEdit != null || onDelete != null;
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -316,13 +332,15 @@ class _CompactTaskTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                _TaskActionMenu(
-                  onEdit: onEdit,
-                  onDelete: onDelete,
-                  showIcons: false,
-                  iconSize: 20,
-                ),
-                const SizedBox(width: calendarGutterMd),
+                if (showActions) ...[
+                  _TaskActionMenu(
+                    onEdit: onEdit,
+                    onDelete: onDelete,
+                    showIcons: false,
+                    iconSize: 20,
+                  ),
+                  const SizedBox(width: calendarGutterMd),
+                ],
                 _TaskCompletionToggle(
                   isUpdating: isUpdating,
                   isCompleted: task.isCompleted,
@@ -356,11 +374,11 @@ class _MediumTaskTile extends StatelessWidget {
   final VoidCallback? onTap;
   final Color taskColor;
   final bool isUpdating;
-  final ValueChanged<bool> onToggleCompletion;
+  final ValueChanged<bool>? onToggleCompletion;
   final String? timeLabel;
   final FontWeight? timeFontWeight;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -368,6 +386,7 @@ class _MediumTaskTile extends StatelessWidget {
     final Color backgroundColor =
         task.isCompleted ? taskCompletedColor : taskColor;
     final Color progressTrack = textColor.withValues(alpha: 0.25);
+    final bool showActions = onEdit != null || onDelete != null;
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -436,22 +455,26 @@ class _MediumTaskTile extends StatelessWidget {
                           fontWeight: timeFontWeight,
                         ),
                       ),
-                      const Spacer(),
-                      _TaskActionMenu(
-                        onEdit: onEdit,
-                        onDelete: onDelete,
-                      ),
+                      if (showActions) ...[
+                        const Spacer(),
+                        _TaskActionMenu(
+                          onEdit: onEdit,
+                          onDelete: onDelete,
+                        ),
+                      ],
                     ],
                   ),
                 ] else ...[
-                  const SizedBox(height: calendarInsetMd),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _TaskActionMenu(
-                      onEdit: onEdit,
-                      onDelete: onDelete,
+                  if (showActions) ...[
+                    const SizedBox(height: calendarInsetMd),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _TaskActionMenu(
+                        onEdit: onEdit,
+                        onDelete: onDelete,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ],
             ),
@@ -483,15 +506,15 @@ class _FullTaskTile extends StatelessWidget {
   final EdgeInsets margin;
   final VoidCallback? onTap;
   final bool isUpdating;
-  final ValueChanged<bool> onToggleCompletion;
+  final ValueChanged<bool>? onToggleCompletion;
   final Color statusColor;
   final String statusText;
   final String? timeLabel;
   final Color timeColor;
   final FontWeight? timeFontWeight;
   final String? durationLabel;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -499,6 +522,7 @@ class _FullTaskTile extends StatelessWidget {
     final Color indicatorColor =
         task.isCompleted ? taskCompletedColor : task.priorityColor;
     final Color progressTrack = colors.muted.withValues(alpha: 0.2);
+    final bool showActions = onEdit != null || onDelete != null;
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -595,32 +619,37 @@ class _FullTaskTile extends StatelessWidget {
                             color: statusColor,
                             text: statusText,
                           ),
-                          const Spacer(),
-                          AxiIconButton(
-                            iconData: Icons.edit,
-                            tooltip: context.l10n.calendarEditTaskTooltip,
-                            onPressed: onEdit,
-                            iconSize: 18,
-                            buttonSize: 36,
-                            tapTargetSize: 40,
-                            cornerRadius: 12,
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            color: colors.mutedForeground,
-                          ),
-                          const SizedBox(width: calendarGutterSm),
-                          AxiIconButton(
-                            iconData: Icons.delete,
-                            tooltip: context.l10n.calendarDeleteTaskTooltip,
-                            onPressed: onDelete,
-                            iconSize: 18,
-                            buttonSize: 36,
-                            tapTargetSize: 40,
-                            cornerRadius: 12,
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            color: colors.destructive,
-                          ),
+                          if (showActions) ...[
+                            const Spacer(),
+                            if (onEdit != null)
+                              AxiIconButton(
+                                iconData: Icons.edit,
+                                tooltip: context.l10n.calendarEditTaskTooltip,
+                                onPressed: onEdit,
+                                iconSize: 18,
+                                buttonSize: 36,
+                                tapTargetSize: 40,
+                                cornerRadius: 12,
+                                backgroundColor: colors.card,
+                                borderColor: colors.border,
+                                color: colors.mutedForeground,
+                              ),
+                            if (onEdit != null && onDelete != null)
+                              const SizedBox(width: calendarGutterSm),
+                            if (onDelete != null)
+                              AxiIconButton(
+                                iconData: Icons.delete,
+                                tooltip: context.l10n.calendarDeleteTaskTooltip,
+                                onPressed: onDelete,
+                                iconSize: 18,
+                                buttonSize: 36,
+                                tapTargetSize: 40,
+                                cornerRadius: 12,
+                                backgroundColor: colors.card,
+                                borderColor: colors.border,
+                                color: colors.destructive,
+                              ),
+                          ],
                         ],
                       ),
                     ],
@@ -650,14 +679,15 @@ class _TaskCompletionToggle extends StatelessWidget {
 
   final bool isUpdating;
   final bool isCompleted;
-  final ValueChanged<bool> onToggle;
+  final ValueChanged<bool>? onToggle;
 
   @override
   Widget build(BuildContext context) {
     final String feedbackMessage =
         isCompleted ? 'Task marked incomplete' : 'Task completed!';
+    final bool isEnabled = onToggle != null;
     return ActionFeedback(
-      onTap: isUpdating ? null : () => onToggle(!isCompleted),
+      onTap: isUpdating || !isEnabled ? null : () => onToggle!(!isCompleted),
       feedbackMessage: feedbackMessage,
       child: isUpdating
           ? const SizedBox(
@@ -667,11 +697,13 @@ class _TaskCompletionToggle extends StatelessWidget {
             )
           : CalendarCompletionCheckbox(
               value: isCompleted,
-              onChanged: (completed) {
-                if (!isUpdating) {
-                  onToggle(completed);
-                }
-              },
+              onChanged: isEnabled
+                  ? (completed) {
+                      if (!isUpdating) {
+                        onToggle!(completed);
+                      }
+                    }
+                  : null,
             ),
     );
   }
@@ -738,8 +770,8 @@ class _TaskActionMenu extends StatefulWidget {
     this.iconSize,
   });
 
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
   final bool showIcons;
   final double? iconSize;
 
@@ -763,36 +795,48 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
   }
 
   void _handleEdit() {
+    if (widget.onEdit == null) {
+      return;
+    }
     _controller.hide();
-    widget.onEdit();
+    widget.onEdit!();
   }
 
   void _handleDelete() {
+    if (widget.onDelete == null) {
+      return;
+    }
     _controller.hide();
-    widget.onDelete();
+    widget.onDelete!();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final List<AxiMenuAction> actions = [
+      if (widget.onEdit != null)
+        AxiMenuAction(
+          label: l10n.chatActionEdit,
+          icon: widget.showIcons ? Icons.edit : null,
+          onPressed: _handleEdit,
+        ),
+      if (widget.onDelete != null)
+        AxiMenuAction(
+          label: l10n.commonDelete,
+          icon: widget.showIcons ? Icons.delete : null,
+          destructive: true,
+          onPressed: _handleDelete,
+        ),
+    ];
+    if (actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return ShadPopover(
       controller: _controller,
       closeOnTapOutside: true,
       padding: EdgeInsets.zero,
       popover: (context) => AxiMenu(
-        actions: [
-          AxiMenuAction(
-            label: l10n.chatActionEdit,
-            icon: widget.showIcons ? Icons.edit : null,
-            onPressed: _handleEdit,
-          ),
-          AxiMenuAction(
-            label: l10n.commonDelete,
-            icon: widget.showIcons ? Icons.delete : null,
-            destructive: true,
-            onPressed: _handleDelete,
-          ),
-        ],
+        actions: actions,
       ),
       child: IconButton(
         iconSize: widget.iconSize,
