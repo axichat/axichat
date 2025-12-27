@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -55,9 +56,8 @@ Future<void> showCalendarTaskShareSheet({
 }) async {
   final List<Chat> chats =
       context.read<ChatsCubit?>()?.state.items ?? const <Chat>[];
-  final List<Chat> available = chats
-      .where((chat) => chat.type != ChatType.note)
-      .toList(growable: false);
+  final List<Chat> available =
+      chats.where((chat) => chat.type != ChatType.note).toList(growable: false);
   if (available.isEmpty) {
     FeedbackSystem.showInfo(context, _taskShareMissingChatsMessage);
     return;
@@ -162,6 +162,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         }
         final EmailAttachment? attachment =
             await _buildCalendarTaskAttachment(widget.task);
+        if (!mounted) {
+          return;
+        }
         if (attachment == null) {
           FeedbackSystem.showError(context, _taskShareSendFailureMessage);
           return;
@@ -199,10 +202,13 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       }
       Navigator.of(context).pop(true);
     } on Exception {
-      FeedbackSystem.showError(context, _taskShareSendFailureMessage);
+      if (mounted) {
+        FeedbackSystem.showError(context, _taskShareSendFailureMessage);
+      }
     } finally {
-      if (!mounted) return;
-      setState(() => _isSending = false);
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
     }
   }
 }
@@ -324,8 +330,7 @@ Future<EmailAttachment?> _buildCalendarTaskAttachment(
   CalendarTask task,
 ) async {
   try {
-    final CalendarTransferService transferService =
-        const CalendarTransferService();
+    const CalendarTransferService transferService = CalendarTransferService();
     final File file = await transferService.exportTaskIcs(task: task);
     final int sizeBytes = await file.length();
     return EmailAttachment(
