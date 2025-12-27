@@ -4,6 +4,8 @@ const String _spamSyncSourceKeyName = 'spam_sync_source_id';
 const String _spamSyncPendingPublishesKeyName = 'spam_sync_pending_publishes';
 const String _spamSyncPendingRetractionsKeyName =
     'spam_sync_pending_retractions';
+const String _spamSyncSnapshotAtKeyName = 'spam_sync_last_snapshot_at';
+const String _spamSyncSnapshotIdsKeyName = 'spam_sync_last_snapshot_ids';
 
 final _spamSyncSourceKey = XmppStateStore.registerKey(
   _spamSyncSourceKeyName,
@@ -13,6 +15,12 @@ final _spamSyncPendingPublishesKey = XmppStateStore.registerKey(
 );
 final _spamSyncPendingRetractionsKey = XmppStateStore.registerKey(
   _spamSyncPendingRetractionsKeyName,
+);
+final _spamSyncSnapshotAtKey = XmppStateStore.registerKey(
+  _spamSyncSnapshotAtKeyName,
+);
+final _spamSyncSnapshotIdsKey = XmppStateStore.registerKey(
+  _spamSyncSnapshotIdsKeyName,
 );
 
 enum _SpamSyncDecision {
@@ -27,6 +35,10 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   bool _pendingSpamSyncLoaded = false;
   final Set<String> _pendingSpamPublishes = {};
   final Set<String> _pendingSpamRetractions = {};
+  // ignore: prefer_final_fields
+  bool _spamSnapshotMetaLoaded = false;
+  DateTime? _spamLastSnapshotAt;
+  final Set<String> _spamLastSnapshotIds = {};
 
   SpamPubSubManager? get _spamManager =>
       _connection.getManager<SpamPubSubManager>();
@@ -86,30 +98,48 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       if (!snapshot.isSuccess) {
         return;
       }
+      await _ensureSpamSnapshotMetaLoaded();
+      final snapshotTimestamp = DateTime.timestamp().toUtc();
+      final isSnapshotComplete = snapshot.isComplete;
 
       final remoteItems = snapshot.items;
-      final remoteByJid = <String, SpamSyncPayload>{
-        for (final item in remoteItems) item.jid: item,
-      };
+      final remoteByJid = <String, SpamSyncPayload>{};
+      for (final item in remoteItems) {
+        final normalized = item.jid.trim().toLowerCase();
+        if (normalized.isEmpty) {
+          continue;
+        }
+        remoteByJid[normalized] = item;
+      }
+      final remoteIds = remoteByJid.keys.toSet();
 
       final localItems =
           await _dbOpReturning<XmppDatabase, List<EmailSpamEntry>>(
         (db) => db.getEmailSpamlist(),
       );
-      final localByJid = <String, EmailSpamEntry>{
-        for (final item in localItems) item.address: item,
-      };
-      final localSourceId = await _ensureSpamSourceId();
-
-      for (final remote in remoteItems) {
-        if (_pendingSpamRetractions.contains(remote.jid)) {
-          await retractSpamSync(remote.jid);
+      final localByJid = <String, EmailSpamEntry>{};
+      for (final item in localItems) {
+        final normalized = item.address.trim().toLowerCase();
+        if (normalized.isEmpty) {
           continue;
         }
-        final local = localByJid[remote.jid];
+        localByJid[normalized] = item;
+      }
+      final localSourceId = await _ensureSpamSourceId();
+      final previousSnapshotAt = _spamLastSnapshotAt;
+      final previousSnapshotIds = Set<String>.of(_spamLastSnapshotIds);
+
+      for (final entry in remoteByJid.entries) {
+        final remoteJid = entry.key;
+        final remote = entry.value;
+        if (_pendingSpamRetractions.contains(remoteJid)) {
+          await retractSpamSync(remoteJid);
+          continue;
+        }
+        final local = localByJid[remoteJid];
         if (local == null) {
           await _applySpamStatus(
-            jid: remote.jid,
+            jid: remoteJid,
             spam: true,
             updatedAt: remote.updatedAt,
             sourceId: remote.sourceId,
@@ -125,7 +155,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
         switch (decision) {
           case _SpamSyncDecision.applyRemote:
             await _applySpamStatus(
-              jid: remote.jid,
+              jid: remoteJid,
               spam: true,
               updatedAt: remote.updatedAt,
               sourceId: remote.sourceId,
@@ -138,12 +168,37 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
         }
       }
 
-      for (final local in localItems) {
-        final jid = local.address;
+      for (final entry in localByJid.entries) {
+        final jid = entry.key;
+        final local = entry.value;
         if (remoteByJid.containsKey(jid)) {
           continue;
         }
+        if (_shouldApplyMissingSpamDeletion(
+          jid: jid,
+          localUpdatedAt: local.flaggedAt,
+          entrySourceId: local.sourceId,
+          localSourceId: localSourceId,
+          lastSnapshotAt: previousSnapshotAt,
+          previousSnapshotIds: previousSnapshotIds,
+          isSnapshotComplete: isSnapshotComplete,
+        )) {
+          await _applySpamStatus(
+            jid: jid,
+            spam: false,
+            updatedAt: snapshotTimestamp,
+            sourceId: await _ensureSpamSourceId(),
+            origin: anti_abuse.SyncOrigin.remote,
+          );
+          continue;
+        }
         await publishSpamSync(local);
+      }
+      if (isSnapshotComplete) {
+        await _persistSpamSnapshotMeta(
+          snapshotAt: snapshotTimestamp,
+          remoteIds: remoteIds,
+        );
       }
     } on XmppAbortedException {
       return;
@@ -432,6 +487,33 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     _pendingSpamSyncLoaded = true;
   }
 
+  Future<void> _ensureSpamSnapshotMetaLoaded() async {
+    if (_spamSnapshotMetaLoaded) {
+      return;
+    }
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        final rawTimestamp = ss.read(key: _spamSyncSnapshotAtKey);
+        final rawIds =
+            (ss.read(key: _spamSyncSnapshotIdsKey) as List?)?.cast<Object?>();
+        _spamLastSnapshotAt = _parseSpamSnapshotAt(rawTimestamp);
+        _spamLastSnapshotIds
+          ..clear()
+          ..addAll(_normalizeSpamSyncIds(rawIds));
+      },
+      awaitDatabase: true,
+    );
+    _spamSnapshotMetaLoaded = true;
+  }
+
+  DateTime? _parseSpamSnapshotAt(Object? raw) {
+    final value = raw?.toString().trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value);
+  }
+
   Iterable<String> _normalizeSpamSyncIds(List<Object?>? raw) sync* {
     if (raw == null || raw.isEmpty) {
       return;
@@ -443,6 +525,53 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       }
       yield normalized;
     }
+  }
+
+  Future<void> _persistSpamSnapshotMeta({
+    required DateTime snapshotAt,
+    required Set<String> remoteIds,
+  }) async {
+    _spamLastSnapshotAt = snapshotAt;
+    _spamLastSnapshotIds
+      ..clear()
+      ..addAll(remoteIds);
+    await _dbOp<XmppStateStore>(
+      (ss) async => ss.writeAll(
+        data: {
+          _spamSyncSnapshotAtKey: snapshotAt.toIso8601String(),
+          _spamSyncSnapshotIdsKey: remoteIds.toList(growable: false),
+        },
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  bool _shouldApplyMissingSpamDeletion({
+    required String jid,
+    required DateTime localUpdatedAt,
+    required String? entrySourceId,
+    required String localSourceId,
+    required DateTime? lastSnapshotAt,
+    required Set<String> previousSnapshotIds,
+    required bool isSnapshotComplete,
+  }) {
+    if (!isSnapshotComplete) {
+      return false;
+    }
+    if (!previousSnapshotIds.contains(jid)) {
+      return false;
+    }
+    if (_pendingSpamPublishes.contains(jid)) {
+      return false;
+    }
+    final normalizedSource = _normalizeSpamSourceId(entrySourceId);
+    if (normalizedSource != localSourceId) {
+      return true;
+    }
+    if (lastSnapshotAt == null) {
+      return false;
+    }
+    return !localUpdatedAt.toUtc().isAfter(lastSnapshotAt);
   }
 
   Future<void> _persistPendingSpamSync() async {

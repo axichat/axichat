@@ -6,6 +6,10 @@ const String _emailBlocklistPendingPublishesKeyName =
     'email_blocklist_sync_pending_publishes';
 const String _emailBlocklistPendingRetractionsKeyName =
     'email_blocklist_sync_pending_retractions';
+const String _emailBlocklistSnapshotAtKeyName =
+    'email_blocklist_sync_last_snapshot_at';
+const String _emailBlocklistSnapshotIdsKeyName =
+    'email_blocklist_sync_last_snapshot_ids';
 
 final _emailBlocklistSyncSourceKey = XmppStateStore.registerKey(
   _emailBlocklistSyncSourceKeyName,
@@ -15,6 +19,12 @@ final _emailBlocklistPendingPublishesKey = XmppStateStore.registerKey(
 );
 final _emailBlocklistPendingRetractionsKey = XmppStateStore.registerKey(
   _emailBlocklistPendingRetractionsKeyName,
+);
+final _emailBlocklistSnapshotAtKey = XmppStateStore.registerKey(
+  _emailBlocklistSnapshotAtKeyName,
+);
+final _emailBlocklistSnapshotIdsKey = XmppStateStore.registerKey(
+  _emailBlocklistSnapshotIdsKeyName,
 );
 
 enum _EmailBlocklistSyncDecision {
@@ -29,6 +39,9 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   bool _pendingEmailBlocklistSyncLoaded = false;
   final Set<String> _pendingEmailBlocklistPublishes = {};
   final Set<String> _pendingEmailBlocklistRetractions = {};
+  bool _emailBlocklistSnapshotMetaLoaded = false;
+  DateTime? _emailBlocklistLastSnapshotAt;
+  final Set<String> _emailBlocklistLastSnapshotIds = {};
 
   EmailBlocklistPubSubManager? get _emailBlocklistManager =>
       _connection.getManager<EmailBlocklistPubSubManager>();
@@ -88,30 +101,49 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       if (!snapshot.isSuccess) {
         return;
       }
+      await _ensureEmailBlocklistSnapshotMetaLoaded();
+      final snapshotTimestamp = DateTime.timestamp().toUtc();
+      final isSnapshotComplete = snapshot.isComplete;
 
       final remoteItems = snapshot.items;
-      final remoteByAddress = <String, EmailBlocklistSyncPayload>{
-        for (final item in remoteItems) item.address: item,
-      };
+      final remoteByAddress = <String, EmailBlocklistSyncPayload>{};
+      for (final item in remoteItems) {
+        final normalized = item.address.trim().toLowerCase();
+        if (normalized.isEmpty) {
+          continue;
+        }
+        remoteByAddress[normalized] = item;
+      }
+      final remoteIds = remoteByAddress.keys.toSet();
 
       final localItems =
           await _dbOpReturning<XmppDatabase, List<EmailBlocklistEntry>>(
         (db) => db.getEmailBlocklist(),
       );
-      final localByAddress = <String, EmailBlocklistEntry>{
-        for (final item in localItems) item.address: item,
-      };
-      final localSourceId = await _ensureEmailBlocklistSourceId();
-
-      for (final remote in remoteItems) {
-        if (_pendingEmailBlocklistRetractions.contains(remote.address)) {
-          await retractEmailBlockSync(remote.address);
+      final localByAddress = <String, EmailBlocklistEntry>{};
+      for (final item in localItems) {
+        final normalized = item.address.trim().toLowerCase();
+        if (normalized.isEmpty) {
           continue;
         }
-        final local = localByAddress[remote.address];
+        localByAddress[normalized] = item;
+      }
+      final localSourceId = await _ensureEmailBlocklistSourceId();
+      final previousSnapshotAt = _emailBlocklistLastSnapshotAt;
+      final previousSnapshotIds =
+          Set<String>.of(_emailBlocklistLastSnapshotIds);
+
+      for (final entry in remoteByAddress.entries) {
+        final remoteAddress = entry.key;
+        final remote = entry.value;
+        if (_pendingEmailBlocklistRetractions.contains(remoteAddress)) {
+          await retractEmailBlockSync(remoteAddress);
+          continue;
+        }
+        final local = localByAddress[remoteAddress];
         if (local == null) {
           await _applyEmailBlockStatus(
-            address: remote.address,
+            address: remoteAddress,
             blocked: true,
             updatedAt: remote.updatedAt,
             sourceId: remote.sourceId,
@@ -127,7 +159,7 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
         switch (decision) {
           case _EmailBlocklistSyncDecision.applyRemote:
             await _applyEmailBlockStatus(
-              address: remote.address,
+              address: remoteAddress,
               blocked: true,
               updatedAt: remote.updatedAt,
               sourceId: remote.sourceId,
@@ -140,12 +172,37 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
         }
       }
 
-      for (final local in localItems) {
-        final address = local.address;
+      for (final entry in localByAddress.entries) {
+        final address = entry.key;
+        final local = entry.value;
         if (remoteByAddress.containsKey(address)) {
           continue;
         }
+        if (_shouldApplyMissingEmailBlocklistDeletion(
+          address: address,
+          localUpdatedAt: local.blockedAt,
+          entrySourceId: local.sourceId,
+          localSourceId: localSourceId,
+          lastSnapshotAt: previousSnapshotAt,
+          previousSnapshotIds: previousSnapshotIds,
+          isSnapshotComplete: isSnapshotComplete,
+        )) {
+          await _applyEmailBlockStatus(
+            address: address,
+            blocked: false,
+            updatedAt: snapshotTimestamp,
+            sourceId: await _ensureEmailBlocklistSourceId(),
+            origin: anti_abuse.SyncOrigin.remote,
+          );
+          continue;
+        }
         await publishEmailBlockSync(local);
+      }
+      if (isSnapshotComplete) {
+        await _persistEmailBlocklistSnapshotMeta(
+          snapshotAt: snapshotTimestamp,
+          remoteIds: remoteIds,
+        );
       }
     } on XmppAbortedException {
       return;
@@ -440,6 +497,34 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     _pendingEmailBlocklistSyncLoaded = true;
   }
 
+  Future<void> _ensureEmailBlocklistSnapshotMetaLoaded() async {
+    if (_emailBlocklistSnapshotMetaLoaded) {
+      return;
+    }
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        final rawTimestamp = ss.read(key: _emailBlocklistSnapshotAtKey);
+        final rawIds = (ss.read(key: _emailBlocklistSnapshotIdsKey) as List?)
+            ?.cast<Object?>();
+        _emailBlocklistLastSnapshotAt =
+            _parseEmailBlocklistSnapshotAt(rawTimestamp);
+        _emailBlocklistLastSnapshotIds
+          ..clear()
+          ..addAll(_normalizeEmailBlocklistSyncIds(rawIds));
+      },
+      awaitDatabase: true,
+    );
+    _emailBlocklistSnapshotMetaLoaded = true;
+  }
+
+  DateTime? _parseEmailBlocklistSnapshotAt(Object? raw) {
+    final value = raw?.toString().trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value);
+  }
+
   Iterable<String> _normalizeEmailBlocklistSyncIds(List<Object?>? raw) sync* {
     if (raw == null || raw.isEmpty) {
       return;
@@ -451,6 +536,53 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       }
       yield normalized;
     }
+  }
+
+  Future<void> _persistEmailBlocklistSnapshotMeta({
+    required DateTime snapshotAt,
+    required Set<String> remoteIds,
+  }) async {
+    _emailBlocklistLastSnapshotAt = snapshotAt;
+    _emailBlocklistLastSnapshotIds
+      ..clear()
+      ..addAll(remoteIds);
+    await _dbOp<XmppStateStore>(
+      (ss) async => ss.writeAll(
+        data: {
+          _emailBlocklistSnapshotAtKey: snapshotAt.toIso8601String(),
+          _emailBlocklistSnapshotIdsKey: remoteIds.toList(growable: false),
+        },
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  bool _shouldApplyMissingEmailBlocklistDeletion({
+    required String address,
+    required DateTime localUpdatedAt,
+    required String? entrySourceId,
+    required String localSourceId,
+    required DateTime? lastSnapshotAt,
+    required Set<String> previousSnapshotIds,
+    required bool isSnapshotComplete,
+  }) {
+    if (!isSnapshotComplete) {
+      return false;
+    }
+    if (!previousSnapshotIds.contains(address)) {
+      return false;
+    }
+    if (_pendingEmailBlocklistPublishes.contains(address)) {
+      return false;
+    }
+    final normalizedSource = _normalizeEmailBlocklistSourceId(entrySourceId);
+    if (normalizedSource != localSourceId) {
+      return true;
+    }
+    if (lastSnapshotAt == null) {
+      return false;
+    }
+    return !localUpdatedAt.toUtc().isAfter(lastSnapshotAt);
   }
 
   Future<void> _persistPendingEmailBlocklistSync() async {
