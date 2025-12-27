@@ -13,6 +13,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
@@ -35,6 +36,11 @@ class _CalendarUndoSnapshot {
   final String? focusedCriticalPathId;
 }
 
+enum _LinkedTaskOperation {
+  update,
+  delete,
+}
+
 abstract class BaseCalendarBloc
     extends HydratedBloc<CalendarEvent, CalendarState> {
   BaseCalendarBloc({
@@ -51,6 +57,7 @@ abstract class BaseCalendarBloc
         _storage = storage,
         _nlParserService = parserService ?? NlScheduleParserService(),
         super(CalendarState.initial()) {
+    _registerLinkedTaskBloc();
     _assertStorageRegistered();
     on<CalendarStarted>(_onStarted);
     on<CalendarDataChanged>(_onDataChanged);
@@ -117,6 +124,12 @@ abstract class BaseCalendarBloc
   final List<_CalendarUndoSnapshot> _undoStack = <_CalendarUndoSnapshot>[];
   final List<_CalendarUndoSnapshot> _redoStack = <_CalendarUndoSnapshot>[];
   int _focusSequence = 0;
+  static final CalendarLinkedTaskRegistry _linkedTaskRegistry =
+      CalendarLinkedTaskRegistry.instance;
+  static final Map<String, BaseCalendarBloc> _linkedTaskBlocs =
+      <String, BaseCalendarBloc>{};
+  static final Map<String, Set<String>> _linkedTaskSuppression =
+      <String, Set<String>>{};
 
   @override
   String get id => _storageId;
@@ -161,6 +174,167 @@ abstract class BaseCalendarBloc
         '$runtimeType received an unregistered storage instance for prefix "$storagePrefix".',
       );
     }
+  }
+
+  void _registerLinkedTaskBloc() {
+    _linkedTaskBlocs[id] = this;
+  }
+
+  void _unregisterLinkedTaskBloc() {
+    _linkedTaskBlocs.remove(id);
+  }
+
+  bool _consumeLinkedTaskSuppression(String taskId) {
+    final Set<String>? suppressed = _linkedTaskSuppression[taskId];
+    if (suppressed == null) {
+      return false;
+    }
+    final bool removed = suppressed.remove(id);
+    if (suppressed.isEmpty) {
+      _linkedTaskSuppression.remove(taskId);
+    }
+    return removed;
+  }
+
+  void _suppressLinkedTask(String taskId, String storageId) {
+    final Set<String> suppressed =
+        _linkedTaskSuppression.putIfAbsent(taskId, () => <String>{});
+    suppressed.add(storageId);
+  }
+
+  Future<void> _propagateLinkedTask(
+    CalendarTask task,
+    _LinkedTaskOperation operation,
+  ) async {
+    if (_consumeLinkedTaskSuppression(task.id)) {
+      return;
+    }
+    final Set<String> linkedStorageIds =
+        _linkedTaskRegistry.linkedStorageIds(task.id);
+    if (linkedStorageIds.isEmpty) {
+      return;
+    }
+    final String sourceId = id;
+    final List<String> targets = linkedStorageIds
+        .where((storageId) => storageId != sourceId)
+        .toList(growable: false);
+    if (targets.isEmpty) {
+      return;
+    }
+    for (final storageId in targets) {
+      final BaseCalendarBloc? targetBloc = _linkedTaskBlocs[storageId];
+      if (targetBloc != null && !targetBloc.isClosed) {
+        _suppressLinkedTask(task.id, storageId);
+        _applyLinkedTaskToBloc(targetBloc, task, operation);
+        continue;
+      }
+      await _applyLinkedTaskToStorage(storageId, task, operation);
+    }
+  }
+
+  Future<void> _notifyTaskUpdated(CalendarTask task) async {
+    await onTaskUpdated(task);
+    await _propagateLinkedTask(task, _LinkedTaskOperation.update);
+  }
+
+  Future<void> _notifyTaskDeleted(CalendarTask task) async {
+    await onTaskDeleted(task);
+    await _propagateLinkedTask(task, _LinkedTaskOperation.delete);
+  }
+
+  Future<void> _notifyTaskCompleted(CalendarTask task) async {
+    await onTaskCompleted(task);
+    await _propagateLinkedTask(task, _LinkedTaskOperation.update);
+  }
+
+  @protected
+  Future<void> propagateLinkedTaskUpdate(CalendarTask task) async {
+    await _propagateLinkedTask(task, _LinkedTaskOperation.update);
+  }
+
+  @protected
+  Future<void> propagateLinkedTaskDelete(CalendarTask task) async {
+    await _propagateLinkedTask(task, _LinkedTaskOperation.delete);
+  }
+
+  void _applyLinkedTaskToBloc(
+    BaseCalendarBloc bloc,
+    CalendarTask task,
+    _LinkedTaskOperation operation,
+  ) {
+    final bool hasTask = bloc.state.model.tasks.containsKey(task.id);
+    switch (operation) {
+      case _LinkedTaskOperation.update:
+        if (hasTask) {
+          bloc.add(
+            CalendarEvent.taskUpdated(
+              task: task,
+            ),
+          );
+        }
+      case _LinkedTaskOperation.delete:
+        if (hasTask) {
+          bloc.add(
+            CalendarEvent.taskDeleted(
+              taskId: task.id,
+            ),
+          );
+        }
+    }
+  }
+
+  Future<void> _applyLinkedTaskToStorage(
+    String storageId,
+    CalendarTask task,
+    _LinkedTaskOperation operation,
+  ) async {
+    final CalendarState? stored = _readLinkedState(storageId);
+    if (stored == null) {
+      return;
+    }
+    final CalendarModel model = stored.model;
+    final bool hasTask = model.tasks.containsKey(task.id);
+    final CalendarModel updated = switch (operation) {
+      _LinkedTaskOperation.update => hasTask ? model.updateTask(task) : model,
+      _LinkedTaskOperation.delete =>
+        hasTask ? model.deleteTask(task.id) : model,
+    };
+    if (identical(updated, model) || updated.checksum == model.checksum) {
+      return;
+    }
+    await _writeLinkedState(
+      storageId,
+      stored.copyWith(model: updated),
+    );
+  }
+
+  CalendarState? _readLinkedState(String storageId) {
+    final String key = _linkedStorageKey(storageId);
+    final raw = HydratedBloc.storage.read(key);
+    if (raw is! Map) {
+      return null;
+    }
+    return CalendarStateStorageCodec.decode(
+      Map<String, dynamic>.from(raw),
+    );
+  }
+
+  Future<void> _writeLinkedState(
+    String storageId,
+    CalendarState state,
+  ) async {
+    final String key = _linkedStorageKey(storageId);
+    final Map<String, dynamic>? encoded =
+        CalendarStateStorageCodec.encode(state);
+    if (encoded == null) {
+      return;
+    }
+    await HydratedBloc.storage.write(key, encoded);
+  }
+
+  String _linkedStorageKey(String storageId) {
+    final String trimmed = storageId.trim();
+    return '$storagePrefix$trimmed';
   }
 
   void commitTaskInteraction(CalendarTask snapshot) {
@@ -479,7 +653,7 @@ abstract class BaseCalendarBloc
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit, isLoading: false);
 
-      await onTaskUpdated(updatedTask);
+      await _notifyTaskUpdated(updatedTask);
     } catch (error) {
       await _handleError(error, 'Failed to update task', emit);
     }
@@ -511,7 +685,7 @@ abstract class BaseCalendarBloc
           selectedTaskIds: remainingSelection,
         );
 
-        await onTaskDeleted(task);
+        await _notifyTaskDeleted(task);
         return;
       }
 
@@ -541,7 +715,7 @@ abstract class BaseCalendarBloc
         final updatedModel = state.model.updateTask(updatedTask);
         emitModel(updatedModel, emit, isLoading: false);
 
-        await onTaskUpdated(updatedTask);
+        await _notifyTaskUpdated(updatedTask);
         return;
       }
 
@@ -564,7 +738,7 @@ abstract class BaseCalendarBloc
         selectedTaskIds: remainingSelection,
       );
 
-      await onTaskDeleted(deletedTask);
+      await _notifyTaskDeleted(deletedTask);
     } catch (error) {
       await _handleError(error, 'Failed to delete task', emit);
     }
@@ -591,7 +765,7 @@ abstract class BaseCalendarBloc
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit, isLoading: false);
 
-      await onTaskCompleted(updatedTask);
+      await _notifyTaskCompleted(updatedTask);
     } catch (error) {
       await _handleError(error, 'Failed to update task completion', emit);
     }
@@ -631,7 +805,7 @@ abstract class BaseCalendarBloc
             state.model.updateTask(scheduledTask);
         emitModel(updatedModel, emit);
 
-        await onTaskUpdated(scheduledTask);
+        await _notifyTaskUpdated(scheduledTask);
         return;
       }
 
@@ -647,7 +821,7 @@ abstract class BaseCalendarBloc
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
-      await onTaskUpdated(updatedTask);
+      await _notifyTaskUpdated(updatedTask);
     } catch (error) {
       logError('Failed to drop task', error);
       emit(state.copyWith(error: error.toString()));
@@ -701,7 +875,7 @@ abstract class BaseCalendarBloc
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
-      await onTaskUpdated(updatedTask);
+      await _notifyTaskUpdated(updatedTask);
     } catch (error) {
       logError('Failed to resize task', error);
       emit(state.copyWith(error: error.toString()));
@@ -755,7 +929,7 @@ abstract class BaseCalendarBloc
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
-      await onTaskUpdated(updatedTask);
+      await _notifyTaskUpdated(updatedTask);
     } catch (error) {
       logError('Failed to update occurrence', error);
       emit(state.copyWith(error: error.toString()));
@@ -780,7 +954,7 @@ abstract class BaseCalendarBloc
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
-      await onTaskUpdated(updatedTask);
+      await _notifyTaskUpdated(updatedTask);
     } catch (error) {
       logError('Failed to change priority', error);
       emit(state.copyWith(error: error.toString()));
@@ -884,7 +1058,7 @@ abstract class BaseCalendarBloc
             selectedTaskIds: state.selectedTaskIds,
           );
 
-          await onTaskUpdated(updatedBase);
+          await _notifyTaskUpdated(updatedBase);
           await onTaskAdded(createdTask);
           return;
         }
@@ -918,7 +1092,7 @@ abstract class BaseCalendarBloc
           selectedTaskIds: state.selectedTaskIds,
         );
 
-        await onTaskUpdated(updatedOccurrence);
+        await _notifyTaskUpdated(updatedOccurrence);
         await onTaskAdded(createdTask);
         return;
       }
@@ -954,7 +1128,7 @@ abstract class BaseCalendarBloc
         selectedTaskIds: state.selectedTaskIds,
       );
 
-      await onTaskUpdated(updatedBaseTask);
+      await _notifyTaskUpdated(updatedBaseTask);
       await onTaskAdded(createdTask);
     } catch (error) {
       logError('Failed to split task', error);
@@ -1400,7 +1574,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in mergedUpdates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -1494,7 +1668,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in mergedUpdates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -1588,7 +1762,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in mergedUpdates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -1679,7 +1853,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in mergedUpdates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -1782,7 +1956,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in mergedUpdates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -1827,7 +2001,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in updates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -2094,7 +2268,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in mergedUpdates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -2573,7 +2747,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in mergedUpdates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -2659,11 +2833,11 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in updatedBases.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
 
     for (final task in baseTasksToDelete) {
-      await onTaskDeleted(task);
+      await _notifyTaskDeleted(task);
     }
   }
 
@@ -2745,7 +2919,7 @@ abstract class BaseCalendarBloc
     );
 
     for (final task in updates.values) {
-      await onTaskUpdated(task);
+      await _notifyTaskUpdated(task);
     }
   }
 
@@ -2998,6 +3172,7 @@ abstract class BaseCalendarBloc
   @override
   Future<void> close() async {
     await _pendingReminderSync;
+    _unregisterLinkedTaskBloc();
     return super.close();
   }
 

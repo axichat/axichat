@@ -81,6 +81,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
     this.isSheet = false,
     this.inlineActionsBuilder,
     this.inlineActionsBloc,
+    this.readOnly = false,
     required this.locationHelper,
   });
 
@@ -96,6 +97,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   final List<TaskContextAction> Function(CalendarState state)?
       inlineActionsBuilder;
   final B? inlineActionsBloc;
+  final bool readOnly;
   final LocationAutocompleteHelper locationHelper;
 
   @override
@@ -248,6 +250,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   @override
   Widget build(BuildContext context) {
     final bool isSheet = widget.isSheet;
+    final bool isReadOnly = widget.readOnly;
     final BorderRadius radius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(8);
@@ -285,7 +288,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       required double safeBottom,
     }) {
       final bool keyboardOpen = keyboardInset > safeBottom;
-      Widget actionRow({required bool includeTopBorder}) {
+      Widget? actionRow({required bool includeTopBorder}) {
+        if (isReadOnly) {
+          return null;
+        }
         return ValueListenableBuilder<TextEditingValue>(
           valueListenable: _titleController,
           builder: (context, value, _) {
@@ -305,6 +311,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           },
         );
       }
+      final Widget? keyboardActionRow = actionRow(includeTopBorder: true);
+      final Widget? footerActionRow = actionRow(includeTopBorder: false);
 
       final Widget form = Form(
         key: _formKey,
@@ -338,6 +346,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       const SizedBox(height: calendarFormGap),
                       _EditTaskOccurrenceScopeSection(
                         scope: _occurrenceScope,
+                        enabled: !isReadOnly,
                         onChanged: (scope) =>
                             setState(() => _occurrenceScope = scope),
                       ),
@@ -352,27 +361,34 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onChanged: _handleTitleChanged,
                       focusNode: _titleFocusNode,
                       autovalidateMode: AutovalidateMode.disabled,
+                      enabled: !isReadOnly,
                     ),
                     const SizedBox(height: calendarFormGap),
                     _EditTaskDescriptionField(
                       controller: _descriptionController,
+                      enabled: !isReadOnly,
                     ),
                     const SizedBox(height: calendarFormGap),
                     _EditTaskLocationField(
                       controller: _locationController,
                       locationHelper: widget.locationHelper,
+                      enabled: !isReadOnly,
                     ),
                     const SizedBox(height: calendarFormGap),
                     _EditTaskPriorityRow(
                       isImportant: _isImportant,
                       isUrgent: _isUrgent,
+                      enabled: !isReadOnly,
                       onImportantChanged: (value) =>
                           setState(() => _isImportant = value),
                       onUrgentChanged: (value) =>
                           setState(() => _isUrgent = value),
                     ),
                     const SizedBox(height: calendarFormGap),
-                    TaskChecklist(controller: _checklistController),
+                    TaskChecklist(
+                      controller: _checklistController,
+                      enabled: !isReadOnly,
+                    ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
                     ),
@@ -381,6 +397,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       end: _endTime,
                       onStartChanged: _handleStartChanged,
                       onEndChanged: _handleEndChanged,
+                      enabled: !isReadOnly,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -388,6 +405,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     _EditTaskDeadlineField(
                       deadline: _deadline,
                       onChanged: (value) => setState(() => _deadline = value),
+                      enabled: !isReadOnly,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -403,6 +421,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onAdvancedAlarmsChanged: (value) => setState(() {
                         _advancedAlarms = value;
                       }),
+                      enabled: !isReadOnly,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -412,6 +431,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       fallbackWeekday: _recurrenceFallbackWeekday,
                       referenceStart: _startTime,
                       onChanged: _handleRecurrenceChanged,
+                      enabled: !isReadOnly,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -424,6 +444,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                           setState(() => _status = value),
                       onTransparencyChanged: (value) =>
                           setState(() => _transparency = value),
+                      enabled: !isReadOnly,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -431,6 +452,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     CalendarCategoriesField(
                       categories: _categories,
                       onChanged: (value) => setState(() => _categories = value),
+                      enabled: !isReadOnly,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -440,6 +462,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       geo: _geo,
                       onUrlChanged: (value) => setState(() => _url = value),
                       onGeoChanged: (value) => setState(() => _geo = value),
+                      enabled: !isReadOnly,
                     ),
                     const TaskSectionDivider(
                       verticalPadding: calendarGutterMd,
@@ -451,6 +474,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                           setState(() => _organizer = value),
                       onAttendeesChanged: (value) =>
                           setState(() => _attendees = value),
+                      enabled: !isReadOnly,
                     ),
                     if (showInvitationStatus) ...[
                       const TaskSectionDivider(
@@ -481,21 +505,31 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     ),
                     _EditTaskCompletionToggle(
                       value: _isCompleted,
+                      enabled: !isReadOnly,
                       onChanged: (value) =>
                           setState(() => _isCompleted = value),
                     ),
                     const SizedBox(height: calendarFormGap),
-                    _TaskCriticalPathMembership<B>(
-                      task: widget.task,
-                      blocOverride: widget.inlineActionsBloc,
-                    ),
+                    if (isReadOnly)
+                      IgnorePointer(
+                        child: _TaskCriticalPathMembership<B>(
+                          task: widget.task,
+                          blocOverride: widget.inlineActionsBloc,
+                        ),
+                      )
+                    else
+                      _TaskCriticalPathMembership<B>(
+                        task: widget.task,
+                        blocOverride: widget.inlineActionsBloc,
+                      ),
                     const SizedBox(height: calendarFormGap),
-                    if (keyboardOpen) actionRow(includeTopBorder: true),
+                    if (keyboardOpen && keyboardActionRow != null)
+                      keyboardActionRow,
                   ],
                 ),
               ),
             ),
-            if (!keyboardOpen)
+            if (!keyboardOpen && !isReadOnly && footerActionRow != null)
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -503,7 +537,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                   SafeArea(
                     top: false,
                     bottom: true,
-                    child: actionRow(includeTopBorder: false),
+                    child: footerActionRow,
                   ),
                 ],
               ),
@@ -875,6 +909,7 @@ class _EditTaskTitleField extends StatelessWidget {
     required this.onChanged,
     this.focusNode,
     required this.autovalidateMode,
+    required this.enabled,
   });
 
   final TextEditingController controller;
@@ -882,6 +917,7 @@ class _EditTaskTitleField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final FocusNode? focusNode;
   final AutovalidateMode autovalidateMode;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -891,12 +927,13 @@ class _EditTaskTitleField extends StatelessWidget {
         TaskTitleField(
           controller: controller,
           focusNode: focusNode,
-          autofocus: true,
+          autofocus: enabled,
           hintText: context.l10n.calendarTaskTitleHint,
           onChanged: onChanged,
           validator: validator,
           autovalidateMode: autovalidateMode,
           textInputAction: TextInputAction.done,
+          enabled: enabled,
         ),
         TaskFieldCharacterHint(controller: controller),
       ],
@@ -907,9 +944,11 @@ class _EditTaskTitleField extends StatelessWidget {
 class _EditTaskDescriptionField extends StatelessWidget {
   const _EditTaskDescriptionField({
     required this.controller,
+    required this.enabled,
   });
 
   final TextEditingController controller;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -922,6 +961,7 @@ class _EditTaskDescriptionField extends StatelessWidget {
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       contentPadding: calendarFieldPadding,
+      enabled: enabled,
     );
   }
 }
@@ -930,10 +970,12 @@ class _EditTaskLocationField extends StatelessWidget {
   const _EditTaskLocationField({
     required this.controller,
     required this.locationHelper,
+    required this.enabled,
   });
 
   final TextEditingController controller;
   final LocationAutocompleteHelper locationHelper;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -945,6 +987,7 @@ class _EditTaskLocationField extends StatelessWidget {
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       autocomplete: locationHelper,
+      enabled: enabled,
     );
   }
 }
@@ -955,12 +998,14 @@ class _EditTaskScheduleSection extends StatelessWidget {
     required this.end,
     required this.onStartChanged,
     required this.onEndChanged,
+    required this.enabled,
   });
 
   final DateTime? start;
   final DateTime? end;
   final ValueChanged<DateTime?> onStartChanged;
   final ValueChanged<DateTime?> onEndChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -970,6 +1015,7 @@ class _EditTaskScheduleSection extends StatelessWidget {
       end: end,
       onStartChanged: onStartChanged,
       onEndChanged: onEndChanged,
+      enabled: enabled,
     );
   }
 }
@@ -978,10 +1024,12 @@ class _EditTaskOccurrenceScopeSection extends StatelessWidget {
   const _EditTaskOccurrenceScopeSection({
     required this.scope,
     required this.onChanged,
+    required this.enabled,
   });
 
   final OccurrenceUpdateScope scope;
   final ValueChanged<OccurrenceUpdateScope> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1006,7 +1054,7 @@ class _EditTaskOccurrenceScopeSection extends StatelessWidget {
                 (option) => _OccurrenceScopeChip(
                   label: option.label,
                   isSelected: option == scope,
-                  onPressed: () => onChanged(option),
+                  onPressed: enabled ? () => onChanged(option) : null,
                 ),
               )
               .toList(growable: false),
@@ -1025,7 +1073,7 @@ class _OccurrenceScopeChip extends StatelessWidget {
 
   final String label;
   final bool isSelected;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -1063,10 +1111,12 @@ class _EditTaskDeadlineField extends StatelessWidget {
   const _EditTaskDeadlineField({
     required this.deadline,
     required this.onChanged,
+    required this.enabled,
   });
 
   final DateTime? deadline;
   final ValueChanged<DateTime?> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1078,6 +1128,7 @@ class _EditTaskDeadlineField extends StatelessWidget {
         DeadlinePickerField(
           value: deadline,
           onChanged: onChanged,
+          enabled: enabled,
         ),
       ],
     );
@@ -1092,6 +1143,7 @@ class _EditTaskReminderSection extends StatelessWidget {
     required this.advancedAlarms,
     required this.onChanged,
     required this.onAdvancedAlarmsChanged,
+    required this.enabled,
   });
 
   final ReminderPreferences reminders;
@@ -1100,6 +1152,7 @@ class _EditTaskReminderSection extends StatelessWidget {
   final List<CalendarAlarm> advancedAlarms;
   final ValueChanged<ReminderPreferences> onChanged;
   final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1111,6 +1164,7 @@ class _EditTaskReminderSection extends StatelessWidget {
       referenceStart: referenceStart,
       anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
       showBothAnchors: deadline != null,
+      enabled: enabled,
     );
   }
 }
@@ -1121,12 +1175,14 @@ class _EditTaskRecurrenceSection extends StatelessWidget {
     required this.fallbackWeekday,
     required this.referenceStart,
     required this.onChanged,
+    required this.enabled,
   });
 
   final RecurrenceFormValue value;
   final int fallbackWeekday;
   final DateTime? referenceStart;
   final ValueChanged<RecurrenceFormValue> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1144,6 +1200,7 @@ class _EditTaskRecurrenceSection extends StatelessWidget {
         fieldGap: 12,
       ),
       onChanged: onChanged,
+      enabled: enabled,
     );
   }
 }
@@ -1154,20 +1211,22 @@ class _EditTaskPriorityRow extends StatelessWidget {
     required this.isUrgent,
     required this.onImportantChanged,
     required this.onUrgentChanged,
+    required this.enabled,
   });
 
   final bool isImportant;
   final bool isUrgent;
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return TaskPriorityToggles(
       isImportant: isImportant,
       isUrgent: isUrgent,
-      onImportantChanged: onImportantChanged,
-      onUrgentChanged: onUrgentChanged,
+      onImportantChanged: enabled ? onImportantChanged : null,
+      onUrgentChanged: enabled ? onUrgentChanged : null,
     );
   }
 }
@@ -1176,16 +1235,19 @@ class _EditTaskCompletionToggle extends StatelessWidget {
   const _EditTaskCompletionToggle({
     required this.value,
     required this.onChanged,
+    required this.enabled,
   });
 
   final bool value;
   final ValueChanged<bool> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return TaskCompletionToggle(
       value: value,
       onChanged: onChanged,
+      enabled: enabled,
     );
   }
 }

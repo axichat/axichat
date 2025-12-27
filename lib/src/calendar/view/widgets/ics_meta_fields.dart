@@ -22,6 +22,7 @@ class CalendarIcsMetaFields extends StatelessWidget {
     required this.onTransparencyChanged,
     this.title = _icsMetaSectionTitle,
     this.showStatus = true,
+    this.enabled = true,
   });
 
   final CalendarIcsStatus? status;
@@ -30,6 +31,7 @@ class CalendarIcsMetaFields extends StatelessWidget {
   final ValueChanged<CalendarTransparency?> onTransparencyChanged;
   final String title;
   final bool showStatus;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +74,8 @@ class CalendarIcsMetaFields extends StatelessWidget {
             value: status,
             options: statusOptions,
             selectedLabel: (status) => status?.label ?? _icsMetaDefaultLabel,
-            onChanged: onStatusChanged,
+            onChanged: enabled ? onStatusChanged : null,
+            enabled: enabled,
           ),
           const SizedBox(height: calendarGutterMd),
         ],
@@ -82,7 +85,8 @@ class CalendarIcsMetaFields extends StatelessWidget {
           options: transparencyOptions,
           selectedLabel: (transparency) =>
               transparency?.label ?? _icsMetaDefaultLabel,
-          onChanged: onTransparencyChanged,
+          onChanged: enabled ? onTransparencyChanged : null,
+          enabled: enabled,
         ),
       ],
     );
@@ -96,13 +100,15 @@ class _IcsSelectField<T> extends StatelessWidget {
     required this.options,
     required this.selectedLabel,
     required this.onChanged,
+    required this.enabled,
   });
 
   final String label;
   final T value;
   final List<ShadOption<T>> options;
   final String Function(T value) selectedLabel;
-  final ValueChanged<T?> onChanged;
+  final ValueChanged<T?>? onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {

@@ -39,6 +39,7 @@ class CalendarParticipantsField extends StatelessWidget {
     required this.onOrganizerChanged,
     required this.onAttendeesChanged,
     this.title = _participantsSectionTitle,
+    this.enabled = true,
   });
 
   final CalendarOrganizer? organizer;
@@ -46,10 +47,11 @@ class CalendarParticipantsField extends StatelessWidget {
   final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
   final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
   final String title;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: title),
@@ -57,14 +59,20 @@ class CalendarParticipantsField extends StatelessWidget {
         _OrganizerField(
           organizer: organizer,
           onChanged: onOrganizerChanged,
+          enabled: enabled,
         ),
         const SizedBox(height: calendarGutterMd),
         _AttendeesField(
           attendees: attendees,
           onChanged: onAttendeesChanged,
+          enabled: enabled,
         ),
       ],
     );
+    if (enabled) {
+      return content;
+    }
+    return IgnorePointer(child: content);
   }
 }
 
@@ -72,10 +80,12 @@ class _OrganizerField extends StatefulWidget {
   const _OrganizerField({
     required this.organizer,
     required this.onChanged,
+    required this.enabled,
   });
 
   final CalendarOrganizer? organizer;
   final ValueChanged<CalendarOrganizer?> onChanged;
+  final bool enabled;
 
   @override
   State<_OrganizerField> createState() => _OrganizerFieldState();
@@ -141,6 +151,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
 
   @override
   Widget build(BuildContext context) {
+    final bool enabled = widget.enabled;
     final TextStyle labelStyle = context.textTheme.small.copyWith(
       color: calendarSubtitleColor,
       fontWeight: FontWeight.w600,
@@ -163,6 +174,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.none,
                 onChanged: (_) => _handleChange(),
+                enabled: widget.enabled,
               ),
             ),
             const SizedBox(width: calendarGutterSm),
@@ -174,6 +186,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.words,
                 onChanged: (_) => _handleChange(),
+                enabled: widget.enabled,
               ),
             ),
           ],
@@ -187,10 +200,12 @@ class _AttendeesField extends StatefulWidget {
   const _AttendeesField({
     required this.attendees,
     required this.onChanged,
+    required this.enabled,
   });
 
   final List<CalendarAttendee> attendees;
   final ValueChanged<List<CalendarAttendee>> onChanged;
+  final bool enabled;
 
   @override
   State<_AttendeesField> createState() => _AttendeesFieldState();
@@ -322,6 +337,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
                 textInputAction: TextInputAction.next,
                 keyboardType: TextInputType.emailAddress,
                 textCapitalization: TextCapitalization.none,
+                enabled: enabled,
               ),
             ),
             const SizedBox(width: calendarGutterSm),
@@ -331,14 +347,15 @@ class _AttendeesFieldState extends State<_AttendeesField> {
                 hintText: _attendeeNameHint,
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.words,
+                enabled: enabled,
               ),
             ),
             const SizedBox(width: calendarGutterSm),
             AxiIconButton(
               iconData: Icons.add,
               tooltip: _attendeeAddTooltip,
-              onPressed: _addAttendee,
-              color: calendarPrimaryColor,
+              onPressed: enabled ? _addAttendee : null,
+              color: enabled ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
               borderColor: calendarBorderColor,
               iconSize: calendarGutterLg,

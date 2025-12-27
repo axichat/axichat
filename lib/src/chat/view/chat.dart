@@ -2938,22 +2938,18 @@ class _ChatState extends State<Chat> {
                     storageManager.isAuthStorageReady;
                 final bool supportsChatCalendar =
                     chatEntity?.supportsChatCalendar ?? false;
-                final OccupantAffiliation calendarAffiliation =
-                    state.roomState?.myAffiliation ?? OccupantAffiliation.none;
-                final bool chatCalendarAllowed = supportsChatCalendar &&
-                    (!isGroupChat || calendarAffiliation.isMemberOrAbove);
                 final bool chatCalendarReady =
                     storageManager.isAuthStorageReady &&
                         chatCalendarCoordinator != null;
                 final bool chatCalendarAvailable =
-                    chatCalendarAllowed && chatCalendarReady;
+                    supportsChatCalendar && chatCalendarReady;
                 final ChatCalendarBloc? chatCalendarBloc =
                     _resolveChatCalendarBloc(
                   chat: chatEntity,
                   calendarAvailable: chatCalendarAvailable,
                 );
                 final List<String> chatCalendarParticipants =
-                    chatCalendarAllowed
+                    supportsChatCalendar
                         ? _resolveChatCalendarParticipants(
                             chat: chatEntity,
                             roomState: state.roomState,
@@ -3270,12 +3266,6 @@ class _ChatState extends State<Chat> {
                             iconData: LucideIcons.calendarClock,
                             tooltip: context.l10n.homeRailCalendar,
                             onPressed: () {
-                              if (!chatCalendarAllowed) {
-                                _showSnackbar(
-                                  _calendarFragmentShareDeniedMessage,
-                                );
-                                return;
-                              }
                               if (!chatCalendarAvailable) {
                                 _showSnackbar(
                                   context.l10n.chatCalendarUnavailable,

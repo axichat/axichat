@@ -46,6 +46,7 @@ class DeadlinePickerField extends StatefulWidget {
     this.overlayWidth = _deadlinePickerOverlayWidth,
     this.minDate,
     this.maxDate,
+    this.enabled = true,
   });
 
   final DateTime? value;
@@ -56,6 +57,7 @@ class DeadlinePickerField extends StatefulWidget {
   final double overlayWidth;
   final DateTime? minDate;
   final DateTime? maxDate;
+  final bool enabled;
 
   @override
   State<DeadlinePickerField> createState() => _DeadlinePickerFieldState();
@@ -208,6 +210,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       _maxDate = _normalizeMaxDate(widget.maxDate);
     }
     _ensureVisibleMonthInRange();
+    if (!widget.enabled && _isOpen) {
+      _hideOverlay();
+    }
   }
 
   @override
@@ -242,6 +247,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   void _toggleOverlay(BuildContext context) {
+    if (!widget.enabled) {
+      return;
+    }
     if (_shouldUseSheetMenus(context)) {
       if (_isOpen) {
         _hideOverlay();
@@ -663,6 +671,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   @override
   Widget build(BuildContext context) {
+    final bool enabled = widget.enabled;
     final borderColor = _borderColor(widget.value);
     final backgroundColor = _backgroundColor(widget.value);
     final iconColor = _iconColor(widget.value);
@@ -679,7 +688,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
     final trigger = InkWell(
       key: _triggerKey,
-      onTap: () => _toggleOverlay(context),
+      onTap: enabled ? () => _toggleOverlay(context) : null,
       borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
