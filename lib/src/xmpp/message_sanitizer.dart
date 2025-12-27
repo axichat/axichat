@@ -5,6 +5,11 @@ const _calendarFragmentTag = 'calendar-fragment';
 const _calendarFragmentPayloadTag = 'payload';
 const _calendarFragmentVersionAttr = 'version';
 const _calendarFragmentVersionValue = '1';
+const _calendarTaskIcsXmlns = 'urn:axichat:calendar-task-ics:1';
+const _calendarTaskIcsTag = 'calendar-task-ics';
+const _calendarTaskIcsPayloadTag = 'payload';
+const _calendarTaskIcsVersionAttr = 'version';
+const _calendarTaskIcsVersionValue = '1';
 const _calendarAvailabilityXmlns = 'urn:axichat:calendar-availability:1';
 const _calendarAvailabilityTag = 'calendar-availability';
 const _calendarAvailabilityPayloadTag = 'payload';
@@ -199,6 +204,44 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
   }
 }
 
+final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
+  const CalendarTaskIcsPayload({required this.ics});
+
+  final String ics;
+
+  mox.XMLNode toXml() {
+    final payload = ics.trim();
+    return mox.XMLNode.xmlns(
+      tag: _calendarTaskIcsTag,
+      xmlns: _calendarTaskIcsXmlns,
+      attributes: const {
+        _calendarTaskIcsVersionAttr: _calendarTaskIcsVersionValue,
+      },
+      children: [
+        mox.XMLNode(
+          tag: _calendarTaskIcsPayloadTag,
+          text: payload,
+        ),
+      ],
+    );
+  }
+
+  static CalendarTaskIcsPayload? fromStanza(mox.Stanza stanza) {
+    final node = stanza.firstTag(
+      _calendarTaskIcsTag,
+      xmlns: _calendarTaskIcsXmlns,
+    );
+    if (node == null) return null;
+    final payloadNode = node.firstTag(_calendarTaskIcsPayloadTag);
+    final payloadText =
+        payloadNode?.innerText().trim() ?? node.innerText().trim();
+    if (payloadText.isEmpty) {
+      return null;
+    }
+    return CalendarTaskIcsPayload(ics: payloadText);
+  }
+}
+
 final class CalendarAvailabilityMessagePayload
     implements mox.StanzaHandlerExtension {
   const CalendarAvailabilityMessagePayload({required this.message});
@@ -312,6 +355,10 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     if (fragment != null) {
       nodes.add(fragment.toXml());
     }
+    final taskIcs = extensions.get<CalendarTaskIcsPayload>();
+    if (taskIcs != null) {
+      nodes.add(taskIcs.toXml());
+    }
     final availability = extensions.get<CalendarAvailabilityMessagePayload>();
     if (availability != null) {
       nodes.add(availability.toXml());
@@ -348,6 +395,10 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     final fragment = CalendarFragmentPayload.fromStanza(stanza);
     if (fragment != null) {
       state.extensions.set(fragment);
+    }
+    final taskIcs = CalendarTaskIcsPayload.fromStanza(stanza);
+    if (taskIcs != null) {
+      state.extensions.set(taskIcs);
     }
     final availability = CalendarAvailabilityMessagePayload.fromStanza(stanza);
     if (availability != null) {
