@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
+import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/jid_transport.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -17,10 +18,6 @@ const String _invalidJidMessage = 'Enter a valid jid';
 const String _blockingUnsupportedMessage = 'Server does not support blocking.';
 const String _unblockingUnsupportedMessage =
     'Server does not support unblocking.';
-const String _spamReportUnsupportedMessage =
-    'Server does not support spam reporting.';
-const String _spamReportFailedMessage =
-    'Failed to report spam. Try again later.';
 const String _unblockAllFailedMessage =
     'Failed to unblock users. Try again later.';
 const String _unblockAllSuccessMessage = 'Unblocked all.';
@@ -83,6 +80,10 @@ class BlocklistCubit extends Cubit<BlocklistState>
     final resolvedTransport = transport ?? normalized.inferredTransport;
     emit(BlocklistLoading(jid: normalized));
     if (resolvedTransport.isEmail) {
+      if (!normalized.isValidEmailAddress) {
+        emit(const BlocklistFailure(_invalidJidMessage));
+        return;
+      }
       try {
         await _xmppService.setEmailBlockStatus(
           address: normalized,
@@ -100,20 +101,10 @@ class BlocklistCubit extends Cubit<BlocklistState>
       return;
     }
     try {
-      if (reportReason != null) {
-        await _xmppService.blockAndReport(
-          jid: normalized,
-          reason: reportReason,
-        );
-      } else {
-        await _xmppService.block(jid: normalized);
-      }
-    } on XmppSpamReportUnsupportedException catch (_) {
-      emit(const BlocklistFailure(_spamReportUnsupportedMessage));
-      return;
-    } on XmppSpamReportException catch (_) {
-      emit(const BlocklistFailure(_spamReportFailedMessage));
-      return;
+      await _blockXmpp(
+        address: normalized,
+        reportReason: reportReason,
+      );
     } on XmppBlockUnsupportedException catch (_) {
       emit(const BlocklistFailure(_blockingUnsupportedMessage));
       return;
@@ -122,6 +113,26 @@ class BlocklistCubit extends Cubit<BlocklistState>
       return;
     }
     emit(BlocklistSuccess(_blockedMessage(normalized)));
+  }
+
+  Future<void> _blockXmpp({
+    required String address,
+    SpamReportReason? reportReason,
+  }) async {
+    if (reportReason == null) {
+      await _xmppService.block(jid: address);
+      return;
+    }
+    try {
+      await _xmppService.blockAndReport(
+        jid: address,
+        reason: reportReason,
+      );
+    } on XmppSpamReportUnsupportedException catch (_) {
+      await _xmppService.block(jid: address);
+    } on XmppSpamReportException catch (_) {
+      await _xmppService.block(jid: address);
+    }
   }
 
   Future<void> unblock({required BlocklistEntry entry}) async {
