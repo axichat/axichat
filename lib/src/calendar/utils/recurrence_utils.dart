@@ -6,6 +6,18 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 const _occurrenceSeparator = '::';
 const int _baseOccurrenceCount = 1;
 const int _daysPerWeek = 7;
+const int _monthsPerYear = 12;
+const int _daysInLeapYear = 366;
+const int _daysInCommonYear = 365;
+const int _minInterval = 1;
+const int _firstMonthIndex = 1;
+const int _firstDayOfMonth = 1;
+const int _firstDayOfYear = 1;
+const int _minDaysInFirstWeek = 4;
+const int _zeroValue = 0;
+const int _setPositionBase = 1;
+const int _negativeIndexOffset = 1;
+const Duration _weekDuration = Duration(days: _daysPerWeek);
 const Duration _zeroDuration = Duration.zero;
 
 enum RecurrenceEndUnit {
@@ -27,6 +39,32 @@ extension RecurrenceEndUnitX on RecurrenceEndUnit {
       case RecurrenceEndUnit.years:
         return 'years';
     }
+  }
+}
+
+extension RecurrenceRuleYearlyExpansionX on RecurrenceRule {
+  bool get usesYearlyExpansion {
+    if (frequency != RecurrenceFrequency.yearly) {
+      return false;
+    }
+    return _hasRuleValues(byMonths) ||
+        _hasRuleValues(byMonthDays) ||
+        _hasRuleValues(byDays) ||
+        _hasRuleValues(byYearDays) ||
+        _hasRuleValues(byWeekNumbers) ||
+        _hasRuleValues(bySetPositions);
+  }
+}
+
+extension RecurrenceRuleMonthlyExpansionX on RecurrenceRule {
+  bool get usesMonthlyExpansion {
+    if (frequency != RecurrenceFrequency.monthly) {
+      return false;
+    }
+    return _hasRuleValues(byMonths) ||
+        _hasRuleValues(byMonthDays) ||
+        _hasRuleValues(byDays) ||
+        _hasRuleValues(bySetPositions);
   }
 }
 
@@ -189,23 +227,34 @@ extension CalendarTaskInstanceX on CalendarTask {
     final Set<String> emittedKeys = <String>{};
 
     if (hasRule) {
-      var current = scheduled;
+      final DateTime rangeLimit = inclusiveEnd ?? rangeEnd;
+      final Iterable<DateTime> generated = recurrence.usesYearlyExpansion
+          ? _yearlyOccurrencesWithin(
+              baseStart: scheduled,
+              rule: recurrence,
+              rangeEnd: rangeLimit,
+            )
+          : recurrence.usesMonthlyExpansion
+              ? _monthlyOccurrencesWithin(
+                  baseStart: scheduled,
+                  rule: recurrence,
+                  rangeEnd: rangeLimit,
+                )
+              : _simpleOccurrencesWithin(
+                  baseStart: scheduled,
+                  rule: recurrence,
+                  rangeEnd: rangeLimit,
+                );
+
       var generatedCount = _baseOccurrenceCount;
-
-      while (true) {
-        final DateTime? next = _nextOccurrence(current, recurrence, scheduled);
-        if (next == null) {
-          break;
-        }
-
+      for (final DateTime next in generated) {
         generatedCount += 1;
-        current = next;
 
         if (recurrence.count != null && generatedCount > recurrence.count!) {
           break;
         }
 
-        if (inclusiveEnd != null && next.isAfter(inclusiveEnd)) {
+        if (next.isAfter(rangeLimit)) {
           break;
         }
 
@@ -303,9 +352,9 @@ extension CalendarTaskInstanceX on CalendarTask {
   }
 
   DateTime? _originalStartForKey(String key) {
-    final micros = int.tryParse(key);
-    if (micros != null) {
-      return DateTime.fromMicrosecondsSinceEpoch(micros);
+    final DateTime? resolved = _dateTimeFromOccurrenceKey(key);
+    if (resolved != null) {
+      return resolved;
     }
     if (baseOccurrenceKey != null && key == baseOccurrenceKey) {
       return scheduledTime;
@@ -383,13 +432,18 @@ Duration _futureRangeBackwardShift(
   Map<String, TaskOccurrenceOverride> overrides,
 ) {
   var maxShift = _zeroDuration;
-  for (final TaskOccurrenceOverride override in overrides.values) {
+  for (final MapEntry<String, TaskOccurrenceOverride> entry
+      in overrides.entries) {
+    final TaskOccurrenceOverride override = entry.value;
     final RecurrenceRange? range = override.range;
     if (range == null || !range.isThisAndFuture) {
       continue;
     }
     final DateTime? overrideStart = override.scheduledTime;
-    final DateTime? originalStart = override.recurrenceId?.value;
+    final DateTime? originalStart = _rangeOriginalStart(
+      key: entry.key,
+      override: override,
+    );
     if (overrideStart == null || originalStart == null) {
       continue;
     }
@@ -413,14 +467,619 @@ DateTime? _nextOccurrence(
     case RecurrenceFrequency.none:
       return null;
     case RecurrenceFrequency.daily:
-      return current.add(Duration(days: max(1, rule.interval)));
+      return current.add(Duration(days: max(_minInterval, rule.interval)));
     case RecurrenceFrequency.weekdays:
-      return _addWeekdays(current, max(1, rule.interval));
+      return _addWeekdays(current, max(_minInterval, rule.interval));
     case RecurrenceFrequency.weekly:
       return _nextWeeklyOccurrence(current, rule, baseStart);
     case RecurrenceFrequency.monthly:
-      return _addMonths(current, max(1, rule.interval), baseStart.day);
+      return _addMonths(
+          current, max(_minInterval, rule.interval), baseStart.day);
+    case RecurrenceFrequency.yearly:
+      return _addMonths(
+        current,
+        max(_minInterval, rule.interval) * _monthsPerYear,
+        baseStart.day,
+      );
   }
+}
+
+Iterable<DateTime> _simpleOccurrencesWithin({
+  required DateTime baseStart,
+  required RecurrenceRule rule,
+  required DateTime rangeEnd,
+}) {
+  final List<DateTime> results = <DateTime>[];
+  var current = baseStart;
+  while (true) {
+    final DateTime? next = _nextOccurrence(current, rule, baseStart);
+    if (next == null || next.isAfter(rangeEnd)) {
+      break;
+    }
+    results.add(next);
+    current = next;
+  }
+  return results;
+}
+
+Iterable<DateTime> _monthlyOccurrencesWithin({
+  required DateTime baseStart,
+  required RecurrenceRule rule,
+  required DateTime rangeEnd,
+}) {
+  final int interval = max(_minInterval, rule.interval);
+  final List<int>? allowedMonths = _resolveMonthlyMonths(rule.byMonths);
+  final List<DateTime> results = <DateTime>[];
+  var current = baseStart;
+
+  while (!current.isAfter(rangeEnd)) {
+    final int year = current.year;
+    final int month = current.month;
+    if (allowedMonths == null || allowedMonths.contains(month)) {
+      final List<DateTime> candidates = _monthlyCandidatesForMonth(
+        year: year,
+        month: month,
+        rule: rule,
+        baseStart: baseStart,
+      );
+      for (final DateTime candidate in candidates) {
+        final bool isBaseMonth =
+            year == baseStart.year && month == baseStart.month;
+        if (isBaseMonth && !candidate.isAfter(baseStart)) {
+          continue;
+        }
+        if (candidate.isAfter(rangeEnd)) {
+          continue;
+        }
+        results.add(candidate);
+      }
+    }
+    current = _addMonths(current, interval, baseStart.day);
+  }
+
+  results.sort();
+  return results;
+}
+
+Iterable<DateTime> _yearlyOccurrencesWithin({
+  required DateTime baseStart,
+  required RecurrenceRule rule,
+  required DateTime rangeEnd,
+}) {
+  final int interval = max(_minInterval, rule.interval);
+  final int baseYear = baseStart.year;
+  final int lastYear = rangeEnd.year;
+  final List<DateTime> results = <DateTime>[];
+
+  for (var year = baseYear; year <= lastYear; year += interval) {
+    final List<DateTime> candidates = _yearlyCandidatesForYear(
+      year: year,
+      rule: rule,
+      baseStart: baseStart,
+    );
+    for (final DateTime candidate in candidates) {
+      if (year == baseYear && !candidate.isAfter(baseStart)) {
+        continue;
+      }
+      if (candidate.isAfter(rangeEnd)) {
+        continue;
+      }
+      results.add(candidate);
+    }
+  }
+
+  return results;
+}
+
+List<int>? _resolveMonthlyMonths(List<int>? byMonths) {
+  if (!_hasRuleValues(byMonths)) {
+    return null;
+  }
+  final Set<int> seen = <int>{};
+  for (final int month in byMonths!) {
+    if (month < _firstMonthIndex || month > _monthsPerYear) {
+      continue;
+    }
+    seen.add(month);
+  }
+  if (seen.isEmpty) {
+    return null;
+  }
+  final List<int> resolved = seen.toList()..sort();
+  return resolved;
+}
+
+List<DateTime> _monthlyCandidatesForMonth({
+  required int year,
+  required int month,
+  required RecurrenceRule rule,
+  required DateTime baseStart,
+}) {
+  final List<DateTime> candidates = <DateTime>[];
+  _addMonthCandidates(
+    candidates: candidates,
+    year: year,
+    month: month,
+    rule: rule,
+    baseStart: baseStart,
+  );
+  final List<DateTime> sorted = _uniqueSortedDates(candidates);
+  if (_hasRuleValues(rule.bySetPositions)) {
+    return _applySetPositions(sorted, rule.bySetPositions!);
+  }
+  return sorted;
+}
+
+List<DateTime> _yearlyCandidatesForYear({
+  required int year,
+  required RecurrenceRule rule,
+  required DateTime baseStart,
+}) {
+  final List<DateTime> candidates = <DateTime>[];
+  final List<int> months = _resolveYearlyMonths(
+    byMonths: rule.byMonths,
+    fallbackMonth: baseStart.month,
+  );
+  if (_hasRuleValues(rule.byYearDays)) {
+    _addYearDayCandidates(
+      candidates: candidates,
+      year: year,
+      rule: rule,
+      months: months,
+      hasByMonths: _hasRuleValues(rule.byMonths),
+      baseStart: baseStart,
+    );
+  } else {
+    for (final int month in months) {
+      _addMonthCandidates(
+        candidates: candidates,
+        year: year,
+        month: month,
+        rule: rule,
+        baseStart: baseStart,
+      );
+    }
+  }
+
+  final List<DateTime> sorted = _uniqueSortedDates(candidates);
+  final List<DateTime> weekFiltered = _filterByWeekNumbers(sorted, rule);
+  if (_hasRuleValues(rule.bySetPositions)) {
+    return _applySetPositions(weekFiltered, rule.bySetPositions!);
+  }
+  return weekFiltered;
+}
+
+void _addYearDayCandidates({
+  required List<DateTime> candidates,
+  required int year,
+  required RecurrenceRule rule,
+  required List<int> months,
+  required bool hasByMonths,
+  required DateTime baseStart,
+}) {
+  final List<int> byYearDays = rule.byYearDays ?? const <int>[];
+  final Set<int>? allowedWeekdays =
+      _weekdaySetFromByDays(rule.byDays ?? const <RecurrenceWeekday>[]);
+  for (final int yearDay in byYearDays) {
+    final int? resolved = _resolveYearDay(yearDay, year);
+    if (resolved == null) {
+      continue;
+    }
+    final DateTime date = DateTime(year, DateTime.january, _firstDayOfYear)
+        .add(Duration(days: resolved - _firstDayOfYear));
+    if (hasByMonths && !months.contains(date.month)) {
+      continue;
+    }
+    if (!_dayMatchesMonthDay(rule.byMonthDays, date)) {
+      continue;
+    }
+    if (allowedWeekdays != null && !allowedWeekdays.contains(date.weekday)) {
+      continue;
+    }
+    candidates.add(_withBaseTime(date, baseStart));
+  }
+}
+
+void _addMonthCandidates({
+  required List<DateTime> candidates,
+  required int year,
+  required int month,
+  required RecurrenceRule rule,
+  required DateTime baseStart,
+}) {
+  final int daysInMonth = _daysInMonth(year, month);
+  final bool hasByDays = _hasRuleValues(rule.byDays);
+  final bool hasByMonthDays = _hasRuleValues(rule.byMonthDays);
+  final List<int> baseDays = _resolveBaseMonthDays(
+    daysInMonth: daysInMonth,
+    fallbackDay: baseStart.day,
+    byMonthDays: rule.byMonthDays,
+    expandForByDays: hasByDays,
+  );
+  final List<int> resolvedDays = hasByDays
+      ? _applyByDays(
+          year: year,
+          month: month,
+          daysInMonth: daysInMonth,
+          baseDays: baseDays,
+          byDays: rule.byDays ?? const <RecurrenceWeekday>[],
+          hasMonthDayFilter: hasByMonthDays,
+        )
+      : baseDays;
+  for (final int day in resolvedDays) {
+    candidates.add(_withBaseTime(DateTime(year, month, day), baseStart));
+  }
+}
+
+List<int> _resolveYearlyMonths({
+  required List<int>? byMonths,
+  required int fallbackMonth,
+}) {
+  final List<int> source =
+      _hasRuleValues(byMonths) ? byMonths! : <int>[fallbackMonth];
+  final Set<int> seen = <int>{};
+  for (final int month in source) {
+    if (month < _firstMonthIndex || month > _monthsPerYear) {
+      continue;
+    }
+    seen.add(month);
+  }
+  if (seen.isEmpty) {
+    return <int>[fallbackMonth];
+  }
+  final List<int> resolved = seen.toList()..sort();
+  return resolved;
+}
+
+List<int> _resolveBaseMonthDays({
+  required int daysInMonth,
+  required int fallbackDay,
+  required List<int>? byMonthDays,
+  required bool expandForByDays,
+}) {
+  if (_hasRuleValues(byMonthDays)) {
+    return _resolveMonthDays(
+      byMonthDays: byMonthDays!,
+      daysInMonth: daysInMonth,
+    );
+  }
+  if (expandForByDays) {
+    return _allDaysInMonth(daysInMonth);
+  }
+  final int day = min(fallbackDay, daysInMonth);
+  return <int>[day];
+}
+
+List<int> _resolveMonthDays({
+  required List<int> byMonthDays,
+  required int daysInMonth,
+}) {
+  final Set<int> resolved = <int>{};
+  for (final int day in byMonthDays) {
+    final int? normalized = _resolveMonthDay(day, daysInMonth);
+    if (normalized == null) {
+      continue;
+    }
+    resolved.add(normalized);
+  }
+  final List<int> days = resolved.toList()..sort();
+  return days;
+}
+
+List<int> _applyByDays({
+  required int year,
+  required int month,
+  required int daysInMonth,
+  required List<int> baseDays,
+  required List<RecurrenceWeekday> byDays,
+  required bool hasMonthDayFilter,
+}) {
+  final Set<int> resolvedDays = <int>{};
+  final Set<int> baseDaySet = baseDays.toSet();
+  final Set<int> plainWeekdays = _plainWeekdaySet(byDays);
+
+  if (plainWeekdays.isNotEmpty) {
+    for (final int day in baseDays) {
+      final int weekday = DateTime(year, month, day).weekday;
+      if (plainWeekdays.contains(weekday)) {
+        resolvedDays.add(day);
+      }
+    }
+  }
+
+  for (final RecurrenceWeekday entry in byDays) {
+    if (entry.position == null) {
+      continue;
+    }
+    final int? resolved = _resolveWeekdayPosition(
+      year: year,
+      month: month,
+      daysInMonth: daysInMonth,
+      entry: entry,
+    );
+    if (resolved == null) {
+      continue;
+    }
+    if (hasMonthDayFilter && !baseDaySet.contains(resolved)) {
+      continue;
+    }
+    resolvedDays.add(resolved);
+  }
+
+  if (resolvedDays.isEmpty) {
+    return const <int>[];
+  }
+  final List<int> days = resolvedDays.toList()..sort();
+  return days;
+}
+
+int? _resolveMonthDay(int day, int daysInMonth) {
+  if (day == _zeroValue) {
+    return null;
+  }
+  if (day > _zeroValue) {
+    return day > daysInMonth ? null : day;
+  }
+  final int resolved = daysInMonth + day + _negativeIndexOffset;
+  return resolved < _firstDayOfMonth ? null : resolved;
+}
+
+int? _resolveYearDay(int day, int year) {
+  if (day == _zeroValue) {
+    return null;
+  }
+  final int daysInYear = _daysInYear(year);
+  if (day > _zeroValue) {
+    return day > daysInYear ? null : day;
+  }
+  final int resolved = daysInYear + day + _negativeIndexOffset;
+  return resolved < _firstDayOfYear ? null : resolved;
+}
+
+int _daysInYear(int year) {
+  final bool isLeap = (year % 4 == _zeroValue && year % 100 != _zeroValue) ||
+      year % 400 == _zeroValue;
+  return isLeap ? _daysInLeapYear : _daysInCommonYear;
+}
+
+int? _resolveWeekdayPosition({
+  required int year,
+  required int month,
+  required int daysInMonth,
+  required RecurrenceWeekday entry,
+}) {
+  final int position = entry.position ?? _zeroValue;
+  if (position == _zeroValue) {
+    return null;
+  }
+  final int weekday = entry.weekday.isoValue;
+  if (position > _zeroValue) {
+    final DateTime firstDate = DateTime(year, month, _firstDayOfMonth);
+    final int delta =
+        (weekday - firstDate.weekday + _daysPerWeek) % _daysPerWeek;
+    final int day =
+        _firstDayOfMonth + delta + (position - _setPositionBase) * _daysPerWeek;
+    return day > daysInMonth ? null : day;
+  }
+  final int offset = position.abs() - _setPositionBase;
+  final DateTime lastDate = DateTime(year, month, daysInMonth);
+  final int delta = (lastDate.weekday - weekday + _daysPerWeek) % _daysPerWeek;
+  final int day = daysInMonth - delta - (offset * _daysPerWeek);
+  return day < _firstDayOfMonth ? null : day;
+}
+
+Set<int> _plainWeekdaySet(List<RecurrenceWeekday> byDays) {
+  final Set<int> weekdays = <int>{};
+  for (final RecurrenceWeekday entry in byDays) {
+    if (entry.position != null) {
+      continue;
+    }
+    weekdays.add(entry.weekday.isoValue);
+  }
+  return weekdays;
+}
+
+Set<int>? _weekdaySetFromByDays(List<RecurrenceWeekday> byDays) {
+  if (byDays.isEmpty) {
+    return null;
+  }
+  final Set<int> weekdays = <int>{};
+  for (final RecurrenceWeekday entry in byDays) {
+    weekdays.add(entry.weekday.isoValue);
+  }
+  return weekdays;
+}
+
+bool _dayMatchesMonthDay(List<int>? byMonthDays, DateTime date) {
+  if (!_hasRuleValues(byMonthDays)) {
+    return true;
+  }
+  final int daysInMonth = _daysInMonth(date.year, date.month);
+  final Set<int> allowed = _resolveMonthDays(
+    byMonthDays: byMonthDays!,
+    daysInMonth: daysInMonth,
+  ).toSet();
+  return allowed.contains(date.day);
+}
+
+List<int> _allDaysInMonth(int daysInMonth) {
+  return List<int>.generate(
+    daysInMonth,
+    (index) => index + _firstDayOfMonth,
+  );
+}
+
+DateTime _withBaseTime(DateTime date, DateTime baseStart) {
+  return DateTime(
+    date.year,
+    date.month,
+    date.day,
+    baseStart.hour,
+    baseStart.minute,
+    baseStart.second,
+    baseStart.millisecond,
+    baseStart.microsecond,
+  );
+}
+
+List<DateTime> _uniqueSortedDates(List<DateTime> dates) {
+  final Set<int> seen = <int>{};
+  final List<DateTime> unique = <DateTime>[];
+  for (final DateTime date in dates) {
+    final int key = date.microsecondsSinceEpoch;
+    if (!seen.add(key)) {
+      continue;
+    }
+    unique.add(date);
+  }
+  unique.sort();
+  return unique;
+}
+
+List<DateTime> _applySetPositions(
+  List<DateTime> sorted,
+  List<int> positions,
+) {
+  if (sorted.isEmpty || positions.isEmpty) {
+    return sorted;
+  }
+  final Set<int> indexes = <int>{};
+  final int length = sorted.length;
+  for (final int position in positions) {
+    if (position == _zeroValue) {
+      continue;
+    }
+    final int index =
+        position > _zeroValue ? position - _setPositionBase : length + position;
+    if (index < _zeroValue || index >= length) {
+      continue;
+    }
+    indexes.add(index);
+  }
+  if (indexes.isEmpty) {
+    return const <DateTime>[];
+  }
+  final List<DateTime> selected = indexes.map((index) => sorted[index]).toList()
+    ..sort();
+  return selected;
+}
+
+List<DateTime> _filterByWeekNumbers(
+  List<DateTime> dates,
+  RecurrenceRule rule,
+) {
+  if (dates.isEmpty || !_hasRuleValues(rule.byWeekNumbers)) {
+    return dates;
+  }
+  final CalendarWeekday weekStart = rule.weekStart ?? CalendarWeekday.monday;
+  final int year = dates.first.year;
+  final DateTime week1Start = _week1StartForYear(
+    year: year,
+    weekStart: weekStart,
+  );
+  final int totalWeeks = _totalWeeksInYear(
+    year: year,
+    weekStart: weekStart,
+    week1Start: week1Start,
+  );
+  final Set<int> allowedWeeks = _resolveWeekNumbers(
+    values: rule.byWeekNumbers!,
+    totalWeeks: totalWeeks,
+  );
+  if (allowedWeeks.isEmpty) {
+    return const <DateTime>[];
+  }
+  final List<DateTime> filtered = <DateTime>[];
+  for (final DateTime date in dates) {
+    final int weekNumber = _weekNumberForDate(
+      date: date,
+      weekStart: weekStart,
+      week1Start: week1Start,
+    );
+    if (allowedWeeks.contains(weekNumber)) {
+      filtered.add(date);
+    }
+  }
+  return filtered;
+}
+
+Set<int> _resolveWeekNumbers({
+  required List<int> values,
+  required int totalWeeks,
+}) {
+  final Set<int> resolved = <int>{};
+  for (final int value in values) {
+    if (value == _zeroValue) {
+      continue;
+    }
+    if (value > _zeroValue) {
+      if (value <= totalWeeks) {
+        resolved.add(value);
+      }
+      continue;
+    }
+    final int normalized = totalWeeks + value + _setPositionBase;
+    if (normalized >= _setPositionBase && normalized <= totalWeeks) {
+      resolved.add(normalized);
+    }
+  }
+  return resolved;
+}
+
+DateTime _week1StartForYear({
+  required int year,
+  required CalendarWeekday weekStart,
+}) {
+  final DateTime yearStart = DateTime(year, DateTime.january, _firstDayOfYear);
+  final DateTime weekStartDate = _startOfWeek(
+    date: yearStart,
+    weekStart: weekStart,
+  );
+  final int daysBeforeYearStart = yearStart.difference(weekStartDate).inDays;
+  const int daysInWeek = _daysPerWeek;
+  final int daysInFirstWeek = daysInWeek - daysBeforeYearStart;
+  if (daysInFirstWeek >= _minDaysInFirstWeek) {
+    return weekStartDate;
+  }
+  return weekStartDate.add(_weekDuration);
+}
+
+DateTime _startOfWeek({
+  required DateTime date,
+  required CalendarWeekday weekStart,
+}) {
+  final int startWeekday = weekStart.isoValue;
+  final int delta = (date.weekday - startWeekday + _daysPerWeek) % _daysPerWeek;
+  return date.subtract(Duration(days: delta));
+}
+
+int _weekNumberForDate({
+  required DateTime date,
+  required CalendarWeekday weekStart,
+  required DateTime week1Start,
+}) {
+  final DateTime weekStartDate = _startOfWeek(
+    date: date,
+    weekStart: weekStart,
+  );
+  final int diffDays = weekStartDate.difference(week1Start).inDays;
+  final int weekIndex = diffDays ~/ _daysPerWeek;
+  return weekIndex + _setPositionBase;
+}
+
+int _totalWeeksInYear({
+  required int year,
+  required CalendarWeekday weekStart,
+  required DateTime week1Start,
+}) {
+  final int lastDay = _daysInMonth(year, DateTime.december);
+  final DateTime lastDate = DateTime(year, DateTime.december, lastDay);
+  final int lastWeek = _weekNumberForDate(
+    date: lastDate,
+    weekStart: weekStart,
+    week1Start: week1Start,
+  );
+  return max(lastWeek, _setPositionBase);
 }
 
 DateTime? calculateRecurrenceEndDate({
@@ -482,6 +1141,8 @@ DateTime? calculateRecurrenceEndDate({
         );
       }
       return (amount: effective, unit: RecurrenceEndUnit.months);
+    case RecurrenceFrequency.yearly:
+      return (amount: effective, unit: RecurrenceEndUnit.years);
     case RecurrenceFrequency.none:
       return null;
   }
@@ -652,6 +1313,21 @@ String? occurrenceKeyFrom(String taskId) {
 String _occurrenceKeyFromDateTime(DateTime dateTime) =>
     dateTime.microsecondsSinceEpoch.toString();
 
+DateTime? _dateTimeFromOccurrenceKey(String key) {
+  final int? micros = int.tryParse(key);
+  if (micros == null) {
+    return null;
+  }
+  return DateTime.fromMicrosecondsSinceEpoch(micros);
+}
+
+DateTime? _rangeOriginalStart({
+  required String key,
+  required TaskOccurrenceOverride override,
+}) {
+  return override.recurrenceId?.value ?? _dateTimeFromOccurrenceKey(key);
+}
+
 Set<String> _calendarDateTimeKeys(List<CalendarDateTime> dates) {
   final Set<String> keys = <String>{};
   for (final CalendarDateTime date in dates) {
@@ -659,6 +1335,8 @@ Set<String> _calendarDateTimeKeys(List<CalendarDateTime> dates) {
   }
   return keys;
 }
+
+bool _hasRuleValues<T>(List<T>? values) => values != null && values.isNotEmpty;
 
 class _OverrideResolution {
   const _OverrideResolution({
@@ -756,7 +1434,10 @@ _RangeOverrideSelection? _selectRangeOverride(
     if (range == null) {
       return;
     }
-    final DateTime? originalStart = override.recurrenceId?.value;
+    final DateTime? originalStart = _rangeOriginalStart(
+      key: key,
+      override: override,
+    );
     if (originalStart == null) {
       return;
     }

@@ -48,6 +48,14 @@ const String _calendarMethodAddIcs = 'ADD';
 const String _calendarMethodRefreshIcs = 'REFRESH';
 const String _calendarMethodCounterIcs = 'COUNTER';
 const String _calendarMethodDeclineCounterIcs = 'DECLINECOUNTER';
+const String _calendarMethodPublishLabel = 'Publish';
+const String _calendarMethodRequestLabel = 'Request';
+const String _calendarMethodReplyLabel = 'Reply';
+const String _calendarMethodCancelLabel = 'Cancel';
+const String _calendarMethodAddLabel = 'Add';
+const String _calendarMethodRefreshLabel = 'Refresh';
+const String _calendarMethodCounterLabel = 'Counter';
+const String _calendarMethodDeclineCounterLabel = 'Decline counter';
 
 @HiveType(typeId: _calendarMethodTypeId)
 enum CalendarMethod {
@@ -98,6 +106,19 @@ enum CalendarMethod {
         _calendarMethodCounterIcs => CalendarMethod.counter,
         _calendarMethodDeclineCounterIcs => CalendarMethod.declineCounter,
         _ => null,
+      };
+}
+
+extension CalendarMethodLabelX on CalendarMethod {
+  String get label => switch (this) {
+        CalendarMethod.publish => _calendarMethodPublishLabel,
+        CalendarMethod.request => _calendarMethodRequestLabel,
+        CalendarMethod.reply => _calendarMethodReplyLabel,
+        CalendarMethod.cancel => _calendarMethodCancelLabel,
+        CalendarMethod.add => _calendarMethodAddLabel,
+        CalendarMethod.refresh => _calendarMethodRefreshLabel,
+        CalendarMethod.counter => _calendarMethodCounterLabel,
+        CalendarMethod.declineCounter => _calendarMethodDeclineCounterLabel,
       };
 }
 

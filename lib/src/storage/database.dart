@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -358,6 +359,7 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markChatSpam({
     required String jid,
     required bool spam,
+    DateTime? spamUpdatedAt,
   });
 
   Future<void> markChatMarkerResponsive({
@@ -468,7 +470,13 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<EmailBlocklistEntry>> getEmailBlocklist();
 
-  Future<void> addEmailBlock(String address);
+  Future<EmailBlocklistEntry?> getEmailBlocklistEntry(String address);
+
+  Future<void> addEmailBlock(
+    String address, {
+    DateTime? blockedAt,
+    String? sourceId,
+  });
 
   Future<void> removeEmailBlock(String address);
 
@@ -478,7 +486,15 @@ abstract interface class XmppDatabase implements Database {
 
   Stream<List<EmailSpamEntry>> watchEmailSpamlist();
 
-  Future<void> addEmailSpam(String address);
+  Future<List<EmailSpamEntry>> getEmailSpamlist();
+
+  Future<EmailSpamEntry?> getEmailSpamEntry(String address);
+
+  Future<void> addEmailSpam(
+    String address, {
+    DateTime? flaggedAt,
+    String? sourceId,
+  });
 
   Future<void> removeEmailSpam(String address);
 
@@ -1081,6 +1097,8 @@ class EmailSpamlistAccessor
       (delete(table)..where((tbl) => tbl.address.equals(address))).go();
 
   Stream<List<EmailSpamEntry>> watchEntries() => select(table).watch();
+
+  Future<List<EmailSpamEntry>> selectEntries() => select(table).get();
 }
 
 @DriftDatabase(tables: [
@@ -1171,7 +1189,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   @override
   MigrationStrategy get migration {
@@ -1282,10 +1300,10 @@ WHERE subject_token IS NOT NULL
           await customStatement(
             '''
 INSERT INTO message_attachments(message_id, file_metadata_id, sort_order)
-SELECT id, file_metadata_id, 0
+SELECT id, file_metadata_i_d, 0
 FROM messages
-WHERE file_metadata_id IS NOT NULL
-  AND trim(file_metadata_id) != ''
+WHERE file_metadata_i_d IS NOT NULL
+  AND trim(file_metadata_i_d) != ''
 ''',
           );
         }
@@ -1302,6 +1320,49 @@ WHERE file_metadata_id IS NOT NULL
         }
         if (from < 21) {
           await m.addColumn(chats, chats.attachmentAutoDownload);
+        }
+        if (from < 22) {
+          await m.addColumn(chats, chats.spamUpdatedAt);
+          await m.addColumn(blocklist, blocklist.blockedAt);
+          await m.addColumn(emailBlocklist, emailBlocklist.sourceId);
+          await m.addColumn(emailSpamlist, emailSpamlist.sourceId);
+          await customStatement(
+            '''
+UPDATE chats
+SET spam_updated_at = last_change_timestamp
+WHERE spam = 1 AND spam_updated_at IS NULL
+''',
+          );
+          await customStatement(
+            '''
+UPDATE blocklist
+SET blocked_at = CURRENT_TIMESTAMP
+WHERE blocked_at IS NULL
+''',
+          );
+          await customStatement(
+            '''
+UPDATE email_blocklist
+SET source_id = ?
+WHERE source_id IS NULL OR trim(source_id) = ''
+''',
+            [syncLegacySourceId],
+          );
+          await customStatement(
+            '''
+UPDATE email_blocklist
+SET blocked_at = CURRENT_TIMESTAMP
+WHERE blocked_at IS NULL
+''',
+          );
+          await customStatement(
+            '''
+UPDATE email_spamlist
+SET source_id = ?
+WHERE source_id IS NULL OR trim(source_id) = ''
+''',
+            [syncLegacySourceId],
+          );
         }
       },
       beforeOpen: (_) async {
@@ -1811,12 +1872,12 @@ SET last_change_timestamp = CASE
 WHERE jid = ?
 ''',
       [
-        Variable<DateTime>(timestamp),
-        Variable<DateTime>(timestamp),
-        Variable<int>(hasLastMessage.toBinary),
-        Variable<DateTime>(timestamp),
-        Variable<String>(resolvedLastMessage),
-        Variable<String>(jid),
+        timestamp,
+        timestamp,
+        hasLastMessage.toBinary,
+        timestamp,
+        resolvedLastMessage,
+        jid,
       ],
     );
   }
@@ -2874,9 +2935,16 @@ $limitClause
   Future<void> markChatSpam({
     required String jid,
     required bool spam,
+    DateTime? spamUpdatedAt,
   }) async {
-    await (update(chats)..where((tbl) => tbl.jid.equals(jid)))
-        .write(ChatsCompanion(spam: Value(spam)));
+    final resolvedUpdatedAt =
+        spam ? (spamUpdatedAt ?? DateTime.timestamp()) : null;
+    await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+      ChatsCompanion(
+        spam: Value(spam),
+        spamUpdatedAt: Value(resolvedUpdatedAt),
+      ),
+    );
   }
 
   @override
@@ -3143,7 +3211,12 @@ $limitClause
   @override
   Future<void> blockJid(String jid) async {
     _log.info('Adding to blocklist');
-    await blocklistAccessor.insertOne(BlocklistCompanion(jid: Value(jid)));
+    await blocklistAccessor.insertOne(
+      BlocklistCompanion.insert(
+        jid: jid,
+        blockedAt: Value(DateTime.timestamp().toUtc()),
+      ),
+    );
   }
 
   @override
@@ -3151,7 +3224,12 @@ $limitClause
     await transaction(() async {
       for (final jid in jids) {
         _log.info('Adding to blocklist');
-        await blocklistAccessor.insertOne(BlocklistCompanion(jid: Value(jid)));
+        await blocklistAccessor.insertOne(
+          BlocklistCompanion.insert(
+            jid: jid,
+            blockedAt: Value(DateTime.timestamp().toUtc()),
+          ),
+        );
       }
     });
   }
@@ -3175,10 +3253,21 @@ $limitClause
   @override
   Future<void> replaceBlocklist(List<String> blocks) async {
     _log.info('Replacing blocklist...');
+    final existing = await blocklistAccessor.selectAll();
+    final blockedAtByJid = <String, DateTime>{
+      for (final entry in existing) entry.jid: entry.blockedAt,
+    };
     await transaction(() async {
       await blocklistAccessor.deleteAll();
       for (final blocked in blocks) {
-        await blocklistAccessor.insertOne(BlocklistData(jid: blocked));
+        final blockedAt =
+            (blockedAtByJid[blocked] ?? DateTime.timestamp()).toUtc();
+        await blocklistAccessor.insertOne(
+          BlocklistCompanion.insert(
+            jid: blocked,
+            blockedAt: Value(blockedAt),
+          ),
+        );
       }
     });
   }
@@ -3214,13 +3303,33 @@ $limitClause
       emailBlocklistAccessor.selectEntries();
 
   @override
-  Future<void> addEmailBlock(String address) async {
+  Future<EmailBlocklistEntry?> getEmailBlocklistEntry(String address) =>
+      emailBlocklistAccessor.selectOne(address);
+
+  @override
+  Future<void> addEmailBlock(
+    String address, {
+    DateTime? blockedAt,
+    String? sourceId,
+  }) async {
     final normalized = _normalizeEmail(address);
     if (normalized.isEmpty) {
       return;
     }
-    await emailBlocklistAccessor.insertOrUpdateOne(
-      EmailBlocklistCompanion.insert(address: normalized),
+    final resolvedBlockedAt = (blockedAt ?? DateTime.timestamp()).toUtc();
+    await customStatement(
+      '''
+INSERT INTO email_blocklist(address, blocked_at, source_id)
+VALUES(?, ?, ?)
+ON CONFLICT(address) DO UPDATE SET
+  blocked_at = excluded.blocked_at,
+  source_id = COALESCE(excluded.source_id, email_blocklist.source_id)
+''',
+      [
+        normalized,
+        resolvedBlockedAt.toIso8601String(),
+        sourceId,
+      ],
     );
   }
 
@@ -3251,13 +3360,19 @@ $limitClause
     }
     await customStatement(
       '''
-INSERT INTO email_blocklist(address, blocked_message_count, last_blocked_message_at)
-VALUES(?, 1, CURRENT_TIMESTAMP)
+INSERT INTO email_blocklist(
+  address,
+  blocked_at,
+  blocked_message_count,
+  last_blocked_message_at,
+  source_id
+)
+VALUES(?, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP, ?)
 ON CONFLICT(address) DO UPDATE SET
   blocked_message_count = blocked_message_count + 1,
   last_blocked_message_at = excluded.last_blocked_message_at
 ''',
-      [normalized],
+      [normalized, null],
     );
   }
 
@@ -3266,13 +3381,37 @@ ON CONFLICT(address) DO UPDATE SET
       emailSpamlistAccessor.watchEntries();
 
   @override
-  Future<void> addEmailSpam(String address) async {
+  Future<List<EmailSpamEntry>> getEmailSpamlist() =>
+      emailSpamlistAccessor.selectEntries();
+
+  @override
+  Future<EmailSpamEntry?> getEmailSpamEntry(String address) =>
+      emailSpamlistAccessor.selectOne(address);
+
+  @override
+  Future<void> addEmailSpam(
+    String address, {
+    DateTime? flaggedAt,
+    String? sourceId,
+  }) async {
     final normalized = _normalizeEmail(address);
     if (normalized.isEmpty) {
       return;
     }
-    await emailSpamlistAccessor.insertOrUpdateOne(
-      EmailSpamlistCompanion.insert(address: normalized),
+    final resolvedFlaggedAt = (flaggedAt ?? DateTime.timestamp()).toUtc();
+    await customStatement(
+      '''
+INSERT INTO email_spamlist(address, flagged_at, source_id)
+VALUES(?, ?, ?)
+ON CONFLICT(address) DO UPDATE SET
+  flagged_at = excluded.flagged_at,
+  source_id = COALESCE(excluded.source_id, email_spamlist.source_id)
+''',
+      [
+        normalized,
+        resolvedFlaggedAt.toIso8601String(),
+        sourceId,
+      ],
     );
   }
 

@@ -67,7 +67,7 @@ class CalendarAvailabilityShareCoordinator {
       isRedacted: isRedacted ?? _availabilityOverlayDefaultRedacted,
     );
     final CalendarAvailabilityOverlay overlay =
-        _deriveOverlay(model: model, base: base);
+        deriveAvailabilityOverlay(model: model, base: base);
     final record = CalendarAvailabilityShareRecord(
       id: id,
       source: source,
@@ -122,7 +122,7 @@ class CalendarAvailabilityShareCoordinator {
         continue;
       }
       final CalendarAvailabilityOverlay overlay =
-          _deriveOverlay(model: model, base: record.overlay);
+          deriveAvailabilityOverlay(model: model, base: record.overlay);
       if (overlay == record.overlay) {
         continue;
       }
@@ -143,7 +143,7 @@ class CalendarAvailabilityShareCoordinator {
   }
 }
 
-CalendarAvailabilityOverlay _deriveOverlay({
+CalendarAvailabilityOverlay deriveAvailabilityOverlay({
   required CalendarModel model,
   required CalendarAvailabilityOverlay base,
 }) {
@@ -168,7 +168,20 @@ CalendarAvailabilityOverlay _deriveOverlay({
   final intervals = typedRanges
       .map((range) => _toInterval(range, base.rangeStart))
       .toList(growable: false);
-  return base.copyWith(intervals: intervals);
+  final CalendarAvailabilityOverlay next = base.copyWith(intervals: intervals);
+  return _applyOverlayRedaction(next);
+}
+
+CalendarAvailabilityOverlay _applyOverlayRedaction(
+  CalendarAvailabilityOverlay overlay,
+) {
+  if (!overlay.isRedacted) {
+    return overlay;
+  }
+  final List<CalendarFreeBusyInterval> freeIntervals = overlay.intervals
+      .where((interval) => interval.type.isFree)
+      .toList(growable: false);
+  return overlay.copyWith(intervals: freeIntervals);
 }
 
 List<_TimeRange> _taskBusyRanges(

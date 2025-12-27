@@ -198,7 +198,67 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatAttachmentConfirmButton => 'Charger';
 
   @override
-  String get chatOpenLinkTitle => 'Ouvrir un lien externe ?';
+  String get attachmentGalleryRosterTrustLabel =>
+      'Télécharger automatiquement les fichiers de cet utilisateur';
+
+  @override
+  String get attachmentGalleryRosterTrustHint =>
+      'Vous pouvez désactiver cela plus tard dans les paramètres du chat.';
+
+  @override
+  String get attachmentGalleryChatTrustLabel =>
+      'Toujours autoriser les pièces jointes dans ce chat';
+
+  @override
+  String get attachmentGalleryChatTrustHint =>
+      'Vous pouvez désactiver cela plus tard dans les paramètres du chat.';
+
+  @override
+  String get attachmentGalleryRosterErrorTitle =>
+      'Impossible d’ajouter le contact';
+
+  @override
+  String get attachmentGalleryRosterErrorMessage =>
+      'Cette pièce jointe a été téléchargée une fois, mais les téléchargements automatiques sont toujours désactivés.';
+
+  @override
+  String get attachmentGalleryErrorMessage =>
+      'Impossible de charger les pièces jointes.';
+
+  @override
+  String get attachmentGalleryAllLabel => 'Tous';
+
+  @override
+  String get attachmentGalleryImagesLabel => 'Images';
+
+  @override
+  String get attachmentGalleryVideosLabel => 'Vidéos';
+
+  @override
+  String get attachmentGalleryFilesLabel => 'Fichiers';
+
+  @override
+  String get attachmentGallerySentLabel => 'Envoyé';
+
+  @override
+  String get attachmentGalleryReceivedLabel => 'Reçu';
+
+  @override
+  String get attachmentGallerySortNameAscLabel => 'Nom A-Z';
+
+  @override
+  String get attachmentGallerySortNameDescLabel => 'Nom Z-A';
+
+  @override
+  String get attachmentGallerySortSizeAscLabel =>
+      'Taille du plus petit au plus grand';
+
+  @override
+  String get attachmentGallerySortSizeDescLabel =>
+      'Taille du plus grand au plus petit';
+
+  @override
+  String get chatOpenLinkTitle => 'Ouvrir un lien externe ?';
 
   @override
   String chatOpenLinkMessage(Object url, Object host) {

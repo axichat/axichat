@@ -8,6 +8,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
@@ -265,6 +266,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
           checklist: task.checklist,
           endDate: task.endDate,
           reminders: task.reminders,
+          icsMeta: task.icsMeta,
         ),
       ),
     );
@@ -356,6 +358,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   ) {
     final VoidCallback? searchAction =
         buildNavigationSearchAction(context, state, usesDesktopLayout);
+    final CalendarChatAcl? chatAcl = buildNavigationChatAcl(state);
+    final String? chatTitle = buildNavigationChatTitle(state);
     final Widget base = CalendarNavigation(
       state: state,
       sidebarVisible: usesDesktopLayout,
@@ -376,6 +380,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
       onToggleHideCompletedScheduled: (hide) =>
           context.read<SettingsCubit>().toggleHideCompletedScheduled(hide),
       onSearchRequested: searchAction,
+      chatAcl: chatAcl,
+      chatTitle: chatTitle,
     );
     final EdgeInsets? padding = navigationPadding(spec, usesDesktopLayout);
     if (padding == null) {
@@ -391,6 +397,12 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     bool usesDesktopLayout,
   ) =>
       null;
+
+  @protected
+  CalendarChatAcl? buildNavigationChatAcl(CalendarState state) => null;
+
+  @protected
+  String? buildNavigationChatTitle(CalendarState state) => null;
 
   @protected
   VoidCallback? buildNavigationSearchAction(

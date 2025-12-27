@@ -2,8 +2,11 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
+import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 
 part 'calendar_event.freezed.dart';
@@ -26,6 +29,7 @@ class CalendarEvent with _$CalendarEvent {
     RecurrenceRule? recurrence,
     @Default([]) List<TaskChecklistItem> checklist,
     ReminderPreferences? reminders,
+    CalendarIcsMeta? icsMeta,
   }) = CalendarTaskAdded;
 
   const factory CalendarEvent.taskUpdated({
@@ -108,6 +112,7 @@ class CalendarEvent with _$CalendarEvent {
     DateTime? endDate,
     bool? isCancelled,
     List<TaskChecklistItem>? checklist,
+    RecurrenceRange? range,
   }) = CalendarTaskOccurrenceUpdated;
 
   const factory CalendarEvent.taskPriorityChanged({
@@ -131,6 +136,7 @@ class CalendarEvent with _$CalendarEvent {
     DateTime? endDate,
     String? description,
     ReminderPreferences? reminders,
+    CalendarIcsMeta? icsMeta,
   }) = CalendarDayEventAdded;
 
   const factory CalendarEvent.dayEventUpdated({
@@ -140,6 +146,10 @@ class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.dayEventDeleted({
     required String eventId,
   }) = CalendarDayEventDeleted;
+
+  const factory CalendarEvent.availabilityUpdated({
+    required CalendarAvailability availability,
+  }) = CalendarAvailabilityUpdated;
 
   const factory CalendarEvent.quickTaskAdded({
     required String text,

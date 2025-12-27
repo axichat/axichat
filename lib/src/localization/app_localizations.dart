@@ -435,6 +435,108 @@ abstract class AppLocalizations {
   /// **'Load'**
   String get chatAttachmentConfirmButton;
 
+  /// No description provided for @attachmentGalleryRosterTrustLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically download files from this user'**
+  String get attachmentGalleryRosterTrustLabel;
+
+  /// No description provided for @attachmentGalleryRosterTrustHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can turn this off later in chat settings.'**
+  String get attachmentGalleryRosterTrustHint;
+
+  /// No description provided for @attachmentGalleryChatTrustLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Always allow attachments in this chat'**
+  String get attachmentGalleryChatTrustLabel;
+
+  /// No description provided for @attachmentGalleryChatTrustHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can turn this off later in chat settings.'**
+  String get attachmentGalleryChatTrustHint;
+
+  /// No description provided for @attachmentGalleryRosterErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to add contact'**
+  String get attachmentGalleryRosterErrorTitle;
+
+  /// No description provided for @attachmentGalleryRosterErrorMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded this attachment once, but automatic downloads are still disabled.'**
+  String get attachmentGalleryRosterErrorMessage;
+
+  /// No description provided for @attachmentGalleryErrorMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to load attachments.'**
+  String get attachmentGalleryErrorMessage;
+
+  /// No description provided for @attachmentGalleryAllLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get attachmentGalleryAllLabel;
+
+  /// No description provided for @attachmentGalleryImagesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get attachmentGalleryImagesLabel;
+
+  /// No description provided for @attachmentGalleryVideosLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get attachmentGalleryVideosLabel;
+
+  /// No description provided for @attachmentGalleryFilesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get attachmentGalleryFilesLabel;
+
+  /// No description provided for @attachmentGallerySentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get attachmentGallerySentLabel;
+
+  /// No description provided for @attachmentGalleryReceivedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get attachmentGalleryReceivedLabel;
+
+  /// No description provided for @attachmentGallerySortNameAscLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name A-Z'**
+  String get attachmentGallerySortNameAscLabel;
+
+  /// No description provided for @attachmentGallerySortNameDescLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name Z-A'**
+  String get attachmentGallerySortNameDescLabel;
+
+  /// No description provided for @attachmentGallerySortSizeAscLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Size small to large'**
+  String get attachmentGallerySortSizeAscLabel;
+
+  /// No description provided for @attachmentGallerySortSizeDescLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Size large to small'**
+  String get attachmentGallerySortSizeDescLabel;
+
   /// No description provided for @chatOpenLinkTitle.
   ///
   /// In en, this message translates to:

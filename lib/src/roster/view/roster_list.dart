@@ -122,6 +122,7 @@ class _RosterListBody extends StatelessWidget {
                   ),
                 ),
                 BlockMenuItem(jid: item.jid),
+                ReportSpamMenuItem(jid: item.jid),
                 AxiDeleteMenuItem(
                   onPressed: () async {
                     final isLoading = switch (rosterState) {

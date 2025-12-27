@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_exceptions.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
@@ -66,6 +67,7 @@ abstract class BaseCalendarBloc
     on<CalendarDayEventAdded>(_onDayEventAdded);
     on<CalendarDayEventUpdated>(_onDayEventUpdated);
     on<CalendarDayEventDeleted>(_onDayEventDeleted);
+    on<CalendarAvailabilityUpdated>(_onAvailabilityUpdated);
     on<CalendarQuickTaskAdded>(_onQuickTaskAdded);
     on<CalendarViewChanged>(_onViewChanged);
     on<CalendarDayViewSelected>(_onDayViewSelected);
@@ -366,10 +368,27 @@ abstract class BaseCalendarBloc
 
       _recordUndoSnapshot();
 
+      final NlAdapterResult parsedResult =
+          await _nlParserService.parse(event.title);
+      final CalendarTask parsed = parsedResult.task;
       final now = _now();
+      final String? description =
+          _resolveParsedText(event.description, parsed.description);
+      final DateTime? scheduledTime =
+          event.scheduledTime ?? parsed.scheduledTime;
+      final Duration? duration = event.duration ?? parsed.duration;
+      final DateTime? deadline = event.deadline ?? parsed.deadline;
+      final String? location =
+          _resolveParsedText(event.location, parsed.location);
+      final RecurrenceRule? recurrence =
+          _resolveParsedRecurrence(event.recurrence, parsed.recurrence);
+      final TaskPriority resolvedPriority =
+          _resolveParsedPriority(event.priority, parsed.priority);
+      final ReminderPreferences resolvedReminders =
+          _resolveParsedReminders(event.reminders, parsed.reminders);
       final DateTime? computedEndDate = event.endDate ??
-          (event.scheduledTime != null && event.duration != null
-              ? event.scheduledTime!.add(event.duration!)
+          (scheduledTime != null && duration != null
+              ? scheduledTime.add(duration)
               : null);
 
       final List<TaskChecklistItem> checklist =
@@ -377,16 +396,17 @@ abstract class BaseCalendarBloc
 
       final task = CalendarTask.create(
         title: event.title,
-        description: event.description,
-        scheduledTime: event.scheduledTime,
-        duration: event.duration,
-        location: event.location,
-        deadline: event.deadline,
+        description: description,
+        scheduledTime: scheduledTime,
+        duration: duration,
+        location: location,
+        deadline: deadline,
         endDate: computedEndDate,
-        priority: event.priority,
-        recurrence: event.recurrence,
+        priority: resolvedPriority,
+        recurrence: recurrence,
         checklist: checklist,
-        reminders: event.reminders,
+        reminders: resolvedReminders,
+        icsMeta: event.icsMeta,
       ).copyWith(modifiedAt: now);
 
       final updatedModel = state.model.addTask(task);
@@ -421,9 +441,40 @@ abstract class BaseCalendarBloc
       final List<TaskChecklistItem> checklist =
           _normalizedChecklist(event.task.checklist);
 
+      final NlAdapterResult parsedResult =
+          await _nlParserService.parse(event.task.title);
+      final CalendarTask parsed = parsedResult.task;
+      final String? description =
+          _resolveParsedText(event.task.description, parsed.description);
+      final DateTime? scheduledTime =
+          event.task.scheduledTime ?? parsed.scheduledTime;
+      final Duration? duration = event.task.duration ?? parsed.duration;
+      final DateTime? deadline = event.task.deadline ?? parsed.deadline;
+      final String? location =
+          _resolveParsedText(event.task.location, parsed.location);
+      final RecurrenceRule? recurrence =
+          _resolveParsedRecurrence(event.task.recurrence, parsed.recurrence);
+      final TaskPriority? priority =
+          _resolveParsedNullablePriority(event.task.priority, parsed.priority);
+      final ReminderPreferences reminders =
+          _resolveParsedReminders(event.task.reminders, parsed.reminders);
+      final DateTime? computedEndDate = event.task.endDate ??
+          (scheduledTime != null && duration != null
+              ? scheduledTime.add(duration)
+              : null);
+
       final updatedTask = event.task.copyWith(
         modifiedAt: _now(),
         checklist: checklist,
+        description: description,
+        scheduledTime: scheduledTime,
+        duration: duration,
+        deadline: deadline,
+        endDate: computedEndDate,
+        location: location,
+        recurrence: recurrence,
+        priority: priority,
+        reminders: reminders,
       );
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit, isLoading: false);
@@ -687,6 +738,7 @@ abstract class BaseCalendarBloc
         endDate: event.endDate ?? baseOverride.endDate,
         isCancelled: event.isCancelled ?? baseOverride.isCancelled,
         checklist: event.checklist ?? baseOverride.checklist,
+        range: event.range,
       );
 
       if (_isOccurrenceOverrideEmpty(updatedOverride)) {
@@ -1008,6 +1060,7 @@ abstract class BaseCalendarBloc
         endDate: event.endDate,
         description: event.description,
         reminders: event.reminders,
+        icsMeta: event.icsMeta,
       );
 
       final CalendarModel updatedModel = state.model.addDayEvent(dayEvent);
@@ -1090,6 +1143,34 @@ abstract class BaseCalendarBloc
     }
   }
 
+  Future<void> _onAvailabilityUpdated(
+    CalendarAvailabilityUpdated event,
+    Emitter<CalendarState> emit,
+  ) async {
+    bool snapshotRecorded = false;
+    try {
+      final CalendarAvailability availability = event.availability;
+      if (!availability.end.value.isAfter(availability.start.value)) {
+        throw const CalendarValidationException(
+          'availability',
+          'End date must be after the start date',
+        );
+      }
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      snapshotRecorded = true;
+      final CalendarModel updatedModel =
+          state.model.upsertAvailability(availability);
+      emitModel(updatedModel, emit, isLoading: false);
+      await onAvailabilityChanged(updatedModel);
+    } catch (error) {
+      if (snapshotRecorded) {
+        _restoreLastUndoSnapshot(emit);
+      }
+      await _handleError(error, 'Failed to update availability', emit);
+    }
+  }
+
   Future<void> _onQuickTaskAdded(
     CalendarQuickTaskAdded event,
     Emitter<CalendarState> emit,
@@ -1111,15 +1192,14 @@ abstract class BaseCalendarBloc
       final CalendarTask parsed = parsedResult.task;
       final now = _now();
       final task = parsed.copyWith(
-        description: event.description ?? parsed.description,
+        description: _resolveParsedText(event.description, parsed.description),
         deadline: event.deadline ?? parsed.deadline,
         priority: event.priority == TaskPriority.none
-            ? parsed.priority
+            ? _normalizePriority(parsed.priority)
             : event.priority,
         checklist: _normalizedChecklist(event.checklist),
         modifiedAt: now,
-        reminders: (event.reminders ?? parsed.reminders)?.normalized() ??
-            ReminderPreferences.defaults(),
+        reminders: _resolveParsedReminders(event.reminders, parsed.reminders),
       );
 
       final updatedModel = state.model.addTask(task);
@@ -1782,6 +1862,68 @@ abstract class BaseCalendarBloc
       normalized.add(item.copyWith(label: label));
     }
     return List<TaskChecklistItem>.unmodifiable(normalized);
+  }
+
+  bool _isBlank(String? value) => value == null || value.trim().isEmpty;
+
+  String? _resolveParsedText(String? explicit, String? parsed) {
+    if (!_isBlank(explicit)) {
+      return explicit!.trim();
+    }
+    if (_isBlank(parsed)) {
+      return null;
+    }
+    return parsed!.trim();
+  }
+
+  RecurrenceRule? _resolveParsedRecurrence(
+    RecurrenceRule? explicit,
+    RecurrenceRule? parsed,
+  ) {
+    if (explicit != null && !explicit.isNone) {
+      return explicit;
+    }
+    if (parsed == null || parsed.isNone) {
+      return null;
+    }
+    return parsed;
+  }
+
+  TaskPriority? _normalizePriority(TaskPriority? value) {
+    if (value == null || value == TaskPriority.none) {
+      return null;
+    }
+    return value;
+  }
+
+  TaskPriority _resolveParsedPriority(
+    TaskPriority explicit,
+    TaskPriority? parsed,
+  ) {
+    if (explicit != TaskPriority.none) {
+      return explicit;
+    }
+    final TaskPriority? resolved = _normalizePriority(parsed);
+    return resolved ?? TaskPriority.none;
+  }
+
+  TaskPriority? _resolveParsedNullablePriority(
+    TaskPriority? explicit,
+    TaskPriority? parsed,
+  ) {
+    return _normalizePriority(explicit) ?? _normalizePriority(parsed);
+  }
+
+  ReminderPreferences _resolveParsedReminders(
+    ReminderPreferences? explicit,
+    ReminderPreferences? parsed,
+  ) {
+    final ReminderPreferences? explicitNormalized = explicit?.normalized();
+    if (explicitNormalized != null) {
+      return explicitNormalized;
+    }
+    final ReminderPreferences? parsedNormalized = parsed?.normalized();
+    return parsedNormalized ?? ReminderPreferences.defaults();
   }
 
   bool _checklistsEqual(
@@ -2863,6 +3005,10 @@ abstract class BaseCalendarBloc
   @protected
   Future<void> onCriticalPathsChanged(CalendarModel model) async {}
 
+  /// Called when availability windows change.
+  @protected
+  Future<void> onAvailabilityChanged(CalendarModel model) async {}
+
   /// Called when a new critical path is created.
   @protected
   Future<void> onCriticalPathAdded(CalendarCriticalPath path) async {}
@@ -2901,6 +3047,8 @@ bool _isOccurrenceOverrideEmpty(TaskOccurrenceOverride override) {
       override.title == null &&
       override.description == null &&
       override.location == null &&
+      override.recurrenceId == null &&
+      override.range == null &&
       (override.checklist == null || override.checklist!.isEmpty) &&
       override.rawProperties.isEmpty &&
       override.rawComponents.isEmpty;

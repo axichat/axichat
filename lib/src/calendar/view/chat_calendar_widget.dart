@@ -4,9 +4,11 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
+import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/calendar_availability_share_sheet.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
@@ -72,6 +74,13 @@ class _ChatCalendarWidgetState
   bool _mobileInitialScrollSynced = false;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
+
+  @override
+  CalendarChatAcl? buildNavigationChatAcl(CalendarState state) =>
+      widget.chat.type.calendarDefaultAcl;
+
+  @override
+  String? buildNavigationChatTitle(CalendarState state) => widget.chat.title;
 
   @override
   void dispose() {
@@ -270,6 +279,9 @@ class _ChatCalendarWidgetState
       ),
       model: state.model,
       ownerJid: ownerJid,
+      onAvailabilitySaved: (availability) => calendarBloc.add(
+        CalendarEvent.availabilityUpdated(availability: availability),
+      ),
       initialChat: widget.chat,
     );
   }

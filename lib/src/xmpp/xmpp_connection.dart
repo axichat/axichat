@@ -117,6 +117,10 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(ConversationIndexManager.managerId);
       case == DraftsPubSubManager:
         return getManagerById(DraftsPubSubManager.managerId);
+      case == SpamPubSubManager:
+        return getManagerById(SpamPubSubManager.managerId);
+      case == EmailBlocklistPubSubManager:
+        return getManagerById(EmailBlocklistPubSubManager.managerId);
       default:
         return null;
     }

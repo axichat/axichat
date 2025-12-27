@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -24,6 +25,7 @@ class TaskTextField extends StatelessWidget {
     this.enabled = true,
     this.onChanged,
     this.onSubmitted,
+    this.inputFormatters,
     this.prefix,
     this.suffix,
     this.contentPadding,
@@ -52,6 +54,7 @@ class TaskTextField extends StatelessWidget {
   final bool enabled;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
   final Widget? prefix;
   final Widget? suffix;
   final EdgeInsetsGeometry? contentPadding;
@@ -82,6 +85,7 @@ class TaskTextField extends StatelessWidget {
       autofocus: autofocus,
       onChanged: onChanged,
       onSubmitted: onSubmitted,
+      inputFormatters: inputFormatters,
       style: textStyle ??
           TextStyle(
             color: calendarTitleColor,

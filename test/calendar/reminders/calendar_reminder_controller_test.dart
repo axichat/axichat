@@ -1,11 +1,51 @@
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
 class MockNotificationService extends Mock implements NotificationService {}
+
+const Duration _taskLeadTwoHours = Duration(hours: 2);
+const Duration _taskLeadOneHour = Duration(hours: 1);
+const Duration _taskLeadThirtyMinutes = Duration(minutes: 30);
+const Duration _taskLeadFifteenMinutes = Duration(minutes: 15);
+const Duration _taskLeadNow = Duration.zero;
+
+const List<Duration> _taskStartOffsets = <Duration>[
+  _taskLeadTwoHours,
+  _taskLeadOneHour,
+  _taskLeadThirtyMinutes,
+  _taskLeadFifteenMinutes,
+  _taskLeadNow,
+];
+
+const List<Duration> _taskDeadlineOffsets = <Duration>[
+  _taskLeadOneHour,
+  _taskLeadThirtyMinutes,
+  _taskLeadFifteenMinutes,
+  _taskLeadNow,
+];
+
+const ReminderPreferences _taskReminderPreferences = ReminderPreferences(
+  enabled: true,
+  startOffsets: _taskStartOffsets,
+  deadlineOffsets: _taskDeadlineOffsets,
+);
+
+const List<Duration> _dayEventOffsets = <Duration>[
+  _taskLeadOneHour,
+  _taskLeadThirtyMinutes,
+  _taskLeadFifteenMinutes,
+  _taskLeadNow,
+];
+
+const ReminderPreferences _dayEventReminderPreferences = ReminderPreferences(
+  enabled: true,
+  startOffsets: _dayEventOffsets,
+);
 
 void main() {
   setUpAll(() {
@@ -58,6 +98,7 @@ void main() {
         scheduledTime: DateTime(2024, 1, 10, 12),
         duration: const Duration(hours: 1),
         deadline: DateTime(2024, 1, 11, 10),
+        reminders: _taskReminderPreferences,
       );
 
       await controller.syncWithTasks(<CalendarTask>[task]);
@@ -88,10 +129,12 @@ void main() {
       final CalendarTask meeting = CalendarTask.create(
         title: 'Team sync',
         scheduledTime: DateTime(2024, 5, 2, 12),
+        reminders: _taskReminderPreferences,
       );
       final CalendarTask demo = CalendarTask.create(
         title: 'Demo',
         scheduledTime: DateTime(2024, 5, 3, 15),
+        reminders: _taskReminderPreferences,
       );
 
       await controller.syncWithTasks(<CalendarTask>[meeting, demo]);
@@ -120,6 +163,7 @@ void main() {
       final DayEvent holiday = DayEvent.create(
         title: 'Holiday',
         startDate: DateTime(2024, 9, 5),
+        reminders: _dayEventReminderPreferences,
       );
 
       await controller.syncWithTasks(

@@ -71,6 +71,7 @@ final class HomeRefreshSyncService {
       await _healTransports();
       final mamOutcome = await _pullUnreadFromNewContacts();
       await _syncEmailContacts();
+      await _refreshAntiAbuseLists();
       await _refreshConversationIndex();
       await _refreshMucBookmarks();
       await _refreshEmailHistory();
@@ -211,6 +212,12 @@ final class HomeRefreshSyncService {
     } on Exception {
       _log.fine('Email contact sync failed.');
     }
+  }
+
+  Future<void> _refreshAntiAbuseLists() async {
+    if (_xmppService.connectionState != ConnectionState.connected) return;
+    await _xmppService.syncSpamSnapshot();
+    await _xmppService.syncEmailBlocklistSnapshot();
   }
 
   Future<void> _refreshXmppHistory({

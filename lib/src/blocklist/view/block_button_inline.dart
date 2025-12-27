@@ -1,8 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -42,7 +42,7 @@ class BlockButtonInline extends StatelessWidget {
         final onPressed = disabled
             ? null
             : () {
-                context.read<BlocklistCubit?>()?.block(jid: jid);
+                context.read<BlocklistCubit?>()?.block(address: jid);
                 if (callback != null) {
                   callback!();
                 }
@@ -75,10 +75,9 @@ class _EmailBlockButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final EmailService? emailService =
-        RepositoryProvider.of<EmailService?>(context);
+    final XmppService? xmppService = context.read<XmppService?>();
     final String? address = emailAddress?.trim();
-    final disabled = emailService == null || address == null || address.isEmpty;
+    final disabled = xmppService == null || address == null || address.isEmpty;
     if (disabled) {
       return ShadButton.ghost(
         width: double.infinity,
@@ -90,7 +89,7 @@ class _EmailBlockButton extends StatelessWidget {
       ).withTapBounce(enabled: false);
     }
     Future<void> handleBlock() async {
-      await emailService.blocking.block(address);
+      await xmppService.setEmailBlockStatus(address: address, blocked: true);
       callback?.call();
     }
 

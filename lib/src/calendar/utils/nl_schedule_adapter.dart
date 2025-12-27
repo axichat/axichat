@@ -5,6 +5,8 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'schedule_parser.dart';
 
+const String _rruleFrequencyYearly = 'YEARLY';
+
 /// Context describing the device/environment used when mapping parser output
 /// into app models. Keeps track of timezone metadata so downstream layers can
 /// persist both UTC instants and the originating zone identifier.
@@ -265,6 +267,8 @@ class NlScheduleAdapter {
         frequency = RecurrenceFrequency.weekly;
       case 'MONTHLY':
         frequency = RecurrenceFrequency.monthly;
+      case _rruleFrequencyYearly:
+        frequency = RecurrenceFrequency.yearly;
       case 'WEEKDAYS':
         frequency = RecurrenceFrequency.weekdays;
       default:

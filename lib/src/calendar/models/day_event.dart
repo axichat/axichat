@@ -40,6 +40,7 @@ class DayEvent with _$DayEvent implements CalendarItemBase {
     DateTime? endDate,
     String? description,
     ReminderPreferences? reminders,
+    CalendarIcsMeta? icsMeta,
   }) {
     final DateTime normalizedStart = _midnight(startDate);
     final DateTime normalizedEnd =
@@ -54,6 +55,7 @@ class DayEvent with _$DayEvent implements CalendarItemBase {
       endDate: normalizedEnd,
       description: description,
       reminders: reminders?.normalized() ?? ReminderPreferences.defaults(),
+      icsMeta: icsMeta,
       createdAt: now,
       modifiedAt: now,
     );
@@ -83,6 +85,7 @@ class DayEvent with _$DayEvent implements CalendarItemBase {
     String? title,
     String? description,
     ReminderPreferences? reminders,
+    CalendarIcsMeta? icsMeta,
     DateTime? modifiedAt,
   }) {
     final DateTime resolvedStart = _midnight(startDate ?? this.startDate);
@@ -102,6 +105,7 @@ class DayEvent with _$DayEvent implements CalendarItemBase {
       startDate: resolvedStart,
       endDate: normalizedEnd,
       reminders: effectiveReminders,
+      icsMeta: icsMeta ?? this.icsMeta,
       modifiedAt: modifiedAt ?? this.modifiedAt,
     );
   }

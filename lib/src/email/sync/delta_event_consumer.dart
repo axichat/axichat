@@ -435,7 +435,11 @@ class DeltaEventConsumer {
         emailAddress.isNotEmpty &&
         await db.isEmailAddressSpam(emailAddress)) {
       warning = MessageWarning.emailSpamQuarantined;
-      await db.markChatSpam(jid: resolvedChat.jid, spam: true);
+      await db.markChatSpam(
+        jid: resolvedChat.jid,
+        spam: true,
+        spamUpdatedAt: timestamp,
+      );
     }
     final normalizedHtml = HtmlContentCodec.normalizeHtml(msg.html);
     final resolvedBody = msg.text?.trim().isNotEmpty == true

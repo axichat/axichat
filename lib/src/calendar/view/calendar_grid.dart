@@ -5,7 +5,8 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show Ticker;
+import 'package:flutter/scheduler.dart'
+    show SchedulerBinding, SchedulerPhase, Ticker;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
@@ -18,14 +19,18 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/calendar_share.dart';
+import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
 import 'edit_task_dropdown.dart';
 import 'models/task_context_action.dart';
 import 'layout/calendar_layout.dart'
@@ -55,6 +60,7 @@ import 'calendar_navigation.dart' show calendarUnitLabel, shiftedCalendarDate;
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
 const double _headerNavButtonExtent = 44.0;
+const String _taskShareIcsActionLabel = 'Share as .ics';
 
 class _CalendarScrollController extends ScrollController {
   _CalendarScrollController({required this.onAttached});
@@ -111,6 +117,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
   static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
   static const double _autoScrollHorizontalSlop = 32.0;
+  final CalendarTransferService _transferService =
+      const CalendarTransferService();
 
   double get _edgeScrollFastBandHeight => _layoutTheme.edgeScrollFastBandHeight;
   double get _edgeScrollSlowBandHeight => _layoutTheme.edgeScrollSlowBandHeight;
@@ -186,6 +194,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   DateTime? _hoveredSlot;
   bool _desktopDayPinned = false;
   bool _autoScrollPending = false;
+  bool _viewportRequestScheduled = false;
+  bool _scrollJumpScheduled = false;
+  double? _pendingScrollJumpTarget;
   DateTime? _pendingScrollSlot;
   TaskFocusRequest? _pendingFocusRequest;
   Offset? _contextMenuAnchor;
@@ -362,6 +373,33 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return (minutes / slotMinutes) * slotHeight;
   }
 
+  void _jumpToSafely(double target) {
+    if (!_verticalController.hasClients) {
+      return;
+    }
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      _verticalController.jumpTo(target);
+      return;
+    }
+    _pendingScrollJumpTarget = target;
+    if (_scrollJumpScheduled) {
+      return;
+    }
+    _scrollJumpScheduled = true;
+    SchedulerBinding.instance.scheduleFrame();
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _scrollJumpScheduled = false;
+      final pendingTarget = _pendingScrollJumpTarget;
+      _pendingScrollJumpTarget = null;
+      if (!mounted ||
+          pendingTarget == null ||
+          !_verticalController.hasClients) {
+        return;
+      }
+      _verticalController.jumpTo(pendingTarget);
+    });
+  }
+
   void _restoreScrollAnchor() {
     if (_pendingAnchorMinutes == null || !_verticalController.hasClients) {
       return;
@@ -381,7 +419,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         targetOffset.clamp(0.0, position.maxScrollExtent).toDouble();
 
     if ((position.pixels - clampedTarget).abs() > 0.5) {
-      _verticalController.jumpTo(clampedTarget);
+      _jumpToSafely(clampedTarget);
     }
 
     _pendingAnchorMinutes = null;
@@ -391,7 +429,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!mounted) {
       return;
     }
-    _processViewportRequests();
+    _scheduleViewportRequests();
   }
 
   void _handleClipboardChanged() {
@@ -433,7 +471,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _scheduleAutoScroll() {
     _autoScrollPending = true;
-    _maybeAutoScroll();
+    _scheduleViewportRequests();
+  }
+
+  void _scheduleViewportRequests() {
+    if (_viewportRequestScheduled) {
+      return;
+    }
+    _viewportRequestScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportRequestScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _processViewportRequests();
+    });
   }
 
   void _processViewportRequests() {
@@ -764,6 +816,51 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     FeedbackSystem.showSuccess(context, 'Task copied to clipboard');
+  }
+
+  Future<void> _shareTaskIcs(CalendarTask task) async {
+    await showCalendarTaskShareSheet(
+      context: context,
+      task: task,
+    );
+  }
+
+  Future<void> _exportTaskIcs(CalendarTask task) async {
+    final l10n = context.l10n;
+    final String trimmedTitle = task.title.trim();
+    final String subject =
+        trimmedTitle.isEmpty ? l10n.calendarExportFormatIcsTitle : trimmedTitle;
+    final String shareText = '$subject (${l10n.calendarExportFormatIcsTitle})';
+    try {
+      final file = await _transferService.exportTaskIcs(task: task);
+      if (!mounted) {
+        return;
+      }
+      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        file: file,
+        subject: subject,
+        text: shareText,
+      );
+      if (!mounted) {
+        return;
+      }
+      FeedbackSystem.showSuccess(
+        context,
+        calendarShareSuccessMessage(
+          outcome: shareOutcome,
+          filePath: file.path,
+          sharedText: l10n.calendarExportReady,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      FeedbackSystem.showError(
+        context,
+        l10n.calendarExportFailed('$error'),
+      );
+    }
   }
 
   void _pasteTask(DateTime slotTime) {
@@ -1280,7 +1377,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   );
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
-                    ? (updatedTask) {
+                    ? (updatedTask, scope) {
                         locate<T>().add(
                           CalendarEvent.taskOccurrenceUpdated(
                             taskId: baseId,
@@ -1289,6 +1386,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                             duration: updatedTask.duration,
                             endDate: updatedTask.endDate,
                             checklist: updatedTask.checklist,
+                            range: scope.range,
                           ),
                         );
 
@@ -1300,6 +1398,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           priority: updatedTask.priority,
                           isCompleted: updatedTask.isCompleted,
                           checklist: updatedTask.checklist,
+                          recurrence: updatedTask.recurrence,
+                          reminders: updatedTask.reminders,
+                          icsMeta: updatedTask.icsMeta,
                           modifiedAt: DateTime.now(),
                         );
 
@@ -2057,7 +2158,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                 );
                           },
                           onOccurrenceUpdated: shouldUpdateOccurrence
-                              ? (updatedTask) {
+                              ? (updatedTask, scope) {
                                   context.read<T>().add(
                                         CalendarEvent.taskOccurrenceUpdated(
                                           taskId: baseId,
@@ -2067,6 +2168,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                           duration: updatedTask.duration,
                                           endDate: updatedTask.endDate,
                                           checklist: updatedTask.checklist,
+                                          range: scope.range,
                                         ),
                                       );
 
@@ -2078,6 +2180,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                     priority: updatedTask.priority,
                                     isCompleted: updatedTask.isCompleted,
                                     checklist: updatedTask.checklist,
+                                    recurrence: updatedTask.recurrence,
+                                    reminders: updatedTask.reminders,
+                                    icsMeta: updatedTask.icsMeta,
                                     modifiedAt: DateTime.now(),
                                   );
 
@@ -2433,7 +2538,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final viewport = position.viewportDimension;
     double target = offset - viewport / 2;
     target = target.clamp(0.0, position.maxScrollExtent).toDouble();
-    _verticalController.jumpTo(target);
+    _jumpToSafely(target);
     _hasAutoScrolled = true;
   }
 
@@ -2553,6 +2658,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         icon: Icons.copy_outlined,
         label: 'Copy Task',
         onSelected: () => _copyTaskInstance(task),
+      ),
+      TaskContextAction(
+        icon: Icons.send,
+        label: _taskShareIcsActionLabel,
+        onSelected: () => _shareTaskIcs(task),
+      ),
+      TaskContextAction(
+        icon: Icons.file_download_outlined,
+        label: context.l10n.calendarExportFormatIcsTitle,
+        onSelected: () => _exportTaskIcs(task),
       ),
       TaskContextAction(
         icon: Icons.share_outlined,
@@ -2904,6 +3019,36 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       });
   }
 
+  List<CalendarAvailabilityWindow> _resolveAvailabilityWindows() {
+    final Map<String, CalendarAvailability> availability =
+        widget.state.model.availability;
+    if (availability.isEmpty) {
+      return const <CalendarAvailabilityWindow>[];
+    }
+    final List<CalendarAvailabilityWindow> windows =
+        <CalendarAvailabilityWindow>[];
+    for (final CalendarAvailability entry in availability.values) {
+      if (entry.windows.isEmpty) {
+        windows.add(
+          CalendarAvailabilityWindow(
+            start: entry.start,
+            end: entry.end,
+            summary: entry.summary,
+            description: entry.description,
+          ),
+        );
+        continue;
+      }
+      windows.addAll(entry.windows);
+    }
+    return windows;
+  }
+
+  List<CalendarAvailabilityOverlay> _resolveAvailabilityOverlays() {
+    return widget.state.model.availabilityOverlays.values
+        .toList(growable: false);
+  }
+
   bool _isTaskVisible(CalendarTask task) {
     if (_hideCompletedScheduled && task.isCompleted) {
       return false;
@@ -2955,6 +3100,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               endDate: draft.endDate,
               description: draft.description,
               reminders: draft.reminders,
+              icsMeta: draft.icsMeta,
             ),
           );
       return;
@@ -2966,6 +3112,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       startDate: draft.startDate,
       endDate: draft.endDate,
       reminders: draft.reminders,
+      icsMeta: draft.icsMeta,
       modifiedAt: DateTime.now(),
     );
     context.read<T>().add(
@@ -3202,7 +3349,7 @@ class _CalendarWeekView extends StatelessWidget {
                               availableHeight,
                               isDayView: isDayView,
                             );
-                            gridState._processViewportRequests();
+                            gridState._scheduleViewportRequests();
                             return Container(
                               decoration: BoxDecoration(
                                 color: calendarStripedSlotColor,
@@ -3545,6 +3692,11 @@ class _CalendarGridContent extends StatelessWidget {
       gridState.widget.state.weekEnd.day,
     );
 
+    final List<CalendarAvailabilityWindow> availabilityWindows =
+        gridState._resolveAvailabilityWindows();
+    final List<CalendarAvailabilityOverlay> availabilityOverlays =
+        gridState._resolveAvailabilityOverlays();
+
     final Widget renderSurface = CalendarRenderSurface(
       key: gridState._surfaceKey,
       columns: columnSpecs,
@@ -3560,6 +3712,8 @@ class _CalendarGridContent extends StatelessWidget {
       verticalScrollController: gridState._verticalController,
       minutesPerStep: gridState._minutesPerStep,
       interactionController: gridState._taskInteractionController,
+      availabilityWindows: availabilityWindows,
+      availabilityOverlays: availabilityOverlays,
       hoveredSlot: hoveredSlot,
       onTap: gridState._handleSurfaceTap,
       dragPreview: gridState._taskInteractionController.preview.value,

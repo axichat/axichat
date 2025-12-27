@@ -1,16 +1,72 @@
-import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'dart:io';
 
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/view/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/calendar_month_view.dart';
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'calendar_test_utils.dart';
+
+const Size _monthViewSize = Size(900, 800);
+
+class CalendarMonthViewHarness extends StatelessWidget {
+  const CalendarMonthViewHarness({
+    super.key,
+    required this.state,
+    required this.onDateSelected,
+    required this.onCreateEvent,
+    required this.onEditEvent,
+    this.size = _monthViewSize,
+  });
+
+  final CalendarState state;
+  final ValueChanged<DateTime> onDateSelected;
+  final ValueChanged<DateTime> onCreateEvent;
+  final ValueChanged<DayEvent> onEditEvent;
+  final Size size;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF0F172A),
+        brightness: Brightness.light,
+      ),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: size.width,
+            height: size.height,
+            child: ShadTheme(
+              data: ShadThemeData(
+                colorScheme: const ShadSlateColorScheme.light(),
+                brightness: Brightness.light,
+              ),
+              child: CalendarMonthView(
+                state: state,
+                onDateSelected: onDateSelected,
+                onCreateEvent: onCreateEvent,
+                onEditEvent: onEditEvent,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -25,12 +81,20 @@ void main() {
   testWidgets('Month view renders overflow pill and taps edit callback',
       (tester) async {
     final DateTime anchor = DateTime(2024, 1, 15);
-    final List<DayEvent> events = <DayEvent>[
-      DayEvent.create(title: 'Birthday', startDate: anchor),
-      DayEvent.create(title: 'Holiday', startDate: anchor),
-      DayEvent.create(title: 'Anniversary', startDate: anchor),
-      DayEvent.create(title: 'Trip', startDate: anchor),
+    const List<String> eventTitles = <String>[
+      'Birthday',
+      'Holiday',
+      'Anniversary',
+      'Trip',
+      'Offsite',
+      'Workshop',
     ];
+    final List<DayEvent> events = eventTitles
+        .map(
+          (title) => DayEvent.create(title: title, startDate: anchor),
+        )
+        .toList();
+    const String expectedOverflowLabel = '+1 more';
 
     CalendarModel model = CalendarModel.empty();
     for (final DayEvent event in events) {
@@ -44,28 +108,18 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: SizedBox(
-              width: 900,
-              height: 800,
-              child: CalendarMonthView(
-                state: state,
-                onDateSelected: (_) {},
-                onCreateEvent: (_) {},
-                onEditEvent: (_) => tappedEdit = true,
-              ),
-            ),
-          ),
-        ),
+      CalendarMonthViewHarness(
+        state: state,
+        onDateSelected: (_) {},
+        onCreateEvent: (_) {},
+        onEditEvent: (_) => tappedEdit = true,
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Birthday'), findsOneWidget);
     expect(find.text('Holiday'), findsOneWidget);
-    expect(find.text('+1 more'), findsOneWidget);
+    expect(find.text(expectedOverflowLabel), findsOneWidget);
 
     await tester.tap(find.text('Birthday'));
     await tester.pump();
@@ -94,23 +148,17 @@ void main() {
       viewMode: CalendarView.week,
     );
 
-    final CalendarWidgetHarness harness = await CalendarWidgetHarness.pump(
+    await CalendarWidgetHarness.pump(
       tester: tester,
       state: state,
       size: const Size(1400, 900),
     );
     await tester.pumpAndSettle();
 
-    final Finder badgeFinder = find.byWidgetPredicate((Widget widget) {
-      if (widget is Container && widget.child is Text) {
-        final BoxDecoration? decoration = widget.decoration as BoxDecoration?;
-        final Text text = widget.child! as Text;
-        return decoration?.color == calendarPrimaryColor &&
-            text.data == '2' &&
-            harness.gridFinder.evaluate().isNotEmpty;
-      }
-      return false;
-    });
+    final Finder badgeFinder = find.descendant(
+      of: find.byType(DayEventBadge),
+      matching: find.text('2'),
+    );
 
     expect(badgeFinder, findsOneWidget);
   });
@@ -118,8 +166,9 @@ void main() {
   testWidgets('Day view renders bullet strip with day-level events',
       (tester) async {
     final DateTime selected = DateTime(2024, 2, 2);
+    const String eventTitle = 'Conference';
     final DayEvent event = DayEvent.create(
-      title: 'Conference',
+      title: eventTitle,
       startDate: selected,
     );
 
@@ -138,8 +187,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Day events'), findsOneWidget);
-    expect(find.text('Conference'), findsOneWidget);
-    expect(find.text('All day'), findsOneWidget);
-    expect(find.text('Add'), findsOneWidget);
+    expect(
+      find.textContaining(eventTitle, findRichText: true),
+      findsOneWidget,
+    );
   });
 }

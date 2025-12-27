@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/storage/database.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,18 +62,18 @@ main() {
       'When jids are added to or removed from the database, emits the new blocklist in order.',
       () async {
         expectLater(
-          xmppService.blocklistStream(),
+          xmppService
+              .blocklistStream()
+              .map((items) => items.map((item) => item.jid).toList()),
           emitsInOrder([
             [],
             ...List.generate(
               length,
-              (index) =>
-                  jids.sublist(0, index).map((e) => BlocklistData(jid: e)),
+              (index) => jids.sublist(0, index),
             ),
             ...List.generate(
               length,
-              (index) =>
-                  jids.sublist(index, length).map((e) => BlocklistData(jid: e)),
+              (index) => jids.sublist(index, length),
             )
           ]),
         );
@@ -117,7 +116,7 @@ main() {
         start: 0,
         end: double.maxFinite.toInt(),
       );
-      expect(afterRequest, jids.map((e) => BlocklistData(jid: e)));
+      expect(afterRequest.map((entry) => entry.jid), jids);
 
       verify(() => mockConnection.requestBlocklist()).called(1);
     },

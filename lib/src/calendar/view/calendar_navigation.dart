@@ -6,9 +6,11 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_collections_panel.dart';
 import 'widgets/task_form_section.dart';
 
 DateTime shiftedCalendarDate(CalendarState state, int steps) {
@@ -62,6 +64,8 @@ class CalendarNavigation extends StatelessWidget {
     this.hideCompletedScheduled = false,
     this.onToggleHideCompletedScheduled,
     this.onSearchRequested,
+    this.chatAcl,
+    this.chatTitle,
   });
 
   final CalendarState state;
@@ -76,6 +80,8 @@ class CalendarNavigation extends StatelessWidget {
   final bool hideCompletedScheduled;
   final ValueChanged<bool>? onToggleHideCompletedScheduled;
   final VoidCallback? onSearchRequested;
+  final CalendarChatAcl? chatAcl;
+  final String? chatTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +95,13 @@ class CalendarNavigation extends StatelessWidget {
     final String unitLabel = calendarUnitLabel(viewMode, l10n);
     final bool placeChevronsInHeader =
         spec.sizeClass != CalendarSizeClass.expanded;
+    final CalendarCollectionsContext collectionsContext =
+        CalendarCollectionsContext(
+      collection: state.model.collection,
+      overlays: state.model.availabilityOverlays,
+      chatAcl: chatAcl,
+      chatTitle: chatTitle,
+    );
     final List<Widget> navButtons = [
       if (!placeChevronsInHeader)
         _iconNavButton(
@@ -158,6 +171,7 @@ class CalendarNavigation extends StatelessWidget {
           onToggleHideCompletedScheduled: onToggleHideCompletedScheduled,
           onSearchRequested: onSearchRequested,
           onViewChanged: onViewChanged,
+          collectionsContext: collectionsContext,
         );
 
         const Border? border = null;
@@ -443,6 +457,7 @@ class _TrailingControls extends StatelessWidget {
     required this.hideCompletedScheduled,
     required this.onToggleHideCompletedScheduled,
     required this.onViewChanged,
+    required this.collectionsContext,
     this.onSearchRequested,
   });
 
@@ -456,6 +471,7 @@ class _TrailingControls extends StatelessWidget {
   final ValueChanged<bool>? onToggleHideCompletedScheduled;
   final ValueChanged<CalendarView> onViewChanged;
   final VoidCallback? onSearchRequested;
+  final CalendarCollectionsContext collectionsContext;
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +503,10 @@ class _TrailingControls extends StatelessWidget {
           onChanged: onViewChanged,
           compact: isCompact,
         ),
+      CalendarCollectionsButton(
+        context: collectionsContext,
+        compact: isCompact,
+      ),
       if (onSearchRequested != null)
         _SearchButton(
           onPressed: onSearchRequested!,

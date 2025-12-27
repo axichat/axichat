@@ -16,6 +16,7 @@ import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
 
 const String _icsLineBreak = '\r\n';
 const int _icsFoldLimit = 75;
@@ -29,6 +30,8 @@ const String _icsComponentVtimezone = 'VTIMEZONE';
 const String _icsComponentVfreebusy = 'VFREEBUSY';
 const String _icsComponentVavailability = 'VAVAILABILITY';
 const String _icsComponentAvailable = 'AVAILABLE';
+
+const String _icsFrequencyYearly = 'YEARLY';
 
 const String _icsPropertyBegin = 'BEGIN';
 const String _icsPropertyEnd = 'END';
@@ -1391,7 +1394,7 @@ _ParsedComponent _parseTaskComponent(
 
   final List<CalendarAlarm> alarms = _parseAlarms(component.components);
   final ReminderPreferences reminders =
-      _remindersFromAlarms(alarms).normalized();
+      remindersFromAlarms(alarms).normalized();
 
   final RecurrenceRule? recurrence = _parseRecurrence(properties);
   final bool hasRecurrenceData = recurrence != null &&
@@ -1535,7 +1538,7 @@ _ParsedDayEvent _parseDayEventComponent(CalendarRawComponent component) {
 
   final List<CalendarAlarm> alarms = _parseAlarms(component.components);
   final ReminderPreferences reminders =
-      _remindersFromAlarms(alarms).normalized();
+      remindersFromAlarms(alarms).normalized();
 
   final DateTime createdAt = meta.created ?? meta.dtStamp ?? DateTime.now();
   final DateTime modifiedAt = meta.lastModified ?? meta.dtStamp ?? createdAt;
@@ -2333,37 +2336,6 @@ List<CalendarAlarmRecipient> _parseAlarmRecipients(
   return recipients;
 }
 
-ReminderPreferences _remindersFromAlarms(List<CalendarAlarm> alarms) {
-  final List<Duration> startOffsets = <Duration>[];
-  final List<Duration> deadlineOffsets = <Duration>[];
-  for (final CalendarAlarm alarm in alarms) {
-    if (alarm.trigger.type != CalendarAlarmTriggerType.relative ||
-        alarm.trigger.offset == null) {
-      continue;
-    }
-    if (alarm.trigger.offsetDirection == CalendarAlarmOffsetDirection.after) {
-      continue;
-    }
-    final Duration offset = alarm.trigger.offset!;
-    final CalendarAlarmRelativeTo relativeTo =
-        alarm.trigger.relativeTo ?? CalendarAlarmRelativeTo.start;
-    final Duration normalized = Duration(
-      microseconds: offset.inMicroseconds.abs(),
-    );
-    if (relativeTo == CalendarAlarmRelativeTo.end) {
-      deadlineOffsets.add(normalized);
-    } else {
-      startOffsets.add(normalized);
-    }
-  }
-  final ReminderPreferences preferences = ReminderPreferences(
-    enabled: startOffsets.isNotEmpty || deadlineOffsets.isNotEmpty,
-    startOffsets: startOffsets,
-    deadlineOffsets: deadlineOffsets,
-  );
-  return preferences.normalized();
-}
-
 RecurrenceRule? _parseRecurrence(List<CalendarRawProperty> properties) {
   final CalendarRawProperty? rrule =
       _firstProperty(properties, _icsPropertyRrule);
@@ -2496,6 +2468,8 @@ RecurrenceFrequency _parseFrequency(
       return RecurrenceFrequency.weekly;
     case 'MONTHLY':
       return RecurrenceFrequency.monthly;
+    case _icsFrequencyYearly:
+      return RecurrenceFrequency.yearly;
     default:
       return RecurrenceFrequency.none;
   }
@@ -3069,8 +3043,10 @@ void _writeTaskComponent(
     }
   }
 
-  final List<CalendarAlarm> alarms =
-      _mergeAlarms(meta?.alarms ?? const <CalendarAlarm>[], task.reminders);
+  final List<CalendarAlarm> alarms = resolveAlarmsForExport(
+    alarms: meta?.alarms ?? const <CalendarAlarm>[],
+    reminders: task.reminders,
+  );
   for (final CalendarAlarm alarm in alarms) {
     _writeAlarm(writer, alarm);
   }
@@ -3283,6 +3259,14 @@ void _writeDayEventComponent(_IcsWriter writer, DayEvent event) {
     defaultPrivacyClass: _defaultPrivacyClass,
     defaultTransparency: _defaultDayEventTransparency,
   );
+  final CalendarIcsStatus? status = meta?.status;
+  if (status != null) {
+    writer.writeProperty(
+      _icsPropertyStatus,
+      status.icsValue,
+      escapeText: false,
+    );
+  }
   writer.writeProperty(_icsPropertySummary, event.title);
   if (event.description != null && event.description!.isNotEmpty) {
     writer.writeProperty(_icsPropertyDescription, event.description!);
@@ -3307,8 +3291,10 @@ void _writeDayEventComponent(_IcsWriter writer, DayEvent event) {
     );
   }
 
-  final List<CalendarAlarm> alarms =
-      _mergeAlarms(meta?.alarms ?? const <CalendarAlarm>[], event.reminders);
+  final List<CalendarAlarm> alarms = resolveAlarmsForExport(
+    alarms: meta?.alarms ?? const <CalendarAlarm>[],
+    reminders: event.reminders,
+  );
   for (final CalendarAlarm alarm in alarms) {
     _writeAlarm(writer, alarm);
   }
@@ -4051,6 +4037,8 @@ String _frequencyValue(RecurrenceRule rule) {
       return 'WEEKLY';
     case RecurrenceFrequency.monthly:
       return 'MONTHLY';
+    case RecurrenceFrequency.yearly:
+      return _icsFrequencyYearly;
     case RecurrenceFrequency.none:
       return 'DAILY';
   }
@@ -4238,63 +4226,6 @@ bool _containsDateTime(List<CalendarDateTime> list, CalendarDateTime value) {
     }
   }
   return false;
-}
-
-List<CalendarAlarm> _mergeAlarms(
-  List<CalendarAlarm> alarms,
-  ReminderPreferences? reminders,
-) {
-  final List<CalendarAlarm> merged = <CalendarAlarm>[
-    ...alarms,
-  ];
-  final List<CalendarAlarm> reminderAlarms = _alarmsFromReminders(reminders);
-  for (final CalendarAlarm alarm in reminderAlarms) {
-    if (!merged.contains(alarm)) {
-      merged.add(alarm);
-    }
-  }
-  return merged;
-}
-
-List<CalendarAlarm> _alarmsFromReminders(
-  ReminderPreferences? reminders,
-) {
-  final ReminderPreferences resolved =
-      (reminders ?? ReminderPreferences.defaults()).normalized();
-  if (!resolved.isEnabled) {
-    return const <CalendarAlarm>[];
-  }
-  final List<CalendarAlarm> alarms = <CalendarAlarm>[];
-  for (final Duration offset in resolved.startOffsets) {
-    alarms.add(_buildRelativeAlarm(offset, CalendarAlarmRelativeTo.start));
-  }
-  for (final Duration offset in resolved.deadlineOffsets) {
-    alarms.add(_buildRelativeAlarm(offset, CalendarAlarmRelativeTo.end));
-  }
-  return alarms;
-}
-
-CalendarAlarm _buildRelativeAlarm(
-  Duration offset,
-  CalendarAlarmRelativeTo anchor,
-) {
-  return CalendarAlarm(
-    action: CalendarAlarmAction.display,
-    trigger: CalendarAlarmTrigger(
-      type: CalendarAlarmTriggerType.relative,
-      absolute: null,
-      offset: offset,
-      relativeTo: anchor,
-      offsetDirection: CalendarAlarmOffsetDirection.before,
-    ),
-    repeat: null,
-    duration: null,
-    description: null,
-    summary: null,
-    attachments: const <CalendarAttachment>[],
-    acknowledged: null,
-    recipients: const <CalendarAlarmRecipient>[],
-  );
 }
 
 void _writeAlarm(_IcsWriter writer, CalendarAlarm alarm) {
