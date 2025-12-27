@@ -11,8 +11,11 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
+import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
+import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
@@ -25,10 +28,12 @@ import 'models/task_context_action.dart';
 import 'controllers/task_checklist_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/critical_path_panel.dart';
+import 'widgets/calendar_invitation_status_field.dart';
 import 'widgets/ics_meta_fields.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/calendar_participants_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
@@ -38,6 +43,8 @@ import 'widgets/reminder_preferences_field.dart';
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
+const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
+const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
 const String _occurrenceScopeTitle = 'Apply changes to';
 const String _occurrenceScopeInstanceLabel = 'This instance';
 const String _occurrenceScopeFutureLabel = 'This and future';
@@ -121,6 +128,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
   List<CalendarAlarm> _advancedAlarms = _emptyAdvancedAlarms;
+  CalendarOrganizer? _organizer;
+  List<CalendarAttendee> _attendees = _emptyAttendees;
 
   @override
   void initState() {
@@ -222,6 +231,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _attachments = List<CalendarAttachment>.from(
         task.icsMeta?.attachments ?? _emptyAttachments,
       );
+      _organizer = task.icsMeta?.organizer;
+      _attendees = List<CalendarAttendee>.from(
+        task.icsMeta?.attendees ?? _emptyAttendees,
+      );
     }
 
     if (rebuild && mounted) {
@@ -254,6 +267,16 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               offset: dropdownShadowOffset,
             ),
           ];
+    final B resolvedBloc = widget.inlineActionsBloc ?? context.read<B>();
+    final CalendarMethod? method = resolvedBloc.state.model.collection?.method;
+    final List<CalendarRawProperty> rawProperties =
+        widget.task.icsMeta?.rawProperties ?? _emptyRawProperties;
+    final int? sequence = widget.task.icsMeta?.sequence;
+    final bool showInvitationStatus = hasInvitationStatusData(
+      method: method,
+      sequence: sequence,
+      rawProperties: rawProperties,
+    );
     Widget buildBody({
       required double keyboardInset,
       required double safeBottom,
@@ -415,6 +438,27 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onUrlChanged: (value) => setState(() => _url = value),
                       onGeoChanged: (value) => setState(() => _geo = value),
                     ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    CalendarParticipantsField(
+                      organizer: _organizer,
+                      attendees: _attendees,
+                      onOrganizerChanged: (value) =>
+                          setState(() => _organizer = value),
+                      onAttendeesChanged: (value) =>
+                          setState(() => _attendees = value),
+                    ),
+                    if (showInvitationStatus) ...[
+                      const TaskSectionDivider(
+                        verticalPadding: calendarGutterMd,
+                      ),
+                      CalendarInvitationStatusField(
+                        method: method,
+                        sequence: sequence,
+                        rawProperties: rawProperties,
+                      ),
+                    ],
                     if (_attachments.isNotEmpty) ...[
                       const TaskSectionDivider(
                         verticalPadding: calendarGutterMd,
@@ -611,6 +655,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       base: widget.task.icsMeta,
       categories: _categories,
     );
+    final CalendarOrganizer? organizer = resolveOrganizerOverride(
+      base: widget.task.icsMeta,
+      organizer: _organizer,
+    );
+    final List<CalendarAttendee>? attendees = resolveAttendeeOverride(
+      base: widget.task.icsMeta,
+      attendees: _attendees,
+    );
     final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
       advancedAlarms: _advancedAlarms,
       reminders: _reminders,
@@ -626,6 +678,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       categories: categories,
       url: _url,
       geo: _geo,
+      organizer: organizer,
+      attendees: attendees,
       alarms: alarms,
     );
 

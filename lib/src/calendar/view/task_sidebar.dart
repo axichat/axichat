@@ -26,6 +26,7 @@ import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
@@ -56,6 +57,7 @@ import 'widgets/calendar_drag_target.dart';
 import 'widgets/calendar_sidebar_draggable.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/calendar_participants_field.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/ics_meta_fields.dart';
@@ -201,7 +203,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _draftController.transparency != null ||
       _draftController.categories.isNotEmpty ||
       _draftController.url != null ||
-      _draftController.geo != null;
+      _draftController.geo != null ||
+      _draftController.organizer != null ||
+      _draftController.attendees.isNotEmpty;
 
   void handleExternalGridDragStarted({required bool isTouchMode}) {
     if (_externalGridDragActive) {
@@ -430,7 +434,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       ..setCategories(_emptyCategories)
       ..setUrl(null)
       ..setGeo(null)
-      ..setAdvancedAlarms(_emptyAdvancedAlarms);
+      ..setAdvancedAlarms(_emptyAdvancedAlarms)
+      ..setOrganizer(null)
+      ..setAttendees(_emptyAttendees);
     if (!_locationLocked && _locationController.text.isNotEmpty) {
       _locationController.clear();
     }
@@ -929,6 +935,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onCategoriesChanged: _onCategoriesChanged,
                         onUrlChanged: _onUrlChanged,
                         onGeoChanged: _onGeoChanged,
+                        onOrganizerChanged: (value) =>
+                            _draftController.setOrganizer(value),
+                        onAttendeesChanged: (value) =>
+                            _draftController.setAttendees(value),
                         queuedCriticalPaths: queuedCriticalPaths,
                         onRemoveQueuedCriticalPath: _removeQueuedCriticalPath,
                         onAddTask: () {
@@ -2740,24 +2750,46 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final hasSchedule =
         _draftController.startTime != null && _draftController.endTime != null;
     final hasRecurrence = _advancedRecurrence.isActive;
+    final List<String>? categories = resolveCategoryOverride(
+      base: null,
+      categories: _draftController.categories,
+    );
+    final CalendarOrganizer? organizer = resolveOrganizerOverride(
+      base: null,
+      organizer: _draftController.organizer,
+    );
+    final List<CalendarAttendee>? attendees = resolveAttendeeOverride(
+      base: null,
+      attendees: _draftController.attendees,
+    );
+    final bool hasIcsMetaFields = _draftController.status != null ||
+        _draftController.transparency != null ||
+        (categories?.isNotEmpty ?? false) ||
+        _draftController.url != null ||
+        _draftController.geo != null ||
+        _draftController.advancedAlarms.isNotEmpty ||
+        organizer != null ||
+        (attendees?.isNotEmpty ?? false);
     final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
       advancedAlarms: _draftController.advancedAlarms,
       reminders: _draftController.reminders,
     );
+    final List<CalendarAlarm>? alarms = hasIcsMetaFields
+        ? resolveAlarmOverride(
+            base: null,
+            alarms: mergedAlarms,
+          )
+        : null;
     final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
       base: null,
       status: _draftController.status,
       transparency: _draftController.transparency,
-      categories: resolveCategoryOverride(
-        base: null,
-        categories: _draftController.categories,
-      ),
+      categories: categories,
       url: _draftController.url,
       geo: _draftController.geo,
-      alarms: resolveAlarmOverride(
-        base: null,
-        alarms: mergedAlarms,
-      ),
+      organizer: organizer,
+      attendees: attendees,
+      alarms: alarms,
     );
     final bool hasIcsMeta = icsMeta != null;
 
@@ -4022,6 +4054,7 @@ final TextStyle _sidebarSectionHeaderStyle = const TextStyle(
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
+const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
 
 class _AddTaskSection extends StatelessWidget {
   const _AddTaskSection({
@@ -4059,6 +4092,8 @@ class _AddTaskSection extends StatelessWidget {
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
+    required this.onOrganizerChanged,
+    required this.onAttendeesChanged,
     required this.queuedCriticalPaths,
     required this.onRemoveQueuedCriticalPath,
   });
@@ -4097,6 +4132,8 @@ class _AddTaskSection extends StatelessWidget {
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
+  final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
+  final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
   final List<CalendarCriticalPath> queuedCriticalPaths;
   final ValueChanged<String> onRemoveQueuedCriticalPath;
 
@@ -4204,6 +4241,8 @@ class _AddTaskSection extends StatelessWidget {
                       onCategoriesChanged: onCategoriesChanged,
                       onUrlChanged: onUrlChanged,
                       onGeoChanged: onGeoChanged,
+                      onOrganizerChanged: onOrganizerChanged,
+                      onAttendeesChanged: onAttendeesChanged,
                       queuedPaths: queuedCriticalPaths,
                       onRemoveQueuedPath: onRemoveQueuedCriticalPath,
                     )
@@ -4273,6 +4312,8 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
+    required this.onOrganizerChanged,
+    required this.onAttendeesChanged,
     required this.onAddTask,
     required this.onAddToCriticalPath,
     required this.queuedCriticalPaths,
@@ -4330,6 +4371,8 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
+  final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
+  final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
   final VoidCallback onAddTask;
   final Future<void> Function() onAddToCriticalPath;
   final List<CalendarCriticalPath> queuedCriticalPaths;
@@ -4404,6 +4447,8 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             onCategoriesChanged: onCategoriesChanged,
             onUrlChanged: onUrlChanged,
             onGeoChanged: onGeoChanged,
+            onOrganizerChanged: onOrganizerChanged,
+            onAttendeesChanged: onAttendeesChanged,
             queuedCriticalPaths: queuedCriticalPaths,
             onRemoveQueuedCriticalPath: onRemoveQueuedCriticalPath,
           ),
@@ -5738,6 +5783,8 @@ class _AdvancedOptions extends StatelessWidget {
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
+    required this.onOrganizerChanged,
+    required this.onAttendeesChanged,
     required this.queuedPaths,
     required this.onRemoveQueuedPath,
   });
@@ -5761,6 +5808,8 @@ class _AdvancedOptions extends StatelessWidget {
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
+  final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
+  final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
   final List<CalendarCriticalPath> queuedPaths;
   final ValueChanged<String> onRemoveQueuedPath;
 
@@ -5867,6 +5916,18 @@ class _AdvancedOptions extends StatelessWidget {
                 geo: draftController.geo,
                 onUrlChanged: onUrlChanged,
                 onGeoChanged: onGeoChanged,
+              );
+            },
+          ),
+          const TaskSectionDivider(),
+          AnimatedBuilder(
+            animation: draftController,
+            builder: (context, _) {
+              return CalendarParticipantsField(
+                organizer: draftController.organizer,
+                attendees: draftController.attendees,
+                onOrganizerChanged: onOrganizerChanged,
+                onAttendeesChanged: onAttendeesChanged,
               );
             },
           ),

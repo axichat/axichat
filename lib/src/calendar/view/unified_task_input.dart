@@ -9,7 +9,10 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
+import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
+import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/alarm_reminder_bridge.dart';
@@ -23,7 +26,9 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_attachments_field.dart';
+import 'widgets/calendar_invitation_status_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
+import 'widgets/calendar_participants_field.dart';
 import 'widgets/ics_meta_fields.dart';
 import 'widgets/reminder_preferences_field.dart';
 import 'error_display.dart';
@@ -34,6 +39,8 @@ import 'widgets/task_field_character_hint.dart';
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
+const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
+const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
 
 class UnifiedTaskInput<T extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarTask? editingTask;
@@ -64,6 +71,8 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   CalendarGeo? _geo;
   List<CalendarAttachment> _attachments = _emptyAttachments;
   List<CalendarAlarm> _advancedAlarms = _emptyAdvancedAlarms;
+  CalendarOrganizer? _organizer;
+  List<CalendarAttendee> _attendees = _emptyAttendees;
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -116,6 +125,10 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     _attachments = List<CalendarAttachment>.from(
       widget.editingTask?.icsMeta?.attachments ?? _emptyAttachments,
     );
+    _organizer = widget.editingTask?.icsMeta?.organizer;
+    _attendees = List<CalendarAttendee>.from(
+      widget.editingTask?.icsMeta?.attendees ?? _emptyAttendees,
+    );
 
     if (widget.editingTask != null) {
       _selectedDate = widget.editingTask!.scheduledTime != null
@@ -159,6 +172,11 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   Widget build(BuildContext context) {
     final bool isEditing = widget.editingTask != null;
     final l10n = context.l10n;
+    final T bloc = context.read<T>();
+    final CalendarMethod? method = bloc.state.model.collection?.method;
+    final List<CalendarRawProperty> rawProperties =
+        widget.editingTask?.icsMeta?.rawProperties ?? _emptyRawProperties;
+    final int? sequence = widget.editingTask?.icsMeta?.sequence;
     final Widget form = _UnifiedTaskForm(
       formKey: _formKey,
       titleController: _titleController,
@@ -199,6 +217,13 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       onUrlChanged: (value) => setState(() => _url = value),
       onGeoChanged: (value) => setState(() => _geo = value),
       attachments: _attachments,
+      organizer: _organizer,
+      attendees: _attendees,
+      onOrganizerChanged: (value) => setState(() => _organizer = value),
+      onAttendeesChanged: (value) => setState(() => _attendees = value),
+      invitationMethod: method,
+      invitationSequence: sequence,
+      invitationRawProperties: rawProperties,
     );
     final Widget saveButton = _UnifiedTaskSaveButton<T>(
       isSubmitting: _isSubmitting,
@@ -298,6 +323,14 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       base: widget.editingTask?.icsMeta,
       categories: _categories,
     );
+    final CalendarOrganizer? organizer = resolveOrganizerOverride(
+      base: widget.editingTask?.icsMeta,
+      organizer: _organizer,
+    );
+    final List<CalendarAttendee>? attendees = resolveAttendeeOverride(
+      base: widget.editingTask?.icsMeta,
+      attendees: _attendees,
+    );
     final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
       advancedAlarms: _advancedAlarms,
       reminders: _reminders,
@@ -313,6 +346,8 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       categories: categories,
       url: _url,
       geo: _geo,
+      organizer: organizer,
+      attendees: attendees,
       alarms: alarms,
     );
 
@@ -512,6 +547,13 @@ class _UnifiedTaskForm extends StatelessWidget {
     required this.onUrlChanged,
     required this.onGeoChanged,
     required this.attachments,
+    required this.organizer,
+    required this.attendees,
+    required this.onOrganizerChanged,
+    required this.onAttendeesChanged,
+    required this.invitationMethod,
+    required this.invitationSequence,
+    required this.invitationRawProperties,
   });
 
   final GlobalKey<FormState> formKey;
@@ -543,9 +585,21 @@ class _UnifiedTaskForm extends StatelessWidget {
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
   final List<CalendarAttachment> attachments;
+  final CalendarOrganizer? organizer;
+  final List<CalendarAttendee> attendees;
+  final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
+  final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
+  final CalendarMethod? invitationMethod;
+  final int? invitationSequence;
+  final List<CalendarRawProperty> invitationRawProperties;
 
   @override
   Widget build(BuildContext context) {
+    final bool showInvitationStatus = hasInvitationStatusData(
+      method: invitationMethod,
+      sequence: invitationSequence,
+      rawProperties: invitationRawProperties,
+    );
     return SingleChildScrollView(
       padding: calendarPaddingXl,
       child: Form(
@@ -614,6 +668,21 @@ class _UnifiedTaskForm extends StatelessWidget {
               onUrlChanged: onUrlChanged,
               onGeoChanged: onGeoChanged,
             ),
+            const SizedBox(height: calendarGutterLg),
+            CalendarParticipantsField(
+              organizer: organizer,
+              attendees: attendees,
+              onOrganizerChanged: onOrganizerChanged,
+              onAttendeesChanged: onAttendeesChanged,
+            ),
+            if (showInvitationStatus) ...[
+              const SizedBox(height: calendarGutterLg),
+              CalendarInvitationStatusField(
+                method: invitationMethod,
+                sequence: invitationSequence,
+                rawProperties: invitationRawProperties,
+              ),
+            ],
             if (attachments.isNotEmpty) ...[
               const SizedBox(height: calendarGutterLg),
               CalendarAttachmentsField(

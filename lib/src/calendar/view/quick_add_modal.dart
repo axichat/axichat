@@ -7,6 +7,7 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
@@ -28,6 +29,7 @@ import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/calendar_categories_field.dart';
+import 'widgets/calendar_participants_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
 import 'widgets/ics_meta_fields.dart';
 import 'widgets/reminder_preferences_field.dart';
@@ -37,6 +39,7 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
+const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
 
 enum QuickAddModalSurface { dialog, bottomSheet }
 
@@ -207,6 +210,8 @@ class _QuickAddModalState extends State<QuickAddModal>
             onCategoriesChanged: _onCategoriesChanged,
             onUrlChanged: _onUrlChanged,
             onGeoChanged: _onGeoChanged,
+            onOrganizerChanged: _onOrganizerChanged,
+            onAttendeesChanged: _onAttendeesChanged,
             actionInsetBuilder: _quickAddActionInset,
             fallbackDate: widget.prefilledDateTime,
             onAddToCriticalPath: _queueCriticalPathForDraft,
@@ -262,6 +267,8 @@ class _QuickAddModalState extends State<QuickAddModal>
               onCategoriesChanged: _onCategoriesChanged,
               onUrlChanged: _onUrlChanged,
               onGeoChanged: _onGeoChanged,
+              onOrganizerChanged: _onOrganizerChanged,
+              onAttendeesChanged: _onAttendeesChanged,
               actionInsetBuilder: _quickAddActionInset,
               fallbackDate: widget.prefilledDateTime,
               onAddToCriticalPath: _queueCriticalPathForDraft,
@@ -454,7 +461,9 @@ class _QuickAddModalState extends State<QuickAddModal>
       ..setCategories(_emptyCategories)
       ..setUrl(null)
       ..setGeo(null)
-      ..setAdvancedAlarms(_emptyAdvancedAlarms);
+      ..setAdvancedAlarms(_emptyAdvancedAlarms)
+      ..setOrganizer(null)
+      ..setAttendees(_emptyAttendees);
     if (!_locationLocked && _locationController.text.isNotEmpty) {
       _locationController.clear();
     }
@@ -542,6 +551,14 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   void _onGeoChanged(CalendarGeo? value) {
     _formController.setGeo(value);
+  }
+
+  void _onOrganizerChanged(CalendarOrganizer? value) {
+    _formController.setOrganizer(value);
+  }
+
+  void _onAttendeesChanged(List<CalendarAttendee> value) {
+    _formController.setAttendees(value);
   }
 
   void _resetParserLocks() {
@@ -662,6 +679,14 @@ class _QuickAddModalState extends State<QuickAddModal>
       base: null,
       categories: _formController.categories,
     );
+    final CalendarOrganizer? organizer = resolveOrganizerOverride(
+      base: null,
+      organizer: _formController.organizer,
+    );
+    final List<CalendarAttendee>? attendees = resolveAttendeeOverride(
+      base: null,
+      attendees: _formController.attendees,
+    );
     final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
       advancedAlarms: _formController.advancedAlarms,
       reminders: _formController.reminders,
@@ -677,6 +702,8 @@ class _QuickAddModalState extends State<QuickAddModal>
       categories: categories,
       url: _formController.url,
       geo: _formController.geo,
+      organizer: organizer,
+      attendees: attendees,
       alarms: alarms,
     );
 
@@ -831,6 +858,8 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
+    required this.onOrganizerChanged,
+    required this.onAttendeesChanged,
     required this.actionInsetBuilder,
     required this.fallbackDate,
     required this.onAddToCriticalPath,
@@ -868,6 +897,8 @@ class _QuickAddModalContent extends StatelessWidget {
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
+  final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
+  final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
   final double Function(BuildContext context) actionInsetBuilder;
   final DateTime? fallbackDate;
   final Future<void> Function() onAddToCriticalPath;
@@ -1087,6 +1118,20 @@ class _QuickAddModalContent extends StatelessWidget {
                               geo: formController.geo,
                               onUrlChanged: onUrlChanged,
                               onGeoChanged: onGeoChanged,
+                            );
+                          },
+                        ),
+                        const TaskSectionDivider(
+                          verticalPadding: calendarGutterMd,
+                        ),
+                        AnimatedBuilder(
+                          animation: formController,
+                          builder: (context, _) {
+                            return CalendarParticipantsField(
+                              organizer: formController.organizer,
+                              attendees: formController.attendees,
+                              onOrganizerChanged: onOrganizerChanged,
+                              onAttendeesChanged: onAttendeesChanged,
                             );
                           },
                         ),
