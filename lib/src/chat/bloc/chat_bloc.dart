@@ -675,19 +675,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final emailService = _emailService;
-    if (chat.isEmailBacked) {
-      if (emailService == null) {
-        _pinnedSubscription = null;
-        return;
-      }
+    final useEmailService = chat.isEmailBacked;
+    if (useEmailService && emailService != null) {
       _pinnedSubscription = emailService
           .pinnedMessagesStream(trimmedChatJid)
           .listen((items) => add(_PinnedMessagesUpdated(items)));
-      return;
+    } else {
+      _pinnedSubscription = _messageService
+          .pinnedMessagesStream(trimmedChatJid)
+          .listen((items) => add(_PinnedMessagesUpdated(items)));
     }
-    _pinnedSubscription = _messageService
-        .pinnedMessagesStream(trimmedChatJid)
-        .listen((items) => add(_PinnedMessagesUpdated(items)));
     unawaited(_syncPinnedMessagesForChat(chat));
   }
 
@@ -1040,7 +1037,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _pinHydrationInFlight = true;
     emit(state.copyWith(pinnedMessagesHydrating: true));
     try {
-      if (_isEmailChat) {
+      if (chat.isEmailBacked) {
         await _hydratePinnedMessagesFromEmail(chat, missing);
       } else {
         await _hydratePinnedMessagesFromMam(chat, missing);
