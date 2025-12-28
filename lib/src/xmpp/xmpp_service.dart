@@ -1122,6 +1122,7 @@ class XmppService extends XmppBase
       smNegotiator.resource = storedResource;
     }
     final featureNegotiators = <mox.XmppFeatureNegotiatorBase>[
+      XmppTlsRequirementNegotiator(),
       mox.StartTlsNegotiator(),
       mox.CSINegotiator(),
       mox.RosterFeatureNegotiator(),
@@ -1773,6 +1774,18 @@ class XmppService extends XmppBase
     }
     await _reset();
     _xmppLogger.info('Logged out.');
+  }
+
+  Future<void> clearSessionTokens() async {
+    final sm = _connection.getManager<XmppStreamManagementManager>();
+    await sm?.resetState();
+    await sm?.clearPersistedState();
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        await ss.delete(key: fastTokenStorageKey);
+      },
+      awaitDatabase: true,
+    );
   }
 
   Future<void> setClientState([bool active = true]) async {
@@ -2476,6 +2489,52 @@ class XmppClientNegotiator extends mox.ClientToServerNegotiator {
   XmppClientNegotiator() : super();
 }
 
+class XmppTlsRequirementNegotiator extends mox.XmppFeatureNegotiatorBase {
+  XmppTlsRequirementNegotiator()
+      : super(
+          _tlsRequirementNegotiatorPriority,
+          _tlsRequirementSendStreamHeader,
+          _tlsRequirementNegotiatorXmlns,
+          _tlsRequirementNegotiatorId,
+        );
+
+  @override
+  bool matchesFeature(List<mox.XMLNode> features) =>
+      _tlsRequirementMatchesAllFeatures;
+
+  @override
+  Future<moxlib.Result<mox.NegotiatorState, mox.NegotiatorError>> negotiate(
+    mox.XMLNode nonza,
+  ) async {
+    if (attributes.getSocket().isSecure()) {
+      return const moxlib.Result(mox.NegotiatorState.done);
+    }
+    if (!_hasStartTlsFeature(nonza)) {
+      return moxlib.Result(_XmppTlsRequiredError());
+    }
+    return const moxlib.Result(mox.NegotiatorState.done);
+  }
+
+  bool _hasStartTlsFeature(mox.XMLNode nonza) {
+    if (nonza.tag != _streamFeaturesTag) {
+      return _tlsRequirementNonFeatureDefault;
+    }
+    return nonza.children.any(
+      (feature) => feature.attributes['xmlns'] == mox.startTlsXmlns,
+    );
+  }
+}
+
+class _XmppTlsRequiredError extends mox.NegotiatorError {
+  _XmppTlsRequiredError();
+
+  @override
+  bool isRecoverable() => _tlsRequirementErrorRecoverable;
+
+  @override
+  String toString() => _tlsRequirementErrorMessage;
+}
+
 class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
   XmppResourceNegotiator({required this.resource}) : super();
 
@@ -2897,6 +2956,14 @@ class SaslScramNegotiator extends mox.SaslScramNegotiator {
   }) : super(10, '', '', mox.ScramHashType.sha512);
 
   final bool preHashed;
+
+  @override
+  bool matchesFeature(List<mox.XMLNode> features) {
+    if (!super.matchesFeature(features)) {
+      return false;
+    }
+    return attributes.getSocket().isSecure();
+  }
 
   String? get saltedPassword =>
       _saltedPassword != null ? base64Encode(_saltedPassword!) : null;
