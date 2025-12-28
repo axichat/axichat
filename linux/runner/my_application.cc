@@ -103,7 +103,12 @@ static void my_application_activate(GApplication* application) {
 static gboolean my_application_local_command_line(GApplication* application, gchar*** arguments, int* exit_status) {
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
+#if !defined(NDEBUG)
   self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
+#else
+  // Drop external args in release builds to reduce untrusted input.
+  self->dart_entrypoint_arguments = g_new0(gchar*, 1);
+#endif
 
   g_autoptr(GError) error = nullptr;
   if (!g_application_register(application, nullptr, &error)) {

@@ -16,15 +16,17 @@ const String _availabilityResponseAcceptedFallbackText =
     'Availability accepted';
 const String _availabilityResponseDeclinedFallbackText =
     'Availability declined';
-const String _calendarSyncOperationAdd = 'add';
 const String _calendarSyncOperationUpdate = 'update';
 const String _calendarSyncOperationDelete = 'delete';
+const String _calendarSyncEntityTask = 'task';
 const String _calendarSyncMissingRoleLog =
     'Rejected calendar sync message; sender role unavailable.';
 const String _calendarSyncUnauthorizedLog =
     'Rejected calendar sync message; sender role insufficient.';
 const String _calendarSyncMamBypassLog =
     'Allowing calendar sync message without sender role (MAM history).';
+const String _calendarSyncReadOnlyRejectedLog =
+    'Rejected calendar sync message targeting read-only task.';
 const String _pinPubSubNamespace = 'urn:axi:pins';
 const String _pinPubSubNodePrefix = 'urn:axi:pins:';
 const String _pinTag = 'pin';
@@ -1377,6 +1379,8 @@ mixin MessageService
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
   var _capabilityCacheLoaded = false;
+  final Map<String, Map<String, String>> _readOnlyTaskOwnersByChat =
+      <String, Map<String, String>>{};
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
   Directory? _attachmentDirectory;
   bool _pendingPinSyncLoaded = false;
@@ -1517,6 +1521,8 @@ mixin MessageService
         if (isGroupChat) {
           handleMucIdentifiersFromMessage(event, message);
         }
+
+        _rememberReadOnlyTaskShare(message);
 
         if (!message.noStore) {
           await _storeMessage(
@@ -2080,6 +2086,7 @@ mixin MessageService
     _log.info(
       'Sending message ${message.stanzaID} (length=${resolvedText.length} chars)',
     );
+    _rememberReadOnlyTaskShare(message);
     if (shouldStore) {
       await _storeMessage(message, chatType: chatType);
     }
@@ -3827,9 +3834,8 @@ mixin MessageService
     }
 
     final bool isGroupChat = event.type == _messageTypeGroupchat;
-    final senderJid = isGroupChat
-        ? event.from.toString()
-        : event.from.toBare().toString();
+    final senderJid =
+        isGroupChat ? event.from.toString() : event.from.toBare().toString();
     final selfJid = myJid;
     final chatJid = _calendarSyncChatJid(event, selfJid);
     final chatType = _calendarSyncChatType(event);
@@ -3869,6 +3875,15 @@ mixin MessageService
           chatJid: chatJid,
           chatType: chatType,
         )) {
+      return true;
+    }
+    if (!isSelfCalendar &&
+        _isReadOnlyTaskSyncBlocked(
+          syncMessage: syncMessage,
+          event: event,
+          chatJid: chatJid,
+        )) {
+      _log.warning(_calendarSyncReadOnlyRejectedLog);
       return true;
     }
 
@@ -3912,6 +3927,186 @@ mixin MessageService
     }
 
     return true; // Handled - don't process as regular chat message
+  }
+
+  bool _canApplyChatCalendarSync({
+    required CalendarSyncMessage syncMessage,
+    required mox.MessageEvent event,
+    required String chatJid,
+    required ChatType chatType,
+  }) {
+    final CalendarChatAcl acl = chatType.calendarDefaultAcl;
+    final CalendarChatRole requiredRole =
+        _calendarSyncRequiredRole(syncMessage, acl: acl);
+    final CalendarChatRole? senderRole = _calendarSyncSenderRole(
+      event,
+      chatJid: chatJid,
+      chatType: chatType,
+    );
+    if (senderRole == null) {
+      if (event.isFromMAM) {
+        _log.fine(_calendarSyncMamBypassLog);
+        return true;
+      }
+      _log.warning(_calendarSyncMissingRoleLog);
+      return false;
+    }
+    if (!senderRole.allows(requiredRole)) {
+      _log.warning(_calendarSyncUnauthorizedLog);
+      return false;
+    }
+    return true;
+  }
+
+  CalendarChatRole _calendarSyncRequiredRole(
+    CalendarSyncMessage message, {
+    required CalendarChatAcl acl,
+  }) {
+    switch (message.type) {
+      case CalendarSyncType.request:
+        return acl.read;
+      case CalendarSyncType.update:
+        final String operation =
+            message.operation ?? _calendarSyncOperationUpdate;
+        if (operation == _calendarSyncOperationDelete) {
+          return acl.delete;
+        }
+        return acl.write;
+      case CalendarSyncType.full:
+      case CalendarSyncType.snapshot:
+        return acl.write;
+    }
+    return acl.write;
+  }
+
+  CalendarChatRole? _calendarSyncSenderRole(
+    mox.MessageEvent event, {
+    required String chatJid,
+    required ChatType chatType,
+  }) {
+    if (chatType != ChatType.groupChat) {
+      return CalendarChatRole.participant;
+    }
+    final RoomState? roomState = roomStateFor(chatJid);
+    if (roomState == null) {
+      return null;
+    }
+    final Occupant? occupant = _calendarSyncOccupantForSender(
+      event,
+      roomState: roomState,
+    );
+    if (occupant == null) {
+      return null;
+    }
+    return occupant.role.calendarChatRole;
+  }
+
+  Occupant? _calendarSyncOccupantForSender(
+    mox.MessageEvent event, {
+    required RoomState roomState,
+  }) {
+    final sender = event.from.toString();
+    final Occupant? direct = roomState.occupants[sender];
+    if (direct != null) {
+      return direct;
+    }
+    final String nick = event.from.resource;
+    if (nick.isEmpty) {
+      return null;
+    }
+    for (final occupant in roomState.occupants.values) {
+      if (occupant.nick == nick) {
+        return occupant;
+      }
+    }
+    return null;
+  }
+
+  bool _isReadOnlyTaskSyncBlocked({
+    required CalendarSyncMessage syncMessage,
+    required mox.MessageEvent event,
+    required String chatJid,
+  }) {
+    if (syncMessage.type != CalendarSyncType.update) {
+      return false;
+    }
+    if (syncMessage.entity != _calendarSyncEntityTask) {
+      return false;
+    }
+    final String? taskId = syncMessage.taskId?.trim();
+    if (taskId == null || taskId.isEmpty) {
+      return false;
+    }
+    final Map<String, String>? owners = _readOnlyTaskOwnersByChat[chatJid];
+    if (owners == null || owners.isEmpty) {
+      return false;
+    }
+    final String? owner = owners[taskId];
+    if (owner == null || owner.trim().isEmpty) {
+      return false;
+    }
+    final String senderIdentity = event.type == _messageTypeGroupchat
+        ? event.from.toString()
+        : event.from.toBare().toString();
+    return !_calendarReadOnlyOwnerMatchesSender(
+      senderJid: senderIdentity,
+      ownerJid: owner,
+    );
+  }
+
+  bool _calendarReadOnlyOwnerMatchesSender({
+    required String senderJid,
+    required String ownerJid,
+  }) {
+    final String sender = senderJid.trim();
+    final String owner = ownerJid.trim();
+    if (sender.isEmpty || owner.isEmpty) {
+      return false;
+    }
+    try {
+      final senderParsed = mox.JID.fromString(sender);
+      final ownerParsed = mox.JID.fromString(owner);
+      final String senderBare = senderParsed.toBare().toString().toLowerCase();
+      final String ownerBare = ownerParsed.toBare().toString().toLowerCase();
+      if (senderBare != ownerBare) {
+        return false;
+      }
+      final String senderResource = senderParsed.resource.trim().toLowerCase();
+      final String ownerResource = ownerParsed.resource.trim().toLowerCase();
+      if (senderResource.isEmpty && ownerResource.isEmpty) {
+        return true;
+      }
+      return senderResource == ownerResource;
+    } on Exception {
+      return sender.toLowerCase() == owner.toLowerCase();
+    }
+  }
+
+  void _rememberReadOnlyTaskShare(Message message) {
+    final CalendarTask? task = message.calendarTaskIcs;
+    if (task == null) {
+      return;
+    }
+    if (!message.calendarTaskIcsReadOnly) {
+      return;
+    }
+    final String taskId = task.id.trim();
+    if (taskId.isEmpty) {
+      return;
+    }
+    final String chatJid = message.chatJid.trim();
+    if (chatJid.isEmpty) {
+      return;
+    }
+    final String owner = message.senderJid.trim();
+    if (owner.isEmpty) {
+      return;
+    }
+    final Map<String, String> owners = _readOnlyTaskOwnersByChat.putIfAbsent(
+      chatJid,
+      () => <String, String>{},
+    );
+    owners[taskId] = owner;
   }
 
   bool _isCalendarSyncRateLimited() {
