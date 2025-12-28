@@ -422,6 +422,7 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
       icon: androidIconPath,
+      visibility: NotificationVisibility.private,
     );
     const windowsDetails = WindowsNotificationDetails();
     const linuxDetails = LinuxNotificationDetails();

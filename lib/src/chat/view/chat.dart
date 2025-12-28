@@ -1240,6 +1240,12 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  String? _normalizeBareJid(String? jid) {
+    final bare = _bareJid(jid)?.trim();
+    if (bare == null || bare.isEmpty) return null;
+    return bare.toLowerCase();
+  }
+
   String? _normalizeOccupantId(String? jid) {
     final trimmed = jid?.trim();
     if (trimmed == null || trimmed.isEmpty) {
@@ -1256,6 +1262,159 @@ class _ChatState extends State<Chat> {
     } on Exception {
       return trimmed.toLowerCase();
     }
+  }
+
+  bool _isMucOccupantSender({
+    required String senderJid,
+    required String? chatJid,
+  }) {
+    final senderBare = _normalizeBareJid(senderJid);
+    final chatBare = _normalizeBareJid(chatJid);
+    if (senderBare == null || chatBare == null) {
+      return false;
+    }
+    final String? nick = _nickFromSender(senderJid);
+    if (nick == null) {
+      return false;
+    }
+    return senderBare == chatBare;
+  }
+
+  Occupant? _resolveOccupantForSender({
+    required String senderJid,
+    required RoomState? roomState,
+  }) {
+    if (roomState == null) {
+      return null;
+    }
+    final Occupant? direct = roomState.occupants[senderJid];
+    if (direct != null) {
+      return direct;
+    }
+    final String? nick = _nickFromSender(senderJid);
+    if (nick == null) {
+      return null;
+    }
+    for (final occupant in roomState.occupants.values) {
+      if (occupant.nick == nick) {
+        return occupant;
+      }
+    }
+    return null;
+  }
+
+  bool _availabilitySenderMatchesClaim({
+    required String senderJid,
+    required String? chatJid,
+    required String claimedJid,
+    required RoomState? roomState,
+  }) {
+    final String trimmedClaimed = claimedJid.trim();
+    if (trimmedClaimed.isEmpty) {
+      return false;
+    }
+    final bool isMucSender = _isMucOccupantSender(
+      senderJid: senderJid,
+      chatJid: chatJid,
+    );
+    if (!isMucSender) {
+      return _normalizeBareJid(senderJid) == _normalizeBareJid(trimmedClaimed);
+    }
+    final String? normalizedSender = _normalizeOccupantId(senderJid);
+    final String? normalizedClaimed = _normalizeOccupantId(trimmedClaimed);
+    if (normalizedSender != null && normalizedSender == normalizedClaimed) {
+      return true;
+    }
+    final Occupant? occupant = _resolveOccupantForSender(
+      senderJid: senderJid,
+      roomState: roomState,
+    );
+    final String? realJid = occupant?.realJid;
+    if (realJid == null) {
+      return false;
+    }
+    return _normalizeBareJid(realJid) == _normalizeBareJid(trimmedClaimed);
+  }
+
+  String? _availabilityActorId({
+    required chat_models.Chat? chat,
+    required String? currentUserId,
+    required RoomState? roomState,
+  }) {
+    final String? trimmedCurrent = currentUserId?.trim();
+    if (chat?.type != ChatType.groupChat) {
+      return trimmedCurrent?.isEmpty == true ? null : trimmedCurrent;
+    }
+    final String? occupantId = roomState?.myOccupantId?.trim();
+    if (occupantId != null && occupantId.isNotEmpty) {
+      return occupantId;
+    }
+    return null;
+  }
+
+  CalendarAvailabilityMessage? _validatedAvailabilityMessage({
+    required Message message,
+    required RoomState? roomState,
+    required Map<String, String> shareOwnersById,
+    required CalendarAvailabilityShareCoordinator? availabilityCoordinator,
+  }) {
+    final CalendarAvailabilityMessage? raw =
+        message.calendarAvailabilityMessage;
+    if (raw == null) {
+      return null;
+    }
+    final String senderJid = message.senderJid;
+    final String chatJid = message.chatJid;
+    final bool isValid = raw.map(
+      share: (value) => _availabilitySenderMatchesClaim(
+        senderJid: senderJid,
+        chatJid: chatJid,
+        claimedJid: value.share.overlay.owner,
+        roomState: roomState,
+      ),
+      request: (value) {
+        final CalendarAvailabilityRequest request = value.request;
+        final bool senderMatches = _availabilitySenderMatchesClaim(
+          senderJid: senderJid,
+          chatJid: chatJid,
+          claimedJid: request.requesterJid,
+          roomState: roomState,
+        );
+        if (!senderMatches) {
+          return false;
+        }
+        final String? claimedOwner = request.ownerJid?.trim();
+        if (claimedOwner == null || claimedOwner.isEmpty) {
+          return true;
+        }
+        final String? knownOwner = shareOwnersById[request.shareId] ??
+            availabilityCoordinator?.ownerJidForShare(request.shareId);
+        if (knownOwner == null || knownOwner.trim().isEmpty) {
+          return true;
+        }
+        return _availabilitySenderMatchesClaim(
+          senderJid: claimedOwner,
+          chatJid: chatJid,
+          claimedJid: knownOwner,
+          roomState: roomState,
+        );
+      },
+      response: (value) {
+        final CalendarAvailabilityResponse response = value.response;
+        final String? ownerJid = shareOwnersById[response.shareId] ??
+            availabilityCoordinator?.ownerJidForShare(response.shareId);
+        if (ownerJid == null || ownerJid.trim().isEmpty) {
+          return true;
+        }
+        return _availabilitySenderMatchesClaim(
+          senderJid: senderJid,
+          chatJid: chatJid,
+          claimedJid: ownerJid,
+          roomState: roomState,
+        );
+      },
+    );
+    return isValid ? raw : null;
   }
 
   bool _isSameOccupantId(String? first, String? second) {
@@ -2845,6 +3004,11 @@ class _ChatState extends State<Chat> {
                 final myOccupant = myOccupantId == null
                     ? null
                     : state.roomState?.occupants[myOccupantId];
+                final String? availabilityActorId = _availabilityActorId(
+                  chat: chatEntity,
+                  currentUserId: currentUserId,
+                  roomState: state.roomState,
+                );
                 final shareContexts = state.shareContexts;
                 final shareReplies = state.shareReplies;
                 final recipients = state.recipients;
@@ -3420,13 +3584,22 @@ class _ChatState extends State<Chat> {
                                     if (availabilityMessage == null) {
                                       continue;
                                     }
-                                    availabilityMessage.map(
+                                    availabilityMessage.maybeMap(
                                       share: (value) {
-                                        availabilityShareOwnersById[value.share
-                                            .id] = value.share.overlay.owner;
+                                        final owner = value.share.overlay.owner;
+                                        final bool isValid =
+                                            _availabilitySenderMatchesClaim(
+                                          senderJid: item.senderJid,
+                                          chatJid: item.chatJid,
+                                          claimedJid: owner,
+                                          roomState: state.roomState,
+                                        );
+                                        if (isValid) {
+                                          availabilityShareOwnersById[
+                                              value.share.id] = owner;
+                                        }
                                       },
-                                      request: (_) {},
-                                      response: (_) {},
+                                      orElse: () {},
                                     );
                                   }
                                   final isEmailChat =
@@ -3666,6 +3839,16 @@ class _ChatState extends State<Chat> {
                                                 hasRenderableSubjectHeader ||
                                                 e.retracted ||
                                                 e.edited);
+                                    final CalendarAvailabilityMessage?
+                                        validatedAvailabilityMessage =
+                                        _validatedAvailabilityMessage(
+                                      message: e,
+                                      roomState: state.roomState,
+                                      shareOwnersById:
+                                          availabilityShareOwnersById,
+                                      availabilityCoordinator:
+                                          availabilityCoordinator,
+                                    );
                                     dashMessages.add(
                                       ChatMessage(
                                         user: author,
@@ -3695,7 +3878,7 @@ class _ChatState extends State<Chat> {
                                           _calendarTaskIcsReadOnlyPropertyKey:
                                               e.calendarTaskIcsReadOnly,
                                           _calendarAvailabilityPropertyKey:
-                                              e.calendarAvailabilityMessage,
+                                              validatedAvailabilityMessage,
                                           'quoted': quotedMessage,
                                           'reactions': e.reactionsPreview,
                                           'shareContext': shareContext,
@@ -4657,23 +4840,32 @@ class _ChatState extends State<Chat> {
                                                             share: (value) {
                                                               final bool
                                                                   isOwner =
-                                                                  _bareJid(
-                                                                        value
+                                                                  availabilityActorId !=
+                                                                          null &&
+                                                                      _availabilitySenderMatchesClaim(
+                                                                        senderJid:
+                                                                            availabilityActorId,
+                                                                        chatJid:
+                                                                            chatEntity?.jid,
+                                                                        claimedJid: value
                                                                             .share
                                                                             .overlay
                                                                             .owner,
-                                                                      ) ==
-                                                                      _bareJid(
-                                                                        currentUserId,
+                                                                        roomState:
+                                                                            state.roomState,
                                                                       );
                                                               if (!isOwner) {
-                                                                availabilityOnRequest =
-                                                                    () =>
-                                                                        _handleAvailabilityRequest(
-                                                                          value
-                                                                              .share,
-                                                                          currentUserId,
-                                                                        );
+                                                                final actorId =
+                                                                    availabilityActorId;
+                                                                if (actorId !=
+                                                                    null) {
+                                                                  availabilityOnRequest =
+                                                                      () =>
+                                                                          _handleAvailabilityRequest(
+                                                                            value.share,
+                                                                            actorId,
+                                                                          );
+                                                                }
                                                               }
                                                             },
                                                             request: (value) {
@@ -4681,7 +4873,7 @@ class _ChatState extends State<Chat> {
                                                                   value.request
                                                                       .ownerJid
                                                                       ?.trim();
-                                                              final ownerJid = requestOwnerJid ==
+                                                              final String? ownerJid = requestOwnerJid ==
                                                                           null ||
                                                                       requestOwnerJid
                                                                           .isEmpty
@@ -4695,24 +4887,50 @@ class _ChatState extends State<Chat> {
                                                                             .shareId,
                                                                       )
                                                                   : requestOwnerJid;
-                                                              final bool isOwner = ownerJid !=
-                                                                      null
-                                                                  ? _bareJid(
-                                                                        ownerJid,
-                                                                      ) ==
-                                                                      _bareJid(
-                                                                        currentUserId,
-                                                                      )
-                                                                  : (chatEntity
-                                                                              ?.type ==
-                                                                          ChatType
-                                                                              .chat &&
-                                                                      _bareJid(
-                                                                            value.request.requesterJid,
-                                                                          ) !=
-                                                                          _bareJid(
-                                                                            currentUserId,
-                                                                          ));
+                                                              bool isOwner =
+                                                                  false;
+                                                              if (ownerJid !=
+                                                                      null &&
+                                                                  ownerJid
+                                                                      .trim()
+                                                                      .isNotEmpty &&
+                                                                  availabilityActorId !=
+                                                                      null) {
+                                                                isOwner =
+                                                                    _availabilitySenderMatchesClaim(
+                                                                  senderJid:
+                                                                      availabilityActorId,
+                                                                  chatJid:
+                                                                      chatEntity
+                                                                          ?.jid,
+                                                                  claimedJid:
+                                                                      ownerJid,
+                                                                  roomState: state
+                                                                      .roomState,
+                                                                );
+                                                              } else if (chatEntity
+                                                                      ?.type ==
+                                                                  ChatType
+                                                                      .chat) {
+                                                                final currentActor =
+                                                                    availabilityActorId;
+                                                                if (currentActor !=
+                                                                    null) {
+                                                                  isOwner =
+                                                                      !_availabilitySenderMatchesClaim(
+                                                                    senderJid:
+                                                                        currentActor,
+                                                                    chatJid:
+                                                                        chatEntity
+                                                                            ?.jid,
+                                                                    claimedJid: value
+                                                                        .request
+                                                                        .requesterJid,
+                                                                    roomState: state
+                                                                        .roomState,
+                                                                  );
+                                                                }
+                                                              }
                                                               if (isOwner) {
                                                                 availabilityOnAccept =
                                                                     () =>
