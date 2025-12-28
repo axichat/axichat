@@ -4783,8 +4783,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatAttachmentExportTitle => '儲存附件？';
 
   @override
-  String get chatAttachmentExportMessage =>
-      '這會把附件複製到共享儲存空間。繼續？';
+  String get chatAttachmentExportMessage => '這會把附件複製到共享儲存空間。繼續？';
 
   @override
   String get chatAttachmentExportConfirm => '儲存';

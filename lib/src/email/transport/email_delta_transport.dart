@@ -32,13 +32,15 @@ const _deltaConfigKeySendServer = 'send_server';
 const _deltaConfigKeySendPort = 'send_port';
 const _deltaConfigKeySendSecurity = 'send_security';
 const _deltaConfigKeySendUser = 'send_user';
+const String _deltaSecurityModeAutomatic = 'automatic';
+const String _deltaSecurityModeAuto = 'auto';
 const String _deltaSecurityModeSsl = 'ssl';
 const String _deltaSecurityModeStartTls = 'starttls';
 const String _deltaSecurityModePlain = 'plain';
-const Set<String> _deltaSecureSecurityModes = <String>{
-  _deltaSecurityModeSsl,
-  _deltaSecurityModeStartTls,
-};
+const String _deltaSecurityModeAutoNumeric = '0';
+const String _deltaSecurityModeSslNumeric = '1';
+const String _deltaSecurityModeStartTlsNumeric = '2';
+const String _deltaSecurityModePlainNumeric = '3';
 const int _imapImplicitTlsPort = 993;
 const int _smtpImplicitTlsPort = 465;
 const String _mailTransportLabel = 'mail';
@@ -48,6 +50,14 @@ const String _emailSecurityModePlainError =
 const String _emailSecurityModeUnknownPrefix =
     'Unsupported email security mode for ';
 const String _emailSecurityModeUnknownSuffix = ' connections.';
+
+enum _DeltaSecurityModeResolution {
+  auto,
+  ssl,
+  startTls,
+  plain,
+  unknown,
+}
 
 const _deltaCredentialConfigKeys = <String>[
   _deltaConfigKeyAddress,
@@ -309,16 +319,33 @@ class EmailDeltaTransport implements ChatTransport {
       await context.setConfig(key: securityKey, value: fallbackMode);
       return;
     }
-    if (_deltaSecureSecurityModes.contains(normalizedMode)) {
-      return;
+    final resolvedMode = _resolveSecurityMode(normalizedMode);
+    switch (resolvedMode) {
+      case _DeltaSecurityModeResolution.auto:
+        final fallbackMode = await _fallbackSecurityMode(
+          context: context,
+          portKey: portKey,
+          implicitTlsPort: implicitTlsPort,
+        );
+        await context.setConfig(key: securityKey, value: fallbackMode);
+        return;
+      case _DeltaSecurityModeResolution.ssl:
+      case _DeltaSecurityModeResolution.startTls:
+        final mappedMode = resolvedMode == _DeltaSecurityModeResolution.ssl
+            ? _deltaSecurityModeSsl
+            : _deltaSecurityModeStartTls;
+        if (normalizedMode != mappedMode) {
+          await context.setConfig(key: securityKey, value: mappedMode);
+        }
+        return;
+      case _DeltaSecurityModeResolution.plain:
+        throw const DeltaSafeException(_emailSecurityModePlainError);
+      case _DeltaSecurityModeResolution.unknown:
+        throw DeltaSafeException(
+          '$_emailSecurityModeUnknownPrefix$transportLabel'
+          '$_emailSecurityModeUnknownSuffix',
+        );
     }
-    if (normalizedMode == _deltaSecurityModePlain) {
-      throw const DeltaSafeException(_emailSecurityModePlainError);
-    }
-    throw DeltaSafeException(
-      '$_emailSecurityModeUnknownPrefix$transportLabel'
-      '$_emailSecurityModeUnknownSuffix',
-    );
   }
 
   Future<String> _fallbackSecurityMode({
@@ -337,6 +364,26 @@ class EmailDeltaTransport implements ChatTransport {
   String _normalizeSecurityMode(String? value) {
     final trimmed = value?.trim().toLowerCase();
     return trimmed ?? '';
+  }
+
+  _DeltaSecurityModeResolution _resolveSecurityMode(String value) {
+    switch (value) {
+      case _deltaSecurityModeAutomatic:
+      case _deltaSecurityModeAuto:
+      case _deltaSecurityModeAutoNumeric:
+        return _DeltaSecurityModeResolution.auto;
+      case _deltaSecurityModeSsl:
+      case _deltaSecurityModeSslNumeric:
+        return _DeltaSecurityModeResolution.ssl;
+      case _deltaSecurityModeStartTls:
+      case _deltaSecurityModeStartTlsNumeric:
+        return _DeltaSecurityModeResolution.startTls;
+      case _deltaSecurityModePlain:
+      case _deltaSecurityModePlainNumeric:
+        return _DeltaSecurityModeResolution.plain;
+      default:
+        return _DeltaSecurityModeResolution.unknown;
+    }
   }
 
   int? _parsePort(String? value) {

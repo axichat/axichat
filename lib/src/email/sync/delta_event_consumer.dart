@@ -5,6 +5,7 @@ import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -13,7 +14,6 @@ import 'package:axichat/src/xmpp/xmpp_service.dart'
     show serverOnlyChatMessageCap;
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
-import 'package:path/path.dart' as p;
 
 const _deltaDomain = 'delta.chat';
 const _deltaSelfJid = 'dc-self@$_deltaDomain';
@@ -23,6 +23,7 @@ const _bootstrapYieldEveryMessages = 40;
 const int _deltaMessageIdUnset = DeltaMessageId.none;
 const int _minimumHistoryWindow = 1;
 const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
+const String _deltaAttachmentFallbackPrefix = 'attachment-';
 
 enum DeltaEventType {
   error(DeltaEventCode.error),
@@ -957,6 +958,7 @@ class DeltaEventConsumer {
   }) {
     final path = delta.filePath?.trim();
     final sanitizedPath = path == null || path.isEmpty ? null : path;
+    final sanitizedMimeType = sanitizeEmailMimeType(delta.fileMime);
     return FileMetadataData(
       id: metadataId,
       filename: _resolvedFilename(
@@ -965,7 +967,7 @@ class DeltaEventConsumer {
         deltaId: delta.id,
       ),
       path: sanitizedPath,
-      mimeType: delta.fileMime,
+      mimeType: sanitizedMimeType,
       sizeBytes: delta.fileSize,
       width: delta.width,
       height: delta.height,
@@ -994,14 +996,12 @@ class DeltaEventConsumer {
     required String? fallbackPath,
     required int deltaId,
   }) {
-    final trimmedName = explicitName?.trim();
-    if (trimmedName?.isNotEmpty == true) {
-      return p.normalize(trimmedName!);
-    }
-    if (fallbackPath?.isNotEmpty == true) {
-      return p.basename(fallbackPath!);
-    }
-    return 'attachment-$deltaId';
+    final fallbackName = '$_deltaAttachmentFallbackPrefix$deltaId';
+    return sanitizeEmailAttachmentFilename(
+      explicitName,
+      fallbackPath: fallbackPath,
+      fallbackName: fallbackName,
+    );
   }
 
   String _attachmentLabel(FileMetadataData metadata) {
