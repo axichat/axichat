@@ -30,7 +30,8 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/database.dart' show MessageAttachmentData;
+import 'package:axichat/src/storage/database.dart'
+    show MessageAttachmentData, PinnedMessageEntry;
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -751,7 +752,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
       roomState: resetContext ? null : state.roomState,
-      pinnedMessages: resetContext ? _emptyPinnedMessageItems : state.pinnedMessages,
+      pinnedMessages:
+          resetContext ? _emptyPinnedMessageItems : state.pinnedMessages,
       typingParticipants:
           typingShouldClear ? const [] : state.typingParticipants,
       typing: event.chat.defaultTransport.isEmail ? false : state.typing,
@@ -946,7 +948,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.copyWith(pinnedMessages: _emptyPinnedMessageItems));
       return;
     }
-    final orderedIds = LinkedHashSet<String>();
+    final orderedIds = <String>{};
     for (final entry in event.items) {
       final stanzaId = entry.messageStanzaId.trim();
       if (stanzaId.isEmpty) {
