@@ -103,6 +103,7 @@ class HtmlContentCodec {
   static const int _maxHtmlInputLength = 200000;
   static const int _maxHtmlNodeCount = 5000;
   static const int _maxHtmlDepth = 40;
+  static const Duration _maxHtmlParseDuration = Duration(milliseconds: 100);
   static const Map<String, Set<String>> _sanitizedAllowedAttributes =
       <String, Set<String>>{
     'a': <String>{_hrefAttribute, _titleAttribute},
@@ -141,6 +142,7 @@ class HtmlContentCodec {
     final budget = _HtmlNodeBudget(
       maxNodes: _maxHtmlNodeCount,
       maxDepth: _maxHtmlDepth,
+      maxDuration: _maxHtmlParseDuration,
     );
     for (final node in fragment.nodes) {
       _appendSanitizedHtml(buffer, node, budget, 0);
@@ -154,6 +156,7 @@ class HtmlContentCodec {
     final budget = _HtmlNodeBudget(
       maxNodes: _maxHtmlNodeCount,
       maxDepth: _maxHtmlDepth,
+      maxDuration: _maxHtmlParseDuration,
     );
     _appendPlainText(buffer, fragment.nodes, budget, 0);
     return _normalizePlainText(buffer.toString());
@@ -165,6 +168,7 @@ class HtmlContentCodec {
     final budget = _HtmlNodeBudget(
       maxNodes: _maxHtmlNodeCount,
       maxDepth: _maxHtmlDepth,
+      maxDuration: _maxHtmlParseDuration,
     );
     for (final node in fragment.nodes) {
       _appendXml(builder, node, budget, 0);
@@ -392,14 +396,20 @@ class _HtmlNodeBudget {
   _HtmlNodeBudget({
     required this.maxNodes,
     required this.maxDepth,
+    required this.maxDuration,
   });
 
   final int maxNodes;
   final int maxDepth;
+  final Duration maxDuration;
   var _visited = 0;
+  final Stopwatch _timer = Stopwatch()..start();
 
   bool allow(int depth) {
     if (depth > maxDepth) {
+      return false;
+    }
+    if (_timer.elapsed > maxDuration) {
       return false;
     }
     if (_visited >= maxNodes) {
