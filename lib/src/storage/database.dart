@@ -42,6 +42,9 @@ SET draft_source_id = ?
 WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
 ''';
 const String _attachmentRootDirectoryName = 'attachments';
+const int _messageAttachmentMaxCount = 50;
+const int _messageAttachmentSortOrderStart = 0;
+const int _messageAttachmentSortOrderStep = 1;
 const int _pinnedMessagesSchemaVersion = 23;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 
@@ -2786,6 +2789,10 @@ WHERE jid = ?
         await messageAttachmentsAccessor.nextSortOrder(
           messageId,
         );
+    if (nextOrder >= _messageAttachmentMaxCount) {
+      _log.warning('Skipping attachment insert after reaching max count.');
+      return;
+    }
     await into(messageAttachments).insert(
       MessageAttachmentsCompanion.insert(
         messageId: messageId,
@@ -2803,11 +2810,19 @@ WHERE jid = ?
     required List<String> fileMetadataIds,
     String? transportGroupId,
   }) async {
+    final trimmedIds = fileMetadataIds.length > _messageAttachmentMaxCount
+        ? fileMetadataIds
+            .take(_messageAttachmentMaxCount)
+            .toList(growable: false)
+        : fileMetadataIds;
+    if (trimmedIds.length < fileMetadataIds.length) {
+      _log.warning('Dropping message attachments beyond max count.');
+    }
     await transaction(() async {
       await messageAttachmentsAccessor.deleteForMessage(messageId);
-      if (fileMetadataIds.isEmpty) return;
-      var order = 0;
-      for (final metadataId in fileMetadataIds) {
+      if (trimmedIds.isEmpty) return;
+      var order = _messageAttachmentSortOrderStart;
+      for (final metadataId in trimmedIds) {
         await into(messageAttachments).insert(
           MessageAttachmentsCompanion.insert(
             messageId: messageId,
@@ -2817,7 +2832,7 @@ WHERE jid = ?
           ),
           mode: InsertMode.insertOrIgnore,
         );
-        order += 1;
+        order += _messageAttachmentSortOrderStep;
       }
     });
   }
