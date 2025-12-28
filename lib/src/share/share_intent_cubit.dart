@@ -6,12 +6,52 @@ import 'package:flutter/services.dart';
 import 'package:share_handler/share_handler.dart';
 
 const int _maxSharedTextLength = 32 * 1024;
+const int _maxSharedAttachmentCount = 32;
+const int _maxSharedAttachmentPathLength = 4096;
 const String _sharedTextNullToken = '\u0000';
+const String _sharedAttachmentNullToken = _sharedTextNullToken;
+const String _sharedTextEmpty = '';
+const String _sharedAttachmentImageMimeType = 'image/*';
+const String _sharedAttachmentVideoMimeType = 'video/*';
+const String _sharedAttachmentAudioMimeType = 'audio/*';
+const String _sharedAttachmentFileMimeType = 'application/octet-stream';
+
+class ShareAttachmentPayload {
+  const ShareAttachmentPayload({required this.path, required this.type});
+
+  final String path;
+  final SharedAttachmentType type;
+}
+
+extension SharedAttachmentTypeExtensions on SharedAttachmentType {
+  bool get isImage => this == SharedAttachmentType.image;
+
+  bool get isVideo => this == SharedAttachmentType.video;
+
+  bool get isAudio => this == SharedAttachmentType.audio;
+
+  bool get isFile => this == SharedAttachmentType.file;
+
+  String get mimeTypeFallback => switch (this) {
+        SharedAttachmentType.image => _sharedAttachmentImageMimeType,
+        SharedAttachmentType.video => _sharedAttachmentVideoMimeType,
+        SharedAttachmentType.audio => _sharedAttachmentAudioMimeType,
+        SharedAttachmentType.file => _sharedAttachmentFileMimeType,
+      };
+}
 
 class SharePayload {
-  const SharePayload({required this.text});
+  const SharePayload({
+    this.text,
+    this.attachments = const <ShareAttachmentPayload>[],
+  });
 
-  final String text;
+  final String? text;
+  final List<ShareAttachmentPayload> attachments;
+
+  bool get hasText => text != null && text!.isNotEmpty;
+
+  bool get hasAttachments => attachments.isNotEmpty;
 }
 
 class ShareIntentState {
@@ -56,15 +96,21 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   }
 
   void _handleMedia(SharedMedia media) {
-    final rawText = media.content;
-    if (rawText == null || rawText.isEmpty) {
+    final String? sanitizedText =
+        _sanitizeSharedText(media.content ?? _sharedTextEmpty);
+    final List<ShareAttachmentPayload> attachments =
+        _sanitizeSharedAttachments(media.attachments);
+    if (sanitizedText == null && attachments.isEmpty) {
       return;
     }
-    final sanitized = _sanitizeSharedText(rawText);
-    if (sanitized == null) {
-      return;
-    }
-    emit(ShareIntentState.ready(SharePayload(text: sanitized)));
+    emit(
+      ShareIntentState.ready(
+        SharePayload(
+          text: sanitizedText,
+          attachments: attachments,
+        ),
+      ),
+    );
   }
 
   bool get _isSupportedPlatform =>
@@ -73,7 +119,7 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
           defaultTargetPlatform == TargetPlatform.iOS);
 
   String? _sanitizeSharedText(String text) {
-    final normalized = text.replaceAll(_sharedTextNullToken, '').trim();
+    final String normalized = text.replaceAll(_sharedTextNullToken, '').trim();
     if (normalized.isEmpty) {
       return null;
     }
@@ -81,6 +127,34 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
       return null;
     }
     return normalized;
+  }
+
+  List<ShareAttachmentPayload> _sanitizeSharedAttachments(
+    List<SharedAttachment?>? attachments,
+  ) {
+    if (attachments == null || attachments.isEmpty) {
+      return const <ShareAttachmentPayload>[];
+    }
+    final Set<String> seenPaths = <String>{};
+    final List<ShareAttachmentPayload> sanitized = <ShareAttachmentPayload>[];
+    for (final attachment in attachments) {
+      if (attachment == null) continue;
+      final String path = attachment.path.trim();
+      if (path.isEmpty) continue;
+      if (path.length > _maxSharedAttachmentPathLength) continue;
+      if (path.contains(_sharedAttachmentNullToken)) continue;
+      if (!seenPaths.add(path)) continue;
+      sanitized.add(
+        ShareAttachmentPayload(
+          path: path,
+          type: attachment.type,
+        ),
+      );
+      if (sanitized.length >= _maxSharedAttachmentCount) {
+        break;
+      }
+    }
+    return List.unmodifiable(sanitized);
   }
 
   @override

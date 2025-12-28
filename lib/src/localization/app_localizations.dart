@@ -1233,6 +1233,30 @@ abstract class AppLocalizations {
   /// **'Forward to...'**
   String get chatForwardDialogTitle;
 
+  /// No description provided for @chatForwardEmailWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward email?'**
+  String get chatForwardEmailWarningTitle;
+
+  /// No description provided for @chatForwardEmailWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding email can include original headers and external image links. Choose how to send.'**
+  String get chatForwardEmailWarningMessage;
+
+  /// No description provided for @chatForwardEmailOptionSafe.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward as new message'**
+  String get chatForwardEmailOptionSafe;
+
+  /// No description provided for @chatForwardEmailOptionOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward original'**
+  String get chatForwardEmailOptionOriginal;
+
   /// No description provided for @chatComposerAttachmentWarning.
   ///
   /// In en, this message translates to:
@@ -3254,6 +3278,24 @@ abstract class AppLocalizations {
   /// **'Unregister'**
   String get authUnregisterTitle;
 
+  /// No description provided for @authUnregisterConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account?'**
+  String get authUnregisterConfirmTitle;
+
+  /// No description provided for @authUnregisterConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will permanently delete your account and local data. This cannot be undone.'**
+  String get authUnregisterConfirmMessage;
+
+  /// No description provided for @authUnregisterConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get authUnregisterConfirmAction;
+
   /// No description provided for @authUnregisterProgressLabel.
   ///
   /// In en, this message translates to:
@@ -3407,7 +3449,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatAttachmentExportMessage.
   ///
   /// In en, this message translates to:
-  /// **'This will copy the attachment to shared storage. Continue?'**
+  /// **'This will copy the attachment to shared storage. Exports are unencrypted and may be readable by other apps. Continue?'**
   String get chatAttachmentExportMessage;
 
   /// No description provided for @chatAttachmentExportConfirm.
@@ -3421,6 +3463,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get chatAttachmentExportCancel;
+
+  /// No description provided for @chatMediaMetadataWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Media may include metadata'**
+  String get chatMediaMetadataWarningTitle;
+
+  /// No description provided for @chatMediaMetadataWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos and videos can include location and device details. Continue?'**
+  String get chatMediaMetadataWarningMessage;
+
+  /// No description provided for @chatNotificationPreviewOptionInherit.
+  ///
+  /// In en, this message translates to:
+  /// **'Use app setting'**
+  String get chatNotificationPreviewOptionInherit;
+
+  /// No description provided for @chatNotificationPreviewOptionShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Always show previews'**
+  String get chatNotificationPreviewOptionShow;
+
+  /// No description provided for @chatNotificationPreviewOptionHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Always hide previews'**
+  String get chatNotificationPreviewOptionHide;
 
   /// No description provided for @chatAttachmentUnavailableDevice.
   ///
@@ -4117,6 +4189,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to export chat'**
   String get chatsExportFailure;
+
+  /// No description provided for @chatExportWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export chat history?'**
+  String get chatExportWarningTitle;
+
+  /// No description provided for @chatExportWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat exports are unencrypted and may be readable by other apps or cloud services. Continue?'**
+  String get chatExportWarningMessage;
 
   /// No description provided for @chatsArchivedRestored.
   ///

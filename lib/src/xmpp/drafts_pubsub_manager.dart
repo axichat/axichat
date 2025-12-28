@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/storage/models/file_models.dart';
+import 'package:axichat/src/xmpp/jid_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
@@ -62,23 +65,31 @@ final class DraftRecipient {
 
   static DraftRecipient? fromXml(mox.XMLNode node) {
     if (node.tag != _recipientTag) return null;
-    final rawJid = node.attributes[_recipientJidAttr]?.toString().trim();
-    if (rawJid == null || rawJid.isEmpty) return null;
+    final rawJid = node.attributes[_recipientJidAttr]?.toString();
+    final normalizedJid =
+        rawJid?.toBareJidOrNull(maxBytes: draftSyncMaxRecipientBytes);
+    if (normalizedJid == null) return null;
     final rawRole = node.attributes[_recipientRoleAttr]?.toString().trim();
-    final resolvedRole =
-        rawRole == null || rawRole.isEmpty ? _recipientRoleDefault : rawRole;
+    final normalizedRole = rawRole?.toLowerCase();
+    final resolvedRole = draftSyncAllowedRecipientRoles.contains(normalizedRole)
+        ? normalizedRole!
+        : _recipientRoleDefault;
     return DraftRecipient(
-      jid: rawJid,
+      jid: normalizedJid,
       role: resolvedRole,
     );
   }
 
   mox.XMLNode toXml() {
+    final normalizedRole = role.trim().toLowerCase();
+    final resolvedRole = draftSyncAllowedRecipientRoles.contains(normalizedRole)
+        ? normalizedRole
+        : _recipientRoleDefault;
     return mox.XMLNode(
       tag: _recipientTag,
       attributes: {
         _recipientJidAttr: jid,
-        _recipientRoleAttr: role,
+        _recipientRoleAttr: resolvedRole,
       },
     );
   }
@@ -125,14 +136,24 @@ final class DraftAttachmentRef {
 
   static DraftAttachmentRef? fromXml(mox.XMLNode node) {
     if (node.tag != _attachmentTag) return null;
-    final rawId = node.attributes[_attachmentIdAttr]?.toString().trim();
+    final rawId = _normalizeIdAttr(node.attributes[_attachmentIdAttr]);
     if (rawId == null || rawId.isEmpty) return null;
-    final url = _normalizeAttr(node.attributes[_attachmentUrlAttr]);
-    final filename = _normalizeAttr(node.attributes[_attachmentNameAttr]);
-    final mimeType = _normalizeAttr(node.attributes[_attachmentMimeAttr]);
-    final sizeBytes = _parseIntAttr(node.attributes[_attachmentSizeAttr]);
-    final width = _parseIntAttr(node.attributes[_attachmentWidthAttr]);
-    final height = _parseIntAttr(node.attributes[_attachmentHeightAttr]);
+    final url = _normalizeUrlAttr(node.attributes[_attachmentUrlAttr]);
+    final filename = _normalizeAttr(
+      node.attributes[_attachmentNameAttr],
+      maxBytes: draftSyncMaxAttachmentNameBytes,
+    );
+    final mimeType = _normalizeAttr(
+      node.attributes[_attachmentMimeAttr],
+      maxBytes: draftSyncMaxAttachmentMimeBytes,
+    );
+    final sizeBytes = _parsePositiveIntAttr(
+      node.attributes[_attachmentSizeAttr],
+      maxValue: draftSyncMaxAttachmentSizeBytes,
+    );
+    final width = _parsePositiveIntAttr(node.attributes[_attachmentWidthAttr]);
+    final height =
+        _parsePositiveIntAttr(node.attributes[_attachmentHeightAttr]);
     return DraftAttachmentRef(
       id: rawId,
       url: url,
@@ -145,9 +166,21 @@ final class DraftAttachmentRef {
   }
 
   mox.XMLNode toXml() {
-    final normalizedUrl = url?.trim();
-    final normalizedName = filename?.trim();
-    final normalizedMime = mimeType?.trim();
+    final normalizedUrl = _normalizeUrlAttr(url);
+    final normalizedName = _normalizeAttr(
+      filename,
+      maxBytes: draftSyncMaxAttachmentNameBytes,
+    );
+    final normalizedMime = _normalizeAttr(
+      mimeType,
+      maxBytes: draftSyncMaxAttachmentMimeBytes,
+    );
+    final normalizedSize = _normalizePositiveInt(
+      sizeBytes,
+      maxValue: draftSyncMaxAttachmentSizeBytes,
+    );
+    final normalizedWidth = _normalizePositiveInt(width);
+    final normalizedHeight = _normalizePositiveInt(height);
     return mox.XMLNode(
       tag: _attachmentTag,
       attributes: {
@@ -158,25 +191,59 @@ final class DraftAttachmentRef {
           _attachmentNameAttr: normalizedName,
         if (normalizedMime != null && normalizedMime.isNotEmpty)
           _attachmentMimeAttr: normalizedMime,
-        if (sizeBytes != null && sizeBytes! > 0)
-          _attachmentSizeAttr: sizeBytes.toString(),
-        if (width != null && width! > 0) _attachmentWidthAttr: width.toString(),
-        if (height != null && height! > 0)
-          _attachmentHeightAttr: height.toString(),
+        if (normalizedSize != null)
+          _attachmentSizeAttr: normalizedSize.toString(),
+        if (normalizedWidth != null)
+          _attachmentWidthAttr: normalizedWidth.toString(),
+        if (normalizedHeight != null)
+          _attachmentHeightAttr: normalizedHeight.toString(),
       },
     );
   }
 
-  static String? _normalizeAttr(Object? value) {
+  static String? _normalizeAttr(Object? value, {required int maxBytes}) {
     final normalized = value?.toString().trim();
     if (normalized == null || normalized.isEmpty) return null;
+    final clamped = clampUtf8Value(normalized, maxBytes: maxBytes);
+    if (clamped == null || clamped.trim().isEmpty) return null;
+    return clamped;
+  }
+
+  static String? _normalizeIdAttr(Object? value) {
+    final normalized = value?.toString().trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    if (!isWithinUtf8ByteLimit(normalized, maxBytes: draftSyncMaxIdBytes)) {
+      return null;
+    }
     return normalized;
   }
 
-  static int? _parseIntAttr(Object? value) {
+  static String? _normalizeUrlAttr(Object? value) {
+    final normalized = _normalizeAttr(
+      value,
+      maxBytes: draftSyncMaxAttachmentUrlBytes,
+    );
+    if (normalized == null) return null;
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || !uri.hasAuthority || !uri.hasScheme) return null;
+    final scheme = uri.scheme.toLowerCase();
+    if (!draftSyncAllowedAttachmentSchemes.contains(scheme)) {
+      return null;
+    }
+    return uri.toString();
+  }
+
+  static int? _parsePositiveIntAttr(Object? value, {int? maxValue}) {
     final normalized = value?.toString().trim();
     if (normalized == null || normalized.isEmpty) return null;
-    return int.tryParse(normalized);
+    final parsed = int.tryParse(normalized);
+    return _normalizePositiveInt(parsed, maxValue: maxValue);
+  }
+
+  static int? _normalizePositiveInt(int? value, {int? maxValue}) {
+    if (value == null || value <= 0) return null;
+    if (maxValue != null && value > maxValue) return null;
+    return value;
   }
 }
 
@@ -242,6 +309,9 @@ final class DraftSyncPayload {
     final resolvedSyncId =
         rawSyncId == null || rawSyncId.isEmpty ? itemId?.trim() : rawSyncId;
     if (resolvedSyncId == null || resolvedSyncId.isEmpty) return null;
+    if (!isWithinUtf8ByteLimit(resolvedSyncId, maxBytes: draftSyncMaxIdBytes)) {
+      return null;
+    }
 
     final rawUpdatedAt =
         node.attributes[_draftUpdatedAtAttr]?.toString().trim();
@@ -250,9 +320,11 @@ final class DraftSyncPayload {
     if (parsedUpdatedAt == null) return null;
 
     final rawSourceId = node.attributes[_draftSourceIdAttr]?.toString().trim();
-    final resolvedSourceId = rawSourceId == null || rawSourceId.isEmpty
-        ? _draftSourceIdFallback
-        : rawSourceId;
+    final resolvedSourceId = _normalizeText(
+          rawSourceId,
+          maxBytes: draftSyncMaxIdBytes,
+        ) ??
+        _draftSourceIdFallback;
 
     final recipientsNode = node.firstTag(_recipientsTag);
     final recipients = recipientsNode
@@ -262,9 +334,18 @@ final class DraftSyncPayload {
             .toList(growable: false) ??
         const <DraftRecipient>[];
 
-    final subject = _normalizeText(node.firstTag(_subjectTag)?.innerText());
-    final body = _normalizeText(node.firstTag(_bodyTag)?.innerText());
-    final html = _normalizeText(node.firstTag(_htmlTag)?.innerText());
+    final subject = _normalizeText(
+      node.firstTag(_subjectTag)?.innerText(),
+      maxBytes: draftSyncMaxSubjectBytes,
+    );
+    final body = _normalizeText(
+      node.firstTag(_bodyTag)?.innerText(),
+      maxBytes: draftSyncMaxBodyBytes,
+    );
+    final html = _normalizeText(
+      node.firstTag(_htmlTag)?.innerText(),
+      maxBytes: draftSyncMaxHtmlBytes,
+    );
 
     final attachmentsNode = node.firstTag(_attachmentsTag);
     final attachments = attachmentsNode
@@ -273,6 +354,8 @@ final class DraftSyncPayload {
             .whereType<DraftAttachmentRef>()
             .toList(growable: false) ??
         const <DraftAttachmentRef>[];
+    if (recipients.length > draftSyncMaxRecipients) return null;
+    if (attachments.length > draftSyncMaxAttachments) return null;
 
     return DraftSyncPayload(
       syncId: resolvedSyncId,
@@ -288,39 +371,67 @@ final class DraftSyncPayload {
 
   mox.XMLNode toXml() {
     final updatedAtIso = updatedAt.toUtc().toIso8601String();
-    final trimmedSourceId = sourceId.trim();
+    final normalizedSourceId = _normalizeText(
+      sourceId,
+      maxBytes: draftSyncMaxIdBytes,
+    );
+    final normalizedSubject = _normalizeText(
+      subject,
+      maxBytes: draftSyncMaxSubjectBytes,
+    );
+    final normalizedBody = _normalizeText(
+      body,
+      maxBytes: draftSyncMaxBodyBytes,
+    );
+    final normalizedHtml = _normalizeText(
+      html,
+      maxBytes: draftSyncMaxHtmlBytes,
+    );
+    final limitedRecipients = recipients.length > draftSyncMaxRecipients
+        ? recipients.take(draftSyncMaxRecipients).toList(growable: false)
+        : recipients;
+    final limitedAttachments = attachments.length > draftSyncMaxAttachments
+        ? attachments.take(draftSyncMaxAttachments).toList(growable: false)
+        : attachments;
     return mox.XMLNode.xmlns(
       tag: _draftTag,
       xmlns: draftsPubSubNode,
       attributes: {
         _draftSyncIdAttr: syncId,
         _draftUpdatedAtAttr: updatedAtIso,
-        if (trimmedSourceId.isNotEmpty) _draftSourceIdAttr: trimmedSourceId,
+        if (normalizedSourceId != null) _draftSourceIdAttr: normalizedSourceId,
       },
       children: [
-        if (recipients.isNotEmpty)
+        if (limitedRecipients.isNotEmpty)
           mox.XMLNode(
             tag: _recipientsTag,
-            children: recipients.map((recipient) => recipient.toXml()).toList(),
+            children: limitedRecipients
+                .map((recipient) => recipient.toXml())
+                .toList(),
           ),
-        if (subject case final value?)
+        if (normalizedSubject case final value?)
           mox.XMLNode(tag: _subjectTag, text: value),
-        if (body case final value?) mox.XMLNode(tag: _bodyTag, text: value),
-        if (html case final value?) mox.XMLNode(tag: _htmlTag, text: value),
-        if (attachments.isNotEmpty)
+        if (normalizedBody case final value?)
+          mox.XMLNode(tag: _bodyTag, text: value),
+        if (normalizedHtml case final value?)
+          mox.XMLNode(tag: _htmlTag, text: value),
+        if (limitedAttachments.isNotEmpty)
           mox.XMLNode(
             tag: _attachmentsTag,
-            children:
-                attachments.map((attachment) => attachment.toXml()).toList(),
+            children: limitedAttachments
+                .map((attachment) => attachment.toXml())
+                .toList(),
           ),
       ],
     );
   }
 
-  static String? _normalizeText(String? value) {
+  static String? _normalizeText(String? value, {required int maxBytes}) {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
-    return trimmed;
+    final clamped = clampUtf8Value(trimmed, maxBytes: maxBytes);
+    if (clamped == null || clamped.trim().isEmpty) return null;
+    return clamped;
   }
 }
 
@@ -368,6 +479,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   Stream<DraftSyncUpdate> get updates => _updatesController.stream;
 
   final Map<String, DraftSyncPayload> _cache = {};
+  final SyncRateLimiter _rateLimiter = SyncRateLimiter(draftSyncRateLimit);
 
   @override
   Future<bool> isSupported() async => true;
@@ -695,21 +807,33 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     getAttributes().sendEvent(DraftSyncRetractedEvent(syncId));
   }
 
+  bool _shouldProcessSyncEvent() {
+    if (_rateLimiter.allowEvent()) {
+      return true;
+    }
+    if (_rateLimiter.shouldRefreshNow()) {
+      unawaited(_refreshFromServer());
+    }
+    return false;
+  }
+
   Future<void> _handleNotification(mox.PubSubNotificationEvent event) async {
     if (event.item.node != draftsPubSubNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
+    if (!_shouldProcessSyncEvent()) return;
 
     DraftSyncPayload? parsed;
     if (event.item.payload case final payload?) {
       parsed = DraftSyncPayload.fromXml(payload, itemId: event.item.id);
     } else {
       final pubsub = _pubSub();
-      final host = _selfPepHost();
       final itemId = event.item.id.trim();
       if (itemId.isEmpty) {
         await _refreshFromServer();
         return;
       }
-      if (pubsub != null && host != null && itemId.isNotEmpty) {
+      if (pubsub != null && itemId.isNotEmpty) {
         final itemResult = await pubsub.getItem(host, draftsPubSubNode, itemId);
         if (!itemResult.isType<mox.PubSubError>()) {
           final item = itemResult.get<mox.PubSubItem>();
@@ -725,13 +849,21 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     }
 
     if (parsed == null) return;
+    final maxItems = _resolveFetchLimit();
+    if (_cache.length >= maxItems && !_cache.containsKey(parsed.syncId)) {
+      await _refreshFromServer();
+      return;
+    }
     _cache[parsed.syncId] = parsed;
     _emitUpdate(parsed);
   }
 
   Future<void> _handleRetractions(mox.PubSubItemsRetractedEvent event) async {
     if (event.node != draftsPubSubNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
     if (event.itemIds.isEmpty) return;
+    if (!_shouldProcessSyncEvent()) return;
     for (final itemId in event.itemIds) {
       final normalized = itemId.trim();
       if (normalized.isEmpty) continue;

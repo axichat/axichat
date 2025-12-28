@@ -24,6 +24,7 @@ import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -159,6 +160,9 @@ class FanOutValidationException implements Exception {
 }
 
 class EmailService {
+  static const NotificationPayloadCodec _notificationPayloadCodec =
+      NotificationPayloadCodec();
+
   EmailService({
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
@@ -1644,7 +1648,7 @@ class EmailService {
     final chat = await db.getChatByDeltaChatId(chatId);
     if (chat == null) return;
     await notificationService.dismissMessageNotification(
-      threadKey: chat.jid,
+      threadKey: _notificationThreadKey(chat.jid),
     );
   }
 
@@ -1656,7 +1660,7 @@ class EmailService {
     final chat = await db.getChatByDeltaChatId(chatId);
     if (chat == null) return;
     await notificationService.dismissMessageNotification(
-      threadKey: chat.jid,
+      threadKey: _notificationThreadKey(chat.jid),
     );
   }
 
@@ -1687,6 +1691,14 @@ class EmailService {
     return _DeltaNotificationContext(message: message, chat: chat);
   }
 
+  String _notificationThreadKey(String chatJid) {
+    final normalized = chatJid.trim();
+    if (normalized.isEmpty) {
+      return normalized;
+    }
+    return _notificationPayloadCodec.encodeChatJid(normalized) ?? normalized;
+  }
+
   Future<void> _notifyIncoming({
     required int chatId,
     required int msgId,
@@ -1708,11 +1720,21 @@ class EmailService {
       if (notificationBody == null) {
         return;
       }
+      final previewSetting = context.chat?.notificationPreviewSetting ??
+          NotificationPreviewSetting.inherit;
+      final showPreview = previewSetting
+          .resolvePreview(notificationService.notificationPreviewsEnabled);
+      final notificationTarget = context.chat?.jid ?? context.message.chatJid;
+      final threadKey = _notificationThreadKey(notificationTarget);
+      if (threadKey.isEmpty) {
+        return;
+      }
       await notificationService.sendMessageNotification(
         title: context.chat?.title ?? context.message.senderJid,
         body: notificationBody,
-        payload: context.chat?.jid,
-        threadKey: context.message.chatJid,
+        payload: threadKey,
+        threadKey: threadKey,
+        showPreviewOverride: showPreview,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -1744,11 +1766,21 @@ class EmailService {
       final body = normalizedReaction == null || normalizedReaction.isEmpty
           ? _reactionNotificationFallback
           : '$_reactionNotificationPrefix$normalizedReaction';
+      final previewSetting = context.chat?.notificationPreviewSetting ??
+          NotificationPreviewSetting.inherit;
+      final showPreview = previewSetting
+          .resolvePreview(notificationService.notificationPreviewsEnabled);
+      final notificationTarget = context.chat?.jid ?? context.message.chatJid;
+      final threadKey = _notificationThreadKey(notificationTarget);
+      if (threadKey.isEmpty) {
+        return;
+      }
       await notificationService.sendMessageNotification(
         title: context.chat?.title ?? context.message.senderJid,
         body: body,
-        payload: context.chat?.jid,
-        threadKey: context.message.chatJid,
+        payload: threadKey,
+        threadKey: threadKey,
+        showPreviewOverride: showPreview,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -1780,11 +1812,21 @@ class EmailService {
       final body = normalizedText == null || normalizedText.isEmpty
           ? _webxdcNotificationFallback
           : normalizedText;
+      final previewSetting = context.chat?.notificationPreviewSetting ??
+          NotificationPreviewSetting.inherit;
+      final showPreview = previewSetting
+          .resolvePreview(notificationService.notificationPreviewsEnabled);
+      final notificationTarget = context.chat?.jid ?? context.message.chatJid;
+      final threadKey = _notificationThreadKey(notificationTarget);
+      if (threadKey.isEmpty) {
+        return;
+      }
       await notificationService.sendMessageNotification(
         title: context.chat?.title ?? context.message.senderJid,
         body: body,
-        payload: context.chat?.jid,
-        threadKey: context.message.chatJid,
+        payload: threadKey,
+        threadKey: threadKey,
+        showPreviewOverride: showPreview,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
