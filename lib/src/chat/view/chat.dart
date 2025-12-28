@@ -7333,10 +7333,27 @@ class _PinnedMessageTile extends StatelessWidget {
     final bool hideTaskText = taskShareText != null &&
         taskShareText.isNotEmpty &&
         taskShareText == messageText;
+    final CalendarFragment? calendarFragment = message?.calendarFragment;
+    final CalendarCriticalPathFragment? criticalPathFragment =
+        calendarFragment?.maybeMap(
+      criticalPath: (value) => value,
+      orElse: () => null,
+    );
+    final bool hasCriticalPath = criticalPathFragment != null;
+    final String? criticalPathShareText = hasCriticalPath
+        ? const CalendarFragmentFormatter().describe(calendarFragment!).trim()
+        : null;
+    final bool hideCriticalPathText = criticalPathShareText != null &&
+        criticalPathShareText.isNotEmpty &&
+        criticalPathShareText == messageText;
     final attachmentIds = item.attachmentMetadataIds;
     final hasAttachments = message != null && attachmentIds.isNotEmpty;
-    final showMessageText = hasMessageText && !hideTaskText;
-    final showMissing = !showMessageText && !hasAttachments && !hasCalendarTask;
+    final showMessageText =
+        hasMessageText && !hideTaskText && !hideCriticalPathText;
+    final showMissing = !showMessageText &&
+        !hasAttachments &&
+        !hasCalendarTask &&
+        !hasCriticalPath;
     final messageStyle = Theme.of(context)
         .textTheme
         .bodyMedium
@@ -7408,6 +7425,16 @@ class _PinnedMessageTile extends StatelessWidget {
                 fragment: CalendarFragment.task(task: calendarTask),
                 footerDetails: _emptyInlineSpans,
               ),
+      );
+    }
+    if (hasCriticalPath) {
+      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      contentChildren.add(
+        ChatCalendarCriticalPathCard(
+          path: criticalPathFragment!.path,
+          tasks: criticalPathFragment.tasks,
+          footerDetails: _emptyInlineSpans,
+        ),
       );
     }
     if (hasAttachments) {
