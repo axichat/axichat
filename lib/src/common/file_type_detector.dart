@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 
@@ -256,8 +257,11 @@ String? _normalizeExtension(String? fileName) {
 bool _isHighRiskFileName(String? fileName) {
   final trimmed = fileName?.trim();
   if (trimmed == null || trimmed.isEmpty) return false;
-  final baseName = p.basename(trimmed).toLowerCase();
-  return baseName == _tnefFileName;
+  final baseName = p.basename(trimmed);
+  if (containsUnicodeControlCharacters(baseName)) {
+    return true;
+  }
+  return baseName.toLowerCase() == _tnefFileName;
 }
 
 bool _isHighRiskMimeType(String? mimeType) {

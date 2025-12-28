@@ -1819,8 +1819,17 @@ Future<void> _openAttachment(
     }
     return;
   }
-  final trimmed = url?.trim();
-  final uri = trimmed == null ? null : Uri.tryParse(trimmed);
+  final rawUrl = url?.trim();
+  if (rawUrl == null || rawUrl.isEmpty) {
+    _showToast(
+      l10n,
+      toaster,
+      l10n.chatAttachmentInvalidLink,
+      destructive: true,
+    );
+    return;
+  }
+  final uri = Uri.tryParse(rawUrl);
   if (uri == null) {
     _showToast(
       l10n,
@@ -1830,7 +1839,8 @@ Future<void> _openAttachment(
     );
     return;
   }
-  if (!isSafeAttachmentUri(uri)) {
+  final report = assessLinkSafety(uri, kind: LinkSafetyKind.attachment);
+  if (!report.allowed || report.hasWarnings) {
     _showToast(
       l10n,
       toaster,
@@ -1839,9 +1849,10 @@ Future<void> _openAttachment(
     );
     return;
   }
-  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  final launched =
+      await launchUrl(report.uri, mode: LaunchMode.externalApplication);
   if (!launched) {
-    final target = uri.host.isEmpty ? uri.toString() : uri.host;
+    final target = formatLinkHostLabel(report);
     _showToast(
       l10n,
       toaster,

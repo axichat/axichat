@@ -5,6 +5,11 @@ void main() {
   const int safeLinkMaxLength = 2048;
   const int safeAttachmentMaxLength = 2048;
   const String httpsBase = 'https://example.com/';
+  const String bidiOverride = '\u202e';
+  const String zeroWidthSpace = '\u200b';
+  const String punycodeHost = 'https://xn--example.com';
+  const String bidiTestUrl = '$httpsBase${bidiOverride}txt';
+  const String zeroWidthTestUrl = '$httpsBase$zeroWidthSpace';
 
   group('isSafeLinkUri', () {
     test('allows https links without credentials', () {
@@ -58,6 +63,33 @@ void main() {
       const int overflowLength = safeAttachmentMaxLength - httpsBase.length + 1;
       final longPath = List.filled(overflowLength, 'a').join();
       expect(isSafeAttachmentUri(Uri.parse('$httpsBase$longPath')), isFalse);
+    });
+  });
+
+  group('assessLinkSafety', () {
+    test('flags bidi control characters for warnings', () {
+      final report = assessLinkSafety(
+        Uri.parse(bidiTestUrl),
+        kind: LinkSafetyKind.standard,
+      );
+      expect(report.hasWarnings, isTrue);
+      expect(report.allowed, isTrue);
+    });
+
+    test('flags zero-width characters for warnings', () {
+      final report = assessLinkSafety(
+        Uri.parse(zeroWidthTestUrl),
+        kind: LinkSafetyKind.standard,
+      );
+      expect(report.hasWarnings, isTrue);
+    });
+
+    test('flags punycode hosts for warnings', () {
+      final report = assessLinkSafety(
+        Uri.parse(punycodeHost),
+        kind: LinkSafetyKind.standard,
+      );
+      expect(report.hasWarnings, isTrue);
     });
   });
 }

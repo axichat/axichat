@@ -27,6 +27,10 @@ const String _calendarSyncMamBypassLog =
     'Allowing calendar sync message without sender role (MAM history).';
 const String _calendarSyncReadOnlyRejectedLog =
     'Rejected calendar sync message targeting read-only task.';
+const String _carbonOriginRejectedLog =
+    'Rejected carbon message with unexpected sender.';
+const String _mamOriginRejectedLog =
+    'Rejected archive message without local account routing.';
 const String _pinPubSubNamespace = 'urn:axi:pins';
 const String _pinPubSubNodePrefix = 'urn:axi:pins:';
 const String _pinTag = 'pin';
@@ -181,6 +185,36 @@ bool _isOversizedMessage(mox.MessageEvent event, Logger log) {
     return true;
   }
   return false;
+}
+
+String? _normalizeBareJidValue(String? jid) {
+  final trimmed = jid?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  try {
+    return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
+  } on Exception {
+    return trimmed.toLowerCase();
+  }
+}
+
+bool _hasInvalidArchiveOrigin(mox.MessageEvent event, String? accountJid) {
+  final normalizedAccount = _normalizeBareJidValue(accountJid);
+  if (normalizedAccount == null) return false;
+  if (event.isCarbon) {
+    final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
+    if (fromBare == null || fromBare != normalizedAccount) {
+      return true;
+    }
+  }
+  if (!event.isFromMAM) return false;
+  final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
+  final toBare = _normalizeBareJidValue(event.to.toBare().toString());
+  final bool isGroupChat = event.type == _messageTypeGroupchat;
+  if (isGroupChat) {
+    return toBare == null || toBare != normalizedAccount;
+  }
+  if (fromBare == null && toBare == null) return true;
+  return fromBare != normalizedAccount && toBare != normalizedAccount;
 }
 
 String? _normalizePinJid(String raw) {
@@ -1500,6 +1534,15 @@ mixin MessageService
       ..registerHandler<mox.MessageEvent>((event) async {
         if (await _handleError(event)) return;
         if (_isOversizedMessage(event, _log)) return;
+        if (_hasInvalidArchiveOrigin(event, myJid)) {
+          if (event.isCarbon) {
+            _log.warning(_carbonOriginRejectedLog);
+          }
+          if (event.isFromMAM) {
+            _log.warning(_mamOriginRejectedLog);
+          }
+          return;
+        }
         _trackMamGlobalAnchor(event);
 
         final reactionOnly = await _handleReactions(event);
@@ -3023,7 +3066,14 @@ mixin MessageService
     required String stanzaID,
     required String emoji,
   }) async {
-    if (emoji.isEmpty) return;
+    final normalizedEmoji = emoji.trim();
+    if (normalizedEmoji.isEmpty) return;
+    if (!isWithinUtf8ByteLimit(
+      normalizedEmoji,
+      maxBytes: maxReactionEmojiBytes,
+    )) {
+      return;
+    }
     final sender = myJid;
     final fromJid = _myJid;
     if (sender == null || fromJid == null) return;
@@ -3038,17 +3088,18 @@ mixin MessageService
       ),
     );
     final emojis = existing.map((reaction) => reaction.emoji).toList();
-    if (emojis.contains(emoji)) {
-      emojis.remove(emoji);
+    if (emojis.contains(normalizedEmoji)) {
+      emojis.remove(normalizedEmoji);
     } else {
-      emojis.add(emoji);
+      emojis.add(normalizedEmoji);
     }
+    final sanitizedEmojis = emojis.clampReactionEmojis();
     final reactionEvent = mox.MessageEvent(
       fromJid,
       mox.JID.fromString(message.chatJid),
       false,
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageReactionsData(message.stanzaID, emojis),
+        mox.MessageReactionsData(message.stanzaID, sanitizedEmojis),
       ]),
       id: _connection.generateId(),
     );
@@ -3069,7 +3120,7 @@ mixin MessageService
       (db) => db.replaceReactions(
         messageId: message.stanzaID,
         senderJid: sender,
-        emojis: emojis,
+        emojis: sanitizedEmojis,
       ),
     );
   }
@@ -3941,6 +3992,11 @@ mixin MessageService
   Future<bool> _handleReactions(mox.MessageEvent event) async {
     final reactions = event.extensions.get<mox.MessageReactionsData>();
     if (reactions == null) return false;
+    final sanitizedEmojis = reactions.emojis.clampReactionEmojis();
+    if (reactions.emojis.isNotEmpty && sanitizedEmojis.isEmpty) {
+      _log.fine('Dropping reactions with no valid emoji payload');
+      return !event.displayable;
+    }
     return await _dbOpReturning<XmppDatabase, bool>(
       (db) async {
         final message = await db.getMessageByStanzaID(reactions.messageId);
@@ -3957,7 +4013,7 @@ mixin MessageService
         await db.replaceReactions(
           messageId: message.stanzaID,
           senderJid: senderJid,
-          emojis: reactions.emojis,
+          emojis: sanitizedEmojis,
         );
         return !event.displayable;
       },

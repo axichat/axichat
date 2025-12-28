@@ -549,6 +549,12 @@ abstract class AppLocalizations {
   /// **'You are about to open:\n{url}\n\nOnly tap OK if you trust the site (host: {host}).'**
   String chatOpenLinkMessage(Object url, Object host);
 
+  /// No description provided for @chatOpenLinkWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You are about to open:\n{url}\n\nThis link contains unusual or invisible characters. Verify the address carefully (host: {host}).'**
+  String chatOpenLinkWarningMessage(Object url, Object host);
+
   /// No description provided for @chatOpenLinkConfirm.
   ///
   /// In en, this message translates to:

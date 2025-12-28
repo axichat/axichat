@@ -255,6 +255,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String chatOpenLinkWarningMessage(Object url, Object host) {
+    return '你将要打开：\n$url\n\n该链接包含异常或不可见字符。请仔细核对地址（主机：$host）。';
+  }
+
+  @override
   String get chatOpenLinkConfirm => '打开链接';
 
   @override
@@ -3283,6 +3288,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String chatOpenLinkMessage(Object url, Object host) {
     return '你將要開啟：\n$url\n\n只有在信任該網站時才按確定（主機：$host）。';
+  }
+
+  @override
+  String chatOpenLinkWarningMessage(Object url, Object host) {
+    return '你將要開啟：\n$url\n\n該連結包含異常或不可見字元。請仔細核對地址（主機：$host）。';
   }
 
   @override
