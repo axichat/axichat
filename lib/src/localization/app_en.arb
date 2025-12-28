@@ -793,6 +793,10 @@
     }
   },
   "chatAttachmentDownload": "Download attachment",
+  "chatAttachmentExportTitle": "Save attachment?",
+  "chatAttachmentExportMessage": "This will copy the attachment to shared storage. Continue?",
+  "chatAttachmentExportConfirm": "Save",
+  "chatAttachmentExportCancel": "Cancel",
   "chatAttachmentUnavailableDevice": "Attachment is no longer available on this device",
   "chatAttachmentInvalidLink": "Invalid attachment link",
   "chatAttachmentOpenFailed": "Could not open {target}",

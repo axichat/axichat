@@ -722,6 +722,10 @@
     }
   },
   "chatAttachmentDownload": "下载附件",
+  "chatAttachmentExportTitle": "保存附件？",
+  "chatAttachmentExportMessage": "这会把附件复制到共享存储。继续？",
+  "chatAttachmentExportConfirm": "保存",
+  "chatAttachmentExportCancel": "取消",
   "chatAttachmentUnavailableDevice": "此设备上已无法获取该附件",
   "chatAttachmentInvalidLink": "无效的附件链接",
   "chatAttachmentOpenFailed": "无法打开 {target}",

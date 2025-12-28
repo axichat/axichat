@@ -1889,6 +1889,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatAttachmentDownload => 'Télécharger la pièce jointe';
 
   @override
+  String get chatAttachmentExportTitle => 'Enregistrer la pièce jointe ?';
+
+  @override
+  String get chatAttachmentExportMessage =>
+      'Cela copiera la pièce jointe dans le stockage partagé. Continuer ?';
+
+  @override
+  String get chatAttachmentExportConfirm => 'Enregistrer';
+
+  @override
+  String get chatAttachmentExportCancel => 'Annuler';
+
+  @override
   String get chatAttachmentUnavailableDevice =>
       'La pièce jointe n’est plus disponible sur cet appareil';
 

@@ -2598,6 +2598,16 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   static final _log = Logger('XmppSocketWrapper');
   static const _socketClosedWithErrorLog = 'Socket closed with error.';
+  static const String _xmlDoctypeToken = '<!doctype';
+  static const String _xmlEntityToken = '<!entity';
+  static const int _xmlTokenCarryLength =
+      _xmlDoctypeToken.length > _xmlEntityToken.length
+          ? _xmlDoctypeToken.length - 1
+          : _xmlEntityToken.length - 1;
+  static const String _xmlForbiddenLog =
+      'Blocked XML containing DTD/entity declaration.';
+  static const String _xmlForbiddenError =
+      'XML DTD/entity declarations are not supported.';
 
   final bool _logIncomingOutgoing;
   final StreamController<String> _dataStream = StreamController.broadcast();
@@ -2608,6 +2618,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
   StreamSubscription<dynamic>? _socketSubscription;
   final Set<Socket> _expectedClosures = {};
   bool _secure = false;
+  String _xmlTokenCarry = '';
 
   @override
   bool isSecure() => _secure;
@@ -2688,6 +2699,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       _log.severe('Failed to setup streams as _socket is null');
       return;
     }
+    _xmlTokenCarry = '';
 
     final StreamSubscription<dynamic>? priorSubscription = _socketSubscription;
     if (priorSubscription != null) {
@@ -2697,6 +2709,16 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     _socketSubscription = socket.listen(
       (List<int> event) {
         final data = utf8.decode(event);
+        if (_containsForbiddenXml(data)) {
+          _log.warning(_xmlForbiddenLog);
+          _eventStream.add(
+            mox.XmppSocketErrorEvent(
+              const FormatException(_xmlForbiddenError),
+            ),
+          );
+          _dropSocket(expectClosure: false);
+          return;
+        }
         if (_logIncomingOutgoing) {
           _log.finest('<== $data');
         }
@@ -2724,6 +2746,20 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
         mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
       );
     });
+  }
+
+  bool _containsForbiddenXml(String data) {
+    final combined = (_xmlTokenCarry + data).toLowerCase();
+    final hasForbidden = combined.contains(_xmlDoctypeToken) ||
+        combined.contains(_xmlEntityToken);
+    if (combined.length <= _xmlTokenCarryLength) {
+      _xmlTokenCarry = combined;
+    } else {
+      _xmlTokenCarry = combined.substring(
+        combined.length - _xmlTokenCarryLength,
+      );
+    }
+    return hasForbidden;
   }
 
   @override

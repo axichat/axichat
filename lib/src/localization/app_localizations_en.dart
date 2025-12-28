@@ -1854,6 +1854,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatAttachmentDownload => 'Download attachment';
 
   @override
+  String get chatAttachmentExportTitle => 'Save attachment?';
+
+  @override
+  String get chatAttachmentExportMessage =>
+      'This will copy the attachment to shared storage. Continue?';
+
+  @override
+  String get chatAttachmentExportConfirm => 'Save';
+
+  @override
+  String get chatAttachmentExportCancel => 'Cancel';
+
+  @override
   String get chatAttachmentUnavailableDevice =>
       'Attachment is no longer available on this device';
 
