@@ -43,7 +43,8 @@ const _connectivityConnectingMin = 2000;
 const _coreDraftMessageId = 0;
 const int _deltaEventMessageUnset = 0;
 const _defaultImapPort = '993';
-const _defaultSecurityMode = 'ssl';
+const String _securityModeSsl = 'ssl';
+const String _securityModeStartTls = 'starttls';
 const _emailDownloadLimitKey = 'download_limit';
 const _emailDownloadLimitDisabledValue = '0';
 const _unknownEmailPassword = '';
@@ -2418,20 +2419,35 @@ class EmailService {
       return configValues;
     }
     final normalizedAddress = address.trim();
+    final mailPortValue = int.parse(_defaultImapPort);
+    final sendPortValue = config.smtpPort > _portUnsetValue
+        ? config.smtpPort
+        : EndpointConfig.defaultSmtpPort;
+    final mailSecurityMode = _securityModeForPort(
+      port: mailPortValue,
+      implicitTlsPort: mailPortValue,
+    );
+    final sendSecurityMode = _securityModeForPort(
+      port: sendPortValue,
+      implicitTlsPort: EndpointConfig.defaultSmtpPort,
+    );
     configValues
       ..[_mailServerConfigKey] = smtpHost
       ..[_mailPortConfigKey] = _defaultImapPort
-      ..[_mailSecurityConfigKey] = _defaultSecurityMode
+      ..[_mailSecurityConfigKey] = mailSecurityMode
       ..[_mailUserConfigKey] = normalizedAddress
       ..[_sendServerConfigKey] = smtpHost
-      ..[_sendPortConfigKey] = (config.smtpPort > _portUnsetValue
-              ? config.smtpPort
-              : EndpointConfig.defaultSmtpPort)
-          .toString()
-      ..[_sendSecurityConfigKey] = _defaultSecurityMode
+      ..[_sendPortConfigKey] = sendPortValue.toString()
+      ..[_sendSecurityConfigKey] = sendSecurityMode
       ..[_sendUserConfigKey] = normalizedAddress;
     return configValues;
   }
+
+  static String _securityModeForPort({
+    required int port,
+    required int implicitTlsPort,
+  }) =>
+      port == implicitTlsPort ? _securityModeSsl : _securityModeStartTls;
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)
     ..sort((a, b) {
