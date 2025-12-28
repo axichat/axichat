@@ -1126,6 +1126,7 @@ mixin MessageService
     manager
       ..registerHandler<mox.MessageEvent>((event) async {
         if (await _handleError(event)) return;
+        if (_isOversizedMessage(event)) return;
         _trackMamGlobalAnchor(event);
 
         final reactionOnly = await _handleReactions(event);
@@ -3548,8 +3549,15 @@ mixin MessageService
     FileMetadataData? metadata,
   }) async {
     // Check if this is a calendar sync message by looking at the message body
-    final messageText = clampMessageText(event.text) ?? '';
+    final messageText = event.text;
     if (messageText.isEmpty) return false;
+    if (!isWithinUtf8ByteLimit(
+      messageText,
+      maxBytes: CalendarSyncMessage.maxEnvelopeLength,
+    )) {
+      _log.warning('Dropped calendar sync message exceeding size limits');
+      return true;
+    }
 
     final senderJid = event.from.toBare().toString();
     final selfJid = myJid;

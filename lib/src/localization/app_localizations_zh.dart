@@ -622,6 +622,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentTooltip => '附件';
 
   @override
+  String get chatPinnedMessagesTooltip => 'Pinned messages';
+
+  @override
+  String get chatPinnedMessagesTitle => 'Pinned messages';
+
+  @override
+  String get chatPinMessage => 'Pin message';
+
+  @override
+  String get chatUnpinMessage => 'Unpin message';
+
+  @override
+  String get chatPinnedEmptyState => 'No pinned messages yet.';
+
+  @override
+  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
+
+  @override
   String get chatSendMessageTooltip => '发送消息';
 
   @override
@@ -1767,8 +1785,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
-    return 'This attachment says it is $declared, but the file looks like '
-        '$detected. Opening it could be unsafe. Continue?';
+    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
   }
 
   @override
@@ -1779,8 +1796,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatAttachmentHighRiskMessage =>
-      'This file type can be dangerous to open. We recommend saving it and '
-      'scanning it before opening. Continue?';
+      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';
@@ -3530,6 +3546,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatAttachmentTooltip => '附件';
 
   @override
+  String get chatPinnedMessagesTooltip => 'Pinned messages';
+
+  @override
+  String get chatPinnedMessagesTitle => 'Pinned messages';
+
+  @override
+  String get chatPinMessage => 'Pin message';
+
+  @override
+  String get chatUnpinMessage => 'Unpin message';
+
+  @override
+  String get chatPinnedEmptyState => 'No pinned messages yet.';
+
+  @override
+  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
+
+  @override
   String get chatSendMessageTooltip => '傳送訊息';
 
   @override
@@ -4675,8 +4709,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
-    return 'This attachment says it is $declared, but the file looks like '
-        '$detected. Opening it could be unsafe. Continue?';
+    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
   }
 
   @override
@@ -4687,8 +4720,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatAttachmentHighRiskMessage =>
-      'This file type can be dangerous to open. We recommend saving it and '
-      'scanning it before opening. Continue?';
+      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';

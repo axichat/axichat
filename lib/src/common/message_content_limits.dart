@@ -14,6 +14,17 @@ String? clampMessageText(String? value) =>
 String? clampMessageHtml(String? value) =>
     _clampUtf8(value, maxBytes: _maxMessageHtmlBytes);
 
+bool isMessageTextWithinLimit(String? value) =>
+    _isWithinLimit(value, maxBytes: _maxMessageTextBytes);
+
+bool isMessageHtmlWithinLimit(String? value) =>
+    _isWithinLimit(value, maxBytes: _maxMessageHtmlBytes);
+
+bool isWithinUtf8ByteLimit(String? value, {required int maxBytes}) =>
+    _isWithinLimit(value, maxBytes: maxBytes);
+
+int utf8ByteLength(String value) => _utf8Length(value);
+
 String? _clampUtf8(String? value, {required int maxBytes}) {
   if (value == null) return null;
   if (value.isEmpty) return value;
@@ -21,13 +32,21 @@ String? _clampUtf8(String? value, {required int maxBytes}) {
   return _truncateUtf8(value, maxBytes);
 }
 
+bool _isWithinLimit(String? value, {required int maxBytes}) {
+  if (value == null || value.isEmpty) return true;
+  return _fitsUtf8Limit(value, maxBytes);
+}
+
 bool _fitsUtf8Limit(String value, int maxBytes) {
+  return _utf8Length(value) <= maxBytes;
+}
+
+int _utf8Length(String value) {
   var count = 0;
   for (final rune in value.runes) {
     count += _utf8ByteLength(rune);
-    if (count > maxBytes) return false;
   }
-  return true;
+  return count;
 }
 
 String _truncateUtf8(String value, int maxBytes) {
