@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/media_decode_safety.dart';
+import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -72,6 +72,15 @@ const int _attachmentVideoMinBytes = 1;
 const double _attachmentVideoMinDimension = 1.0;
 const Duration _attachmentImageDecodeTimeout = Duration(seconds: 2);
 const Duration _attachmentVideoInitTimeout = Duration(seconds: 3);
+const ImageDecodeLimits _attachmentImageDecodeLimits = ImageDecodeLimits(
+  maxBytes: _attachmentImagePreviewMaxBytes,
+  maxPixels: _attachmentImageMaxPixels,
+  maxFrames: _attachmentImageMaxFrames,
+  minDimension: _attachmentImageMinDimension,
+  decodeTimeout: _attachmentImageDecodeTimeout,
+  minBytes: _attachmentImageMinBytes,
+  minFrames: _attachmentImageMinFrameCount,
+);
 const int _attachmentMillisecondsPerSecond = 1000;
 const int _attachmentMacOsQuarantineRadix = 16;
 const String _attachmentMacOsQuarantineAgent = appDisplayName;
@@ -1086,59 +1095,7 @@ Size _fitWithinBounds({
 }
 
 Future<bool> _isImagePreviewAllowed(File file) async {
-  try {
-    final length = await file.length();
-    if (length < _attachmentImageMinBytes) {
-      return false;
-    }
-    if (length > _attachmentImagePreviewMaxBytes) {
-      return false;
-    }
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty || bytes.length > _attachmentImagePreviewMaxBytes) {
-      return false;
-    }
-    return _passesImageDecodeSafety(bytes);
-  } on Exception {
-    return false;
-  }
-}
-
-Future<bool> _passesImageDecodeSafety(Uint8List bytes) async {
-  try {
-    final codec = await ui
-        .instantiateImageCodec(bytes)
-        .timeout(_attachmentImageDecodeTimeout);
-    try {
-      final frameCount = codec.frameCount;
-      if (frameCount < _attachmentImageMinFrameCount ||
-          frameCount > _attachmentImageMaxFrames) {
-        return false;
-      }
-      final frame =
-          await codec.getNextFrame().timeout(_attachmentImageDecodeTimeout);
-      final image = frame.image;
-      try {
-        final width = image.width;
-        final height = image.height;
-        if (width < _attachmentImageMinDimension ||
-            height < _attachmentImageMinDimension) {
-          return false;
-        }
-        final pixelCount = width * height;
-        if (pixelCount > _attachmentImageMaxPixels) {
-          return false;
-        }
-      } finally {
-        image.dispose();
-      }
-    } finally {
-      codec.dispose();
-    }
-    return true;
-  } on Exception {
-    return false;
-  }
+  return isSafeImageFile(file, _attachmentImageDecodeLimits);
 }
 
 class _FileAttachment extends StatefulWidget {
@@ -1817,6 +1774,15 @@ Future<void> _openAttachment(
   final trimmed = url?.trim();
   final uri = trimmed == null ? null : Uri.tryParse(trimmed);
   if (uri == null) {
+    _showToast(
+      l10n,
+      toaster,
+      l10n.chatAttachmentInvalidLink,
+      destructive: true,
+    );
+    return;
+  }
+  if (!isSafeAttachmentUri(uri)) {
     _showToast(
       l10n,
       toaster,

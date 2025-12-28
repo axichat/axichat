@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/media_decode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -11,6 +12,23 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum AxiAvatarShape { circle, squircle }
+
+const int _avatarMaxBytes = 512 * 1024;
+const int _avatarMaxPixels = 2 * 1024 * 1024;
+const int _avatarMaxFrames = 10;
+const int _avatarMinBytes = 1;
+const int _avatarMinFrames = 1;
+const int _avatarMinDimension = 1;
+const Duration _avatarDecodeTimeout = Duration(milliseconds: 1500);
+const ImageDecodeLimits _avatarDecodeLimits = ImageDecodeLimits(
+  maxBytes: _avatarMaxBytes,
+  maxPixels: _avatarMaxPixels,
+  maxFrames: _avatarMaxFrames,
+  minDimension: _avatarMinDimension,
+  decodeTimeout: _avatarDecodeTimeout,
+  minBytes: _avatarMinBytes,
+  minFrames: _avatarMinFrames,
+);
 
 class AxiAvatar extends StatefulWidget {
   const AxiAvatar({
@@ -63,6 +81,12 @@ class _AxiAvatarState extends State<AxiAvatar> {
     return jid;
   }
 
+  Future<Uint8List?> _sanitizeAvatarBytes(Uint8List? bytes) async {
+    if (bytes == null || bytes.isEmpty) return null;
+    final safe = await isSafeImageBytes(bytes, _avatarDecodeLimits);
+    return safe ? bytes : null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -93,8 +117,18 @@ class _AxiAvatarState extends State<AxiAvatar> {
             ? widget.avatarBytes
             : null;
     if (providedBytes != null) {
+      final safeBytes = await _sanitizeAvatarBytes(providedBytes);
+      if (!mounted) return;
+      if (safeBytes == null) {
+        setState(() {
+          _resolvedAvatarBytes = null;
+          _resolvedPath = null;
+          _loadingPath = null;
+        });
+        return;
+      }
       setState(() {
-        _resolvedAvatarBytes = providedBytes;
+        _resolvedAvatarBytes = safeBytes;
         _resolvedPath = widget.avatarPath?.trim();
         _loadingPath = _resolvedPath;
       });
@@ -114,8 +148,20 @@ class _AxiAvatarState extends State<AxiAvatar> {
     final xmpp = context.read<XmppService>();
     final cached = xmpp.cachedAvatarBytes(path);
     if (cached != null && cached.isNotEmpty) {
+      final safeBytes = await _sanitizeAvatarBytes(cached);
+      if (!mounted) return;
+      if (safeBytes == null) {
+        setState(() {
+          if (clearStaleBytes) {
+            _resolvedAvatarBytes = null;
+            _resolvedPath = null;
+          }
+          _loadingPath = null;
+        });
+        return;
+      }
       setState(() {
-        _resolvedAvatarBytes = cached;
+        _resolvedAvatarBytes = safeBytes;
         _resolvedPath = path;
         _loadingPath = path;
       });
@@ -138,15 +184,19 @@ class _AxiAvatarState extends State<AxiAvatar> {
       if (!mounted || _loadingPath != path) {
         return;
       }
+      final safeBytes = await _sanitizeAvatarBytes(bytes);
+      if (!mounted || _loadingPath != path) {
+        return;
+      }
       setState(() {
-        if (bytes != null && bytes.isNotEmpty) {
-          _resolvedAvatarBytes = bytes;
+        if (safeBytes != null) {
+          _resolvedAvatarBytes = safeBytes;
           _resolvedPath = path;
         } else if (clearStaleBytes) {
           _resolvedAvatarBytes = null;
           _resolvedPath = null;
         }
-        if (bytes == null || bytes.isEmpty) {
+        if (safeBytes == null) {
           _loadingPath = null;
         }
       });

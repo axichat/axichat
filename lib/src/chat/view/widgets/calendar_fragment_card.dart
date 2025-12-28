@@ -1,10 +1,12 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:flutter/material.dart';
 
@@ -16,10 +18,12 @@ const double _fragmentLabelSpacing = 2.0;
 const double _fragmentInfoSpacing = 4.0;
 const double _fragmentChecklistSpacing = 4.0;
 const double _fragmentChecklistIndent = 12.0;
+const double _fragmentCriticalPathIndent = 14.0;
 const double _fragmentLabelLetterSpacing = 1.1;
 const int _fragmentDescriptionMaxLines = 3;
 const int _fragmentChecklistMaxLines = 4;
 const int _fragmentChecklistPreviewLimit = 4;
+const int _fragmentCriticalPathPreviewLimit = 4;
 
 const EdgeInsets _fragmentCardPadding =
     EdgeInsets.symmetric(horizontal: 12, vertical: 10);
@@ -27,21 +31,30 @@ const EdgeInsets _fragmentFooterPadding = EdgeInsets.only(top: 4);
 const EdgeInsets _fragmentChecklistBulletPadding = EdgeInsets.only(top: 2);
 const EdgeInsets _fragmentChecklistMorePadding =
     EdgeInsets.only(left: _fragmentChecklistIndent);
+const EdgeInsets _fragmentCriticalPathMorePadding =
+    EdgeInsets.only(left: _fragmentCriticalPathIndent);
 
 const String _fragmentLabelTask = 'Task';
 const String _fragmentLabelChecklist = 'Checklist';
 const String _fragmentLabelReminder = 'Reminder';
 const String _fragmentLabelDayEvent = 'Day event';
+const String _fragmentLabelCriticalPath = 'Critical path';
 const String _fragmentLabelFreeBusy = 'Free/busy';
 const String _fragmentLabelAvailability = 'Availability';
 
 const String _fragmentFallbackTitle = 'Untitled';
 const String _fragmentChecklistBullet = '- ';
+const String _fragmentCriticalPathBullet = '• ';
 const String _fragmentChecklistMorePrefix = 'and ';
 const String _fragmentChecklistMoreSuffix = ' more';
+const String _fragmentCriticalPathMorePrefix = 'and ';
+const String _fragmentCriticalPathMoreSuffix = ' more';
 const String _fragmentReminderEmptyLabel = 'No reminders';
 const String _fragmentScheduleLabel = 'Scheduled';
 const String _fragmentDueLabel = 'Due';
+const String _fragmentCriticalPathProgressLabel = 'Progress';
+const String _fragmentCriticalPathEmptyLabel = 'No tasks yet';
+const String _fragmentCriticalPathProgressSeparator = ' / ';
 const String _fragmentRangeSeparator = ' - ';
 const String _fragmentReminderSeparator = ', ';
 const String _fragmentReminderStartLabel = 'Start';
@@ -56,16 +69,18 @@ class CalendarFragmentCard extends StatelessWidget {
     super.key,
     required this.fragment,
     this.footerDetails = _emptyInlineSpans,
+    this.onTap,
   });
 
   final CalendarFragment fragment;
   final List<InlineSpan> footerDetails;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final accentColor = colors.primary;
-    return DecoratedBox(
+    final card = DecoratedBox(
       decoration: ShapeDecoration(
         color: colors.card,
         shape: ContinuousRectangleBorder(
@@ -98,6 +113,17 @@ class CalendarFragmentCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+    if (onTap == null) {
+      return card;
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(_fragmentCardRadius),
+        child: card,
       ),
     );
   }
@@ -134,6 +160,10 @@ class _CalendarFragmentBody extends StatelessWidget {
       checklist: (value) => _ChecklistFragmentBody(checklist: value.checklist),
       reminder: (value) => _ReminderFragmentBody(reminders: value.reminders),
       dayEvent: (value) => _DayEventFragmentBody(event: value.event),
+      criticalPath: (value) => _CriticalPathFragmentBody(
+        path: value.path,
+        tasks: value.tasks,
+      ),
       freeBusy: (value) => _FreeBusyFragmentBody(interval: value.interval),
       availability: (value) => _AvailabilityFragmentBody(window: value.window),
     );
@@ -322,6 +352,157 @@ class _ChecklistItemRow extends StatelessWidget {
         Expanded(
           child: Text(
             resolvedLabel,
+            style: textStyle,
+            maxLines: _fragmentChecklistMaxLines,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CriticalPathFragmentBody extends StatelessWidget {
+  const _CriticalPathFragmentBody({
+    required this.path,
+    required this.tasks,
+  });
+
+  final CalendarCriticalPath path;
+  final List<CalendarTask> tasks;
+
+  @override
+  Widget build(BuildContext context) {
+    final String title =
+        path.name.trim().isNotEmpty ? path.name.trim() : _fragmentFallbackTitle;
+    final List<CalendarTask> orderedTasks = _orderedTasks();
+    final int total = orderedTasks.length;
+    final int completed = orderedTasks.where((task) => task.isCompleted).length;
+    final TextStyle emptyStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: _fragmentContentSpacing,
+      children: [
+        const _FragmentLabel(text: _fragmentLabelCriticalPath),
+        Text(
+          title,
+          style: context.textTheme.large.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (total > 0)
+          _FragmentInfoLine(
+            label: _fragmentCriticalPathProgressLabel,
+            value: '$completed$_fragmentCriticalPathProgressSeparator$total',
+          )
+        else
+          Text(
+            _fragmentCriticalPathEmptyLabel,
+            style: emptyStyle,
+          ),
+        if (total > 0)
+          _CriticalPathTaskList(
+            tasks: orderedTasks,
+          ),
+      ],
+    );
+  }
+
+  List<CalendarTask> _orderedTasks() {
+    if (tasks.isEmpty) {
+      return const <CalendarTask>[];
+    }
+    final Map<String, CalendarTask> taskById = <String, CalendarTask>{
+      for (final task in tasks) task.id: task,
+    };
+    final List<CalendarTask> ordered = <CalendarTask>[];
+    for (final String id in path.taskIds) {
+      final String baseId = baseTaskIdFrom(id);
+      final CalendarTask? task = taskById[baseId] ?? taskById[id];
+      if (task != null) {
+        ordered.add(task);
+      }
+    }
+    if (ordered.isNotEmpty) {
+      return ordered;
+    }
+    return tasks;
+  }
+}
+
+class _CriticalPathTaskList extends StatelessWidget {
+  const _CriticalPathTaskList({
+    required this.tasks,
+  });
+
+  final List<CalendarTask> tasks;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<CalendarTask> visible =
+        tasks.length <= _fragmentCriticalPathPreviewLimit
+            ? tasks
+            : tasks.sublist(0, _fragmentCriticalPathPreviewLimit);
+    final int remaining = tasks.length - visible.length;
+    final textTheme = context.textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: _fragmentChecklistSpacing,
+      children: [
+        for (final task in visible)
+          _CriticalPathTaskRow(
+            title: task.title,
+            completed: task.isCompleted,
+          ),
+        if (remaining > 0)
+          Padding(
+            padding: _fragmentCriticalPathMorePadding,
+            child: Text(
+              '$_fragmentCriticalPathMorePrefix$remaining'
+              '$_fragmentCriticalPathMoreSuffix',
+              style: textTheme.small.copyWith(
+                color: context.colorScheme.mutedForeground,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CriticalPathTaskRow extends StatelessWidget {
+  const _CriticalPathTaskRow({
+    required this.title,
+    required this.completed,
+  });
+
+  final String title;
+  final bool completed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textStyle = context.textTheme.small.copyWith(
+      color: completed ? colors.mutedForeground : colors.foreground,
+      decoration: completed ? TextDecoration.lineThrough : null,
+    );
+    final String resolvedTitle =
+        title.trim().isEmpty ? _fragmentFallbackTitle : title;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: _fragmentChecklistBulletPadding,
+          child: Text(
+            _fragmentCriticalPathBullet,
+            style: textStyle,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            resolvedTitle,
             style: textStyle,
             maxLines: _fragmentChecklistMaxLines,
             overflow: TextOverflow.ellipsis,

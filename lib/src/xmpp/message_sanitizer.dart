@@ -19,6 +19,11 @@ const _calendarAvailabilityTag = 'calendar-availability';
 const _calendarAvailabilityPayloadTag = 'payload';
 const _calendarAvailabilityVersionAttr = 'version';
 const _calendarAvailabilityVersionValue = '1';
+const int _inviteFieldMaxLength = 512;
+const int _inviteRoomJidMaxLength = 1024;
+const int _calendarFragmentPayloadMaxLength = 200000;
+const int _calendarTaskIcsPayloadMaxLength = 200000;
+const int _calendarAvailabilityPayloadMaxLength = 200000;
 
 final class DirectMucInviteData implements mox.StanzaHandlerExtension {
   const DirectMucInviteData({
@@ -34,8 +39,14 @@ final class DirectMucInviteData implements mox.StanzaHandlerExtension {
   final bool? continueFlag;
 
   mox.XMLNode toXml() {
-    final trimmedReason = reason?.trim();
-    final trimmedPassword = password?.trim();
+    final trimmedReason = _normalizeInviteText(
+      reason,
+      maxLength: _inviteFieldMaxLength,
+    );
+    final trimmedPassword = _normalizeInviteText(
+      password,
+      maxLength: _inviteFieldMaxLength,
+    );
     return mox.XMLNode.xmlns(
       tag: _directInviteTag,
       xmlns: _directInviteXmlns,
@@ -54,15 +65,25 @@ final class DirectMucInviteData implements mox.StanzaHandlerExtension {
     final invite = stanza.firstTag(_directInviteTag, xmlns: _directInviteXmlns);
     if (invite == null) return null;
     final roomJid = invite.attributes[_directInviteRoomAttr]?.toString().trim();
-    if (roomJid == null || roomJid.isEmpty) return null;
+    if (roomJid == null ||
+        roomJid.isEmpty ||
+        roomJid.length > _inviteRoomJidMaxLength) {
+      return null;
+    }
     final reasonAttr =
         invite.attributes[_directInviteReasonAttr]?.toString().trim();
     final passwordAttr =
         invite.attributes[_directInvitePasswordAttr]?.toString().trim();
     final continueAttr =
         invite.attributes[_directInviteContinueAttr]?.toString().trim();
-    final reason = _normalizeInviteText(reasonAttr ?? invite.innerText());
-    final password = _normalizeInviteText(passwordAttr);
+    final reason = _normalizeInviteText(
+      reasonAttr ?? invite.innerText(),
+      maxLength: _inviteFieldMaxLength,
+    );
+    final password = _normalizeInviteText(
+      passwordAttr,
+      maxLength: _inviteFieldMaxLength,
+    );
     final continueFlag = _parseInviteBool(continueAttr);
     return DirectMucInviteData(
       roomJid: roomJid,
@@ -95,12 +116,30 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
   final bool revoked;
 
   mox.XMLNode toXml() {
-    final trimmedToken = token?.trim();
-    final trimmedInviter = inviter?.trim();
-    final trimmedInvitee = invitee?.trim();
-    final trimmedRoomName = roomName?.trim();
-    final trimmedReason = reason?.trim();
-    final trimmedPassword = password?.trim();
+    final trimmedToken = _normalizeInviteText(
+      token,
+      maxLength: _inviteFieldMaxLength,
+    );
+    final trimmedInviter = _normalizeInviteText(
+      inviter,
+      maxLength: _inviteFieldMaxLength,
+    );
+    final trimmedInvitee = _normalizeInviteText(
+      invitee,
+      maxLength: _inviteFieldMaxLength,
+    );
+    final trimmedRoomName = _normalizeInviteText(
+      roomName,
+      maxLength: _inviteFieldMaxLength,
+    );
+    final trimmedReason = _normalizeInviteText(
+      reason,
+      maxLength: _inviteFieldMaxLength,
+    );
+    final trimmedPassword = _normalizeInviteText(
+      password,
+      maxLength: _inviteFieldMaxLength,
+    );
     return mox.XMLNode.xmlns(
       tag: revoked ? _axiInviteRevokeTag : _axiInviteTag,
       xmlns: _axiInviteXmlns,
@@ -128,24 +167,34 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
     final node = invite ?? revoke;
     if (node == null) return null;
     final roomJid = node.attributes[_axiInviteRoomAttr]?.toString().trim();
-    if (roomJid == null || roomJid.isEmpty) return null;
+    if (roomJid == null ||
+        roomJid.isEmpty ||
+        roomJid.length > _inviteRoomJidMaxLength) {
+      return null;
+    }
     final token = _normalizeInviteText(
       node.attributes[_axiInviteTokenAttr]?.toString(),
+      maxLength: _inviteFieldMaxLength,
     );
     final inviter = _normalizeInviteText(
       node.attributes[_axiInviteInviterAttr]?.toString(),
+      maxLength: _inviteFieldMaxLength,
     );
     final invitee = _normalizeInviteText(
       node.attributes[_axiInviteInviteeAttr]?.toString(),
+      maxLength: _inviteFieldMaxLength,
     );
     final roomName = _normalizeInviteText(
       node.attributes[_axiInviteRoomNameAttr]?.toString(),
+      maxLength: _inviteFieldMaxLength,
     );
     final reason = _normalizeInviteText(
       node.attributes[_axiInviteReasonAttr]?.toString(),
+      maxLength: _inviteFieldMaxLength,
     );
     final password = _normalizeInviteText(
       node.attributes[_axiInvitePasswordAttr]?.toString(),
+      maxLength: _inviteFieldMaxLength,
     );
     return AxiMucInvitePayload(
       roomJid: roomJid,
@@ -192,6 +241,9 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
     final payloadText =
         payloadNode?.innerText().trim() ?? node.innerText().trim();
     if (payloadText.isEmpty) {
+      return null;
+    }
+    if (payloadText.length > _calendarFragmentPayloadMaxLength) {
       return null;
     }
     try {
@@ -248,6 +300,9 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
     if (payloadText.isEmpty) {
       return null;
     }
+    if (payloadText.length > _calendarTaskIcsPayloadMaxLength) {
+      return null;
+    }
     final readOnlyAttr =
         node.attributes[_calendarTaskIcsReadOnlyAttr]?.toString();
     final bool readOnly = _parseReadOnly(readOnlyAttr);
@@ -302,6 +357,9 @@ final class CalendarAvailabilityMessagePayload
     if (payloadText.isEmpty) {
       return null;
     }
+    if (payloadText.length > _calendarAvailabilityPayloadMaxLength) {
+      return null;
+    }
     try {
       final decoded = jsonDecode(payloadText);
       if (decoded is! Map<String, dynamic>) {
@@ -325,9 +383,10 @@ bool? _parseInviteBool(String? raw) {
   };
 }
 
-String? _normalizeInviteText(String? text) {
+String? _normalizeInviteText(String? text, {required int maxLength}) {
   final trimmed = text?.trim();
   if (trimmed == null || trimmed.isEmpty) return null;
+  if (trimmed.length > maxLength) return null;
   return trimmed;
 }
 
@@ -435,7 +494,10 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     if (type == _messageTypeGroupchat && subjectNode != null) {
       final fromAttr = stanza.from?.trim();
       if (fromAttr?.isNotEmpty == true) {
-        final subject = _normalizeInviteText(subjectNode.innerText());
+        final subject = _normalizeInviteText(
+          subjectNode.innerText(),
+          maxLength: _inviteFieldMaxLength,
+        );
         final roomJid = mox.JID.fromString(fromAttr!).toBare().toString();
         getAttributes().sendEvent(
           MucSubjectChangedEvent(

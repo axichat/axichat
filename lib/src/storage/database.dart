@@ -42,6 +42,8 @@ SET draft_source_id = ?
 WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
 ''';
 const String _attachmentRootDirectoryName = 'attachments';
+const int _pinnedMessagesSchemaVersion = 23;
+const int _schemaVersion = _pinnedMessagesSchemaVersion;
 
 abstract interface class XmppDatabase implements Database {
   Stream<List<Message>> watchChatMessages(
@@ -84,6 +86,8 @@ abstract interface class XmppDatabase implements Database {
   Future<Message?> getMessageByStanzaID(String stanzaID);
 
   Future<Message?> getMessageByOriginID(String originID);
+
+  Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
 
   Stream<List<Reaction>> watchReactionsForChat(String jid);
 
@@ -154,6 +158,17 @@ abstract interface class XmppDatabase implements Database {
   );
 
   Future<List<String>> deleteMessageAttachments(String messageId);
+
+  Stream<List<PinnedMessageEntry>> watchPinnedMessages(String chatJid);
+
+  Future<List<PinnedMessageEntry>> getPinnedMessages(String chatJid);
+
+  Future<void> upsertPinnedMessage(PinnedMessageEntry entry);
+
+  Future<void> deletePinnedMessage({
+    required String chatJid,
+    required String messageStanzaId,
+  });
 
   Future<void> markMessageRetracted(String stanzaID);
 
@@ -1108,6 +1123,7 @@ class EmailSpamlistAccessor
 
 @DriftDatabase(tables: [
   Messages,
+  PinnedMessages,
   MessageAttachments,
   MessageShares,
   MessageParticipants,
@@ -1194,7 +1210,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => _schemaVersion;
 
   @override
   MigrationStrategy get migration {
@@ -1368,6 +1384,9 @@ WHERE source_id IS NULL OR trim(source_id) = ''
 ''',
             [syncLegacySourceId],
           );
+        }
+        if (from < _pinnedMessagesSchemaVersion) {
+          await m.createTable(pinnedMessages);
         }
       },
       beforeOpen: (_) async {
@@ -1626,6 +1645,21 @@ WHERE source_id IS NULL OR trim(source_id) = ''
   @override
   Future<Message?> getMessageByOriginID(String originID) =>
       messagesAccessor.selectOneByOriginID(originID);
+
+  @override
+  Future<List<Message>> getMessagesByStanzaIds(
+    Iterable<String> stanzaIds,
+  ) async {
+    final normalized = stanzaIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    if (normalized.isEmpty) {
+      return const <Message>[];
+    }
+    return (select(messages)..where((tbl) => tbl.stanzaID.isIn(normalized)))
+        .get();
+  }
 
   @override
   Stream<List<Reaction>> watchReactionsForChat(String jid) =>
@@ -2043,6 +2077,10 @@ WHERE jid = ?
       if (existing.id != null) {
         metadataIds.addAll(await deleteMessageAttachments(existing.id!));
       }
+      await deletePinnedMessage(
+        chatJid: existing.chatJid,
+        messageStanzaId: existing.stanzaID,
+      );
       await messagesAccessor.deleteOne(stanzaID);
       final chat = await getChat(existing.chatJid);
       if (chat == null) return;
@@ -2089,6 +2127,7 @@ WHERE jid = ?
         await delete(messageShares).go();
         await delete(messageAttachments).go();
         await delete(messages).go();
+        await delete(pinnedMessages).go();
         await delete(drafts).go();
         await delete(fileMetadata).go();
         await delete(notifications).go();
@@ -2205,6 +2244,12 @@ WHERE jid = ?
         for (final batch in chunked(messageIds)) {
           await (delete(messageAttachments)
                 ..where((tbl) => tbl.messageId.isIn(batch)))
+              .go();
+        }
+        for (final batch in chunked(stanzaIds)) {
+          await (delete(pinnedMessages)
+                ..where((tbl) => tbl.messageStanzaId.isIn(batch))
+                ..where((tbl) => tbl.chatJid.equals(jid)))
               .go();
         }
         for (final batch in chunked(stanzaIds)) {
@@ -2808,6 +2853,52 @@ WHERE jid = ?
     if (attachments.isEmpty) return const [];
     await messageAttachmentsAccessor.deleteForMessage(messageId);
     return attachments.map((attachment) => attachment.fileMetadataId).toList();
+  }
+
+  @override
+  Stream<List<PinnedMessageEntry>> watchPinnedMessages(String chatJid) {
+    final query = select(pinnedMessages)
+      ..where((tbl) => tbl.chatJid.equals(chatJid))
+      ..orderBy([
+        (tbl) =>
+            OrderingTerm(expression: tbl.pinnedAt, mode: OrderingMode.desc),
+        (tbl) => OrderingTerm(
+              expression: tbl.messageStanzaId,
+              mode: OrderingMode.desc,
+            ),
+      ]);
+    return query.watch();
+  }
+
+  @override
+  Future<List<PinnedMessageEntry>> getPinnedMessages(String chatJid) {
+    final query = select(pinnedMessages)
+      ..where((tbl) => tbl.chatJid.equals(chatJid))
+      ..orderBy([
+        (tbl) =>
+            OrderingTerm(expression: tbl.pinnedAt, mode: OrderingMode.desc),
+        (tbl) => OrderingTerm(
+              expression: tbl.messageStanzaId,
+              mode: OrderingMode.desc,
+            ),
+      ]);
+    return query.get();
+  }
+
+  @override
+  Future<void> upsertPinnedMessage(PinnedMessageEntry entry) async {
+    await into(pinnedMessages).insertOnConflictUpdate(entry);
+  }
+
+  @override
+  Future<void> deletePinnedMessage({
+    required String chatJid,
+    required String messageStanzaId,
+  }) async {
+    await (delete(pinnedMessages)
+          ..where((tbl) => tbl.chatJid.equals(chatJid))
+          ..where((tbl) => tbl.messageStanzaId.equals(messageStanzaId)))
+        .go();
   }
 
   @override

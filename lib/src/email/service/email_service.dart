@@ -1450,6 +1450,13 @@ class EmailService {
     );
   }
 
+  Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String jid) async* {
+    await _ensureReady();
+    final db = await _databaseBuilder();
+    yield await db.getPinnedMessages(jid);
+    yield* db.watchPinnedMessages(jid);
+  }
+
   Stream<List<Draft>> draftsStream({
     int start = 0,
     int end = _defaultPageSize,
@@ -1475,6 +1482,44 @@ class EmailService {
     final db = await _databaseBuilder();
     yield await db.getChat(jid);
     yield* db.watchChat(jid);
+  }
+
+  Future<void> pinMessage({
+    required Chat chat,
+    required Message message,
+  }) async {
+    await _ensureReady();
+    final chatJid = chat.jid.trim();
+    final stanzaId = message.stanzaID.trim();
+    if (chatJid.isEmpty || stanzaId.isEmpty) {
+      return;
+    }
+    final pinnedAt = DateTime.timestamp().toUtc();
+    final db = await _databaseBuilder();
+    await db.upsertPinnedMessage(
+      PinnedMessageEntry(
+        messageStanzaId: stanzaId,
+        chatJid: chatJid,
+        pinnedAt: pinnedAt,
+      ),
+    );
+  }
+
+  Future<void> unpinMessage({
+    required Chat chat,
+    required Message message,
+  }) async {
+    await _ensureReady();
+    final chatJid = chat.jid.trim();
+    final stanzaId = message.stanzaID.trim();
+    if (chatJid.isEmpty || stanzaId.isEmpty) {
+      return;
+    }
+    final db = await _databaseBuilder();
+    await db.deletePinnedMessage(
+      chatJid: chatJid,
+      messageStanzaId: stanzaId,
+    );
   }
 
   Future<void> _processDeltaEvent(DeltaCoreEvent event) async {

@@ -6,6 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/drift.dart' hide JsonKey;
@@ -355,16 +356,16 @@ class Message with _$Message implements Insertable<Message> {
             ? fragmentPayload?.fragment.toJson()
             : taskIcsMessage.toJson());
     final htmlData = get<XhtmlImData>();
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(
-      htmlData?.xhtmlBody,
-    );
-    final htmlPlain = htmlData?.plainText ?? '';
+    final boundedHtml = clampMessageHtml(htmlData?.xhtmlBody);
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(boundedHtml);
+    final htmlPlain = clampMessageText(htmlData?.plainText) ?? '';
     final fallbackText = htmlPlain.isNotEmpty
         ? htmlPlain
         : (normalizedHtml == null
             ? ''
             : HtmlContentCodec.toPlainText(normalizedHtml));
-    final resolvedText = event.text.isNotEmpty ? event.text : fallbackText;
+    final boundedText = clampMessageText(event.text) ?? '';
+    final resolvedText = boundedText.isNotEmpty ? boundedText : fallbackText;
 
     return Message(
       stanzaID: event.id ?? uuid.v4(),

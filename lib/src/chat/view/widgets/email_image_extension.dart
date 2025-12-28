@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
+import 'package:axichat/src/common/media_decode_safety.dart';
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
@@ -22,6 +22,13 @@ const String _emailImageHttpsScheme = 'https';
 const Set<String> _emailImageAllowedSchemes = <String>{
   _emailImageHttpsScheme,
 };
+const ImageDecodeLimits _emailImageDecodeLimits = ImageDecodeLimits(
+  maxBytes: _emailImageMaxBytes,
+  maxPixels: _emailImageMaxPixels,
+  maxFrames: _emailImageMaxFrames,
+  minDimension: _emailImageMinDimension,
+  decodeTimeout: _emailImageDecodeTimeout,
+);
 
 /// Creates a flutter_html extension that blocks or allows external images.
 ///
@@ -174,7 +181,7 @@ Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
           !detectedMime.startsWith(_emailImageMimePrefix)) {
         return null;
       }
-      final allowed = await _passesEmailImageSafetyChecks(bytes);
+      final allowed = await isSafeImageBytes(bytes, _emailImageDecodeLimits);
       if (!allowed) {
         return null;
       }
@@ -196,41 +203,6 @@ Future<Uint8List?> _readResponseBytes(HttpClientResponse response) async {
     sink.add(chunk);
   }
   return sink.takeBytes();
-}
-
-Future<bool> _passesEmailImageSafetyChecks(Uint8List bytes) async {
-  try {
-    final codec =
-        await ui.instantiateImageCodec(bytes).timeout(_emailImageDecodeTimeout);
-    try {
-      if (codec.frameCount <= 0 || codec.frameCount > _emailImageMaxFrames) {
-        return false;
-      }
-      final frame = await codec.getNextFrame().timeout(
-            _emailImageDecodeTimeout,
-          );
-      final image = frame.image;
-      try {
-        final width = image.width;
-        final height = image.height;
-        if (width < _emailImageMinDimension ||
-            height < _emailImageMinDimension) {
-          return false;
-        }
-        final pixelCount = width * height;
-        if (pixelCount > _emailImageMaxPixels) {
-          return false;
-        }
-      } finally {
-        image.dispose();
-      }
-    } finally {
-      codec.dispose();
-    }
-    return true;
-  } on Exception {
-    return false;
-  }
 }
 
 bool _isRedirectStatusCode(int statusCode) => switch (statusCode) {
