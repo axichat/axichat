@@ -765,6 +765,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       roomState: resetContext ? null : state.roomState,
       pinnedMessages:
           resetContext ? _emptyPinnedMessageItems : state.pinnedMessages,
+      pinnedMessagesLoaded: resetContext ? false : state.pinnedMessagesLoaded,
+      pinnedMessagesHydrating:
+          resetContext ? false : state.pinnedMessagesHydrating,
       typingParticipants:
           typingShouldClear ? const [] : state.typingParticipants,
       typing: event.chat.defaultTransport.isEmail ? false : state.typing,
@@ -956,7 +959,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     if (event.items.isEmpty) {
-      emit(state.copyWith(pinnedMessages: _emptyPinnedMessageItems));
+      emit(
+        state.copyWith(
+          pinnedMessages: _emptyPinnedMessageItems,
+          pinnedMessagesLoaded: true,
+        ),
+      );
       return;
     }
     final orderedIds = <String>{};
@@ -968,7 +976,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       orderedIds.add(stanzaId);
     }
     if (orderedIds.isEmpty) {
-      emit(state.copyWith(pinnedMessages: _emptyPinnedMessageItems));
+      emit(
+        state.copyWith(
+          pinnedMessages: _emptyPinnedMessageItems,
+          pinnedMessagesLoaded: true,
+        ),
+      );
       return;
     }
     final db = await _messageService.database;
@@ -998,7 +1011,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     }
-    emit(state.copyWith(pinnedMessages: pinnedItems));
+    emit(
+      state.copyWith(
+        pinnedMessages: pinnedItems,
+        pinnedMessagesLoaded: true,
+      ),
+    );
   }
 
   Future<void> _onChatPinnedMessagesOpened(
@@ -1014,9 +1032,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     var missing = _missingPinnedMessageIds(state.pinnedMessages);
     if (missing.isEmpty) {
+      if (state.pinnedMessagesHydrating) {
+        emit(state.copyWith(pinnedMessagesHydrating: false));
+      }
       return;
     }
     _pinHydrationInFlight = true;
+    emit(state.copyWith(pinnedMessagesHydrating: true));
     try {
       if (_isEmailChat) {
         await _hydratePinnedMessagesFromEmail(chat, missing);
@@ -1025,6 +1047,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     } finally {
       _pinHydrationInFlight = false;
+      emit(state.copyWith(pinnedMessagesHydrating: false));
     }
   }
 

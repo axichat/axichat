@@ -207,26 +207,7 @@ class ChatAttachmentPreview extends StatelessWidget {
                 }
                 final report = typeSnapshot.data;
                 if (report?.isDetectedImage ?? false) {
-                    return _ImageAttachment(
-                      metadata: metadata,
-                      stanzaId: stanzaId,
-                      autoDownload: shouldAutoDownload,
-                      autoDownloadUserInitiated: autoDownloadUserInitiated,
-                      downloadDelegate: downloadDelegate,
-                      typeReport: report,
-                    );
-                  }
-                  if (report?.isDetectedVideo ?? false) {
-                    return _VideoAttachment(
-                      metadata: metadata,
-                      stanzaId: stanzaId,
-                      autoDownload: shouldAutoDownload,
-                      autoDownloadUserInitiated: autoDownloadUserInitiated,
-                      downloadDelegate: downloadDelegate,
-                      typeReport: report,
-                    );
-                  }
-                  return _FileAttachment(
+                  return _ImageAttachment(
                     metadata: metadata,
                     stanzaId: stanzaId,
                     autoDownload: shouldAutoDownload,
@@ -234,9 +215,28 @@ class ChatAttachmentPreview extends StatelessWidget {
                     downloadDelegate: downloadDelegate,
                     typeReport: report,
                   );
-                },
-              );
-            }
+                }
+                if (report?.isDetectedVideo ?? false) {
+                  return _VideoAttachment(
+                    metadata: metadata,
+                    stanzaId: stanzaId,
+                    autoDownload: shouldAutoDownload,
+                    autoDownloadUserInitiated: autoDownloadUserInitiated,
+                    downloadDelegate: downloadDelegate,
+                    typeReport: report,
+                  );
+                }
+                return _FileAttachment(
+                  metadata: metadata,
+                  stanzaId: stanzaId,
+                  autoDownload: shouldAutoDownload,
+                  autoDownloadUserInitiated: autoDownloadUserInitiated,
+                  downloadDelegate: downloadDelegate,
+                  typeReport: report,
+                );
+              },
+            );
+          }
           if (!allowed) {
             return _BlockedAttachment(
               metadata: metadata,

@@ -20,10 +20,13 @@ class SafePubSubManager extends mox.PubSubManager {
   static const String _retractTag = 'retract';
   static const String _subscriptionTag = 'subscription';
   static const String _configurationTag = 'configuration';
+  static const String _affiliationsTag = 'affiliations';
+  static const String _affiliationTag = 'affiliation';
   static const String _nodeAttr = 'node';
   static const String _jidAttr = 'jid';
   static const String _subIdAttr = 'subid';
   static const String _subscriptionAttr = 'subscription';
+  static const String _affiliationAttr = 'affiliation';
   static const String _dataFormTag = 'x';
   static const String _dataFormXmlns = 'jabber:x:data';
   static const String _pubsubEventXmlns =
@@ -207,6 +210,67 @@ class SafePubSubManager extends mox.PubSubManager {
                           ..child(form))
                         .build(),
                   ))
+                .build(),
+          ],
+        ),
+        shouldEncrypt: false,
+      ),
+    );
+
+    if (result == null) {
+      return moxlib.Result(mox.UnknownPubSubError());
+    }
+
+    if (result.attributes['type'] != _iqResult) {
+      return moxlib.Result(mox.getPubSubError(result));
+    }
+
+    return const moxlib.Result(true);
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> setAffiliations(
+    mox.JID jid,
+    String node,
+    Map<String, mox.PubSubAffiliation> affiliations,
+  ) async {
+    if (affiliations.isEmpty) {
+      return const moxlib.Result(true);
+    }
+    final affiliationNodes = <mox.XMLNode>[];
+    for (final entry in affiliations.entries) {
+      final targetJid = entry.key.trim();
+      final affiliationValue = entry.value.value.trim();
+      if (targetJid.isEmpty || affiliationValue.isEmpty) {
+        continue;
+      }
+      affiliationNodes.add(
+        mox.XMLNode(
+          tag: _affiliationTag,
+          attributes: {
+            _jidAttr: targetJid,
+            _affiliationAttr: affiliationValue,
+          },
+        ),
+      );
+    }
+    if (affiliationNodes.isEmpty) {
+      return const moxlib.Result(true);
+    }
+    final attrs = getAttributes();
+    final affiliationsBuilder = mox.XmlBuilder(_affiliationsTag)
+      ..attr(_nodeAttr, node);
+    for (final node in affiliationNodes) {
+      affiliationsBuilder.child(node);
+    }
+    final result = await attrs.sendStanza(
+      mox.StanzaDetails(
+        mox.Stanza.iq(
+          type: _iqSet,
+          to: jid.toString(),
+          children: [
+            (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
+                  ..child(affiliationsBuilder.build()))
                 .build(),
           ],
         ),

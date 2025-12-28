@@ -23,6 +23,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 const double _taskFooterPaddingTop = 4.0;
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 const String _taskCopyActionLabel = 'Copy to calendar';
+const String _taskImportConfirmTitle = 'Add to calendar?';
+const String _taskImportConfirmMessage =
+    'This task came from chat. Add it to your calendar to manage or edit it.';
+const String _taskImportConfirmLabel = 'Add to calendar';
+const String _taskImportCancelLabel = 'Not now';
 const String _taskCopyUnavailableMessage = 'Calendar is unavailable.';
 const String _taskCopyAlreadyAddedMessage = 'Task already added.';
 const String _taskCopySuccessMessage = 'Task copied.';
@@ -32,11 +37,13 @@ class ChatCalendarTaskCard extends StatefulWidget {
     super.key,
     required this.task,
     required this.readOnly,
+    this.requireImportConfirmation = false,
     this.footerDetails = _emptyInlineSpans,
   });
 
   final CalendarTask task;
   final bool readOnly;
+  final bool requireImportConfirmation;
   final List<InlineSpan> footerDetails;
 
   @override
@@ -62,14 +69,11 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                   resolvedTask,
                   editMode: editMode,
                 )
-            : () {
-                _ensureTaskImported(resolvedTask);
-                _showTaskEditSheet(
-                  context,
+            : () => _handleEditableTap(
                   resolvedTask,
+                  taskInCalendar: taskInCalendar,
                   editMode: editMode,
                 );
-              };
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -233,6 +237,33 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
         TaskEditSessionTracker.instance.end(task.id, this);
       }
     }
+  }
+
+  Future<void> _handleEditableTap(
+    CalendarTask task, {
+    required bool taskInCalendar,
+    required TaskEditMode editMode,
+  }) async {
+    if (!taskInCalendar && widget.requireImportConfirmation) {
+      final approved = await confirm(
+        context,
+        title: _taskImportConfirmTitle,
+        message: _taskImportConfirmMessage,
+        confirmLabel: _taskImportConfirmLabel,
+        cancelLabel: _taskImportCancelLabel,
+        destructiveConfirm: false,
+      );
+      if (approved != true) return;
+    }
+    if (!mounted) return;
+    if (!taskInCalendar) {
+      _ensureTaskImported(task);
+    }
+    await _showTaskEditSheet(
+      context,
+      task,
+      editMode: editMode,
+    );
   }
 
   List<TaskContextAction> _inlineActionsForTask(
