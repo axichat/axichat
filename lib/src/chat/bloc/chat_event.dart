@@ -31,6 +31,13 @@ final class _PinnedMessagesUpdated extends ChatEvent {
   List<Object?> get props => [items];
 }
 
+final class ChatPinnedMessagesOpened extends ChatEvent {
+  const ChatPinnedMessagesOpened();
+
+  @override
+  List<Object?> get props => [];
+}
+
 final class _RoomStateUpdated extends ChatEvent {
   const _RoomStateUpdated(this.roomState);
 

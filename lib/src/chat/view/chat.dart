@@ -6453,9 +6453,11 @@ class _ChatState extends State<Chat> {
                                   '$_chatPinnedPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
                                 ),
                                 chat: chatEntity,
+                                visible: _chatRoute == _ChatRoute.pins,
                                 pinnedMessages: state.pinnedMessages,
                                 onClose: _closePinnedMessages,
                                 canTogglePins: canTogglePins,
+                                canShowCalendarTasks: chatCalendarBloc != null,
                                 roomState: state.roomState,
                                 metadataStreamFor: _metadataStreamFor,
                                 metadataInitialFor: _metadataInitialFor,
@@ -7111,13 +7113,15 @@ class _ChatState extends State<Chat> {
   }
 }
 
-class _ChatPinnedMessagesPanel extends StatelessWidget {
+class _ChatPinnedMessagesPanel extends StatefulWidget {
   const _ChatPinnedMessagesPanel({
     super.key,
     required this.chat,
+    required this.visible,
     required this.pinnedMessages,
     required this.onClose,
     required this.canTogglePins,
+    required this.canShowCalendarTasks,
     required this.roomState,
     required this.metadataStreamFor,
     required this.metadataInitialFor,
@@ -7127,9 +7131,11 @@ class _ChatPinnedMessagesPanel extends StatelessWidget {
   });
 
   final chat_models.Chat? chat;
+  final bool visible;
   final List<PinnedMessageItem> pinnedMessages;
   final VoidCallback onClose;
   final bool canTogglePins;
+  final bool canShowCalendarTasks;
   final RoomState? roomState;
   final Stream<FileMetadataData?> Function(String) metadataStreamFor;
   final FileMetadataData? Function(String) metadataInitialFor;
@@ -7151,14 +7157,50 @@ class _ChatPinnedMessagesPanel extends StatelessWidget {
   }) onApproveAttachment;
 
   @override
+  State<_ChatPinnedMessagesPanel> createState() =>
+      _ChatPinnedMessagesPanelState();
+}
+
+class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
+  @override
+  void initState() {
+    super.initState();
+    _requestPinnedHydration();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatPinnedMessagesPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final bool becameVisible = !oldWidget.visible && widget.visible;
+    final bool pinnedChanged =
+        oldWidget.pinnedMessages != widget.pinnedMessages;
+    if (becameVisible || (widget.visible && pinnedChanged)) {
+      _requestPinnedHydration();
+    }
+  }
+
+  void _requestPinnedHydration() {
+    if (!widget.visible) {
+      return;
+    }
+    final hasMissingMessage = widget.pinnedMessages.any(
+      (item) => item.message == null && item.messageStanzaId.trim().isNotEmpty,
+    );
+    if (!hasMissingMessage) {
+      return;
+    }
+    context.read<ChatBloc>().add(const ChatPinnedMessagesOpened());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final resolvedChat = chat;
+    final resolvedChat = widget.chat;
     if (resolvedChat == null) {
       return const SizedBox.shrink();
     }
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final Widget body = pinnedMessages.isEmpty
+    final Widget body = widget.pinnedMessages.isEmpty
         ? Center(
             child: Text(
               l10n.chatPinnedEmptyState,
@@ -7170,20 +7212,21 @@ class _ChatPinnedMessagesPanel extends StatelessWidget {
           )
         : ListView.separated(
             padding: EdgeInsets.zero,
-            itemCount: pinnedMessages.length,
+            itemCount: widget.pinnedMessages.length,
             separatorBuilder: (_, __) => const AxiListDivider(),
             itemBuilder: (context, index) {
-              final item = pinnedMessages[index];
+              final item = widget.pinnedMessages[index];
               return _PinnedMessageTile(
                 item: item,
                 chat: resolvedChat,
-                roomState: roomState,
-                canTogglePins: canTogglePins,
-                metadataStreamFor: metadataStreamFor,
-                metadataInitialFor: metadataInitialFor,
-                isOneTimeAttachmentAllowed: isOneTimeAttachmentAllowed,
-                shouldAllowAttachment: shouldAllowAttachment,
-                onApproveAttachment: onApproveAttachment,
+                roomState: widget.roomState,
+                canTogglePins: widget.canTogglePins,
+                canShowCalendarTasks: widget.canShowCalendarTasks,
+                metadataStreamFor: widget.metadataStreamFor,
+                metadataInitialFor: widget.metadataInitialFor,
+                isOneTimeAttachmentAllowed: widget.isOneTimeAttachmentAllowed,
+                shouldAllowAttachment: widget.shouldAllowAttachment,
+                onApproveAttachment: widget.onApproveAttachment,
               );
             },
           );
@@ -7191,7 +7234,7 @@ class _ChatPinnedMessagesPanel extends StatelessWidget {
       header: AxiSheetHeader(
         title: Text(l10n.chatPinnedMessagesTitle),
         subtitle: Text(resolvedChat.displayName),
-        onClose: onClose,
+        onClose: widget.onClose,
       ),
       body: body,
     );
@@ -7204,6 +7247,7 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.chat,
     required this.roomState,
     required this.canTogglePins,
+    required this.canShowCalendarTasks,
     required this.metadataStreamFor,
     required this.metadataInitialFor,
     required this.isOneTimeAttachmentAllowed,
@@ -7215,6 +7259,7 @@ class _PinnedMessageTile extends StatelessWidget {
   final chat_models.Chat chat;
   final RoomState? roomState;
   final bool canTogglePins;
+  final bool canShowCalendarTasks;
   final Stream<FileMetadataData?> Function(String) metadataStreamFor;
   final FileMetadataData? Function(String) metadataInitialFor;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
@@ -7282,14 +7327,21 @@ class _PinnedMessageTile extends StatelessWidget {
     final message = item.message;
     final messageText = message?.plainText.trim();
     final hasMessageText = messageText?.isNotEmpty == true;
+    final CalendarTask? calendarTask = message?.calendarTaskIcs;
+    final bool hasCalendarTask = calendarTask != null;
+    final String? taskShareText = calendarTask?.toShareText().trim();
+    final bool hideTaskText = taskShareText != null &&
+        taskShareText.isNotEmpty &&
+        taskShareText == messageText;
     final attachmentIds = item.attachmentMetadataIds;
     final hasAttachments = message != null && attachmentIds.isNotEmpty;
-    final showMissing = !hasMessageText && !hasAttachments;
+    final showMessageText = hasMessageText && !hideTaskText;
+    final showMissing = !showMessageText && !hasAttachments && !hasCalendarTask;
     final messageStyle = Theme.of(context)
         .textTheme
         .bodyMedium
         ?.copyWith(color: colors.foreground);
-    final messageWidget = hasMessageText
+    final messageWidget = showMessageText
         ? Text(
             messageText ?? _emptyText,
             style: messageStyle,
@@ -7341,6 +7393,23 @@ class _PinnedMessageTile extends StatelessWidget {
         ],
       ),
     ];
+    if (hasCalendarTask) {
+      final bool taskReadOnly =
+          message?.calendarTaskIcsReadOnly ?? _calendarTaskIcsReadOnlyFallback;
+      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      contentChildren.add(
+        canShowCalendarTasks
+            ? ChatCalendarTaskCard(
+                task: calendarTask,
+                readOnly: taskReadOnly,
+                footerDetails: _emptyInlineSpans,
+              )
+            : CalendarFragmentCard(
+                fragment: CalendarFragment.task(task: calendarTask),
+                footerDetails: _emptyInlineSpans,
+              ),
+      );
+    }
     if (hasAttachments) {
       contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
       final isGroupChat = chat.type == ChatType.groupChat;

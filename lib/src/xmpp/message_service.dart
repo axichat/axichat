@@ -133,9 +133,18 @@ extension MessageEvent on mox.MessageEvent {
 bool _isOversizedMessage(mox.MessageEvent event, Logger log) {
   final body = event.extensions.get<mox.MessageBodyData>()?.body;
   if (body != null && !isMessageTextWithinLimit(body)) {
-    final sizeBytes = utf8ByteLength(body);
-    log.warning('Dropped message with oversized text payload ($sizeBytes)');
-    return true;
+    final trimmedBody = body.trimLeft();
+    final looksLikeCalendarSync =
+        trimmedBody.startsWith(_calendarSyncEnvelopeJsonPrefix) &&
+            body.contains(_calendarSyncEnvelopeKeyLiteral);
+    final maxBytes = looksLikeCalendarSync
+        ? CalendarSyncMessage.maxEnvelopeLength
+        : maxMessageTextBytes;
+    if (!isWithinUtf8ByteLimit(body, maxBytes: maxBytes)) {
+      final sizeBytes = utf8ByteLength(body);
+      log.warning('Dropped message with oversized text payload ($sizeBytes)');
+      return true;
+    }
   }
   final htmlBody = event.extensions.get<XhtmlImData>()?.xhtmlBody;
   if (htmlBody != null && !isMessageHtmlWithinLimit(htmlBody)) {

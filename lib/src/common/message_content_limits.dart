@@ -8,11 +8,17 @@ const int _utf8TwoByteLength = 2;
 const int _utf8ThreeByteLength = 3;
 const int _utf8FourByteLength = 4;
 
+const int maxMessageTextBytes = _maxMessageTextBytes;
+const int maxMessageHtmlBytes = _maxMessageHtmlBytes;
+
 String? clampMessageText(String? value) =>
     _clampUtf8(value, maxBytes: _maxMessageTextBytes);
 
 String? clampMessageHtml(String? value) =>
     _clampUtf8(value, maxBytes: _maxMessageHtmlBytes);
+
+String? clampUtf8Value(String? value, {required int maxBytes}) =>
+    _clampUtf8(value, maxBytes: maxBytes);
 
 bool isMessageTextWithinLimit(String? value) =>
     _isWithinLimit(value, maxBytes: _maxMessageTextBytes);
