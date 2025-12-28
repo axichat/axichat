@@ -1227,5 +1227,13 @@
   "calendarRemindersSection": "提醒",
   "settingsAutoLoadEmailImages": "自動載入電郵圖片",
   "settingsAutoLoadEmailImagesDescription": "可能會向寄件人洩露您的IP地址",
+  "settingsAutoDownloadImages": "Auto-download images",
+  "settingsAutoDownloadImagesDescription": "Only for trusted chats.",
+  "settingsAutoDownloadVideos": "Auto-download videos",
+  "settingsAutoDownloadVideosDescription": "Only for trusted chats.",
+  "settingsAutoDownloadDocuments": "Auto-download documents",
+  "settingsAutoDownloadDocumentsDescription": "Only for trusted chats.",
+  "settingsAutoDownloadArchives": "Auto-download archives",
+  "settingsAutoDownloadArchivesDescription": "Only for trusted chats.",
   "chatChooseTextToAdd": "選擇要新增的文字"
 }

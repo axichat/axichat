@@ -25,6 +25,83 @@ class ImageDecodeLimits {
   final int minFrames;
 }
 
+const int _maxDecodeFailureCount = 3;
+const int _maxDecodeFailureEntries = 256;
+const Duration _decodeFailureCooldown = Duration(minutes: 10);
+
+class MediaDecodeGuard {
+  MediaDecodeGuard._();
+
+  static final MediaDecodeGuard instance = MediaDecodeGuard._();
+
+  final Map<String, _DecodeFailure> _failures = <String, _DecodeFailure>{};
+
+  bool allowAttempt(String key) {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) return true;
+    final entry = _failures[trimmed];
+    if (entry == null) return true;
+    if (_isExpired(entry)) {
+      _failures.remove(trimmed);
+      return true;
+    }
+    return entry.count < _maxDecodeFailureCount;
+  }
+
+  void registerFailure(String key) {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) return;
+    final now = DateTime.now();
+    final entry = _failures[trimmed];
+    if (entry == null || _isExpired(entry)) {
+      _failures[trimmed] = _DecodeFailure(count: 1, lastFailure: now);
+    } else {
+      _failures[trimmed] = entry.increment(now);
+    }
+    _evictIfNeeded();
+  }
+
+  void registerSuccess(String key) {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) return;
+    _failures.remove(trimmed);
+  }
+
+  bool _isExpired(_DecodeFailure entry) =>
+      DateTime.now().difference(entry.lastFailure) > _decodeFailureCooldown;
+
+  void _evictIfNeeded() {
+    if (_failures.length <= _maxDecodeFailureEntries) return;
+    var oldestKey = '';
+    DateTime? oldestTime;
+    for (final entry in _failures.entries) {
+      if (oldestTime == null ||
+          entry.value.lastFailure.isBefore(oldestTime)) {
+        oldestTime = entry.value.lastFailure;
+        oldestKey = entry.key;
+      }
+    }
+    if (oldestKey.isNotEmpty) {
+      _failures.remove(oldestKey);
+    }
+  }
+}
+
+class _DecodeFailure {
+  const _DecodeFailure({
+    required this.count,
+    required this.lastFailure,
+  });
+
+  final int count;
+  final DateTime lastFailure;
+
+  _DecodeFailure increment(DateTime timestamp) => _DecodeFailure(
+        count: count + 1,
+        lastFailure: timestamp,
+      );
+}
+
 Future<bool> isSafeImageFile(File file, ImageDecodeLimits limits) async {
   try {
     if (!await file.exists()) {

@@ -1,4 +1,5 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/attachments/attachment_gallery_repository.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
@@ -13,6 +14,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -442,6 +444,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     final knownContacts = context.watch<RosterCubit>().contacts;
     final xmppService = context.read<XmppService>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
+    final autoDownloadSettings =
+        context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
     final l10n = context.l10n;
     final chatOverride = widget.chatOverride;
     final showChatLabel = widget.showChatLabel;
@@ -582,7 +586,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                             .downloadFullMessage(message),
                                       )
                                     : null;
-                            final autoDownload =
+                            final autoDownloadAllowed =
                                 allowAttachment && !isEmailChat;
                             final autoDownloadUserInitiated =
                                 allowOnce && !isEmailChat;
@@ -594,7 +598,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                               metadata: metadata,
                               stanzaId: message.stanzaID,
                               allowed: allowAttachment,
-                              autoDownload: autoDownload,
+                              autoDownloadSettings: autoDownloadSettings,
+                              autoDownloadAllowed: autoDownloadAllowed,
                               autoDownloadUserInitiated:
                                   autoDownloadUserInitiated,
                               downloadDelegate: downloadDelegate,
@@ -854,7 +859,8 @@ class AttachmentGalleryTile extends StatelessWidget {
     required this.metadata,
     required this.stanzaId,
     required this.allowed,
-    required this.autoDownload,
+    required this.autoDownloadSettings,
+    required this.autoDownloadAllowed,
     required this.autoDownloadUserInitiated,
     required this.downloadDelegate,
     required this.onAllowPressed,
@@ -864,7 +870,8 @@ class AttachmentGalleryTile extends StatelessWidget {
   final FileMetadataData metadata;
   final String stanzaId;
   final bool allowed;
-  final bool autoDownload;
+  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final bool autoDownloadAllowed;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
   final VoidCallback? onAllowPressed;
@@ -886,7 +893,8 @@ class AttachmentGalleryTile extends StatelessWidget {
                   context.read<XmppService>().fileMetadataStream(metadata.id),
               initialMetadata: metadata,
               allowed: allowed,
-              autoDownload: autoDownload,
+              autoDownloadSettings: autoDownloadSettings,
+              autoDownloadAllowed: autoDownloadAllowed,
               autoDownloadUserInitiated: autoDownloadUserInitiated,
               downloadDelegate: downloadDelegate,
               onAllowPressed: onAllowPressed,

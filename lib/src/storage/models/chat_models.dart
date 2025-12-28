@@ -506,6 +506,17 @@ extension ChatTransportExtension on Chat {
     return remoteJid.isEmailJid;
   }
 
+  bool get isEmailBacked {
+    if (deltaChatId != null) {
+      return true;
+    }
+    final address = emailAddress?.trim();
+    if (address != null && address.isNotEmpty) {
+      return true;
+    }
+    return defaultTransport.isEmail;
+  }
+
   MessageTransport get defaultTransport {
     if (type != ChatType.chat) {
       return MessageTransport.xmpp;

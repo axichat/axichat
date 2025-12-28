@@ -659,8 +659,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   String? _resolvePinnedMessagesChatJid(Chat chat) {
-    final resolvedChatJid =
-        chat.defaultTransport.isEmail ? chat.jid : chat.remoteJid;
+    final resolvedChatJid = chat.isEmailBacked ? chat.jid : chat.remoteJid;
     final trimmedChatJid = resolvedChatJid.trim();
     if (trimmedChatJid.isEmpty) {
       return null;
@@ -676,7 +675,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final emailService = _emailService;
-    if (chat.defaultTransport.isEmail) {
+    if (chat.isEmailBacked) {
       if (emailService == null) {
         _pinnedSubscription = null;
         return;
@@ -706,11 +705,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _syncPinnedMessagesForChat(Chat chat) async {
-    if (chat.defaultTransport.isEmail) {
+    final chatJid = _resolvePinnedMessagesChatJid(chat);
+    if (chatJid == null) {
       return;
     }
     try {
-      await _messageService.syncPinnedMessagesForChat(chat.remoteJid);
+      await _messageService.syncPinnedMessagesForChat(chatJid);
     } on Exception catch (error, stackTrace) {
       _log.safeFine(_pinSyncFailedLogMessage, error, stackTrace);
     }
@@ -2203,7 +2203,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (stanzaId.isEmpty) {
       return;
     }
-    if (chat.type == ChatType.groupChat) {
+    final isEmailBacked = chat.isEmailBacked;
+    if (chat.type == ChatType.groupChat && !isEmailBacked) {
       final roomState = state.roomState;
       if (roomState == null) {
         emit(
@@ -2231,7 +2232,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     final emailService = _emailService;
-    if (chat.defaultTransport.isEmail) {
+    if (isEmailBacked) {
       if (emailService == null) {
         return;
       }

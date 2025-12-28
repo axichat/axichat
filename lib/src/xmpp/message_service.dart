@@ -23,6 +23,7 @@ const String _pinMessageIdAttr = 'message_id';
 const String _pinPinnedAtAttr = 'pinned_at';
 const String _pinChatJidAttr = 'chat_jid';
 const String _pinPublishModelOpen = 'open';
+const String _pinPublishModelPublishers = 'publishers';
 const String _pinSendLastOnSubscribe = 'on_subscribe';
 const int _pinSyncMaxItems = 500;
 const String _pinSyncMaxItemsValue = '500';
@@ -31,6 +32,8 @@ const bool _pinDeliverNotificationsEnabled = true;
 const bool _pinDeliverPayloadsEnabled = true;
 const bool _pinPersistItemsEnabled = true;
 const bool _pinPresenceBasedDeliveryDisabled = false;
+const mox.AccessModel _pinAccessModelOpen = mox.AccessModel.open;
+const mox.AccessModel _pinAccessModelRestricted = mox.AccessModel.whitelist;
 const String _pinPubSubHostPrefix = 'pubsub.';
 const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
 const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
@@ -202,9 +205,43 @@ String? _chatJidFromPinNode(String nodeId) {
   return _decodePinChatJid(encoded);
 }
 
-AxiPubSubNodeConfig _pinNodeConfig() => const AxiPubSubNodeConfig(
-      accessModel: mox.AccessModel.open,
-      publishModel: _pinPublishModelOpen,
+enum _PinNodePolicy {
+  shared,
+  restricted,
+}
+
+bool _hasEmailAddressValue(String? address) {
+  final trimmed = address?.trim();
+  return trimmed != null && trimmed.isNotEmpty;
+}
+
+_PinNodePolicy _pinPolicyFromChat(Chat? chat) {
+  if (chat == null) {
+    return _PinNodePolicy.shared;
+  }
+  final hasDeltaChatId = chat.deltaChatId != null;
+  final hasEmailAddress = _hasEmailAddressValue(chat.emailAddress);
+  if (hasDeltaChatId || hasEmailAddress || chat.defaultTransport.isEmail) {
+    return _PinNodePolicy.restricted;
+  }
+  return _PinNodePolicy.shared;
+}
+
+mox.AccessModel _pinAccessModelForPolicy(_PinNodePolicy policy) =>
+    switch (policy) {
+      _PinNodePolicy.restricted => _pinAccessModelRestricted,
+      _PinNodePolicy.shared => _pinAccessModelOpen,
+    };
+
+String _pinPublishModelForPolicy(_PinNodePolicy policy) => switch (policy) {
+      _PinNodePolicy.restricted => _pinPublishModelPublishers,
+      _PinNodePolicy.shared => _pinPublishModelOpen,
+    };
+
+AxiPubSubNodeConfig _pinNodeConfig(_PinNodePolicy policy) =>
+    AxiPubSubNodeConfig(
+      accessModel: _pinAccessModelForPolicy(policy),
+      publishModel: _pinPublishModelForPolicy(policy),
       deliverNotifications: _pinDeliverNotificationsEnabled,
       deliverPayloads: _pinDeliverPayloadsEnabled,
       maxItems: _pinSyncMaxItemsValue,
@@ -217,13 +254,15 @@ AxiPubSubNodeConfig _pinNodeConfig() => const AxiPubSubNodeConfig(
       sendLastPublishedItem: _pinSendLastOnSubscribe,
     );
 
-mox.NodeConfig _pinCreateNodeConfig() => _pinNodeConfig().toNodeConfig();
+mox.NodeConfig _pinCreateNodeConfig(_PinNodePolicy policy) =>
+    _pinNodeConfig(policy).toNodeConfig();
 
-mox.PubSubPublishOptions _pinPublishOptions() => mox.PubSubPublishOptions(
-      accessModel: mox.AccessModel.open.value,
+mox.PubSubPublishOptions _pinPublishOptions(_PinNodePolicy policy) =>
+    mox.PubSubPublishOptions(
+      accessModel: _pinAccessModelForPolicy(policy).value,
       maxItems: _pinSyncMaxItemsValue,
       persistItems: _pinPersistItemsEnabled,
-      publishModel: _pinPublishModelOpen,
+      publishModel: _pinPublishModelForPolicy(policy),
       sendLastPublishedItem: _pinSendLastOnSubscribe,
     );
 
@@ -1011,6 +1050,13 @@ mixin MessageService
         getFunction: (db) => db.getPinnedMessages(chatJid),
       );
 
+  Future<_PinNodePolicy> _resolvePinNodePolicy(String chatJid) async {
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(chatJid),
+    );
+    return _pinPolicyFromChat(chat);
+  }
+
   Future<void> pinMessage({
     required String chatJid,
     required Message message,
@@ -1067,6 +1113,7 @@ mixin MessageService
     if (connectionState != ConnectionState.connected) {
       return;
     }
+    final policy = await _resolvePinNodePolicy(normalizedChat);
     _pinSyncInFlight.add(normalizedChat);
     try {
       await database;
@@ -1078,7 +1125,7 @@ mixin MessageService
       if (!support.pubSubSupported) {
         return;
       }
-      final host = await _ensurePinNodeForChat(normalizedChat);
+      final host = await _ensurePinNodeForChat(normalizedChat, policy: policy);
       if (host == null) {
         return;
       }
@@ -4978,7 +5025,10 @@ mixin MessageService
     return candidates;
   }
 
-  Future<mox.JID?> _ensurePinNodeForChat(String chatJid) async {
+  Future<mox.JID?> _ensurePinNodeForChat(
+    String chatJid, {
+    required _PinNodePolicy policy,
+  }) async {
     final nodeId = _pinNodeForChat(chatJid);
     if (nodeId == null) return null;
     final pubsub = _pinPubSub();
@@ -4988,6 +5038,7 @@ mixin MessageService
         pubsub: pubsub,
         host: host,
         nodeId: nodeId,
+        policy: policy,
       );
       if (!configured) continue;
       _pinPubSubHost = host;
@@ -5000,8 +5051,9 @@ mixin MessageService
     required SafePubSubManager pubsub,
     required mox.JID host,
     required String nodeId,
+    required _PinNodePolicy policy,
   }) async {
-    final config = _pinNodeConfig();
+    final config = _pinNodeConfig(policy);
     final configured = await pubsub.configureNode(host, nodeId, config);
     if (!configured.isType<mox.PubSubError>()) {
       return true;
@@ -5010,7 +5062,7 @@ mixin MessageService
     try {
       final created = await pubsub.createNodeWithConfig(
         host,
-        _pinCreateNodeConfig(),
+        _pinCreateNodeConfig(policy),
         nodeId: nodeId,
       );
       if (created != null) {
@@ -5261,6 +5313,7 @@ mixin MessageService
     if (normalizedChat == null) {
       return;
     }
+    final policy = await _resolvePinNodePolicy(normalizedChat);
     final support = await refreshPubSubSupport();
     if (!support.pubSubSupported) {
       return;
@@ -5269,7 +5322,7 @@ mixin MessageService
     if (pubsub == null) {
       return;
     }
-    final host = await _ensurePinNodeForChat(normalizedChat);
+    final host = await _ensurePinNodeForChat(normalizedChat, policy: policy);
     if (host == null) {
       return;
     }
@@ -5325,6 +5378,7 @@ mixin MessageService
         host: host,
         nodeId: nodeId,
         entry: entry,
+        policy: policy,
       );
       if (!success) {
         continue;
@@ -5343,6 +5397,7 @@ mixin MessageService
     required mox.JID host,
     required String nodeId,
     required PinnedMessageEntry entry,
+    required _PinNodePolicy policy,
   }) async {
     final messageId = entry.messageStanzaId.trim();
     if (messageId.isEmpty) return false;
@@ -5356,9 +5411,9 @@ mixin MessageService
       nodeId,
       payload.toXml(),
       id: payload.itemId,
-      options: _pinPublishOptions(),
+      options: _pinPublishOptions(policy),
       autoCreate: true,
-      createNodeConfig: _pinCreateNodeConfig(),
+      createNodeConfig: _pinCreateNodeConfig(policy),
     );
     return !result.isType<mox.PubSubError>();
   }
@@ -5421,6 +5476,13 @@ mixin MessageService
         );
       }
       if (!isTrusted) return;
+      final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+        (db) => db.getFileMetadata(trimmedMetadataId),
+      );
+      if (metadata == null) return;
+      if (!attachmentAutoDownloadSettings.allowsMetadata(metadata)) {
+        return;
+      }
       await downloadInboundAttachment(
         metadataId: trimmedMetadataId,
         stanzaId: stanzaId,

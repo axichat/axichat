@@ -1298,5 +1298,13 @@
   "calendarRemindersSection": "Reminders",
   "settingsAutoLoadEmailImages": "Auto-load email images",
   "settingsAutoLoadEmailImagesDescription": "May reveal your IP address to senders",
+  "settingsAutoDownloadImages": "Auto-download images",
+  "settingsAutoDownloadImagesDescription": "Only for trusted chats.",
+  "settingsAutoDownloadVideos": "Auto-download videos",
+  "settingsAutoDownloadVideosDescription": "Only for trusted chats.",
+  "settingsAutoDownloadDocuments": "Auto-download documents",
+  "settingsAutoDownloadDocumentsDescription": "Only for trusted chats.",
+  "settingsAutoDownloadArchives": "Auto-download archives",
+  "settingsAutoDownloadArchivesDescription": "Only for trusted chats.",
   "chatChooseTextToAdd": "Choose text to add"
 }

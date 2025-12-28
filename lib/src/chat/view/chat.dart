@@ -5092,6 +5092,21 @@ class _ChatState extends State<Chat> {
                                                         final allowAttachment =
                                                             allowAttachmentByTrust ||
                                                                 allowAttachmentOnce;
+                                                        final autoDownloadSettings =
+                                                            context
+                                                                .watch<
+                                                                    SettingsCubit>()
+                                                                .state
+                                                                .attachmentAutoDownloadSettings;
+                                                        final chatAutoDownloadAllowed =
+                                                            state
+                                                                    .chat
+                                                                    ?.attachmentAutoDownload
+                                                                    .isAllowed ??
+                                                                false;
+                                                        final autoDownloadAllowed =
+                                                            allowAttachment &&
+                                                                chatAutoDownloadAllowed;
                                                         final emailService =
                                                             RepositoryProvider
                                                                 .of<EmailService?>(
@@ -5107,14 +5122,6 @@ class _ChatState extends State<Chat> {
                                                                     ),
                                                                   )
                                                                 : null;
-                                                        final autoDownload =
-                                                            allowAttachmentOnce ||
-                                                                (allowAttachment &&
-                                                                    (state
-                                                                            .chat
-                                                                            ?.attachmentAutoDownload
-                                                                            .isAllowed ??
-                                                                        false));
                                                         final autoDownloadUserInitiated =
                                                             allowAttachmentOnce;
                                                         for (var index = 0;
@@ -5146,8 +5153,10 @@ class _ChatState extends State<Chat> {
                                                                       attachmentId),
                                                               allowed:
                                                                   allowAttachment,
-                                                              autoDownload:
-                                                                  autoDownload,
+                                                              autoDownloadSettings:
+                                                                  autoDownloadSettings,
+                                                              autoDownloadAllowed:
+                                                                  autoDownloadAllowed,
                                                               autoDownloadUserInitiated:
                                                                   autoDownloadUserInitiated,
                                                               downloadDelegate:
@@ -7427,12 +7436,13 @@ class _PinnedMessageTile extends StatelessWidget {
               ),
       );
     }
-    if (hasCriticalPath) {
+    final resolvedCriticalPath = criticalPathFragment;
+    if (resolvedCriticalPath != null) {
       contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
       contentChildren.add(
         ChatCalendarCriticalPathCard(
-          path: criticalPathFragment!.path,
-          tasks: criticalPathFragment.tasks,
+          path: resolvedCriticalPath.path,
+          tasks: resolvedCriticalPath.tasks,
           footerDetails: _emptyInlineSpans,
         ),
       );
@@ -7454,14 +7464,17 @@ class _PinnedMessageTile extends StatelessWidget {
       );
       final allowAttachmentOnce = isOneTimeAttachmentAllowed(message.stanzaID);
       final allowAttachment = allowAttachmentByTrust || allowAttachmentOnce;
+      final autoDownloadSettings =
+          context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
+      final chatAutoDownloadAllowed = chat.attachmentAutoDownload.isAllowed;
+      final autoDownloadAllowed =
+          allowAttachment && chatAutoDownloadAllowed;
       final emailService = RepositoryProvider.of<EmailService?>(context);
       final emailDownloadDelegate = isEmailChat && emailService != null
           ? AttachmentDownloadDelegate(
               () => emailService.downloadFullMessage(message),
             )
           : null;
-      final autoDownload = allowAttachmentOnce ||
-          (allowAttachment && chat.attachmentAutoDownload.isAllowed);
       final autoDownloadUserInitiated = allowAttachmentOnce;
       for (var index = 0; index < attachmentIds.length; index += 1) {
         final attachmentId = attachmentIds[index];
@@ -7476,7 +7489,8 @@ class _PinnedMessageTile extends StatelessWidget {
             metadataStream: metadataStreamFor(attachmentId),
             initialMetadata: metadataInitialFor(attachmentId),
             allowed: allowAttachment,
-            autoDownload: autoDownload,
+            autoDownloadSettings: autoDownloadSettings,
+            autoDownloadAllowed: autoDownloadAllowed,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: emailDownloadDelegate,
             onAllowPressed: allowAttachment

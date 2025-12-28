@@ -151,6 +151,7 @@ class _AxichatState extends State<Axichat> {
             credentialStore: context.read<CredentialStore>(),
             databaseBuilder: () => context.read<XmppService>().database,
             notificationService: context.read<NotificationService>(),
+            messageService: context.read<MessageService>(),
           ),
         ),
         RepositoryProvider<HomeRefreshSyncService>(
@@ -163,7 +164,8 @@ class _AxichatState extends State<Axichat> {
       child: MultiBlocProvider(
         providers: [
           BlocProvider(
-            create: (context) => SettingsCubit(),
+            create: (context) =>
+                SettingsCubit(xmppService: context.read<XmppService>()),
           ),
           BlocProvider(
             create: (context) => AuthenticationCubit(

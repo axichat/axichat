@@ -5486,6 +5486,54 @@ abstract class AppLocalizations {
   /// **'May reveal your IP address to senders'**
   String get settingsAutoLoadEmailImagesDescription;
 
+  /// No description provided for @settingsAutoDownloadImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download images'**
+  String get settingsAutoDownloadImages;
+
+  /// No description provided for @settingsAutoDownloadImagesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted chats.'**
+  String get settingsAutoDownloadImagesDescription;
+
+  /// No description provided for @settingsAutoDownloadVideos.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download videos'**
+  String get settingsAutoDownloadVideos;
+
+  /// No description provided for @settingsAutoDownloadVideosDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted chats.'**
+  String get settingsAutoDownloadVideosDescription;
+
+  /// No description provided for @settingsAutoDownloadDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download documents'**
+  String get settingsAutoDownloadDocuments;
+
+  /// No description provided for @settingsAutoDownloadDocumentsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted chats.'**
+  String get settingsAutoDownloadDocumentsDescription;
+
+  /// No description provided for @settingsAutoDownloadArchives.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download archives'**
+  String get settingsAutoDownloadArchives;
+
+  /// No description provided for @settingsAutoDownloadArchivesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted chats.'**
+  String get settingsAutoDownloadArchivesDescription;
+
   /// No description provided for @chatChooseTextToAdd.
   ///
   /// In en, this message translates to:

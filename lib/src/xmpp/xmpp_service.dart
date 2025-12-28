@@ -6,6 +6,8 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
+import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
@@ -445,6 +447,8 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _databaseFactory;
   final NotificationService _notificationService;
   final Capability _capability;
+  AttachmentAutoDownloadSettings _attachmentAutoDownloadSettings =
+      const AttachmentAutoDownloadSettings();
 
   // Calendar sync message callback
   Future<bool> Function(CalendarSyncInbound)? _calendarSyncCallback;
@@ -481,6 +485,15 @@ class XmppService extends XmppBase
   @override
   Stream<PubSubSupport> get pubSubSupportStream =>
       _pubSubSupportController.stream;
+
+  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
+      _attachmentAutoDownloadSettings;
+
+  void updateAttachmentAutoDownloadSettings(
+    AttachmentAutoDownloadSettings settings,
+  ) {
+    _attachmentAutoDownloadSettings = settings;
+  }
 
   @override
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;

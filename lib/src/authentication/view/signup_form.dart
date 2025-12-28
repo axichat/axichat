@@ -9,6 +9,7 @@ import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -44,6 +45,17 @@ enum _InsecurePasswordReason { weak, breached }
 
 const _strengthMediumColor = Color(0xFFF97316);
 const _strengthStrongColor = Color(0xFF22C55E);
+const int _captchaXmlMaxBytes = 64 * 1024;
+const int _captchaXmlMaxNodes = 4000;
+const int _captchaXmlMaxDepth = 32;
+const Duration _captchaXmlMaxParseDuration = Duration(milliseconds: 120);
+const int _httpOkStatus = 200;
+const XmlParseLimits _captchaXmlParseLimits = XmlParseLimits(
+  maxBytes: _captchaXmlMaxBytes,
+  maxNodes: _captchaXmlMaxNodes,
+  maxDepth: _captchaXmlMaxDepth,
+  maxDuration: _captchaXmlMaxParseDuration,
+);
 
 class _SignupFormState extends State<SignupForm>
     with AutomaticKeepAliveClientMixin {
@@ -251,19 +263,18 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Future<String> _loadCaptchaSrc() async {
-    late final XmlDocument document;
+    XmlDocument? document;
     try {
       final registrationUrl =
           context.read<AuthenticationCubit>().registrationUrl;
       _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
       final response = await http.get(registrationUrl);
-      if (response.statusCode != 200) return '';
-      document = XmlDocument.parse(response.body);
+      if (response.statusCode != _httpOkStatus) return '';
+      final bodyBytes = response.bodyBytes;
+      if (bodyBytes.length > _captchaXmlMaxBytes) return '';
+      document = tryParseXml(response.body, _captchaXmlParseLimits);
+      if (document == null) return '';
     } on http.ClientException catch (_) {
-      return '';
-    } on XmlParserException catch (_) {
-      return '';
-    } on XmlTagException catch (_) {
       return '';
     } on Exception catch (_) {
       return '';

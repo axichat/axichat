@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:share_handler/share_handler.dart';
 
+const int _maxSharedTextLength = 32 * 1024;
+const String _sharedTextNullToken = '\u0000';
+
 class SharePayload {
   const SharePayload({required this.text});
 
@@ -53,17 +56,32 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   }
 
   void _handleMedia(SharedMedia media) {
-    final text = media.content?.trim();
-    if (text == null || text.isEmpty) {
+    final rawText = media.content;
+    if (rawText == null || rawText.isEmpty) {
       return;
     }
-    emit(ShareIntentState.ready(SharePayload(text: text)));
+    final sanitized = _sanitizeSharedText(rawText);
+    if (sanitized == null) {
+      return;
+    }
+    emit(ShareIntentState.ready(SharePayload(text: sanitized)));
   }
 
   bool get _isSupportedPlatform =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
+
+  String? _sanitizeSharedText(String text) {
+    final normalized = text.replaceAll(_sharedTextNullToken, '').trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (normalized.length > _maxSharedTextLength) {
+      return null;
+    }
+    return normalized;
+  }
 
   @override
   Future<void> close() async {
