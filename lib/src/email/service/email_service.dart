@@ -28,6 +28,7 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 const _defaultPageSize = 50;
 const _maxFanOutRecipients = 20;
@@ -163,6 +164,7 @@ class EmailService {
     EmailDeltaTransport? transport,
     EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
+    MessageService? messageService,
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
     EndpointConfig endpointConfig = const EndpointConfig(),
@@ -178,6 +180,7 @@ class EmailService {
             connectionConfigBuilder ?? _defaultConnectionConfig,
         _log = logger ?? Logger('EmailService'),
         _notificationService = notificationService,
+        _messageService = messageService,
         _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     blocking = EmailBlockingService(
       databaseBuilder: databaseBuilder,
@@ -201,6 +204,7 @@ class EmailService {
   final Logger _log;
   EndpointConfig _endpointConfig;
   final NotificationService? _notificationService;
+  final MessageService? _messageService;
   final ForegroundTaskBridge? _foregroundBridge;
   late final EmailBlockingService blocking;
   late final EmailSpamService spam;
@@ -1491,6 +1495,11 @@ class EmailService {
     if (chatJid.isEmpty || stanzaId.isEmpty) {
       return;
     }
+    final messageService = _messageService;
+    if (messageService != null) {
+      await messageService.pinMessage(chatJid: chatJid, message: message);
+      return;
+    }
     final pinnedAt = DateTime.timestamp().toUtc();
     final db = await _databaseBuilder();
     await db.upsertPinnedMessage(
@@ -1510,6 +1519,11 @@ class EmailService {
     final chatJid = chat.jid.trim();
     final stanzaId = message.stanzaID.trim();
     if (chatJid.isEmpty || stanzaId.isEmpty) {
+      return;
+    }
+    final messageService = _messageService;
+    if (messageService != null) {
+      await messageService.unpinMessage(chatJid: chatJid, message: message);
       return;
     }
     final db = await _databaseBuilder();

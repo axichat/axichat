@@ -35,8 +35,22 @@ class SettingsState with _$SettingsState {
     @Default(<String>[]) List<String> unscheduledSidebarOrder,
     @Default(<String>[]) List<String> reminderSidebarOrder,
     @Default(false) bool autoLoadEmailImages,
+    @Default(defaultAutoDownloadImages) bool autoDownloadImages,
+    @Default(defaultAutoDownloadVideos) bool autoDownloadVideos,
+    @Default(defaultAutoDownloadDocuments) bool autoDownloadDocuments,
+    @Default(defaultAutoDownloadArchives) bool autoDownloadArchives,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>
       _$SettingsStateFromJson(json);
+}
+
+extension SettingsAttachmentAutoDownload on SettingsState {
+  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
+      AttachmentAutoDownloadSettings(
+        imagesEnabled: autoDownloadImages,
+        videosEnabled: autoDownloadVideos,
+        documentsEnabled: autoDownloadDocuments,
+        archivesEnabled: autoDownloadArchives,
+      );
 }
