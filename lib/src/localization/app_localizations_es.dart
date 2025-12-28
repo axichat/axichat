@@ -264,6 +264,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String chatOpenLinkWarningMessage(Object url, Object host) {
+    return 'Vas a abrir:\n$url\n\nEste enlace contiene caracteres inusuales o invisibles. Verifica la dirección con cuidado (host: $host).';
+  }
+
+  @override
   String get chatOpenLinkConfirm => 'Abrir enlace';
 
   @override

@@ -83,6 +83,7 @@
   "attachmentGallerySortSizeDescLabel": "Taille du plus grand au plus petit",
   "chatOpenLinkTitle": "Ouvrir un lien externe ?",
   "chatOpenLinkMessage": "Tu es sur le point d'ouvrir :\n{url}\n\nN'appuie sur OK que si tu fais confiance au site (hôte : {host}).",
+  "chatOpenLinkWarningMessage": "Tu es sur le point d'ouvrir :\n{url}\n\nCe lien contient des caractères inhabituels ou invisibles. Vérifie attentivement l'adresse (hôte : {host}).",
   "chatOpenLinkConfirm": "Ouvrir le lien",
   "chatInvalidLink": "Lien invalide : {url}",
   "chatUnableToOpenHost": "Impossible d'ouvrir {host}",

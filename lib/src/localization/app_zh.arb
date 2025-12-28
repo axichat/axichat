@@ -83,6 +83,7 @@
   "attachmentGallerySortSizeDescLabel": "大小从大到小",
   "chatOpenLinkTitle": "打开外部链接？",
   "chatOpenLinkMessage": "你将要打开：\n{url}\n\n仅在信任该站点时点击确定（主机：{host}）。",
+  "chatOpenLinkWarningMessage": "你将要打开：\n{url}\n\n该链接包含异常或不可见字符。请仔细核对地址（主机：{host}）。",
   "chatOpenLinkConfirm": "打开链接",
   "chatInvalidLink": "无效的链接：{url}",
   "chatUnableToOpenHost": "无法打开 {host}",
