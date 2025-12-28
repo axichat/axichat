@@ -58,6 +58,16 @@ final _pinPendingRetractionsKey =
 const String _pinBase64PaddingChar = '=';
 const int _pinBase64Quantum = 4;
 final RegExp _pinBase64PaddingPattern = RegExp(r'=+$');
+const int _tlsRequirementNegotiatorPriority = 95;
+const bool _tlsRequirementSendStreamHeader = false;
+const bool _tlsRequirementErrorRecoverable = false;
+const bool _tlsRequirementMatchesAllFeatures = true;
+const bool _tlsRequirementNonFeatureDefault = true;
+const String _tlsRequirementNegotiatorId = 'axi.im.tls.required';
+const String _tlsRequirementNegotiatorXmlns = 'axi.im.tls.required';
+const String _tlsRequirementErrorMessage =
+    'TLS is required before authentication.';
+const String _streamFeaturesTag = 'stream:features';
 
 final class _MessageStatusSyncEnvelope {
   const _MessageStatusSyncEnvelope({
@@ -1156,33 +1166,21 @@ mixin MessageService
       (db) => db.getChat(chatJid),
     );
     if (chat == null) {
-      return const _PinNodeContext(
-        policy: _PinNodePolicy.shared,
+      return _PinNodeContext(
+        policy: _PinNodePolicy.restricted,
         chat: null,
+        affiliations: _basePinAffiliations(),
       );
     }
     if (chat.isEmailBacked) {
-      final affiliations = _basePinAffiliations();
-      if (affiliations == null || affiliations.isEmpty) {
-        return _PinNodeContext(
-          policy: _PinNodePolicy.shared,
-          chat: chat,
-        );
-      }
       return _PinNodeContext(
         policy: _PinNodePolicy.restricted,
         chat: chat,
-        affiliations: affiliations,
+        affiliations: _basePinAffiliations(),
       );
     }
     if (chat.type == ChatType.groupChat) {
       final affiliations = await _pinGroupAffiliations(chat);
-      if (affiliations == null || affiliations.isEmpty) {
-        return _PinNodeContext(
-          policy: _PinNodePolicy.shared,
-          chat: chat,
-        );
-      }
       return _PinNodeContext(
         policy: _PinNodePolicy.restricted,
         chat: chat,
@@ -1190,12 +1188,6 @@ mixin MessageService
       );
     }
     final affiliations = _pinDirectAffiliations(chat);
-    if (affiliations == null || affiliations.isEmpty) {
-      return _PinNodeContext(
-        policy: _PinNodePolicy.shared,
-        chat: chat,
-      );
-    }
     return _PinNodeContext(
       policy: _PinNodePolicy.restricted,
       chat: chat,
@@ -5458,23 +5450,10 @@ mixin MessageService
       policy: context.policy,
       affiliations: context.affiliations,
     );
-    if (applied) {
-      return context.policy;
-    }
-    if (context.policy == _PinNodePolicy.shared) {
+    if (!applied) {
       return null;
     }
-    final fallbackApplied = await _configurePinNodeWithPolicy(
-      pubsub: pubsub,
-      host: host,
-      nodeId: nodeId,
-      policy: _PinNodePolicy.shared,
-      affiliations: null,
-    );
-    if (!fallbackApplied) {
-      return null;
-    }
-    return _PinNodePolicy.shared;
+    return context.policy;
   }
 
   Future<bool> _configurePinNodeWithPolicy({

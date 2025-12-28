@@ -42,6 +42,9 @@ SET draft_source_id = ?
 WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
 ''';
 const String _attachmentRootDirectoryName = 'attachments';
+const String _databaseFileSuffix = '.axichat.drift';
+const String _attachmentPrefixFallback = 'shared';
+const String _attachmentPrefixReplacement = '_';
 const String _databaseWalSuffix = '-wal';
 const String _databaseShmSuffix = '-shm';
 const String _databaseJournalSuffix = '-journal';
@@ -50,6 +53,7 @@ const int _messageAttachmentSortOrderStart = 0;
 const int _messageAttachmentSortOrderStep = 1;
 const int _pinnedMessagesSchemaVersion = 23;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
+final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
 abstract interface class XmppDatabase implements Database {
   Stream<List<Message>> watchChatMessages(
@@ -2723,6 +2727,39 @@ WHERE jid = ?
     );
   }
 
+  String? _databasePrefixFromFilePath() {
+    final path = _file.path;
+    if (path.isEmpty) return null;
+    final baseName = p.basename(path);
+    if (!baseName.endsWith(_databaseFileSuffix)) {
+      return null;
+    }
+    final prefix =
+        baseName.substring(0, baseName.length - _databaseFileSuffix.length);
+    final trimmed = prefix.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String _normalizeAttachmentPrefix(String prefix) {
+    final trimmed = prefix.trim();
+    if (trimmed.isEmpty) {
+      return _attachmentPrefixFallback;
+    }
+    return trimmed.replaceAll(
+      _attachmentPrefixSanitizer,
+      _attachmentPrefixReplacement,
+    );
+  }
+
+  Future<Directory> _attachmentDirectoryForPrefix(String prefix) async {
+    final root = await _attachmentRootDirectory();
+    final normalizedPrefix = _normalizeAttachmentPrefix(prefix);
+    return Directory(p.join(root.path, normalizedPrefix));
+  }
+
   Future<bool> _isManagedAttachmentPath(String path) async {
     final trimmed = path.trim();
     if (trimmed.isEmpty) return false;
@@ -3884,7 +3921,11 @@ ON CONFLICT(address) DO UPDATE SET
   }
 
   Future<void> _deleteAttachmentRootDirectory() async {
-    final Directory directory = await _attachmentRootDirectory();
+    final String? prefix = _databasePrefixFromFilePath();
+    if (prefix == null) {
+      return;
+    }
+    final Directory directory = await _attachmentDirectoryForPrefix(prefix);
     if (!await directory.exists()) {
       return;
     }

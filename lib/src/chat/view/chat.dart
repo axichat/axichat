@@ -3195,7 +3195,9 @@ class _ChatState extends State<Chat> {
                     !readOnly &&
                     jid != null &&
                     _chatRoute == _ChatRoute.main;
+                final isEmailBacked = chatEntity?.isEmailBacked ?? false;
                 final canManagePins = !isGroupChat ||
+                    isEmailBacked ||
                     (state.roomState?.myAffiliation.canManagePins ?? false);
                 final canTogglePins = !readOnly && canManagePins;
                 if (!chatCalendarAvailable &&
@@ -7708,7 +7710,7 @@ class _PinnedMessageTile extends StatelessWidget {
     if (hasAttachments) {
       contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
       final isGroupChat = chat.type == ChatType.groupChat;
-      final isEmailChat = chat.defaultTransport.isEmail;
+      final isEmailBacked = chat.isEmailBacked;
       final allowAttachmentByTrust = shouldAllowAttachment(
         senderJid: message.senderJid,
         isSelf: isSelf,
@@ -7722,7 +7724,7 @@ class _PinnedMessageTile extends StatelessWidget {
       final chatAutoDownloadAllowed = chat.attachmentAutoDownload.isAllowed;
       final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
       final emailService = RepositoryProvider.of<EmailService?>(context);
-      final emailDownloadDelegate = isEmailChat && emailService != null
+      final emailDownloadDelegate = isEmailBacked && emailService != null
           ? AttachmentDownloadDelegate(
               () => emailService.downloadFullMessage(message),
             )
@@ -7753,7 +7755,7 @@ class _PinnedMessageTile extends StatelessWidget {
                       stanzaId: message.stanzaID,
                       metadataId: attachmentId,
                       isGroupChat: isGroupChat,
-                      isEmailChat: isEmailChat,
+                      isEmailChat: isEmailBacked,
                       senderEmail: chat.emailAddress,
                     ),
           ),
