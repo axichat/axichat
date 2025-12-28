@@ -626,6 +626,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatForwardDialogTitle => 'Forward to...';
 
   @override
+  String get chatForwardEmailWarningTitle => 'Forward email?';
+
+  @override
+  String get chatForwardEmailWarningMessage =>
+      'Forwarding email can include original headers and external image links. Choose how to send.';
+
+  @override
+  String get chatForwardEmailOptionSafe => 'Forward as new message';
+
+  @override
+  String get chatForwardEmailOptionOriginal => 'Forward original';
+
+  @override
   String get chatComposerAttachmentWarning =>
       'Large attachments are sent separately to each recipient and may take longer to deliver.';
 
@@ -1778,6 +1791,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authUnregisterTitle => 'Unregister';
 
   @override
+  String get authUnregisterConfirmTitle => 'Delete account?';
+
+  @override
+  String get authUnregisterConfirmMessage =>
+      'This will permanently delete your account and local data. This cannot be undone.';
+
+  @override
+  String get authUnregisterConfirmAction => 'Delete account';
+
+  @override
   String get authUnregisterProgressLabel => 'Waiting for account deletion';
 
   @override
@@ -1858,13 +1881,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatAttachmentExportMessage =>
-      'This will copy the attachment to shared storage. Continue?';
+      'This will copy the attachment to shared storage. Exports are unencrypted and may be readable by other apps. Continue?';
 
   @override
   String get chatAttachmentExportConfirm => 'Save';
 
   @override
   String get chatAttachmentExportCancel => 'Cancel';
+
+  @override
+  String get chatMediaMetadataWarningTitle => 'Media may include metadata';
+
+  @override
+  String get chatMediaMetadataWarningMessage =>
+      'Photos and videos can include location and device details. Continue?';
+
+  @override
+  String get chatNotificationPreviewOptionInherit => 'Use app setting';
+
+  @override
+  String get chatNotificationPreviewOptionShow => 'Always show previews';
+
+  @override
+  String get chatNotificationPreviewOptionHide => 'Always hide previews';
 
   @override
   String get chatAttachmentUnavailableDevice =>
@@ -2237,6 +2276,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatsExportFailure => 'Unable to export chat';
+
+  @override
+  String get chatExportWarningTitle => 'Export chat history?';
+
+  @override
+  String get chatExportWarningMessage =>
+      'Chat exports are unencrypted and may be readable by other apps or cloud services. Continue?';
 
   @override
   String get chatsArchivedRestored => 'Chat restored';

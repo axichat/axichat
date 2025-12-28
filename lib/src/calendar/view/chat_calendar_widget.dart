@@ -17,7 +17,6 @@ import 'package:axichat/src/calendar/view/task_sidebar.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
-import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';

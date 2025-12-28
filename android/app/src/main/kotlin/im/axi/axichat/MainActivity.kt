@@ -3,12 +3,24 @@ package im.axi.axichat
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.WindowManager
+import android.widget.Toast
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterView
 
 class MainActivity : FlutterActivity() {
+  companion object {
+    private const val overlayWarningMessage =
+        "Screen overlay detected. Tap blocked for your security."
+    private const val overlayWarningThrottleMs = 2000L
+    private const val overlayBlockDurationMs = 1500L
+  }
+
+  private var lastOverlayWarningAt = 0L
+  private var overlayBlockUntilMs = 0L
+
   override fun onCreate(savedInstanceState: Bundle?) {
     if (shouldFinishForTaskHijack(intent)) {
       finish()
@@ -23,7 +35,14 @@ class MainActivity : FlutterActivity() {
   }
 
   override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    val nowMs = SystemClock.elapsedRealtime()
+    if (nowMs < overlayBlockUntilMs) {
+      maybeShowOverlayWarning(nowMs)
+      return false
+    }
     if (isTouchObscured(event)) {
+      overlayBlockUntilMs = nowMs + overlayBlockDurationMs
+      maybeShowOverlayWarning(nowMs)
       return false
     }
     return super.dispatchTouchEvent(event)
@@ -37,6 +56,14 @@ class MainActivity : FlutterActivity() {
       false
     }
     return obscured || partiallyObscured
+  }
+
+  private fun maybeShowOverlayWarning(nowMs: Long) {
+    if (nowMs - lastOverlayWarningAt < overlayWarningThrottleMs) {
+      return
+    }
+    lastOverlayWarningAt = nowMs
+    Toast.makeText(this, overlayWarningMessage, Toast.LENGTH_SHORT).show()
   }
 
   private fun shouldFinishForTaskHijack(intent: Intent?): Boolean {

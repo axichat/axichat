@@ -638,6 +638,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatForwardDialogTitle => 'Reenviar a...';
 
   @override
+  String get chatForwardEmailWarningTitle => 'Forward email?';
+
+  @override
+  String get chatForwardEmailWarningMessage =>
+      'Forwarding email can include original headers and external image links. Choose how to send.';
+
+  @override
+  String get chatForwardEmailOptionSafe => 'Forward as new message';
+
+  @override
+  String get chatForwardEmailOptionOriginal => 'Forward original';
+
+  @override
   String get chatComposerAttachmentWarning =>
       'Los archivos adjuntos grandes se envían por separado a cada destinatario y pueden tardar más en entregarse.';
 
@@ -1802,6 +1815,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authUnregisterTitle => 'Dar de baja';
 
   @override
+  String get authUnregisterConfirmTitle => 'Delete account?';
+
+  @override
+  String get authUnregisterConfirmMessage =>
+      'This will permanently delete your account and local data. This cannot be undone.';
+
+  @override
+  String get authUnregisterConfirmAction => 'Delete account';
+
+  @override
   String get authUnregisterProgressLabel =>
       'Esperando la eliminación de la cuenta';
 
@@ -1884,13 +1907,33 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatAttachmentExportMessage =>
-      'Esto copiará el adjunto al almacenamiento compartido. ¿Continuar?';
+      'Esto copiará el adjunto al almacenamiento compartido. Las exportaciones no están cifradas y otras apps pueden leerlas. ¿Continuar?';
 
   @override
   String get chatAttachmentExportConfirm => 'Guardar';
 
   @override
   String get chatAttachmentExportCancel => 'Cancelar';
+
+  @override
+  String get chatMediaMetadataWarningTitle =>
+      'Los medios pueden incluir metadatos';
+
+  @override
+  String get chatMediaMetadataWarningMessage =>
+      'Las fotos y los videos pueden incluir ubicación y datos del dispositivo. ¿Continuar?';
+
+  @override
+  String get chatNotificationPreviewOptionInherit =>
+      'Usar la configuración de la app';
+
+  @override
+  String get chatNotificationPreviewOptionShow =>
+      'Mostrar vistas previas siempre';
+
+  @override
+  String get chatNotificationPreviewOptionHide =>
+      'Ocultar vistas previas siempre';
 
   @override
   String get chatAttachmentUnavailableDevice =>
@@ -2264,6 +2307,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatsExportFailure => 'No se pudo exportar el chat';
+
+  @override
+  String get chatExportWarningTitle => '¿Exportar historial del chat?';
+
+  @override
+  String get chatExportWarningMessage =>
+      'Las exportaciones de chat no están cifradas y otras apps o servicios en la nube pueden leerlas. ¿Continuar?';
 
   @override
   String get chatsArchivedRestored => 'Chat restaurado';

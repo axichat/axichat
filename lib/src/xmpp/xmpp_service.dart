@@ -34,12 +34,15 @@ import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -421,6 +424,10 @@ class XmppService extends XmppBase
   static XmppService? _instance;
   static const bool _enableStreamManagement = true;
   static const String _capabilityHashBase = 'https://axichat.im/caps';
+  static const NotificationPayloadCodec _notificationPayloadCodec =
+      NotificationPayloadCodec();
+  static const int _notificationPayloadLookupStart = 0;
+  static const int _notificationPayloadLookupEnd = 0;
 
   factory XmppService({
     required FutureOr<XmppConnection> Function() buildConnection,
@@ -577,6 +584,22 @@ class XmppService extends XmppBase
 
   @override
   mox.JID? _myJid;
+
+  Future<String?> resolveNotificationPayload(String payload) async {
+    final trimmed = payload.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final db = await database;
+    final chats = await db.getChats(
+      start: _notificationPayloadLookupStart,
+      end: _notificationPayloadLookupEnd,
+    );
+    return _notificationPayloadCodec.resolveChatJid(
+      payload: trimmed,
+      chatJids: chats.map((chat) => chat.jid),
+    );
+  }
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -1067,14 +1090,26 @@ class XmppService extends XmppBase
         if (chat?.muted ?? false) {
           return;
         }
+        final previewSetting = chat?.notificationPreviewSetting ??
+            NotificationPreviewSetting.inherit;
+        final showPreview = previewSetting
+            .resolvePreview(_notificationService.notificationPreviewsEnabled);
+        final threadKey = _notificationPayloadCodec.encodeChatJid(
+              message.chatJid,
+            ) ??
+            message.chatJid.trim();
+        if (threadKey.isEmpty) {
+          return;
+        }
         await _notificationService.sendMessageNotification(
           title: chat?.title ?? message.senderJid,
           body: message.body,
           extraConditions: [
             message.senderJid != myJid,
           ],
-          payload: message.chatJid,
-          threadKey: message.chatJid,
+          payload: threadKey,
+          threadKey: threadKey,
+          showPreviewOverride: showPreview,
         );
       },
     );
@@ -2598,6 +2633,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   static final _log = Logger('XmppSocketWrapper');
   static const _socketClosedWithErrorLog = 'Socket closed with error.';
+  static const TlsProtocolVersion _minTlsProtocolVersion =
+      TlsProtocolVersion.tls1_2;
   static const String _xmlDoctypeToken = '<!doctype';
   static const String _xmlEntityToken = '<!entity';
   static const int _xmlTokenCarryLength =
@@ -2777,9 +2814,13 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
     try {
       _expectedClosures.add(socket);
+      final context = SecurityContext(withTrustedRoots: true)
+        ..minimumTlsProtocolVersion = _minTlsProtocolVersion
+        ..allowLegacyUnsafeRenegotiation = false;
       _socket = await SecureSocket.secure(
         socket,
         host: domain,
+        context: context,
         supportedProtocols: const [mox.xmppClientALPNId],
         onBadCertificate: (cert) => onBadCertificate(cert, domain),
       );
