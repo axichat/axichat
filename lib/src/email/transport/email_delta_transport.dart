@@ -1146,11 +1146,12 @@ class EmailDeltaTransport implements ChatTransport {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
+    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
     return _context!.sendTextWithQuote(
       chatId: chatId,
       message: body,
       quotedMessageId: quotedMessageId,
-      subject: subject,
+      subject: sanitizedSubject,
       html: htmlBody,
     );
   }

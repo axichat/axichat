@@ -343,7 +343,10 @@ const int _xmppAttachmentDownloadLimitFallbackBytes = 50 * 1024 * 1024;
 const int _xmppAttachmentDownloadMaxRedirects = 5;
 const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
+const int _attachmentMaxUrlLength = 2048;
+const int _attachmentMaxMimeTypeLength = 128;
 const int _attachmentSourceMaxCount = 8;
+const String _attachmentFallbackName = 'attachment';
 const int _attachmentSizeFallbackBytes = 0;
 const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
@@ -4224,19 +4227,25 @@ mixin MessageService
     final fun = event.extensions.get<mox.FileUploadNotificationData>();
     final statelessData = event.extensions.get<mox.StatelessFileSharingData>();
     final oob = event.extensions.get<mox.OOBData>();
-    final oobUrl = oob?.url;
+    final oobUrl = _sanitizeAttachmentUrl(oob?.url);
     final oobDesc = oob?.desc?.trim();
-    final oobName = oobDesc?.isNotEmpty == true ? oobDesc : null;
+    final oobName = oobDesc?.isNotEmpty == true
+        ? _sanitizeAttachmentFilename(oobDesc!)
+        : null;
     if (statelessData == null || statelessData.sources.isEmpty) {
       if (fun != null) {
         final name = fun.metadata.name;
         final fallbackName =
             oobName ?? (oobUrl == null ? null : _filenameFromUrl(oobUrl));
+        final resolvedName = _sanitizeAttachmentFilename(
+          name ?? fallbackName ?? _attachmentFallbackName,
+        );
+        final mimeType = _sanitizeAttachmentMimeType(fun.metadata.mediaType);
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: oobUrl == null ? null : [oobUrl],
-          filename: p.normalize(name ?? fallbackName ?? 'attachment'),
-          mimeType: fun.metadata.mediaType,
+          filename: resolvedName,
+          mimeType: mimeType,
           sizeBytes: fun.metadata.size,
           width: fun.metadata.width,
           height: fun.metadata.height,
@@ -4247,7 +4256,9 @@ mixin MessageService
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: [oobUrl],
-          filename: oobName ?? _filenameFromUrl(oobUrl),
+          filename: _sanitizeAttachmentFilename(
+            oobName ?? _filenameFromUrl(oobUrl),
+          ),
         );
       }
       return null;
@@ -4260,18 +4271,26 @@ mixin MessageService
         exceededSourceLimit = true;
         break;
       }
-      urls.add(source.url);
+      final sanitizedUrl = _sanitizeAttachmentUrl(source.url);
+      if (sanitizedUrl == null) {
+        continue;
+      }
+      urls.add(sanitizedUrl);
     }
     if (exceededSourceLimit) {
       _log.warning('Attachment source list exceeded safe limits');
     }
     if (urls.isNotEmpty) {
+      final resolvedName = _sanitizeAttachmentFilename(
+        statelessData.metadata.name ?? p.basename(urls.first),
+      );
+      final mimeType =
+          _sanitizeAttachmentMimeType(statelessData.metadata.mediaType);
       return FileMetadataData(
         id: uuid.v4(),
         sourceUrls: urls,
-        filename:
-            p.normalize(statelessData.metadata.name ?? p.basename(urls.first)),
-        mimeType: statelessData.metadata.mediaType,
+        filename: resolvedName,
+        mimeType: mimeType,
         sizeBytes: statelessData.metadata.size,
         width: statelessData.metadata.width,
         height: statelessData.metadata.height,
@@ -4287,17 +4306,27 @@ mixin MessageService
           return FileMetadataData(
             id: uuid.v4(),
             sourceUrls: [oobUrl],
-            filename: oobName ?? _filenameFromUrl(oobUrl),
+            filename: _sanitizeAttachmentFilename(
+              oobName ?? _filenameFromUrl(oobUrl),
+            ),
           );
         }
         return null;
       }
+      final encryptedUrl = _sanitizeAttachmentUrl(encryptedSource.source.url);
+      if (encryptedUrl == null) {
+        return null;
+      }
+      final resolvedName = _sanitizeAttachmentFilename(
+        statelessData.metadata.name ?? p.basename(encryptedUrl),
+      );
+      final mimeType =
+          _sanitizeAttachmentMimeType(statelessData.metadata.mediaType);
       return FileMetadataData(
         id: uuid.v4(),
-        sourceUrls: [encryptedSource.source.url],
-        filename: p.normalize(statelessData.metadata.name ??
-            p.basename(encryptedSource.source.url)),
-        mimeType: statelessData.metadata.mediaType,
+        sourceUrls: [encryptedUrl],
+        filename: resolvedName,
+        mimeType: mimeType,
         encryptionKey: base64Encode(encryptedSource.key),
         encryptionIV: base64Encode(encryptedSource.iv),
         encryptionScheme: encryptedSource.encryption.toNamespace(),
@@ -4317,7 +4346,7 @@ mixin MessageService
         ? segments.last
         : p.basename(url);
     final normalized = p.basename(candidate).trim();
-    return normalized.isEmpty ? 'attachment' : normalized;
+    return normalized.isEmpty ? _attachmentFallbackName : normalized;
   }
 
   Stream<FileMetadataData?> fileMetadataStream(String id) =>
@@ -4545,17 +4574,17 @@ mixin MessageService
 
   String _sanitizeAttachmentFilename(String filename) {
     final base = p.basename(filename).trim();
-    if (base.isEmpty) return 'attachment';
+    if (base.isEmpty) return _attachmentFallbackName;
     final strippedSeparators = base.replaceAll(RegExp(r'[\\/]'), '_');
     final collapsedWhitespace =
         strippedSeparators.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (collapsedWhitespace.isEmpty) return 'attachment';
+    if (collapsedWhitespace.isEmpty) return _attachmentFallbackName;
     final safe = collapsedWhitespace.replaceAll(
       RegExp(r'[^a-zA-Z0-9._() \[\]-]'),
       '_',
     );
     final normalized = safe.trim();
-    if (normalized.isEmpty) return 'attachment';
+    if (normalized.isEmpty) return _attachmentFallbackName;
     if (normalized.length <= _attachmentMaxFilenameLength) return normalized;
     final extension = p.extension(normalized);
     final baseName = p.basenameWithoutExtension(normalized);
@@ -4564,6 +4593,24 @@ mixin MessageService
       return normalized.substring(0, _attachmentMaxFilenameLength);
     }
     return '${baseName.substring(0, maxBase)}$extension';
+  }
+
+  String? _sanitizeAttachmentMimeType(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (trimmed.length > _attachmentMaxMimeTypeLength) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String? _sanitizeAttachmentUrl(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (trimmed.length > _attachmentMaxUrlLength) {
+      return null;
+    }
+    return trimmed;
   }
 
   Future<void> _replaceFile({

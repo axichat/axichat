@@ -137,45 +137,57 @@ class HtmlContentCodec {
   static String sanitizeHtml(String html) {
     final trimmed = html.trim();
     if (trimmed.isEmpty) return '';
-    final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
-    final buffer = StringBuffer();
-    final budget = _HtmlNodeBudget(
-      maxNodes: _maxHtmlNodeCount,
-      maxDepth: _maxHtmlDepth,
-      maxDuration: _maxHtmlParseDuration,
-    );
-    for (final node in fragment.nodes) {
-      _appendSanitizedHtml(buffer, node, budget, 0);
+    try {
+      final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
+      final buffer = StringBuffer();
+      final budget = _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      );
+      for (final node in fragment.nodes) {
+        _appendSanitizedHtml(buffer, node, budget, 0);
+      }
+      return buffer.toString().trim();
+    } on Exception {
+      return '';
     }
-    return buffer.toString().trim();
   }
 
   static String toPlainText(String html) {
-    final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
-    final buffer = StringBuffer();
-    final budget = _HtmlNodeBudget(
-      maxNodes: _maxHtmlNodeCount,
-      maxDepth: _maxHtmlDepth,
-      maxDuration: _maxHtmlParseDuration,
-    );
-    _appendPlainText(buffer, fragment.nodes, budget, 0);
-    return _normalizePlainText(buffer.toString());
+    try {
+      final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
+      final buffer = StringBuffer();
+      final budget = _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      );
+      _appendPlainText(buffer, fragment.nodes, budget, 0);
+      return _normalizePlainText(buffer.toString());
+    } on Exception {
+      return '';
+    }
   }
 
   static String? toXhtml(String html) {
-    final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
-    final builder = xml.XmlBuilder();
-    final budget = _HtmlNodeBudget(
-      maxNodes: _maxHtmlNodeCount,
-      maxDepth: _maxHtmlDepth,
-      maxDuration: _maxHtmlParseDuration,
-    );
-    for (final node in fragment.nodes) {
-      _appendXml(builder, node, budget, 0);
+    try {
+      final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
+      final builder = xml.XmlBuilder();
+      final budget = _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      );
+      for (final node in fragment.nodes) {
+        _appendXml(builder, node, budget, 0);
+      }
+      final encoded = builder.buildFragment().toXmlString();
+      final normalized = encoded.trim();
+      return normalized.isEmpty ? null : normalized;
+    } on Exception {
+      return null;
     }
-    final encoded = builder.buildFragment().toXmlString();
-    final normalized = encoded.trim();
-    return normalized.isEmpty ? null : normalized;
   }
 
   static void _appendPlainText(
