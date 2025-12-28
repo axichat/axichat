@@ -5,6 +5,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -631,10 +632,11 @@ class EmailDeltaTransport implements ChatTransport {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
+    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
     final msgId = await _context!.sendText(
       chatId: chatId,
       message: body,
-      subject: subject,
+      subject: sanitizedSubject,
       html: htmlBody,
     );
     final deltaMessage = await _context!.getMessage(msgId);
@@ -662,6 +664,7 @@ class EmailDeltaTransport implements ChatTransport {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
+    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
     final msgId = await _context!.sendFileMessage(
       chatId: chatId,
       viewType: _viewTypeFor(attachment),
@@ -669,7 +672,7 @@ class EmailDeltaTransport implements ChatTransport {
       fileName: attachment.fileName,
       mimeType: attachment.mimeType,
       text: attachment.caption,
-      subject: subject,
+      subject: sanitizedSubject,
       html: htmlCaption,
     );
     final deltaMessage = await _context!.getMessage(msgId);

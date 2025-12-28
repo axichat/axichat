@@ -1,6 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'calendar_availability.dart';
+import 'calendar_critical_path.dart';
 import 'calendar_task.dart';
 import 'day_event.dart';
 import 'reminder_preferences.dart';
@@ -10,6 +11,7 @@ part 'calendar_fragment.g.dart';
 
 const String _calendarFragmentUnionKey = 'type';
 const List<TaskChecklistItem> _emptyTaskChecklistItems = <TaskChecklistItem>[];
+const List<CalendarTask> _emptyCriticalPathTasks = <CalendarTask>[];
 
 @Freezed(
   unionKey: _calendarFragmentUnionKey,
@@ -33,6 +35,11 @@ class CalendarFragment with _$CalendarFragment {
   const factory CalendarFragment.dayEvent({
     required DayEvent event,
   }) = CalendarDayEventFragment;
+
+  const factory CalendarFragment.criticalPath({
+    required CalendarCriticalPath path,
+    @Default(_emptyCriticalPathTasks) List<CalendarTask> tasks,
+  }) = CalendarCriticalPathFragment;
 
   const factory CalendarFragment.freeBusy({
     required CalendarFreeBusyInterval interval,

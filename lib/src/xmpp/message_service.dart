@@ -16,6 +16,31 @@ const String _availabilityResponseAcceptedFallbackText =
     'Availability accepted';
 const String _availabilityResponseDeclinedFallbackText =
     'Availability declined';
+const String _pinPubSubNamespace = 'urn:axi:pins';
+const String _pinPubSubNodePrefix = 'urn:axi:pins:';
+const String _pinTag = 'pin';
+const String _pinMessageIdAttr = 'message_id';
+const String _pinPinnedAtAttr = 'pinned_at';
+const String _pinChatJidAttr = 'chat_jid';
+const String _pinPublishModelOpen = 'open';
+const String _pinSendLastOnSubscribe = 'on_subscribe';
+const int _pinSyncMaxItems = 500;
+const String _pinSyncMaxItemsValue = '500';
+const bool _pinNotifyEnabled = true;
+const bool _pinDeliverNotificationsEnabled = true;
+const bool _pinDeliverPayloadsEnabled = true;
+const bool _pinPersistItemsEnabled = true;
+const bool _pinPresenceBasedDeliveryDisabled = false;
+const String _pinPubSubHostPrefix = 'pubsub.';
+const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
+const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
+final _pinPendingPublishesKey =
+    XmppStateStore.registerKey(_pinPendingPublishesKeyName);
+final _pinPendingRetractionsKey =
+    XmppStateStore.registerKey(_pinPendingRetractionsKeyName);
+const String _pinBase64PaddingChar = '=';
+const int _pinBase64Quantum = 4;
+final RegExp _pinBase64PaddingPattern = RegExp(r'=+$');
 
 final class _MessageStatusSyncEnvelope {
   const _MessageStatusSyncEnvelope({
@@ -105,6 +130,142 @@ extension MessageEvent on mox.MessageEvent {
   }
 }
 
+String? _normalizePinChatJid(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  try {
+    return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
+  } on Exception {
+    return trimmed.toLowerCase();
+  }
+}
+
+String _encodePinChatJid(String chatJid) {
+  final bytes = utf8.encode(chatJid);
+  final encoded = base64Url.encode(bytes);
+  return encoded.replaceAll(_pinBase64PaddingPattern, '');
+}
+
+String? _decodePinChatJid(String encoded) {
+  final trimmed = encoded.trim();
+  if (trimmed.isEmpty) return null;
+  var normalized = trimmed;
+  final paddingRemainder = normalized.length % _pinBase64Quantum;
+  if (paddingRemainder != 0) {
+    final paddingLength = _pinBase64Quantum - paddingRemainder;
+    normalized = '$normalized${_pinBase64PaddingChar * paddingLength}';
+  }
+  try {
+    final bytes = base64Url.decode(normalized);
+    final decoded = utf8.decode(bytes);
+    return _normalizePinChatJid(decoded);
+  } on FormatException {
+    return null;
+  }
+}
+
+String? _pinNodeForChat(String chatJid) {
+  final normalized = _normalizePinChatJid(chatJid);
+  if (normalized == null) return null;
+  final encoded = _encodePinChatJid(normalized);
+  return '$_pinPubSubNodePrefix$encoded';
+}
+
+String? _chatJidFromPinNode(String nodeId) {
+  if (!nodeId.startsWith(_pinPubSubNodePrefix)) return null;
+  final encoded = nodeId.substring(_pinPubSubNodePrefix.length);
+  return _decodePinChatJid(encoded);
+}
+
+AxiPubSubNodeConfig _pinNodeConfig() => const AxiPubSubNodeConfig(
+      accessModel: mox.AccessModel.open,
+      publishModel: _pinPublishModelOpen,
+      deliverNotifications: _pinDeliverNotificationsEnabled,
+      deliverPayloads: _pinDeliverPayloadsEnabled,
+      maxItems: _pinSyncMaxItemsValue,
+      notifyRetract: _pinNotifyEnabled,
+      notifyDelete: _pinNotifyEnabled,
+      notifyConfig: _pinNotifyEnabled,
+      notifySub: _pinNotifyEnabled,
+      presenceBasedDelivery: _pinPresenceBasedDeliveryDisabled,
+      persistItems: _pinPersistItemsEnabled,
+      sendLastPublishedItem: _pinSendLastOnSubscribe,
+    );
+
+mox.NodeConfig _pinCreateNodeConfig() => _pinNodeConfig().toNodeConfig();
+
+mox.PubSubPublishOptions _pinPublishOptions() => mox.PubSubPublishOptions(
+      accessModel: mox.AccessModel.open.value,
+      maxItems: _pinSyncMaxItemsValue,
+      persistItems: _pinPersistItemsEnabled,
+      publishModel: _pinPublishModelOpen,
+      sendLastPublishedItem: _pinSendLastOnSubscribe,
+    );
+
+final class _PinnedMessageSyncPayload {
+  const _PinnedMessageSyncPayload({
+    required this.messageStanzaId,
+    required this.chatJid,
+    required this.pinnedAt,
+  });
+
+  final String messageStanzaId;
+  final String chatJid;
+  final DateTime pinnedAt;
+
+  String get itemId => messageStanzaId;
+
+  static _PinnedMessageSyncPayload? fromXml(
+    mox.XMLNode node, {
+    required String chatJid,
+    String? itemId,
+  }) {
+    if (node.tag != _pinTag) return null;
+    if (node.attributes['xmlns']?.toString() != _pinPubSubNamespace) {
+      return null;
+    }
+    final rawMessageId = node.attributes[_pinMessageIdAttr]?.toString().trim();
+    final resolvedMessageId = rawMessageId == null || rawMessageId.isEmpty
+        ? itemId?.trim()
+        : rawMessageId;
+    if (resolvedMessageId == null || resolvedMessageId.isEmpty) {
+      return null;
+    }
+    final rawPinnedAt = node.attributes[_pinPinnedAtAttr]?.toString().trim();
+    if (rawPinnedAt == null || rawPinnedAt.isEmpty) {
+      return null;
+    }
+    final parsedPinnedAt = DateTime.tryParse(rawPinnedAt);
+    if (parsedPinnedAt == null) return null;
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) return null;
+    final rawChat = node.attributes[_pinChatJidAttr]?.toString().trim();
+    if (rawChat != null && rawChat.isNotEmpty) {
+      final normalizedRawChat = _normalizePinChatJid(rawChat);
+      if (normalizedRawChat != null && normalizedRawChat != normalizedChat) {
+        return null;
+      }
+    }
+    return _PinnedMessageSyncPayload(
+      messageStanzaId: resolvedMessageId,
+      chatJid: normalizedChat,
+      pinnedAt: parsedPinnedAt.toUtc(),
+    );
+  }
+
+  mox.XMLNode toXml() {
+    return mox.XMLNode.xmlns(
+      tag: _pinTag,
+      xmlns: _pinPubSubNamespace,
+      attributes: {
+        _pinMessageIdAttr: messageStanzaId,
+        _pinChatJidAttr: chatJid,
+        _pinPinnedAtAttr: pinnedAt.toUtc().toIso8601String(),
+      },
+    );
+  }
+}
+
 class MamPageResult {
   const MamPageResult({
     required this.complete,
@@ -164,6 +325,10 @@ const int _emptyMessageCount = 0;
 const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
 const int _calendarMamPageSize = 100;
 const int _calendarSnapshotDownloadMaxBytes = 10 * 1024 * 1024;
+const Duration _calendarSyncInboundWindow = Duration(seconds: 60);
+const int _calendarSyncInboundMaxMessages = 120;
+const String _calendarSyncEnvelopeKeyLiteral = '"calendar_sync"';
+const String _calendarSyncEnvelopeJsonPrefix = '{';
 const String _calendarSnapshotDefaultName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _calendarSnapshotNoJidMessage =
@@ -811,6 +976,109 @@ mixin MessageService
         getFunction: (db) => db.getDrafts(start: start, end: end),
       );
 
+  Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String chatJid) =>
+      createPaginatedStream<PinnedMessageEntry, XmppDatabase>(
+        watchFunction: (db) async => db.watchPinnedMessages(chatJid),
+        getFunction: (db) => db.getPinnedMessages(chatJid),
+      );
+
+  Future<void> pinMessage({
+    required String chatJid,
+    required Message message,
+  }) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    final stanzaId = message.stanzaID.trim();
+    if (normalizedChat == null || stanzaId.isEmpty) {
+      return;
+    }
+    final pinnedAt = DateTime.timestamp().toUtc();
+    await _dbOp<XmppDatabase>(
+      (db) => db.upsertPinnedMessage(
+        PinnedMessageEntry(
+          messageStanzaId: stanzaId,
+          chatJid: normalizedChat,
+          pinnedAt: pinnedAt,
+        ),
+      ),
+    );
+    await _queuePinPublish(normalizedChat, stanzaId);
+    await _flushPendingPinSyncForChat(normalizedChat);
+  }
+
+  Future<void> unpinMessage({
+    required String chatJid,
+    required Message message,
+  }) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    final stanzaId = message.stanzaID.trim();
+    if (normalizedChat == null || stanzaId.isEmpty) {
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.deletePinnedMessage(
+        chatJid: normalizedChat,
+        messageStanzaId: stanzaId,
+      ),
+    );
+    await _queuePinRetraction(normalizedChat, stanzaId);
+    await _flushPendingPinSyncForChat(normalizedChat);
+  }
+
+  Future<void> syncPinnedMessagesForChat(String chatJid) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    if (_pinSyncInFlight.contains(normalizedChat)) {
+      return;
+    }
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
+    _pinSyncInFlight.add(normalizedChat);
+    try {
+      await database;
+      if (connectionState != ConnectionState.connected) {
+        return;
+      }
+      await _ensurePendingPinSyncLoaded();
+      final support = await refreshPubSubSupport();
+      if (!support.pubSubSupported) {
+        return;
+      }
+      final host = await _ensurePinNodeForChat(normalizedChat);
+      if (host == null) {
+        return;
+      }
+      final nodeId = _pinNodeForChat(normalizedChat);
+      if (nodeId == null) {
+        return;
+      }
+      await _subscribeToPins(host: host, nodeId: nodeId);
+      await _flushPendingPinSyncForChat(normalizedChat);
+      final snapshot = await _fetchPinSnapshot(
+        host: host,
+        nodeId: nodeId,
+        chatJid: normalizedChat,
+      );
+      if (snapshot == null) {
+        return;
+      }
+      await _applyPinSnapshot(
+        chatJid: normalizedChat,
+        items: snapshot,
+      );
+      await _flushPendingPinSyncForChat(normalizedChat);
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _pinSyncInFlight.remove(normalizedChat);
+    }
+  }
+
   final _log = Logger('MessageService');
 
   final _messageStream = StreamController<Message>.broadcast();
@@ -824,6 +1092,7 @@ mixin MessageService
   bool _calendarMamRehydrateInFlight = false;
   bool _calendarMamSnapshotSeen = false;
   bool _calendarMamSnapshotUnavailableNotified = false;
+  final Queue<DateTime> _calendarSyncInboundTimestamps = Queue<DateTime>();
   final Set<String> _mucMamUnsupportedRooms = {};
   final Set<String> _mucJoinMamSyncRooms = {};
   final Set<String> _mucJoinMamDeferredRooms = {};
@@ -845,6 +1114,11 @@ mixin MessageService
   var _capabilityCacheLoaded = false;
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
   Directory? _attachmentDirectory;
+  bool _pendingPinSyncLoaded = false;
+  final Map<String, Set<String>> _pendingPinPublishesByChat = {};
+  final Map<String, Set<String>> _pendingPinRetractionsByChat = {};
+  final Set<String> _pinSyncInFlight = {};
+  mox.JID? _pinPubSubHost;
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -1069,6 +1343,16 @@ mixin MessageService
           received: true,
           displayed: false,
         );
+      })
+      ..registerHandler<mox.PubSubNotificationEvent>((event) async {
+        await _handlePinNotification(event);
+      })
+      ..registerHandler<mox.PubSubItemsRetractedEvent>((event) async {
+        await _handlePinRetraction(event);
+      })
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        if (connectionState != ConnectionState.connected) return;
+        unawaited(_flushPendingPinSync());
       });
   }
 
@@ -3264,7 +3548,7 @@ mixin MessageService
     FileMetadataData? metadata,
   }) async {
     // Check if this is a calendar sync message by looking at the message body
-    final messageText = event.text;
+    final messageText = clampMessageText(event.text) ?? '';
     if (messageText.isEmpty) return false;
 
     final senderJid = event.from.toBare().toString();
@@ -3276,15 +3560,24 @@ mixin MessageService
     final bool isSelfCalendar =
         selfJid != null && chatJid.toLowerCase() == selfJid.toLowerCase();
 
-    final syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
+    final trimmedMessageText = messageText.trimLeft();
+    final looksLikeCalendarSync =
+        trimmedMessageText.startsWith(_calendarSyncEnvelopeJsonPrefix) &&
+            messageText.contains(_calendarSyncEnvelopeKeyLiteral);
+    final syncMessage = looksLikeCalendarSync
+        ? CalendarSyncMessage.tryParseEnvelope(messageText)
+        : null;
     if (syncMessage == null) {
-      if (selfJid != null &&
-          senderJid == selfJid &&
-          messageText.contains('"calendar_sync"')) {
-        _log.info('Dropped malformed calendar sync envelope from self');
+      if (looksLikeCalendarSync) {
+        _log.info('Dropped malformed calendar sync envelope');
         return true;
       }
       return false;
+    }
+
+    if (_isCalendarSyncRateLimited()) {
+      _log.warning('Dropping calendar sync message due to rate limits');
+      return true;
     }
 
     if (isSelfCalendar && !isSelfSender) {
@@ -3332,6 +3625,21 @@ mixin MessageService
     }
 
     return true; // Handled - don't process as regular chat message
+  }
+
+  bool _isCalendarSyncRateLimited() {
+    final now = DateTime.now();
+    final windowStart = now.subtract(_calendarSyncInboundWindow);
+    while (_calendarSyncInboundTimestamps.isNotEmpty &&
+        _calendarSyncInboundTimestamps.first.isBefore(windowStart)) {
+      _calendarSyncInboundTimestamps.removeFirst();
+    }
+    if (_calendarSyncInboundTimestamps.length >=
+        _calendarSyncInboundMaxMessages) {
+      return true;
+    }
+    _calendarSyncInboundTimestamps.addLast(now);
+    return false;
   }
 
   bool _isSnapshotCalendarMessage(CalendarSyncMessage message) {
@@ -4459,6 +4767,527 @@ mixin MessageService
     } on FormatException {
       return null;
     }
+  }
+
+  Future<void> _handlePinNotification(
+    mox.PubSubNotificationEvent event,
+  ) async {
+    final nodeId = event.item.node;
+    final chatJid = _chatJidFromPinNode(nodeId);
+    if (chatJid == null) return;
+    await _ensurePendingPinSyncLoaded();
+    final itemId = event.item.id.trim();
+    if (itemId.isNotEmpty &&
+        _pendingPinRetractionsByChat[chatJid]?.contains(itemId) == true) {
+      return;
+    }
+    final payload = event.item.payload;
+    if (payload == null) {
+      unawaited(syncPinnedMessagesForChat(chatJid));
+      return;
+    }
+    final parsed = _PinnedMessageSyncPayload.fromXml(
+      payload,
+      chatJid: chatJid,
+      itemId: itemId.isEmpty ? null : itemId,
+    );
+    if (parsed == null) {
+      return;
+    }
+    if (_pendingPinRetractionsByChat[chatJid]
+            ?.contains(parsed.messageStanzaId) ==
+        true) {
+      return;
+    }
+    await _applyPinSyncUpdate(parsed);
+  }
+
+  Future<void> _handlePinRetraction(
+    mox.PubSubItemsRetractedEvent event,
+  ) async {
+    final chatJid = _chatJidFromPinNode(event.node);
+    if (chatJid == null) return;
+    if (event.itemIds.isEmpty) return;
+    await _ensurePendingPinSyncLoaded();
+    var pendingChanged = false;
+    for (final itemId in event.itemIds) {
+      final normalized = itemId.trim();
+      if (normalized.isEmpty) continue;
+      await _applyPinSyncRetraction(
+        chatJid: chatJid,
+        messageStanzaId: normalized,
+      );
+      pendingChanged =
+          _pendingPinPublishesByChat[chatJid]?.remove(normalized) == true ||
+              _pendingPinRetractionsByChat[chatJid]?.remove(normalized) ==
+                  true ||
+              pendingChanged;
+    }
+    if (pendingChanged) {
+      await _persistPendingPinSync();
+    }
+  }
+
+  Future<void> _applyPinSyncUpdate(
+    _PinnedMessageSyncPayload payload,
+  ) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.upsertPinnedMessage(
+        PinnedMessageEntry(
+          messageStanzaId: payload.messageStanzaId,
+          chatJid: payload.chatJid,
+          pinnedAt: payload.pinnedAt,
+        ),
+      ),
+    );
+    final pending = _pendingPinPublishesByChat[payload.chatJid];
+    if (pending?.remove(payload.messageStanzaId) == true) {
+      await _persistPendingPinSync();
+    }
+  }
+
+  Future<void> _applyPinSyncRetraction({
+    required String chatJid,
+    required String messageStanzaId,
+  }) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.deletePinnedMessage(
+        chatJid: chatJid,
+        messageStanzaId: messageStanzaId,
+      ),
+    );
+  }
+
+  SafePubSubManager? _pinPubSub() =>
+      _connection.getManager<SafePubSubManager>();
+
+  List<mox.JID> _pinPubSubHosts() {
+    final domain = _myJid?.domain.trim();
+    if (domain == null || domain.isEmpty) {
+      return const <mox.JID>[];
+    }
+    final candidates = <mox.JID>[];
+    final seen = <String>{};
+    void addCandidate(String raw) {
+      final normalized = raw.trim();
+      if (normalized.isEmpty || seen.contains(normalized)) return;
+      try {
+        candidates.add(mox.JID.fromString(normalized));
+        seen.add(normalized);
+      } on Exception {
+        return;
+      }
+    }
+
+    final cachedHost = _pinPubSubHost?.toString();
+    if (cachedHost != null && cachedHost.isNotEmpty) {
+      addCandidate(cachedHost);
+    }
+    addCandidate('$_pinPubSubHostPrefix$domain');
+    addCandidate(domain);
+    return candidates;
+  }
+
+  Future<mox.JID?> _ensurePinNodeForChat(String chatJid) async {
+    final nodeId = _pinNodeForChat(chatJid);
+    if (nodeId == null) return null;
+    final pubsub = _pinPubSub();
+    if (pubsub == null) return null;
+    for (final host in _pinPubSubHosts()) {
+      final configured = await _configurePinNode(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+      );
+      if (!configured) continue;
+      _pinPubSubHost = host;
+      return host;
+    }
+    return null;
+  }
+
+  Future<bool> _configurePinNode({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+  }) async {
+    final config = _pinNodeConfig();
+    final configured = await pubsub.configureNode(host, nodeId, config);
+    if (!configured.isType<mox.PubSubError>()) {
+      return true;
+    }
+
+    try {
+      final created = await pubsub.createNodeWithConfig(
+        host,
+        _pinCreateNodeConfig(),
+        nodeId: nodeId,
+      );
+      if (created != null) {
+        await pubsub.configureNode(host, nodeId, config);
+        return true;
+      }
+    } on Exception {
+      // Ignore and try fallback creation.
+    }
+
+    try {
+      final created = await pubsub.createNode(host, nodeId: nodeId);
+      if (created == null) return false;
+      await pubsub.configureNode(host, nodeId, config);
+      return true;
+    } on Exception {
+      return false;
+    }
+  }
+
+  Future<void> _subscribeToPins({
+    required mox.JID host,
+    required String nodeId,
+  }) async {
+    final pubsub = _pinPubSub();
+    if (pubsub == null) return;
+    final result = await pubsub.subscribe(host, nodeId);
+    if (!result.isType<mox.PubSubError>()) {
+      return;
+    }
+    final error = result.get<mox.PubSubError>();
+    if (error is mox.MalformedResponseError) {
+      return;
+    }
+  }
+
+  Future<List<_PinnedMessageSyncPayload>?> _fetchPinSnapshot({
+    required mox.JID host,
+    required String nodeId,
+    required String chatJid,
+  }) async {
+    final pubsub = _pinPubSub();
+    if (pubsub == null) return null;
+    final result = await pubsub.getItems(
+      host,
+      nodeId,
+      maxItems: _pinSyncMaxItems,
+    );
+    if (result.isType<mox.PubSubError>()) {
+      return null;
+    }
+    final items = result.get<List<mox.PubSubItem>>();
+    final parsed = <_PinnedMessageSyncPayload>[];
+    for (final item in items) {
+      final payload = item.payload;
+      if (payload == null) continue;
+      final entry = _PinnedMessageSyncPayload.fromXml(
+        payload,
+        chatJid: chatJid,
+        itemId: item.id,
+      );
+      if (entry != null) {
+        parsed.add(entry);
+      }
+    }
+    return parsed;
+  }
+
+  Future<void> _applyPinSnapshot({
+    required String chatJid,
+    required List<_PinnedMessageSyncPayload> items,
+  }) async {
+    await _ensurePendingPinSyncLoaded();
+    final pendingPublishes =
+        _pendingPinPublishesByChat[chatJid] ?? const <String>{};
+    final pendingRetractions =
+        _pendingPinRetractionsByChat[chatJid] ?? const <String>{};
+    for (final item in items) {
+      if (pendingRetractions.contains(item.messageStanzaId)) {
+        continue;
+      }
+      await _applyPinSyncUpdate(item);
+    }
+    final remoteById = <String, _PinnedMessageSyncPayload>{
+      for (final item in items) item.messageStanzaId: item,
+    };
+    final localItems =
+        await _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
+      (db) => db.getPinnedMessages(chatJid),
+    );
+    for (final local in localItems) {
+      final messageId = local.messageStanzaId;
+      if (remoteById.containsKey(messageId)) {
+        continue;
+      }
+      if (pendingPublishes.contains(messageId)) {
+        continue;
+      }
+      await _applyPinSyncRetraction(
+        chatJid: chatJid,
+        messageStanzaId: messageId,
+      );
+    }
+  }
+
+  Future<void> _queuePinPublish(
+    String chatJid,
+    String messageStanzaId,
+  ) async {
+    await _ensurePendingPinSyncLoaded();
+    final publishes = _pendingPinPublishesByChat.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    final retractions = _pendingPinRetractionsByChat.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    retractions.remove(messageStanzaId);
+    publishes.add(messageStanzaId);
+    await _persistPendingPinSync();
+  }
+
+  Future<void> _queuePinRetraction(
+    String chatJid,
+    String messageStanzaId,
+  ) async {
+    await _ensurePendingPinSyncLoaded();
+    final retractions = _pendingPinRetractionsByChat.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    final publishes = _pendingPinPublishesByChat.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    publishes.remove(messageStanzaId);
+    retractions.add(messageStanzaId);
+    await _persistPendingPinSync();
+  }
+
+  Map<String, Set<String>> _decodePendingPinMap(Object? raw) {
+    final decoded = <String, Set<String>>{};
+    if (raw is! Map) {
+      return decoded;
+    }
+    for (final entry in raw.entries) {
+      final key = entry.key;
+      if (key is! String) continue;
+      final value = entry.value;
+      if (value is! Iterable) continue;
+      final normalized = value
+          .whereType<String>()
+          .map((id) => id.trim())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      if (normalized.isEmpty) continue;
+      decoded[key] = normalized;
+    }
+    return decoded;
+  }
+
+  Map<String, List<String>> _encodePendingPinMap(
+    Map<String, Set<String>> source,
+  ) {
+    final encoded = <String, List<String>>{};
+    for (final entry in source.entries) {
+      if (entry.value.isEmpty) continue;
+      encoded[entry.key] = entry.value.toList(growable: false);
+    }
+    return encoded;
+  }
+
+  Future<void> _ensurePendingPinSyncLoaded() async {
+    if (_pendingPinSyncLoaded) {
+      return;
+    }
+    final rawPublishes = await _dbOpReturning<XmppStateStore, Object?>(
+      (ss) => ss.read(key: _pinPendingPublishesKey),
+    );
+    final rawRetractions = await _dbOpReturning<XmppStateStore, Object?>(
+      (ss) => ss.read(key: _pinPendingRetractionsKey),
+    );
+    _pendingPinPublishesByChat
+      ..clear()
+      ..addAll(_decodePendingPinMap(rawPublishes));
+    _pendingPinRetractionsByChat
+      ..clear()
+      ..addAll(_decodePendingPinMap(rawRetractions));
+    _pendingPinSyncLoaded = true;
+  }
+
+  Future<void> _persistPendingPinSync() async {
+    if (!_pendingPinSyncLoaded) {
+      return;
+    }
+    _pendingPinPublishesByChat.removeWhere((_, ids) => ids.isEmpty);
+    _pendingPinRetractionsByChat.removeWhere((_, ids) => ids.isEmpty);
+    final publishes = _encodePendingPinMap(_pendingPinPublishesByChat);
+    final retractions = _encodePendingPinMap(_pendingPinRetractionsByChat);
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        if (publishes.isEmpty) {
+          await ss.delete(key: _pinPendingPublishesKey);
+        } else {
+          await ss.write(key: _pinPendingPublishesKey, value: publishes);
+        }
+        if (retractions.isEmpty) {
+          await ss.delete(key: _pinPendingRetractionsKey);
+        } else {
+          await ss.write(key: _pinPendingRetractionsKey, value: retractions);
+        }
+      },
+      awaitDatabase: true,
+    );
+  }
+
+  Future<void> _flushPendingPinSync() async {
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
+    await _ensurePendingPinSyncLoaded();
+    if (_pendingPinPublishesByChat.isEmpty &&
+        _pendingPinRetractionsByChat.isEmpty) {
+      return;
+    }
+    final chatIds = <String>{
+      ..._pendingPinPublishesByChat.keys,
+      ..._pendingPinRetractionsByChat.keys,
+    };
+    for (final chatJid in chatIds) {
+      await _flushPendingPinSyncForChat(chatJid);
+    }
+  }
+
+  Future<void> _flushPendingPinSyncForChat(String chatJid) async {
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
+    await _ensurePendingPinSyncLoaded();
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    final support = await refreshPubSubSupport();
+    if (!support.pubSubSupported) {
+      return;
+    }
+    final pubsub = _pinPubSub();
+    if (pubsub == null) {
+      return;
+    }
+    final host = await _ensurePinNodeForChat(normalizedChat);
+    if (host == null) {
+      return;
+    }
+    final nodeId = _pinNodeForChat(normalizedChat);
+    if (nodeId == null) {
+      return;
+    }
+    await _subscribeToPins(host: host, nodeId: nodeId);
+    final pendingRetractions =
+        _pendingPinRetractionsByChat[normalizedChat]?.toList(growable: false) ??
+            const <String>[];
+    final pendingPublishes =
+        _pendingPinPublishesByChat[normalizedChat]?.toList(growable: false) ??
+            const <String>[];
+    final pinnedEntries =
+        await _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
+      (db) => db.getPinnedMessages(normalizedChat),
+    );
+    final pinnedById = <String, PinnedMessageEntry>{
+      for (final entry in pinnedEntries) entry.messageStanzaId: entry,
+    };
+    var pendingChanged = false;
+    for (final messageId in pendingRetractions) {
+      final trimmed = messageId.trim();
+      if (trimmed.isEmpty) continue;
+      final success = await _retractPinFromServer(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        messageStanzaId: trimmed,
+      );
+      if (!success) {
+        continue;
+      }
+      pendingChanged =
+          _pendingPinRetractionsByChat[normalizedChat]?.remove(trimmed) ==
+                  true ||
+              pendingChanged;
+    }
+    for (final messageId in pendingPublishes) {
+      final trimmed = messageId.trim();
+      if (trimmed.isEmpty) continue;
+      final entry = pinnedById[trimmed];
+      if (entry == null) {
+        pendingChanged =
+            _pendingPinPublishesByChat[normalizedChat]?.remove(trimmed) ==
+                    true ||
+                pendingChanged;
+        continue;
+      }
+      final success = await _publishPinToServer(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        entry: entry,
+      );
+      if (!success) {
+        continue;
+      }
+      pendingChanged =
+          _pendingPinPublishesByChat[normalizedChat]?.remove(trimmed) == true ||
+              pendingChanged;
+    }
+    if (pendingChanged) {
+      await _persistPendingPinSync();
+    }
+  }
+
+  Future<bool> _publishPinToServer({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required PinnedMessageEntry entry,
+  }) async {
+    final messageId = entry.messageStanzaId.trim();
+    if (messageId.isEmpty) return false;
+    final payload = _PinnedMessageSyncPayload(
+      messageStanzaId: messageId,
+      chatJid: entry.chatJid,
+      pinnedAt: entry.pinnedAt,
+    );
+    final result = await pubsub.publish(
+      host,
+      nodeId,
+      payload.toXml(),
+      id: payload.itemId,
+      options: _pinPublishOptions(),
+      autoCreate: true,
+      createNodeConfig: _pinCreateNodeConfig(),
+    );
+    return !result.isType<mox.PubSubError>();
+  }
+
+  Future<bool> _retractPinFromServer({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required String messageStanzaId,
+  }) async {
+    final trimmed = messageStanzaId.trim();
+    if (trimmed.isEmpty) return false;
+    final result = await pubsub.retract(
+      host,
+      nodeId,
+      trimmed,
+      notify: _pinNotifyEnabled,
+    );
+    return !result.isType<mox.PubSubError>();
   }
 
   String _normalizeBase64(String input) {

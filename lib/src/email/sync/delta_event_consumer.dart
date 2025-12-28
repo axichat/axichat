@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/util/email_address.dart';
@@ -886,11 +887,13 @@ class DeltaEventConsumer {
     required int chatId,
     required DeltaMessage msg,
   }) async {
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(msg.html);
-    final resolvedBody = msg.text?.trim().isNotEmpty == true
-        ? msg.text
+    final rawText = clampMessageText(msg.text);
+    final rawHtml = clampMessageHtml(msg.html);
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(rawHtml);
+    final resolvedBody = rawText?.trim().isNotEmpty == true
+        ? rawText
         : (normalizedHtml == null
-            ? msg.text
+            ? rawText
             : HtmlContentCodec.toPlainText(normalizedHtml));
     var next = message.copyWith(
       body: resolvedBody?.trim().isEmpty == true ? null : resolvedBody,
@@ -899,8 +902,8 @@ class DeltaEventConsumer {
     next = await _applyShareMetadata(
       db: db,
       message: next,
-      rawBody: msg.text,
-      rawHtml: msg.html,
+      rawBody: rawText,
+      rawHtml: rawHtml,
       chatId: chatId,
       msgId: msg.id,
     );

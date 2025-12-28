@@ -1,4 +1,5 @@
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
@@ -14,6 +15,7 @@ const String _fallbackEventTitle = 'Untitled event';
 const String _fragmentLabelChecklist = 'Checklist';
 const String _fragmentLabelDayEvent = 'Day event';
 const String _fragmentLabelAvailability = 'Availability';
+const String _fragmentLabelCriticalPath = 'Critical path';
 
 const String _fragmentRangeSeparator = ' - ';
 const String _fragmentChecklistSeparator = ', ';
@@ -32,6 +34,8 @@ const String _fragmentFreeBusyLabelBusy = 'Busy';
 const String _fragmentFreeBusyLabelBusyUnavailable = 'Busy (unavailable)';
 const String _fragmentFreeBusyLabelBusyTentative = 'Busy (tentative)';
 const String _emptyText = '';
+const String _fragmentCriticalPathProgressSeparator = '/';
+const String _fragmentCriticalPathProgressSuffix = ' done';
 
 const int _fragmentChecklistPreviewLimit = 4;
 
@@ -79,6 +83,7 @@ class CalendarFragmentFormatter {
       checklist: (taskId, checklist) => _formatChecklist(checklist),
       reminder: (taskId, reminders) => _formatReminders(reminders),
       dayEvent: (event) => _formatDayEvent(event),
+      criticalPath: (path, tasks) => _formatCriticalPath(path, tasks),
       freeBusy: (interval) => _formatFreeBusy(interval),
       availability: (window) => _formatAvailability(window),
     );
@@ -160,6 +165,24 @@ class CalendarFragmentFormatter {
     );
     return '${interval.type.label}$_fragmentDetailOpen'
         '$_fragmentFreeBusyLabel$_fragmentInfoSeparator$range'
+        '$_fragmentDetailClose';
+  }
+
+  String _formatCriticalPath(
+    CalendarCriticalPath path,
+    List<CalendarTask> tasks,
+  ) {
+    final String name = path.name.trim().isNotEmpty
+        ? path.name.trim()
+        : _fragmentLabelCriticalPath;
+    if (tasks.isEmpty) {
+      return '$_fragmentLabelCriticalPath$_fragmentInfoSeparator$name';
+    }
+    final int completed = tasks.where((task) => task.isCompleted).length;
+    final String progress = '$completed$_fragmentCriticalPathProgressSeparator'
+        '${tasks.length}$_fragmentCriticalPathProgressSuffix';
+    return '$name$_fragmentDetailOpen'
+        '$_fragmentLabelCriticalPath$_fragmentInfoSeparator$progress'
         '$_fragmentDetailClose';
   }
 

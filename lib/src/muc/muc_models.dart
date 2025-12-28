@@ -43,6 +43,10 @@ enum OccupantAffiliation {
       };
 }
 
+extension OccupantAffiliationPins on OccupantAffiliation {
+  bool get canManagePins => isOwner || isAdmin || isMember;
+}
+
 enum OccupantRole {
   moderator,
   participant,

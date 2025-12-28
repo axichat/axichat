@@ -27,6 +27,7 @@ import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
@@ -40,6 +41,7 @@ import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_availability_card.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_availability_request_sheet.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
+import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
@@ -52,6 +54,7 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -100,6 +103,7 @@ enum _ChatRoute {
   main,
   details,
   attachments,
+  pins,
   calendar,
 }
 
@@ -122,6 +126,7 @@ const _regularBubbleWidthFraction = 0.7;
 const _reactionOverflowGlyphWidth = 18.0;
 const String _chatAttachmentPanelKeyPrefix = 'chat-attachments-';
 const String _chatCalendarPanelKeyPrefix = 'chat-calendar-';
+const String _chatPinnedPanelKeyPrefix = 'chat-pins-';
 const String _chatPanelKeyFallback = '';
 const _recipientCutoutDepth = 16.0;
 const _recipientCutoutRadius = 18.0;
@@ -143,6 +148,7 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
 const _chatHeaderActionSpacing = 4.0;
+const _messageActionIconSize = 16.0;
 const String _calendarFragmentShareDeniedMessage =
     'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
@@ -1627,7 +1633,11 @@ class _ChatState extends State<Chat> {
     final l10n = context.l10n;
     final trimmed = url.trim();
     final uri = Uri.tryParse(trimmed);
-    final host = uri?.host.isNotEmpty == true ? uri!.host : trimmed;
+    if (uri == null || !isSafeLinkUri(uri)) {
+      _showSnackbar(l10n.chatInvalidLink(trimmed));
+      return;
+    }
+    final host = uri.host.isNotEmpty ? uri.host : trimmed;
     final approved = await confirm(
       context,
       title: l10n.chatOpenLinkTitle,
@@ -1636,10 +1646,6 @@ class _ChatState extends State<Chat> {
       destructiveConfirm: false,
     );
     if (approved != true) return;
-    if (uri == null) {
-      _showSnackbar(l10n.chatInvalidLink(trimmed));
-      return;
-    }
     final launched = await launchUrl(
       uri,
       mode: LaunchMode.externalApplication,
@@ -3024,6 +3030,9 @@ class _ChatState extends State<Chat> {
                     !readOnly &&
                     jid != null &&
                     _chatRoute == _ChatRoute.main;
+                final canManagePins = !isGroupChat ||
+                    (state.roomState?.myAffiliation.canManagePins ?? false);
+                final canTogglePins = !readOnly && canManagePins;
                 if (!chatCalendarAvailable &&
                     _chatRoute == _ChatRoute.calendar) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3260,6 +3269,12 @@ class _ChatState extends State<Chat> {
                           tooltip: context.l10n.chatAttachmentTooltip,
                           onPressed: _openChatAttachments,
                         ),
+                        const SizedBox(width: _chatHeaderActionSpacing),
+                        AxiIconButton(
+                          iconData: LucideIcons.pin,
+                          tooltip: context.l10n.chatPinnedMessagesTooltip,
+                          onPressed: _openPinnedMessages,
+                        ),
                         if (supportsChatCalendar) ...[
                           const SizedBox(width: _chatHeaderActionSpacing),
                           AxiIconButton(
@@ -3333,6 +3348,9 @@ class _ChatState extends State<Chat> {
                                     for (final item in state.items)
                                       item.stanzaID: item,
                                   };
+                                  final pinnedStanzaIds = state.pinnedMessages
+                                      .map((item) => item.messageStanzaId)
+                                      .toSet();
                                   if (searchFiltering) {
                                     for (final item in searchResults) {
                                       messageById[item.stanzaID] = item;
@@ -4758,13 +4776,28 @@ class _ChatState extends State<Chat> {
                                                           );
                                                         } else if (displayFragment !=
                                                             null) {
-                                                          bubbleChildren.add(
-                                                            CalendarFragmentCard(
+                                                          final Widget
+                                                              fragmentCard =
+                                                              displayFragment
+                                                                  .maybeMap(
+                                                            criticalPath: (value) =>
+                                                                ChatCalendarCriticalPathCard(
+                                                              path: value.path,
+                                                              tasks:
+                                                                  value.tasks,
+                                                              footerDetails:
+                                                                  fragmentFooterDetails,
+                                                            ),
+                                                            orElse: () =>
+                                                                CalendarFragmentCard(
                                                               fragment:
                                                                   displayFragment,
                                                               footerDetails:
                                                                   fragmentFooterDetails,
                                                             ),
+                                                          );
+                                                          bubbleChildren.add(
+                                                            fragmentCard,
                                                           );
                                                         }
                                                         final String?
@@ -5569,6 +5602,13 @@ class _ChatState extends State<Chat> {
                                                           MessageStatus.failed;
                                                       final includeSelectAction =
                                                           !_multiSelectActive;
+                                                      final isPinned =
+                                                          pinnedStanzaIds
+                                                              .contains(
+                                                        messageModel.stanzaID,
+                                                      );
+                                                      final pinActionCount =
+                                                          canTogglePins ? 1 : 0;
                                                       List<GlobalKey>?
                                                           actionButtonKeys;
                                                       if (isSingleSelection) {
@@ -5576,6 +5616,7 @@ class _ChatState extends State<Chat> {
                                                             6;
                                                         final actionCount =
                                                             baseActionCount +
+                                                                pinActionCount +
                                                                 (canResend
                                                                     ? 1
                                                                     : 0) +
@@ -5669,6 +5710,19 @@ class _ChatState extends State<Chat> {
                                                                   ),
                                                                 );
                                                       }
+                                                      VoidCallback? onPinToggle;
+                                                      if (canTogglePins) {
+                                                        onPinToggle = () =>
+                                                            context
+                                                                .read<ChatBloc>()
+                                                                .add(
+                                                                  ChatMessagePinRequested(
+                                                                    message:
+                                                                        messageModel,
+                                                                    pin: !isPinned,
+                                                                  ),
+                                                                );
+                                                      }
                                                       VoidCallback?
                                                           onRevokeInvite;
                                                       if (isInviteMessage &&
@@ -5696,6 +5750,9 @@ class _ChatState extends State<Chat> {
                                                         onSelect: onSelect,
                                                         onResend: onResend,
                                                         onEdit: onEdit,
+                                                        onPinToggle:
+                                                            onPinToggle,
+                                                        isPinned: isPinned,
                                                         hitRegionKeys:
                                                             actionButtonKeys,
                                                         onRevokeInvite:
@@ -6389,6 +6446,22 @@ class _ChatState extends State<Chat> {
                                 onClose: _closeChatAttachments,
                                 chat: chatEntity,
                               ),
+                              _ChatPinnedMessagesPanel(
+                                key: ValueKey(
+                                  '$_chatPinnedPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                                ),
+                                chat: chatEntity,
+                                pinnedMessages: state.pinnedMessages,
+                                onClose: _closePinnedMessages,
+                                canTogglePins: canTogglePins,
+                                roomState: state.roomState,
+                                metadataStreamFor: _metadataStreamFor,
+                                metadataInitialFor: _metadataInitialFor,
+                                isOneTimeAttachmentAllowed:
+                                    _isOneTimeAttachmentAllowed,
+                                shouldAllowAttachment: _shouldAllowAttachment,
+                                onApproveAttachment: _approveAttachment,
+                              ),
                               _ChatCalendarPanel(
                                 key: ValueKey(
                                   '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
@@ -6837,6 +6910,17 @@ class _ChatState extends State<Chat> {
     });
   }
 
+  void _openPinnedMessages() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.pins;
+      _settingsPanelExpanded = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
+  }
+
   void _closeChatCalendar() {
     if (!mounted) return;
     context.read<ChatsCubit>().setChatCalendarOpen(open: false);
@@ -6846,6 +6930,13 @@ class _ChatState extends State<Chat> {
   }
 
   void _closeChatAttachments() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.main;
+    });
+  }
+
+  void _closePinnedMessages() {
     if (!mounted) return;
     setState(() {
       _chatRoute = _ChatRoute.main;
@@ -7015,6 +7106,304 @@ class _ChatState extends State<Chat> {
       }
     }
     return null;
+  }
+}
+
+class _ChatPinnedMessagesPanel extends StatelessWidget {
+  const _ChatPinnedMessagesPanel({
+    super.key,
+    required this.chat,
+    required this.pinnedMessages,
+    required this.onClose,
+    required this.canTogglePins,
+    required this.roomState,
+    required this.metadataStreamFor,
+    required this.metadataInitialFor,
+    required this.isOneTimeAttachmentAllowed,
+    required this.shouldAllowAttachment,
+    required this.onApproveAttachment,
+  });
+
+  final chat_models.Chat? chat;
+  final List<PinnedMessageItem> pinnedMessages;
+  final VoidCallback onClose;
+  final bool canTogglePins;
+  final RoomState? roomState;
+  final Stream<FileMetadataData?> Function(String) metadataStreamFor;
+  final FileMetadataData? Function(String) metadataInitialFor;
+  final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
+  final bool Function({
+    required String senderJid,
+    required bool isSelf,
+    required Set<String> knownContacts,
+    required chat_models.Chat? chat,
+  }) shouldAllowAttachment;
+  final Future<void> Function({
+    required Message message,
+    required String senderJid,
+    required String stanzaId,
+    required String metadataId,
+    required bool isGroupChat,
+    required bool isEmailChat,
+    String? senderEmail,
+  }) onApproveAttachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChat = chat;
+    if (resolvedChat == null) {
+      return const SizedBox.shrink();
+    }
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    final Widget body = pinnedMessages.isEmpty
+        ? Center(
+            child: Text(
+              l10n.chatPinnedEmptyState,
+              textAlign: TextAlign.center,
+              style: context.textTheme.muted.copyWith(
+                color: colors.mutedForeground,
+              ),
+            ),
+          )
+        : ListView.separated(
+            padding: EdgeInsets.zero,
+            itemCount: pinnedMessages.length,
+            separatorBuilder: (_, __) => const AxiListDivider(),
+            itemBuilder: (context, index) {
+              final item = pinnedMessages[index];
+              return _PinnedMessageTile(
+                item: item,
+                chat: resolvedChat,
+                roomState: roomState,
+                canTogglePins: canTogglePins,
+                metadataStreamFor: metadataStreamFor,
+                metadataInitialFor: metadataInitialFor,
+                isOneTimeAttachmentAllowed: isOneTimeAttachmentAllowed,
+                shouldAllowAttachment: shouldAllowAttachment,
+                onApproveAttachment: onApproveAttachment,
+              );
+            },
+          );
+    return AxiSheetScaffold(
+      header: AxiSheetHeader(
+        title: Text(l10n.chatPinnedMessagesTitle),
+        subtitle: Text(resolvedChat.displayName),
+        onClose: onClose,
+      ),
+      body: body,
+    );
+  }
+}
+
+class _PinnedMessageTile extends StatelessWidget {
+  const _PinnedMessageTile({
+    required this.item,
+    required this.chat,
+    required this.roomState,
+    required this.canTogglePins,
+    required this.metadataStreamFor,
+    required this.metadataInitialFor,
+    required this.isOneTimeAttachmentAllowed,
+    required this.shouldAllowAttachment,
+    required this.onApproveAttachment,
+  });
+
+  final PinnedMessageItem item;
+  final chat_models.Chat chat;
+  final RoomState? roomState;
+  final bool canTogglePins;
+  final Stream<FileMetadataData?> Function(String) metadataStreamFor;
+  final FileMetadataData? Function(String) metadataInitialFor;
+  final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
+  final bool Function({
+    required String senderJid,
+    required bool isSelf,
+    required Set<String> knownContacts,
+    required chat_models.Chat? chat,
+  }) shouldAllowAttachment;
+  final Future<void> Function({
+    required Message message,
+    required String senderJid,
+    required String stanzaId,
+    required String metadataId,
+    required bool isGroupChat,
+    required bool isEmailChat,
+    String? senderEmail,
+  }) onApproveAttachment;
+
+  Message? _resolveMessageForPin() {
+    final message = item.message;
+    if (message != null) {
+      return message;
+    }
+    final chatJid = item.chatJid.trim();
+    final stanzaId = item.messageStanzaId.trim();
+    if (chatJid.isEmpty || stanzaId.isEmpty) {
+      return null;
+    }
+    return Message(
+      stanzaID: stanzaId,
+      senderJid: chatJid,
+      chatJid: chatJid,
+      timestamp: item.pinnedAt,
+    );
+  }
+
+  bool _isSelfMessage({
+    required Message message,
+    required String? accountJid,
+  }) {
+    if (chat.type == ChatType.groupChat) {
+      final myOccupantId = roomState?.myOccupantId;
+      final occupantId = message.occupantID;
+      if (myOccupantId == null || occupantId == null) {
+        return false;
+      }
+      return myOccupantId == occupantId;
+    }
+    final resolvedAccountJid = accountJid?.trim();
+    if (resolvedAccountJid == null || resolvedAccountJid.isEmpty) {
+      return false;
+    }
+    try {
+      return message.authorized(mox.JID.fromString(resolvedAccountJid));
+    } on Exception {
+      return false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    final message = item.message;
+    final messageText = message?.plainText.trim();
+    final hasMessageText = messageText?.isNotEmpty == true;
+    final attachmentIds = item.attachmentMetadataIds;
+    final hasAttachments = message != null && attachmentIds.isNotEmpty;
+    final showMissing = !hasMessageText && !hasAttachments;
+    final messageStyle = Theme.of(context)
+        .textTheme
+        .bodyMedium
+        ?.copyWith(color: colors.foreground);
+    final messageWidget = hasMessageText
+        ? Text(
+            messageText ?? _emptyText,
+            style: messageStyle,
+          )
+        : showMissing
+            ? Text(
+                l10n.chatPinnedMissingMessage,
+                style: context.textTheme.muted.copyWith(
+                  color: colors.mutedForeground,
+                ),
+              )
+            : null;
+    final messageForPin = _resolveMessageForPin();
+    final unpinButton = canTogglePins && messageForPin != null
+        ? ShadButton.ghost(
+            size: ShadButtonSize.sm,
+            onPressed: () => context.read<ChatBloc>().add(
+                  ChatMessagePinRequested(
+                    message: messageForPin,
+                    pin: false,
+                  ),
+                ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  LucideIcons.pinOff,
+                  size: _messageActionIconSize,
+                  color: colors.mutedForeground,
+                ),
+                const SizedBox(width: _attachmentPreviewSpacing),
+                Text(
+                  l10n.chatUnpinMessage,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ).withTapBounce()
+        : null;
+    final contentChildren = <Widget>[
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: messageWidget ?? const SizedBox.shrink()),
+          if (unpinButton != null) unpinButton,
+        ],
+      ),
+    ];
+    if (hasAttachments && message != null) {
+      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      final isGroupChat = chat.type == ChatType.groupChat;
+      final isEmailChat = chat.defaultTransport.isEmail;
+      final accountJid = context.read<XmppService>().myJid?.toString();
+      final isSelf = _isSelfMessage(
+        message: message,
+        accountJid: accountJid,
+      );
+      final allowAttachmentByTrust = shouldAllowAttachment(
+        senderJid: message.senderJid,
+        isSelf: isSelf,
+        knownContacts: context.watch<RosterCubit>().contacts,
+        chat: chat,
+      );
+      final allowAttachmentOnce =
+          isOneTimeAttachmentAllowed(message.stanzaID);
+      final allowAttachment = allowAttachmentByTrust || allowAttachmentOnce;
+      final emailService = RepositoryProvider.of<EmailService?>(context);
+      final emailDownloadDelegate =
+          isEmailChat && emailService != null
+              ? AttachmentDownloadDelegate(
+                  () => emailService.downloadFullMessage(message),
+                )
+              : null;
+      final autoDownload = allowAttachmentOnce ||
+          (allowAttachment && chat.attachmentAutoDownload.isAllowed);
+      final autoDownloadUserInitiated = allowAttachmentOnce;
+      for (var index = 0; index < attachmentIds.length; index += 1) {
+        final attachmentId = attachmentIds[index];
+        if (index > 0) {
+          contentChildren.add(
+            const SizedBox(height: _attachmentPreviewSpacing),
+          );
+        }
+        contentChildren.add(
+          ChatAttachmentPreview(
+            stanzaId: message.stanzaID,
+            metadataStream: metadataStreamFor(attachmentId),
+            initialMetadata: metadataInitialFor(attachmentId),
+            allowed: allowAttachment,
+            autoDownload: autoDownload,
+            autoDownloadUserInitiated: autoDownloadUserInitiated,
+            downloadDelegate: emailDownloadDelegate,
+            onAllowPressed: allowAttachment
+                ? null
+                : () => onApproveAttachment(
+                      message: message,
+                      senderJid: message.senderJid,
+                      stanzaId: message.stanzaID,
+                      metadataId: attachmentId,
+                      isGroupChat: isGroupChat,
+                      isEmailChat: isEmailChat,
+                      senderEmail: chat.emailAddress,
+                    ),
+          ),
+        );
+      }
+    }
+    return ListItemPadding(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: contentChildren,
+      ),
+    );
   }
 }
 
@@ -8759,6 +9148,8 @@ class _MessageActionBar extends StatelessWidget {
     this.onSelect,
     this.onResend,
     this.onEdit,
+    this.onPinToggle,
+    required this.isPinned,
     this.hitRegionKeys,
     this.onRevokeInvite,
   });
@@ -8772,6 +9163,8 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback? onSelect;
   final VoidCallback? onResend;
   final VoidCallback? onEdit;
+  final VoidCallback? onPinToggle;
+  final bool isPinned;
   final List<GlobalKey>? hitRegionKeys;
   final VoidCallback? onRevokeInvite;
 
@@ -8790,7 +9183,7 @@ class _MessageActionBar extends StatelessWidget {
     final actions = <Widget>[
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.reply, size: 16),
+        icon: const Icon(LucideIcons.reply, size: _messageActionIconSize),
         label: l10n.chatActionReply,
         onPressed: onReply,
       ),
@@ -8798,7 +9191,7 @@ class _MessageActionBar extends StatelessWidget {
         key: nextKey(),
         icon: Transform.scale(
           scaleX: -1,
-          child: const Icon(LucideIcons.reply, size: 16),
+          child: const Icon(LucideIcons.reply, size: _messageActionIconSize),
         ),
         label: l10n.chatActionForward,
         onPressed: onForward,
@@ -8806,45 +9199,57 @@ class _MessageActionBar extends StatelessWidget {
       if (onResend != null)
         ContextActionButton(
           key: nextKey(),
-          icon: const Icon(LucideIcons.repeat, size: 16),
+          icon: const Icon(LucideIcons.repeat, size: _messageActionIconSize),
           label: l10n.chatActionResend,
           onPressed: onResend!,
         ),
       if (onEdit != null)
         ContextActionButton(
           key: nextKey(),
-          icon: const Icon(LucideIcons.pencilLine, size: 16),
+          icon:
+              const Icon(LucideIcons.pencilLine, size: _messageActionIconSize),
           label: l10n.chatActionEdit,
           onPressed: onEdit!,
         ),
       if (onRevokeInvite != null)
         ContextActionButton(
           key: nextKey(),
-          icon: const Icon(LucideIcons.ban, size: 16),
+          icon: const Icon(LucideIcons.ban, size: _messageActionIconSize),
           label: l10n.chatActionRevoke,
           onPressed: onRevokeInvite!,
         ),
+      if (onPinToggle != null)
+        ContextActionButton(
+          key: nextKey(),
+          icon: Icon(
+            isPinned ? LucideIcons.pinOff : LucideIcons.pin,
+            size: _messageActionIconSize,
+          ),
+          label: isPinned ? l10n.chatUnpinMessage : l10n.chatPinMessage,
+          onPressed: onPinToggle!,
+        ),
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.copy, size: 16),
+        icon: const Icon(LucideIcons.copy, size: _messageActionIconSize),
         label: l10n.chatActionCopy,
         onPressed: onCopy,
       ),
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.share2, size: 16),
+        icon: const Icon(LucideIcons.share2, size: _messageActionIconSize),
         label: l10n.chatActionShare,
         onPressed: onShare,
       ),
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.calendarPlus, size: 16),
+        icon:
+            const Icon(LucideIcons.calendarPlus, size: _messageActionIconSize),
         label: l10n.chatActionAddToCalendar,
         onPressed: onAddToCalendar,
       ),
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.info, size: 16),
+        icon: const Icon(LucideIcons.info, size: _messageActionIconSize),
         label: l10n.chatActionDetails,
         onPressed: onDetails,
       ),
@@ -8853,7 +9258,8 @@ class _MessageActionBar extends StatelessWidget {
       actions.add(
         ContextActionButton(
           key: nextKey(),
-          icon: const Icon(LucideIcons.squareCheck, size: 16),
+          icon:
+              const Icon(LucideIcons.squareCheck, size: _messageActionIconSize),
           label: l10n.chatActionSelect,
           onPressed: onSelect,
         ),

@@ -200,6 +200,19 @@ final class ChatQuoteCleared extends ChatEvent {
   List<Object?> get props => [];
 }
 
+final class ChatMessagePinRequested extends ChatEvent {
+  const ChatMessagePinRequested({
+    required this.message,
+    required this.pin,
+  });
+
+  final Message message;
+  final bool pin;
+
+  @override
+  List<Object?> get props => [message, pin];
+}
+
 final class ChatMessageReactionToggled extends ChatEvent {
   const ChatMessageReactionToggled({
     required this.message,

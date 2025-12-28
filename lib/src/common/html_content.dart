@@ -100,6 +100,9 @@ class HtmlContentCodec {
   static const String _heightAttribute = 'height';
   static const String _colspanAttribute = 'colspan';
   static const String _rowspanAttribute = 'rowspan';
+  static const int _maxHtmlInputLength = 200000;
+  static const int _maxHtmlNodeCount = 5000;
+  static const int _maxHtmlDepth = 40;
   static const Map<String, Set<String>> _sanitizedAllowedAttributes =
       <String, Set<String>>{
     'a': <String>{_hrefAttribute, _titleAttribute},
@@ -133,26 +136,38 @@ class HtmlContentCodec {
   static String sanitizeHtml(String html) {
     final trimmed = html.trim();
     if (trimmed.isEmpty) return '';
-    final fragment = html_parser.parseFragment(trimmed);
+    final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
     final buffer = StringBuffer();
+    final budget = _HtmlNodeBudget(
+      maxNodes: _maxHtmlNodeCount,
+      maxDepth: _maxHtmlDepth,
+    );
     for (final node in fragment.nodes) {
-      _appendSanitizedHtml(buffer, node);
+      _appendSanitizedHtml(buffer, node, budget, 0);
     }
     return buffer.toString().trim();
   }
 
   static String toPlainText(String html) {
-    final fragment = html_parser.parseFragment(html);
+    final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
     final buffer = StringBuffer();
-    _appendPlainText(buffer, fragment.nodes);
+    final budget = _HtmlNodeBudget(
+      maxNodes: _maxHtmlNodeCount,
+      maxDepth: _maxHtmlDepth,
+    );
+    _appendPlainText(buffer, fragment.nodes, budget, 0);
     return _normalizePlainText(buffer.toString());
   }
 
   static String? toXhtml(String html) {
-    final fragment = html_parser.parseFragment(html);
+    final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
     final builder = xml.XmlBuilder();
+    final budget = _HtmlNodeBudget(
+      maxNodes: _maxHtmlNodeCount,
+      maxDepth: _maxHtmlDepth,
+    );
     for (final node in fragment.nodes) {
-      _appendXml(builder, node);
+      _appendXml(builder, node, budget, 0);
     }
     final encoded = builder.buildFragment().toXmlString();
     final normalized = encoded.trim();
@@ -162,8 +177,13 @@ class HtmlContentCodec {
   static void _appendPlainText(
     StringBuffer buffer,
     List<dom.Node> nodes,
+    _HtmlNodeBudget budget,
+    int depth,
   ) {
     for (final node in nodes) {
+      if (!budget.allow(depth)) {
+        return;
+      }
       if (node is dom.Text) {
         buffer.write(node.text);
         continue;
@@ -178,14 +198,14 @@ class HtmlContentCodec {
         if (isBlock) {
           _appendLineBreak(buffer);
         }
-        _appendPlainText(buffer, node.nodes);
+        _appendPlainText(buffer, node.nodes, budget, depth + 1);
         if (isBlock) {
           _appendLineBreak(buffer);
         }
         continue;
       }
       if (node.nodes.isNotEmpty) {
-        _appendPlainText(buffer, node.nodes);
+        _appendPlainText(buffer, node.nodes, budget, depth + 1);
       }
     }
   }
@@ -193,7 +213,12 @@ class HtmlContentCodec {
   static void _appendXml(
     xml.XmlBuilder builder,
     dom.Node node,
+    _HtmlNodeBudget budget,
+    int depth,
   ) {
+    if (!budget.allow(depth)) {
+      return;
+    }
     if (node is dom.Text) {
       builder.text(node.text);
       return;
@@ -209,21 +234,26 @@ class HtmlContentCodec {
         attributes: attributes,
         nest: () {
           for (final child in node.nodes) {
-            _appendXml(builder, child);
+            _appendXml(builder, child, budget, depth + 1);
           }
         },
       );
       return;
     }
     for (final child in node.nodes) {
-      _appendXml(builder, child);
+      _appendXml(builder, child, budget, depth + 1);
     }
   }
 
   static void _appendSanitizedHtml(
     StringBuffer buffer,
     dom.Node node,
+    _HtmlNodeBudget budget,
+    int depth,
   ) {
+    if (!budget.allow(depth)) {
+      return;
+    }
     if (node is dom.Text) {
       buffer.write(_escapeHtml(node.text));
       return;
@@ -232,7 +262,7 @@ class HtmlContentCodec {
       final tag = (node.localName ?? '').toLowerCase();
       if (!_sanitizedAllowedTags.contains(tag)) {
         for (final child in node.nodes) {
-          _appendSanitizedHtml(buffer, child);
+          _appendSanitizedHtml(buffer, child, budget, depth + 1);
         }
         return;
       }
@@ -254,7 +284,7 @@ class HtmlContentCodec {
       }
       buffer.write('>');
       for (final child in node.nodes) {
-        _appendSanitizedHtml(buffer, child);
+        _appendSanitizedHtml(buffer, child, budget, depth + 1);
       }
       buffer
         ..write('</')
@@ -264,7 +294,7 @@ class HtmlContentCodec {
     }
     if (node.nodes.isNotEmpty) {
       for (final child in node.nodes) {
-        _appendSanitizedHtml(buffer, child);
+        _appendSanitizedHtml(buffer, child, budget, depth + 1);
       }
     }
   }
@@ -348,5 +378,34 @@ class HtmlContentCodec {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
+  }
+
+  static String _truncateHtmlInput(String html) {
+    if (html.length <= _maxHtmlInputLength) {
+      return html;
+    }
+    return html.substring(0, _maxHtmlInputLength);
+  }
+}
+
+class _HtmlNodeBudget {
+  _HtmlNodeBudget({
+    required this.maxNodes,
+    required this.maxDepth,
+  });
+
+  final int maxNodes;
+  final int maxDepth;
+  var _visited = 0;
+
+  bool allow(int depth) {
+    if (depth > maxDepth) {
+      return false;
+    }
+    if (_visited >= maxNodes) {
+      return false;
+    }
+    _visited += 1;
+    return true;
   }
 }
