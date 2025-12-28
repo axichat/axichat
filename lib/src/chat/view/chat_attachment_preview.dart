@@ -1858,6 +1858,17 @@ Future<void> _saveAttachmentToDevice(
 }) async {
   final l10n = context.l10n;
   final toaster = ShadToaster.maybeOf(context);
+  final approved = await confirm(
+    context,
+    title: l10n.chatAttachmentExportTitle,
+    message: l10n.chatAttachmentExportMessage,
+    confirmLabel: l10n.chatAttachmentExportConfirm,
+    cancelLabel: l10n.chatAttachmentExportCancel,
+    destructiveConfirm: false,
+  );
+  if (approved != true) {
+    return;
+  }
   if (!await file.exists()) {
     _showToast(
       l10n,

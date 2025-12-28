@@ -757,12 +757,17 @@ class EmailDeltaTransport implements ChatTransport {
       throw StateError('Transport not initialized');
     }
     final sanitizedSubject = sanitizeEmailHeaderValue(subject);
+    final sanitizedFileName = sanitizeEmailAttachmentFilename(
+      attachment.fileName,
+      fallbackPath: attachment.path,
+    );
+    final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
     final msgId = await _context!.sendFileMessage(
       chatId: chatId,
       viewType: _viewTypeFor(attachment),
       filePath: attachment.path,
-      fileName: attachment.fileName,
-      mimeType: attachment.mimeType,
+      fileName: sanitizedFileName,
+      mimeType: sanitizedMimeType,
       text: attachment.caption,
       subject: sanitizedSubject,
       html: htmlCaption,
@@ -974,11 +979,16 @@ class EmailDeltaTransport implements ChatTransport {
     EmailAttachment attachment,
     int msgId,
   ) {
+    final sanitizedFileName = sanitizeEmailAttachmentFilename(
+      attachment.fileName,
+      fallbackPath: attachment.path,
+    );
+    final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
     return FileMetadataData(
       id: deltaFileMetadataId(msgId),
-      filename: attachment.fileName,
+      filename: sanitizedFileName,
       path: attachment.path,
-      mimeType: attachment.mimeType,
+      mimeType: sanitizedMimeType,
       sizeBytes: attachment.sizeBytes,
       width: attachment.width,
       height: attachment.height,

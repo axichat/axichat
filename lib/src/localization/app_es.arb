@@ -722,6 +722,10 @@
     }
   },
   "chatAttachmentDownload": "Descargar adjunto",
+  "chatAttachmentExportTitle": "¿Guardar adjunto?",
+  "chatAttachmentExportMessage": "Esto copiará el adjunto al almacenamiento compartido. ¿Continuar?",
+  "chatAttachmentExportConfirm": "Guardar",
+  "chatAttachmentExportCancel": "Cancelar",
   "chatAttachmentUnavailableDevice": "El adjunto ya no está disponible en este dispositivo",
   "chatAttachmentInvalidLink": "Enlace de adjunto no válido",
   "chatAttachmentOpenFailed": "No se pudo abrir {target}",
