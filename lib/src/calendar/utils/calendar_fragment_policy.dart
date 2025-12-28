@@ -4,6 +4,8 @@ import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/models/calendar_acl.dart';
+import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -55,7 +57,16 @@ class CalendarFragmentPolicy {
     if (chat == null || !chat.supportsChatCalendar) {
       return const CalendarFragmentShareDecision(canWrite: false);
     }
-    return const CalendarFragmentShareDecision(canWrite: true);
+    if (chat.type != ChatType.groupChat) {
+      return const CalendarFragmentShareDecision(canWrite: true);
+    }
+    if (roomState == null) {
+      return const CalendarFragmentShareDecision(canWrite: false);
+    }
+    final CalendarChatRole role = roomState.myRole.calendarChatRole;
+    final CalendarChatAcl acl = chat.type.calendarDefaultAcl;
+    final bool canWrite = role.allows(acl.write);
+    return CalendarFragmentShareDecision(canWrite: canWrite);
   }
 }
 

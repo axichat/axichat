@@ -19,6 +19,7 @@ part 'message_models.freezed.dart';
 
 const uuid = Uuid();
 const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
+const int _maxCalendarTaskIcsBytes = maxMessageHtmlBytes;
 
 // ENUMS WARNING: New values must only be added to the end of the list.
 // If not, the database will break
@@ -332,13 +333,15 @@ class Message with _$Message implements Insertable<Message> {
     final taskIcsPayload = get<CalendarTaskIcsPayload>();
     final CalendarTask? calendarTaskIcs = taskIcsPayload == null
         ? null
-        : _calendarTaskIcsCodec.decode(taskIcsPayload.ics);
+        : _decodeCalendarTaskIcsPayload(taskIcsPayload);
+    final bool taskIcsReadOnly = taskIcsPayload == null
+        ? CalendarTaskIcsMessage.defaultReadOnly
+        : taskIcsPayload.readOnly;
     final CalendarTaskIcsMessage? taskIcsMessage = calendarTaskIcs == null
         ? null
         : CalendarTaskIcsMessage(
             task: calendarTaskIcs,
-            readOnly: taskIcsPayload?.readOnly ??
-                CalendarTaskIcsMessage.defaultReadOnly,
+            readOnly: taskIcsReadOnly,
           );
     final availabilityPayload = get<CalendarAvailabilityMessagePayload>();
     final PseudoMessageType? availabilityType =
@@ -620,6 +623,19 @@ extension MessageCalendarAvailabilityX on Message {
     } catch (_) {
       return null;
     }
+  }
+}
+
+CalendarTask? _decodeCalendarTaskIcsPayload(CalendarTaskIcsPayload payload) {
+  final raw = payload.ics.trim();
+  if (raw.isEmpty) return null;
+  if (!isWithinUtf8ByteLimit(raw, maxBytes: _maxCalendarTaskIcsBytes)) {
+    return null;
+  }
+  try {
+    return _calendarTaskIcsCodec.decode(raw);
+  } on Exception {
+    return null;
   }
 }
 
