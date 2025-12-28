@@ -42,6 +42,9 @@ SET draft_source_id = ?
 WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
 ''';
 const String _attachmentRootDirectoryName = 'attachments';
+const String _databaseWalSuffix = '-wal';
+const String _databaseShmSuffix = '-shm';
+const String _databaseJournalSuffix = '-journal';
 const int _messageAttachmentMaxCount = 50;
 const int _messageAttachmentSortOrderStart = 0;
 const int _messageAttachmentSortOrderStep = 1;
@@ -3856,8 +3859,42 @@ ON CONFLICT(address) DO UPDATE SET
   }
 
   @override
-  Future<void> deleteFile() =>
-      _inMemory || _file.path.isEmpty ? Future.value() : _file.delete();
+  Future<void> deleteFile() async {
+    if (_inMemory || _file.path.isEmpty) {
+      return;
+    }
+    final basePath = _file.path;
+    final candidates = <File>[
+      File(basePath),
+      File('$basePath$_databaseWalSuffix'),
+      File('$basePath$_databaseShmSuffix'),
+      File('$basePath$_databaseJournalSuffix'),
+    ];
+    for (final candidate in candidates) {
+      if (!await candidate.exists()) {
+        continue;
+      }
+      try {
+        await candidate.delete();
+      } on Exception {
+        // Ignore deletion failures for cleanup operations.
+      }
+    }
+    await _deleteAttachmentRootDirectory();
+  }
+
+  Future<void> _deleteAttachmentRootDirectory() async {
+    final Directory directory = await _attachmentRootDirectory();
+    if (!await directory.exists()) {
+      return;
+    }
+    const bool recursiveDelete = true;
+    try {
+      await directory.delete(recursive: recursiveDelete);
+    } on Exception {
+      // Ignore cleanup failures.
+    }
+  }
 }
 
 QueryExecutor _openDatabase(File file, String passphrase) {

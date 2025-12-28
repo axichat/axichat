@@ -1,5 +1,6 @@
 package im.axi.axichat
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.MotionEvent
@@ -10,6 +11,10 @@ import io.flutter.embedding.android.FlutterView
 class MainActivity : FlutterActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    if (shouldFinishForTaskHijack(intent)) {
+      finish()
+      return
+    }
     window.setFlags(
       WindowManager.LayoutParams.FLAG_SECURE,
       WindowManager.LayoutParams.FLAG_SECURE,
@@ -32,6 +37,17 @@ class MainActivity : FlutterActivity() {
       false
     }
     return obscured || partiallyObscured
+  }
+
+  private fun shouldFinishForTaskHijack(intent: Intent?): Boolean {
+    if (isTaskRoot) {
+      return false
+    }
+    if (intent == null) {
+      return false
+    }
+    return Intent.ACTION_MAIN == intent.action &&
+        intent.hasCategory(Intent.CATEGORY_LAUNCHER)
   }
 
   private val flutterView: FlutterView?
