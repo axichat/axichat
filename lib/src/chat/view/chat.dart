@@ -5714,12 +5714,14 @@ class _ChatState extends State<Chat> {
                                                       if (canTogglePins) {
                                                         onPinToggle = () =>
                                                             context
-                                                                .read<ChatBloc>()
+                                                                .read<
+                                                                    ChatBloc>()
                                                                 .add(
                                                                   ChatMessagePinRequested(
                                                                     message:
                                                                         messageModel,
-                                                                    pin: !isPinned,
+                                                                    pin:
+                                                                        !isPinned,
                                                                   ),
                                                                 );
                                                       }
@@ -7339,7 +7341,7 @@ class _PinnedMessageTile extends StatelessWidget {
         ],
       ),
     ];
-    if (hasAttachments && message != null) {
+    if (hasAttachments) {
       contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
       final isGroupChat = chat.type == ChatType.groupChat;
       final isEmailChat = chat.defaultTransport.isEmail;
@@ -7354,16 +7356,14 @@ class _PinnedMessageTile extends StatelessWidget {
         knownContacts: context.watch<RosterCubit>().contacts,
         chat: chat,
       );
-      final allowAttachmentOnce =
-          isOneTimeAttachmentAllowed(message.stanzaID);
+      final allowAttachmentOnce = isOneTimeAttachmentAllowed(message.stanzaID);
       final allowAttachment = allowAttachmentByTrust || allowAttachmentOnce;
       final emailService = RepositoryProvider.of<EmailService?>(context);
-      final emailDownloadDelegate =
-          isEmailChat && emailService != null
-              ? AttachmentDownloadDelegate(
-                  () => emailService.downloadFullMessage(message),
-                )
-              : null;
+      final emailDownloadDelegate = isEmailChat && emailService != null
+          ? AttachmentDownloadDelegate(
+              () => emailService.downloadFullMessage(message),
+            )
+          : null;
       final autoDownload = allowAttachmentOnce ||
           (allowAttachment && chat.attachmentAutoDownload.isAllowed);
       final autoDownloadUserInitiated = allowAttachmentOnce;

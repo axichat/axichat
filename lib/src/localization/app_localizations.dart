@@ -1234,6 +1234,42 @@ abstract class AppLocalizations {
   /// **'Attachments'**
   String get chatAttachmentTooltip;
 
+  /// No description provided for @chatPinnedMessagesTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned messages'**
+  String get chatPinnedMessagesTooltip;
+
+  /// No description provided for @chatPinnedMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned messages'**
+  String get chatPinnedMessagesTitle;
+
+  /// No description provided for @chatPinMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin message'**
+  String get chatPinMessage;
+
+  /// No description provided for @chatUnpinMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin message'**
+  String get chatUnpinMessage;
+
+  /// No description provided for @chatPinnedEmptyState.
+  ///
+  /// In en, this message translates to:
+  /// **'No pinned messages yet.'**
+  String get chatPinnedEmptyState;
+
+  /// No description provided for @chatPinnedMissingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message is unavailable.'**
+  String get chatPinnedMissingMessage;
+
   /// No description provided for @chatSendMessageTooltip.
   ///
   /// In en, this message translates to:

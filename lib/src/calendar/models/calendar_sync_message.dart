@@ -67,6 +67,8 @@ class CalendarSyncInbound {
 
 @freezed
 class CalendarSyncMessage with _$CalendarSyncMessage {
+  static const int maxEnvelopeLength = _calendarSyncEnvelopeMaxLength;
+
   const factory CalendarSyncMessage({
     /// Message type: request, full, update, or snapshot.
     required String type,

@@ -638,6 +638,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatAttachmentTooltip => 'Attachments';
 
   @override
+  String get chatPinnedMessagesTooltip => 'Pinned messages';
+
+  @override
+  String get chatPinnedMessagesTitle => 'Pinned messages';
+
+  @override
+  String get chatPinMessage => 'Pin message';
+
+  @override
+  String get chatUnpinMessage => 'Unpin message';
+
+  @override
+  String get chatPinnedEmptyState => 'No pinned messages yet.';
+
+  @override
+  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
+
+  @override
   String get chatSendMessageTooltip => 'Send message';
 
   @override
@@ -1826,8 +1844,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
-    return 'This attachment says it is $declared, but the file looks like '
-        '$detected. Opening it could be unsafe. Continue?';
+    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
   }
 
   @override
@@ -1838,8 +1855,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatAttachmentHighRiskMessage =>
-      'This file type can be dangerous to open. We recommend saving it and '
-      'scanning it before opening. Continue?';
+      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
 
   @override
   String get chatAttachmentUnknownSize => 'Unknown size';
