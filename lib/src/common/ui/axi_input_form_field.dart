@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide SpellCheckConfiguration;
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/src/components/form/field.dart';
 import 'package:shadcn_ui/src/theme/components/decorator.dart';
@@ -9,6 +9,7 @@ import 'package:shadcn_ui/src/theme/theme.dart';
 
 import 'axi_editable_text.dart' as axi;
 import 'axi_input.dart';
+import 'axi_spell_check.dart';
 
 class AxiInputFormField extends ShadFormBuilderField<String> {
   AxiInputFormField({
@@ -28,138 +29,72 @@ class AxiInputFormField extends ShadFormBuilderField<String> {
     super.valueTransformer,
     super.onReset,
     super.focusNode,
-
     ShadDecoration? decoration,
-
     Widget? placeholder,
-
     TextMagnifierConfiguration magnifierConfiguration =
         TextMagnifierConfiguration.disabled,
-
     TextInputType? keyboardType,
-
     TextInputAction? textInputAction,
-
     TextCapitalization textCapitalization = TextCapitalization.none,
-
     TextStyle? style,
-
     StrutStyle? strutStyle,
-
     TextAlign textAlign = TextAlign.start,
-
     TextDirection? textDirection,
-
     bool autofocus = false,
-
     String obscuringCharacter = '•',
-
     bool obscureText = false,
-
     bool autocorrect = true,
-
     SmartDashesType? smartDashesType,
-
     SmartQuotesType? smartQuotesType,
-
     bool enableSuggestions = true,
-
     int? maxLines = 1,
-
     int? minLines,
-
     bool expands = false,
-
     super.readOnly,
-
     bool? showCursor,
-
     int? maxLength,
-
     MaxLengthEnforcement? maxLengthEnforcement,
-
     VoidCallback? onEditingComplete,
-
     ValueChanged<String>? onSubmitted,
-
     AppPrivateCommandCallback? onAppPrivateCommand,
-
     List<TextInputFormatter>? inputFormatters,
-
     double cursorWidth = 2.0,
-
     double? cursorHeight,
-
     Radius? cursorRadius,
-
     bool? cursorOpacityAnimates,
-
     Color? cursorColor,
-
     ui.BoxHeightStyle selectionHeightStyle = ui.BoxHeightStyle.tight,
-
     ui.BoxWidthStyle selectionWidthStyle = ui.BoxWidthStyle.tight,
-
     Brightness? keyboardAppearance,
-
     EdgeInsets scrollPadding = const EdgeInsets.all(20),
-
     bool? enableInteractiveSelection,
-
     TextSelectionControls? selectionControls,
-
     DragStartBehavior dragStartBehavior = DragStartBehavior.start,
-
     GestureTapCallback? onPressed,
-
     bool onPressedAlwaysCalled = false,
-
     TapRegionCallback? onPressedOutside,
-
     MouseCursor? mouseCursor,
-
     ScrollPhysics? scrollPhysics,
-
     ScrollController? scrollController,
-
     Iterable<String>? autofillHints,
-
     Clip clipBehavior = Clip.hardEdge,
-
     bool scribbleEnabled = true,
-
     bool enableIMEPersonalizedLearning = true,
-
     ContentInsertionConfiguration? contentInsertionConfiguration,
-
     axi.EditableTextContextMenuBuilder? contextMenuBuilder,
-
     UndoHistoryController? undoController,
-
     SpellCheckConfiguration? spellCheckConfiguration,
-
     Color? selectionColor,
-
     EdgeInsets? padding,
-
     Widget? leading,
-
     Widget? trailing,
-
     MainAxisAlignment? mainAxisAlignment,
-
     CrossAxisAlignment? crossAxisAlignment,
-
     TextStyle? placeholderStyle,
-
     Alignment? placeholderAlignment,
-
     EdgeInsets? inputPadding,
-
     double? gap,
-
     BoxConstraints? constraints,
-
     Object? groupId,
   }) : super(
           initialValue: controller != null ? controller.text : initialValue,

@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'typing_text_input.dart';
+import 'axi_input_form_field.dart';
 
-const double _transparentCursorAlpha = 0.0;
-const String _emptyTextValue = '';
-
-class AxiTextFormField extends StatefulWidget {
+class AxiTextFormField extends StatelessWidget {
   const AxiTextFormField({
     super.key,
     this.controller,
@@ -66,75 +62,34 @@ class AxiTextFormField extends StatefulWidget {
   final EdgeInsets? padding;
 
   @override
-  State<AxiTextFormField> createState() => _AxiTextFormFieldState();
-}
-
-class _AxiTextFormFieldState extends State<AxiTextFormField> {
-  late final TypingTextEditingController _typingController =
-      TypingTextEditingController(
-    source: widget.controller,
-    initialValue: _initialValueFromWidget(),
-  );
-
-  @override
-  void didUpdateWidget(covariant AxiTextFormField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller ||
-        oldWidget.initialValue != widget.initialValue) {
-      _typingController.updateSource(
-        widget.controller,
-        _initialValueFromWidget(),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _typingController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final Color transparentCursor =
-        ShadTheme.of(context).colorScheme.foreground.withValues(
-              alpha: _transparentCursorAlpha,
-            );
-    return TypingTextAnimator(
-      controller: _typingController,
-      child: ShadInputFormField(
-        controller: _typingController,
-        focusNode: widget.focusNode,
-        placeholder: widget.placeholder,
-        keyboardType: widget.keyboardType,
-        enabled: widget.enabled ?? true,
-        obscureText: widget.obscureText ?? false,
-        validator: widget.validator,
-        onChanged: widget.onChanged,
-        onSubmitted: widget.onSubmitted,
-        initialValue: widget.initialValue,
-        description: widget.description,
-        inputFormatters: widget.inputFormatters,
-        trailing: widget.trailing,
-        expands: widget.expands ?? false,
-        minLines: widget.minLines,
-        maxLines: widget.maxLines,
-        autocorrect: widget.autocorrect ?? true,
-        textInputAction: widget.textInputAction,
-        autofocus: widget.autofocus ?? false,
-        style: widget.style,
-        placeholderStyle: widget.placeholderStyle,
-        placeholderAlignment: widget.placeholderAlignment,
-        inputPadding: widget.inputPadding,
-        crossAxisAlignment: widget.crossAxisAlignment,
-        constraints: widget.constraints,
-        padding: widget.padding,
-        cursorColor: transparentCursor,
-      ),
+    return AxiInputFormField(
+      controller: controller,
+      focusNode: focusNode,
+      placeholder: placeholder,
+      keyboardType: keyboardType,
+      enabled: enabled ?? true,
+      obscureText: obscureText ?? false,
+      validator: validator,
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
+      initialValue: initialValue,
+      description: description,
+      inputFormatters: inputFormatters,
+      trailing: trailing,
+      expands: expands ?? false,
+      minLines: minLines,
+      maxLines: maxLines,
+      autocorrect: autocorrect ?? true,
+      textInputAction: textInputAction,
+      autofocus: autofocus ?? false,
+      style: style,
+      placeholderStyle: placeholderStyle,
+      placeholderAlignment: placeholderAlignment,
+      inputPadding: inputPadding,
+      crossAxisAlignment: crossAxisAlignment,
+      constraints: constraints,
+      padding: padding,
     );
-  }
-
-  TextEditingValue _initialValueFromWidget() {
-    return TextEditingValue(text: widget.initialValue ?? _emptyTextValue);
   }
 }
