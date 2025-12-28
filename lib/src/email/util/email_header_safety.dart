@@ -4,8 +4,7 @@ import 'package:path/path.dart' as p;
 final RegExp _emailHeaderCrlfPattern = RegExp(r'[\r\n]+');
 final RegExp _emailFilenameSeparatorPattern = RegExp(r'[\\/]');
 final RegExp _emailFilenameWhitespacePattern = RegExp(r'\s+');
-final RegExp _emailFilenameUnsafePattern =
-    RegExp(r'[^a-zA-Z0-9._() \[\]-]');
+final RegExp _emailFilenameUnsafePattern = RegExp(r'[^a-zA-Z0-9._() \[\]-]');
 final RegExp _emailMimeTypePattern = RegExp(
   r'^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$',
 );
@@ -31,9 +30,8 @@ String sanitizeEmailAttachmentFilename(
   final fallbackCandidate = fallbackPath == null || fallbackPath.trim().isEmpty
       ? null
       : p.basename(fallbackPath.trim());
-  final candidate = sanitized?.isNotEmpty == true
-      ? sanitized!
-      : (fallbackCandidate ?? '');
+  final candidate =
+      sanitized?.isNotEmpty == true ? sanitized! : (fallbackCandidate ?? '');
   final base = p.basename(candidate).trim();
   final stripped = base.replaceAll(_emailFilenameSeparatorPattern, '_');
   final collapsed =
