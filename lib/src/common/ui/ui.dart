@@ -26,7 +26,9 @@ export 'axi_progress_indicator.dart';
 export 'axi_sheet_scaffold.dart';
 export 'axi_tab_bar.dart';
 export 'axi_tap_bounce.dart';
+export 'axi_text_field.dart';
 export 'axi_text_form_field.dart';
+export 'axi_text_input.dart';
 export 'axi_tooltip.dart';
 export 'axi_transport_chip.dart';
 export 'axi_version.dart';
@@ -41,6 +43,7 @@ export 'presence_indicator.dart';
 export 'selection_indicator.dart';
 export 'squircle_border.dart';
 export 'string_to_color.dart';
+export 'typing_text_input.dart';
 
 const appDisplayName = 'axichat';
 const androidIconPath = '@mipmap/ic_launcher';

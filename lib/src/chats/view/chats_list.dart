@@ -12,6 +12,7 @@ import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -854,23 +855,10 @@ class _ChatListTileState extends State<ChatListTile> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<bool> _confirmChatExport() async {
-    final l10n = context.l10n;
-    final confirmed = await confirm(
-      context,
-      title: l10n.chatExportWarningTitle,
-      message: l10n.chatExportWarningMessage,
-      confirmLabel: l10n.commonContinue,
-      cancelLabel: l10n.commonCancel,
-      destructiveConfirm: false,
-    );
-    return confirmed == true;
-  }
-
   Future<void> _exportChatFromContextMenu(Chat chat) async {
     final l10n = context.l10n;
     if (context.read<ChatsCubit?>() == null) return;
-    final confirmed = await _confirmChatExport();
+    final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
     try {
       final result = await ChatHistoryExporter.exportChats(
@@ -1129,7 +1117,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
   Future<void> _exportChat() async {
     final l10n = context.l10n;
     if (context.read<ChatsCubit?>() == null) return;
-    final confirmed = await _confirmChatExport();
+    final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
     setState(() {
       _exporting = true;
@@ -1170,6 +1158,19 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+Future<bool> _confirmChatExport(BuildContext context) async {
+  final l10n = context.l10n;
+  final confirmed = await confirm(
+    context,
+    title: l10n.chatExportWarningTitle,
+    message: l10n.chatExportWarningMessage,
+    confirmLabel: l10n.commonContinue,
+    cancelLabel: l10n.commonCancel,
+    destructiveConfirm: false,
+  );
+  return confirmed == true;
 }
 
 double _measureLabelWidth(BuildContext context, String text) {

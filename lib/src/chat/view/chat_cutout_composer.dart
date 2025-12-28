@@ -1,6 +1,5 @@
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/cutout.dart';
-import 'package:axichat/src/common/ui/squircle_border.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -166,7 +165,7 @@ class ChatCutoutComposer extends StatelessWidget {
                 child: Semantics(
                   label: semanticsLabel ?? hintText,
                   textField: true,
-                  child: TextField(
+                  child: AxiTextField(
                     controller: controller,
                     focusNode: focusNode,
                     minLines: minLines,
@@ -174,7 +173,6 @@ class ChatCutoutComposer extends StatelessWidget {
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     style: textStyle,
-                    cursorColor: colors.primary,
                     cursorHeight: cursorHeight,
                     decoration: InputDecoration(
                       border: InputBorder.none,
