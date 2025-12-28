@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/event_transform.dart';
@@ -60,6 +61,12 @@ const _sendSignatureAttachmentFieldSeparator = '|';
 const _emptySignatureValue = '';
 const _bundledAttachmentSendFailureLogMessage =
     'Failed to send bundled email attachment';
+const _pinPermissionDeniedMessage =
+    'You do not have permission to pin messages in this room.';
+const _pinRoomStateLoadingMessage = 'Room members are still loading.';
+const _pinSyncFailedLogMessage = 'Failed to sync pinned messages.';
+const _emptyPinnedMessageItems = <PinnedMessageItem>[];
+const _emptyPinnedAttachmentIds = <String>[];
 
 class ComposerRecipient extends Equatable {
   const ComposerRecipient({
@@ -151,6 +158,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
+    on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
     on<_RoomStateUpdated>(_onRoomStateUpdated);
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
@@ -175,6 +183,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatAlertHidden>(_onChatAlertHidden);
     on<ChatQuoteRequested>(_onChatQuoteRequested);
     on<ChatQuoteCleared>(_onChatQuoteCleared);
+    on<ChatMessagePinRequested>(_onChatMessagePinRequested);
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
@@ -228,6 +237,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             if (chat != null && _xmppAllowedForChat(chat)) {
               unawaited(_catchUpFromMam());
               unawaited(_prefetchPeerAvatar(chat));
+              unawaited(_syncPinnedMessagesForChat(chat));
             }
           }
         },
@@ -288,6 +298,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
+  StreamSubscription<List<PinnedMessageEntry>>? _pinnedSubscription;
   StreamSubscription<RoomState>? _roomSubscription;
   StreamSubscription<List<String>>? _typingParticipantsSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
@@ -643,6 +654,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
+  void _subscribeToPinnedMessages(Chat chat) {
+    final resolvedChatJid =
+        chat.defaultTransport.isEmail ? chat.jid : chat.remoteJid;
+    final trimmedChatJid = resolvedChatJid.trim();
+    unawaited(_pinnedSubscription?.cancel());
+    if (trimmedChatJid.isEmpty) {
+      _pinnedSubscription = null;
+      return;
+    }
+    final emailService = _emailService;
+    if (chat.defaultTransport.isEmail) {
+      if (emailService == null) {
+        _pinnedSubscription = null;
+        return;
+      }
+      _pinnedSubscription = emailService
+          .pinnedMessagesStream(trimmedChatJid)
+          .listen((items) => add(_PinnedMessagesUpdated(items)));
+      return;
+    }
+    _pinnedSubscription = _messageService
+        .pinnedMessagesStream(trimmedChatJid)
+        .listen((items) => add(_PinnedMessagesUpdated(items)));
+    unawaited(_syncPinnedMessagesForChat(chat));
+  }
+
   void _subscribeToTypingParticipants(Chat chat) {
     if (!_xmppAllowedForChat(chat)) {
       unawaited(_typingParticipantsSubscription?.cancel());
@@ -656,10 +693,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             (participants) => add(_TypingParticipantsUpdated(participants)));
   }
 
+  Future<void> _syncPinnedMessagesForChat(Chat chat) async {
+    if (chat.defaultTransport.isEmail) {
+      return;
+    }
+    try {
+      await _messageService.syncPinnedMessagesForChat(chat.remoteJid);
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_pinSyncFailedLogMessage, error, stackTrace);
+    }
+  }
+
   @override
   Future<void> close() async {
     await _chatSubscription.cancel();
     await _messageSubscription?.cancel();
+    await _pinnedSubscription?.cancel();
     await _roomSubscription?.cancel();
     await _typingParticipantsSubscription?.cancel();
     await _emailSyncSubscription?.cancel();
@@ -678,6 +727,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final previousChat = state.chat;
     final resetContext = previousChat?.jid != event.chat.jid;
     final typingContextChanged = resetContext ||
+        previousChat?.defaultTransport != event.chat.defaultTransport;
+    final pinnedContextChanged = resetContext ||
         previousChat?.defaultTransport != event.chat.defaultTransport;
     final typingShouldClear =
         typingContextChanged || event.chat.defaultTransport.isEmail;
@@ -700,6 +751,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
       roomState: resetContext ? null : state.roomState,
+      pinnedMessages: resetContext ? _emptyPinnedMessageItems : state.pinnedMessages,
       typingParticipants:
           typingShouldClear ? const [] : state.typingParticipants,
       typing: event.chat.defaultTransport.isEmail ? false : state.typing,
@@ -714,6 +766,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (typingContextChanged) {
       _subscribeToTypingParticipants(event.chat);
+    }
+    if (pinnedContextChanged) {
+      _subscribeToPinnedMessages(event.chat);
     }
     _resetMamCursors(resetContext);
     if (_xmppAllowedForChat(event.chat)) {
@@ -881,6 +936,56 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _markEmailMessagesDisplayedLocally(seenCandidates);
       }
     }
+  }
+
+  Future<void> _onPinnedMessagesUpdated(
+    _PinnedMessagesUpdated event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (event.items.isEmpty) {
+      emit(state.copyWith(pinnedMessages: _emptyPinnedMessageItems));
+      return;
+    }
+    final orderedIds = LinkedHashSet<String>();
+    for (final entry in event.items) {
+      final stanzaId = entry.messageStanzaId.trim();
+      if (stanzaId.isEmpty) {
+        continue;
+      }
+      orderedIds.add(stanzaId);
+    }
+    if (orderedIds.isEmpty) {
+      emit(state.copyWith(pinnedMessages: _emptyPinnedMessageItems));
+      return;
+    }
+    final db = await _messageService.database;
+    final messages = await db.getMessagesByStanzaIds(orderedIds);
+    final messageByStanza = <String, Message>{
+      for (final message in messages) message.stanzaID: message,
+    };
+    final attachmentMaps = await _loadAttachmentMaps(messages);
+    final pinnedItems = <PinnedMessageItem>[];
+    for (final entry in event.items) {
+      final stanzaId = entry.messageStanzaId.trim();
+      if (stanzaId.isEmpty) {
+        continue;
+      }
+      final message = messageByStanza[stanzaId];
+      final attachmentIds = message == null
+          ? _emptyPinnedAttachmentIds
+          : attachmentMaps.attachmentsByMessageId[_messageKey(message)] ??
+              _emptyPinnedAttachmentIds;
+      pinnedItems.add(
+        PinnedMessageItem(
+          messageStanzaId: stanzaId,
+          chatJid: entry.chatJid,
+          pinnedAt: entry.pinnedAt,
+          message: message,
+          attachmentMetadataIds: attachmentIds,
+        ),
+      );
+    }
+    emit(state.copyWith(pinnedMessages: pinnedItems));
   }
 
   Future<void> _onChatInviteRequested(
@@ -1945,6 +2050,70 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     if (state.quoting != null) {
       emit(state.copyWith(quoting: null));
+    }
+  }
+
+  Future<void> _onChatMessagePinRequested(
+    ChatMessagePinRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    final stanzaId = event.message.stanzaID.trim();
+    if (stanzaId.isEmpty) {
+      return;
+    }
+    if (chat.type == ChatType.groupChat) {
+      final roomState = state.roomState;
+      if (roomState == null) {
+        emit(
+          _attachToast(
+            state,
+            const ChatToast(
+              message: _pinRoomStateLoadingMessage,
+              variant: ChatToastVariant.warning,
+            ),
+          ),
+        );
+        return;
+      }
+      if (!roomState.myAffiliation.canManagePins) {
+        emit(
+          _attachToast(
+            state,
+            const ChatToast(
+              message: _pinPermissionDeniedMessage,
+              variant: ChatToastVariant.warning,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    final emailService = _emailService;
+    if (chat.defaultTransport.isEmail) {
+      if (emailService == null) {
+        return;
+      }
+      if (event.pin) {
+        await emailService.pinMessage(chat: chat, message: event.message);
+      } else {
+        await emailService.unpinMessage(chat: chat, message: event.message);
+      }
+      return;
+    }
+    if (event.pin) {
+      await _messageService.pinMessage(
+        chatJid: chat.remoteJid,
+        message: event.message,
+      );
+    } else {
+      await _messageService.unpinMessage(
+        chatJid: chat.remoteJid,
+        message: event.message,
+      );
     }
   }
 
