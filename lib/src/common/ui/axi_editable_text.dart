@@ -2,16 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/// @docImport 'package:flutter/cupertino.dart';
-/// @docImport 'package:flutter/material.dart';
-///
-/// @docImport 'app.dart';
-/// @docImport 'context_menu_controller.dart';
-/// @docImport 'form.dart';
-/// @docImport 'restoration.dart';
-/// @docImport 'restoration_properties.dart';
-/// @docImport 'selectable_region.dart';
-/// @docImport 'text_selection_toolbar_layout_delegate.dart';
 library;
 
 import 'dart:async';
@@ -25,6 +15,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart'
+    show ContentInsertionConfiguration, TextEditingController, ToolbarOptions;
 
 import 'package:flutter/src/widgets/_web_browser_detection_io.dart'
     if (dart.library.js_interop) 'package:flutter/src/widgets/_web_browser_detection_web.dart';
@@ -57,7 +49,6 @@ import 'package:flutter/src/widgets/scrollable.dart';
 import 'package:flutter/src/widgets/scrollable_helpers.dart';
 import 'package:flutter/src/widgets/shortcuts.dart';
 import 'package:flutter/src/widgets/size_changed_layout_notifier.dart';
-import 'package:flutter/src/widgets/spell_check.dart';
 import 'package:flutter/src/widgets/tap_region.dart';
 import 'package:flutter/src/widgets/text.dart';
 import 'package:flutter/src/widgets/text_editing_intents.dart';
@@ -69,6 +60,7 @@ import 'package:flutter/src/widgets/view.dart';
 import 'package:flutter/src/widgets/widget_span.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'axi_spell_check.dart';
 import 'typing_text_input.dart';
 
 export 'package:flutter/services.dart'
@@ -234,307 +226,7 @@ class _RenderCompositionCallback extends RenderProxyBox {
 ///  * [EditableText], which is a raw region of editable text that can be
 ///    controlled with a [TextEditingController].
 ///  * Learn how to use a [TextEditingController] in one of our [cookbook recipes](https://docs.flutter.dev/cookbook/forms/text-field-changes#2-use-a-texteditingcontroller).
-class TextEditingController extends ValueNotifier<TextEditingValue> {
-  /// Creates a controller for an editable text field, with no initial selection.
-  ///
-  /// This constructor treats a null [text] argument as if it were the empty
-  /// string.
-  ///
-  /// The initial selection is `TextSelection.collapsed(offset: -1)`.
-  /// This indicates that there is no selection at all ([TextSelection.isValid]
-  /// is false in this case). When a text field is built with a controller whose
-  /// selection is not valid, the text field will update the selection when it
-  /// is focused (the selection will be an empty selection positioned at the
-  /// end of the text).
-  ///
-  /// Consider using [TextEditingController.fromValue] to initialize both the
-  /// text and the selection.
-  ///
-  /// {@tool dartpad}
-  /// This example creates a [TextField] with a [TextEditingController] whose
-  /// initial selection is empty (collapsed) and positioned at the beginning
-  /// of the text (offset is 0).
-  ///
-  /// ** See code in examples/api/lib/widgets/editable_text/text_editing_controller.1.dart **
-  /// {@end-tool}
-  TextEditingController({String? text})
-      : super(text == null
-            ? TextEditingValue.empty
-            : TextEditingValue(text: text));
-
-  /// Creates a controller for an editable text field from an initial [TextEditingValue].
-  ///
-  /// This constructor treats a null [value] argument as if it were
-  /// [TextEditingValue.empty].
-  TextEditingController.fromValue(TextEditingValue? value)
-      : assert(
-          value == null ||
-              !value.composing.isValid ||
-              value.isComposingRangeValid,
-          'New TextEditingValue $value has an invalid non-empty composing range '
-          '${value.composing}. It is recommended to use a valid composing range, '
-          'even for readonly text fields.',
-        ),
-        super(value ?? TextEditingValue.empty);
-
-  /// The current string the user is editing.
-  String get text => value.text;
-
-  /// Updates the current [text] to the given `newText`, and removes existing
-  /// selection and composing range held by the controller.
-  ///
-  /// This setter is typically only used in tests, as it resets the cursor
-  /// position and the composing state. For production code, **consider using the
-  /// [value] setter to update the [text] value instead**, and specify a
-  /// reasonable selection range within the new [text].
-  ///
-  /// Setting this notifies all the listeners of this [TextEditingController]
-  /// that they need to update (it calls [notifyListeners]). For this reason,
-  /// this value should only be set between frames, e.g. in response to user
-  /// actions, not during the build, layout, or paint phases. This property can
-  /// be set from a listener added to this [TextEditingController].
-  set text(String newText) {
-    value = value.copyWith(
-      text: newText,
-      selection: const TextSelection.collapsed(offset: -1),
-      composing: TextRange.empty,
-    );
-  }
-
-  @override
-  set value(TextEditingValue newValue) {
-    assert(
-      !newValue.composing.isValid || newValue.isComposingRangeValid,
-      'New TextEditingValue $newValue has an invalid non-empty composing range '
-      '${newValue.composing}. It is recommended to use a valid composing range, '
-      'even for readonly text fields.',
-    );
-    super.value = newValue;
-  }
-
-  /// Builds [TextSpan] from current editing value.
-  ///
-  /// By default makes text in composing range appear as underlined. Descendants
-  /// can override this method to customize appearance of text.
-  TextSpan buildTextSpan({
-    required BuildContext context,
-    TextStyle? style,
-    required bool withComposing,
-  }) {
-    assert(!value.composing.isValid ||
-        !withComposing ||
-        value.isComposingRangeValid);
-    // If the composing range is out of range for the current text, ignore it to
-    // preserve the tree integrity, otherwise in release mode a RangeError will
-    // be thrown and this EditableText will be built with a broken subtree.
-    final bool composingRegionOutOfRange =
-        !value.isComposingRangeValid || !withComposing;
-
-    if (composingRegionOutOfRange) {
-      return TextSpan(style: style, text: text);
-    }
-
-    final TextStyle composingStyle =
-        style?.merge(const TextStyle(decoration: TextDecoration.underline)) ??
-            const TextStyle(decoration: TextDecoration.underline);
-    return TextSpan(
-      style: style,
-      children: <TextSpan>[
-        TextSpan(text: value.composing.textBefore(value.text)),
-        TextSpan(
-            style: composingStyle,
-            text: value.composing.textInside(value.text)),
-        TextSpan(text: value.composing.textAfter(value.text)),
-      ],
-    );
-  }
-
-  /// The currently selected range within [text].
-  ///
-  /// If the selection is collapsed, then this property gives the offset of the
-  /// cursor within the text.
-  TextSelection get selection => value.selection;
-
-  /// Setting this will notify all the listeners of this [TextEditingController]
-  /// that they need to update (it calls [notifyListeners]). For this reason,
-  /// this value should only be set between frames, e.g. in response to user
-  /// actions, not during the build, layout, or paint phases.
-  ///
-  /// This property can be set from a listener added to this
-  /// [TextEditingController]; however, one should not also set [text]
-  /// in a separate statement. To change both the [text] and the [selection]
-  /// change the controller's [value].
-  ///
-  /// If the new selection is outside the composing range, the composing range is
-  /// cleared.
-  set selection(TextSelection newSelection) {
-    if (text.length < newSelection.end || text.length < newSelection.start) {
-      throw FlutterError('invalid text selection: $newSelection');
-    }
-    final TextRange newComposing =
-        _isSelectionWithinComposingRange(newSelection)
-            ? value.composing
-            : TextRange.empty;
-    value = value.copyWith(selection: newSelection, composing: newComposing);
-  }
-
-  /// Set the [value] to empty.
-  ///
-  /// After calling this function, [text] will be the empty string and the
-  /// selection will be collapsed at zero offset.
-  ///
-  /// Calling this will notify all the listeners of this [TextEditingController]
-  /// that they need to update (it calls [notifyListeners]). For this reason,
-  /// this method should only be called between frames, e.g. in response to user
-  /// actions, not during the build, layout, or paint phases.
-  void clear() {
-    value =
-        const TextEditingValue(selection: TextSelection.collapsed(offset: 0));
-  }
-
-  /// Set the composing region to an empty range.
-  ///
-  /// The composing region is the range of text that is still being composed.
-  /// Calling this function indicates that the user is done composing that
-  /// region.
-  ///
-  /// Calling this will notify all the listeners of this [TextEditingController]
-  /// that they need to update (it calls [notifyListeners]). For this reason,
-  /// this method should only be called between frames, e.g. in response to user
-  /// actions, not during the build, layout, or paint phases.
-  void clearComposing() {
-    value = value.copyWith(composing: TextRange.empty);
-  }
-
-  /// Check that the [selection] is inside of the composing range.
-  bool _isSelectionWithinComposingRange(TextSelection selection) {
-    return selection.start >= value.composing.start &&
-        selection.end <= value.composing.end;
-  }
-}
-
 /// Toolbar configuration for [EditableText].
-///
-/// Toolbar is a context menu that will show up when user right click or long
-/// press the [EditableText]. It includes several options: cut, copy, paste,
-/// and select all.
-///
-/// [EditableText] and its derived widgets have their own default [ToolbarOptions].
-/// Create a custom [ToolbarOptions] if you want explicit control over the toolbar
-/// option.
-@Deprecated(
-  'Use `contextMenuBuilder` instead. '
-  'This feature was deprecated after v3.3.0-0.5.pre.',
-)
-class ToolbarOptions {
-  /// Create a toolbar configuration with given options.
-  ///
-  /// All options default to false if they are not explicitly set.
-  @Deprecated(
-    'Use `contextMenuBuilder` instead. '
-    'This feature was deprecated after v3.3.0-0.5.pre.',
-  )
-  const ToolbarOptions({
-    this.copy = false,
-    this.cut = false,
-    this.paste = false,
-    this.selectAll = false,
-  });
-
-  /// An instance of [ToolbarOptions] with no options enabled.
-  static const ToolbarOptions empty = ToolbarOptions();
-
-  /// Whether to show copy option in toolbar.
-  ///
-  /// Defaults to false.
-  final bool copy;
-
-  /// Whether to show cut option in toolbar.
-  ///
-  /// If [EditableText.readOnly] is set to true, cut will be disabled regardless.
-  ///
-  /// Defaults to false.
-  final bool cut;
-
-  /// Whether to show paste option in toolbar.
-  ///
-  /// If [EditableText.readOnly] is set to true, paste will be disabled regardless.
-  ///
-  /// Defaults to false.
-  final bool paste;
-
-  /// Whether to show select all option in toolbar.
-  ///
-  /// Defaults to false.
-  final bool selectAll;
-}
-
-/// Configures the ability to insert media content through the soft keyboard.
-///
-/// The configuration provides a handler for any rich content inserted through
-/// the system input method, and also provides the ability to limit the mime
-/// types of the inserted content.
-///
-/// See also:
-///
-/// * [EditableText.contentInsertionConfiguration]
-class ContentInsertionConfiguration {
-  /// Creates a content insertion configuration with the specified options.
-  ///
-  /// A handler for inserted content, in the form of [onContentInserted], must
-  /// be supplied.
-  ///
-  /// The allowable mime types of inserted content may also
-  /// be provided via [allowedMimeTypes], which cannot be an empty list.
-  ContentInsertionConfiguration({
-    required this.onContentInserted,
-    this.allowedMimeTypes = kDefaultContentInsertionMimeTypes,
-  }) : assert(allowedMimeTypes.isNotEmpty);
-
-  /// Called when a user inserts content through the virtual / on-screen keyboard,
-  /// currently only used on Android.
-  ///
-  /// [KeyboardInsertedContent] holds the data representing the inserted content.
-  ///
-  /// {@tool dartpad}
-  ///
-  /// This example shows how to access the data for inserted content in your
-  /// `TextField`.
-  ///
-  /// ** See code in examples/api/lib/widgets/editable_text/editable_text.on_content_inserted.0.dart **
-  /// {@end-tool}
-  ///
-  /// See also:
-  ///
-  ///  * <https://developer.android.com/guide/topics/text/image-keyboard>
-  final ValueChanged<KeyboardInsertedContent> onContentInserted;
-
-  /// {@template flutter.widgets.contentInsertionConfiguration.allowedMimeTypes}
-  /// Used when a user inserts image-based content through the device keyboard,
-  /// currently only used on Android.
-  ///
-  /// The passed list of strings will determine which MIME types are allowed to
-  /// be inserted via the device keyboard.
-  ///
-  /// The default mime types are given by [kDefaultContentInsertionMimeTypes].
-  /// These are all the mime types that are able to be handled and inserted
-  /// from keyboards.
-  ///
-  /// This field cannot be an empty list.
-  ///
-  /// {@tool dartpad}
-  /// This example shows how to limit image insertion to specific file types.
-  ///
-  /// ** See code in examples/api/lib/widgets/editable_text/editable_text.on_content_inserted.0.dart **
-  /// {@end-tool}
-  ///
-  /// See also:
-  ///
-  ///  * <https://developer.android.com/guide/topics/text/image-keyboard>
-  /// {@endtemplate}
-  final List<String> allowedMimeTypes;
-}
-
 // A time-value pair that represents a key frame in an animation.
 class _KeyFrame {
   const _KeyFrame(this.time, this.value);
@@ -2581,14 +2273,14 @@ class EditableTextState extends State<EditableText>
     parent: _typingGlyphController,
     curve: _typingGlyphMorphCurve,
   );
-  final Animation<Offset> _typingCaretAnimation =
+  Animation<Offset> _typingCaretAnimation =
       const AlwaysStoppedAnimation<Offset>(Offset.zero);
-  final Offset _typingCaretOffset = Offset.zero;
+  Offset _typingCaretOffset = Offset.zero;
   TypingGlyphAnimation? _typingGlyphAnimation;
   TypingCaretPainter? _typingCaretPainter;
   TypingTextChange? _pendingTypingChange;
   TextEditingValue _previousTypingValue = const TextEditingValue();
-  final bool _suppressTypingControllerNotifications = false;
+  bool _suppressTypingControllerNotifications = false;
 
   /// Detects whether the clipboard can paste.
   final ClipboardStatusNotifier clipboardStatus = kIsWeb

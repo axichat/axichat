@@ -1,9 +1,9 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/cupertino.dart' hide SpellCheckConfiguration;
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide SpellCheckConfiguration;
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/src/components/disabled.dart';
 import 'package:shadcn_ui/src/theme/components/decorator.dart';
@@ -11,6 +11,8 @@ import 'package:shadcn_ui/src/theme/theme.dart';
 import 'package:shadcn_ui/src/utils/separated_iterable.dart';
 
 import 'axi_editable_text.dart' as axi;
+import 'axi_spell_check.dart';
+import 'axi_system_context_menu.dart';
 import 'axi_text_selection.dart';
 import 'typing_text_input.dart';
 
@@ -516,8 +518,17 @@ class AxiInputState extends State<AxiInput>
 
     final effectiveContextMenuBuilder = widget.contextMenuBuilder ??
         (context, editableState) {
-          return AdaptiveTextSelectionToolbar.editableText(
-            editableTextState: _editableText!,
+          final bool supportsSystemMenu =
+              AxiSystemContextMenu.isSupported(context) &&
+                  !editableState.widget.readOnly;
+          if (supportsSystemMenu) {
+            return AxiSystemContextMenu.editableText(
+              editableTextState: editableState,
+            );
+          }
+          return AdaptiveTextSelectionToolbar.buttonItems(
+            anchors: editableState.contextMenuAnchors,
+            buttonItems: editableState.contextMenuButtonItems,
           );
         };
     final Color resolvedCursorColor =

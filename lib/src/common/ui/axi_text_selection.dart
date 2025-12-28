@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -19,6 +21,22 @@ class AxiTextSelectionGestureDetectorBuilder {
 
   @protected
   final AxiTextSelectionGestureDetectorBuilderDelegate delegate;
+
+  int _effectiveConsecutiveTapCount(int rawCount) {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+        return rawCount <= 3
+            ? rawCount
+            : (rawCount % 3 == 0 ? 3 : rawCount % 3);
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        return math.min(rawCount, 3);
+      case TargetPlatform.windows:
+        return rawCount < 2 ? rawCount : 2 + rawCount % 2;
+    }
+  }
 
   // Shows the magnifier on supported platforms at the given offset, currently
   // only Android and iOS.
@@ -71,7 +89,8 @@ class AxiTextSelectionGestureDetectorBuilder {
       return false;
     }
 
-    return selection.start < textPosition.offset && selection.end > textPosition.offset;
+    return selection.start < textPosition.offset &&
+        selection.end > textPosition.offset;
   }
 
   bool _positionWasOnSelectionInclusive(TextPosition textPosition) {
@@ -80,7 +99,8 @@ class AxiTextSelectionGestureDetectorBuilder {
       return false;
     }
 
-    return selection.start <= textPosition.offset && selection.end >= textPosition.offset;
+    return selection.start <= textPosition.offset &&
+        selection.end >= textPosition.offset;
   }
 
   // Expand the selection to the given global position.
@@ -102,11 +122,12 @@ class AxiTextSelectionGestureDetectorBuilder {
   ]) {
     assert(renderEditable.selection?.baseOffset != null);
 
-    final TextPosition tappedPosition = renderEditable.getPositionForPoint(offset);
+    final TextPosition tappedPosition =
+        renderEditable.getPositionForPoint(offset);
     final TextSelection selection = fromSelection ?? renderEditable.selection!;
     final bool baseIsCloser =
         (tappedPosition.offset - selection.baseOffset).abs() <
-        (tappedPosition.offset - selection.extentOffset).abs();
+            (tappedPosition.offset - selection.extentOffset).abs();
     final TextSelection nextSelection = selection.copyWith(
       baseOffset: baseIsCloser ? selection.extentOffset : selection.baseOffset,
       extentOffset: tappedPosition.offset,
@@ -129,9 +150,11 @@ class AxiTextSelectionGestureDetectorBuilder {
   void _extendSelection(Offset offset, SelectionChangedCause cause) {
     assert(renderEditable.selection?.baseOffset != null);
 
-    final TextPosition tappedPosition = renderEditable.getPositionForPoint(offset);
+    final TextPosition tappedPosition =
+        renderEditable.getPositionForPoint(offset);
     final TextSelection selection = renderEditable.selection!;
-    final TextSelection nextSelection = selection.copyWith(extentOffset: tappedPosition.offset);
+    final TextSelection nextSelection =
+        selection.copyWith(extentOffset: tappedPosition.offset);
 
     editableText.userUpdateTextEditingValue(
       editableText.textEditingValue.copyWith(selection: nextSelection),
@@ -146,12 +169,14 @@ class AxiTextSelectionGestureDetectorBuilder {
   bool _shouldShowSelectionHandles = true;
 
   @protected
-  axi.EditableTextState get editableText => delegate.editableTextKey.currentState!;
+  axi.EditableTextState get editableText =>
+      delegate.editableTextKey.currentState!;
 
   @protected
   RenderEditable get renderEditable => editableText.renderEditable;
 
-  bool get _isEditableTextMounted => delegate.editableTextKey.currentContext?.mounted ?? false;
+  bool get _isEditableTextMounted =>
+      delegate.editableTextKey.currentContext?.mounted ?? false;
 
   bool _isShiftPressed = false;
 
@@ -160,16 +185,18 @@ class AxiTextSelectionGestureDetectorBuilder {
   double _dragStartViewportOffset = 0.0;
 
   double get _scrollPosition {
-    final ScrollableState? scrollableState = delegate.editableTextKey.currentContext == null
-        ? null
-        : Scrollable.maybeOf(delegate.editableTextKey.currentContext!);
+    final ScrollableState? scrollableState =
+        delegate.editableTextKey.currentContext == null
+            ? null
+            : Scrollable.maybeOf(delegate.editableTextKey.currentContext!);
     return scrollableState == null ? 0.0 : scrollableState.position.pixels;
   }
 
   AxisDirection? get _scrollDirection {
-    final ScrollableState? scrollableState = delegate.editableTextKey.currentContext == null
-        ? null
-        : Scrollable.maybeOf(delegate.editableTextKey.currentContext!);
+    final ScrollableState? scrollableState =
+        delegate.editableTextKey.currentContext == null
+            ? null
+            : Scrollable.maybeOf(delegate.editableTextKey.currentContext!);
     return scrollableState?.axisDirection;
   }
 
@@ -189,7 +216,10 @@ class AxiTextSelectionGestureDetectorBuilder {
   @protected
   void onTapTrackStart() {
     _isShiftPressed = HardwareKeyboard.instance.logicalKeysPressed.intersection(
-      <LogicalKeyboardKey>{LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.shiftRight},
+      <LogicalKeyboardKey>{
+        LogicalKeyboardKey.shiftLeft,
+        LogicalKeyboardKey.shiftRight
+      },
     ).isNotEmpty;
   }
 
@@ -210,7 +240,8 @@ class AxiTextSelectionGestureDetectorBuilder {
     // vs [TapGestureRecognizer.onSecondaryTapUp] instead of having to track state in
     // renderEditable. When this migration is complete we should remove this hack.
     // See https://github.com/flutter/flutter/issues/115130.
-    renderEditable.handleTapDown(TapDownDetails(globalPosition: details.globalPosition));
+    renderEditable
+        .handleTapDown(TapDownDetails(globalPosition: details.globalPosition));
     // The selection overlay should only be shown when the user is interacting
     // through a touch screen (via either a finger or a stylus). A mouse shouldn't
     // trigger the selection overlay.
@@ -219,8 +250,9 @@ class AxiTextSelectionGestureDetectorBuilder {
     // TODO(justinmc): Should a desktop platform show its selection toolbar when
     // receiving a tap event?  Say a Windows device with a touchscreen.
     // https://github.com/flutter/flutter/issues/106586
-    _shouldShowSelectionToolbar =
-        kind == null || kind == PointerDeviceKind.touch || kind == PointerDeviceKind.stylus;
+    _shouldShowSelectionToolbar = kind == null ||
+        kind == PointerDeviceKind.touch ||
+        kind == PointerDeviceKind.stylus;
     _shouldShowSelectionHandles = _shouldShowSelectionToolbar;
 
     // It is impossible to extend the selection when the shift key is pressed, if the
@@ -232,13 +264,15 @@ class AxiTextSelectionGestureDetectorBuilder {
         if (editableText.widget.stylusHandwritingEnabled) {
           final bool stylusEnabled = switch (kind) {
             PointerDeviceKind.stylus ||
-            PointerDeviceKind.invertedStylus => editableText.widget.stylusHandwritingEnabled,
+            PointerDeviceKind.invertedStylus =>
+              editableText.widget.stylusHandwritingEnabled,
             _ => false,
           };
           if (stylusEnabled) {
             Scribe.isFeatureAvailable().then((bool isAvailable) {
               if (isAvailable) {
-                renderEditable.selectPosition(cause: SelectionChangedCause.stylusHandwriting);
+                renderEditable.selectPosition(
+                    cause: SelectionChangedCause.stylusHandwriting);
                 Scribe.startStylusHandwriting();
               }
             });
@@ -256,7 +290,8 @@ class AxiTextSelectionGestureDetectorBuilder {
           final TextSelection? fromSelection = renderEditable.hasFocus
               ? null
               : const TextSelection.collapsed(offset: 0);
-          _expandSelection(details.globalPosition, SelectionChangedCause.tap, fromSelection);
+          _expandSelection(
+              details.globalPosition, SelectionChangedCause.tap, fromSelection);
           return;
         }
         // On macOS, a tap/click places the selection in a precise position.
@@ -347,7 +382,8 @@ class AxiTextSelectionGestureDetectorBuilder {
           final TextSelection? fromSelection = renderEditable.hasFocus
               ? null
               : const TextSelection.collapsed(offset: 0);
-          _expandSelection(details.globalPosition, SelectionChangedCause.tap, fromSelection);
+          _expandSelection(
+              details.globalPosition, SelectionChangedCause.tap, fromSelection);
           return;
         }
         switch (details.kind) {
@@ -379,18 +415,22 @@ class AxiTextSelectionGestureDetectorBuilder {
             // Selects the word edge closest to the tap when the editable is not focused, or if the tap was neither exclusively
             // or inclusively on `previousSelection`. If the selection remains the same after selecting the word edge, then we
             // toggle the toolbar, if the editable field is not read only. If the selection changes then we hide the toolbar.
-            final TextSelection previousSelection =
-                renderEditable.selection ?? editableText.textEditingValue.selection;
-            final TextPosition textPosition = renderEditable.getPositionForPoint(
+            final TextSelection previousSelection = renderEditable.selection ??
+                editableText.textEditingValue.selection;
+            final TextPosition textPosition =
+                renderEditable.getPositionForPoint(
               details.globalPosition,
             );
-            final bool isAffinityTheSame = textPosition.affinity == previousSelection.affinity;
-            final bool wordAtCursorIndexIsMisspelled =
-                editableText.findSuggestionSpanAtCursorIndex(textPosition.offset) != null;
+            final bool isAffinityTheSame =
+                textPosition.affinity == previousSelection.affinity;
+            final bool wordAtCursorIndexIsMisspelled = editableText
+                    .findSuggestionSpanAtCursorIndex(textPosition.offset) !=
+                null;
 
             if (wordAtCursorIndexIsMisspelled) {
               renderEditable.selectWord(cause: SelectionChangedCause.tap);
-              if (previousSelection != editableText.textEditingValue.selection) {
+              if (previousSelection !=
+                  editableText.textEditingValue.selection) {
                 editableText.showSpellCheckSuggestionsToolbar();
               } else {
                 editableText.toggleToolbar(false);
@@ -405,7 +445,8 @@ class AxiTextSelectionGestureDetectorBuilder {
               editableText.toggleToolbar(false);
             } else {
               renderEditable.selectWordEdge(cause: SelectionChangedCause.tap);
-              if (previousSelection == editableText.textEditingValue.selection &&
+              if (previousSelection ==
+                      editableText.textEditingValue.selection &&
                   renderEditable.hasFocus &&
                   !renderEditable.readOnly) {
                 editableText.toggleToolbar(false);
@@ -494,8 +535,7 @@ class AxiTextSelectionGestureDetectorBuilder {
       case TargetPlatform.macOS:
         if (_longPressStartedWithoutFocus || renderEditable.readOnly) {
           renderEditable.selectWordsInRange(
-            from:
-                details.globalPosition -
+            from: details.globalPosition -
                 details.offsetFromOrigin -
                 editableOffset -
                 scrollableOffset,
@@ -519,8 +559,10 @@ class AxiTextSelectionGestureDetectorBuilder {
       case TargetPlatform.linux:
       case TargetPlatform.windows:
         renderEditable.selectWordsInRange(
-          from:
-              details.globalPosition - details.offsetFromOrigin - editableOffset - scrollableOffset,
+          from: details.globalPosition -
+              details.offsetFromOrigin -
+              editableOffset -
+              scrollableOffset,
           to: details.globalPosition,
           cause: SelectionChangedCause.longPress,
         );
@@ -576,10 +618,10 @@ class AxiTextSelectionGestureDetectorBuilder {
     // vs [TapGestureRecognizer.onSecondaryTapUp] instead of having to track state in
     // renderEditable. When this migration is complete we should remove this hack.
     // See https://github.com/flutter/flutter/issues/115130.
-    renderEditable.handleSecondaryTapDown(TapDownDetails(globalPosition: details.globalPosition));
+    renderEditable.handleSecondaryTapDown(
+        TapDownDetails(globalPosition: details.globalPosition));
     _shouldShowSelectionToolbar = true;
-    _shouldShowSelectionHandles =
-        details.kind == null ||
+    _shouldShowSelectionHandles = details.kind == null ||
         details.kind == PointerDeviceKind.touch ||
         details.kind == PointerDeviceKind.stylus;
   }
@@ -613,33 +655,37 @@ class AxiTextSelectionGestureDetectorBuilder {
 
   // Selects the set of paragraphs in a document that intersect a given range of
   // global positions.
-  void _selectParagraphsInRange({required Offset from, Offset? to, SelectionChangedCause? cause}) {
-    final TextBoundary paragraphBoundary = ParagraphBoundary(editableText.textEditingValue.text);
-    _selectTextBoundariesInRange(boundary: paragraphBoundary, from: from, to: to, cause: cause);
+  void _selectParagraphsInRange(
+      {required Offset from, Offset? to, SelectionChangedCause? cause}) {
+    final TextBoundary paragraphBoundary =
+        ParagraphBoundary(editableText.textEditingValue.text);
+    _selectTextBoundariesInRange(
+        boundary: paragraphBoundary, from: from, to: to, cause: cause);
   }
 
   // Selects the set of lines in a document that intersect a given range of
   // global positions.
-  void _selectLinesInRange({required Offset from, Offset? to, SelectionChangedCause? cause}) {
+  void _selectLinesInRange(
+      {required Offset from, Offset? to, SelectionChangedCause? cause}) {
     final TextBoundary lineBoundary = LineBoundary(renderEditable);
-    _selectTextBoundariesInRange(boundary: lineBoundary, from: from, to: to, cause: cause);
+    _selectTextBoundariesInRange(
+        boundary: lineBoundary, from: from, to: to, cause: cause);
   }
 
   // Returns the location of a text boundary at `extent`. When `extent` is at
   // the end of the text, returns the previous text boundary's location.
-  TextRange _moveToTextBoundary(TextPosition extent, TextBoundary textBoundary) {
+  TextRange _moveToTextBoundary(
+      TextPosition extent, TextBoundary textBoundary) {
     assert(extent.offset >= 0);
     // Use extent.offset - 1 when `extent` is at the end of the text to retrieve
     // the previous text boundary's location.
-    final int start =
-        textBoundary.getLeadingTextBoundaryAt(
+    final int start = textBoundary.getLeadingTextBoundaryAt(
           extent.offset == editableText.textEditingValue.text.length
               ? extent.offset - 1
               : extent.offset,
         ) ??
         0;
-    final int end =
-        textBoundary.getTrailingTextBoundaryAt(extent.offset) ??
+    final int end = textBoundary.getTrailingTextBoundaryAt(extent.offset) ??
         editableText.textEditingValue.text.length;
     return TextRange(start: start, end: end);
   }
@@ -660,9 +706,8 @@ class AxiTextSelectionGestureDetectorBuilder {
   }) {
     final TextPosition fromPosition = renderEditable.getPositionForPoint(from);
     final TextRange fromRange = _moveToTextBoundary(fromPosition, boundary);
-    final TextPosition toPosition = to == null
-        ? fromPosition
-        : renderEditable.getPositionForPoint(to);
+    final TextPosition toPosition =
+        to == null ? fromPosition : renderEditable.getPositionForPoint(to);
     final TextRange toRange = toPosition == fromPosition
         ? fromRange
         : _moveToTextBoundary(toPosition, boundary);
@@ -692,9 +737,11 @@ class AxiTextSelectionGestureDetectorBuilder {
         case TargetPlatform.iOS:
         case TargetPlatform.macOS:
         case TargetPlatform.windows:
-          _selectParagraphsInRange(from: details.globalPosition, cause: SelectionChangedCause.tap);
+          _selectParagraphsInRange(
+              from: details.globalPosition, cause: SelectionChangedCause.tap);
         case TargetPlatform.linux:
-          _selectLinesInRange(from: details.globalPosition, cause: SelectionChangedCause.tap);
+          _selectLinesInRange(
+              from: details.globalPosition, cause: SelectionChangedCause.tap);
       }
     }
     if (shouldShowSelectionToolbar) {
@@ -708,15 +755,16 @@ class AxiTextSelectionGestureDetectorBuilder {
       return;
     }
     final PointerDeviceKind? kind = details.kind;
-    _shouldShowSelectionToolbar =
-        kind == null || kind == PointerDeviceKind.touch || kind == PointerDeviceKind.stylus;
+    _shouldShowSelectionToolbar = kind == null ||
+        kind == PointerDeviceKind.touch ||
+        kind == PointerDeviceKind.stylus;
     _shouldShowSelectionHandles = _shouldShowSelectionToolbar;
 
     _dragStartSelection = renderEditable.selection;
     _dragStartScrollOffset = _scrollPosition;
     _dragStartViewportOffset = renderEditable.offset.pixels;
 
-    if (_TextSelectionGestureDetectorState._getEffectiveConsecutiveTapCount(
+    if (_effectiveConsecutiveTapCount(
           details.consecutiveTapCount,
         ) >
         1) {
@@ -724,7 +772,9 @@ class AxiTextSelectionGestureDetectorBuilder {
       return;
     }
 
-    if (_isShiftPressed && renderEditable.selection != null && renderEditable.selection!.isValid) {
+    if (_isShiftPressed &&
+        renderEditable.selection != null &&
+        renderEditable.selection!.isValid) {
       switch (defaultTargetPlatform) {
         case TargetPlatform.iOS:
         case TargetPlatform.macOS:
@@ -796,17 +846,20 @@ class AxiTextSelectionGestureDetectorBuilder {
       // Adjust the drag start offset for possible viewport offset changes.
       final Offset editableOffset = renderEditable.maxLines == 1
           ? Offset(renderEditable.offset.pixels - _dragStartViewportOffset, 0.0)
-          : Offset(0.0, renderEditable.offset.pixels - _dragStartViewportOffset);
+          : Offset(
+              0.0, renderEditable.offset.pixels - _dragStartViewportOffset);
       final Offset scrollableOffset = switch (axisDirectionToAxis(
         _scrollDirection ?? AxisDirection.left,
       )) {
-        Axis.horizontal => Offset(_scrollPosition - _dragStartScrollOffset, 0.0),
+        Axis.horizontal =>
+          Offset(_scrollPosition - _dragStartScrollOffset, 0.0),
         Axis.vertical => Offset(0.0, _scrollPosition - _dragStartScrollOffset),
       };
-      final Offset dragStartGlobalPosition = details.globalPosition - details.offsetFromOrigin;
+      final Offset dragStartGlobalPosition =
+          details.globalPosition - details.offsetFromOrigin;
 
       // Select word by word.
-      if (_TextSelectionGestureDetectorState._getEffectiveConsecutiveTapCount(
+      if (_effectiveConsecutiveTapCount(
             details.consecutiveTapCount,
           ) ==
           2) {
@@ -830,7 +883,7 @@ class AxiTextSelectionGestureDetectorBuilder {
       }
 
       // Select paragraph-by-paragraph.
-      if (_TextSelectionGestureDetectorState._getEffectiveConsecutiveTapCount(
+      if (_effectiveConsecutiveTapCount(
             details.consecutiveTapCount,
           ) ==
           3) {
@@ -842,7 +895,9 @@ class AxiTextSelectionGestureDetectorBuilder {
               case PointerDeviceKind.mouse:
               case PointerDeviceKind.trackpad:
                 return _selectParagraphsInRange(
-                  from: dragStartGlobalPosition - editableOffset - scrollableOffset,
+                  from: dragStartGlobalPosition -
+                      editableOffset -
+                      scrollableOffset,
                   to: details.globalPosition,
                   cause: SelectionChangedCause.drag,
                 );
@@ -882,7 +937,8 @@ class AxiTextSelectionGestureDetectorBuilder {
             case PointerDeviceKind.mouse:
             case PointerDeviceKind.trackpad:
               return renderEditable.selectPositionAt(
-                from: dragStartGlobalPosition - editableOffset - scrollableOffset,
+                from:
+                    dragStartGlobalPosition - editableOffset - scrollableOffset,
                 to: details.globalPosition,
                 cause: SelectionChangedCause.drag,
               );
@@ -905,7 +961,8 @@ class AxiTextSelectionGestureDetectorBuilder {
             case PointerDeviceKind.stylus:
             case PointerDeviceKind.invertedStylus:
               return renderEditable.selectPositionAt(
-                from: dragStartGlobalPosition - editableOffset - scrollableOffset,
+                from:
+                    dragStartGlobalPosition - editableOffset - scrollableOffset,
                 to: details.globalPosition,
                 cause: SelectionChangedCause.drag,
               );
@@ -916,7 +973,8 @@ class AxiTextSelectionGestureDetectorBuilder {
                   from: details.globalPosition,
                   cause: SelectionChangedCause.drag,
                 );
-                return _showMagnifierIfSupportedByPlatform(details.globalPosition);
+                return _showMagnifierIfSupportedByPlatform(
+                    details.globalPosition);
               }
             case null:
               break;
@@ -936,13 +994,15 @@ class AxiTextSelectionGestureDetectorBuilder {
     if (_dragStartSelection!.isCollapsed ||
         (defaultTargetPlatform != TargetPlatform.iOS &&
             defaultTargetPlatform != TargetPlatform.macOS)) {
-      return _extendSelection(details.globalPosition, SelectionChangedCause.drag);
+      return _extendSelection(
+          details.globalPosition, SelectionChangedCause.drag);
     }
 
     // If the drag inverts the selection, Mac and iOS revert to the initial
     // selection.
     final TextSelection selection = editableText.textEditingValue.selection;
-    final TextPosition nextExtent = renderEditable.getPositionForPoint(details.globalPosition);
+    final TextPosition nextExtent =
+        renderEditable.getPositionForPoint(details.globalPosition);
     final bool isShiftTapDragSelectionForward =
         _dragStartSelection!.baseOffset < _dragStartSelection!.extentOffset;
     final bool isInverted = isShiftTapDragSelectionForward
@@ -978,7 +1038,7 @@ class AxiTextSelectionGestureDetectorBuilder {
   @protected
   void onDragSelectionEnd(TapDragEndDetails details) {
     if (_shouldShowSelectionToolbar &&
-        _TextSelectionGestureDetectorState._getEffectiveConsecutiveTapCount(
+        _effectiveConsecutiveTapCount(
               details.consecutiveTapCount,
             ) ==
             2) {
@@ -992,7 +1052,8 @@ class AxiTextSelectionGestureDetectorBuilder {
     _hideMagnifierIfSupportedByPlatform();
   }
 
-  Widget buildGestureDetector({Key? key, HitTestBehavior? behavior, required Widget child}) {
+  Widget buildGestureDetector(
+      {Key? key, HitTestBehavior? behavior, required Widget child}) {
     return TextSelectionGestureDetector(
       key: key,
       onTapTrackStart: onTapTrackStart,

@@ -41,6 +41,21 @@ const Set<int> _zeroWidthCodePoints = <int>{
   _mongolianVowelSeparator,
 };
 
+const Set<int> _unicodeControlCodePoints = <int>{
+  ..._bidiControlCodePoints,
+  ..._zeroWidthCodePoints,
+};
+
+class UnicodeSanitizedText {
+  const UnicodeSanitizedText({
+    required this.value,
+    required this.hadControls,
+  });
+
+  final String value;
+  final bool hadControls;
+}
+
 bool containsBidiControlCharacters(String value) =>
     _containsUnicodeControls(value, _bidiControlCodePoints);
 
@@ -49,6 +64,19 @@ bool containsZeroWidthCharacters(String value) =>
 
 bool containsUnicodeControlCharacters(String value) =>
     containsBidiControlCharacters(value) || containsZeroWidthCharacters(value);
+
+UnicodeSanitizedText sanitizeUnicodeControls(String value) {
+  if (!containsUnicodeControlCharacters(value)) {
+    return UnicodeSanitizedText(value: value, hadControls: false);
+  }
+  final buffer = StringBuffer();
+  for (final rune in value.runes) {
+    if (!_unicodeControlCodePoints.contains(rune)) {
+      buffer.writeCharCode(rune);
+    }
+  }
+  return UnicodeSanitizedText(value: buffer.toString(), hadControls: true);
+}
 
 bool _containsUnicodeControls(String value, Set<int> codePoints) {
   for (final rune in value.runes) {

@@ -55,6 +55,7 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -111,6 +112,10 @@ enum _ChatRoute {
 
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 const _bubbleRadius = 18.0;
+const double _senderLabelBottomSpacing = 6.0;
+const double _senderLabelSecondarySpacing = 2.0;
+const double _senderLabelNoInset = 0.0;
+const String _senderLabelAddressPrefix = 'JID: ';
 const _reactionBubbleInset = 12.0;
 const _reactionCutoutDepth = 14.0;
 const _reactionCutoutMinThickness = 28.0;
@@ -583,6 +588,129 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+class _UnknownSenderBanner extends StatelessWidget {
+  const _UnknownSenderBanner({
+    required this.readOnly,
+    required this.onAddContact,
+    required this.onReportSpam,
+  });
+
+  final bool readOnly;
+  final Future<void> Function()? onAddContact;
+  final Future<void> Function()? onReportSpam;
+
+  @override
+  Widget build(BuildContext context) {
+    if (readOnly) {
+      return const SizedBox.shrink();
+    }
+    return BlocBuilder<ChatBloc, ChatState>(
+      builder: (context, state) {
+        final chat = state.chat;
+        if (chat == null || chat.type != ChatType.chat || chat.spam) {
+          return const SizedBox.shrink();
+        }
+        return BlocBuilder<RosterCubit, RosterState>(
+          buildWhen: (_, current) => current is RosterAvailable,
+          builder: (context, rosterState) {
+            final cached = rosterState is RosterAvailable
+                ? rosterState.items
+                : context.read<RosterCubit>()['items'] as List<RosterItem>?;
+            final rosterItems = cached ?? const <RosterItem>[];
+            final rosterEntry = rosterItems
+                .where((entry) => entry.jid == chat.remoteJid)
+                .singleOrNull;
+            final inRoster =
+                rosterEntry != null && !rosterEntry.subscription.isNone;
+            final hasContactRecord =
+                chat.contactID?.trim().isNotEmpty == true ||
+                    chat.contactDisplayName?.trim().isNotEmpty == true;
+            final isEmailChat = chat.isEmailBacked;
+            final showBanner = (isEmailChat && !hasContactRecord) ||
+                (!isEmailChat && !inRoster);
+            if (!showBanner) {
+              return const SizedBox.shrink();
+            }
+            EmailService? emailService;
+            try {
+              emailService = RepositoryProvider.of<EmailService>(
+                context,
+                listen: false,
+              );
+            } on Exception {
+              emailService = null;
+            }
+            final canAddContact = !isEmailChat || emailService != null;
+            final l10n = context.l10n;
+            final actions = <Widget>[
+              if (onAddContact != null && canAddContact)
+                ContextActionButton(
+                  icon: const Icon(
+                    LucideIcons.userPlus,
+                    size: _unknownSenderIconSize,
+                  ),
+                  label: l10n.rosterAddTitle,
+                  onPressed: () => unawaited(onAddContact!.call()),
+                ),
+              if (onReportSpam != null)
+                ContextActionButton(
+                  icon: const Icon(
+                    LucideIcons.shieldAlert,
+                    size: _unknownSenderIconSize,
+                  ),
+                  label: l10n.chatReportSpam,
+                  onPressed: () => unawaited(onReportSpam!.call()),
+                  destructive: true,
+                ),
+            ];
+            return ListItemPadding(
+              child: ShadCard(
+                padding: const EdgeInsets.all(_unknownSenderCardPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          LucideIcons.userX,
+                          size: _unknownSenderIconSize,
+                          color: context.colorScheme.destructive,
+                        ),
+                        const SizedBox(width: _unknownSenderTextSpacing),
+                        Expanded(
+                          child: Text(
+                            l10n.accessibilityUnknownContact,
+                            style: context.textTheme.small.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: _unknownSenderTextSpacing),
+                    Text(
+                      l10n.chatAttachmentBlockedDescription,
+                      style: context.textTheme.muted,
+                    ),
+                    if (actions.isNotEmpty) ...[
+                      const SizedBox(height: _unknownSenderActionSpacing),
+                      Wrap(
+                        spacing: _unknownSenderActionSpacing,
+                        runSpacing: _unknownSenderActionSpacing,
+                        children: actions,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -3460,12 +3588,11 @@ class _ChatState extends State<Chat> {
                               final l10n = context.l10n;
                               final chatAddress = chatEntity?.remoteJid ?? jid;
                               final trimmedAddress = chatAddress.trim();
-                              final normalizedAddress =
-                                  trimmedAddress.isEmpty
-                                      ? null
-                                      : trimmedAddress.toBareJidOrNull(
-                                          maxBytes: syncAddressMaxBytes,
-                                        );
+                              final normalizedAddress = trimmedAddress.isEmpty
+                                  ? null
+                                  : trimmedAddress.toBareJidOrNull(
+                                      maxBytes: syncAddressMaxBytes,
+                                    );
                               final isAddressMalformed =
                                   normalizedAddress == null &&
                                       trimmedAddress.isNotEmpty;
@@ -3518,10 +3645,9 @@ class _ChatState extends State<Chat> {
                                                 ),
                                               ),
                                               if (showDisplayNameBadge)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsetsDirectional
-                                                          .only(
+                                                const Padding(
+                                                  padding: EdgeInsetsDirectional
+                                                      .only(
                                                     start:
                                                         _chatHeaderIdentitySpacing,
                                                   ),
@@ -3605,8 +3731,7 @@ class _ChatState extends State<Chat> {
                                                     builder: (context) => Text(
                                                       l10n.chatActionCopy,
                                                     ),
-                                                    child:
-                                                        ShadIconButton.ghost(
+                                                    child: ShadIconButton.ghost(
                                                       onPressed: () =>
                                                           _copyChatAddress(
                                                         displayAddress,
@@ -6499,20 +6624,17 @@ class _ChatState extends State<Chat> {
                                                                 message,
                                                                 previous,
                                                               );
-                                                      final fullName = message
-                                                          .user
-                                                          .getFullName()
-                                                          .trim();
-                                                      final displayName = self
-                                                          ? l10n.chatSenderYou
-                                                          : (fullName.isEmpty
-                                                              ? message.user.id
-                                                              : fullName);
                                                       Widget bubbleWithSlack =
                                                           bubbleStack;
-                                                      if (shouldShowSenderLabel &&
-                                                          displayName
-                                                              .isNotEmpty) {
+                                                      if (shouldShowSenderLabel) {
+                                                        final double
+                                                            senderLabelLeftInset =
+                                                            !self &&
+                                                                    hasAvatarSlot
+                                                                ? _messageAvatarContentInset +
+                                                                    _bubblePadding
+                                                                        .left
+                                                                : _senderLabelNoInset;
                                                         bubbleWithSlack =
                                                             Column(
                                                           mainAxisSize:
@@ -6523,36 +6645,14 @@ class _ChatState extends State<Chat> {
                                                               : CrossAxisAlignment
                                                                   .start,
                                                           children: [
-                                                            Padding(
-                                                              padding:
-                                                                  EdgeInsets
-                                                                      .only(
-                                                                bottom: 6,
-                                                                left: (!self &&
-                                                                        hasAvatarSlot)
-                                                                    ? _messageAvatarContentInset +
-                                                                        _bubblePadding
-                                                                            .left
-                                                                    : 0,
-                                                              ),
-                                                              child: Text(
-                                                                displayName,
-                                                                style: context
-                                                                    .textTheme
-                                                                    .small
-                                                                    .copyWith(
-                                                                  color: colors
-                                                                      .mutedForeground,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
-                                                                textAlign: self
-                                                                    ? TextAlign
-                                                                        .right
-                                                                    : TextAlign
-                                                                        .left,
-                                                              ),
+                                                            _MessageSenderLabel(
+                                                              user:
+                                                                  message.user,
+                                                              isSelf: self,
+                                                              selfLabel: l10n
+                                                                  .chatSenderYou,
+                                                              leftInset:
+                                                                  senderLabelLeftInset,
                                                             ),
                                                             bubbleStack,
                                                           ],
@@ -11517,27 +11617,18 @@ class _GuestMessageBubble extends StatelessWidget {
       ),
     );
     final showSenderLabel = !chainedPrev;
-    final fullName = message.user.getFullName().trim();
-    final displayName = isSelf
-        ? context.l10n.chatSenderYou
-        : (fullName.isEmpty ? message.user.id : fullName);
     Widget bubbleWithLabel = bubble;
-    if (showSenderLabel && displayName.isNotEmpty) {
+    if (showSenderLabel) {
       bubbleWithLabel = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment:
             isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              displayName,
-              style: context.textTheme.small.copyWith(
-                color: colors.mutedForeground,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: isSelf ? TextAlign.right : TextAlign.left,
-            ),
+          _MessageSenderLabel(
+            user: message.user,
+            isSelf: isSelf,
+            selfLabel: context.l10n.chatSenderYou,
+            leftInset: _senderLabelNoInset,
           ),
           bubble,
         ],
@@ -11557,6 +11648,114 @@ class _GuestMessageBubble extends StatelessWidget {
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: bubbleWithLabel,
         ),
+      ),
+    );
+  }
+}
+
+class _MessageSenderLabel extends StatelessWidget {
+  const _MessageSenderLabel({
+    required this.user,
+    required this.isSelf,
+    required this.selfLabel,
+    required this.leftInset,
+  });
+
+  final ChatUser user;
+  final bool isSelf;
+  final String selfLabel;
+  final double leftInset;
+
+  @override
+  Widget build(BuildContext context) {
+    final String trimmedSelfLabel = selfLabel.trim();
+    final UnicodeSanitizedText displayName = sanitizeUnicodeControls(
+      user.getFullName().trim(),
+    );
+    final UnicodeSanitizedText address = sanitizeUnicodeControls(
+      user.id.trim(),
+    );
+    final String safeDisplayName = displayName.value.trim();
+    final String safeAddress = address.value.trim();
+    if (isSelf) {
+      if (trimmedSelfLabel.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return _SenderLabelBlock(
+        primaryLabel: trimmedSelfLabel,
+        secondaryLabel: null,
+        isSelf: isSelf,
+        leftInset: leftInset,
+      );
+    }
+    if (safeDisplayName.isEmpty && safeAddress.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final String primaryLabel =
+        safeDisplayName.isNotEmpty ? safeDisplayName : safeAddress;
+    final String normalizedPrimary = primaryLabel.toLowerCase();
+    final String normalizedAddress = safeAddress.toLowerCase();
+    final bool showSecondary =
+        safeAddress.isNotEmpty && normalizedPrimary != normalizedAddress;
+    final String? secondaryLabel =
+        showSecondary ? '$_senderLabelAddressPrefix$safeAddress' : null;
+    return _SenderLabelBlock(
+      primaryLabel: primaryLabel,
+      secondaryLabel: secondaryLabel,
+      isSelf: isSelf,
+      leftInset: leftInset,
+    );
+  }
+}
+
+class _SenderLabelBlock extends StatelessWidget {
+  const _SenderLabelBlock({
+    required this.primaryLabel,
+    required this.secondaryLabel,
+    required this.isSelf,
+    required this.leftInset,
+  });
+
+  final String primaryLabel;
+  final String? secondaryLabel;
+  final bool isSelf;
+  final double leftInset;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textAlign = isSelf ? TextAlign.right : TextAlign.left;
+    final crossAxis =
+        isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final primaryStyle = context.textTheme.small.copyWith(
+      color: colors.mutedForeground,
+      fontWeight: FontWeight.w600,
+    );
+    final secondaryStyle = context.textTheme.muted.copyWith(
+      color: colors.mutedForeground,
+    );
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: _senderLabelBottomSpacing,
+        left: leftInset,
+      ),
+      child: Column(
+        spacing: _senderLabelSecondarySpacing,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: crossAxis,
+        children: [
+          Text(
+            primaryLabel,
+            style: primaryStyle,
+            textAlign: textAlign,
+          ),
+          if (secondaryLabel != null)
+            Text(
+              secondaryLabel!,
+              style: secondaryStyle,
+              textAlign: textAlign,
+            ),
+        ],
       ),
     );
   }

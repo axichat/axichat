@@ -69,27 +69,30 @@ void main() {
   group('assessLinkSafety', () {
     test('flags bidi control characters for warnings', () {
       final report = assessLinkSafety(
-        Uri.parse(bidiTestUrl),
-        kind: LinkSafetyKind.standard,
+        raw: bidiTestUrl,
+        kind: LinkSafetyKind.message,
       );
-      expect(report.hasWarnings, isTrue);
-      expect(report.allowed, isTrue);
+      expect(report, isNotNull);
+      expect(report!.needsWarning, isTrue);
+      expect(report.isSafe, isTrue);
     });
 
     test('flags zero-width characters for warnings', () {
       final report = assessLinkSafety(
-        Uri.parse(zeroWidthTestUrl),
-        kind: LinkSafetyKind.standard,
+        raw: zeroWidthTestUrl,
+        kind: LinkSafetyKind.message,
       );
-      expect(report.hasWarnings, isTrue);
+      expect(report, isNotNull);
+      expect(report!.needsWarning, isTrue);
     });
 
     test('flags punycode hosts for warnings', () {
       final report = assessLinkSafety(
-        Uri.parse(punycodeHost),
-        kind: LinkSafetyKind.standard,
+        raw: punycodeHost,
+        kind: LinkSafetyKind.message,
       );
-      expect(report.hasWarnings, isTrue);
+      expect(report, isNotNull);
+      expect(report!.needsWarning, isTrue);
     });
   });
 }
