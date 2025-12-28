@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
@@ -175,6 +176,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   Stream<ConvItemUpdate> get updates => _updatesController.stream;
 
   final Map<String, ConvItem> _cache = {};
+  final SyncRateLimiter _rateLimiter =
+      SyncRateLimiter(conversationIndexSyncRateLimit);
 
   @override
   Future<bool> isSupported() async => true;
@@ -279,6 +282,16 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     } on Exception {
       return;
     }
+  }
+
+  bool _shouldProcessSyncEvent() {
+    if (_rateLimiter.allowEvent()) {
+      return true;
+    }
+    if (_rateLimiter.shouldRefreshNow()) {
+      unawaited(_refreshFromServer());
+    }
+    return false;
   }
 
   Future<void> ensureNode() async {
@@ -506,19 +519,21 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
   Future<void> _handleNotification(mox.PubSubNotificationEvent event) async {
     if (event.item.node != conversationIndexNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
+    if (!_shouldProcessSyncEvent()) return;
 
     ConvItem? parsed;
     if (event.item.payload case final payload?) {
       parsed = ConvItem.fromXml(payload);
     } else {
       final pubsub = _pubSub();
-      final host = _selfPepHost();
       final itemId = event.item.id.trim();
       if (itemId.isEmpty) {
         await _refreshFromServer();
         return;
       }
-      if (pubsub != null && host != null && itemId.isNotEmpty) {
+      if (pubsub != null && itemId.isNotEmpty) {
         final itemResult =
             await pubsub.getItem(host, conversationIndexNode, itemId);
         if (!itemResult.isType<mox.PubSubError>()) {
@@ -533,6 +548,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     if (parsed == null) return;
     final merged = _mergeIncoming(parsed);
     if (merged == null) return;
+    final maxItems = _resolveFetchLimit();
+    if (_cache.length >= maxItems && !_cache.containsKey(merged.itemId)) {
+      await _refreshFromServer();
+      return;
+    }
 
     _cache[merged.itemId] = merged;
     final update = ConvItemUpdated(merged);
@@ -544,7 +564,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
   Future<void> _handleRetractions(mox.PubSubItemsRetractedEvent event) async {
     if (event.node != conversationIndexNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
     if (event.itemIds.isEmpty) return;
+    if (!_shouldProcessSyncEvent()) return;
     for (final itemId in event.itemIds) {
       final normalized = itemId.trim();
       if (normalized.isEmpty) continue;

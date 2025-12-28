@@ -175,6 +175,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     on<ChatAvailabilityMessageSent>(_onChatAvailabilityMessageSent);
     on<ChatMuted>(_onChatMuted);
+    on<ChatNotificationPreviewSettingChanged>(
+      _onChatNotificationPreviewSettingChanged,
+    );
     on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
     on<ChatAttachmentAutoDownloadToggled>(
       _onChatAttachmentAutoDownloadToggled,
@@ -2109,6 +2112,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _chatsService.toggleChatMuted(jid: jid!, muted: event.muted);
   }
 
+  Future<void> _onChatNotificationPreviewSettingChanged(
+    ChatNotificationPreviewSettingChanged event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) return;
+    await _chatsService.setChatNotificationPreviewSetting(
+      jid: chat.jid,
+      setting: event.setting,
+    );
+    emit(
+      state.copyWith(
+        chat: chat.copyWith(notificationPreviewSetting: event.setting),
+      ),
+    );
+  }
+
   Future<void> _onChatShareSignatureToggled(
     ChatShareSignatureToggled event,
     Emitter<ChatState> emit,
@@ -2304,9 +2324,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final plainText = message.plainText.trim();
     final htmlBody = message.normalizedHtmlBody;
     final isEmailTarget = _isEmailCapableChat(target);
+    final forwardingMode = event.forwardingMode;
+    final safeForward = isEmailTarget && forwardingMode.isSafe;
+    final resolvedHtmlBody = safeForward ? null : htmlBody;
     final emailService = _emailService;
     try {
-      if (isEmailTarget && emailService != null && message.deltaMsgId != null) {
+      if (isEmailTarget &&
+          emailService != null &&
+          message.deltaMsgId != null &&
+          forwardingMode.isOriginal) {
         final forwarded = await emailService.forwardMessages(
           messages: [message],
           toChat: target,
@@ -2318,6 +2344,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final attachments = await _attachmentsForMessage(message);
       if (attachments.isNotEmpty) {
         final caption = plainText.isNotEmpty ? plainText : null;
+        final htmlCaption = safeForward ? null : htmlBody;
         if (isEmailTarget) {
           if (emailService == null) return;
           final bundled = await _bundleEmailAttachmentList(
@@ -2332,7 +2359,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             await emailService.sendAttachment(
               chat: target,
               attachment: captionedAttachment,
-              htmlCaption: index == 0 ? htmlBody : null,
+              htmlCaption: index == 0 ? htmlCaption : null,
             );
           }
           return;
@@ -2349,26 +2376,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             attachment: captionedAttachment,
             encryptionProtocol: target.encryptionProtocol,
             chatType: target.type,
-            htmlCaption: shouldApplyCaption ? htmlBody : null,
+            htmlCaption: shouldApplyCaption ? resolvedHtmlBody : null,
             transportGroupId: attachmentGroupId,
             attachmentOrder: index,
           );
         }
         return;
       }
-      if (plainText.isEmpty && htmlBody == null) return;
+      if (plainText.isEmpty && resolvedHtmlBody == null) return;
       if (isEmailTarget) {
         if (emailService == null) return;
         await emailService.sendMessage(
           chat: target,
           body: plainText,
-          htmlBody: htmlBody,
+          htmlBody: resolvedHtmlBody,
         );
       } else {
         await _messageService.sendMessage(
           jid: target.jid,
           text: plainText,
-          htmlBody: htmlBody,
+          htmlBody: resolvedHtmlBody,
           encryptionProtocol: target.encryptionProtocol,
           chatType: target.type,
         );

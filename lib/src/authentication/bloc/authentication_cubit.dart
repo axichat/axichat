@@ -121,13 +121,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           launchedFromNotification = false;
           final payload = takeLaunchedNotificationChatJid();
           if (payload != null) {
-            xmppService.openChat(payload);
+            final chatJid =
+                await xmppService.resolveNotificationPayload(payload);
+            if (chatJid != null) {
+              xmppService.openChat(chatJid);
+            }
           } else {
             final appLaunchDetails =
                 await notificationService?.getAppNotificationAppLaunchDetails();
             if (appLaunchDetails?.notificationResponse?.payload
-                case final chatJid?) {
-              xmppService.openChat(chatJid);
+                case final launchPayload?) {
+              final chatJid =
+                  await xmppService.resolveNotificationPayload(launchPayload);
+              if (chatJid != null) {
+                xmppService.openChat(chatJid);
+              }
             }
           }
         }

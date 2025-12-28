@@ -609,6 +609,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatForwardDialogTitle => '转发到...';
 
   @override
+  String get chatForwardEmailWarningTitle => 'Forward email?';
+
+  @override
+  String get chatForwardEmailWarningMessage =>
+      'Forwarding email can include original headers and external image links. Choose how to send.';
+
+  @override
+  String get chatForwardEmailOptionSafe => 'Forward as new message';
+
+  @override
+  String get chatForwardEmailOptionOriginal => 'Forward original';
+
+  @override
   String get chatComposerAttachmentWarning => '大附件会分别发送给每个收件人，可能需要更长时间送达。';
 
   @override
@@ -1720,6 +1733,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authUnregisterTitle => '注销';
 
   @override
+  String get authUnregisterConfirmTitle => 'Delete account?';
+
+  @override
+  String get authUnregisterConfirmMessage =>
+      'This will permanently delete your account and local data. This cannot be undone.';
+
+  @override
+  String get authUnregisterConfirmAction => 'Delete account';
+
+  @override
   String get authUnregisterProgressLabel => '正在等待删除账户';
 
   @override
@@ -1797,13 +1820,29 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentExportTitle => '保存附件？';
 
   @override
-  String get chatAttachmentExportMessage => '这会把附件复制到共享存储。继续？';
+  String get chatAttachmentExportMessage =>
+      '这会将附件复制到共享存储。导出内容未加密，可能会被其他应用读取。继续？';
 
   @override
   String get chatAttachmentExportConfirm => '保存';
 
   @override
   String get chatAttachmentExportCancel => '取消';
+
+  @override
+  String get chatMediaMetadataWarningTitle => '媒体可能包含元数据';
+
+  @override
+  String get chatMediaMetadataWarningMessage => '照片和视频可能包含位置和设备信息。继续？';
+
+  @override
+  String get chatNotificationPreviewOptionInherit => '使用应用设置';
+
+  @override
+  String get chatNotificationPreviewOptionShow => '始终显示预览';
+
+  @override
+  String get chatNotificationPreviewOptionHide => '始终隐藏预览';
 
   @override
   String get chatAttachmentUnavailableDevice => '此设备上已无法获取该附件';
@@ -2173,6 +2212,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatsExportFailure => '无法导出聊天';
+
+  @override
+  String get chatExportWarningTitle => '导出聊天记录？';
+
+  @override
+  String get chatExportWarningMessage => '聊天导出未加密，可能会被其他应用或云服务读取。继续？';
 
   @override
   String get chatsArchivedRestored => '聊天已恢复';
@@ -3595,6 +3640,19 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatForwardDialogTitle => '轉寄到...';
 
   @override
+  String get chatForwardEmailWarningTitle => 'Forward email?';
+
+  @override
+  String get chatForwardEmailWarningMessage =>
+      'Forwarding email can include original headers and external image links. Choose how to send.';
+
+  @override
+  String get chatForwardEmailOptionSafe => 'Forward as new message';
+
+  @override
+  String get chatForwardEmailOptionOriginal => 'Forward original';
+
+  @override
   String get chatComposerAttachmentWarning => '大型附件會分別傳送給每位收件者，可能需要更長時間。';
 
   @override
@@ -4706,6 +4764,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get authUnregisterTitle => '註銷';
 
   @override
+  String get authUnregisterConfirmTitle => 'Delete account?';
+
+  @override
+  String get authUnregisterConfirmMessage =>
+      'This will permanently delete your account and local data. This cannot be undone.';
+
+  @override
+  String get authUnregisterConfirmAction => 'Delete account';
+
+  @override
   String get authUnregisterProgressLabel => '正在等待刪除帳戶';
 
   @override
@@ -4783,13 +4851,29 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatAttachmentExportTitle => '儲存附件？';
 
   @override
-  String get chatAttachmentExportMessage => '這會把附件複製到共享儲存空間。繼續？';
+  String get chatAttachmentExportMessage =>
+      '這會把附件複製到共享儲存空間。匯出內容未加密，可能會被其他應用程式讀取。繼續？';
 
   @override
   String get chatAttachmentExportConfirm => '儲存';
 
   @override
   String get chatAttachmentExportCancel => '取消';
+
+  @override
+  String get chatMediaMetadataWarningTitle => '媒體可能包含中繼資料';
+
+  @override
+  String get chatMediaMetadataWarningMessage => '相片和影片可能包含位置及裝置資訊。繼續？';
+
+  @override
+  String get chatNotificationPreviewOptionInherit => '使用應用程式設定';
+
+  @override
+  String get chatNotificationPreviewOptionShow => '一律顯示預覽';
+
+  @override
+  String get chatNotificationPreviewOptionHide => '一律隱藏預覽';
 
   @override
   String get chatAttachmentUnavailableDevice => '此裝置上已無法取得該附件';
@@ -5159,6 +5243,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatsExportFailure => '無法匯出聊天';
+
+  @override
+  String get chatExportWarningTitle => '匯出聊天記錄？';
+
+  @override
+  String get chatExportWarningMessage => '聊天匯出未加密，可能會被其他應用程式或雲端服務讀取。繼續？';
 
   @override
   String get chatsArchivedRestored => '聊天已還原';

@@ -1,5 +1,16 @@
 part of 'chat_bloc.dart';
 
+enum EmailForwardingMode {
+  original,
+  safe,
+}
+
+extension EmailForwardingModeExtensions on EmailForwardingMode {
+  bool get isOriginal => this == EmailForwardingMode.original;
+
+  bool get isSafe => this == EmailForwardingMode.safe;
+}
+
 sealed class ChatEvent extends Equatable {
   const ChatEvent();
 }
@@ -141,6 +152,15 @@ final class ChatMuted extends ChatEvent {
   List<Object?> get props => [muted];
 }
 
+final class ChatNotificationPreviewSettingChanged extends ChatEvent {
+  const ChatNotificationPreviewSettingChanged(this.setting);
+
+  final NotificationPreviewSetting setting;
+
+  @override
+  List<Object?> get props => [setting];
+}
+
 final class ChatShareSignatureToggled extends ChatEvent {
   const ChatShareSignatureToggled(this.enabled);
 
@@ -246,13 +266,15 @@ final class ChatMessageForwardRequested extends ChatEvent {
   const ChatMessageForwardRequested({
     required this.message,
     required this.target,
+    this.forwardingMode = EmailForwardingMode.original,
   });
 
   final Message message;
   final Chat target;
+  final EmailForwardingMode forwardingMode;
 
   @override
-  List<Object?> get props => [message, target];
+  List<Object?> get props => [message, target, forwardingMode];
 }
 
 final class ChatMessageResendRequested extends ChatEvent {

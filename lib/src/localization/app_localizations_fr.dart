@@ -636,10 +636,23 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatAddToCalendarNoText =>
-      'Les messages sélectionnés n’ont pas de texte à ajouter au calendrier.';
+      'Les messages sélectionnés n\'ont pas de texte à ajouter au calendrier.';
 
   @override
   String get chatForwardDialogTitle => 'Transférer à...';
+
+  @override
+  String get chatForwardEmailWarningTitle => 'Forward email?';
+
+  @override
+  String get chatForwardEmailWarningMessage =>
+      'Forwarding email can include original headers and external image links. Choose how to send.';
+
+  @override
+  String get chatForwardEmailOptionSafe => 'Forward as new message';
+
+  @override
+  String get chatForwardEmailOptionOriginal => 'Forward original';
 
   @override
   String get chatComposerAttachmentWarning =>
@@ -1809,6 +1822,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authUnregisterTitle => 'Désinscription';
 
   @override
+  String get authUnregisterConfirmTitle => 'Delete account?';
+
+  @override
+  String get authUnregisterConfirmMessage =>
+      'This will permanently delete your account and local data. This cannot be undone.';
+
+  @override
+  String get authUnregisterConfirmAction => 'Delete account';
+
+  @override
   String get authUnregisterProgressLabel =>
       'En attente de la suppression du compte';
 
@@ -1893,7 +1916,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatAttachmentExportMessage =>
-      'Cela copiera la pièce jointe dans le stockage partagé. Continuer ?';
+      'Cela copiera la pièce jointe vers le stockage partagé. Les exportations ne sont pas chiffrées et peuvent être lues par d\'autres apps. Continuer ?';
 
   @override
   String get chatAttachmentExportConfirm => 'Enregistrer';
@@ -1902,8 +1925,28 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatAttachmentExportCancel => 'Annuler';
 
   @override
+  String get chatMediaMetadataWarningTitle =>
+      'Les médias peuvent contenir des métadonnées';
+
+  @override
+  String get chatMediaMetadataWarningMessage =>
+      'Les photos et vidéos peuvent contenir la localisation et des données de l\'appareil. Continuer ?';
+
+  @override
+  String get chatNotificationPreviewOptionInherit =>
+      'Utiliser le réglage de l\'app';
+
+  @override
+  String get chatNotificationPreviewOptionShow =>
+      'Toujours afficher les aperçus';
+
+  @override
+  String get chatNotificationPreviewOptionHide =>
+      'Toujours masquer les aperçus';
+
+  @override
   String get chatAttachmentUnavailableDevice =>
-      'La pièce jointe n’est plus disponible sur cet appareil';
+      'La pièce jointe n\'est plus disponible sur cet appareil';
 
   @override
   String get chatAttachmentInvalidLink => 'Lien de pièce jointe invalide';
@@ -2274,6 +2317,13 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatsExportFailure => 'Impossible d’exporter le chat';
+
+  @override
+  String get chatExportWarningTitle => 'Exporter l’historique du chat ?';
+
+  @override
+  String get chatExportWarningMessage =>
+      'Les exports de chat ne sont pas chiffrés et peuvent être lus par d\'autres apps ou services cloud. Continuer ?';
 
   @override
   String get chatsArchivedRestored => 'Chat restauré';

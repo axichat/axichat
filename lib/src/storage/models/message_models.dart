@@ -399,6 +399,23 @@ class Message with _$Message implements Insertable<Message> {
   bool authorized(mox.JID jid) =>
       mox.JID.fromString(senderJid).toBare() == jid.toBare();
 
+  bool authorizedForMutation({
+    required mox.JID from,
+    String? occupantId,
+  }) {
+    final messageOccupantId = occupantID?.trim();
+    if (messageOccupantId != null && messageOccupantId.isNotEmpty) {
+      final resolvedOccupantId = occupantId?.trim();
+      if (resolvedOccupantId != null && resolvedOccupantId.isNotEmpty) {
+        if (resolvedOccupantId == messageOccupantId) {
+          return true;
+        }
+      }
+      return senderJid == from.toString();
+    }
+    return authorized(from);
+  }
+
   bool get editable =>
       error.isNone &&
       fileMetadataID == null &&
@@ -668,6 +685,7 @@ class _ParsedInvite {
   static const _inviteRevokePrefix = 'axc-invite-revoke:';
   static const _inviteBodyLabel = 'You have been invited to a group chat';
   static const _inviteRevokedBodyLabel = 'Invite revoked';
+  static const _messageTypeGroupChat = 'groupchat';
 
   static String? _firstNonEmpty(Iterable<String?> values) {
     for (final value in values) {
@@ -677,12 +695,42 @@ class _ParsedInvite {
     return null;
   }
 
-  static _ParsedInvite? fromEvent(mox.MessageEvent event,
-      {required String to}) {
+  static String? _normalizeBareJid(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    try {
+      return mox.JID.fromString(trimmed).toBare().toString();
+    } on Exception {
+      return trimmed;
+    }
+  }
+
+  static bool _matchesBareJid(String candidate, String expectedBare) {
+    final normalized = _normalizeBareJid(candidate);
+    if (normalized == null) return false;
+    return normalized == expectedBare;
+  }
+
+  static _ParsedInvite? fromEvent(
+    mox.MessageEvent event, {
+    required String to,
+  }) {
+    if (event.type == _messageTypeGroupChat) {
+      return null;
+    }
+    final senderBare = _normalizeBareJid(event.from.toBare().toString());
+    final recipientBare = _normalizeBareJid(to);
+    if (senderBare == null || recipientBare == null) {
+      return null;
+    }
     final directInvite = event.get<DirectMucInviteData>();
     final axiInvite = event.get<AxiMucInvitePayload>();
     if (directInvite == null && axiInvite == null) {
-      return fromBody(event.text, to: to);
+      return fromBody(
+        event.text,
+        to: recipientBare,
+        sender: senderBare,
+      );
     }
 
     final roomJid = _firstNonEmpty([
@@ -690,16 +738,36 @@ class _ParsedInvite {
       directInvite?.roomJid,
     ]);
     if (roomJid == null) {
-      return fromBody(event.text, to: to);
+      return fromBody(
+        event.text,
+        to: recipientBare,
+        sender: senderBare,
+      );
+    }
+
+    final payloadInviter = _firstNonEmpty([
+      axiInvite?.inviter,
+    ]);
+    if (payloadInviter != null &&
+        !_matchesBareJid(payloadInviter, senderBare)) {
+      return null;
+    }
+
+    final payloadInvitee = _firstNonEmpty([
+      axiInvite?.invitee,
+    ]);
+    if (payloadInvitee != null &&
+        !_matchesBareJid(payloadInvitee, recipientBare)) {
+      return null;
     }
 
     final inviter = _firstNonEmpty([
-      axiInvite?.inviter,
-      event.from.toBare().toString(),
+      payloadInviter,
+      senderBare,
     ]);
     final invitee = _firstNonEmpty([
-      axiInvite?.invitee,
-      to,
+      payloadInvitee,
+      recipientBare,
     ]);
     final roomName = _firstNonEmpty([axiInvite?.roomName]);
     final reason = _firstNonEmpty([
@@ -733,8 +801,17 @@ class _ParsedInvite {
     );
   }
 
-  static _ParsedInvite? fromBody(String body, {required String to}) {
+  static _ParsedInvite? fromBody(
+    String body, {
+    required String to,
+    required String sender,
+  }) {
     if (body.isEmpty) return null;
+    final recipientBare = _normalizeBareJid(to);
+    final senderBare = _normalizeBareJid(sender);
+    if (recipientBare == null || senderBare == null) {
+      return null;
+    }
     final lines = body.split('\n');
     final metaLine = lines.lastWhere(
       (line) =>
@@ -753,7 +830,16 @@ class _ParsedInvite {
     } catch (_) {
       return null;
     }
-    payload['invitee'] ??= to;
+    final rawInviter = payload['inviter'] as String?;
+    if (rawInviter != null && !_matchesBareJid(rawInviter, senderBare)) {
+      return null;
+    }
+    final rawInvitee = payload['invitee'] as String?;
+    if (rawInvitee != null && !_matchesBareJid(rawInvitee, recipientBare)) {
+      return null;
+    }
+    payload['inviter'] ??= senderBare;
+    payload['invitee'] ??= recipientBare;
     final displayBody = isRevoke ? _inviteRevokedBodyLabel : _inviteBodyLabel;
     return _ParsedInvite(
       type: isRevoke

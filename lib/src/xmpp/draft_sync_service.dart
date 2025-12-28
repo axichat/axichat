@@ -443,7 +443,12 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
 
   Future<List<DraftAttachmentRef>?> _resolveDraftAttachments(
       Draft draft) async {
-    final metadataIds = draft.attachmentMetadataIds;
+    final metadataIds =
+        draft.attachmentMetadataIds.length > draftSyncMaxAttachments
+            ? draft.attachmentMetadataIds
+                .take(draftSyncMaxAttachments)
+                .toList(growable: false)
+            : draft.attachmentMetadataIds;
     if (metadataIds.isEmpty) return const <DraftAttachmentRef>[];
     final db = await database;
     final attachments = <DraftAttachmentRef>[];
@@ -498,8 +503,14 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     required DraftAttachmentRef attachment,
     FileMetadataData? existing,
   }) {
-    final normalizedName = _normalizeAttachmentText(attachment.filename);
-    final normalizedMime = _normalizeAttachmentText(attachment.mimeType);
+    final normalizedName = _normalizeAttachmentText(
+      attachment.filename,
+      maxBytes: draftSyncMaxAttachmentNameBytes,
+    );
+    final normalizedMime = _normalizeAttachmentText(
+      attachment.mimeType,
+      maxBytes: draftSyncMaxAttachmentMimeBytes,
+    );
     final mergedUrls = _mergeAttachmentUrls(
       existing?.sourceUrls,
       attachment.url,
@@ -593,14 +604,14 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     final urls = <String>{};
     if (existing != null) {
       for (final value in existing) {
-        final trimmed = value.trim();
-        if (trimmed.isNotEmpty) {
-          urls.add(trimmed);
+        final normalized = _normalizeAttachmentUrl(value);
+        if (normalized != null) {
+          urls.add(normalized);
         }
       }
     }
-    final normalizedIncoming = incoming?.trim();
-    if (normalizedIncoming != null && normalizedIncoming.isNotEmpty) {
+    final normalizedIncoming = _normalizeAttachmentUrl(incoming);
+    if (normalizedIncoming != null) {
       urls.add(normalizedIncoming);
     }
     if (urls.isEmpty) {
@@ -609,12 +620,32 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     return urls.toList(growable: false);
   }
 
-  String? _normalizeAttachmentText(String? value) {
+  String? _normalizeAttachmentText(
+    String? value, {
+    required int maxBytes,
+  }) {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       return null;
     }
-    return trimmed;
+    final clamped = clampUtf8Value(trimmed, maxBytes: maxBytes);
+    if (clamped == null || clamped.trim().isEmpty) return null;
+    return clamped;
+  }
+
+  String? _normalizeAttachmentUrl(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    final clamped = clampUtf8Value(
+      trimmed,
+      maxBytes: draftSyncMaxAttachmentUrlBytes,
+    );
+    if (clamped == null || clamped.trim().isEmpty) return null;
+    final uri = Uri.tryParse(clamped);
+    if (uri == null || !uri.hasAuthority || !uri.hasScheme) return null;
+    final scheme = uri.scheme.toLowerCase();
+    if (!draftSyncAllowedAttachmentSchemes.contains(scheme)) return null;
+    return uri.toString();
   }
 
   Future<void> _ensurePendingDraftSyncLoaded() async {

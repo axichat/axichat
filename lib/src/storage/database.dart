@@ -51,7 +51,7 @@ const String _databaseJournalSuffix = '-journal';
 const int _messageAttachmentMaxCount = 50;
 const int _messageAttachmentSortOrderStart = 0;
 const int _messageAttachmentSortOrderStep = 1;
-const int _pinnedMessagesSchemaVersion = 23;
+const int _pinnedMessagesSchemaVersion = 24;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
@@ -359,6 +359,11 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markChatMuted({
     required String jid,
     required bool muted,
+  });
+
+  Future<void> setChatNotificationPreviewSetting({
+    required String jid,
+    required NotificationPreviewSetting setting,
   });
 
   Future<void> setChatShareSignature({
@@ -1394,6 +1399,9 @@ WHERE source_id IS NULL OR trim(source_id) = ''
 ''',
             [syncLegacySourceId],
           );
+        }
+        if (from < 24) {
+          await m.addColumn(chats, chats.notificationPreviewSetting);
         }
         if (from < _pinnedMessagesSchemaVersion) {
           await m.createTable(pinnedMessages);
@@ -3108,6 +3116,17 @@ $limitClause
     _log.info('Updating chat muted state');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(muted: Value(muted)));
+  }
+
+  @override
+  Future<void> setChatNotificationPreviewSetting({
+    required String jid,
+    required NotificationPreviewSetting setting,
+  }) async {
+    _log.info('Updating chat notification preview setting');
+    await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
+      ChatsCompanion(notificationPreviewSetting: Value(setting)),
+    );
   }
 
   @override

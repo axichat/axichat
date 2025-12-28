@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -12,12 +13,15 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
+import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
+import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
@@ -41,6 +45,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
+import 'package:mime/mime.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -49,6 +55,10 @@ import 'localization/app_localizations.dart';
 
 Timer? _pendingAuthNavigation;
 AuthenticationState? _lastAuthState;
+const String _shareFileSchemePrefix = 'file://';
+const String _emptyShareBody = '';
+const int _shareAttachmentUnknownSizeBytes = 0;
+const int _shareAttachmentMinSizeBytes = 1;
 
 class Axichat extends StatefulWidget {
   Axichat({
@@ -523,11 +533,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                             Timer(animationDuration, navigateHome);
                       }
                     }
-                    _handleShareIntent(context);
+                    unawaited(_handleShareIntent());
                   },
                 ),
                 BlocListener<ShareIntentCubit, ShareIntentState>(
-                  listener: (context, _) => _handleShareIntent(context),
+                  listener: (context, _) => unawaited(_handleShareIntent()),
                 ),
               ],
               child: Stack(
@@ -571,6 +581,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 ),
               ),
             );
+            content = ShorebirdUpdateGate(child: content);
             return content;
           },
         );
@@ -580,20 +591,119 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     );
   }
 
-  void _handleShareIntent(BuildContext context) {
-    final shareState = context.read<ShareIntentCubit>().state;
+  Future<void> _handleShareIntent() async {
+    final ShareIntentCubit shareCubit = context.read<ShareIntentCubit>();
+    final ShareIntentState shareState = shareCubit.state;
     if (!shareState.hasPayload) return;
-    final authState = context.read<AuthenticationCubit>().state;
+    final AuthenticationState authState =
+        context.read<AuthenticationCubit>().state;
     if (authState is! AuthenticationComplete) return;
-    final payload = shareState.payload!;
+    final SharePayload payload = shareState.payload!;
+    final MessageService messageService = context.read<MessageService>();
+    final List<String> attachmentMetadataIds = await _persistSharedAttachments(
+      messageService: messageService,
+      attachments: payload.attachments,
+    );
+    if (!mounted) return;
+    final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
+    final bool hasBody = resolvedBody.isNotEmpty;
+    if (!hasBody && attachmentMetadataIds.isEmpty) {
+      shareCubit.consume();
+      return;
+    }
     openComposeDraft(
       context,
       navigator: _router.routerDelegate.navigatorKey.currentState,
-      body: payload.text,
+      body: resolvedBody,
       jids: const [''],
-      attachmentMetadataIds: const <String>[],
+      attachmentMetadataIds: attachmentMetadataIds,
     );
-    context.read<ShareIntentCubit>().consume();
+    shareCubit.consume();
+  }
+
+  Future<List<String>> _persistSharedAttachments({
+    required MessageService messageService,
+    required List<ShareAttachmentPayload> attachments,
+  }) async {
+    if (attachments.isEmpty) {
+      return const <String>[];
+    }
+    final List<EmailAttachment> prepared = <EmailAttachment>[];
+    for (final ShareAttachmentPayload attachment in attachments) {
+      final String normalizedPath =
+          _normalizeSharedAttachmentPath(attachment.path);
+      if (normalizedPath.isEmpty) {
+        continue;
+      }
+      final File file = File(normalizedPath);
+      if (!await file.exists()) {
+        continue;
+      }
+      final String fileName = _resolveSharedAttachmentFileName(normalizedPath);
+      final int sizeBytes = await _resolveSharedAttachmentSizeBytes(file);
+      final int resolvedSizeBytes = sizeBytes >= _shareAttachmentMinSizeBytes
+          ? sizeBytes
+          : _shareAttachmentUnknownSizeBytes;
+      final String mimeType = _resolveSharedAttachmentMimeType(
+        fileName: fileName,
+        path: normalizedPath,
+        attachment: attachment,
+      );
+      EmailAttachment emailAttachment = EmailAttachment(
+        path: normalizedPath,
+        fileName: fileName,
+        sizeBytes: resolvedSizeBytes,
+        mimeType: mimeType,
+      );
+      emailAttachment =
+          await EmailAttachmentOptimizer.optimize(emailAttachment);
+      prepared.add(emailAttachment);
+    }
+    if (prepared.isEmpty) {
+      return const <String>[];
+    }
+    return messageService.persistDraftAttachmentMetadata(prepared);
+  }
+
+  String _normalizeSharedAttachmentPath(String path) {
+    final String trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    if (!trimmed.startsWith(_shareFileSchemePrefix)) {
+      return trimmed;
+    }
+    final String? resolved = Uri.tryParse(trimmed)?.toFilePath();
+    if (resolved == null || resolved.isEmpty) {
+      return trimmed;
+    }
+    return resolved;
+  }
+
+  String _resolveSharedAttachmentFileName(String path) {
+    final String baseName = p.basename(path);
+    if (baseName.isNotEmpty) {
+      return baseName;
+    }
+    return path;
+  }
+
+  String _resolveSharedAttachmentMimeType({
+    required String fileName,
+    required String path,
+    required ShareAttachmentPayload attachment,
+  }) {
+    return lookupMimeType(fileName) ??
+        lookupMimeType(path) ??
+        attachment.type.mimeTypeFallback;
+  }
+
+  Future<int> _resolveSharedAttachmentSizeBytes(File file) async {
+    try {
+      return await file.length();
+    } on Exception {
+      return _shareAttachmentUnknownSizeBytes;
+    }
   }
 }
 

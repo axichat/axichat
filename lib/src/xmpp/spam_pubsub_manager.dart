@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/xmpp/jid_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
@@ -59,10 +62,13 @@ final class SpamSyncPayload {
       return null;
     }
 
-    final rawJid = node.attributes[_spamJidAttr]?.toString().trim();
+    final rawJid = node.attributes[_spamJidAttr]?.toString();
     final resolvedJid =
         rawJid == null || rawJid.isEmpty ? itemId?.trim() : rawJid;
     if (resolvedJid == null || resolvedJid.isEmpty) return null;
+    final normalizedJid =
+        resolvedJid.toBareJidOrNull(maxBytes: syncAddressMaxBytes);
+    if (normalizedJid == null) return null;
 
     final rawUpdatedAt = node.attributes[_spamUpdatedAtAttr]?.toString().trim();
     if (rawUpdatedAt == null || rawUpdatedAt.isEmpty) return null;
@@ -70,12 +76,10 @@ final class SpamSyncPayload {
     if (parsedUpdatedAt == null) return null;
 
     final rawSourceId = node.attributes[_spamSourceIdAttr]?.toString().trim();
-    final resolvedSourceId = rawSourceId == null || rawSourceId.isEmpty
-        ? _spamSourceIdFallback
-        : rawSourceId;
+    final resolvedSourceId = _normalizeSourceId(rawSourceId);
 
     return SpamSyncPayload(
-      jid: resolvedJid,
+      jid: normalizedJid,
       updatedAt: parsedUpdatedAt.toUtc(),
       sourceId: resolvedSourceId,
     );
@@ -91,6 +95,16 @@ final class SpamSyncPayload {
         _spamSourceIdAttr: sourceId,
       },
     );
+  }
+
+  static String _normalizeSourceId(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return _spamSourceIdFallback;
+    final clamped = clampUtf8Value(trimmed, maxBytes: syncSourceIdMaxBytes);
+    if (clamped == null || clamped.trim().isEmpty) {
+      return _spamSourceIdFallback;
+    }
+    return clamped;
   }
 }
 
@@ -138,6 +152,7 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
   Stream<SpamSyncUpdate> get updates => _updatesController.stream;
 
   final Map<String, SpamSyncPayload> _cache = {};
+  final SyncRateLimiter _rateLimiter = SyncRateLimiter(spamSyncRateLimit);
 
   @override
   Future<bool> isSupported() async => true;
@@ -466,21 +481,33 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     getAttributes().sendEvent(SpamSyncRetractedEvent(jid));
   }
 
+  bool _shouldProcessSyncEvent() {
+    if (_rateLimiter.allowEvent()) {
+      return true;
+    }
+    if (_rateLimiter.shouldRefreshNow()) {
+      unawaited(_refreshFromServer());
+    }
+    return false;
+  }
+
   Future<void> _handleNotification(mox.PubSubNotificationEvent event) async {
     if (event.item.node != spamPubSubNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
+    if (!_shouldProcessSyncEvent()) return;
 
     SpamSyncPayload? parsed;
     if (event.item.payload case final payload?) {
       parsed = SpamSyncPayload.fromXml(payload, itemId: event.item.id);
     } else {
       final pubsub = _pubSub();
-      final host = _selfPepHost();
       final itemId = event.item.id.trim();
       if (itemId.isEmpty) {
         await _refreshFromServer();
         return;
       }
-      if (pubsub != null && host != null && itemId.isNotEmpty) {
+      if (pubsub != null && itemId.isNotEmpty) {
         final itemResult = await pubsub.getItem(host, spamPubSubNode, itemId);
         if (!itemResult.isType<mox.PubSubError>()) {
           final item = itemResult.get<mox.PubSubItem>();
@@ -496,13 +523,21 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     }
 
     if (parsed == null) return;
+    final maxItems = _resolveFetchLimit();
+    if (_cache.length >= maxItems && !_cache.containsKey(parsed.itemId)) {
+      await _refreshFromServer();
+      return;
+    }
     _cache[parsed.itemId] = parsed;
     _emitUpdate(parsed);
   }
 
   Future<void> _handleRetractions(mox.PubSubItemsRetractedEvent event) async {
     if (event.node != spamPubSubNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
     if (event.itemIds.isEmpty) return;
+    if (!_shouldProcessSyncEvent()) return;
     for (final itemId in event.itemIds) {
       final normalized = itemId.trim();
       if (normalized.isEmpty) continue;

@@ -216,6 +216,7 @@ class NotificationService {
     bool allowForeground = false,
     String? payload,
     String? threadKey,
+    bool? showPreviewOverride,
   }) async {
     if (mute) return;
     if (!await hasAllNotificationPermissions()) return;
@@ -228,8 +229,9 @@ class NotificationService {
     }
 
     await _ensureInitialized();
+    final showPreview = showPreviewOverride ?? notificationPreviewsEnabled;
     final notificationDetails = await _messageNotificationDetails(
-      showPreview: notificationPreviewsEnabled,
+      showPreview: showPreview,
     );
     final stableKey = (threadKey ?? payload)?.trim();
     final notificationId = stableKey == null || stableKey.isEmpty
@@ -239,7 +241,7 @@ class NotificationService {
     await _plugin.show(
       notificationId,
       _sanitizeMessageNotificationTitle(title),
-      notificationPreviewsEnabled ? body : null,
+      showPreview ? body : null,
       notificationDetails,
       payload: payload,
     );

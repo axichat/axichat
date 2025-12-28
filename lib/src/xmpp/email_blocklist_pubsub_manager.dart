@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/xmpp/jid_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
@@ -59,10 +62,13 @@ final class EmailBlocklistSyncPayload {
       return null;
     }
 
-    final rawAddress = node.attributes[_blockAddressAttr]?.toString().trim();
+    final rawAddress = node.attributes[_blockAddressAttr]?.toString();
     final resolvedAddress =
         rawAddress == null || rawAddress.isEmpty ? itemId?.trim() : rawAddress;
     if (resolvedAddress == null || resolvedAddress.isEmpty) return null;
+    final normalizedAddress =
+        resolvedAddress.toBareJidOrNull(maxBytes: syncAddressMaxBytes);
+    if (normalizedAddress == null) return null;
 
     final rawUpdatedAt =
         node.attributes[_blockUpdatedAtAttr]?.toString().trim();
@@ -71,12 +77,10 @@ final class EmailBlocklistSyncPayload {
     if (parsedUpdatedAt == null) return null;
 
     final rawSourceId = node.attributes[_blockSourceIdAttr]?.toString().trim();
-    final resolvedSourceId = rawSourceId == null || rawSourceId.isEmpty
-        ? _blockSourceIdFallback
-        : rawSourceId;
+    final resolvedSourceId = _normalizeSourceId(rawSourceId);
 
     return EmailBlocklistSyncPayload(
-      address: resolvedAddress,
+      address: normalizedAddress,
       updatedAt: parsedUpdatedAt.toUtc(),
       sourceId: resolvedSourceId,
     );
@@ -92,6 +96,16 @@ final class EmailBlocklistSyncPayload {
         _blockSourceIdAttr: sourceId,
       },
     );
+  }
+
+  static String _normalizeSourceId(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return _blockSourceIdFallback;
+    final clamped = clampUtf8Value(trimmed, maxBytes: syncSourceIdMaxBytes);
+    if (clamped == null || clamped.trim().isEmpty) {
+      return _blockSourceIdFallback;
+    }
+    return clamped;
   }
 }
 
@@ -139,6 +153,8 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   Stream<EmailBlocklistSyncUpdate> get updates => _updatesController.stream;
 
   final Map<String, EmailBlocklistSyncPayload> _cache = {};
+  final SyncRateLimiter _rateLimiter =
+      SyncRateLimiter(emailBlocklistSyncRateLimit);
 
   @override
   Future<bool> isSupported() async => true;
@@ -471,8 +487,21 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     getAttributes().sendEvent(EmailBlocklistSyncRetractedEvent(address));
   }
 
+  bool _shouldProcessSyncEvent() {
+    if (_rateLimiter.allowEvent()) {
+      return true;
+    }
+    if (_rateLimiter.shouldRefreshNow()) {
+      unawaited(_refreshFromServer());
+    }
+    return false;
+  }
+
   Future<void> _handleNotification(mox.PubSubNotificationEvent event) async {
     if (event.item.node != emailBlocklistPubSubNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
+    if (!_shouldProcessSyncEvent()) return;
 
     EmailBlocklistSyncPayload? parsed;
     if (event.item.payload case final payload?) {
@@ -482,13 +511,12 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       );
     } else {
       final pubsub = _pubSub();
-      final host = _selfPepHost();
       final itemId = event.item.id.trim();
       if (itemId.isEmpty) {
         await _refreshFromServer();
         return;
       }
-      if (pubsub != null && host != null && itemId.isNotEmpty) {
+      if (pubsub != null && itemId.isNotEmpty) {
         final itemResult =
             await pubsub.getItem(host, emailBlocklistPubSubNode, itemId);
         if (!itemResult.isType<mox.PubSubError>()) {
@@ -505,13 +533,21 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     }
 
     if (parsed == null) return;
+    final maxItems = _resolveFetchLimit();
+    if (_cache.length >= maxItems && !_cache.containsKey(parsed.itemId)) {
+      await _refreshFromServer();
+      return;
+    }
     _cache[parsed.itemId] = parsed;
     _emitUpdate(parsed);
   }
 
   Future<void> _handleRetractions(mox.PubSubItemsRetractedEvent event) async {
     if (event.node != emailBlocklistPubSubNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
     if (event.itemIds.isEmpty) return;
+    if (!_shouldProcessSyncEvent()) return;
     for (final itemId in event.itemIds) {
       final normalized = itemId.trim();
       if (normalized.isEmpty) continue;

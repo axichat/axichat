@@ -148,6 +148,9 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
 const _chatHeaderActionSpacing = 4.0;
+const _chatSettingsSectionSpacing = 12.0;
+const _chatSettingsFieldSpacing = 8.0;
+const _chatSettingsSelectMinWidth = 220.0;
 const _messageActionIconSize = 16.0;
 const _pinnedListLoadingIndicatorSize = 28.0;
 const String _calendarFragmentShareDeniedMessage =
@@ -1825,24 +1828,30 @@ class _ChatState extends State<Chat> {
       );
   }
 
-  void _handleSendMessage() {
+  Future<void> _handleSendMessage() async {
     final rawText = _textController.text.trim();
     final seedText = _pendingCalendarSeedText;
     final String resolvedText =
         rawText.isNotEmpty ? rawText : (seedText ?? _emptyText);
-    final bool hasPreparingAttachments =
-        context.read<ChatBloc>().state.pendingAttachments.any(
-              (attachment) => attachment.isPreparing,
-            );
-    final bool hasQueuedAttachments =
-        context.read<ChatBloc>().state.pendingAttachments.any(
-              (attachment) =>
-                  attachment.status == PendingAttachmentStatus.queued,
-            );
+    final pendingAttachments =
+        context.read<ChatBloc>().state.pendingAttachments;
+    final hasPreparingAttachments = pendingAttachments.any(
+      (attachment) => attachment.isPreparing,
+    );
+    final queuedAttachments = pendingAttachments
+        .where(
+          (attachment) =>
+              attachment.status == PendingAttachmentStatus.queued &&
+              !attachment.isPreparing,
+        )
+        .toList();
+    final hasQueuedAttachments = queuedAttachments.isNotEmpty;
     final hasSubject = _subjectController.text.trim().isNotEmpty;
     final canSend = !hasPreparingAttachments &&
         (resolvedText.isNotEmpty || hasQueuedAttachments || hasSubject);
     if (!canSend) return;
+    final confirmed = await _confirmMediaMetadataIfNeeded(queuedAttachments);
+    if (!confirmed || !mounted) return;
     context.read<ChatBloc>().add(
           ChatMessageSent(
             text: resolvedText,
@@ -1861,6 +1870,29 @@ class _ChatState extends State<Chat> {
       });
     }
     _focusNode.requestFocus();
+  }
+
+  Future<bool> _confirmMediaMetadataIfNeeded(
+    List<PendingAttachment> attachments,
+  ) async {
+    if (!mounted) return false;
+    final hasMedia = attachments.any(
+      (attachment) =>
+          attachment.attachment.isImage || attachment.attachment.isVideo,
+    );
+    if (!hasMedia) {
+      return true;
+    }
+    final l10n = context.l10n;
+    final approved = await confirm(
+      context,
+      title: l10n.chatMediaMetadataWarningTitle,
+      message: l10n.chatMediaMetadataWarningMessage,
+      confirmLabel: l10n.commonContinue,
+      cancelLabel: l10n.commonCancel,
+      destructiveConfirm: false,
+    );
+    return approved == true;
   }
 
   Future<void> _handleSendButtonLongPress() async {
@@ -6794,14 +6826,74 @@ class _ChatState extends State<Chat> {
     _toggleQuickReactionForMessages(messages, selected);
   }
 
+  bool _shouldPromptEmailForwarding({
+    required chat_models.Chat target,
+    required List<Message> messages,
+  }) {
+    if (!target.supportsEmail) {
+      return false;
+    }
+    return messages.any((message) => message.deltaMsgId != null);
+  }
+
+  Future<EmailForwardingMode?> _resolveForwardingMode({
+    required chat_models.Chat target,
+    required List<Message> messages,
+  }) async {
+    if (!_shouldPromptEmailForwarding(
+      target: target,
+      messages: messages,
+    )) {
+      return EmailForwardingMode.original;
+    }
+    if (!mounted) return null;
+    return _showEmailForwardDialog();
+  }
+
+  Future<EmailForwardingMode?> _showEmailForwardDialog() async {
+    final l10n = context.l10n;
+    return showShadDialog<EmailForwardingMode>(
+      context: context,
+      builder: (dialogContext) => ShadDialog(
+        title: Text(
+          l10n.chatForwardEmailWarningTitle,
+          style: dialogContext.modalHeaderTextStyle,
+        ),
+        actions: [
+          ShadButton.ghost(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.commonCancel),
+          ).withTapBounce(),
+          ShadButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(EmailForwardingMode.safe),
+            child: Text(l10n.chatForwardEmailOptionSafe),
+          ).withTapBounce(),
+          ShadButton.destructive(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(EmailForwardingMode.original),
+            child: Text(l10n.chatForwardEmailOptionOriginal),
+          ).withTapBounce(),
+        ],
+        child: Text(l10n.chatForwardEmailWarningMessage),
+      ),
+    );
+  }
+
   Future<void> _handleForward(Message message) async {
     _clearAllSelections();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
+    final forwardingMode = await _resolveForwardingMode(
+      target: target,
+      messages: [message],
+    );
+    if (!mounted || forwardingMode == null) return;
     context.read<ChatBloc>().add(
           ChatMessageForwardRequested(
             message: message,
             target: target,
+            forwardingMode: forwardingMode,
           ),
         );
   }
@@ -7061,11 +7153,17 @@ class _ChatState extends State<Chat> {
     final candidates = forwardable.toList();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
+    final forwardingMode = await _resolveForwardingMode(
+      target: target,
+      messages: candidates,
+    );
+    if (!mounted || forwardingMode == null) return;
     for (final message in candidates) {
       context.read<ChatBloc>().add(
             ChatMessageForwardRequested(
               message: message,
               target: target,
+              forwardingMode: forwardingMode,
             ),
           );
     }
@@ -10133,19 +10231,26 @@ class _ChatSettingsButtons extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: _chatSettingsSectionSpacing),
+        _ChatNotificationPreviewControl(
+          setting: chat.notificationPreviewSetting,
+          onChanged: (setting) => context.read<ChatBloc>().add(
+                ChatNotificationPreviewSettingChanged(setting),
+              ),
+        ),
         if (showRosterAttachmentToggle) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: _chatSettingsSectionSpacing),
           _ChatAttachmentAutoDownloadToggle(
             jid: chat.jid,
             displayName: chat.displayName,
           ),
         ],
         if (showChatAttachmentToggle) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: _chatSettingsSectionSpacing),
           _ChatAttachmentTrustToggle(chat: chat),
         ],
         if (chat.supportsEmail) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: _chatSettingsSectionSpacing),
           ShadSwitch(
             label: Text(l10n.chatSignatureToggleLabel),
             sublabel: Text(
@@ -10177,6 +10282,66 @@ class _ChatAttachmentAutoDownloadToggle extends StatefulWidget {
   @override
   State<_ChatAttachmentAutoDownloadToggle> createState() =>
       _ChatAttachmentAutoDownloadToggleState();
+}
+
+class _ChatNotificationPreviewControl extends StatelessWidget {
+  const _ChatNotificationPreviewControl({
+    required this.setting,
+    required this.onChanged,
+  });
+
+  final NotificationPreviewSetting setting;
+  final ValueChanged<NotificationPreviewSetting> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.settingsNotificationPreviews,
+          style: context.textTheme.muted,
+        ),
+        const SizedBox(height: _chatSettingsFieldSpacing),
+        SizedBox(
+          width: _chatSettingsSelectMinWidth,
+          child: ShadSelect<NotificationPreviewSetting>(
+            initialValue: setting,
+            onChanged: (value) {
+              if (value == null) return;
+              onChanged(value);
+            },
+            options: NotificationPreviewSetting.values
+                .map(
+                  (option) => ShadOption<NotificationPreviewSetting>(
+                    value: option,
+                    child: Text(
+                      _notificationPreviewSettingLabel(option, l10n),
+                    ),
+                  ),
+                )
+                .toList(),
+            selectedOptionBuilder: (_, value) => Text(
+              _notificationPreviewSettingLabel(value, l10n),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _notificationPreviewSettingLabel(
+  NotificationPreviewSetting setting,
+  AppLocalizations l10n,
+) {
+  return switch (setting) {
+    NotificationPreviewSetting.inherit =>
+      l10n.chatNotificationPreviewOptionInherit,
+    NotificationPreviewSetting.show => l10n.chatNotificationPreviewOptionShow,
+    NotificationPreviewSetting.hide => l10n.chatNotificationPreviewOptionHide,
+  };
 }
 
 class _ChatAttachmentAutoDownloadToggleState

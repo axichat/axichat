@@ -51,6 +51,7 @@ const mox.AccessModel _pinAccessModelRestricted = mox.AccessModel.whitelist;
 const String _pinPubSubHostPrefix = 'pubsub.';
 const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
 const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
+const Set<String> _emptyPinPublisherSet = <String>{};
 final _pinPendingPublishesKey =
     XmppStateStore.registerKey(_pinPendingPublishesKeyName);
 final _pinPendingRetractionsKey =
@@ -182,7 +183,7 @@ bool _isOversizedMessage(mox.MessageEvent event, Logger log) {
   return false;
 }
 
-String? _normalizePinChatJid(String raw) {
+String? _normalizePinJid(String raw) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return null;
   try {
@@ -191,6 +192,10 @@ String? _normalizePinChatJid(String raw) {
     return trimmed.toLowerCase();
   }
 }
+
+String? _normalizePinChatJid(String raw) => _normalizePinJid(raw);
+
+String? _normalizePinPublisherJid(String raw) => _normalizePinJid(raw);
 
 String _encodePinChatJid(String chatJid) {
   final bytes = utf8.encode(chatJid);
@@ -1196,6 +1201,108 @@ mixin MessageService
     );
   }
 
+  Set<String> _normalizePinPublishers(Iterable<String> publishers) {
+    final normalized = <String>{};
+    for (final publisher in publishers) {
+      final resolved = _normalizePinPublisherJid(publisher);
+      if (resolved != null) {
+        normalized.add(resolved);
+      }
+    }
+    return normalized;
+  }
+
+  Set<String> _pinAuthorizedPublishersFromContext(_PinNodeContext context) {
+    final candidates = <String>[];
+    final selfBare = _selfBareJid();
+    if (selfBare != null && selfBare.isNotEmpty) {
+      candidates.add(selfBare);
+    }
+    final chat = context.chat;
+    if (chat != null &&
+        !chat.isEmailBacked &&
+        chat.type != ChatType.groupChat) {
+      final peerJid = chat.remoteJid.trim();
+      if (peerJid.isNotEmpty) {
+        candidates.add(peerJid);
+      }
+    }
+    final affiliations = context.affiliations;
+    if (affiliations != null && affiliations.isNotEmpty) {
+      candidates.addAll(affiliations.keys);
+    }
+    return _normalizePinPublishers(candidates);
+  }
+
+  void _cachePinAuthorizedPublishers(
+    String chatJid,
+    _PinNodeContext context,
+  ) {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    final publishers = _pinAuthorizedPublishersFromContext(context);
+    if (publishers.isEmpty) {
+      return;
+    }
+    _pinAuthorizedPublishersByChat[normalizedChat] = publishers;
+  }
+
+  Future<Set<String>?> _resolvePinAuthorizedPublishers(String chatJid) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return null;
+    }
+    final cached = _pinAuthorizedPublishersByChat[normalizedChat];
+    if (cached != null) {
+      return cached;
+    }
+    final context = await _resolvePinNodeContext(normalizedChat);
+    _cachePinAuthorizedPublishers(normalizedChat, context);
+    return _pinAuthorizedPublishersByChat[normalizedChat];
+  }
+
+  bool _isPinPublisherAllowed({
+    required Set<String>? allowedPublishers,
+    required Set<String> pendingPublishes,
+    required String messageStanzaId,
+    required String? publisher,
+  }) {
+    if (pendingPublishes.contains(messageStanzaId)) {
+      return true;
+    }
+    final rawPublisher = publisher?.trim();
+    if (rawPublisher == null || rawPublisher.isEmpty) {
+      return false;
+    }
+    final normalizedPublisher = _normalizePinPublisherJid(rawPublisher);
+    if (normalizedPublisher == null) {
+      return false;
+    }
+    if (allowedPublishers == null || allowedPublishers.isEmpty) {
+      return false;
+    }
+    return allowedPublishers.contains(normalizedPublisher);
+  }
+
+  Future<bool> _isPinPublisherAuthorized({
+    required String chatJid,
+    required String messageStanzaId,
+    required String? publisher,
+  }) async {
+    await _ensurePendingPinSyncLoaded();
+    final pendingPublishes =
+        _pendingPinPublishesByChat[chatJid] ?? _emptyPinPublisherSet;
+    final allowedPublishers = await _resolvePinAuthorizedPublishers(chatJid);
+    return _isPinPublisherAllowed(
+      allowedPublishers: allowedPublishers,
+      pendingPublishes: pendingPublishes,
+      messageStanzaId: messageStanzaId,
+      publisher: publisher,
+    );
+  }
+
   Future<void> pinMessage({
     required String chatJid,
     required Message message,
@@ -1253,6 +1360,7 @@ mixin MessageService
       return;
     }
     final context = await _resolvePinNodeContext(normalizedChat);
+    _cachePinAuthorizedPublishers(normalizedChat, context);
     _pinSyncInFlight.add(normalizedChat);
     try {
       await database;
@@ -1377,8 +1485,10 @@ mixin MessageService
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
   Directory? _attachmentDirectory;
   bool _pendingPinSyncLoaded = false;
+  final Map<String, Set<String>> _pinAuthorizedPublishersByChat = {};
   final Map<String, Set<String>> _pendingPinPublishesByChat = {};
   final Map<String, Set<String>> _pendingPinRetractionsByChat = {};
+  final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
   final Set<String> _pinSyncInFlight = {};
   bool _emailPinSnapshotInFlight = false;
   mox.JID? _pinPubSubHost;
@@ -3135,6 +3245,20 @@ mixin MessageService
     );
   }
 
+  Future<List<String>> persistDraftAttachmentMetadata(
+    Iterable<EmailAttachment> attachments,
+  ) async {
+    if (attachments.isEmpty) {
+      return const <String>[];
+    }
+    final List<String> metadataIds = <String>[];
+    for (final attachment in attachments) {
+      final metadataId = await _persistDraftAttachmentMetadata(attachment);
+      metadataIds.add(metadataId);
+    }
+    return List.unmodifiable(metadataIds);
+  }
+
   Future<DraftSaveResult> saveDraft({
     int? id,
     required List<String> jids,
@@ -3270,6 +3394,16 @@ mixin MessageService
     if (syncId.trim().isNotEmpty) {
       unawaited(retractDraftSync(syncId));
     }
+  }
+
+  Future<void> deleteFileMetadata(String id) async {
+    final String trimmed = id.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.deleteFileMetadata(trimmed),
+    );
   }
 
   Future<void> _handleMessageSendFailure(String stanzaID) async {
@@ -3756,10 +3890,17 @@ mixin MessageService
     final correction = event.extensions.get<mox.LastMessageCorrectionData>();
     if (correction == null) return false;
 
+    final mox.OccupantIdData? occupantData =
+        event.extensions.get<mox.OccupantIdData>();
+    final String? occupantId = occupantData?.id;
     return await _dbOpReturning<XmppDatabase, bool>(
       (db) async {
         if (await db.getMessageByOriginID(correction.id) case final message?) {
-          if (!message.authorized(event.from) || !message.editable) {
+          if (!message.authorizedForMutation(
+                from: event.from,
+                occupantId: occupantId,
+              ) ||
+              !message.editable) {
             return false;
           }
           await db.saveMessageEdit(
@@ -3777,10 +3918,18 @@ mixin MessageService
     final retraction = event.extensions.get<mox.MessageRetractionData>();
     if (retraction == null) return false;
 
+    final mox.OccupantIdData? occupantData =
+        event.extensions.get<mox.OccupantIdData>();
+    final String? occupantId = occupantData?.id;
     return await _dbOpReturning<XmppDatabase, bool>(
       (db) async {
         if (await db.getMessageByOriginID(retraction.id) case final message?) {
-          if (!message.authorized(event.from)) return false;
+          if (!message.authorizedForMutation(
+            from: event.from,
+            occupantId: occupantId,
+          )) {
+            return false;
+          }
           await db.markMessageRetracted(message.stanzaID);
           return true;
         }
@@ -3801,9 +3950,13 @@ mixin MessageService
           );
           return !event.displayable;
         }
+        final bool isGroupChat = event.type == _messageTypeGroupchat;
+        final String senderJid = isGroupChat
+            ? event.from.toString()
+            : event.from.toBare().toString();
         await db.replaceReactions(
           messageId: message.stanzaID,
-          senderJid: event.from.toBare().toString(),
+          senderJid: senderJid,
           emojis: reactions.emojis,
         );
         return !event.displayable;
@@ -5297,12 +5450,23 @@ mixin MessageService
     }
   }
 
+  bool _shouldProcessPinSyncEvent(String chatJid) {
+    if (_pinSyncRateLimiter.allowEvent()) {
+      return true;
+    }
+    if (_pinSyncRateLimiter.shouldRefreshNow()) {
+      unawaited(syncPinnedMessagesForChat(chatJid));
+    }
+    return false;
+  }
+
   Future<void> _handlePinNotification(
     mox.PubSubNotificationEvent event,
   ) async {
     final nodeId = event.item.node;
     final chatJid = _chatJidFromPinNode(nodeId);
     if (chatJid == null) return;
+    if (!_shouldProcessPinSyncEvent(chatJid)) return;
     await _ensurePendingPinSyncLoaded();
     final itemId = event.item.id.trim();
     if (itemId.isNotEmpty &&
@@ -5327,6 +5491,18 @@ mixin MessageService
         true) {
       return;
     }
+    final publisher = event.item.publisher;
+    final canApply = await _isPinPublisherAuthorized(
+      chatJid: chatJid,
+      messageStanzaId: parsed.messageStanzaId,
+      publisher: publisher,
+    );
+    if (!canApply) {
+      if (publisher == null || publisher.trim().isEmpty) {
+        unawaited(syncPinnedMessagesForChat(chatJid));
+      }
+      return;
+    }
     await _applyPinSyncUpdate(parsed);
   }
 
@@ -5336,6 +5512,7 @@ mixin MessageService
     final chatJid = _chatJidFromPinNode(event.node);
     if (chatJid == null) return;
     if (event.itemIds.isEmpty) return;
+    if (!_shouldProcessPinSyncEvent(chatJid)) return;
     await _ensurePendingPinSyncLoaded();
     var pendingChanged = false;
     for (final itemId in event.itemIds) {
@@ -5566,6 +5743,10 @@ mixin MessageService
     if (result.isType<mox.PubSubError>()) {
       return null;
     }
+    await _ensurePendingPinSyncLoaded();
+    final allowedPublishers = await _resolvePinAuthorizedPublishers(chatJid);
+    final pendingPublishes =
+        _pendingPinPublishesByChat[chatJid] ?? _emptyPinPublisherSet;
     final items = result.get<List<mox.PubSubItem>>();
     final parsed = <_PinnedMessageSyncPayload>[];
     for (final item in items) {
@@ -5576,7 +5757,13 @@ mixin MessageService
         chatJid: chatJid,
         itemId: item.id,
       );
-      if (entry != null) {
+      if (entry != null &&
+          _isPinPublisherAllowed(
+            allowedPublishers: allowedPublishers,
+            pendingPublishes: pendingPublishes,
+            messageStanzaId: entry.messageStanzaId,
+            publisher: item.publisher,
+          )) {
         parsed.add(entry);
       }
     }

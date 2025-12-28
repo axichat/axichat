@@ -9,6 +9,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const double _unregisterErrorPaddingValue = 10.0;
+const double _unregisterFieldPaddingValue = 8.0;
+const double _unregisterSpacerHeight = 40.0;
+const double _unregisterButtonGap = 16.0;
+const EdgeInsets _unregisterErrorPadding =
+    EdgeInsets.all(_unregisterErrorPaddingValue);
+const EdgeInsets _unregisterFieldPadding =
+    EdgeInsets.all(_unregisterFieldPaddingValue);
+
 class UnregisterForm extends StatefulWidget {
   const UnregisterForm({super.key});
 
@@ -34,12 +43,26 @@ class _UnregisterFormState extends State<UnregisterForm> {
   }
 
   void _onPressed(BuildContext context) async {
-    if (!Form.of(context).mounted || !Form.of(context).validate()) return;
-    await context.read<AuthenticationCubit>().unregister(
-          username: context.read<ProfileCubit>().state.username,
-          host: context.read<AuthenticationCubit>().endpointConfig.domain,
-          password: _passwordTextController.value.text,
-        );
+    final form = Form.of(context);
+    if (!form.validate()) return;
+    final l10n = context.l10n;
+    final authCubit = context.read<AuthenticationCubit>();
+    final profileState = context.read<ProfileCubit>().state;
+    final endpointDomain = authCubit.endpointConfig.domain;
+    final approved = await confirm(
+      context,
+      title: l10n.authUnregisterConfirmTitle,
+      message: l10n.authUnregisterConfirmMessage,
+      confirmLabel: l10n.authUnregisterConfirmAction,
+      cancelLabel: l10n.commonCancel,
+      destructiveConfirm: true,
+    );
+    if (!mounted || approved != true) return;
+    await authCubit.unregister(
+      username: profileState.username,
+      host: endpointDomain,
+      password: _passwordTextController.value.text,
+    );
     _passwordTextController.clear();
   }
 
@@ -59,7 +82,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
               ),
               state is AuthenticationUnregisterFailure
                   ? Padding(
-                      padding: const EdgeInsets.all(10.0),
+                      padding: _unregisterErrorPadding,
                       child: Text(
                         state.errorText,
                         textAlign: TextAlign.center,
@@ -68,16 +91,16 @@ class _UnregisterFormState extends State<UnregisterForm> {
                         ),
                       ),
                     )
-                  : const SizedBox(height: 40),
+                  : const SizedBox(height: _unregisterSpacerHeight),
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: _unregisterFieldPadding,
                 child: PasswordInput(
                   placeholder: l10n.authPasswordPlaceholder,
                   enabled: !loading,
                   controller: _passwordTextController,
                 ),
               ),
-              const SizedBox.square(dimension: 16.0),
+              const SizedBox.square(dimension: _unregisterButtonGap),
               Builder(
                 builder: (context) {
                   return ShadButton.destructive(
