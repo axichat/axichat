@@ -5,71 +5,66 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'typing_text_input.dart';
 
 const double _transparentCursorAlpha = 0.0;
+const int _axiTextInputDefaultMaxLines = 1;
 const String _emptyTextValue = '';
 
-class AxiTextFormField extends StatefulWidget {
-  const AxiTextFormField({
+class AxiTextInput extends StatefulWidget {
+  const AxiTextInput({
     super.key,
     this.controller,
     this.focusNode,
-    this.placeholder,
-    this.keyboardType,
-    this.enabled,
-    this.obscureText,
-    this.validator,
-    this.onChanged,
-    this.onSubmitted,
     this.initialValue,
-    this.description,
-    this.inputFormatters,
-    this.trailing,
-    this.expands,
-    this.minLines,
-    this.maxLines,
-    this.autocorrect,
+    this.placeholder,
+    this.enabled = true,
+    this.readOnly = false,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
+    this.keyboardType,
     this.textInputAction,
-    this.autofocus,
+    this.textCapitalization = TextCapitalization.none,
+    this.autofocus = false,
+    this.obscureText = false,
+    this.minLines,
+    this.maxLines = _axiTextInputDefaultMaxLines,
+    this.expands = false,
+    this.onChanged,
+    this.onEditingComplete,
+    this.onSubmitted,
+    this.inputFormatters,
+    this.decoration,
     this.style,
-    this.placeholderStyle,
-    this.placeholderAlignment,
-    this.inputPadding,
-    this.crossAxisAlignment,
-    this.constraints,
-    this.padding,
+    this.strutStyle,
   });
 
   final TextEditingController? controller;
   final FocusNode? focusNode;
-  final Widget? placeholder;
-  final TextInputType? keyboardType;
-  final bool? enabled;
-  final bool? obscureText;
-  final String? Function(String)? validator;
-  final ValueChanged<String>? onChanged;
-  final ValueChanged<String>? onSubmitted;
   final String? initialValue;
-  final Widget? description;
-  final List<TextInputFormatter>? inputFormatters;
-  final Widget? trailing;
-  final bool? expands;
-  final int? minLines;
-  final int? maxLines;
-  final bool? autocorrect;
+  final Widget? placeholder;
+  final bool enabled;
+  final bool readOnly;
+  final bool autocorrect;
+  final bool enableSuggestions;
+  final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
-  final bool? autofocus;
+  final TextCapitalization textCapitalization;
+  final bool autofocus;
+  final bool obscureText;
+  final int? minLines;
+  final int maxLines;
+  final bool expands;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onEditingComplete;
+  final ValueChanged<String>? onSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
+  final ShadDecoration? decoration;
   final TextStyle? style;
-  final TextStyle? placeholderStyle;
-  final Alignment? placeholderAlignment;
-  final EdgeInsets? inputPadding;
-  final CrossAxisAlignment? crossAxisAlignment;
-  final BoxConstraints? constraints;
-  final EdgeInsets? padding;
+  final StrutStyle? strutStyle;
 
   @override
-  State<AxiTextFormField> createState() => _AxiTextFormFieldState();
+  State<AxiTextInput> createState() => _AxiTextInputState();
 }
 
-class _AxiTextFormFieldState extends State<AxiTextFormField> {
+class _AxiTextInputState extends State<AxiTextInput> {
   late final TypingTextEditingController _typingController =
       TypingTextEditingController(
     source: widget.controller,
@@ -77,7 +72,7 @@ class _AxiTextFormFieldState extends State<AxiTextFormField> {
   );
 
   @override
-  void didUpdateWidget(covariant AxiTextFormField oldWidget) {
+  void didUpdateWidget(covariant AxiTextInput oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller ||
         oldWidget.initialValue != widget.initialValue) {
@@ -102,33 +97,29 @@ class _AxiTextFormFieldState extends State<AxiTextFormField> {
             );
     return TypingTextAnimator(
       controller: _typingController,
-      child: ShadInputFormField(
+      child: ShadInput(
         controller: _typingController,
         focusNode: widget.focusNode,
+        enabled: widget.enabled,
+        readOnly: widget.readOnly,
         placeholder: widget.placeholder,
+        autocorrect: widget.autocorrect,
+        enableSuggestions: widget.enableSuggestions,
         keyboardType: widget.keyboardType,
-        enabled: widget.enabled ?? true,
-        obscureText: widget.obscureText ?? false,
-        validator: widget.validator,
-        onChanged: widget.onChanged,
-        onSubmitted: widget.onSubmitted,
-        initialValue: widget.initialValue,
-        description: widget.description,
-        inputFormatters: widget.inputFormatters,
-        trailing: widget.trailing,
-        expands: widget.expands ?? false,
+        textInputAction: widget.textInputAction,
+        textCapitalization: widget.textCapitalization,
+        autofocus: widget.autofocus,
+        obscureText: widget.obscureText,
         minLines: widget.minLines,
         maxLines: widget.maxLines,
-        autocorrect: widget.autocorrect ?? true,
-        textInputAction: widget.textInputAction,
-        autofocus: widget.autofocus ?? false,
+        expands: widget.expands,
+        onChanged: widget.onChanged,
+        onEditingComplete: widget.onEditingComplete,
+        onSubmitted: widget.onSubmitted,
+        inputFormatters: widget.inputFormatters,
+        decoration: widget.decoration,
         style: widget.style,
-        placeholderStyle: widget.placeholderStyle,
-        placeholderAlignment: widget.placeholderAlignment,
-        inputPadding: widget.inputPadding,
-        crossAxisAlignment: widget.crossAxisAlignment,
-        constraints: widget.constraints,
-        padding: widget.padding,
+        strutStyle: widget.strutStyle,
         cursorColor: transparentCursor,
       ),
     );

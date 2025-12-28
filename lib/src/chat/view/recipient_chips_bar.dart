@@ -5,8 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
-import 'package:axichat/src/common/ui/axi_avatar.dart';
-import 'package:axichat/src/common/ui/string_to_color.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -1631,10 +1630,9 @@ final class _RecipientAutocompleteOverlayState
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),
-                      child: TextField(
+                      child: AxiTextField(
                         controller: widget.controller,
                         focusNode: widget.focusNode,
-                        cursorColor: materialColors.primary,
                         maxLines: 1,
                         keyboardType: TextInputType.emailAddress,
                         textCapitalization: TextCapitalization.none,

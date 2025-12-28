@@ -311,7 +311,7 @@ class _ChecklistItemRow extends StatelessWidget {
           ),
           const SizedBox(width: calendarInsetSm),
           Expanded(
-            child: TextField(
+            child: AxiTextField(
               controller: controller,
               onChanged: onLabelChanged,
               style: textTheme.p,
@@ -396,7 +396,7 @@ class _ChecklistAddField extends StatelessWidget {
         ),
         const SizedBox(width: calendarInsetSm),
         Expanded(
-          child: TextField(
+          child: AxiTextField(
             controller: controller,
             focusNode: focusNode,
             onSubmitted: (_) => onSubmitted(),

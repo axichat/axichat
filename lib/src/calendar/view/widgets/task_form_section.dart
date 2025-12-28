@@ -10,6 +10,8 @@ import 'recurrence_editor.dart';
 import 'schedule_range_fields.dart';
 import 'task_text_field.dart';
 
+const double _transparentCursorAlpha = 0.0;
+
 /// Standard section title used across the calendar task forms. Keeps typography
 /// and spacing consistent while allowing trailing actions or custom padding.
 class TaskSectionHeader extends StatelessWidget {
@@ -172,7 +174,7 @@ class TaskCompletionToggle extends StatelessWidget {
 /// Styled [TextFormField] counterpart to [TaskTextField] for use inside forms
 /// that require validation. Mirrors the calendar styling so validators can be
 /// added without reimplementing decoration logic everywhere.
-class TaskTextFormField extends StatelessWidget {
+class TaskTextFormField extends StatefulWidget {
   const TaskTextFormField({
     super.key,
     required this.controller,
@@ -229,65 +231,95 @@ class TaskTextFormField extends StatelessWidget {
   final TextStyle? errorStyle;
 
   @override
-  Widget build(BuildContext context) {
-    final double radius = borderRadius ?? 8;
-    final Color focusedColor = focusBorderColor ?? calendarPrimaryColor;
-    final Color effectiveFill = fillColor ?? calendarContainerColor;
+  State<TaskTextFormField> createState() => _TaskTextFormFieldState();
+}
 
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      minLines: minLines,
-      maxLines: maxLines,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      textCapitalization: textCapitalization,
-      textInputAction: textInputAction,
-      autofocus: autofocus,
-      autovalidateMode: autovalidateMode,
-      onChanged: onChanged,
-      onFieldSubmitted: onFieldSubmitted,
-      onSaved: onSaved,
-      validator: validator,
-      style: textStyle ??
-          TextStyle(
-            color: calendarTitleColor,
-            fontSize: 14,
+class _TaskTextFormFieldState extends State<TaskTextFormField> {
+  late final TypingTextEditingController _typingController =
+      TypingTextEditingController(source: widget.controller);
+
+  @override
+  void didUpdateWidget(covariant TaskTextFormField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      _typingController.updateSource(widget.controller, null);
+    }
+  }
+
+  @override
+  void dispose() {
+    _typingController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double radius = widget.borderRadius ?? 8;
+    final Color focusedColor = widget.focusBorderColor ?? calendarPrimaryColor;
+    final Color effectiveFill = widget.fillColor ?? calendarContainerColor;
+    final Color transparentCursor =
+        ShadTheme.of(context).colorScheme.foreground.withValues(
+              alpha: _transparentCursorAlpha,
+            );
+
+    return TypingTextAnimator(
+      controller: _typingController,
+      child: TextFormField(
+        controller: _typingController,
+        focusNode: widget.focusNode,
+        minLines: widget.minLines,
+        maxLines: widget.maxLines,
+        enabled: widget.enabled,
+        keyboardType: widget.keyboardType,
+        textCapitalization: widget.textCapitalization,
+        textInputAction: widget.textInputAction,
+        autofocus: widget.autofocus,
+        autovalidateMode: widget.autovalidateMode,
+        onChanged: widget.onChanged,
+        onFieldSubmitted: widget.onFieldSubmitted,
+        onSaved: widget.onSaved,
+        validator: widget.validator,
+        style: widget.textStyle ??
+            TextStyle(
+              color: calendarTitleColor,
+              fontSize: 14,
+            ),
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          labelStyle: widget.labelStyle ??
+              TextStyle(
+                color: calendarSubtitleColor,
+                fontSize: 14,
+              ),
+          hintText: widget.hintText,
+          hintStyle: widget.hintStyle ??
+              TextStyle(
+                color: calendarTimeLabelColor,
+                fontSize: 14,
+              ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(radius),
+            borderSide: BorderSide(color: calendarBorderColor),
           ),
-      decoration: InputDecoration(
-        labelText: labelText,
-        labelStyle: labelStyle ??
-            TextStyle(
-              color: calendarSubtitleColor,
-              fontSize: 14,
-            ),
-        hintText: hintText,
-        hintStyle: hintStyle ??
-            TextStyle(
-              color: calendarTimeLabelColor,
-              fontSize: 14,
-            ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: calendarBorderColor),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(radius),
+            borderSide: BorderSide(color: calendarBorderColor),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(radius),
+            borderSide: BorderSide(color: focusedColor, width: 2),
+          ),
+          contentPadding: widget.contentPadding ??
+              const EdgeInsets.symmetric(
+                horizontal: calendarGutterMd,
+                vertical: calendarGutterMd,
+              ),
+          filled: true,
+          fillColor: effectiveFill,
+          errorText: widget.errorText,
+          errorStyle: widget.errorStyle,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: calendarBorderColor),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: focusedColor, width: 2),
-        ),
-        contentPadding: contentPadding ??
-            const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterMd,
-            ),
-        filled: true,
-        fillColor: effectiveFill,
-        errorText: errorText,
-        errorStyle: errorStyle,
+        cursorColor: transparentCursor,
       ),
     );
   }

@@ -1850,7 +1850,7 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
             padding: const EdgeInsets.all(2),
             child: Shortcuts(
               shortcuts: navigationShortcuts,
-              child: ShadInput(
+              child: AxiTextInput(
                 controller: _controller,
                 focusNode: _focusNode,
                 enabled: widget.enabled,

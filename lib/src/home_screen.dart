@@ -1518,7 +1518,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                 Row(
                   children: [
                     Expanded(
-                      child: ShadInput(
+                      child: AxiTextInput(
                         controller: _controller,
                         focusNode: _focusNode,
                         placeholder: Text(placeholder),
