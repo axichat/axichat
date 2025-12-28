@@ -3042,5 +3042,31 @@ class AppLocalizationsFr extends AppLocalizations {
       'Peut révéler votre adresse IP aux expéditeurs';
 
   @override
+  String get settingsAutoDownloadImages => 'Auto-download images';
+
+  @override
+  String get settingsAutoDownloadImagesDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadVideos => 'Auto-download videos';
+
+  @override
+  String get settingsAutoDownloadVideosDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+
+  @override
+  String get settingsAutoDownloadDocumentsDescription =>
+      'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadArchives => 'Auto-download archives';
+
+  @override
+  String get settingsAutoDownloadArchivesDescription =>
+      'Only for trusted chats.';
+
+  @override
   String get chatChooseTextToAdd => 'Choisir le texte à ajouter';
 }

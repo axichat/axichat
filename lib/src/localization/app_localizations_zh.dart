@@ -2925,6 +2925,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAutoLoadEmailImagesDescription => '可能会向发件人泄露您的IP地址';
 
   @override
+  String get settingsAutoDownloadImages => 'Auto-download images';
+
+  @override
+  String get settingsAutoDownloadImagesDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadVideos => 'Auto-download videos';
+
+  @override
+  String get settingsAutoDownloadVideosDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+
+  @override
+  String get settingsAutoDownloadDocumentsDescription =>
+      'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadArchives => 'Auto-download archives';
+
+  @override
+  String get settingsAutoDownloadArchivesDescription =>
+      'Only for trusted chats.';
+
+  @override
   String get chatChooseTextToAdd => '选择要添加的文本';
 }
 
@@ -5847,6 +5873,32 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsAutoLoadEmailImagesDescription => '可能會向寄件人洩露您的IP地址';
+
+  @override
+  String get settingsAutoDownloadImages => 'Auto-download images';
+
+  @override
+  String get settingsAutoDownloadImagesDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadVideos => 'Auto-download videos';
+
+  @override
+  String get settingsAutoDownloadVideosDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+
+  @override
+  String get settingsAutoDownloadDocumentsDescription =>
+      'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadArchives => 'Auto-download archives';
+
+  @override
+  String get settingsAutoDownloadArchivesDescription =>
+      'Only for trusted chats.';
 
   @override
   String get chatChooseTextToAdd => '選擇要新增的文字';

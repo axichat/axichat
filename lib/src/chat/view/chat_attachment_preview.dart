@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/media_decode_safety.dart';
@@ -102,6 +103,7 @@ const String _attachmentWindowsZoneIdentifierContent =
     '$_attachmentWindowsZoneEntrySeparator'
     '$_attachmentWindowsZoneIdEntry'
     '$_attachmentWindowsZoneEntrySeparator';
+const String _mediaDecodeGuardKeyPrefix = 'attachment:';
 const String _attachmentTooLargeMessageDefault =
     'Attachment exceeds the server limit.';
 const String _attachmentTooLargeMessagePrefix =
@@ -123,7 +125,8 @@ class ChatAttachmentPreview extends StatelessWidget {
     required this.metadataStream,
     this.initialMetadata,
     required this.allowed,
-    this.autoDownload = false,
+    required this.autoDownloadSettings,
+    required this.autoDownloadAllowed,
     this.autoDownloadUserInitiated = false,
     this.downloadDelegate,
     this.onAllowPressed,
@@ -133,10 +136,21 @@ class ChatAttachmentPreview extends StatelessWidget {
   final Stream<FileMetadataData?> metadataStream;
   final FileMetadataData? initialMetadata;
   final bool allowed;
-  final bool autoDownload;
+  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final bool autoDownloadAllowed;
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
   final VoidCallback? onAllowPressed;
+
+  bool _shouldAutoDownload(FileMetadataData metadata) {
+    if (autoDownloadUserInitiated) {
+      return true;
+    }
+    if (!autoDownloadAllowed) {
+      return false;
+    }
+    return autoDownloadSettings.allowsMetadata(metadata);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +183,7 @@ class ChatAttachmentPreview extends StatelessWidget {
             );
           }
 
+          final shouldAutoDownload = _shouldAutoDownload(metadata);
           final path = metadata.path?.trim();
           final localFile = path == null || path.isEmpty ? null : File(path);
           final hasLocalFile = localFile?.existsSync() ?? false;
@@ -192,36 +207,36 @@ class ChatAttachmentPreview extends StatelessWidget {
                 }
                 final report = typeSnapshot.data;
                 if (report?.isDetectedImage ?? false) {
-                  return _ImageAttachment(
+                    return _ImageAttachment(
+                      metadata: metadata,
+                      stanzaId: stanzaId,
+                      autoDownload: shouldAutoDownload,
+                      autoDownloadUserInitiated: autoDownloadUserInitiated,
+                      downloadDelegate: downloadDelegate,
+                      typeReport: report,
+                    );
+                  }
+                  if (report?.isDetectedVideo ?? false) {
+                    return _VideoAttachment(
+                      metadata: metadata,
+                      stanzaId: stanzaId,
+                      autoDownload: shouldAutoDownload,
+                      autoDownloadUserInitiated: autoDownloadUserInitiated,
+                      downloadDelegate: downloadDelegate,
+                      typeReport: report,
+                    );
+                  }
+                  return _FileAttachment(
                     metadata: metadata,
                     stanzaId: stanzaId,
-                    autoDownload: autoDownload,
+                    autoDownload: shouldAutoDownload,
                     autoDownloadUserInitiated: autoDownloadUserInitiated,
                     downloadDelegate: downloadDelegate,
                     typeReport: report,
                   );
-                }
-                if (report?.isDetectedVideo ?? false) {
-                  return _VideoAttachment(
-                    metadata: metadata,
-                    stanzaId: stanzaId,
-                    autoDownload: autoDownload,
-                    autoDownloadUserInitiated: autoDownloadUserInitiated,
-                    downloadDelegate: downloadDelegate,
-                    typeReport: report,
-                  );
-                }
-                return _FileAttachment(
-                  metadata: metadata,
-                  stanzaId: stanzaId,
-                  autoDownload: autoDownload,
-                  autoDownloadUserInitiated: autoDownloadUserInitiated,
-                  downloadDelegate: downloadDelegate,
-                  typeReport: report,
-                );
-              },
-            );
-          }
+                },
+              );
+            }
           if (!allowed) {
             return _BlockedAttachment(
               metadata: metadata,
@@ -232,7 +247,7 @@ class ChatAttachmentPreview extends StatelessWidget {
             return _ImageAttachment(
               metadata: metadata,
               stanzaId: stanzaId,
-              autoDownload: autoDownload,
+              autoDownload: shouldAutoDownload,
               autoDownloadUserInitiated: autoDownloadUserInitiated,
               downloadDelegate: downloadDelegate,
             );
@@ -241,7 +256,7 @@ class ChatAttachmentPreview extends StatelessWidget {
             return _VideoAttachment(
               metadata: metadata,
               stanzaId: stanzaId,
-              autoDownload: autoDownload,
+              autoDownload: shouldAutoDownload,
               autoDownloadUserInitiated: autoDownloadUserInitiated,
               downloadDelegate: downloadDelegate,
             );
@@ -249,7 +264,7 @@ class ChatAttachmentPreview extends StatelessWidget {
           return _FileAttachment(
             metadata: metadata,
             stanzaId: stanzaId,
-            autoDownload: autoDownload,
+            autoDownload: shouldAutoDownload,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: downloadDelegate,
           );
@@ -396,7 +411,10 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
       );
     }
     final previewFile = localFile!;
-    final previewAllowedFuture = _resolvePreviewAllowed(previewFile);
+    final previewAllowedFuture = _resolvePreviewAllowed(
+      previewFile,
+      metadataId: metadata.id,
+    );
     return FutureBuilder<bool>(
       future: previewAllowedFuture,
       builder: (context, snapshot) {
@@ -467,14 +485,20 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     );
   }
 
-  Future<bool> _resolvePreviewAllowed(File file) {
+  Future<bool> _resolvePreviewAllowed(
+    File file, {
+    required String metadataId,
+  }) {
     final path = file.path;
     final cachedFuture = _previewAllowed;
     if (cachedFuture != null && _previewPath == path) {
       return cachedFuture;
     }
     _previewPath = path;
-    final nextFuture = _isImagePreviewAllowed(file);
+    final nextFuture = _isImagePreviewAllowed(
+      file,
+      metadataId: metadataId,
+    );
     _previewAllowed = nextFuture;
     return nextFuture;
   }
@@ -818,6 +842,11 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
 
   void _initializeVideoIfAvailable() {
     _initFailed = false;
+    final guardKey = _mediaDecodeGuardKey(widget.metadata.id);
+    if (!MediaDecodeGuard.instance.allowAttempt(guardKey)) {
+      _markVideoInitFailed();
+      return;
+    }
     final path = widget.metadata.path?.trim();
     if (path == null || path.isEmpty) return;
     final file = File(path);
@@ -842,13 +871,16 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       final size = controller.value.size;
       if (!_isVideoFrameAllowed(size)) {
         _disposeVideoController(controller);
+        MediaDecodeGuard.instance.registerFailure(guardKey);
         _markVideoInitFailed();
         return;
       }
+      MediaDecodeGuard.instance.registerSuccess(guardKey);
       setState(() {});
     }).catchError((_) {
       if (!mounted) return;
       _disposeVideoController(controller);
+      MediaDecodeGuard.instance.registerFailure(guardKey);
       _markVideoInitFailed();
     });
   }
@@ -1094,8 +1126,24 @@ Size _fitWithinBounds({
   return Size(width, height);
 }
 
-Future<bool> _isImagePreviewAllowed(File file) async {
-  return isSafeImageFile(file, _attachmentImageDecodeLimits);
+String _mediaDecodeGuardKey(String metadataId) =>
+    '$_mediaDecodeGuardKeyPrefix$metadataId';
+
+Future<bool> _isImagePreviewAllowed(
+  File file, {
+  required String metadataId,
+}) async {
+  final guardKey = _mediaDecodeGuardKey(metadataId);
+  if (!MediaDecodeGuard.instance.allowAttempt(guardKey)) {
+    return false;
+  }
+  final allowed = await isSafeImageFile(file, _attachmentImageDecodeLimits);
+  if (!allowed) {
+    MediaDecodeGuard.instance.registerFailure(guardKey);
+    return false;
+  }
+  MediaDecodeGuard.instance.registerSuccess(guardKey);
+  return true;
 }
 
 class _FileAttachment extends StatefulWidget {

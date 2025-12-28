@@ -26,6 +26,9 @@ const String _bundlePayloadPathKey = 'path';
 const String _bundlePayloadFilesKey = 'files';
 const String _bundleFilePathKey = 'file_path';
 const String _bundleFileNameKey = 'file_name';
+const String _bundleSymlinkErrorMessage = 'Attachment cannot be a symlink.';
+const String _bundleEntityTypeErrorMessage =
+    'Attachment must be a regular file.';
 
 final class EmailAttachmentBundler {
   const EmailAttachmentBundler();
@@ -57,6 +60,22 @@ final class EmailAttachmentBundler {
     var index = _bundleFileIndexStart;
     final files = <Map<String, String>>[];
     for (final attachment in attachmentList) {
+      final entityType = FileSystemEntity.typeSync(
+        attachment.path,
+        followLinks: false,
+      );
+      if (entityType == FileSystemEntityType.link) {
+        throw FileSystemException(
+          _bundleSymlinkErrorMessage,
+          attachment.path,
+        );
+      }
+      if (entityType != FileSystemEntityType.file) {
+        throw FileSystemException(
+          _bundleEntityTypeErrorMessage,
+          attachment.path,
+        );
+      }
       final file = File(attachment.path);
       if (!await file.exists()) {
         throw FileSystemException('Attachment missing', attachment.path);
