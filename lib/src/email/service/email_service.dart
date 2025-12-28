@@ -2697,6 +2697,7 @@ class EmailService {
       );
     }
     await _ensureReady();
+    final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();
     final resolvedBody = trimmedBody.isNotEmpty
@@ -2710,7 +2711,7 @@ class EmailService {
         chatId: chatId,
         body: resolvedBody,
         quotedMessageId: quotedMsgId,
-        subject: subject,
+        subject: normalizedSubject,
         htmlBody: normalizedHtml,
       ),
     );
