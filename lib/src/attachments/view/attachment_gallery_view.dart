@@ -735,7 +735,7 @@ class AttachmentGallerySearchRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: ShadInput(
+          child: AxiTextInput(
             controller: searchController,
             placeholder: Text(l10n.commonSearch),
           ),

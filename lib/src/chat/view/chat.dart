@@ -398,7 +398,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                 Row(
                   children: [
                     Expanded(
-                      child: ShadInput(
+                      child: AxiTextInput(
                         controller: _controller,
                         focusNode: _focusNode,
                         placeholder: Text(l10n.chatSearchMessages),
@@ -9201,12 +9201,11 @@ class _SubjectTextField extends StatelessWidget {
       child: Semantics(
         label: l10n.chatSubjectSemantics,
         textField: true,
-        child: TextField(
+        child: AxiTextField(
           controller: controller,
           focusNode: focusNode,
           textInputAction: TextInputAction.next,
           textCapitalization: TextCapitalization.sentences,
-          cursorColor: colors.primary,
           onSubmitted: (_) => onSubmitted(),
           onEditingComplete: onSubmitted,
           style: subjectStyle,
@@ -10075,7 +10074,7 @@ class _CalendarTextSelectionDialogState
                         ),
                       ),
                       const SizedBox(height: 12),
-                      ShadInput(
+                      AxiTextInput(
                         controller: _controller,
                         focusNode: _focusNode,
                         minLines: 4,
