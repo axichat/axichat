@@ -47,6 +47,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
@@ -73,6 +74,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/xmpp/jid_extensions.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -148,6 +150,14 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
 const _chatHeaderActionSpacing = 4.0;
+const double _chatHeaderIdentityIconSize = 14.0;
+const double _chatHeaderIdentityCopyIconSize = 16.0;
+const double _chatHeaderIdentitySpacing = 6.0;
+const String _chatHeaderDisplayNameBadgeLabel = 'Display name';
+const double _unknownSenderCardPadding = 12.0;
+const double _unknownSenderIconSize = 18.0;
+const double _unknownSenderTextSpacing = 8.0;
+const double _unknownSenderActionSpacing = 8.0;
 const _chatSettingsSectionSpacing = 12.0;
 const _chatSettingsFieldSpacing = 8.0;
 const _chatSettingsSelectMinWidth = 220.0;
@@ -1583,6 +1593,63 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  Future<void> _handleAddContact() async {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) return;
+    final address = chat.remoteJid.trim();
+    if (address.isEmpty) return;
+    final l10n = context.l10n;
+    final showToast = ShadToaster.maybeOf(context)?.show;
+    final rawDisplayName = chat.contactDisplayName?.trim();
+    final rosterTitle =
+        rawDisplayName?.isNotEmpty == true ? rawDisplayName! : chat.title;
+    try {
+      if (chat.isEmailBacked) {
+        EmailService? emailService;
+        try {
+          emailService = RepositoryProvider.of<EmailService>(
+            context,
+            listen: false,
+          );
+        } on Exception {
+          emailService = null;
+        }
+        if (emailService == null) return;
+        await emailService.ensureChatForAddress(
+          address: address,
+          displayName: rosterTitle,
+        );
+      } else {
+        await context.read<XmppService>().addToRoster(
+              jid: address,
+              title: rosterTitle.isNotEmpty ? rosterTitle : null,
+            );
+      }
+    } on Exception {
+      if (!mounted) return;
+      showToast?.call(
+        FeedbackToast.error(
+          title: l10n.rosterAddTitle,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    showToast?.call(
+      FeedbackToast.success(
+        title: l10n.rosterAddTitle,
+      ),
+    );
+  }
+
+  Future<void> _copyChatAddress(String address) async {
+    final trimmed = address.trim();
+    if (trimmed.isEmpty) return;
+    await Clipboard.setData(
+      ClipboardData(text: trimmed),
+    );
+  }
+
   void _handleSubjectChanged() {
     final text = _subjectController.text;
     if (_lastSubjectValue == text) {
@@ -1794,19 +1861,16 @@ class _ChatState extends State<Chat> {
   Future<void> _handleLinkTap(String url) async {
     if (!mounted) return;
     final l10n = context.l10n;
-    final trimmed = url.trim();
-    final uri = Uri.tryParse(trimmed);
-    if (uri == null) {
-      _showSnackbar(l10n.chatInvalidLink(trimmed));
+    final report = assessLinkSafety(
+      raw: url,
+      kind: LinkSafetyKind.message,
+    );
+    if (report == null || !report.isSafe) {
+      _showSnackbar(l10n.chatInvalidLink(url.trim()));
       return;
     }
-    final report = assessLinkSafety(uri, kind: LinkSafetyKind.standard);
-    if (!report.allowed) {
-      _showSnackbar(l10n.chatInvalidLink(trimmed));
-      return;
-    }
-    final hostLabel = formatLinkHostLabel(report);
-    final warningMessage = report.hasWarnings
+    final hostLabel = formatLinkSchemeHostLabel(report);
+    final baseMessage = report.needsWarning
         ? l10n.chatOpenLinkWarningMessage(
             report.displayUri,
             hostLabel,
@@ -1815,20 +1879,28 @@ class _ChatState extends State<Chat> {
             report.displayUri,
             hostLabel,
           );
-    final approved = await confirm(
+    final warningBlock = formatLinkWarningText(report.warnings);
+    final action = await showLinkActionDialog(
       context,
       title: l10n.chatOpenLinkTitle,
-      message: warningMessage,
-      confirmLabel: l10n.chatOpenLinkConfirm,
-      destructiveConfirm: false,
+      message: '$baseMessage$warningBlock',
+      openLabel: l10n.chatOpenLinkConfirm,
+      copyLabel: l10n.chatActionCopy,
+      cancelLabel: l10n.commonCancel,
     );
-    if (approved != true) return;
+    if (action == null) return;
+    if (action == LinkAction.copy) {
+      await Clipboard.setData(
+        ClipboardData(text: report.displayUri),
+      );
+      return;
+    }
     final launched = await launchUrl(
       report.uri,
       mode: LaunchMode.externalApplication,
     );
     if (!launched) {
-      _showSnackbar(l10n.chatUnableToOpenHost(hostLabel));
+      _showSnackbar(l10n.chatUnableToOpenHost(report.displayHost));
     }
   }
 
@@ -3385,6 +3457,30 @@ class _ChatState extends State<Chat> {
                               final titleStyle = baseTitleStyle.copyWith(
                                 fontSize: context.textTheme.large.fontSize,
                               );
+                              final l10n = context.l10n;
+                              final chatAddress = chatEntity?.remoteJid ?? jid;
+                              final trimmedAddress = chatAddress.trim();
+                              final normalizedAddress =
+                                  trimmedAddress.isEmpty
+                                      ? null
+                                      : trimmedAddress.toBareJidOrNull(
+                                          maxBytes: syncAddressMaxBytes,
+                                        );
+                              final isAddressMalformed =
+                                  normalizedAddress == null &&
+                                      trimmedAddress.isNotEmpty;
+                              final displayAddress = isAddressMalformed
+                                  ? trimmedAddress
+                                  : (normalizedAddress ?? trimmedAddress);
+                              final trimmedDisplayName =
+                                  (state.chat?.displayName ?? '').trim();
+                              final showDisplayNameBadge =
+                                  trimmedDisplayName.isNotEmpty &&
+                                      displayAddress.isNotEmpty &&
+                                      trimmedDisplayName != displayAddress;
+                              final addressColor = isAddressMalformed
+                                  ? context.colorScheme.destructive
+                                  : context.colorScheme.mutedForeground;
                               return Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -3421,6 +3517,20 @@ class _ChatState extends State<Chat> {
                                                   style: titleStyle,
                                                 ),
                                               ),
+                                              if (showDisplayNameBadge)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .only(
+                                                    start:
+                                                        _chatHeaderIdentitySpacing,
+                                                  ),
+                                                  child: ShadBadge.secondary(
+                                                    child: Text(
+                                                      _chatHeaderDisplayNameBadgeLabel,
+                                                    ),
+                                                  ),
+                                                ),
                                               if (canRenameContact)
                                                 Padding(
                                                   padding:
@@ -3453,6 +3563,72 @@ class _ChatState extends State<Chat> {
                                                 ),
                                             ],
                                           ),
+                                          if (displayAddress.isNotEmpty)
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isAddressMalformed
+                                                      ? LucideIcons
+                                                          .triangleAlert
+                                                      : LucideIcons.atSign,
+                                                  size:
+                                                      _chatHeaderIdentityIconSize,
+                                                  color: addressColor,
+                                                ),
+                                                const SizedBox(
+                                                  width:
+                                                      _chatHeaderIdentitySpacing,
+                                                ),
+                                                Flexible(
+                                                  fit: FlexFit.loose,
+                                                  child: Text(
+                                                    displayAddress,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: context
+                                                        .textTheme.small
+                                                        .copyWith(
+                                                      color: addressColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .only(
+                                                    start:
+                                                        _chatHeaderIdentitySpacing,
+                                                  ),
+                                                  child: AxiTooltip(
+                                                    builder: (context) => Text(
+                                                      l10n.chatActionCopy,
+                                                    ),
+                                                    child:
+                                                        ShadIconButton.ghost(
+                                                      onPressed: () =>
+                                                          _copyChatAddress(
+                                                        displayAddress,
+                                                      ),
+                                                      icon: Icon(
+                                                        LucideIcons.copy,
+                                                        size:
+                                                            _chatHeaderIdentityCopyIconSize,
+                                                        color: addressColor,
+                                                      ),
+                                                      decoration:
+                                                          const ShadDecoration(
+                                                        secondaryBorder:
+                                                            ShadBorder.none,
+                                                        secondaryFocusedBorder:
+                                                            ShadBorder.none,
+                                                      ),
+                                                    ).withTapBounce(),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           if (statusLabel.isNotEmpty)
                                             Text(
                                               statusLabel,
@@ -3533,6 +3709,13 @@ class _ChatState extends State<Chat> {
                         ),
                       ),
                       const ChatAlert(),
+                      _UnknownSenderBanner(
+                        readOnly: readOnly,
+                        onAddContact: _handleAddContact,
+                        onReportSpam: () => _handleSpamToggle(
+                          sendToSpam: true,
+                        ),
+                      ),
                       const _ChatSearchPanel(),
                       Expanded(
                         child: AnimatedSwitcher(

@@ -17,6 +17,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart'
     show XmppFileTooBigException, XmppService;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -1829,8 +1830,11 @@ Future<void> _openAttachment(
     );
     return;
   }
-  final uri = Uri.tryParse(rawUrl);
-  if (uri == null) {
+  final report = assessLinkSafety(
+    raw: rawUrl,
+    kind: LinkSafetyKind.attachment,
+  );
+  if (report == null || !report.isSafe) {
     _showToast(
       l10n,
       toaster,
@@ -1839,20 +1843,36 @@ Future<void> _openAttachment(
     );
     return;
   }
-  final report = assessLinkSafety(uri, kind: LinkSafetyKind.attachment);
-  if (!report.allowed || report.hasWarnings) {
-    _showToast(
-      l10n,
-      toaster,
-      l10n.chatAttachmentInvalidLink,
-      destructive: true,
+  final hostLabel = formatLinkSchemeHostLabel(report);
+  final baseMessage = report.needsWarning
+      ? l10n.chatOpenLinkWarningMessage(
+          report.displayUri,
+          hostLabel,
+        )
+      : l10n.chatOpenLinkMessage(
+          report.displayUri,
+          hostLabel,
+        );
+  final warningBlock = formatLinkWarningText(report.warnings);
+  final action = await showLinkActionDialog(
+    context,
+    title: l10n.chatOpenLinkTitle,
+    message: '$baseMessage$warningBlock',
+    openLabel: l10n.chatOpenLinkConfirm,
+    copyLabel: l10n.chatActionCopy,
+    cancelLabel: l10n.commonCancel,
+  );
+  if (action == null) return;
+  if (action == LinkAction.copy) {
+    await Clipboard.setData(
+      ClipboardData(text: report.displayUri),
     );
     return;
   }
   final launched =
       await launchUrl(report.uri, mode: LaunchMode.externalApplication);
   if (!launched) {
-    final target = formatLinkHostLabel(report);
+    final target = report.displayHost;
     _showToast(
       l10n,
       toaster,

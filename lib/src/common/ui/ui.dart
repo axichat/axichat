@@ -37,6 +37,7 @@ export 'display_fingerprint.dart';
 export 'display_time_since.dart';
 export 'dynamic_inline_text.dart';
 export 'jid_input.dart';
+export 'link_action_dialog.dart';
 export 'list_item_padding.dart';
 export 'password_input.dart';
 export 'presence_indicator.dart';

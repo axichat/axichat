@@ -26,9 +26,8 @@ import 'package:flutter/src/material/selectable_text.dart'
 import 'package:flutter/src/material/spell_check_suggestions_toolbar.dart';
 import 'package:flutter/src/material/text_selection.dart';
 import 'package:flutter/src/material/theme.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
-
 import 'axi_editable_text.dart' as axi;
+import 'axi_text_selection.dart';
 import 'typing_text_input.dart';
 
 export 'package:flutter/services.dart'
@@ -49,7 +48,10 @@ typedef InputCounterWidgetBuilder =
       required bool isFocused,
     });
 
-class _AxiTextFieldSelectionGestureDetectorBuilder extends TextSelectionGestureDetectorBuilder {
+const double _transparentCursorAlpha = 0.0;
+
+class _AxiTextFieldSelectionGestureDetectorBuilder
+    extends AxiTextSelectionGestureDetectorBuilder {
   _AxiTextFieldSelectionGestureDetectorBuilder({required _AxiTextFieldState state})
     : _state = state,
       super(delegate: state);
@@ -554,7 +556,7 @@ class AxiTextField extends StatefulWidget {
 
 class _AxiTextFieldState extends State<AxiTextField>
     with RestorationMixin
-    implements TextSelectionGestureDetectorBuilderDelegate, AutofillClient {
+    implements AxiTextSelectionGestureDetectorBuilderDelegate, AutofillClient {
   RestorableTextEditingController? _controller;
   TextEditingController get _effectiveController => widget.controller ?? _controller!.value;
   late TypingTextEditingController _typingController;
@@ -960,7 +962,7 @@ class _AxiTextFieldState extends State<AxiTextField>
       theme.useMaterial3 ? _m3InputStyle(context) : theme.textTheme.titleMedium!,
     ).merge(providedStyle);
     final Brightness keyboardAppearance = widget.keyboardAppearance ?? theme.brightness;
-    final TextEditingController controller = _effectiveController;
+    final TypingTextEditingController controller = _typingController;
     final FocusNode focusNode = _effectiveFocusNode;
     final List<TextInputFormatter> formatters = <TextInputFormatter>[
       ...?widget.inputFormatters,
@@ -1093,6 +1095,9 @@ class _AxiTextFieldState extends State<AxiTextField>
         };
     }
 
+    final Color transparentCursorColor =
+        cursorColor.withValues(alpha: _transparentCursorAlpha);
+
     Widget child = RepaintBoundary(
       child: UnmanagedRestorationScope(
         bucket: bucket,
@@ -1140,7 +1145,7 @@ class _AxiTextFieldState extends State<AxiTextField>
           cursorWidth: widget.cursorWidth,
           cursorHeight: widget.cursorHeight,
           cursorRadius: cursorRadius,
-          cursorColor: cursorColor,
+          cursorColor: transparentCursorColor,
           selectionHeightStyle: widget.selectionHeightStyle,
           selectionWidthStyle: widget.selectionWidthStyle,
           cursorOpacityAnimates: cursorOpacityAnimates,
