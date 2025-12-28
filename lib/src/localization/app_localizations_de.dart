@@ -427,6 +427,33 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatActionAddToCalendar => 'Zum Kalender hinzufügen';
 
   @override
+  String get chatCalendarTaskCopyActionLabel => 'In den Kalender kopieren';
+
+  @override
+  String get chatCalendarTaskImportConfirmTitle => 'Zum Kalender hinzufügen?';
+
+  @override
+  String get chatCalendarTaskImportConfirmMessage =>
+      'Diese Aufgabe stammt aus dem Chat. Füge sie deinem Kalender hinzu, um sie zu verwalten oder zu bearbeiten.';
+
+  @override
+  String get chatCalendarTaskImportConfirmLabel => 'Zum Kalender hinzufügen';
+
+  @override
+  String get chatCalendarTaskImportCancelLabel => 'Nicht jetzt';
+
+  @override
+  String get chatCalendarTaskCopyUnavailableMessage =>
+      'Kalender ist nicht verfügbar.';
+
+  @override
+  String get chatCalendarTaskCopyAlreadyAddedMessage =>
+      'Aufgabe bereits hinzugefügt.';
+
+  @override
+  String get chatCalendarTaskCopySuccessMessage => 'Aufgabe kopiert.';
+
+  @override
   String get chatActionDetails => 'Einzelheiten';
 
   @override

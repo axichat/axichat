@@ -17,20 +17,12 @@ import 'package:axichat/src/calendar/view/models/task_context_action.dart';
 import 'package:axichat/src/calendar/view/task_edit_session_tracker.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_task_copy_sheet.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 const double _taskFooterPaddingTop = 4.0;
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
-const String _taskCopyActionLabel = 'Copy to calendar';
-const String _taskImportConfirmTitle = 'Add to calendar?';
-const String _taskImportConfirmMessage =
-    'This task came from chat. Add it to your calendar to manage or edit it.';
-const String _taskImportConfirmLabel = 'Add to calendar';
-const String _taskImportCancelLabel = 'Not now';
-const String _taskCopyUnavailableMessage = 'Calendar is unavailable.';
-const String _taskCopyAlreadyAddedMessage = 'Task already added.';
-const String _taskCopySuccessMessage = 'Task copied.';
 
 class ChatCalendarTaskCard extends StatefulWidget {
   const ChatCalendarTaskCard({
@@ -245,12 +237,13 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     required TaskEditMode editMode,
   }) async {
     if (!taskInCalendar && widget.requireImportConfirmation) {
+      final l10n = context.l10n;
       final approved = await confirm(
         context,
-        title: _taskImportConfirmTitle,
-        message: _taskImportConfirmMessage,
-        confirmLabel: _taskImportConfirmLabel,
-        cancelLabel: _taskImportCancelLabel,
+        title: l10n.chatCalendarTaskImportConfirmTitle,
+        message: l10n.chatCalendarTaskImportConfirmMessage,
+        confirmLabel: l10n.chatCalendarTaskImportConfirmLabel,
+        cancelLabel: l10n.chatCalendarTaskImportCancelLabel,
         destructiveConfirm: false,
       );
       if (approved != true) return;
@@ -270,10 +263,11 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     CalendarTask task, {
     required CalendarTaskCopyStyle copyStyle,
   }) {
+    final l10n = context.l10n;
     return <TaskContextAction>[
       TaskContextAction(
         icon: Icons.copy,
-        label: _taskCopyActionLabel,
+        label: l10n.chatCalendarTaskCopyActionLabel,
         onSelected: () => unawaited(
           _handleCopyTask(
             task: task,
@@ -288,6 +282,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     required CalendarTask task,
     required CalendarTaskCopyStyle style,
   }) async {
+    final l10n = context.l10n;
     final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc();
     final ChatCalendarBloc? chatBloc = _maybeReadChatCalendarBloc();
     final CalendarStorageManager storageManager =
@@ -297,7 +292,10 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     final bool canAddToChat = chatBloc != null;
 
     if (!canAddToPersonal && !canAddToChat) {
-      FeedbackSystem.showInfo(context, _taskCopyUnavailableMessage);
+      FeedbackSystem.showInfo(
+        context,
+        l10n.chatCalendarTaskCopyUnavailableMessage,
+      );
       return;
     }
 
@@ -353,7 +351,10 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return;
     }
     if (didCopy) {
-      FeedbackSystem.showSuccess(context, _taskCopySuccessMessage);
+      FeedbackSystem.showSuccess(
+        context,
+        l10n.chatCalendarTaskCopySuccessMessage,
+      );
     }
   }
 
@@ -365,7 +366,11 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
   }) {
     final bool alreadyAdded = state.model.tasks.containsKey(task.id);
     if (style.isLinked && alreadyAdded) {
-      FeedbackSystem.showInfo(context, _taskCopyAlreadyAddedMessage);
+      final l10n = context.l10n;
+      FeedbackSystem.showInfo(
+        context,
+        l10n.chatCalendarTaskCopyAlreadyAddedMessage,
+      );
       return false;
     }
     final List<CalendarTask> tasks = <CalendarTask>[task];

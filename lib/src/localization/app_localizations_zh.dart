@@ -409,6 +409,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatActionAddToCalendar => '添加到日历';
 
   @override
+  String get chatCalendarTaskCopyActionLabel => '复制到日历';
+
+  @override
+  String get chatCalendarTaskImportConfirmTitle => '添加到日历？';
+
+  @override
+  String get chatCalendarTaskImportConfirmMessage => '此任务来自聊天。添加到你的日历以便管理或编辑。';
+
+  @override
+  String get chatCalendarTaskImportConfirmLabel => '添加到日历';
+
+  @override
+  String get chatCalendarTaskImportCancelLabel => '暂不';
+
+  @override
+  String get chatCalendarTaskCopyUnavailableMessage => '日历不可用。';
+
+  @override
+  String get chatCalendarTaskCopyAlreadyAddedMessage => '任务已添加。';
+
+  @override
+  String get chatCalendarTaskCopySuccessMessage => '任务已复制。';
+
+  @override
   String get chatActionDetails => '详情';
 
   @override
@@ -3357,6 +3381,30 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatActionAddToCalendar => '加入行事曆';
+
+  @override
+  String get chatCalendarTaskCopyActionLabel => '複製到行事曆';
+
+  @override
+  String get chatCalendarTaskImportConfirmTitle => '加入行事曆？';
+
+  @override
+  String get chatCalendarTaskImportConfirmMessage => '此任務來自聊天。加入你的行事曆以便管理或編輯。';
+
+  @override
+  String get chatCalendarTaskImportConfirmLabel => '加入行事曆';
+
+  @override
+  String get chatCalendarTaskImportCancelLabel => '暫不';
+
+  @override
+  String get chatCalendarTaskCopyUnavailableMessage => '行事曆無法使用。';
+
+  @override
+  String get chatCalendarTaskCopyAlreadyAddedMessage => '任務已加入。';
+
+  @override
+  String get chatCalendarTaskCopySuccessMessage => '任務已複製。';
 
   @override
   String get chatActionDetails => '詳細資料';

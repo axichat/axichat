@@ -849,6 +849,54 @@ abstract class AppLocalizations {
   /// **'Add to calendar'**
   String get chatActionAddToCalendar;
 
+  /// No description provided for @chatCalendarTaskCopyActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy to calendar'**
+  String get chatCalendarTaskCopyActionLabel;
+
+  /// No description provided for @chatCalendarTaskImportConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to calendar?'**
+  String get chatCalendarTaskImportConfirmTitle;
+
+  /// No description provided for @chatCalendarTaskImportConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This task came from chat. Add it to your calendar to manage or edit it.'**
+  String get chatCalendarTaskImportConfirmMessage;
+
+  /// No description provided for @chatCalendarTaskImportConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to calendar'**
+  String get chatCalendarTaskImportConfirmLabel;
+
+  /// No description provided for @chatCalendarTaskImportCancelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get chatCalendarTaskImportCancelLabel;
+
+  /// No description provided for @chatCalendarTaskCopyUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar is unavailable.'**
+  String get chatCalendarTaskCopyUnavailableMessage;
+
+  /// No description provided for @chatCalendarTaskCopyAlreadyAddedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task already added.'**
+  String get chatCalendarTaskCopyAlreadyAddedMessage;
+
+  /// No description provided for @chatCalendarTaskCopySuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task copied.'**
+  String get chatCalendarTaskCopySuccessMessage;
+
   /// No description provided for @chatActionDetails.
   ///
   /// In en, this message translates to:
