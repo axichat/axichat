@@ -1,6 +1,7 @@
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:xml/xml.dart' as xml;
+import 'package:axichat/src/common/url_safety.dart';
 
 class HtmlContentCodec {
   static const Set<String> _blockTags = <String>{
@@ -351,6 +352,9 @@ class HtmlContentCodec {
   ) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return null;
+    if (containsUnsafeUriText(trimmed) || containsSuspiciousUriText(trimmed)) {
+      return null;
+    }
     final uri = Uri.tryParse(trimmed);
     if (uri == null) return null;
     final scheme = uri.scheme.toLowerCase();

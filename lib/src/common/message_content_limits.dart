@@ -1,5 +1,9 @@
 const int _maxMessageTextBytes = 128 * 1024;
 const int _maxMessageHtmlBytes = 256 * 1024;
+const int _maxXmppStanzaBytes = 1024 * 1024;
+const int _maxXmppStanzaDepth = 64;
+const int _maxReactionEmojisPerMessage = 32;
+const int _maxReactionEmojiBytes = 32;
 const int _utf8OneByteMax = 0x7f;
 const int _utf8TwoByteMax = 0x7ff;
 const int _utf8ThreeByteMax = 0xffff;
@@ -10,6 +14,10 @@ const int _utf8FourByteLength = 4;
 
 const int maxMessageTextBytes = _maxMessageTextBytes;
 const int maxMessageHtmlBytes = _maxMessageHtmlBytes;
+const int maxXmppStanzaBytes = _maxXmppStanzaBytes;
+const int maxXmppStanzaDepth = _maxXmppStanzaDepth;
+const int maxReactionEmojisPerMessage = _maxReactionEmojisPerMessage;
+const int maxReactionEmojiBytes = _maxReactionEmojiBytes;
 
 String? clampMessageText(String? value) =>
     _clampUtf8(value, maxBytes: _maxMessageTextBytes);
@@ -30,6 +38,28 @@ bool isWithinUtf8ByteLimit(String? value, {required int maxBytes}) =>
     _isWithinLimit(value, maxBytes: maxBytes);
 
 int utf8ByteLength(String value) => _utf8Length(value);
+
+extension ReactionEmojiLimits on Iterable<String> {
+  List<String> clampReactionEmojis() {
+    final unique = <String>{};
+    final limited = <String>[];
+    for (final emoji in this) {
+      final trimmed = emoji.trim();
+      if (trimmed.isEmpty) continue;
+      if (!isWithinUtf8ByteLimit(trimmed, maxBytes: _maxReactionEmojiBytes)) {
+        continue;
+      }
+      if (!unique.add(trimmed)) {
+        continue;
+      }
+      limited.add(trimmed);
+      if (limited.length >= _maxReactionEmojisPerMessage) {
+        break;
+      }
+    }
+    return List<String>.unmodifiable(limited);
+  }
+}
 
 String? _clampUtf8(String? value, {required int maxBytes}) {
   if (value == null) return null;

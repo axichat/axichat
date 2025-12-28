@@ -1796,25 +1796,39 @@ class _ChatState extends State<Chat> {
     final l10n = context.l10n;
     final trimmed = url.trim();
     final uri = Uri.tryParse(trimmed);
-    if (uri == null || !isSafeLinkUri(uri)) {
+    if (uri == null) {
       _showSnackbar(l10n.chatInvalidLink(trimmed));
       return;
     }
-    final host = uri.host.isNotEmpty ? uri.host : trimmed;
+    final report = assessLinkSafety(uri, kind: LinkSafetyKind.standard);
+    if (!report.allowed) {
+      _showSnackbar(l10n.chatInvalidLink(trimmed));
+      return;
+    }
+    final hostLabel = formatLinkHostLabel(report);
+    final warningMessage = report.hasWarnings
+        ? l10n.chatOpenLinkWarningMessage(
+            report.displayUri,
+            hostLabel,
+          )
+        : l10n.chatOpenLinkMessage(
+            report.displayUri,
+            hostLabel,
+          );
     final approved = await confirm(
       context,
       title: l10n.chatOpenLinkTitle,
-      message: l10n.chatOpenLinkMessage(trimmed, host),
+      message: warningMessage,
       confirmLabel: l10n.chatOpenLinkConfirm,
       destructiveConfirm: false,
     );
     if (approved != true) return;
     final launched = await launchUrl(
-      uri,
+      report.uri,
       mode: LaunchMode.externalApplication,
     );
     if (!launched) {
-      _showSnackbar(l10n.chatUnableToOpenHost(host));
+      _showSnackbar(l10n.chatUnableToOpenHost(hostLabel));
     }
   }
 

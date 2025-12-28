@@ -117,6 +117,13 @@
       "host": {}
     }
   },
+  "chatOpenLinkWarningMessage": "You are about to open:\n{url}\n\nThis link contains unusual or invisible characters. Verify the address carefully (host: {host}).",
+  "@chatOpenLinkWarningMessage": {
+    "placeholders": {
+      "url": {},
+      "host": {}
+    }
+  },
   "chatOpenLinkConfirm": "Open link",
   "chatInvalidLink": "Invalid link: {url}",
   "@chatInvalidLink": {

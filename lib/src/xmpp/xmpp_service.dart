@@ -80,6 +80,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
 import 'package:uuid/uuid.dart';
+import 'package:xml/xml_events.dart';
 
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 
@@ -2625,6 +2626,139 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
   }
 }
 
+final class _ListConversionSink<T> implements Sink<List<T>> {
+  _ListConversionSink(this._onData);
+
+  final void Function(List<T>) _onData;
+
+  @override
+  void add(List<T> data) => _onData(data);
+
+  @override
+  void close() {}
+}
+
+final class _ChunkedConversionBuffer<S, T> {
+  _ChunkedConversionBuffer(Converter<S, List<T>> converter) {
+    _outputSink = _ListConversionSink<T>(_results.addAll);
+    _inputSink = converter.startChunkedConversion(_outputSink);
+  }
+
+  final List<T> _results = List<T>.empty(growable: true);
+  late Sink<List<T>> _outputSink;
+  late Sink<S> _inputSink;
+
+  void close() {
+    _inputSink.close();
+    _outputSink.close();
+  }
+
+  List<T> convert(S input) {
+    _results.clear();
+    _inputSink.add(input);
+    return _results;
+  }
+}
+
+enum _XmppStanzaGuardResult {
+  allowed,
+  oversize,
+  depthExceeded,
+  malformed,
+}
+
+final class _XmppStanzaSizeGuard {
+  _XmppStanzaSizeGuard({
+    required this.maxStanzaBytes,
+    required this.maxStanzaDepth,
+  });
+
+  final int maxStanzaBytes;
+  final int maxStanzaDepth;
+  var _inStream = false;
+  var _depth = 0;
+  var _currentStanzaBytes = 0;
+  _ChunkedConversionBuffer<String, XmlEvent> _eventBuffer =
+      _ChunkedConversionBuffer<String, XmlEvent>(XmlEventDecoder());
+
+  _XmppStanzaGuardResult evaluateChunk(String data) {
+    final chunkBytes = utf8ByteLength(data);
+    var stanzaTouched = _inStream && _depth > 0;
+    var endedTopLevel = false;
+    try {
+      final events = _eventBuffer.convert(data);
+      for (final event in events) {
+        if (event is XmlStartElementEvent) {
+          if (event.name == 'stream:stream') {
+            _inStream = true;
+            if (event.isSelfClosing) {
+              _resetCounters();
+            }
+            continue;
+          }
+          if (_inStream) {
+            _depth += 1;
+            stanzaTouched = true;
+            if (_depth > maxStanzaDepth) {
+              return _XmppStanzaGuardResult.depthExceeded;
+            }
+            if (event.isSelfClosing) {
+              _depth -= 1;
+              if (_depth == 0) {
+                endedTopLevel = true;
+              }
+            }
+          }
+          continue;
+        }
+        if (event is XmlEndElementEvent) {
+          if (event.name == 'stream:stream') {
+            _resetCounters();
+            continue;
+          }
+          if (_inStream && _depth > 0) {
+            _depth -= 1;
+            if (_depth == 0) {
+              endedTopLevel = true;
+            }
+          }
+        }
+      }
+    } on Exception {
+      return _XmppStanzaGuardResult.malformed;
+    }
+
+    if (stanzaTouched) {
+      _currentStanzaBytes += chunkBytes;
+      if (_currentStanzaBytes > maxStanzaBytes) {
+        return _XmppStanzaGuardResult.oversize;
+      }
+    }
+
+    if (_inStream && _depth == 0 && endedTopLevel) {
+      _currentStanzaBytes = 0;
+    }
+    return _XmppStanzaGuardResult.allowed;
+  }
+
+  void reset() {
+    _resetCounters();
+    try {
+      _eventBuffer.close();
+    } on Exception {
+      // ignore; stream parser may already be closed
+    }
+    _eventBuffer =
+        _ChunkedConversionBuffer<String, XmlEvent>(XmlEventDecoder());
+  }
+
+  void _resetCounters() {
+    _inStream = false;
+    _depth = 0;
+    _currentStanzaBytes = 0;
+  }
+}
+
 /// Stream management negotiator that tolerates missing managers and avoids null
 /// dereferences during feature matching.
 class XmppSocketWrapper implements mox.BaseSocketWrapper {
@@ -2645,11 +2779,21 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       'Blocked XML containing DTD/entity declaration.';
   static const String _xmlForbiddenError =
       'XML DTD/entity declarations are not supported.';
+  static const String _stanzaOversizeError =
+      'Incoming stanza exceeds size limit.';
+  static const String _stanzaDepthError =
+      'Incoming stanza exceeds nesting depth limit.';
+  static const String _stanzaMalformedError =
+      'Incoming stanza rejected due to parse error.';
 
   final bool _logIncomingOutgoing;
   final StreamController<String> _dataStream = StreamController.broadcast();
   final StreamController<mox.XmppSocketEvent> _eventStream =
       StreamController.broadcast();
+  final _XmppStanzaSizeGuard _stanzaSizeGuard = _XmppStanzaSizeGuard(
+    maxStanzaBytes: maxXmppStanzaBytes,
+    maxStanzaDepth: maxXmppStanzaDepth,
+  );
 
   Socket? _socket;
   StreamSubscription<dynamic>? _socketSubscription;
@@ -2737,6 +2881,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       return;
     }
     _xmlTokenCarry = '';
+    _stanzaSizeGuard.reset();
 
     final StreamSubscription<dynamic>? priorSubscription = _socketSubscription;
     if (priorSubscription != null) {
@@ -2753,6 +2898,45 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
               const FormatException(_xmlForbiddenError),
             ),
           );
+          _dropSocket(expectClosure: false);
+          return;
+        }
+        final guardResult = _stanzaSizeGuard.evaluateChunk(data);
+        if (guardResult != _XmppStanzaGuardResult.allowed) {
+          switch (guardResult) {
+            case _XmppStanzaGuardResult.oversize:
+              _log.warning(
+                'Blocked inbound stanza exceeding $maxXmppStanzaBytes bytes.',
+              );
+              _eventStream.add(
+                mox.XmppSocketErrorEvent(
+                  const FormatException(_stanzaOversizeError),
+                ),
+              );
+              break;
+            case _XmppStanzaGuardResult.depthExceeded:
+              _log.warning(
+                'Blocked inbound stanza exceeding $maxXmppStanzaDepth depth.',
+              );
+              _eventStream.add(
+                mox.XmppSocketErrorEvent(
+                  const FormatException(_stanzaDepthError),
+                ),
+              );
+              break;
+            case _XmppStanzaGuardResult.malformed:
+              _log.warning(
+                'Blocked inbound stanza due to parse error.',
+              );
+              _eventStream.add(
+                mox.XmppSocketErrorEvent(
+                  const FormatException(_stanzaMalformedError),
+                ),
+              );
+              break;
+            case _XmppStanzaGuardResult.allowed:
+              break;
+          }
           _dropSocket(expectClosure: false);
           return;
         }

@@ -83,6 +83,7 @@
   "attachmentGallerySortSizeDescLabel": "大小由大到小",
   "chatOpenLinkTitle": "開啟外部連結？",
   "chatOpenLinkMessage": "你將要開啟：\n{url}\n\n只有在信任該網站時才按確定（主機：{host}）。",
+  "chatOpenLinkWarningMessage": "你將要開啟：\n{url}\n\n該連結包含異常或不可見字元。請仔細核對地址（主機：{host}）。",
   "chatOpenLinkConfirm": "開啟連結",
   "chatInvalidLink": "無效的連結：{url}",
   "chatUnableToOpenHost": "無法開啟 {host}",
