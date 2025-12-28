@@ -130,6 +130,22 @@ extension MessageEvent on mox.MessageEvent {
   }
 }
 
+bool _isOversizedMessage(mox.MessageEvent event, Logger log) {
+  final body = event.extensions.get<mox.MessageBodyData>()?.body;
+  if (body != null && !isMessageTextWithinLimit(body)) {
+    final sizeBytes = utf8ByteLength(body);
+    log.warning('Dropped message with oversized text payload ($sizeBytes)');
+    return true;
+  }
+  final htmlBody = event.extensions.get<XhtmlImData>()?.xhtmlBody;
+  if (htmlBody != null && !isMessageHtmlWithinLimit(htmlBody)) {
+    final sizeBytes = utf8ByteLength(htmlBody);
+    log.warning('Dropped message with oversized HTML payload ($sizeBytes)');
+    return true;
+  }
+  return false;
+}
+
 String? _normalizePinChatJid(String raw) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return null;
@@ -318,6 +334,7 @@ const int _xmppAttachmentDownloadLimitFallbackBytes = 50 * 1024 * 1024;
 const int _xmppAttachmentDownloadMaxRedirects = 5;
 const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
+const int _attachmentSourceMaxCount = 8;
 const int _attachmentSizeFallbackBytes = 0;
 const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
@@ -1126,7 +1143,7 @@ mixin MessageService
     manager
       ..registerHandler<mox.MessageEvent>((event) async {
         if (await _handleError(event)) return;
-        if (_isOversizedMessage(event)) return;
+        if (_isOversizedMessage(event, _log)) return;
         _trackMamGlobalAnchor(event);
 
         final reactionOnly = await _handleReactions(event);
@@ -4226,10 +4243,19 @@ mixin MessageService
       }
       return null;
     }
-    final urls = statelessData.sources
-        .whereType<mox.StatelessFileSharingUrlSource>()
-        .map((e) => e.url)
-        .toList();
+    final urls = <String>[];
+    var exceededSourceLimit = false;
+    for (final source in statelessData.sources
+        .whereType<mox.StatelessFileSharingUrlSource>()) {
+      if (urls.length >= _attachmentSourceMaxCount) {
+        exceededSourceLimit = true;
+        break;
+      }
+      urls.add(source.url);
+    }
+    if (exceededSourceLimit) {
+      _log.warning('Attachment source list exceeded safe limits');
+    }
     if (urls.isNotEmpty) {
       return FileMetadataData(
         id: uuid.v4(),

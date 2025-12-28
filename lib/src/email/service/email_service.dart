@@ -21,6 +21,7 @@ import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -964,11 +965,7 @@ class EmailService {
   }
 
   String? _normalizeSubject(String? subject) {
-    final trimmed = subject?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return null;
-    }
-    return trimmed;
+    return sanitizeEmailHeaderValue(subject);
   }
 
   String? _normalizeDraftHtml({
