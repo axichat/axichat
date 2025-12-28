@@ -413,7 +413,19 @@ class Message with _$Message implements Insertable<Message> {
       }
       return senderJid == from.toString();
     }
-    return authorized(from);
+    final sender = senderJid.trim();
+    if (sender.isEmpty) {
+      return false;
+    }
+    try {
+      final senderParsed = mox.JID.fromString(sender);
+      if (senderParsed.resource.trim().isNotEmpty) {
+        return sender == from.toString();
+      }
+      return senderParsed.toBare() == from.toBare();
+    } on Exception {
+      return sender == from.toString();
+    }
   }
 
   bool get editable =>

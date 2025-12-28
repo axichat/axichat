@@ -11,6 +11,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
@@ -27,6 +28,18 @@ String? _bareJid(String? jid) {
     return jid;
   }
 }
+
+const double _messageDetailsCopyIconSize = 16.0;
+const double _messageDetailsCopySpacing = 6.0;
+const double _messageDetailsSectionSpacing = 8.0;
+const double _messageDetailsMetadataSpacing = 12.0;
+const String _messageDetailsSenderLabel = 'Sender address';
+const String _messageDetailsMetadataLabel = 'Message metadata';
+const String _messageDetailsStanzaIdLabel = 'Stanza ID';
+const String _messageDetailsOriginIdLabel = 'Origin ID';
+const String _messageDetailsOccupantIdLabel = 'Occupant ID';
+const String _messageDetailsDeltaIdLabel = 'Delta message ID';
+const String _messageDetailsLocalIdLabel = 'Local message ID';
 
 class ChatMessageDetails extends StatelessWidget {
   const ChatMessageDetails({super.key});
@@ -81,6 +94,65 @@ class ChatMessageDetails extends StatelessWidget {
                 shareParticipants.isNotEmpty;
             final showReactions = (transport == null || transport.isXmpp) &&
                 message.reactionsPreview.isNotEmpty;
+            final copyLabel = l10n.chatActionCopy;
+            final senderAddress = message.senderJid.trim();
+            final metadataItems = <Widget>[];
+            final stanzaId = message.stanzaID.trim();
+            if (stanzaId.isNotEmpty) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsStanzaIdLabel,
+                  value: stanzaId,
+                  copyValue: stanzaId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final originId = message.originID?.trim();
+            if (originId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsOriginIdLabel,
+                  value: originId!,
+                  copyValue: originId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final occupantId = message.occupantID?.trim();
+            if (occupantId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsOccupantIdLabel,
+                  value: occupantId!,
+                  copyValue: occupantId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final deltaMessageId = message.deltaMsgId;
+            if (deltaMessageId != null) {
+              final deltaLabel = deltaMessageId.toString();
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsDeltaIdLabel,
+                  value: deltaLabel,
+                  copyValue: deltaLabel,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final localId = message.id?.trim();
+            if (localId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsLocalIdLabel,
+                  value: localId!,
+                  copyValue: localId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
             return SingleChildScrollView(
               child: Container(
                 width: double.maxFinite,
@@ -293,6 +365,30 @@ class ChatMessageDetails extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (senderAddress.isNotEmpty)
+                      _MessageDetailsInfo(
+                        label: _messageDetailsSenderLabel,
+                        value: senderAddress,
+                        copyValue: senderAddress,
+                        copyLabel: copyLabel,
+                      ),
+                    if (metadataItems.isNotEmpty)
+                      Column(
+                        spacing: _messageDetailsSectionSpacing,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            _messageDetailsMetadataLabel,
+                            style: context.textTheme.muted,
+                          ),
+                          Wrap(
+                            spacing: _messageDetailsMetadataSpacing,
+                            runSpacing: _messageDetailsMetadataSpacing,
+                            alignment: WrapAlignment.center,
+                            children: metadataItems,
+                          ),
+                        ],
+                      ),
                     if (message.error.isNotNone)
                       Column(
                         spacing: 8,
@@ -430,14 +526,65 @@ class _MessageDetailsInfo extends StatelessWidget {
     required this.label,
     required this.value,
     this.leading,
+    this.copyValue,
+    this.copyLabel,
   });
 
   final String label;
   final String value;
   final Widget? leading;
+  final String? copyValue;
+  final String? copyLabel;
 
   @override
   Widget build(BuildContext context) {
+    final trimmedCopyValue = copyValue?.trim();
+    final canCopy = trimmedCopyValue?.isNotEmpty == true;
+    final resolvedCopyLabel = copyLabel ?? context.l10n.chatActionCopy;
+    final copyButton = canCopy
+        ? AxiTooltip(
+            builder: (context) => Text(resolvedCopyLabel),
+            child: ShadIconButton.ghost(
+              onPressed: () async {
+                await Clipboard.setData(
+                  ClipboardData(text: trimmedCopyValue!),
+                );
+              },
+              icon: Icon(
+                LucideIcons.copy,
+                size: _messageDetailsCopyIconSize,
+                color: context.colorScheme.mutedForeground,
+              ),
+              decoration: const ShadDecoration(
+                secondaryBorder: ShadBorder.none,
+                secondaryFocusedBorder: ShadBorder.none,
+              ),
+            ).withTapBounce(),
+          )
+        : null;
+    final valueText = SelectableText(
+      value,
+      textAlign: TextAlign.center,
+      style: context.textTheme.small,
+    );
+    final valueRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (leading != null) ...[
+          leading!,
+          const SizedBox(width: _messageDetailsCopySpacing),
+        ],
+        Flexible(
+          fit: FlexFit.loose,
+          child: valueText,
+        ),
+        if (copyButton != null) ...[
+          const SizedBox(width: _messageDetailsCopySpacing),
+          copyButton,
+        ],
+      ],
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -446,28 +593,7 @@ class _MessageDetailsInfo extends StatelessWidget {
           label,
           style: context.textTheme.muted,
         ),
-        if (leading == null)
-          SelectableText(
-            value,
-            textAlign: TextAlign.center,
-            style: context.textTheme.small,
-          )
-        else
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              leading!,
-              const SizedBox(width: 6),
-              Flexible(
-                child: SelectableText(
-                  value,
-                  textAlign: TextAlign.center,
-                  style: context.textTheme.small,
-                ),
-              ),
-            ],
-          ),
+        valueRow,
       ],
     );
   }

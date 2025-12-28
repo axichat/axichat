@@ -6,14 +6,14 @@ library;
 
 import 'dart:ui' as ui show BoxHeightStyle, BoxWidthStyle;
 
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/cupertino.dart' hide SpellCheckConfiguration;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import 'package:flutter/src/material/adaptive_text_selection_toolbar.dart';
-import 'package:flutter/src/material/color_scheme.dart';
 import 'package:flutter/src/material/colors.dart';
 import 'package:flutter/src/material/debug.dart';
 import 'package:flutter/src/material/desktop_text_selection.dart';
@@ -27,34 +27,41 @@ import 'package:flutter/src/material/spell_check_suggestions_toolbar.dart';
 import 'package:flutter/src/material/text_selection.dart';
 import 'package:flutter/src/material/theme.dart';
 import 'axi_editable_text.dart' as axi;
+import 'axi_spell_check.dart';
+import 'axi_system_context_menu.dart';
 import 'axi_text_selection.dart';
 import 'typing_text_input.dart';
 
 export 'package:flutter/services.dart'
-    show SmartDashesType, SmartQuotesType, TextCapitalization, TextInputAction, TextInputType;
+    show
+        SmartDashesType,
+        SmartQuotesType,
+        TextCapitalization,
+        TextInputAction,
+        TextInputType;
 
 // Examples can assume:
 // late BuildContext context;
 // late FocusNode myFocusNode;
 
-typedef InputCounterWidgetBuilder =
-    Widget? Function(
-      BuildContext context, {
-
-      required int currentLength,
-
-      required int? maxLength,
-
-      required bool isFocused,
-    });
+typedef InputCounterWidgetBuilder = Widget? Function(
+  BuildContext context, {
+  required int currentLength,
+  required int? maxLength,
+  required bool isFocused,
+});
 
 const double _transparentCursorAlpha = 0.0;
+const int _spellCheckMaxSuggestions = 3;
+const String _spellCheckBringIntoViewLabel =
+    'AxiSpellCheckSuggestionsToolbar.bringIntoView';
 
 class _AxiTextFieldSelectionGestureDetectorBuilder
     extends AxiTextSelectionGestureDetectorBuilder {
-  _AxiTextFieldSelectionGestureDetectorBuilder({required _AxiTextFieldState state})
-    : _state = state,
-      super(delegate: state);
+  _AxiTextFieldSelectionGestureDetectorBuilder(
+      {required _AxiTextFieldState state})
+      : _state = state,
+        super(delegate: state);
 
   final _AxiTextFieldState _state;
 
@@ -141,44 +148,47 @@ class AxiTextField extends StatefulWidget {
       'This feature was deprecated after v3.27.0-0.2.pre.',
     )
     this.scribbleEnabled = true,
-    this.stylusHandwritingEnabled = axi.EditableText.defaultStylusHandwritingEnabled,
+    this.stylusHandwritingEnabled =
+        axi.EditableText.defaultStylusHandwritingEnabled,
     this.enableIMEPersonalizedLearning = true,
     this.contextMenuBuilder = _defaultContextMenuBuilder,
     this.canRequestFocus = true,
     this.spellCheckConfiguration,
     this.magnifierConfiguration,
     this.hintLocales,
-  }) : assert(obscuringCharacter.length == 1),
-       smartDashesType =
-           smartDashesType ?? (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
-       smartQuotesType =
-           smartQuotesType ?? (obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled),
-       assert(maxLines == null || maxLines > 0),
-       assert(minLines == null || minLines > 0),
-       assert(
-         (maxLines == null) || (minLines == null) || (maxLines >= minLines),
-         "minLines can't be greater than maxLines",
-       ),
-       assert(
-         !expands || (maxLines == null && minLines == null),
-         'minLines and maxLines must be null when expands is true.',
-       ),
-       assert(!obscureText || maxLines == 1, 'Obscured fields cannot be multiline.'),
-       assert(
-         maxLength == null ||
-             maxLength == AxiTextField.noMaxLength ||
-             maxLength > 0,
-       ),
-       // Assert the following instead of setting it directly to avoid surprising the user by silently changing the value they set.
-       assert(
-         !identical(textInputAction, TextInputAction.newline) ||
-             maxLines == 1 ||
-             !identical(keyboardType, TextInputType.text),
-         'Use keyboardType TextInputType.multiline when using TextInputAction.newline on a multiline TextField.',
-       ),
-       keyboardType =
-           keyboardType ?? (maxLines == 1 ? TextInputType.text : TextInputType.multiline),
-       enableInteractiveSelection = enableInteractiveSelection ?? (!readOnly || !obscureText);
+  })  : assert(obscuringCharacter.length == 1),
+        smartDashesType = smartDashesType ??
+            (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
+        smartQuotesType = smartQuotesType ??
+            (obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled),
+        assert(maxLines == null || maxLines > 0),
+        assert(minLines == null || minLines > 0),
+        assert(
+          (maxLines == null) || (minLines == null) || (maxLines >= minLines),
+          "minLines can't be greater than maxLines",
+        ),
+        assert(
+          !expands || (maxLines == null && minLines == null),
+          'minLines and maxLines must be null when expands is true.',
+        ),
+        assert(!obscureText || maxLines == 1,
+            'Obscured fields cannot be multiline.'),
+        assert(
+          maxLength == null ||
+              maxLength == AxiTextField.noMaxLength ||
+              maxLength > 0,
+        ),
+        // Assert the following instead of setting it directly to avoid surprising the user by silently changing the value they set.
+        assert(
+          !identical(textInputAction, TextInputAction.newline) ||
+              maxLines == 1 ||
+              !identical(keyboardType, TextInputType.text),
+          'Use keyboardType TextInputType.multiline when using TextInputAction.newline on a multiline TextField.',
+        ),
+        keyboardType = keyboardType ??
+            (maxLines == 1 ? TextInputType.text : TextInputType.multiline),
+        enableInteractiveSelection =
+            enableInteractiveSelection ?? (!readOnly || !obscureText);
 
   final TextMagnifierConfiguration? magnifierConfiguration;
 
@@ -334,10 +344,17 @@ class AxiTextField extends StatefulWidget {
     BuildContext context,
     axi.EditableTextState editableTextState,
   ) {
-    if (SystemContextMenu.isSupportedByField(editableTextState)) {
-      return SystemContextMenu.editableText(editableTextState: editableTextState);
+    final bool supportsSystemMenu = AxiSystemContextMenu.isSupported(context) &&
+        !editableTextState.widget.readOnly;
+    if (supportsSystemMenu) {
+      return AxiSystemContextMenu.editableText(
+        editableTextState: editableTextState,
+      );
     }
-    return AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState);
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableTextState.contextMenuAnchors,
+      buttonItems: editableTextState.contextMenuButtonItems,
+    );
   }
 
   final SpellCheckConfiguration? spellCheckConfiguration;
@@ -348,6 +365,130 @@ class AxiTextField extends StatefulWidget {
     decorationStyle: TextDecorationStyle.wavy,
   );
 
+  static SuggestionSpan? _spellCheckSpanAtCursor(
+    axi.EditableTextState editableTextState,
+  ) {
+    return editableTextState.findSuggestionSpanAtCursorIndex(
+      editableTextState.currentTextEditingValue.selection.baseOffset,
+    );
+  }
+
+  static List<ContextMenuButtonItem>? _materialSpellCheckButtonItems(
+    axi.EditableTextState editableTextState,
+  ) {
+    final SuggestionSpan? spanAtCursor =
+        _spellCheckSpanAtCursor(editableTextState);
+    if (spanAtCursor == null) {
+      return null;
+    }
+
+    return <ContextMenuButtonItem>[
+      ...spanAtCursor.suggestions.take(_spellCheckMaxSuggestions).map(
+            (suggestion) => ContextMenuButtonItem(
+              onPressed: () {
+                if (!editableTextState.mounted) {
+                  return;
+                }
+                _replaceSpellCheckText(
+                  editableTextState,
+                  text: suggestion,
+                  replacementRange: spanAtCursor.range,
+                );
+              },
+              label: suggestion,
+            ),
+          ),
+      ContextMenuButtonItem(
+        onPressed: () {
+          if (!editableTextState.mounted) {
+            return;
+          }
+          _replaceSpellCheckText(
+            editableTextState,
+            text: '',
+            replacementRange:
+                editableTextState.currentTextEditingValue.composing,
+          );
+        },
+        type: ContextMenuButtonType.delete,
+      ),
+    ];
+  }
+
+  static List<ContextMenuButtonItem>? _cupertinoSpellCheckButtonItems(
+    BuildContext context,
+    axi.EditableTextState editableTextState,
+  ) {
+    final SuggestionSpan? spanAtCursor =
+        _spellCheckSpanAtCursor(editableTextState);
+    if (spanAtCursor == null) {
+      return null;
+    }
+    if (spanAtCursor.suggestions.isEmpty) {
+      assert(debugCheckHasCupertinoLocalizations(context));
+      final CupertinoLocalizations localizations =
+          CupertinoLocalizations.of(context);
+      return <ContextMenuButtonItem>[
+        ContextMenuButtonItem(
+          onPressed: null,
+          label: localizations.noSpellCheckReplacementsLabel,
+        ),
+      ];
+    }
+
+    return spanAtCursor.suggestions.take(_spellCheckMaxSuggestions).map(
+      (suggestion) {
+        return ContextMenuButtonItem(
+          onPressed: () {
+            if (!editableTextState.mounted) {
+              return;
+            }
+            _replaceSpellCheckText(
+              editableTextState,
+              text: suggestion,
+              replacementRange: spanAtCursor.range,
+              selectionOverride: TextSelection.collapsed(
+                offset: spanAtCursor.range.start + suggestion.length,
+              ),
+            );
+          },
+          label: suggestion,
+        );
+      },
+    ).toList();
+  }
+
+  static void _replaceSpellCheckText(
+    axi.EditableTextState editableTextState, {
+    required String text,
+    required TextRange replacementRange,
+    TextSelection? selectionOverride,
+  }) {
+    assert(!editableTextState.widget.readOnly &&
+        !editableTextState.widget.obscureText);
+
+    final TextEditingValue replacedValue =
+        editableTextState.textEditingValue.replaced(replacementRange, text);
+    final TextEditingValue newValue = selectionOverride == null
+        ? replacedValue
+        : replacedValue.copyWith(selection: selectionOverride);
+    editableTextState.userUpdateTextEditingValue(
+      newValue,
+      SelectionChangedCause.toolbar,
+    );
+    SchedulerBinding.instance.addPostFrameCallback(
+      (_) {
+        if (editableTextState.mounted) {
+          editableTextState.bringIntoView(
+            editableTextState.textEditingValue.selection.extent,
+          );
+        }
+      },
+      debugLabel: _spellCheckBringIntoViewLabel,
+    );
+    editableTextState.hideToolbar();
+  }
+
   @visibleForTesting
   static Widget defaultSpellCheckSuggestionsToolbarBuilder(
     BuildContext context,
@@ -356,30 +497,56 @@ class AxiTextField extends StatefulWidget {
     switch (defaultTargetPlatform) {
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
-        return CupertinoSpellCheckSuggestionsToolbar.editableText(
-          editableTextState: editableTextState,
+        final List<ContextMenuButtonItem>? buttonItems =
+            _cupertinoSpellCheckButtonItems(context, editableTextState);
+        return CupertinoSpellCheckSuggestionsToolbar(
+          anchors: editableTextState.contextMenuAnchors,
+          buttonItems: buttonItems ?? const <ContextMenuButtonItem>[],
         );
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
       case TargetPlatform.linux:
       case TargetPlatform.windows:
-        return SpellCheckSuggestionsToolbar.editableText(editableTextState: editableTextState);
+        final List<ContextMenuButtonItem>? buttonItems =
+            _materialSpellCheckButtonItems(editableTextState);
+        return SpellCheckSuggestionsToolbar(
+          anchor: SpellCheckSuggestionsToolbar.getToolbarAnchor(
+            editableTextState.contextMenuAnchors,
+          ),
+          buttonItems: buttonItems ?? const <ContextMenuButtonItem>[],
+        );
     }
   }
 
   static SpellCheckConfiguration inferAndroidSpellCheckConfiguration(
     SpellCheckConfiguration? configuration,
   ) {
-    if (configuration == null || configuration == const SpellCheckConfiguration.disabled()) {
+    if (configuration == null ||
+        configuration == const SpellCheckConfiguration.disabled()) {
       return const SpellCheckConfiguration.disabled();
     }
     return configuration.copyWith(
-      misspelledTextStyle:
-          configuration.misspelledTextStyle ??
-              AxiTextField.materialMisspelledTextStyle,
+      misspelledTextStyle: configuration.misspelledTextStyle ??
+          AxiTextField.materialMisspelledTextStyle,
       spellCheckSuggestionsToolbarBuilder:
           configuration.spellCheckSuggestionsToolbarBuilder ??
-          AxiTextField.defaultSpellCheckSuggestionsToolbarBuilder,
+              AxiTextField.defaultSpellCheckSuggestionsToolbarBuilder,
+    );
+  }
+
+  static SpellCheckConfiguration inferIOSSpellCheckConfiguration(
+    SpellCheckConfiguration? configuration,
+  ) {
+    if (configuration == null ||
+        configuration == const SpellCheckConfiguration.disabled()) {
+      return const SpellCheckConfiguration.disabled();
+    }
+    return configuration.copyWith(
+      misspelledTextStyle: configuration.misspelledTextStyle ??
+          CupertinoTextField.cupertinoMisspelledTextStyle,
+      spellCheckSuggestionsToolbarBuilder:
+          configuration.spellCheckSuggestionsToolbarBuilder ??
+              AxiTextField.defaultSpellCheckSuggestionsToolbarBuilder,
     );
   }
 
@@ -390,9 +557,11 @@ class AxiTextField extends StatefulWidget {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(
-      DiagnosticsProperty<TextEditingController>('controller', controller, defaultValue: null),
+      DiagnosticsProperty<TextEditingController>('controller', controller,
+          defaultValue: null),
     );
-    properties.add(DiagnosticsProperty<FocusNode>('focusNode', focusNode, defaultValue: null));
+    properties.add(DiagnosticsProperty<FocusNode>('focusNode', focusNode,
+        defaultValue: null));
     properties.add(
       DiagnosticsProperty<UndoHistoryController>(
         'undoController',
@@ -400,7 +569,8 @@ class AxiTextField extends StatefulWidget {
         defaultValue: null,
       ),
     );
-    properties.add(DiagnosticsProperty<bool>('enabled', enabled, defaultValue: null));
+    properties
+        .add(DiagnosticsProperty<bool>('enabled', enabled, defaultValue: null));
     properties.add(
       DiagnosticsProperty<InputDecoration>(
         'decoration',
@@ -415,33 +585,42 @@ class AxiTextField extends StatefulWidget {
         defaultValue: TextInputType.text,
       ),
     );
-    properties.add(DiagnosticsProperty<TextStyle>('style', style, defaultValue: null));
-    properties.add(DiagnosticsProperty<bool>('autofocus', autofocus, defaultValue: false));
     properties.add(
-      DiagnosticsProperty<String>('obscuringCharacter', obscuringCharacter, defaultValue: '•'),
+        DiagnosticsProperty<TextStyle>('style', style, defaultValue: null));
+    properties.add(
+        DiagnosticsProperty<bool>('autofocus', autofocus, defaultValue: false));
+    properties.add(
+      DiagnosticsProperty<String>('obscuringCharacter', obscuringCharacter,
+          defaultValue: '•'),
     );
-    properties.add(DiagnosticsProperty<bool>('obscureText', obscureText, defaultValue: false));
-    properties.add(DiagnosticsProperty<bool>('autocorrect', autocorrect, defaultValue: null));
+    properties.add(DiagnosticsProperty<bool>('obscureText', obscureText,
+        defaultValue: false));
+    properties.add(DiagnosticsProperty<bool>('autocorrect', autocorrect,
+        defaultValue: null));
     properties.add(
       EnumProperty<SmartDashesType>(
         'smartDashesType',
         smartDashesType,
-        defaultValue: obscureText ? SmartDashesType.disabled : SmartDashesType.enabled,
+        defaultValue:
+            obscureText ? SmartDashesType.disabled : SmartDashesType.enabled,
       ),
     );
     properties.add(
       EnumProperty<SmartQuotesType>(
         'smartQuotesType',
         smartQuotesType,
-        defaultValue: obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled,
+        defaultValue:
+            obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled,
       ),
     );
     properties.add(
-      DiagnosticsProperty<bool>('enableSuggestions', enableSuggestions, defaultValue: true),
+      DiagnosticsProperty<bool>('enableSuggestions', enableSuggestions,
+          defaultValue: true),
     );
     properties.add(IntProperty('maxLines', maxLines, defaultValue: 1));
     properties.add(IntProperty('minLines', minLines, defaultValue: null));
-    properties.add(DiagnosticsProperty<bool>('expands', expands, defaultValue: false));
+    properties.add(
+        DiagnosticsProperty<bool>('expands', expands, defaultValue: false));
     properties.add(IntProperty('maxLength', maxLength, defaultValue: null));
     properties.add(
       EnumProperty<MaxLengthEnforcement>(
@@ -451,7 +630,8 @@ class AxiTextField extends StatefulWidget {
       ),
     );
     properties.add(
-      EnumProperty<TextInputAction>('textInputAction', textInputAction, defaultValue: null),
+      EnumProperty<TextInputAction>('textInputAction', textInputAction,
+          defaultValue: null),
     );
     properties.add(
       EnumProperty<TextCapitalization>(
@@ -460,7 +640,8 @@ class AxiTextField extends StatefulWidget {
         defaultValue: TextCapitalization.none,
       ),
     );
-    properties.add(EnumProperty<TextAlign>('textAlign', textAlign, defaultValue: TextAlign.start));
+    properties.add(EnumProperty<TextAlign>('textAlign', textAlign,
+        defaultValue: TextAlign.start));
     properties.add(
       DiagnosticsProperty<TextAlignVertical>(
         'textAlignVertical',
@@ -468,17 +649,25 @@ class AxiTextField extends StatefulWidget {
         defaultValue: null,
       ),
     );
-    properties.add(EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
-    properties.add(DoubleProperty('cursorWidth', cursorWidth, defaultValue: 2.0));
-    properties.add(DoubleProperty('cursorHeight', cursorHeight, defaultValue: null));
-    properties.add(DiagnosticsProperty<Radius>('cursorRadius', cursorRadius, defaultValue: null));
+    properties.add(EnumProperty<TextDirection>('textDirection', textDirection,
+        defaultValue: null));
+    properties
+        .add(DoubleProperty('cursorWidth', cursorWidth, defaultValue: 2.0));
+    properties
+        .add(DoubleProperty('cursorHeight', cursorHeight, defaultValue: null));
+    properties.add(DiagnosticsProperty<Radius>('cursorRadius', cursorRadius,
+        defaultValue: null));
     properties.add(
-      DiagnosticsProperty<bool>('cursorOpacityAnimates', cursorOpacityAnimates, defaultValue: null),
+      DiagnosticsProperty<bool>('cursorOpacityAnimates', cursorOpacityAnimates,
+          defaultValue: null),
     );
-    properties.add(ColorProperty('cursorColor', cursorColor, defaultValue: null));
-    properties.add(ColorProperty('cursorErrorColor', cursorErrorColor, defaultValue: null));
+    properties
+        .add(ColorProperty('cursorColor', cursorColor, defaultValue: null));
+    properties.add(ColorProperty('cursorErrorColor', cursorErrorColor,
+        defaultValue: null));
     properties.add(
-      DiagnosticsProperty<Brightness>('keyboardAppearance', keyboardAppearance, defaultValue: null),
+      DiagnosticsProperty<Brightness>('keyboardAppearance', keyboardAppearance,
+          defaultValue: null),
     );
     properties.add(
       DiagnosticsProperty<EdgeInsetsGeometry>(
@@ -510,13 +699,16 @@ class AxiTextField extends StatefulWidget {
       ),
     );
     properties.add(
-      DiagnosticsProperty<ScrollPhysics>('scrollPhysics', scrollPhysics, defaultValue: null),
+      DiagnosticsProperty<ScrollPhysics>('scrollPhysics', scrollPhysics,
+          defaultValue: null),
     );
     properties.add(
-      DiagnosticsProperty<Clip>('clipBehavior', clipBehavior, defaultValue: Clip.hardEdge),
+      DiagnosticsProperty<Clip>('clipBehavior', clipBehavior,
+          defaultValue: Clip.hardEdge),
     );
     properties.add(
-      DiagnosticsProperty<bool>('scribbleEnabled', scribbleEnabled, defaultValue: true),
+      DiagnosticsProperty<bool>('scribbleEnabled', scribbleEnabled,
+          defaultValue: true),
     );
     properties.add(
       DiagnosticsProperty<bool>(
@@ -549,7 +741,8 @@ class AxiTextField extends StatefulWidget {
       ),
     );
     properties.add(
-      DiagnosticsProperty<List<Locale>?>('hintLocales', hintLocales, defaultValue: null),
+      DiagnosticsProperty<List<Locale>?>('hintLocales', hintLocales,
+          defaultValue: null),
     );
   }
 }
@@ -558,15 +751,18 @@ class _AxiTextFieldState extends State<AxiTextField>
     with RestorationMixin
     implements AxiTextSelectionGestureDetectorBuilderDelegate, AutofillClient {
   RestorableTextEditingController? _controller;
-  TextEditingController get _effectiveController => widget.controller ?? _controller!.value;
+  TextEditingController get _effectiveController =>
+      widget.controller ?? _controller!.value;
   late TypingTextEditingController _typingController;
 
   FocusNode? _focusNode;
-  FocusNode get _effectiveFocusNode => widget.focusNode ?? (_focusNode ??= FocusNode());
+  FocusNode get _effectiveFocusNode =>
+      widget.focusNode ?? (_focusNode ??= FocusNode());
 
   MaxLengthEnforcement get _effectiveMaxLengthEnforcement =>
       widget.maxLengthEnforcement ??
-      LengthLimitingTextInputFormatter.getDefaultMaxLengthEnforcement(Theme.of(context).platform);
+      LengthLimitingTextInputFormatter.getDefaultMaxLengthEnforcement(
+          Theme.of(context).platform);
 
   bool _isHovering = false;
 
@@ -577,7 +773,8 @@ class _AxiTextFieldState extends State<AxiTextField>
 
   bool _showSelectionHandles = false;
 
-  late _AxiTextFieldSelectionGestureDetectorBuilder _selectionGestureDetectorBuilder;
+  late _AxiTextFieldSelectionGestureDetectorBuilder
+      _selectionGestureDetectorBuilder;
 
   // API for TextSelectionGestureDetectorBuilderDelegate.
   @override
@@ -599,8 +796,11 @@ class _AxiTextFieldState extends State<AxiTextField>
       widget.maxLength != null &&
       widget.maxLength! > 0 &&
       (widget.controller == null
-          ? !restorePending && _effectiveController.value.text.characters.length > widget.maxLength!
-          : _effectiveController.value.text.characters.length > widget.maxLength!);
+          ? !restorePending &&
+              _effectiveController.value.text.characters.length >
+                  widget.maxLength!
+          : _effectiveController.value.text.characters.length >
+              widget.maxLength!);
 
   bool get _hasError =>
       widget.decoration?.errorText != null ||
@@ -613,20 +813,22 @@ class _AxiTextFieldState extends State<AxiTextField>
       Theme.of(context).colorScheme.error;
 
   InputDecoration _getEffectiveDecoration() {
-    final MaterialLocalizations localizations = MaterialLocalizations.of(context);
+    final MaterialLocalizations localizations =
+        MaterialLocalizations.of(context);
     final ThemeData themeData = Theme.of(context);
-    final InputDecoration effectiveDecoration = (widget.decoration ?? const InputDecoration())
-        .applyDefaults(themeData.inputDecorationTheme)
-        .copyWith(
-          enabled: _isEnabled,
-          hintMaxLines:
-              widget.decoration?.hintMaxLines ??
-              themeData.inputDecorationTheme.hintMaxLines ??
-              widget.maxLines,
-        );
+    final InputDecoration effectiveDecoration =
+        (widget.decoration ?? const InputDecoration())
+            .applyDefaults(themeData.inputDecorationTheme)
+            .copyWith(
+              enabled: _isEnabled,
+              hintMaxLines: widget.decoration?.hintMaxLines ??
+                  themeData.inputDecorationTheme.hintMaxLines ??
+                  widget.maxLines,
+            );
 
     // No need to build anything if counter or counterText were given directly.
-    if (effectiveDecoration.counter != null || effectiveDecoration.counterText != null) {
+    if (effectiveDecoration.counter != null ||
+        effectiveDecoration.counterText != null) {
       return effectiveDecoration;
     }
 
@@ -645,7 +847,8 @@ class _AxiTextFieldState extends State<AxiTextField>
       );
       // If buildCounter returns null, don't add a counter widget to the field.
       if (builtCounter != null) {
-        counter = Semantics(container: true, liveRegion: isFocused, child: builtCounter);
+        counter = Semantics(
+            container: true, liveRegion: isFocused, child: builtCounter);
       }
       return effectiveDecoration.copyWith(counter: counter);
     }
@@ -661,15 +864,16 @@ class _AxiTextFieldState extends State<AxiTextField>
     if (widget.maxLength! > 0) {
       // Show the maxLength in the counter
       counterText += '/${widget.maxLength}';
-      final int remaining = (widget.maxLength! - currentLength).clamp(0, widget.maxLength!);
-      semanticCounterText = localizations.remainingTextFieldCharacterCount(remaining);
+      final int remaining =
+          (widget.maxLength! - currentLength).clamp(0, widget.maxLength!);
+      semanticCounterText =
+          localizations.remainingTextFieldCharacterCount(remaining);
     }
 
     if (_hasIntrinsicError) {
       return effectiveDecoration.copyWith(
         errorText: effectiveDecoration.errorText ?? '',
-        counterStyle:
-            effectiveDecoration.errorStyle ??
+        counterStyle: effectiveDecoration.errorStyle ??
             (themeData.useMaterial3
                 ? _m3CounterErrorStyle(context)
                 : _m2CounterErrorStyle(context)),
@@ -687,11 +891,13 @@ class _AxiTextFieldState extends State<AxiTextField>
   @override
   void initState() {
     super.initState();
-    _selectionGestureDetectorBuilder = _AxiTextFieldSelectionGestureDetectorBuilder(state: this);
+    _selectionGestureDetectorBuilder =
+        _AxiTextFieldSelectionGestureDetectorBuilder(state: this);
     if (widget.controller == null) {
       _createLocalController();
     }
-    _typingController = TypingTextEditingController(source: _effectiveController);
+    _typingController =
+        TypingTextEditingController(source: _effectiveController);
     _effectiveFocusNode.canRequestFocus = widget.canRequestFocus && _isEnabled;
     _effectiveFocusNode.addListener(_handleFocusChanged);
     _initStatesController();
@@ -731,7 +937,9 @@ class _AxiTextFieldState extends State<AxiTextField>
 
     _effectiveFocusNode.canRequestFocus = _canRequestFocus;
 
-    if (_effectiveFocusNode.hasFocus && widget.readOnly != oldWidget.readOnly && _isEnabled) {
+    if (_effectiveFocusNode.hasFocus &&
+        widget.readOnly != oldWidget.readOnly &&
+        _isEnabled) {
       if (_effectiveController.selection.isCollapsed) {
         _showSelectionHandles = !widget.readOnly;
       }
@@ -740,7 +948,8 @@ class _AxiTextFieldState extends State<AxiTextField>
     if (widget.statesController == oldWidget.statesController) {
       _statesController.update(WidgetState.disabled, !_isEnabled);
       _statesController.update(WidgetState.hovered, _isHovering);
-      _statesController.update(WidgetState.focused, _effectiveFocusNode.hasFocus);
+      _statesController.update(
+          WidgetState.focused, _effectiveFocusNode.hasFocus);
       _statesController.update(WidgetState.error, _hasError);
     } else {
       oldWidget.statesController?.removeListener(_handleStatesControllerChange);
@@ -834,7 +1043,8 @@ class _AxiTextFieldState extends State<AxiTextField>
     _statesController.update(WidgetState.focused, _effectiveFocusNode.hasFocus);
   }
 
-  void _handleSelectionChanged(TextSelection selection, SelectionChangedCause? cause) {
+  void _handleSelectionChanged(
+      TextSelection selection, SelectionChangedCause? cause) {
     final bool willShowSelectionHandles = _shouldShowSelectionHandles(cause);
     if (willShowSelectionHandles != _showSelectionHandles) {
       setState(() {
@@ -910,11 +1120,13 @@ class _AxiTextFieldState extends State<AxiTextField>
   String get autofillId => _editableText!.autofillId;
 
   @override
-  void autofill(TextEditingValue newEditingValue) => _editableText!.autofill(newEditingValue);
+  void autofill(TextEditingValue newEditingValue) =>
+      _editableText!.autofill(newEditingValue);
 
   @override
   TextInputConfiguration get textInputConfiguration {
-    final List<String>? autofillHints = widget.autofillHints?.toList(growable: false);
+    final List<String>? autofillHints =
+        widget.autofillHints?.toList(growable: false);
     final AutofillConfiguration autofillConfiguration = autofillHints != null
         ? AutofillConfiguration(
             uniqueIdentifier: autofillId,
@@ -933,10 +1145,13 @@ class _AxiTextFieldState extends State<AxiTextField>
   TextStyle _getInputStyleForState(TextStyle style) {
     final ThemeData theme = Theme.of(context);
     final TextStyle stateStyle = WidgetStateProperty.resolveAs(
-      theme.useMaterial3 ? _m3StateInputStyle(context)! : _m2StateInputStyle(context)!,
+      theme.useMaterial3
+          ? _m3StateInputStyle(context)!
+          : _m2StateInputStyle(context)!,
       _statesController.value,
     );
-    final TextStyle providedStyle = WidgetStateProperty.resolveAs(style, _statesController.value);
+    final TextStyle providedStyle =
+        WidgetStateProperty.resolveAs(style, _statesController.value);
     return providedStyle.merge(stateStyle);
   }
 
@@ -948,20 +1163,25 @@ class _AxiTextFieldState extends State<AxiTextField>
     assert(
       !(widget.style != null &&
           !widget.style!.inherit &&
-          (widget.style!.fontSize == null || widget.style!.textBaseline == null)),
+          (widget.style!.fontSize == null ||
+              widget.style!.textBaseline == null)),
       'inherit false style must supply fontSize and textBaseline',
     );
 
     final ThemeData theme = Theme.of(context);
-    final DefaultSelectionStyle selectionStyle = DefaultSelectionStyle.of(context);
+    final DefaultSelectionStyle selectionStyle =
+        DefaultSelectionStyle.of(context);
     final TextStyle? providedStyle = WidgetStateProperty.resolveAs(
       widget.style,
       _statesController.value,
     );
     final TextStyle style = _getInputStyleForState(
-      theme.useMaterial3 ? _m3InputStyle(context) : theme.textTheme.titleMedium!,
+      theme.useMaterial3
+          ? _m3InputStyle(context)
+          : theme.textTheme.titleMedium!,
     ).merge(providedStyle);
-    final Brightness keyboardAppearance = widget.keyboardAppearance ?? theme.brightness;
+    final Brightness keyboardAppearance =
+        widget.keyboardAppearance ?? theme.brightness;
     final TypingTextEditingController controller = _typingController;
     final FocusNode focusNode = _effectiveFocusNode;
     final List<TextInputFormatter> formatters = <TextInputFormatter>[
@@ -980,14 +1200,15 @@ class _AxiTextFieldState extends State<AxiTextField>
     switch (defaultTargetPlatform) {
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
-        spellCheckConfiguration = CupertinoTextField.inferIOSSpellCheckConfiguration(
+        spellCheckConfiguration = AxiTextField.inferIOSSpellCheckConfiguration(
           widget.spellCheckConfiguration,
         );
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
       case TargetPlatform.linux:
       case TargetPlatform.windows:
-        spellCheckConfiguration = AxiTextField.inferAndroidSpellCheckConfiguration(
+        spellCheckConfiguration =
+            AxiTextField.inferAndroidSpellCheckConfiguration(
           widget.spellCheckConfiguration,
         );
     }
@@ -1012,11 +1233,14 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorOpacityAnimates ??= true;
         cursorColor = _hasError
             ? _errorColor
-            : widget.cursorColor ?? selectionStyle.cursorColor ?? cupertinoTheme.primaryColor;
-        selectionColor =
-            selectionStyle.selectionColor ?? cupertinoTheme.primaryColor.withOpacity(0.40);
+            : widget.cursorColor ??
+                selectionStyle.cursorColor ??
+                cupertinoTheme.primaryColor;
+        selectionColor = selectionStyle.selectionColor ??
+            cupertinoTheme.primaryColor.withOpacity(0.40);
         cursorRadius ??= const Radius.circular(2.0);
-        cursorOffset = Offset(iOSHorizontalOffset / MediaQuery.devicePixelRatioOf(context), 0);
+        cursorOffset = Offset(
+            iOSHorizontalOffset / MediaQuery.devicePixelRatioOf(context), 0);
         autocorrectionTextRectColor = selectionColor;
 
       case TargetPlatform.macOS:
@@ -1027,14 +1251,18 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorOpacityAnimates ??= false;
         cursorColor = _hasError
             ? _errorColor
-            : widget.cursorColor ?? selectionStyle.cursorColor ?? cupertinoTheme.primaryColor;
-        selectionColor =
-            selectionStyle.selectionColor ?? cupertinoTheme.primaryColor.withOpacity(0.40);
+            : widget.cursorColor ??
+                selectionStyle.cursorColor ??
+                cupertinoTheme.primaryColor;
+        selectionColor = selectionStyle.selectionColor ??
+            cupertinoTheme.primaryColor.withOpacity(0.40);
         cursorRadius ??= const Radius.circular(2.0);
-        cursorOffset = Offset(iOSHorizontalOffset / MediaQuery.devicePixelRatioOf(context), 0);
+        cursorOffset = Offset(
+            iOSHorizontalOffset / MediaQuery.devicePixelRatioOf(context), 0);
         handleDidGainAccessibilityFocus = () {
           // Automatically activate the TextField when it receives accessibility focus.
-          if (!_effectiveFocusNode.hasFocus && _effectiveFocusNode.canRequestFocus) {
+          if (!_effectiveFocusNode.hasFocus &&
+              _effectiveFocusNode.canRequestFocus) {
             _effectiveFocusNode.requestFocus();
           }
         };
@@ -1050,9 +1278,11 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorOpacityAnimates ??= false;
         cursorColor = _hasError
             ? _errorColor
-            : widget.cursorColor ?? selectionStyle.cursorColor ?? theme.colorScheme.primary;
-        selectionColor =
-            selectionStyle.selectionColor ?? theme.colorScheme.primary.withOpacity(0.40);
+            : widget.cursorColor ??
+                selectionStyle.cursorColor ??
+                theme.colorScheme.primary;
+        selectionColor = selectionStyle.selectionColor ??
+            theme.colorScheme.primary.withOpacity(0.40);
 
       case TargetPlatform.linux:
         forcePressEnabled = false;
@@ -1061,12 +1291,15 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorOpacityAnimates ??= false;
         cursorColor = _hasError
             ? _errorColor
-            : widget.cursorColor ?? selectionStyle.cursorColor ?? theme.colorScheme.primary;
-        selectionColor =
-            selectionStyle.selectionColor ?? theme.colorScheme.primary.withOpacity(0.40);
+            : widget.cursorColor ??
+                selectionStyle.cursorColor ??
+                theme.colorScheme.primary;
+        selectionColor = selectionStyle.selectionColor ??
+            theme.colorScheme.primary.withOpacity(0.40);
         handleDidGainAccessibilityFocus = () {
           // Automatically activate the TextField when it receives accessibility focus.
-          if (!_effectiveFocusNode.hasFocus && _effectiveFocusNode.canRequestFocus) {
+          if (!_effectiveFocusNode.hasFocus &&
+              _effectiveFocusNode.canRequestFocus) {
             _effectiveFocusNode.requestFocus();
           }
         };
@@ -1081,12 +1314,15 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorOpacityAnimates ??= false;
         cursorColor = _hasError
             ? _errorColor
-            : widget.cursorColor ?? selectionStyle.cursorColor ?? theme.colorScheme.primary;
-        selectionColor =
-            selectionStyle.selectionColor ?? theme.colorScheme.primary.withOpacity(0.40);
+            : widget.cursorColor ??
+                selectionStyle.cursorColor ??
+                theme.colorScheme.primary;
+        selectionColor = selectionStyle.selectionColor ??
+            theme.colorScheme.primary.withOpacity(0.40);
         handleDidGainAccessibilityFocus = () {
           // Automatically activate the TextField when it receives accessibility focus.
-          if (!_effectiveFocusNode.hasFocus && _effectiveFocusNode.canRequestFocus) {
+          if (!_effectiveFocusNode.hasFocus &&
+              _effectiveFocusNode.canRequestFocus) {
             _effectiveFocusNode.requestFocus();
           }
         };
@@ -1129,7 +1365,8 @@ class _AxiTextFieldState extends State<AxiTextField>
           expands: widget.expands,
           // Only show the selection highlight when the text field is focused.
           selectionColor: focusNode.hasFocus ? selectionColor : null,
-          selectionControls: widget.selectionEnabled ? textSelectionControls : null,
+          selectionControls:
+              widget.selectionEnabled ? textSelectionControls : null,
           onChanged: widget.onChanged,
           onSelectionChanged: _handleSelectionChanged,
           onEditingComplete: widget.onEditingComplete,
@@ -1170,8 +1407,8 @@ class _AxiTextFieldState extends State<AxiTextField>
           contentInsertionConfiguration: widget.contentInsertionConfiguration,
           contextMenuBuilder: widget.contextMenuBuilder,
           spellCheckConfiguration: spellCheckConfiguration,
-          magnifierConfiguration:
-              widget.magnifierConfiguration ?? TextMagnifier.adaptiveMagnifierConfiguration,
+          magnifierConfiguration: widget.magnifierConfiguration ??
+              TextMagnifier.adaptiveMagnifierConfiguration,
           hintLocales: widget.hintLocales,
         ),
       ),
@@ -1196,7 +1433,8 @@ class _AxiTextFieldState extends State<AxiTextField>
         child: child,
       );
     }
-    final MouseCursor effectiveMouseCursor = WidgetStateProperty.resolveAs<MouseCursor>(
+    final MouseCursor effectiveMouseCursor =
+        WidgetStateProperty.resolveAs<MouseCursor>(
       widget.mouseCursor ?? WidgetStateMouseCursor.textable,
       _statesController.value,
     );
@@ -1228,7 +1466,8 @@ class _AxiTextFieldState extends State<AxiTextField>
                     ? null
                     : () {
                         if (!_effectiveController.selection.isValid) {
-                          _effectiveController.selection = TextSelection.collapsed(
+                          _effectiveController.selection =
+                              TextSelection.collapsed(
                             offset: _effectiveController.text.length,
                           );
                         }
@@ -1247,7 +1486,8 @@ class _AxiTextFieldState extends State<AxiTextField>
                           'such that the assistive technology cannot request focus on it.',
                         );
 
-                        if (_effectiveFocusNode.canRequestFocus && !_effectiveFocusNode.hasFocus) {
+                        if (_effectiveFocusNode.canRequestFocus &&
+                            !_effectiveFocusNode.hasFocus) {
                           _effectiveFocusNode.requestFocus();
                         } else if (!widget.readOnly) {
                           // If the platform requested focus, that means that previously the
@@ -1288,8 +1528,10 @@ TextStyle? _m2StateInputStyle(BuildContext context) =>
       return TextStyle(color: theme.textTheme.titleMedium?.color);
     });
 
-TextStyle _m2CounterErrorStyle(BuildContext context) =>
-    Theme.of(context).textTheme.bodySmall!.copyWith(color: Theme.of(context).colorScheme.error);
+TextStyle _m2CounterErrorStyle(BuildContext context) => Theme.of(context)
+    .textTheme
+    .bodySmall!
+    .copyWith(color: Theme.of(context).colorScheme.error);
 
 // BEGIN GENERATED TOKEN PROPERTIES - TextField
 
@@ -1299,17 +1541,26 @@ TextStyle _m2CounterErrorStyle(BuildContext context) =>
 //   dev/tools/gen_defaults/bin/gen_defaults.dart.
 
 // dart format off
-TextStyle? _m3StateInputStyle(BuildContext context) => WidgetStateTextStyle.resolveWith((Set<WidgetState> states) {
-  if (states.contains(WidgetState.disabled)) {
-    return TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color?.withOpacity(0.38));
-  }
-  return TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color);
-});
+TextStyle? _m3StateInputStyle(BuildContext context) =>
+    WidgetStateTextStyle.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.disabled)) {
+        return TextStyle(
+            color: Theme.of(context)
+                .textTheme
+                .bodyLarge!
+                .color
+                ?.withOpacity(0.38));
+      }
+      return TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color);
+    });
 
-TextStyle _m3InputStyle(BuildContext context) => Theme.of(context).textTheme.bodyLarge!;
+TextStyle _m3InputStyle(BuildContext context) =>
+    Theme.of(context).textTheme.bodyLarge!;
 
-TextStyle _m3CounterErrorStyle(BuildContext context) =>
-  Theme.of(context).textTheme.bodySmall!.copyWith(color: Theme.of(context).colorScheme.error);
+TextStyle _m3CounterErrorStyle(BuildContext context) => Theme.of(context)
+    .textTheme
+    .bodySmall!
+    .copyWith(color: Theme.of(context).colorScheme.error);
 // dart format on
 
 // END GENERATED TOKEN PROPERTIES - TextField
