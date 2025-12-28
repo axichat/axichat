@@ -66,6 +66,7 @@ const _pinPermissionDeniedMessage =
     'You do not have permission to pin messages in this room.';
 const _pinRoomStateLoadingMessage = 'Room members are still loading.';
 const _pinSyncFailedLogMessage = 'Failed to sync pinned messages.';
+const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
 
@@ -160,6 +161,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
+    on<ChatPinnedMessagesOpened>(_onChatPinnedMessagesOpened);
     on<_RoomStateUpdated>(_onRoomStateUpdated);
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
@@ -314,6 +316,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _mamLoading = false;
   bool _mamCatchingUp = false;
   bool _emailHistoryLoading = false;
+  bool _pinHydrationInFlight = false;
   Completer<void>? _mamLoadingCompleter;
 
   RestartableTimer? _typingTimer;
@@ -655,12 +658,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
-  void _subscribeToPinnedMessages(Chat chat) {
+  String? _resolvePinnedMessagesChatJid(Chat chat) {
     final resolvedChatJid =
         chat.defaultTransport.isEmail ? chat.jid : chat.remoteJid;
     final trimmedChatJid = resolvedChatJid.trim();
-    unawaited(_pinnedSubscription?.cancel());
     if (trimmedChatJid.isEmpty) {
+      return null;
+    }
+    return trimmedChatJid;
+  }
+
+  void _subscribeToPinnedMessages(Chat chat) {
+    final trimmedChatJid = _resolvePinnedMessagesChatJid(chat);
+    unawaited(_pinnedSubscription?.cancel());
+    if (trimmedChatJid == null) {
       _pinnedSubscription = null;
       return;
     }
@@ -988,6 +999,131 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     emit(state.copyWith(pinnedMessages: pinnedItems));
+  }
+
+  Future<void> _onChatPinnedMessagesOpened(
+    ChatPinnedMessagesOpened event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    if (_pinHydrationInFlight) {
+      return;
+    }
+    var missing = _missingPinnedMessageIds(state.pinnedMessages);
+    if (missing.isEmpty) {
+      return;
+    }
+    _pinHydrationInFlight = true;
+    try {
+      if (_isEmailChat) {
+        await _hydratePinnedMessagesFromEmail(chat, missing);
+      } else {
+        await _hydratePinnedMessagesFromMam(chat, missing);
+      }
+    } finally {
+      _pinHydrationInFlight = false;
+    }
+  }
+
+  Set<String> _missingPinnedMessageIds(
+    List<PinnedMessageItem> items,
+  ) {
+    final missing = <String>{};
+    for (final item in items) {
+      if (item.message != null) {
+        continue;
+      }
+      final stanzaId = item.messageStanzaId.trim();
+      if (stanzaId.isEmpty) {
+        continue;
+      }
+      missing.add(stanzaId);
+    }
+    return missing;
+  }
+
+  Future<void> _hydratePinnedMessagesFromMam(
+    Chat chat,
+    Set<String> missingStanzaIds,
+  ) async {
+    if (!_xmppAllowedForChat(chat)) {
+      return;
+    }
+    if (_mamBeforeId == null && state.items.isEmpty) {
+      await _hydrateLatestFromMam(chat);
+      missingStanzaIds = await _pruneResolvedPinnedMessages(
+        missingStanzaIds,
+      );
+      await _refreshPinnedMessagesFromDatabase(chat);
+    }
+    for (var attempt = 0;
+        attempt < _pinnedMessagesFetchPageLimit && missingStanzaIds.isNotEmpty;
+        attempt += 1) {
+      final localCount = await _archivedMessageCount(chat);
+      final desiredWindow = localCount + messageBatchSize;
+      await _loadEarlierFromMam(desiredWindow: desiredWindow);
+      missingStanzaIds = await _pruneResolvedPinnedMessages(
+        missingStanzaIds,
+      );
+      await _refreshPinnedMessagesFromDatabase(chat);
+      if (_mamComplete) {
+        break;
+      }
+    }
+  }
+
+  Future<void> _hydratePinnedMessagesFromEmail(
+    Chat chat,
+    Set<String> missingStanzaIds,
+  ) async {
+    for (var attempt = 0;
+        attempt < _pinnedMessagesFetchPageLimit && missingStanzaIds.isNotEmpty;
+        attempt += 1) {
+      final localCount = await _archivedMessageCount(chat);
+      final desiredWindow = localCount + messageBatchSize;
+      await _loadEarlierFromEmail(desiredWindow: desiredWindow);
+      missingStanzaIds = await _pruneResolvedPinnedMessages(
+        missingStanzaIds,
+      );
+      await _refreshPinnedMessagesFromDatabase(chat);
+    }
+  }
+
+  Future<Set<String>> _pruneResolvedPinnedMessages(
+    Set<String> missingStanzaIds,
+  ) async {
+    if (missingStanzaIds.isEmpty) {
+      return missingStanzaIds;
+    }
+    final db = await _messageService.database;
+    final resolvedMessages = await db.getMessagesByStanzaIds(
+      missingStanzaIds,
+    );
+    if (resolvedMessages.isEmpty) {
+      return missingStanzaIds;
+    }
+    final resolvedIds = <String>{};
+    for (final message in resolvedMessages) {
+      final stanzaId = message.stanzaID.trim();
+      if (stanzaId.isNotEmpty) {
+        resolvedIds.add(stanzaId);
+      }
+    }
+    missingStanzaIds.removeAll(resolvedIds);
+    return missingStanzaIds;
+  }
+
+  Future<void> _refreshPinnedMessagesFromDatabase(Chat chat) async {
+    final pinnedChatJid = _resolvePinnedMessagesChatJid(chat);
+    if (pinnedChatJid == null) {
+      return;
+    }
+    final db = await _messageService.database;
+    final entries = await db.getPinnedMessages(pinnedChatJid);
+    add(_PinnedMessagesUpdated(entries));
   }
 
   Future<void> _onChatInviteRequested(
