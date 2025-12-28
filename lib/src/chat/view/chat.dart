@@ -149,6 +149,7 @@ const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
 const _chatHeaderActionSpacing = 4.0;
 const _messageActionIconSize = 16.0;
+const _pinnedListLoadingIndicatorSize = 28.0;
 const String _calendarFragmentShareDeniedMessage =
     'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
@@ -4770,6 +4771,8 @@ class _ChatState extends State<Chat> {
                                                                         calendarTaskIcs,
                                                                     readOnly:
                                                                         calendarTaskIcsReadOnly,
+                                                                    requireImportConfirmation:
+                                                                        !self,
                                                                     footerDetails:
                                                                         taskFooterDetails,
                                                                   ),
@@ -5092,12 +5095,11 @@ class _ChatState extends State<Chat> {
                                                         final allowAttachment =
                                                             allowAttachmentByTrust ||
                                                                 allowAttachmentOnce;
-                                                        final autoDownloadSettings =
-                                                            context
-                                                                .watch<
-                                                                    SettingsCubit>()
-                                                                .state
-                                                                .attachmentAutoDownloadSettings;
+                                                        final autoDownloadSettings = context
+                                                            .watch<
+                                                                SettingsCubit>()
+                                                            .state
+                                                            .attachmentAutoDownloadSettings;
                                                         final chatAutoDownloadAllowed =
                                                             state
                                                                     .chat
@@ -6464,6 +6466,10 @@ class _ChatState extends State<Chat> {
                                 chat: chatEntity,
                                 visible: _chatRoute == _ChatRoute.pins,
                                 pinnedMessages: state.pinnedMessages,
+                                pinnedMessagesLoaded:
+                                    state.pinnedMessagesLoaded,
+                                pinnedMessagesHydrating:
+                                    state.pinnedMessagesHydrating,
                                 onClose: _closePinnedMessages,
                                 canTogglePins: canTogglePins,
                                 canShowCalendarTasks: chatCalendarBloc != null,
@@ -7128,6 +7134,8 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.chat,
     required this.visible,
     required this.pinnedMessages,
+    required this.pinnedMessagesLoaded,
+    required this.pinnedMessagesHydrating,
     required this.onClose,
     required this.canTogglePins,
     required this.canShowCalendarTasks,
@@ -7142,6 +7150,8 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final chat_models.Chat? chat;
   final bool visible;
   final List<PinnedMessageItem> pinnedMessages;
+  final bool pinnedMessagesLoaded;
+  final bool pinnedMessagesHydrating;
   final VoidCallback onClose;
   final bool canTogglePins;
   final bool canShowCalendarTasks;
@@ -7209,36 +7219,46 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
     }
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final Widget body = widget.pinnedMessages.isEmpty
+    final showLoading = widget.visible && !widget.pinnedMessagesLoaded;
+    final Widget body = showLoading
         ? Center(
-            child: Text(
-              l10n.chatPinnedEmptyState,
-              textAlign: TextAlign.center,
-              style: context.textTheme.muted.copyWith(
-                color: colors.mutedForeground,
-              ),
+            child: AxiProgressIndicator(
+              dimension: _pinnedListLoadingIndicatorSize,
+              color: colors.mutedForeground,
             ),
           )
-        : ListView.separated(
-            padding: EdgeInsets.zero,
-            itemCount: widget.pinnedMessages.length,
-            separatorBuilder: (_, __) => const AxiListDivider(),
-            itemBuilder: (context, index) {
-              final item = widget.pinnedMessages[index];
-              return _PinnedMessageTile(
-                item: item,
-                chat: resolvedChat,
-                roomState: widget.roomState,
-                canTogglePins: widget.canTogglePins,
-                canShowCalendarTasks: widget.canShowCalendarTasks,
-                metadataStreamFor: widget.metadataStreamFor,
-                metadataInitialFor: widget.metadataInitialFor,
-                isOneTimeAttachmentAllowed: widget.isOneTimeAttachmentAllowed,
-                shouldAllowAttachment: widget.shouldAllowAttachment,
-                onApproveAttachment: widget.onApproveAttachment,
+        : widget.pinnedMessages.isEmpty
+            ? Center(
+                child: Text(
+                  l10n.chatPinnedEmptyState,
+                  textAlign: TextAlign.center,
+                  style: context.textTheme.muted.copyWith(
+                    color: colors.mutedForeground,
+                  ),
+                ),
+              )
+            : ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: widget.pinnedMessages.length,
+                separatorBuilder: (_, __) => const AxiListDivider(),
+                itemBuilder: (context, index) {
+                  final item = widget.pinnedMessages[index];
+                  return _PinnedMessageTile(
+                    item: item,
+                    chat: resolvedChat,
+                    roomState: widget.roomState,
+                    canTogglePins: widget.canTogglePins,
+                    canShowCalendarTasks: widget.canShowCalendarTasks,
+                    isHydrating: widget.pinnedMessagesHydrating,
+                    metadataStreamFor: widget.metadataStreamFor,
+                    metadataInitialFor: widget.metadataInitialFor,
+                    isOneTimeAttachmentAllowed:
+                        widget.isOneTimeAttachmentAllowed,
+                    shouldAllowAttachment: widget.shouldAllowAttachment,
+                    onApproveAttachment: widget.onApproveAttachment,
+                  );
+                },
               );
-            },
-          );
     return AxiSheetScaffold(
       header: AxiSheetHeader(
         title: Text(l10n.chatPinnedMessagesTitle),
@@ -7257,6 +7277,7 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.roomState,
     required this.canTogglePins,
     required this.canShowCalendarTasks,
+    required this.isHydrating,
     required this.metadataStreamFor,
     required this.metadataInitialFor,
     required this.isOneTimeAttachmentAllowed,
@@ -7269,6 +7290,7 @@ class _PinnedMessageTile extends StatelessWidget {
   final RoomState? roomState;
   final bool canTogglePins;
   final bool canShowCalendarTasks;
+  final bool isHydrating;
   final Stream<FileMetadataData?> Function(String) metadataStreamFor;
   final FileMetadataData? Function(String) metadataInitialFor;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
@@ -7359,7 +7381,9 @@ class _PinnedMessageTile extends StatelessWidget {
     final hasAttachments = message != null && attachmentIds.isNotEmpty;
     final showMessageText =
         hasMessageText && !hideTaskText && !hideCriticalPathText;
-    final showMissing = !showMessageText &&
+    final showLoading = message == null && isHydrating;
+    final showMissing = !showLoading &&
+        !showMessageText &&
         !hasAttachments &&
         !hasCalendarTask &&
         !hasCriticalPath;
@@ -7367,19 +7391,27 @@ class _PinnedMessageTile extends StatelessWidget {
         .textTheme
         .bodyMedium
         ?.copyWith(color: colors.foreground);
-    final messageWidget = showMessageText
-        ? Text(
-            messageText ?? _emptyText,
-            style: messageStyle,
+    final messageWidget = showLoading
+        ? Align(
+            alignment: Alignment.centerLeft,
+            child: AxiProgressIndicator(
+              dimension: _messageActionIconSize,
+              color: colors.mutedForeground,
+            ),
           )
-        : showMissing
+        : showMessageText
             ? Text(
-                l10n.chatPinnedMissingMessage,
-                style: context.textTheme.muted.copyWith(
-                  color: colors.mutedForeground,
-                ),
+                messageText ?? _emptyText,
+                style: messageStyle,
               )
-            : null;
+            : showMissing
+                ? Text(
+                    l10n.chatPinnedMissingMessage,
+                    style: context.textTheme.muted.copyWith(
+                      color: colors.mutedForeground,
+                    ),
+                  )
+                : null;
     final messageForPin = _resolveMessageForPin();
     final unpinButton = canTogglePins && messageForPin != null
         ? ShadButton.ghost(
@@ -7410,6 +7442,13 @@ class _PinnedMessageTile extends StatelessWidget {
             ),
           ).withTapBounce()
         : null;
+    final accountJid = context.read<XmppService>().myJid?.toString();
+    final isSelf = message == null
+        ? false
+        : _isSelfMessage(
+            message: message,
+            accountJid: accountJid,
+          );
     final contentChildren = <Widget>[
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -7428,6 +7467,7 @@ class _PinnedMessageTile extends StatelessWidget {
             ? ChatCalendarTaskCard(
                 task: calendarTask,
                 readOnly: taskReadOnly,
+                requireImportConfirmation: !isSelf,
                 footerDetails: _emptyInlineSpans,
               )
             : CalendarFragmentCard(
@@ -7451,11 +7491,6 @@ class _PinnedMessageTile extends StatelessWidget {
       contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
       final isGroupChat = chat.type == ChatType.groupChat;
       final isEmailChat = chat.defaultTransport.isEmail;
-      final accountJid = context.read<XmppService>().myJid?.toString();
-      final isSelf = _isSelfMessage(
-        message: message,
-        accountJid: accountJid,
-      );
       final allowAttachmentByTrust = shouldAllowAttachment(
         senderJid: message.senderJid,
         isSelf: isSelf,
@@ -7467,8 +7502,7 @@ class _PinnedMessageTile extends StatelessWidget {
       final autoDownloadSettings =
           context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
       final chatAutoDownloadAllowed = chat.attachmentAutoDownload.isAllowed;
-      final autoDownloadAllowed =
-          allowAttachment && chatAutoDownloadAllowed;
+      final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
       final emailService = RepositoryProvider.of<EmailService?>(context);
       final emailDownloadDelegate = isEmailChat && emailService != null
           ? AttachmentDownloadDelegate(

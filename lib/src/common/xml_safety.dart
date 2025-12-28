@@ -27,7 +27,7 @@ XmlDocument? tryParseXml(String raw, XmlParseLimits limits) {
     if (_isParseTimedOut(start, limits)) {
       return null;
     }
-    if (document.doctype != null) {
+    if (document.doctypeElement != null) {
       return null;
     }
     final budget = _XmlNodeBudget(

@@ -7,8 +7,8 @@ import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
-import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -17,6 +17,7 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
+import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
@@ -301,6 +302,12 @@ abstract interface class XmppBase {
 
   Stream<PubSubSupport> get pubSubSupportStream;
 
+  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings;
+
+  void updateAttachmentAutoDownloadSettings(
+    AttachmentAutoDownloadSettings settings,
+  );
+
   Future<PubSubSupport> refreshPubSubSupport({bool force = false});
 
   RegisteredStateKey get selfAvatarPathKey;
@@ -486,9 +493,11 @@ class XmppService extends XmppBase
   Stream<PubSubSupport> get pubSubSupportStream =>
       _pubSubSupportController.stream;
 
+  @override
   AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
       _attachmentAutoDownloadSettings;
 
+  @override
   void updateAttachmentAutoDownloadSettings(
     AttachmentAutoDownloadSettings settings,
   ) {

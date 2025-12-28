@@ -16,6 +16,15 @@ const String _availabilityResponseAcceptedFallbackText =
     'Availability accepted';
 const String _availabilityResponseDeclinedFallbackText =
     'Availability declined';
+const String _calendarSyncOperationAdd = 'add';
+const String _calendarSyncOperationUpdate = 'update';
+const String _calendarSyncOperationDelete = 'delete';
+const String _calendarSyncMissingRoleLog =
+    'Rejected calendar sync message; sender role unavailable.';
+const String _calendarSyncUnauthorizedLog =
+    'Rejected calendar sync message; sender role insufficient.';
+const String _calendarSyncMamBypassLog =
+    'Allowing calendar sync message without sender role (MAM history).';
 const String _pinPubSubNamespace = 'urn:axi:pins';
 const String _pinPubSubNodePrefix = 'urn:axi:pins:';
 const String _pinTag = 'pin';
@@ -24,6 +33,9 @@ const String _pinPinnedAtAttr = 'pinned_at';
 const String _pinChatJidAttr = 'chat_jid';
 const String _pinPublishModelOpen = 'open';
 const String _pinPublishModelPublishers = 'publishers';
+const mox.PubSubAffiliation _pinAffiliationOwner = mox.PubSubAffiliation.owner;
+const mox.PubSubAffiliation _pinAffiliationPublisher =
+    mox.PubSubAffiliation.publisher;
 const String _pinSendLastOnSubscribe = 'on_subscribe';
 const int _pinSyncMaxItems = 500;
 const String _pinSyncMaxItemsValue = '500';
@@ -210,21 +222,26 @@ enum _PinNodePolicy {
   restricted,
 }
 
-bool _hasEmailAddressValue(String? address) {
-  final trimmed = address?.trim();
-  return trimmed != null && trimmed.isNotEmpty;
+final class _PinNodeContext {
+  const _PinNodeContext({
+    required this.policy,
+    required this.chat,
+    this.affiliations,
+  });
+
+  final _PinNodePolicy policy;
+  final Chat? chat;
+  final Map<String, mox.PubSubAffiliation>? affiliations;
 }
 
-_PinNodePolicy _pinPolicyFromChat(Chat? chat) {
-  if (chat == null) {
-    return _PinNodePolicy.shared;
-  }
-  final hasDeltaChatId = chat.deltaChatId != null;
-  final hasEmailAddress = _hasEmailAddressValue(chat.emailAddress);
-  if (hasDeltaChatId || hasEmailAddress || chat.defaultTransport.isEmail) {
-    return _PinNodePolicy.restricted;
-  }
-  return _PinNodePolicy.shared;
+final class _PinNodeConfigResult {
+  const _PinNodeConfigResult({
+    required this.host,
+    required this.policy,
+  });
+
+  final mox.JID host;
+  final _PinNodePolicy policy;
 }
 
 mox.AccessModel _pinAccessModelForPolicy(_PinNodePolicy policy) =>
@@ -1050,11 +1067,138 @@ mixin MessageService
         getFunction: (db) => db.getPinnedMessages(chatJid),
       );
 
-  Future<_PinNodePolicy> _resolvePinNodePolicy(String chatJid) async {
+  String? _selfBareJid() {
+    final selfJid = myJid?.trim();
+    if (selfJid == null || selfJid.isEmpty) {
+      return null;
+    }
+    try {
+      return mox.JID.fromString(selfJid).toBare().toString();
+    } on Exception {
+      return selfJid;
+    }
+  }
+
+  Map<String, mox.PubSubAffiliation>? _basePinAffiliations() {
+    final selfBare = _selfBareJid();
+    if (selfBare == null || selfBare.isEmpty) {
+      return null;
+    }
+    return <String, mox.PubSubAffiliation>{selfBare: _pinAffiliationOwner};
+  }
+
+  Map<String, mox.PubSubAffiliation>? _pinDirectAffiliations(Chat chat) {
+    final affiliations = _basePinAffiliations();
+    if (affiliations == null) {
+      return null;
+    }
+    final peerJid = chat.remoteJid.trim();
+    if (peerJid.isEmpty) {
+      return null;
+    }
+    affiliations[peerJid] = _pinAffiliationPublisher;
+    return affiliations;
+  }
+
+  int _appendPinAffiliations(
+    Map<String, mox.PubSubAffiliation> affiliations,
+    List<MucAffiliationEntry> entries,
+  ) {
+    var added = 0;
+    for (final entry in entries) {
+      final jid = entry.jid?.trim();
+      if (jid == null || jid.isEmpty) {
+        continue;
+      }
+      if (affiliations.containsKey(jid)) {
+        continue;
+      }
+      affiliations[jid] = _pinAffiliationPublisher;
+      added += 1;
+    }
+    return added;
+  }
+
+  Future<Map<String, mox.PubSubAffiliation>?> _pinGroupAffiliations(
+    Chat chat,
+  ) async {
+    final affiliations = _basePinAffiliations();
+    if (affiliations == null) {
+      return null;
+    }
+    final roomJid = chat.jid.trim();
+    if (roomJid.isEmpty) {
+      return null;
+    }
+    try {
+      final members = await fetchRoomMembers(roomJid: roomJid);
+      final admins = await fetchRoomAdmins(roomJid: roomJid);
+      final owners = await fetchRoomOwners(roomJid: roomJid);
+      final entries = <MucAffiliationEntry>[
+        ...members,
+        ...admins,
+        ...owners,
+      ];
+      final added = _appendPinAffiliations(affiliations, entries);
+      if (added == 0) {
+        return null;
+      }
+      return affiliations;
+    } on Exception {
+      return null;
+    }
+  }
+
+  Future<_PinNodeContext> _resolvePinNodeContext(String chatJid) async {
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(chatJid),
     );
-    return _pinPolicyFromChat(chat);
+    if (chat == null) {
+      return const _PinNodeContext(
+        policy: _PinNodePolicy.shared,
+        chat: null,
+      );
+    }
+    if (chat.isEmailBacked) {
+      final affiliations = _basePinAffiliations();
+      if (affiliations == null || affiliations.isEmpty) {
+        return _PinNodeContext(
+          policy: _PinNodePolicy.shared,
+          chat: chat,
+        );
+      }
+      return _PinNodeContext(
+        policy: _PinNodePolicy.restricted,
+        chat: chat,
+        affiliations: affiliations,
+      );
+    }
+    if (chat.type == ChatType.groupChat) {
+      final affiliations = await _pinGroupAffiliations(chat);
+      if (affiliations == null || affiliations.isEmpty) {
+        return _PinNodeContext(
+          policy: _PinNodePolicy.shared,
+          chat: chat,
+        );
+      }
+      return _PinNodeContext(
+        policy: _PinNodePolicy.restricted,
+        chat: chat,
+        affiliations: affiliations,
+      );
+    }
+    final affiliations = _pinDirectAffiliations(chat);
+    if (affiliations == null || affiliations.isEmpty) {
+      return _PinNodeContext(
+        policy: _PinNodePolicy.shared,
+        chat: chat,
+      );
+    }
+    return _PinNodeContext(
+      policy: _PinNodePolicy.restricted,
+      chat: chat,
+      affiliations: affiliations,
+    );
   }
 
   Future<void> pinMessage({
@@ -1113,7 +1257,7 @@ mixin MessageService
     if (connectionState != ConnectionState.connected) {
       return;
     }
-    final policy = await _resolvePinNodePolicy(normalizedChat);
+    final context = await _resolvePinNodeContext(normalizedChat);
     _pinSyncInFlight.add(normalizedChat);
     try {
       await database;
@@ -1125,10 +1269,12 @@ mixin MessageService
       if (!support.pubSubSupported) {
         return;
       }
-      final host = await _ensurePinNodeForChat(normalizedChat, policy: policy);
-      if (host == null) {
+      final nodeConfig =
+          await _ensurePinNodeForChat(normalizedChat, context: context);
+      if (nodeConfig == null) {
         return;
       }
+      final host = nodeConfig.host;
       final nodeId = _pinNodeForChat(normalizedChat);
       if (nodeId == null) {
         return;
@@ -1152,6 +1298,49 @@ mixin MessageService
       return;
     } finally {
       _pinSyncInFlight.remove(normalizedChat);
+    }
+  }
+
+  Future<void> _syncEmailPinnedMessagesOnReconnect() async {
+    if (_emailPinSnapshotInFlight) {
+      return;
+    }
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
+    _emailPinSnapshotInFlight = true;
+    try {
+      await database;
+      if (connectionState != ConnectionState.connected) {
+        return;
+      }
+      final support = await refreshPubSubSupport();
+      if (!support.pubSubSupported) {
+        return;
+      }
+      final emailChats = await _dbOpReturning<XmppDatabase, List<Chat>>(
+        (db) => db.getDeltaChats(),
+      );
+      for (final chat in emailChats) {
+        if (connectionState != ConnectionState.connected) {
+          return;
+        }
+        if (!chat.isEmailBacked) {
+          continue;
+        }
+        final chatJid = chat.jid.trim();
+        if (chatJid.isEmpty) {
+          continue;
+        }
+        await syncPinnedMessagesForChat(chatJid);
+      }
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _emailPinSnapshotInFlight = false;
     }
   }
 
@@ -1194,6 +1383,7 @@ mixin MessageService
   final Map<String, Set<String>> _pendingPinPublishesByChat = {};
   final Map<String, Set<String>> _pendingPinRetractionsByChat = {};
   final Set<String> _pinSyncInFlight = {};
+  bool _emailPinSnapshotInFlight = false;
   mox.JID? _pinPubSubHost;
 
   @override
@@ -1430,6 +1620,7 @@ mixin MessageService
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         unawaited(_flushPendingPinSync());
+        unawaited(_syncEmailPinnedMessagesOnReconnect());
       });
   }
 
@@ -3635,7 +3826,10 @@ mixin MessageService
       return true;
     }
 
-    final senderJid = event.from.toBare().toString();
+    final bool isGroupChat = event.type == _messageTypeGroupchat;
+    final senderJid = isGroupChat
+        ? event.from.toString()
+        : event.from.toBare().toString();
     final selfJid = myJid;
     final chatJid = _calendarSyncChatJid(event, selfJid);
     final chatType = _calendarSyncChatType(event);
@@ -3666,6 +3860,15 @@ mixin MessageService
 
     if (isSelfCalendar && !isSelfSender) {
       _log.warning('Rejected calendar sync message from unauthorized sender');
+      return true;
+    }
+    if (!isSelfCalendar &&
+        !_canApplyChatCalendarSync(
+          syncMessage: syncMessage,
+          event: event,
+          chatJid: chatJid,
+          chatType: chatType,
+        )) {
       return true;
     }
 
@@ -5025,38 +5228,77 @@ mixin MessageService
     return candidates;
   }
 
-  Future<mox.JID?> _ensurePinNodeForChat(
+  Future<_PinNodeConfigResult?> _ensurePinNodeForChat(
     String chatJid, {
-    required _PinNodePolicy policy,
+    required _PinNodeContext context,
   }) async {
     final nodeId = _pinNodeForChat(chatJid);
     if (nodeId == null) return null;
     final pubsub = _pinPubSub();
     if (pubsub == null) return null;
     for (final host in _pinPubSubHosts()) {
-      final configured = await _configurePinNode(
+      final appliedPolicy = await _configurePinNode(
         pubsub: pubsub,
         host: host,
         nodeId: nodeId,
-        policy: policy,
+        context: context,
       );
-      if (!configured) continue;
+      if (appliedPolicy == null) continue;
       _pinPubSubHost = host;
-      return host;
+      return _PinNodeConfigResult(host: host, policy: appliedPolicy);
     }
     return null;
   }
 
-  Future<bool> _configurePinNode({
+  Future<_PinNodePolicy?> _configurePinNode({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required _PinNodeContext context,
+  }) async {
+    final applied = await _configurePinNodeWithPolicy(
+      pubsub: pubsub,
+      host: host,
+      nodeId: nodeId,
+      policy: context.policy,
+      affiliations: context.affiliations,
+    );
+    if (applied) {
+      return context.policy;
+    }
+    if (context.policy == _PinNodePolicy.shared) {
+      return null;
+    }
+    final fallbackApplied = await _configurePinNodeWithPolicy(
+      pubsub: pubsub,
+      host: host,
+      nodeId: nodeId,
+      policy: _PinNodePolicy.shared,
+      affiliations: null,
+    );
+    if (!fallbackApplied) {
+      return null;
+    }
+    return _PinNodePolicy.shared;
+  }
+
+  Future<bool> _configurePinNodeWithPolicy({
     required SafePubSubManager pubsub,
     required mox.JID host,
     required String nodeId,
     required _PinNodePolicy policy,
+    Map<String, mox.PubSubAffiliation>? affiliations,
   }) async {
     final config = _pinNodeConfig(policy);
     final configured = await pubsub.configureNode(host, nodeId, config);
     if (!configured.isType<mox.PubSubError>()) {
-      return true;
+      return _applyPinAffiliationsIfNeeded(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        policy: policy,
+        affiliations: affiliations,
+      );
     }
 
     try {
@@ -5066,8 +5308,17 @@ mixin MessageService
         nodeId: nodeId,
       );
       if (created != null) {
-        await pubsub.configureNode(host, nodeId, config);
-        return true;
+        final applied = await pubsub.configureNode(host, nodeId, config);
+        if (applied.isType<mox.PubSubError>()) {
+          return false;
+        }
+        return _applyPinAffiliationsIfNeeded(
+          pubsub: pubsub,
+          host: host,
+          nodeId: nodeId,
+          policy: policy,
+          affiliations: affiliations,
+        );
       }
     } on Exception {
       // Ignore and try fallback creation.
@@ -5076,11 +5327,37 @@ mixin MessageService
     try {
       final created = await pubsub.createNode(host, nodeId: nodeId);
       if (created == null) return false;
-      await pubsub.configureNode(host, nodeId, config);
-      return true;
+      final applied = await pubsub.configureNode(host, nodeId, config);
+      if (applied.isType<mox.PubSubError>()) {
+        return false;
+      }
+      return _applyPinAffiliationsIfNeeded(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        policy: policy,
+        affiliations: affiliations,
+      );
     } on Exception {
       return false;
     }
+  }
+
+  Future<bool> _applyPinAffiliationsIfNeeded({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required _PinNodePolicy policy,
+    Map<String, mox.PubSubAffiliation>? affiliations,
+  }) async {
+    if (policy != _PinNodePolicy.restricted) {
+      return true;
+    }
+    if (affiliations == null || affiliations.isEmpty) {
+      return false;
+    }
+    final result = await pubsub.setAffiliations(host, nodeId, affiliations);
+    return !result.isType<mox.PubSubError>();
   }
 
   Future<void> _subscribeToPins({
@@ -5313,7 +5590,7 @@ mixin MessageService
     if (normalizedChat == null) {
       return;
     }
-    final policy = await _resolvePinNodePolicy(normalizedChat);
+    final context = await _resolvePinNodeContext(normalizedChat);
     final support = await refreshPubSubSupport();
     if (!support.pubSubSupported) {
       return;
@@ -5322,10 +5599,13 @@ mixin MessageService
     if (pubsub == null) {
       return;
     }
-    final host = await _ensurePinNodeForChat(normalizedChat, policy: policy);
-    if (host == null) {
+    final nodeConfig =
+        await _ensurePinNodeForChat(normalizedChat, context: context);
+    if (nodeConfig == null) {
       return;
     }
+    final host = nodeConfig.host;
+    final policy = nodeConfig.policy;
     final nodeId = _pinNodeForChat(normalizedChat);
     if (nodeId == null) {
       return;

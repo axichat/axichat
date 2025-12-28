@@ -75,8 +75,7 @@ class MediaDecodeGuard {
     var oldestKey = '';
     DateTime? oldestTime;
     for (final entry in _failures.entries) {
-      if (oldestTime == null ||
-          entry.value.lastFailure.isBefore(oldestTime)) {
+      if (oldestTime == null || entry.value.lastFailure.isBefore(oldestTime)) {
         oldestTime = entry.value.lastFailure;
         oldestKey = entry.key;
       }
