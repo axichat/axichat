@@ -722,7 +722,11 @@
     }
   },
   "chatAttachmentDownload": "Télécharger la pièce jointe",
-  "chatAttachmentUnavailableDevice": "La pièce jointe n’est plus disponible sur cet appareil",
+  "chatAttachmentExportTitle": "Enregistrer la pièce jointe ?",
+  "chatAttachmentExportMessage": "Cela copiera la pièce jointe dans le stockage partagé. Continuer ?",
+  "chatAttachmentExportConfirm": "Enregistrer",
+  "chatAttachmentExportCancel": "Annuler",
+  "chatAttachmentUnavailableDevice": "La pièce jointe n'est plus disponible sur cet appareil",
   "chatAttachmentInvalidLink": "Lien de pièce jointe invalide",
   "chatAttachmentOpenFailed": "Impossible d’ouvrir {target}",
   "@chatAttachmentOpenFailed": {

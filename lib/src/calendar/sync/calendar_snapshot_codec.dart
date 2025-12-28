@@ -20,6 +20,15 @@ class CalendarSnapshotCodec {
   /// File extension for snapshot files.
   static const String fileExtension = '.axical.gz';
 
+  /// Maximum size of compressed snapshot data.
+  static const int maxCompressedBytes = 10 * 1024 * 1024;
+
+  /// Maximum size of decompressed snapshot data.
+  static const int maxDecompressedBytes = 20 * 1024 * 1024;
+
+  /// Maximum allowable compression ratio for snapshot payloads.
+  static const int maxCompressionRatio = 10;
+
   /// Encodes a [CalendarModel] to a gzip-compressed snapshot.
   ///
   /// Returns the compressed bytes suitable for file upload.
@@ -33,8 +42,21 @@ class CalendarSnapshotCodec {
   ///
   /// Returns null if decoding fails or the snapshot is invalid.
   static CalendarSnapshotResult? decode(Uint8List compressedBytes) {
+    if (compressedBytes.isEmpty ||
+        compressedBytes.length > maxCompressedBytes) {
+      return null;
+    }
     try {
-      final decompressed = gzip.decode(compressedBytes);
+      final decompressed = _decodeGzipWithLimit(compressedBytes);
+      if (decompressed == null) {
+        return null;
+      }
+      if (!_withinCompressionLimits(
+        compressedLength: compressedBytes.length,
+        decompressedLength: decompressed.length,
+      )) {
+        return null;
+      }
       final jsonString = utf8.decode(decompressed);
       final envelope = jsonDecode(jsonString) as Map<String, dynamic>;
       return _parseEnvelope(envelope);
@@ -48,6 +70,10 @@ class CalendarSnapshotCodec {
   /// Decodes a snapshot from a file.
   static Future<CalendarSnapshotResult?> decodeFile(File file) async {
     try {
+      final length = await file.length();
+      if (length > maxCompressedBytes) {
+        return null;
+      }
       final bytes = await file.readAsBytes();
       return decode(bytes);
     } on FileSystemException {
@@ -122,6 +148,33 @@ class CalendarSnapshotCodec {
     }
   }
 
+  static Uint8List? _decodeGzipWithLimit(Uint8List compressedBytes) {
+    final sink = _LimitedByteSink(maxDecompressedBytes);
+    final converter = GZipCodec().decoder.startChunkedConversion(sink);
+    try {
+      converter.add(compressedBytes);
+      converter.close();
+      return sink.takeBytes();
+    } on FormatException {
+      return null;
+    } on Exception {
+      return null;
+    }
+  }
+
+  static bool _withinCompressionLimits({
+    required int compressedLength,
+    required int decompressedLength,
+  }) {
+    if (decompressedLength > maxDecompressedBytes) {
+      return false;
+    }
+    if (decompressedLength > compressedLength * maxCompressionRatio) {
+      return false;
+    }
+    return true;
+  }
+
   static String _generateFileName() {
     final timestamp =
         DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
@@ -170,4 +223,34 @@ class CalendarSnapshotUploadResult {
   final String url;
   final String checksum;
   final int version;
+}
+
+class _LimitedByteSink extends ByteConversionSinkBase {
+  _LimitedByteSink(this._maxBytes);
+
+  final int _maxBytes;
+  final BytesBuilder _builder = BytesBuilder();
+  var _length = 0;
+  var _closed = false;
+
+  @override
+  void add(List<int> chunk) {
+    if (_closed) {
+      return;
+    }
+    final nextLength = _length + chunk.length;
+    if (nextLength > _maxBytes) {
+      _closed = true;
+      throw const FormatException();
+    }
+    _length = nextLength;
+    _builder.add(chunk);
+  }
+
+  @override
+  void close() {
+    _closed = true;
+  }
+
+  Uint8List takeBytes() => _builder.takeBytes();
 }

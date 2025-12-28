@@ -421,7 +421,8 @@ const int mamLoginBackfillMessageLimit = 50;
 const int _emptyMessageCount = 0;
 const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
 const int _calendarMamPageSize = 100;
-const int _calendarSnapshotDownloadMaxBytes = 10 * 1024 * 1024;
+const int _calendarSnapshotDownloadMaxBytes =
+    CalendarSnapshotCodec.maxCompressedBytes;
 const Duration _calendarSyncInboundWindow = Duration(seconds: 60);
 const int _calendarSyncInboundMaxMessages = 120;
 const String _calendarSyncEnvelopeKeyLiteral = '"calendar_sync"';

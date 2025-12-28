@@ -722,6 +722,10 @@
     }
   },
   "chatAttachmentDownload": "Anhang herunterladen",
+  "chatAttachmentExportTitle": "Anhang speichern?",
+  "chatAttachmentExportMessage": "Dies kopiert den Anhang in den gemeinsamen Speicher. Fortfahren?",
+  "chatAttachmentExportConfirm": "Speichern",
+  "chatAttachmentExportCancel": "Abbrechen",
   "chatAttachmentUnavailableDevice": "Anhang ist auf diesem Gerät nicht mehr verfügbar",
   "chatAttachmentInvalidLink": "Ungültiger Anhang-Link",
   "chatAttachmentOpenFailed": "Konnte {target} nicht öffnen",

@@ -9,6 +9,7 @@ const String _genericBinaryMimeType = 'application/octet-stream';
 const String _mimeDetectionPlaceholder = 'file';
 const String _jpegAliasMimeType = 'image/jpg';
 const String _jpegMimeType = 'image/jpeg';
+const String _tnefFileName = 'winmail.dat';
 
 const Set<String> _imageMimeTypes = <String>{
   'image/png',
@@ -63,8 +64,10 @@ const Set<String> _highRiskExtensions = <String>{
   'sldm',
   'svg',
   'svgz',
+  'tnef',
   'url',
   'vbs',
+  'vcf',
   'xlam',
   'xlsm',
   'xltm',
@@ -91,15 +94,22 @@ const Set<String> _highRiskMimeTypes = <String>{
   'application/x-msdos-program',
   'application/x-msi',
   'application/x-ms-installer',
+  'application/ms-tnef',
+  'application/vnd.ms-tnef',
   'application/x-powershell',
   'application/x-shellscript',
   'application/x-sh',
   'application/x-url',
+  'application/vcard',
+  'application/x-vcard',
   'application/x-vbscript',
   'application/x-python',
   'image/svg+xml',
   'text/html',
   'text/javascript',
+  'text/vcard',
+  'text/x-vcard',
+  'text/directory',
   'text/vbscript',
   'text/x-python',
   'text/x-shellscript',
@@ -229,6 +239,9 @@ FileOpenRisk assessFileOpenRisk({
   if (extension != null && _highRiskExtensions.contains(extension)) {
     return FileOpenRisk.warning;
   }
+  if (_isHighRiskFileName(fileName)) {
+    return FileOpenRisk.warning;
+  }
   return FileOpenRisk.safe;
 }
 
@@ -238,6 +251,13 @@ String? _normalizeExtension(String? fileName) {
   final extension = p.extension(trimmed).toLowerCase();
   if (extension.isEmpty) return null;
   return extension.startsWith('.') ? extension.substring(1) : extension;
+}
+
+bool _isHighRiskFileName(String? fileName) {
+  final trimmed = fileName?.trim();
+  if (trimmed == null || trimmed.isEmpty) return false;
+  final baseName = p.basename(trimmed).toLowerCase();
+  return baseName == _tnefFileName;
 }
 
 bool _isHighRiskMimeType(String? mimeType) {

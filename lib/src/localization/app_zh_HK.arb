@@ -722,6 +722,10 @@
     }
   },
   "chatAttachmentDownload": "下載附件",
+  "chatAttachmentExportTitle": "儲存附件？",
+  "chatAttachmentExportMessage": "這會把附件複製到共享儲存空間。繼續？",
+  "chatAttachmentExportConfirm": "儲存",
+  "chatAttachmentExportCancel": "取消",
   "chatAttachmentUnavailableDevice": "此裝置上已無法取得該附件",
   "chatAttachmentInvalidLink": "無效的附件連結",
   "chatAttachmentOpenFailed": "無法開啟 {target}",

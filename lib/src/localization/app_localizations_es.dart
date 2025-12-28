@@ -1880,6 +1880,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatAttachmentDownload => 'Descargar adjunto';
 
   @override
+  String get chatAttachmentExportTitle => '¿Guardar adjunto?';
+
+  @override
+  String get chatAttachmentExportMessage =>
+      'Esto copiará el adjunto al almacenamiento compartido. ¿Continuar?';
+
+  @override
+  String get chatAttachmentExportConfirm => 'Guardar';
+
+  @override
+  String get chatAttachmentExportCancel => 'Cancelar';
+
+  @override
   String get chatAttachmentUnavailableDevice =>
       'El adjunto ya no está disponible en este dispositivo';
 

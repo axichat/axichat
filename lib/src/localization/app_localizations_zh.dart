@@ -1794,6 +1794,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentDownload => '下载附件';
 
   @override
+  String get chatAttachmentExportTitle => '保存附件？';
+
+  @override
+  String get chatAttachmentExportMessage => '这会把附件复制到共享存储。继续？';
+
+  @override
+  String get chatAttachmentExportConfirm => '保存';
+
+  @override
+  String get chatAttachmentExportCancel => '取消';
+
+  @override
   String get chatAttachmentUnavailableDevice => '此设备上已无法获取该附件';
 
   @override
@@ -4766,6 +4778,19 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatAttachmentDownload => '下載附件';
+
+  @override
+  String get chatAttachmentExportTitle => '儲存附件？';
+
+  @override
+  String get chatAttachmentExportMessage =>
+      '這會把附件複製到共享儲存空間。繼續？';
+
+  @override
+  String get chatAttachmentExportConfirm => '儲存';
+
+  @override
+  String get chatAttachmentExportCancel => '取消';
 
   @override
   String get chatAttachmentUnavailableDevice => '此裝置上已無法取得該附件';

@@ -3398,6 +3398,30 @@ abstract class AppLocalizations {
   /// **'Download attachment'**
   String get chatAttachmentDownload;
 
+  /// No description provided for @chatAttachmentExportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save attachment?'**
+  String get chatAttachmentExportTitle;
+
+  /// No description provided for @chatAttachmentExportMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will copy the attachment to shared storage. Continue?'**
+  String get chatAttachmentExportMessage;
+
+  /// No description provided for @chatAttachmentExportConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get chatAttachmentExportConfirm;
+
+  /// No description provided for @chatAttachmentExportCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get chatAttachmentExportCancel;
+
   /// No description provided for @chatAttachmentUnavailableDevice.
   ///
   /// In en, this message translates to:
