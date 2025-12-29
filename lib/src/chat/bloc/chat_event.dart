@@ -94,6 +94,15 @@ final class ChatMessageFocused extends ChatEvent {
   List<Object?> get props => [messageID];
 }
 
+final class ChatEmailHeadersRequested extends ChatEvent {
+  const ChatEmailHeadersRequested(this.deltaMessageId);
+
+  final int deltaMessageId;
+
+  @override
+  List<Object?> get props => [deltaMessageId];
+}
+
 final class _ChatTypingStopped extends ChatEvent {
   const _ChatTypingStopped();
 

@@ -8,3 +8,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 deltachat = { git = "https://github.com/deltachat/deltachat-core-rust", package = "deltachat_ffi", default-features = false, features = ["vendored"] }
+deltachat_core = { git = "https://github.com/deltachat/deltachat-core-rust", package = "deltachat", default-features = false, features = ["internals", "vendored"] }
+brotli = { version = "8", default-features = false, features = ["std"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }

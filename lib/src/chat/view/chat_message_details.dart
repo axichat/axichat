@@ -3,12 +3,10 @@ import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
-import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -42,27 +40,14 @@ const String _messageDetailsMetadataLabel = 'Message metadata';
 const String _messageDetailsHeadersLabel = 'Raw headers';
 const String _messageDetailsHeadersActionLabel = 'View headers';
 const String _messageDetailsHeadersNote =
-    'Headers are derived from stored metadata.';
+    'Headers are loaded from the original RFC822 message.';
+const String _messageDetailsHeadersLoadingLabel = 'Loading headers...';
+const String _messageDetailsHeadersUnavailableLabel = 'Headers unavailable.';
 const String _messageDetailsStanzaIdLabel = 'Stanza ID';
 const String _messageDetailsOriginIdLabel = 'Origin ID';
 const String _messageDetailsOccupantIdLabel = 'Occupant ID';
 const String _messageDetailsDeltaIdLabel = 'Delta message ID';
 const String _messageDetailsLocalIdLabel = 'Local message ID';
-const String _rawHeaderSeparator = ': ';
-const String _rawHeaderLineBreak = '\n';
-const String _rawHeaderRecipientSeparator = ', ';
-const String _rawHeaderFromLabel = 'From';
-const String _rawHeaderToLabel = 'To';
-const String _rawHeaderDateLabel = 'Date';
-const String _rawHeaderSubjectLabel = 'Subject';
-const String _rawHeaderMessageIdLabel = 'Message-ID';
-const String _rawHeaderStanzaIdLabel = 'X-Axichat-Stanza-ID';
-const String _rawHeaderOccupantIdLabel = 'X-Axichat-Occupant-ID';
-const String _rawHeaderLocalIdLabel = 'X-Axichat-Local-ID';
-const String _rawHeaderDeltaMsgIdLabel = 'X-Axichat-Delta-Message-ID';
-const String _rawHeaderDeltaChatIdLabel = 'X-Axichat-Delta-Chat-ID';
-const String _rawHeaderChatJidLabel = 'X-Axichat-Chat-JID';
-const String _rawHeaderTransportLabel = 'X-Axichat-Transport';
 
 class ChatMessageDetails extends StatelessWidget {
   const ChatMessageDetails({super.key});
@@ -97,7 +82,8 @@ class ChatMessageDetails extends StatelessWidget {
               profileJid,
             );
             final transport = state.chat?.transport;
-            final isEmailMessage = message.deltaMsgId != null;
+            final deltaMessageId = message.deltaMsgId;
+            final isEmailMessage = deltaMessageId != null;
             final protocolLabel = isEmailMessage
                 ? MessageTransport.email.label
                 : transport?.label ?? MessageTransport.xmpp.label;
@@ -119,17 +105,13 @@ class ChatMessageDetails extends StatelessWidget {
                 message.reactionsPreview.isNotEmpty;
             final copyLabel = l10n.chatActionCopy;
             final senderAddress = message.senderJid.trim();
-            final String? rawHeaders = isEmailMessage
-                ? _composeRawHeaders(
-                    message: message,
-                    chat: state.chat,
-                    shareParticipants: shareParticipants,
-                    isFromSelf: isFromSelf,
-                    selfJid: emailSelfJid ?? profileJid,
-                    subject: shareContext?.subject,
-                    transportLabel: protocolLabel,
-                  )
-                : null;
+            final String? rawHeaders = deltaMessageId == null
+                ? null
+                : state.emailRawHeadersByDeltaId[deltaMessageId];
+            final bool isHeadersLoading = deltaMessageId != null &&
+                state.emailRawHeadersLoading.contains(deltaMessageId);
+            final bool isHeadersUnavailable = deltaMessageId != null &&
+                state.emailRawHeadersUnavailable.contains(deltaMessageId);
             final metadataItems = <Widget>[];
             final stanzaId = message.stanzaID.trim();
             if (stanzaId.isNotEmpty) {
@@ -164,7 +146,6 @@ class ChatMessageDetails extends StatelessWidget {
                 ),
               );
             }
-            final deltaMessageId = message.deltaMsgId;
             if (deltaMessageId != null) {
               final deltaLabel = deltaMessageId.toString();
               metadataItems.add(
@@ -423,12 +404,17 @@ class ChatMessageDetails extends StatelessWidget {
                           ),
                         ],
                       ),
-                    if (rawHeaders?.isNotEmpty == true)
+                    if (isEmailMessage)
                       _MessageHeadersSection(
-                        headers: rawHeaders!,
+                        headers: rawHeaders,
                         title: _messageDetailsHeadersLabel,
                         buttonLabel: _messageDetailsHeadersActionLabel,
                         note: _messageDetailsHeadersNote,
+                        loadingLabel: _messageDetailsHeadersLoadingLabel,
+                        unavailableLabel:
+                            _messageDetailsHeadersUnavailableLabel,
+                        isLoading: isHeadersLoading,
+                        isUnavailable: isHeadersUnavailable,
                       ),
                     if (message.error.isNotNone)
                       Column(
@@ -568,15 +554,32 @@ class _MessageHeadersSection extends StatelessWidget {
     required this.title,
     required this.buttonLabel,
     required this.note,
+    required this.loadingLabel,
+    required this.unavailableLabel,
+    required this.isLoading,
+    required this.isUnavailable,
   });
 
-  final String headers;
+  final String? headers;
   final String title;
   final String buttonLabel;
   final String note;
+  final String loadingLabel;
+  final String unavailableLabel;
+  final bool isLoading;
+  final bool isUnavailable;
+
+  bool get _canOpen => headers?.trim().isNotEmpty == true;
+
+  String? get _statusLabel {
+    if (isLoading) return loadingLabel;
+    if (isUnavailable) return unavailableLabel;
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final statusLabel = _statusLabel;
     return Column(
       spacing: _messageDetailsSectionSpacing,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -587,20 +590,27 @@ class _MessageHeadersSection extends StatelessWidget {
         ),
         ShadButton.secondary(
           size: ShadButtonSize.sm,
-          onPressed: () => _showHeadersDialog(context),
+          onPressed: _canOpen ? () => _showHeadersDialog(context) : null,
           child: Text(buttonLabel),
         ).withTapBounce(),
+        if (statusLabel != null)
+          Text(
+            statusLabel,
+            style: context.textTheme.muted,
+          ),
       ],
     );
   }
 
   Future<void> _showHeadersDialog(BuildContext context) async {
+    final rawHeaders = headers;
+    if (rawHeaders == null || !_canOpen) return;
     final l10n = context.l10n;
     await showShadDialog<void>(
       context: context,
       builder: (dialogContext) {
         return _RawHeadersDialog(
-          headers: headers,
+          headers: rawHeaders,
           title: title,
           note: note,
           copyLabel: l10n.chatActionCopy,
@@ -678,110 +688,6 @@ class _RawHeadersDialog extends StatelessWidget {
       ),
     );
   }
-}
-
-String? _composeRawHeaders({
-  required Message message,
-  required Chat? chat,
-  required List<Chat> shareParticipants,
-  required bool isFromSelf,
-  required String? selfJid,
-  required String? subject,
-  required String? transportLabel,
-}) {
-  final lines = <String>[];
-  _appendHeaderLine(lines, _rawHeaderFromLabel, message.senderJid);
-  final String? recipients = _resolveHeaderRecipients(
-    isFromSelf: isFromSelf,
-    shareParticipants: shareParticipants,
-    chat: chat,
-    selfJid: selfJid,
-  );
-  _appendHeaderLine(lines, _rawHeaderToLabel, recipients);
-  _appendHeaderLine(lines, _rawHeaderSubjectLabel, subject);
-  _appendHeaderLine(
-    lines,
-    _rawHeaderDateLabel,
-    _formatHeaderDate(message.timestamp),
-  );
-  _appendHeaderLine(lines, _rawHeaderMessageIdLabel, message.originID);
-  _appendHeaderLine(lines, _rawHeaderStanzaIdLabel, message.stanzaID);
-  _appendHeaderLine(lines, _rawHeaderOccupantIdLabel, message.occupantID);
-  _appendHeaderLine(lines, _rawHeaderLocalIdLabel, message.id);
-  _appendHeaderLine(
-    lines,
-    _rawHeaderDeltaMsgIdLabel,
-    message.deltaMsgId?.toString(),
-  );
-  _appendHeaderLine(
-    lines,
-    _rawHeaderDeltaChatIdLabel,
-    message.deltaChatId?.toString(),
-  );
-  _appendHeaderLine(lines, _rawHeaderChatJidLabel, message.chatJid);
-  _appendHeaderLine(lines, _rawHeaderTransportLabel, transportLabel);
-  if (lines.isEmpty) return null;
-  return lines.join(_rawHeaderLineBreak);
-}
-
-void _appendHeaderLine(
-  List<String> lines,
-  String label,
-  String? value,
-) {
-  final sanitized = _sanitizeHeaderValue(value);
-  if (sanitized == null) return;
-  lines.add('$label$_rawHeaderSeparator$sanitized');
-}
-
-String? _sanitizeHeaderValue(String? value) {
-  final sanitized = sanitizeEmailHeaderValue(value);
-  if (sanitized == null) return null;
-  final unicodeSanitized = sanitizeUnicodeControls(sanitized);
-  final normalized = unicodeSanitized.value.trim();
-  if (normalized.isEmpty) return null;
-  return normalized;
-}
-
-String? _resolveHeaderRecipients({
-  required bool isFromSelf,
-  required List<Chat> shareParticipants,
-  required Chat? chat,
-  required String? selfJid,
-}) {
-  if (isFromSelf) {
-    final recipients = _resolveParticipantAddresses(shareParticipants);
-    if (recipients.isNotEmpty) {
-      return recipients.join(_rawHeaderRecipientSeparator);
-    }
-    final chatAddress = chat?.emailAddress?.trim();
-    if (chatAddress?.isNotEmpty == true) {
-      return chatAddress;
-    }
-    return chat?.jid;
-  }
-  return selfJid;
-}
-
-List<String> _resolveParticipantAddresses(List<Chat> participants) {
-  final addresses = <String>{};
-  for (final participant in participants) {
-    final email = participant.emailAddress?.trim();
-    if (email?.isNotEmpty == true) {
-      addresses.add(email!);
-      continue;
-    }
-    final jid = participant.jid.trim();
-    if (jid.isNotEmpty) {
-      addresses.add(jid);
-    }
-  }
-  return addresses.toList(growable: false);
-}
-
-String? _formatHeaderDate(DateTime? timestamp) {
-  if (timestamp == null) return null;
-  return timestamp.toUtc().toIso8601String();
 }
 
 class _MessageDetailsInfo extends StatelessWidget {

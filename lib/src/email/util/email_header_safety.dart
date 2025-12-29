@@ -11,7 +11,10 @@ final RegExp _emailMimeTypePattern = RegExp(
 const int _emailHeaderMaxBytes = 998;
 const int _emailAttachmentFilenameMaxBytes = 120;
 const int _emailMimeTypeMaxBytes = 128;
+const int _emailRawHeadersMaxBytes = 64 * 1024;
 const String _emailAttachmentFilenameFallback = 'attachment';
+const String _emailRawHeaderLineBreak = '\n';
+final RegExp _emailRawHeaderLineBreakPattern = RegExp(r'\r\n?');
 
 String? sanitizeEmailHeaderValue(String? value) {
   if (value == null) return null;
@@ -65,4 +68,15 @@ String? sanitizeEmailMimeType(String? value) {
     return null;
   }
   return trimmed;
+}
+
+String? sanitizeRawEmailHeaders(String? value) {
+  if (value == null) return null;
+  final normalized = value.replaceAll(
+      _emailRawHeaderLineBreakPattern, _emailRawHeaderLineBreak);
+  final trimmed = normalized.trim();
+  if (trimmed.isEmpty) return null;
+  final clamped = clampUtf8Value(trimmed, maxBytes: _emailRawHeadersMaxBytes);
+  if (clamped == null || clamped.trim().isEmpty) return null;
+  return clamped;
 }
