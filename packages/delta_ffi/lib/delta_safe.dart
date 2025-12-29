@@ -70,6 +70,16 @@ typedef _DcGetConfigDart = ffi.Pointer<ffi.Char> Function(
   ffi.Pointer<ffi.Char>,
 );
 
+typedef _DcGetMsgMimeHeadersNative = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Uint32,
+);
+
+typedef _DcGetMsgMimeHeadersDart = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  int,
+);
+
 final class _DeltaOptionalConfig {
   _DeltaOptionalConfig() : _getConfig = _loadGetConfig();
 
@@ -100,6 +110,40 @@ final class _DeltaOptionalConfig {
 }
 
 final _DeltaOptionalConfig _deltaOptionalConfig = _DeltaOptionalConfig();
+
+final class _DeltaOptionalMimeHeaders {
+  _DeltaOptionalMimeHeaders() : _getHeaders = _loadGetHeaders();
+
+  final _DcGetMsgMimeHeadersDart? _getHeaders;
+
+  static _DcGetMsgMimeHeadersDart? _loadGetHeaders() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol =
+          library.lookup<ffi.NativeFunction<_DcGetMsgMimeHeadersNative>>(
+        'dc_get_msg_mime_headers',
+      );
+      return symbol.asFunction<_DcGetMsgMimeHeadersDart>();
+    } on Exception {
+      return null;
+    }
+  }
+
+  String? read(
+    ffi.Pointer<dc_context_t> context,
+    int messageId,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getHeaders;
+    if (fn == null) return null;
+    if (messageId <= _zeroValue) return null;
+    final ptr = fn(context, messageId);
+    return _takeString(ptr, bindings: bindings);
+  }
+}
+
+final _DeltaOptionalMimeHeaders _deltaOptionalMimeHeaders =
+    _DeltaOptionalMimeHeaders();
 
 class DeltaMessageType {
   static const int undefined = DC_MSG_UNDEFINED;
@@ -891,6 +935,12 @@ class DeltaContextHandle {
     } finally {
       _bindings.dc_msg_unref(msgPtr);
     }
+  }
+
+  Future<String?> getMessageMimeHeaders(int messageId) async {
+    _ensureState(_opened, 'get message mime headers');
+    if (messageId <= _zeroValue) return null;
+    return _deltaOptionalMimeHeaders.read(_context, messageId, _bindings);
   }
 
   Future<List<int>> getFreshMessageIds() async {

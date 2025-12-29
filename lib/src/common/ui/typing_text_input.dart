@@ -46,13 +46,24 @@ class TypingTextChange {
 class TypingGlyphAnimation {
   const TypingGlyphAnimation({
     required this.text,
-    required this.targetRect,
+    required this.range,
     required this.style,
   });
 
   final String text;
-  final Rect targetRect;
+  final TextRange range;
   final TextStyle style;
+}
+
+@immutable
+class TypingGlyphFrame {
+  const TypingGlyphFrame({
+    required this.animation,
+    required this.progress,
+  });
+
+  final TypingGlyphAnimation animation;
+  final double progress;
 }
 
 class TypingTextEditingController extends TextEditingController {
@@ -71,9 +82,10 @@ class TypingTextEditingController extends TextEditingController {
 
   TextEditingController? _source;
   bool _syncing = false;
-  TextRange? _hiddenRange;
+  List<TextRange> _hiddenRanges = const <TextRange>[];
 
-  TextRange? get hiddenRange => _hiddenRange;
+  List<TextRange> get hiddenRanges =>
+      List<TextRange>.unmodifiable(_hiddenRanges);
 
   void updateSource(
       TextEditingController? source, TextEditingValue? initialValue) {
@@ -94,14 +106,21 @@ class TypingTextEditingController extends TextEditingController {
   }
 
   void setHiddenRange(TextRange? range) {
-    if (_hiddenRange == range) {
+    final List<TextRange> ranges =
+        range == null ? const <TextRange>[] : <TextRange>[range];
+    setHiddenRanges(ranges);
+  }
+
+  void setHiddenRanges(List<TextRange> ranges) {
+    final List<TextRange> nextRanges = _normalizedHiddenRanges(ranges);
+    if (_rangesEqual(_hiddenRanges, nextRanges)) {
       return;
     }
-    _hiddenRange = range;
+    _hiddenRanges = nextRanges;
     notifyListeners();
   }
 
-  void clearHiddenRange() => setHiddenRange(null);
+  void clearHiddenRange() => setHiddenRanges(const <TextRange>[]);
 
   @override
   TextSpan buildTextSpan({
@@ -112,8 +131,9 @@ class TypingTextEditingController extends TextEditingController {
     final String fullText = text;
     final TextRange composingRange = value.composing;
     final bool hasValidComposing = withComposing && value.isComposingRangeValid;
-    final TextRange? hiddenRange = _validatedHiddenRange(fullText);
-    if (!hasValidComposing && hiddenRange == null) {
+    final List<TextRange> hiddenRanges =
+        _validatedHiddenRanges(fullText, _hiddenRanges);
+    if (!hasValidComposing && hiddenRanges.isEmpty) {
       return TextSpan(style: style, text: fullText);
     }
 
@@ -132,10 +152,12 @@ class TypingTextEditingController extends TextEditingController {
         ..add(composingRange.start)
         ..add(composingRange.end);
     }
-    if (hiddenRange != null) {
-      boundaries
-        ..add(hiddenRange.start)
-        ..add(hiddenRange.end);
+    if (hiddenRanges.isNotEmpty) {
+      for (final TextRange range in hiddenRanges) {
+        boundaries
+          ..add(range.start)
+          ..add(range.end);
+      }
     }
     boundaries.sort();
 
@@ -147,9 +169,7 @@ class TypingTextEditingController extends TextEditingController {
         continue;
       }
       final String segment = fullText.substring(start, end);
-      final bool isHidden = hiddenRange != null &&
-          start >= hiddenRange.start &&
-          end <= hiddenRange.end;
+      final bool isHidden = _isHiddenRange(hiddenRanges, start, end);
       final bool isComposing = hasValidComposing &&
           start >= composingRange.start &&
           end <= composingRange.end;
@@ -164,18 +184,62 @@ class TypingTextEditingController extends TextEditingController {
     return TextSpan(style: style, children: children);
   }
 
-  TextRange? _validatedHiddenRange(String fullText) {
-    final TextRange? hiddenRange = _hiddenRange;
-    if (hiddenRange == null || !hiddenRange.isValid) {
-      return null;
+  List<TextRange> _validatedHiddenRanges(
+    String fullText,
+    List<TextRange> ranges,
+  ) {
+    if (ranges.isEmpty) {
+      return const <TextRange>[];
     }
-    if (hiddenRange.isCollapsed) {
-      return null;
+    final List<TextRange> valid = <TextRange>[];
+    for (final TextRange range in ranges) {
+      if (!range.isValid || range.isCollapsed) {
+        continue;
+      }
+      if (range.start < 0 || range.end > fullText.length) {
+        continue;
+      }
+      valid.add(range);
     }
-    if (hiddenRange.start < 0 || hiddenRange.end > fullText.length) {
-      return null;
+    if (valid.length < 2) {
+      return valid;
     }
-    return hiddenRange;
+    valid.sort((TextRange a, TextRange b) => a.start.compareTo(b.start));
+    return valid;
+  }
+
+  bool _isHiddenRange(List<TextRange> ranges, int start, int end) {
+    for (final TextRange range in ranges) {
+      if (start >= range.start && end <= range.end) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  List<TextRange> _normalizedHiddenRanges(List<TextRange> ranges) {
+    if (ranges.isEmpty) {
+      return const <TextRange>[];
+    }
+    final Set<TextRange> unique = <TextRange>{}..addAll(ranges);
+    final List<TextRange> normalized = unique.toList()
+      ..sort((TextRange a, TextRange b) => a.start.compareTo(b.start));
+    return normalized;
+  }
+
+  bool _rangesEqual(List<TextRange> a, List<TextRange> b) {
+    if (identical(a, b)) {
+      return true;
+    }
+    if (a.length != b.length) {
+      return false;
+    }
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   TextStyle _hiddenTextStyle(TextStyle style, Color hiddenColor) {
@@ -257,8 +321,7 @@ class TypingCaretPainter extends RenderEditablePainter {
   double _caretHeight = 0.0;
   Offset _caretOffset = Offset.zero;
   bool _showCaret = true;
-  TypingGlyphAnimation? _glyphAnimation;
-  double _glyphProgress = _glyphStartOpacity;
+  List<TypingGlyphFrame> _glyphFrames = const <TypingGlyphFrame>[];
 
   Color get caretColor => _caretColor;
   set caretColor(Color value) {
@@ -314,29 +377,20 @@ class TypingCaretPainter extends RenderEditablePainter {
     notifyListeners();
   }
 
-  TypingGlyphAnimation? get glyphAnimation => _glyphAnimation;
-  set glyphAnimation(TypingGlyphAnimation? value) {
-    if (_glyphAnimation == value) {
+  List<TypingGlyphFrame> get glyphFrames => _glyphFrames;
+  set glyphFrames(List<TypingGlyphFrame> value) {
+    if (identical(_glyphFrames, value)) {
       return;
     }
-    _glyphAnimation = value;
-    notifyListeners();
-  }
-
-  double get glyphProgress => _glyphProgress;
-  set glyphProgress(double value) {
-    if (_glyphProgress == value) {
-      return;
-    }
-    _glyphProgress = value;
+    _glyphFrames = value;
     notifyListeners();
   }
 
   @override
   void paint(Canvas canvas, Size size, RenderEditable renderEditable) {
-    final TypingGlyphAnimation? glyphAnimation = _glyphAnimation;
-    if (glyphAnimation != null) {
-      _paintGlyphMorph(canvas, renderEditable, glyphAnimation);
+    final List<TypingGlyphFrame> glyphFrames = _glyphFrames;
+    for (final TypingGlyphFrame frame in glyphFrames) {
+      _paintGlyphMorph(canvas, renderEditable, frame);
     }
 
     final TextSelection? selection = renderEditable.selection;
@@ -354,14 +408,19 @@ class TypingCaretPainter extends RenderEditablePainter {
   void _paintGlyphMorph(
     Canvas canvas,
     RenderEditable renderEditable,
-    TypingGlyphAnimation glyphAnimation,
+    TypingGlyphFrame frame,
   ) {
     final double progress =
-        _glyphProgress.clamp(_glyphStartOpacity, _glyphEndOpacity).toDouble();
+        frame.progress.clamp(_glyphStartOpacity, _glyphEndOpacity).toDouble();
     if (progress <= _glyphStartOpacity) {
       return;
     }
-    final Rect glyphRect = glyphAnimation.targetRect;
+    final TypingGlyphAnimation glyphAnimation = frame.animation;
+    final Rect? glyphRect =
+        _glyphRectForRange(renderEditable, glyphAnimation.range);
+    if (glyphRect == null) {
+      return;
+    }
     final Color baseColor = glyphAnimation.style.color ?? _caretColor;
     final double glyphAlpha =
         (baseColor.a * progress).clamp(_glyphStartOpacity, _glyphEndOpacity);
@@ -385,6 +444,16 @@ class TypingCaretPainter extends RenderEditablePainter {
       ..translate(-glyphCenter.dx, -glyphCenter.dy);
     painter.paint(canvas, glyphRect.topLeft);
     canvas.restore();
+  }
+
+  Rect? _glyphRectForRange(RenderEditable renderEditable, TextRange range) {
+    final List<TextBox> boxes = renderEditable.getBoxesForSelection(
+      TextSelection(baseOffset: range.start, extentOffset: range.end),
+    );
+    if (boxes.isEmpty) {
+      return null;
+    }
+    return boxes.first.toRect();
   }
 
   void _paintCaretBar(

@@ -60,6 +60,7 @@ const _sendSignatureQuoteTag = '::quote:';
 const _sendSignatureListSeparator = ',';
 const _sendSignatureAttachmentFieldSeparator = '|';
 const _emptySignatureValue = '';
+const int _deltaMessageIdUnset = 0;
 const _bundledAttachmentSendFailureLogMessage =
     'Failed to send bundled email attachment';
 const _pinPermissionDeniedMessage =
@@ -166,6 +167,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
     on<ChatMessageFocused>(_onChatMessageFocused);
+    on<ChatEmailHeadersRequested>(_onChatEmailHeadersRequested);
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
     on<_TypingParticipantsUpdated>(_onTypingParticipantsUpdated);
@@ -1622,10 +1624,86 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             ),
           );
         emit(state.copyWith(items: updatedItems, focused: fetched));
+        _maybeRequestEmailHeaders(fetched);
         return;
       }
     }
     emit(state.copyWith(focused: target));
+    _maybeRequestEmailHeaders(target);
+  }
+
+  Future<void> _onChatEmailHeadersRequested(
+    ChatEmailHeadersRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final deltaMessageId = event.deltaMessageId;
+    if (deltaMessageId <= _deltaMessageIdUnset) return;
+    if (state.emailRawHeadersByDeltaId.containsKey(deltaMessageId)) {
+      return;
+    }
+    if (state.emailRawHeadersLoading.contains(deltaMessageId) ||
+        state.emailRawHeadersUnavailable.contains(deltaMessageId)) {
+      return;
+    }
+    final loading = Set<int>.from(state.emailRawHeadersLoading)
+      ..add(deltaMessageId);
+    emit(state.copyWith(emailRawHeadersLoading: loading));
+    final emailService = _emailService;
+    if (emailService == null) {
+      final updatedLoading = Set<int>.from(state.emailRawHeadersLoading)
+        ..remove(deltaMessageId);
+      final unavailable = Set<int>.from(state.emailRawHeadersUnavailable)
+        ..add(deltaMessageId);
+      emit(
+        state.copyWith(
+          emailRawHeadersLoading: updatedLoading,
+          emailRawHeadersUnavailable: unavailable,
+        ),
+      );
+      return;
+    }
+    String? headers;
+    try {
+      headers = await emailService.getMessageRawHeaders(deltaMessageId);
+    } catch (_) {
+      headers = null;
+    }
+    final updatedLoading = Set<int>.from(state.emailRawHeadersLoading)
+      ..remove(deltaMessageId);
+    if (headers == null || headers.trim().isEmpty) {
+      final unavailable = Set<int>.from(state.emailRawHeadersUnavailable)
+        ..add(deltaMessageId);
+      emit(
+        state.copyWith(
+          emailRawHeadersLoading: updatedLoading,
+          emailRawHeadersUnavailable: unavailable,
+        ),
+      );
+      return;
+    }
+    final updatedHeaders = Map<int, String>.from(state.emailRawHeadersByDeltaId)
+      ..[deltaMessageId] = headers;
+    emit(
+      state.copyWith(
+        emailRawHeadersLoading: updatedLoading,
+        emailRawHeadersByDeltaId: updatedHeaders,
+      ),
+    );
+  }
+
+  void _maybeRequestEmailHeaders(Message? message) {
+    final deltaMessageId = message?.deltaMsgId;
+    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
+      return;
+    }
+    if (state.emailRawHeadersByDeltaId.containsKey(deltaMessageId)) {
+      return;
+    }
+    if (state.emailRawHeadersLoading.contains(deltaMessageId) ||
+        state.emailRawHeadersUnavailable.contains(deltaMessageId)) {
+      return;
+    }
+    add(ChatEmailHeadersRequested(deltaMessageId));
   }
 
   Future<void> _onChatTypingStarted(

@@ -2265,23 +2265,15 @@ class EditableTextState extends State<EditableText>
     parent: _typingCaretController,
     curve: _typingCaretSlideCurve,
   );
-  late final AnimationController _typingGlyphController = AnimationController(
-    vsync: this,
-    duration: _typingGlyphMorphDuration,
-  )
-    ..addListener(_handleTypingGlyphTick)
-    ..addStatusListener(_handleTypingGlyphStatus);
-  Animation<double> _typingGlyphCurve =
-      const AlwaysStoppedAnimation<double>(_typingGlyphStartOpacity);
+  late final Ticker _typingGlyphTicker = createTicker(_handleTypingGlyphTick);
+  Duration _typingGlyphElapsed = Duration.zero;
   Animation<Offset> _typingCaretAnimation =
       const AlwaysStoppedAnimation<Offset>(Offset.zero);
   Offset _typingCaretOffset = Offset.zero;
-  TypingGlyphAnimation? _typingGlyphAnimation;
   TypingCaretPainter? _typingCaretPainter;
-  int? _typingGlyphSelectionOffset;
-  TextRange? _typingGlyphRange;
-  String? _typingGlyphText;
-  TypingTextChange? _pendingTypingChange;
+  final List<_TypingGlyphEntry> _typingGlyphEntries = <_TypingGlyphEntry>[];
+  final List<TextRange> _pendingTypingHiddenRanges = <TextRange>[];
+  final List<TypingTextChange> _pendingTypingChanges = <TypingTextChange>[];
   TextEditingValue _previousTypingValue = const TextEditingValue();
   bool _suppressTypingControllerNotifications = false;
   bool _typingLayoutCallbackScheduled = false;
@@ -3087,7 +3079,6 @@ class EditableTextState extends State<EditableText>
     _appLifecycleListener =
         AppLifecycleListener(onResume: () => _justResumed = true);
     _initProcessTextActions();
-    _refreshTypingGlyphCurve();
   }
 
   /// Query the engine to initialize the list of text processing actions to show
@@ -3202,7 +3193,7 @@ class EditableTextState extends State<EditableText>
       widget.controller.addListener(_didChangeTextEditingValue);
       _updateRemoteEditingValueIfNeeded();
       _previousTypingValue = widget.controller.value;
-      _stopTypingGlyphMorph();
+      _stopTypingGlyphMorphs();
     }
 
     if (_selectionOverlay != null &&
@@ -3315,9 +3306,9 @@ class EditableTextState extends State<EditableText>
     widget.controller.removeListener(_didChangeTextEditingValue);
     _cursorVisibilityNotifier
         .removeListener(_handleTypingCursorVisibilityChanged);
-    _stopTypingGlyphMorph();
+    _stopTypingGlyphMorphs();
     _typingCaretController.dispose();
-    _typingGlyphController.dispose();
+    _typingGlyphTicker.dispose();
     _floatingCursorResetController?.dispose();
     _floatingCursorResetController = null;
     _closeInputConnectionIfNeeded();
@@ -4671,13 +4662,6 @@ class EditableTextState extends State<EditableText>
     _typingCaretPainter?.showCaret = _cursorVisibilityNotifier.value;
   }
 
-  void _refreshTypingGlyphCurve() {
-    _typingGlyphCurve = CurvedAnimation(
-      parent: _typingGlyphController,
-      curve: _typingGlyphMorphCurve,
-    );
-  }
-
   void _handleTypingControllerChange() {
     if (_suppressTypingControllerNotifications) {
       return;
@@ -4691,30 +4675,48 @@ class EditableTextState extends State<EditableText>
     final TypingTextChange change =
         _describeTypingChange(_previousTypingValue, nextValue);
     _previousTypingValue = nextValue;
-    final TypingTextChange? pendingChange = _pendingTypingChange;
-    final bool hasPendingInsertion =
-        pendingChange?.isSingleCharacterInsertion ?? false;
-    final bool isSelectionOnlyUpdate =
-        change.kind == TypingTextChangeKind.selection;
-    final bool preservesPendingText = pendingChange != null &&
-        pendingChange.currentValue.text == change.currentValue.text;
-    if (hasPendingInsertion && isSelectionOnlyUpdate && preservesPendingText) {
-      _pendingTypingChange = TypingTextChange(
-        kind: pendingChange.kind,
-        previousValue: pendingChange.previousValue,
-        currentValue: change.currentValue,
-        insertedRange: pendingChange.insertedRange,
-        insertedText: pendingChange.insertedText,
-      );
-      _applyPendingTypingChange();
+    if (change.kind == TypingTextChangeKind.none) {
       return;
     }
-    _pendingTypingChange = change;
+    final TypingTextChange? lastPending =
+        _pendingTypingChanges.isNotEmpty ? _pendingTypingChanges.last : null;
+    final bool hasPendingInsertion =
+        lastPending?.isSingleCharacterInsertion ?? false;
+    final bool isSelectionOnlyUpdate =
+        change.kind == TypingTextChangeKind.selection;
+    final bool preservesPendingText = lastPending != null &&
+        lastPending.currentValue.text == change.currentValue.text;
+    if (hasPendingInsertion && isSelectionOnlyUpdate && preservesPendingText) {
+      _pendingTypingChanges[_pendingTypingChanges.length - 1] =
+          TypingTextChange(
+        kind: lastPending.kind,
+        previousValue: lastPending.previousValue,
+        currentValue: change.currentValue,
+        insertedRange: lastPending.insertedRange,
+        insertedText: lastPending.insertedText,
+      );
+      _applyPendingTypingChanges();
+      return;
+    }
+    if (change.kind.isDeletion || change.kind == TypingTextChangeKind.replace) {
+      _pendingTypingChanges
+        ..clear()
+        ..add(change);
+      _pendingTypingHiddenRanges.clear();
+      _stopTypingGlyphMorphs();
+      _applyPendingTypingChanges();
+      return;
+    }
+    _pendingTypingChanges.add(change);
     final bool shouldAnimateTyping = _hasFocus && !widget.readOnly;
     if (shouldAnimateTyping && change.isSingleCharacterInsertion) {
-      _applyHiddenRange(change.insertedRange);
+      final TextRange? insertedRange = change.insertedRange;
+      if (insertedRange != null) {
+        _pendingTypingHiddenRanges.add(insertedRange);
+        _updateTypingHiddenRanges();
+      }
     }
-    _applyPendingTypingChange();
+    _applyPendingTypingChanges();
   }
 
   void _handleTypingLayout() {
@@ -4735,32 +4737,57 @@ class EditableTextState extends State<EditableText>
         return;
       }
       _typingLayoutCallbackScheduled = false;
-      _applyPendingTypingChange();
-      if (_pendingTypingChange != null || _typingCaretController.isAnimating) {
+      _applyPendingTypingChanges();
+      if (_pendingTypingChanges.isNotEmpty ||
+          _typingCaretController.isAnimating) {
         return;
       }
       _syncTypingCaretToSelection();
     });
   }
 
-  void _applyPendingTypingChange() {
-    final TypingTextChange? change = _pendingTypingChange;
+  void _applyPendingTypingChanges() {
+    if (_pendingTypingChanges.isEmpty) {
+      return;
+    }
     final AxiRenderEditable? renderEditable = _typingRenderEditable;
-    if (change == null || renderEditable == null || !renderEditable.hasSize) {
+    if (renderEditable == null || !renderEditable.hasSize) {
       return;
     }
     final String? renderText = renderEditable.text?.toPlainText();
-    if (renderText != null && renderText != change.currentValue.text) {
+    if (renderText == null) {
       return;
     }
-    _pendingTypingChange = null;
-    _applyTypingChange(change, renderEditable);
+    final List<TypingTextChange> deferredChanges = <TypingTextChange>[];
+    bool deferRemaining = false;
+    for (final TypingTextChange change in _pendingTypingChanges) {
+      if (deferRemaining) {
+        deferredChanges.add(change);
+        continue;
+      }
+      final _TypingChangeApplyState applyState =
+          _evaluateTypingChange(change, renderText);
+      if (applyState == _TypingChangeApplyState.defer) {
+        deferredChanges.add(change);
+        deferRemaining = true;
+        continue;
+      }
+      if (applyState == _TypingChangeApplyState.drop) {
+        _removePendingHiddenRange(change.insertedRange);
+        continue;
+      }
+      _applyTypingChange(change, renderEditable);
+    }
+    _pendingTypingChanges
+      ..clear()
+      ..addAll(deferredChanges);
   }
 
   void _applyTypingChange(
     TypingTextChange change,
     AxiRenderEditable renderEditable,
   ) {
+    _pruneTypingGlyphsForValue(change.currentValue);
     final bool hasFocus = renderEditable.hasFocus;
     final Offset? endOffset = _typingCaretOffsetForSelection(
       change.currentValue.selection,
@@ -4775,7 +4802,7 @@ class EditableTextState extends State<EditableText>
       return;
     }
     if (!hasFocus) {
-      _stopTypingGlyphMorph();
+      _stopTypingGlyphMorphs();
       _jumpTypingCaret(endOffset);
       return;
     }
@@ -4786,35 +4813,106 @@ class EditableTextState extends State<EditableText>
       _jumpTypingCaret(endOffset);
     }
 
-    final bool shouldKeepMorph =
-        _shouldKeepTypingGlyphMorph(change.currentValue);
-
     if (change.isSingleCharacterInsertion) {
       _startTypingGlyphMorph(change, renderEditable);
-    } else if (!shouldKeepMorph) {
-      _stopTypingGlyphMorph();
     }
   }
 
-  bool _shouldKeepTypingGlyphMorph(TextEditingValue value) {
-    final TextRange? range = _typingGlyphRange;
-    final String? text = _typingGlyphText;
+  void _pruneTypingGlyphsForValue(TextEditingValue value) {
+    if (_typingGlyphEntries.isEmpty) {
+      return;
+    }
+    final String text = value.text;
+    final List<_TypingGlyphEntry> invalidEntries = <_TypingGlyphEntry>[];
+    for (final _TypingGlyphEntry entry in _typingGlyphEntries) {
+      final TextRange range = entry.animation.range;
+      if (!_isTypingRangeValid(range, text)) {
+        invalidEntries.add(entry);
+        continue;
+      }
+      final String currentText = text.substring(range.start, range.end);
+      if (currentText != entry.animation.text) {
+        invalidEntries.add(entry);
+      }
+    }
+    if (invalidEntries.isEmpty) {
+      return;
+    }
+    _typingGlyphEntries.removeWhere(invalidEntries.contains);
+    _updateTypingHiddenRanges();
+    _updateTypingGlyphFrames(
+      _typingGlyphElapsed,
+      removeCompleted: false,
+    );
+  }
+
+  bool _isTypingRangeValid(TextRange range, String text) {
+    if (!range.isValid || range.isCollapsed) {
+      return false;
+    }
+    if (range.start < 0 || range.end > text.length) {
+      return false;
+    }
+    return true;
+  }
+
+  void _removePendingHiddenRange(TextRange? range) {
+    if (range == null || _pendingTypingHiddenRanges.isEmpty) {
+      return;
+    }
+    _pendingTypingHiddenRanges.remove(range);
+    _updateTypingHiddenRanges();
+  }
+
+  void _updateTypingHiddenRanges() {
+    final Set<TextRange> ranges = <TextRange>{}
+      ..addAll(_pendingTypingHiddenRanges)
+      ..addAll(_activeTypingGlyphRanges());
+    final List<TextRange> hiddenRanges = ranges.toList()
+      ..sort((TextRange a, TextRange b) => a.start.compareTo(b.start));
+    _applyHiddenRanges(hiddenRanges);
+  }
+
+  List<TextRange> _activeTypingGlyphRanges() {
+    if (_typingGlyphEntries.isEmpty) {
+      return const <TextRange>[];
+    }
+    final List<TextRange> ranges = <TextRange>[];
+    for (final _TypingGlyphEntry entry in _typingGlyphEntries) {
+      ranges.add(entry.animation.range);
+    }
+    return ranges;
+  }
+
+  _TypingChangeApplyState _evaluateTypingChange(
+    TypingTextChange change,
+    String renderText,
+  ) {
+    final TextSelection selection = change.currentValue.selection;
+    if (!selection.isValid ||
+        selection.extentOffset < 0 ||
+        selection.extentOffset > renderText.length) {
+      return _TypingChangeApplyState.defer;
+    }
+    if (!change.isSingleCharacterInsertion) {
+      return _TypingChangeApplyState.apply;
+    }
+    final TextRange? range = change.insertedRange;
+    final String? text = change.insertedText;
     if (range == null || text == null || range.isCollapsed) {
-      return false;
+      return _TypingChangeApplyState.drop;
     }
-    if (range.end > value.text.length || range.start < 0) {
-      return false;
+    if (range.end > renderText.length) {
+      return _TypingChangeApplyState.defer;
     }
-    final String currentText = value.text.substring(range.start, range.end);
+    if (range.start < 0) {
+      return _TypingChangeApplyState.drop;
+    }
+    final String currentText = renderText.substring(range.start, range.end);
     if (currentText != text) {
-      return false;
+      return _TypingChangeApplyState.drop;
     }
-    final TextSelection selection = value.selection;
-    final int? selectionOffset = _typingGlyphSelectionOffset;
-    if (!selection.isCollapsed || selectionOffset == null) {
-      return false;
-    }
-    return selection.extentOffset == selectionOffset;
+    return _TypingChangeApplyState.apply;
   }
 
   TypingTextChange _describeTypingChange(
@@ -4958,23 +5056,20 @@ class EditableTextState extends State<EditableText>
     TypingTextChange change,
     AxiRenderEditable renderEditable,
   ) {
-    _typingGlyphSelectionOffset = null;
-    _typingGlyphRange = null;
-    _typingGlyphText = null;
     final TypingCaretPainter? painter = _typingCaretPainter;
-    if (painter == null) {
-      _applyHiddenRange(null);
-      return;
-    }
     final TextRange? range = change.insertedRange;
     final String? text = change.insertedText;
+    if (painter == null) {
+      _removePendingHiddenRange(range);
+      return;
+    }
     if (range == null || text == null) {
-      _applyHiddenRange(null);
+      _removePendingHiddenRange(range);
       return;
     }
     final Rect? glyphRect = _typingGlyphRectForRange(renderEditable, range);
     if (glyphRect == null) {
-      _applyHiddenRange(null);
+      _removePendingHiddenRange(range);
       return;
     }
     final TextStyle style = _typingTextStyleForOffset(
@@ -4983,63 +5078,107 @@ class EditableTextState extends State<EditableText>
     );
     final TypingGlyphAnimation animation = TypingGlyphAnimation(
       text: text,
-      targetRect: glyphRect,
+      range: range,
       style: style,
     );
-    final TextSelection selection = change.currentValue.selection;
-    _typingGlyphSelectionOffset =
-        selection.isCollapsed ? selection.extentOffset : null;
-    _typingGlyphRange = range;
-    _typingGlyphText = text;
-    _typingGlyphController.stop();
-    _typingGlyphAnimation = animation;
-    painter
-      ..glyphAnimation = animation
-      ..glyphProgress = _typingGlyphStartOpacity;
-    _applyHiddenRange(range);
-    _refreshTypingGlyphCurve();
-    _typingGlyphController
-      ..duration = _typingGlyphMorphDuration
-      ..reset()
-      ..forward();
+    _pendingTypingHiddenRanges.remove(range);
+    _queueTypingGlyphAnimation(animation);
+    _updateTypingHiddenRanges();
   }
 
-  void _handleTypingGlyphTick() {
-    _typingCaretPainter?.glyphProgress = _typingGlyphCurve.value;
-  }
-
-  void _handleTypingGlyphStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed) {
-      _stopTypingGlyphMorph();
+  void _queueTypingGlyphAnimation(TypingGlyphAnimation animation) {
+    if (!_typingGlyphTicker.isActive) {
+      _typingGlyphElapsed = Duration.zero;
     }
+    final Duration startTime = _typingGlyphElapsed;
+    _typingGlyphEntries.add(
+      _TypingGlyphEntry(animation: animation, startTime: startTime),
+    );
+    if (!_typingGlyphTicker.isActive) {
+      _typingGlyphTicker.start();
+    }
+    _updateTypingGlyphFrames(
+      _typingGlyphElapsed,
+      removeCompleted: false,
+    );
   }
 
-  void _stopTypingGlyphMorph() {
-    if (_typingGlyphAnimation == null) {
-      _typingGlyphSelectionOffset = null;
-      _typingGlyphRange = null;
-      _typingGlyphText = null;
-      _applyHiddenRange(null);
+  void _handleTypingGlyphTick(Duration elapsed) {
+    _typingGlyphElapsed = elapsed;
+    _updateTypingGlyphFrames(elapsed, removeCompleted: true);
+  }
+
+  void _updateTypingGlyphFrames(
+    Duration elapsed, {
+    required bool removeCompleted,
+  }) {
+    if (_typingGlyphEntries.isEmpty) {
+      _typingCaretPainter?.glyphFrames = const <TypingGlyphFrame>[];
+      if (_typingGlyphTicker.isActive) {
+        _typingGlyphTicker.stop();
+      }
+      _typingGlyphElapsed = Duration.zero;
+      _updateTypingHiddenRanges();
       return;
     }
-    _typingGlyphController.stop();
-    _typingGlyphAnimation = null;
-    _typingGlyphSelectionOffset = null;
-    _typingGlyphRange = null;
-    _typingGlyphText = null;
-    _typingCaretPainter
-      ?..glyphAnimation = null
-      ..glyphProgress = _typingGlyphEndOpacity;
-    _applyHiddenRange(null);
+    final List<_TypingGlyphEntry> completedEntries = <_TypingGlyphEntry>[];
+    final List<TypingGlyphFrame> frames = <TypingGlyphFrame>[];
+    for (final _TypingGlyphEntry entry in _typingGlyphEntries) {
+      final double progress = _typingGlyphProgress(elapsed, entry.startTime);
+      if (removeCompleted && progress >= _typingGlyphEndOpacity) {
+        completedEntries.add(entry);
+        continue;
+      }
+      frames.add(
+        TypingGlyphFrame(animation: entry.animation, progress: progress),
+      );
+    }
+    if (completedEntries.isNotEmpty) {
+      _typingGlyphEntries.removeWhere(completedEntries.contains);
+      _updateTypingHiddenRanges();
+    }
+    _typingCaretPainter?.glyphFrames = frames;
+    if (_typingGlyphEntries.isEmpty && _typingGlyphTicker.isActive) {
+      _typingGlyphTicker.stop();
+    }
   }
 
-  void _applyHiddenRange(TextRange? range) {
+  double _typingGlyphProgress(Duration elapsed, Duration startTime) {
+    final Duration delta = elapsed - startTime;
+    if (delta <= Duration.zero) {
+      return _typingGlyphStartOpacity;
+    }
+    final double totalMicros =
+        _typingGlyphMorphDuration.inMicroseconds.toDouble();
+    if (totalMicros <= 0) {
+      return _typingGlyphEndOpacity;
+    }
+    final double progress = (delta.inMicroseconds / totalMicros).clamp(
+      _typingGlyphStartOpacity,
+      _typingGlyphEndOpacity,
+    );
+    return _typingGlyphMorphCurve.transform(progress);
+  }
+
+  void _stopTypingGlyphMorphs() {
+    if (_typingGlyphEntries.isEmpty) {
+      _updateTypingHiddenRanges();
+      return;
+    }
+    _typingGlyphTicker.stop();
+    _typingGlyphElapsed = Duration.zero;
+    _typingGlyphEntries.clear();
+    _typingCaretPainter?.glyphFrames = const <TypingGlyphFrame>[];
+    _updateTypingHiddenRanges();
+  }
+
+  void _applyHiddenRanges(List<TextRange> ranges) {
     final TypingTextEditingController? typingController = _typingController;
-    if (typingController == null || typingController.hiddenRange == range) {
+    if (typingController == null) {
       return;
     }
     _suppressTypingControllerNotifications = true;
-    typingController.setHiddenRange(range);
+    typingController.setHiddenRanges(ranges);
     _suppressTypingControllerNotifications = false;
   }
 
@@ -7273,6 +7412,22 @@ class _EditableTextTapOutsideAction
         intent.focusNode.unfocus();
     }
   }
+}
+
+enum _TypingChangeApplyState {
+  apply,
+  defer,
+  drop,
+}
+
+class _TypingGlyphEntry {
+  const _TypingGlyphEntry({
+    required this.animation,
+    required this.startTime,
+  });
+
+  final TypingGlyphAnimation animation;
+  final Duration startTime;
 }
 
 class _EditableTextTapUpOutsideAction
