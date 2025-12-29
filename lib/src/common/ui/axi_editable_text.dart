@@ -4861,7 +4861,7 @@ class EditableTextState extends State<EditableText>
       return;
     }
 
-    if (change.kind.isInsertion || change.kind.isDeletion) {
+    if (change.kind.isInsertion) {
       final bool shouldAnimateTyping =
           _typingAnimationsEnabled && !widget.readOnly;
       if (shouldAnimateTyping) {
