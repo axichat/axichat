@@ -35,7 +35,6 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   bool _pendingSpamSyncLoaded = false;
   final Set<String> _pendingSpamPublishes = {};
   final Set<String> _pendingSpamRetractions = {};
-  // ignore: prefer_final_fields
   bool _spamSnapshotMetaLoaded = false;
   DateTime? _spamLastSnapshotAt;
   final Set<String> _spamLastSnapshotIds = {};
