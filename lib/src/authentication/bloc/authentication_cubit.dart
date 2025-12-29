@@ -89,8 +89,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             HomeRefreshSyncService(
               xmppService: xmppService,
               emailService: emailService,
-            )
-          ..start(),
+            ),
         _endpointResolver = endpointResolver,
         _endpointConfig = initialState?.config ??
             initialEndpointConfig ??
@@ -102,6 +101,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           httpClient: _httpClient,
         );
     _emailService?.updateEndpointConfig(_endpointConfig);
+    if (state is AuthenticationComplete) {
+      _homeRefreshSyncService.start();
+    }
     _authRecoveryFuture = _recoverAuthTransaction();
     _endpointConfigRecoveryFuture = _restoreEndpointConfig();
     unawaited(_endpointConfigRecoveryFuture);
@@ -289,6 +291,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   void _emit(AuthenticationState state) {
     // Always allow transitions away from an authenticated session (e.g. logout).
     _updateLoginBackoff(state);
+    if (state is AuthenticationComplete) {
+      _homeRefreshSyncService.start();
+    }
     emit(state.copyWithConfig(_endpointConfig));
   }
 
@@ -1785,6 +1790,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
     }
+    await _homeRefreshSyncService.close();
     await _xmppService.disconnect();
     if (_endpointConfig.enableSmtp) {
       if (severity == LogoutSeverity.burn) {
