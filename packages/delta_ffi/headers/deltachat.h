@@ -262,6 +262,7 @@ int32_t dc_unblock_contact(dc_context_t* ctx, uint32_t contact_id);
 uint32_t dc_lookup_contact_id_by_addr(dc_context_t* ctx, const char* addr);
 
 dc_msg_t* dc_get_msg(dc_context_t* ctx, uint32_t msg_id);
+char* dc_get_msg_mime_headers(dc_context_t* ctx, uint32_t msg_id);
 void dc_msg_unref(dc_msg_t* msg);
 char* dc_msg_get_text(dc_msg_t* msg);
 char* dc_msg_get_html(dc_msg_t* msg);

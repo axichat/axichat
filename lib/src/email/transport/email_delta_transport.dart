@@ -50,6 +50,7 @@ const String _emailSecurityModePlainError =
 const String _emailSecurityModeUnknownPrefix =
     'Unsupported email security mode for ';
 const String _emailSecurityModeUnknownSuffix = ' connections.';
+const int _deltaMessageIdUnset = DeltaMessageId.none;
 
 enum _DeltaSecurityModeResolution {
   auto,
@@ -1340,6 +1341,15 @@ class EmailDeltaTransport implements ChatTransport {
     final context = _context;
     if (context == null) return null;
     return context.getMessage(messageId);
+  }
+
+  /// Gets raw MIME headers by message ID from core.
+  Future<String?> getMessageMimeHeaders(int messageId) async {
+    if (messageId <= _deltaMessageIdUnset) return null;
+    await _ensureContextReady();
+    final context = _context;
+    if (context == null) return null;
+    return context.getMessageMimeHeaders(messageId);
   }
 
   /// Gets contact IDs from core.

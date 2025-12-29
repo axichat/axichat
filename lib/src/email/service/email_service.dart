@@ -34,6 +34,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 const _defaultPageSize = 50;
 const _maxFanOutRecipients = 20;
 const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
+const int _deltaMessageIdUnset = DeltaMessageId.none;
 const _foregroundKeepaliveInterval = Duration(seconds: 45);
 const _foregroundFetchTimeout = Duration(seconds: 8);
 const _notificationFlushDelay = Duration(milliseconds: 500);
@@ -2804,6 +2805,14 @@ class EmailService {
     if (deltaId == null) return null;
     await _ensureReady();
     return _transport.getQuotedMessage(deltaId);
+  }
+
+  /// Gets raw RFC822 headers for a message, if available.
+  Future<String?> getMessageRawHeaders(int messageId) async {
+    if (messageId <= _deltaMessageIdUnset) return null;
+    await _ensureReady();
+    final headers = await _transport.getMessageMimeHeaders(messageId);
+    return sanitizeRawEmailHeaders(headers);
   }
 
   /// Saves a draft to core.
