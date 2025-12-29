@@ -1383,6 +1383,7 @@ class _AxiTextFieldState extends State<AxiTextField>
           cursorHeight: widget.cursorHeight,
           cursorRadius: cursorRadius,
           cursorColor: transparentCursorColor,
+          typingCaretColor: cursorColor,
           selectionHeightStyle: widget.selectionHeightStyle,
           selectionWidthStyle: widget.selectionWidthStyle,
           cursorOpacityAnimates: cursorOpacityAnimates,

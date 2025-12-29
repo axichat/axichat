@@ -17,8 +17,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
     show ContentInsertionConfiguration, TextEditingController, ToolbarOptions;
-import 'package:shadcn_ui/shadcn_ui.dart';
-
 import 'package:flutter/src/widgets/_web_browser_detection_io.dart'
     if (dart.library.js_interop) 'package:flutter/src/widgets/_web_browser_detection_web.dart';
 import 'package:flutter/src/widgets/actions.dart';
@@ -111,9 +109,6 @@ const Duration _typingGlyphMorphDuration =
     Duration(milliseconds: _typingGlyphMorphMs);
 const Curve _typingCaretSlideCurve = Curves.easeInOutCubic;
 const Curve _typingGlyphMorphCurve = Curves.easeInOutCubic;
-const double _typingCursorDotDiameter = 6.0;
-const double _typingCursorDotRadius = _typingCursorDotDiameter / 2;
-const double _typingCursorDotTextGap = 2.0;
 const double _typingGlyphStartOpacity = 0.0;
 const double _typingGlyphEndOpacity = 1.0;
 
@@ -561,6 +556,7 @@ class EditableText extends StatefulWidget {
     StrutStyle? strutStyle,
     required this.cursorColor,
     required this.backgroundCursorColor,
+    this.typingCaretColor,
     this.textAlign = TextAlign.start,
     this.textDirection,
     this.locale,
@@ -916,6 +912,9 @@ class EditableText extends StatefulWidget {
 
   /// The color to use when painting the cursor.
   final Color cursorColor;
+
+  /// Optional override for the animated typing caret color.
+  final Color? typingCaretColor;
 
   /// The color to use when painting the autocorrection Rect.
   ///
@@ -2425,6 +2424,15 @@ class EditableTextState extends State<EditableText>
     return widget.cursorColor.withOpacity(effectiveOpacity);
   }
 
+  Color get _typingCaretColor {
+    final Color baseColor = widget.typingCaretColor ?? widget.cursorColor;
+    final double effectiveOpacity = math.min(
+      baseColor.alpha / 255.0,
+      _cursorBlinkOpacityController.value,
+    );
+    return baseColor.withOpacity(effectiveOpacity);
+  }
+
   @override
   bool get cutEnabled {
     if (widget.selectionControls is! TextSelectionHandleControls) {
@@ -3101,14 +3109,16 @@ class EditableTextState extends State<EditableText>
     _style = MediaQuery.boldTextOf(context)
         ? widget.style.merge(const TextStyle(fontWeight: FontWeight.bold))
         : widget.style;
-    final Color dotColor = ShadTheme.of(context).colorScheme.foreground;
+    final Color caretColor = _typingCaretColor;
     _typingCaretPainter ??= TypingCaretPainter(
-      dotColor: dotColor,
-      dotRadius: _typingCursorDotRadius,
+      caretColor: caretColor,
+      cursorWidth: widget.cursorWidth,
+      cursorRadius: widget.cursorRadius,
     );
     _typingCaretPainter
-      ?..dotColor = dotColor
-      ..dotRadius = _typingCursorDotRadius
+      ?..caretColor = caretColor
+      ..cursorWidth = widget.cursorWidth
+      ..cursorRadius = widget.cursorRadius
       ..caretOffset = _typingCaretOffset;
     _handleTypingCursorVisibilityChanged();
 
@@ -4517,6 +4527,7 @@ class EditableTextState extends State<EditableText>
     );
     renderEditable.cursorColor =
         widget.cursorColor.withOpacity(effectiveOpacity);
+    _typingCaretPainter?.caretColor = _typingCaretColor;
     _cursorVisibilityNotifier.value = widget.showCursor &&
         (EditableText.debugDeterministicCursor ||
             _cursorBlinkOpacityController.value > 0);
@@ -4754,6 +4765,7 @@ class EditableTextState extends State<EditableText>
     final Offset? endOffset = _typingCaretOffsetForSelection(
       change.currentValue.selection,
       renderEditable,
+      updatePainter: true,
     );
     final Offset? startOffset = _typingCaretOffsetForSelection(
       change.previousValue.selection,
@@ -4863,22 +4875,18 @@ class EditableTextState extends State<EditableText>
 
   Offset? _typingCaretOffsetForSelection(
     TextSelection selection,
-    AxiRenderEditable renderEditable,
-  ) {
+    AxiRenderEditable renderEditable, {
+    bool updatePainter = false,
+  }) {
     if (!selection.isValid) {
       return null;
     }
     final TextPosition position = TextPosition(offset: selection.extentOffset);
     final Rect caretRect = renderEditable.getLocalRectForCaret(position);
-    final double dotRadius =
-        _typingCaretPainter?.dotRadius ?? _typingCursorDotRadius;
-    final double direction =
-        renderEditable.textDirection == TextDirection.rtl ? -1.0 : 1.0;
-    final double dotOffset = dotRadius + _typingCursorDotTextGap;
-    final Offset adjusted = Offset(
-      caretRect.center.dx + direction * dotOffset,
-      caretRect.center.dy,
-    );
+    if (updatePainter) {
+      _typingCaretPainter?.caretHeight = caretRect.height;
+    }
+    final Offset adjusted = caretRect.center;
     return _snapTypingOffset(adjusted, renderEditable.devicePixelRatio);
   }
 
@@ -4934,8 +4942,11 @@ class EditableTextState extends State<EditableText>
     if (selection == null || !selection.isValid) {
       return;
     }
-    final Offset? caretOffset =
-        _typingCaretOffsetForSelection(selection, renderEditable);
+    final Offset? caretOffset = _typingCaretOffsetForSelection(
+      selection,
+      renderEditable,
+      updatePainter: true,
+    );
     if (caretOffset == null) {
       return;
     }
@@ -4970,15 +4981,9 @@ class EditableTextState extends State<EditableText>
       renderEditable,
       range.start,
     );
-    final Offset startOffset = _typingCaretOffsetForSelection(
-          change.previousValue.selection,
-          renderEditable,
-        ) ??
-        _typingCaretOffset;
     final TypingGlyphAnimation animation = TypingGlyphAnimation(
       text: text,
       targetRect: glyphRect,
-      startOffset: startOffset,
       style: style,
     );
     final TextSelection selection = change.currentValue.selection;

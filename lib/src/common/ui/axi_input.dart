@@ -673,6 +673,8 @@ class AxiInputState extends State<AxiInput>
                                             style: effectiveTextStyle,
                                             strutStyle: widget.strutStyle,
                                             cursorColor: transparentCursorColor,
+                                            typingCaretColor:
+                                                resolvedCursorColor,
                                             backgroundCursorColor: Colors.grey,
                                             keyboardType: widget.keyboardType,
                                             keyboardAppearance:
