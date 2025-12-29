@@ -24,6 +24,7 @@ const validPassword = 'validPassword';
 const saltedPassword = 'saltedPassword';
 const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
+const bool clearEmailCredentialsOnLogout = true;
 
 const missingDatabaseSecretsErrorText =
     'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
@@ -1065,6 +1066,14 @@ void main() {
       when(() => mockCredentialStore.deleteAll(burn: any(named: 'burn')))
           .thenAnswer((_) async => true);
       when(() => mockXmppService.burn()).thenAnswer((_) async {});
+      when(
+        () => mockEmailService.shutdown(
+          jid: any(named: 'jid'),
+          clearCredentials: any(named: 'clearCredentials'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => mockEmailService.burn(jid: any(named: 'jid')))
+          .thenAnswer((_) async {});
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -1121,9 +1130,37 @@ void main() {
             .called(1);
         verify(() => mockCredentialStore.delete(key: bloc.passwordStorageKey))
             .called(1);
+        verify(
+          () => mockCredentialStore.delete(
+            key: bloc.passwordPreHashedStorageKey,
+          ),
+        ).called(1);
         verify(() => mockXmppService.clearSessionTokens()).called(1);
         verify(() => mockHomeRefreshSyncService.close()).called(1);
         verify(() => mockXmppService.disconnect()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'User initiated logout clears email credentials when enabled.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        homeRefreshSyncService: mockHomeRefreshSyncService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.logout(severity: LogoutSeverity.normal),
+      expect: () => [const AuthenticationNone()],
+      verify: (_) {
+        verify(
+          () => mockEmailService.shutdown(
+            jid: any(named: 'jid'),
+            clearCredentials: clearEmailCredentialsOnLogout,
+          ),
+        ).called(1);
       },
     );
 
@@ -1142,6 +1179,24 @@ void main() {
         verify(() => mockCredentialStore.deleteAll(burn: true)).called(1);
         verify(() => mockXmppService.burn()).called(1);
         verify(() => mockXmppService.disconnect()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Burn logout clears email storage when enabled.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        homeRefreshSyncService: mockHomeRefreshSyncService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
+      expect: () => [const AuthenticationNone()],
+      verify: (_) {
+        verify(() => mockEmailService.burn(jid: any(named: 'jid'))).called(1);
       },
     );
   });

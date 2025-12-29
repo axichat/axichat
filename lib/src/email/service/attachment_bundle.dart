@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
+import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -15,7 +16,6 @@ const int _bundleMaxTotalSizeMiB = 50;
 const int _bundleMaxFileNameLength = 120;
 const int _bundleFileIndexStart = 1;
 const int _bundleFileIndexStep = 1;
-const int _bundleSubstringStart = 0;
 const int _bundleMinFileSizeBytes = 0;
 const int _bundleBytesPerKiB = 1024;
 const int _bundleBytesPerMiB = _bundleBytesPerKiB * _bundleBytesPerKiB;
@@ -123,27 +123,30 @@ String _sanitizeBundleFileName({
   required String fallbackPath,
   required int index,
 }) {
-  final trimmedName = explicitName?.trim();
-  final candidate =
-      trimmedName?.isNotEmpty == true ? trimmedName! : p.basename(fallbackPath);
-  final normalized = p.basename(candidate).trim();
-  final fallbackName =
-      '$_bundleFallbackFileName$_bundleFileIndexSeparator$index';
-  final resolved = normalized.isEmpty ? fallbackName : normalized;
-  return _truncateBundleFileName(resolved);
+  final fallbackName = _resolveBundleFallbackName(
+    fallbackPath: fallbackPath,
+    index: index,
+  );
+  return sanitizeAttachmentFileName(
+    rawName: explicitName,
+    fallbackName: fallbackName,
+    maxLength: _bundleMaxFileNameLength,
+  );
 }
 
-String _truncateBundleFileName(String name) {
-  if (name.length <= _bundleMaxFileNameLength) {
-    return name;
+String _resolveBundleFallbackName({
+  required String fallbackPath,
+  required int index,
+}) {
+  final trimmedPath = fallbackPath.trim();
+  if (trimmedPath.isNotEmpty) {
+    return trimmedPath;
   }
-  final extension = p.extension(name);
-  if (extension.isEmpty || extension.length >= _bundleMaxFileNameLength) {
-    return name.substring(_bundleSubstringStart, _bundleMaxFileNameLength);
-  }
-  final maxBaseLength = _bundleMaxFileNameLength - extension.length;
-  return '${name.substring(_bundleSubstringStart, maxBaseLength)}$extension';
+  return _buildBundleFallbackName(index);
 }
+
+String _buildBundleFallbackName(int index) =>
+    '$_bundleFallbackFileName$_bundleFileIndexSeparator$index';
 
 void _writeBundle(Map<String, Object?> payload) {
   final rawPath = payload[_bundlePayloadPathKey];

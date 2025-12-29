@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
+import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/media_decode_safety.dart';
 import 'package:axichat/src/common/unicode_safety.dart';
@@ -104,7 +105,7 @@ const String _attachmentShareDirName = 'attachment_shares';
 const String _attachmentShareDirPrefix = 'share_';
 const String _attachmentShareFallbackName = 'attachment';
 const int _attachmentShareNameMaxLength = 120;
-const int _attachmentShareNameSubstringStart = 0;
+const int _attachmentSaveNameMaxLength = _attachmentShareNameMaxLength;
 const Duration _attachmentShareCleanupAge = Duration(days: 1);
 const bool _attachmentShareCleanupFollowLinks = false;
 const Duration _attachmentImageDecodeTimeout = Duration(seconds: 2);
@@ -2386,9 +2387,15 @@ Future<void> _saveAttachmentToDevice(
     );
     return;
   }
-  final trimmedName = filename.trim();
-  final resolvedName =
-      trimmedName.isNotEmpty ? trimmedName : p.basename(file.path);
+  final fallbackName = _resolveAttachmentFallbackName(
+    fallbackPath: file.path,
+    fallbackName: _attachmentShareFallbackName,
+  );
+  final resolvedName = sanitizeAttachmentFileName(
+    rawName: filename,
+    fallbackName: fallbackName,
+    maxLength: _attachmentSaveNameMaxLength,
+  );
   final savePath = await FilePicker.platform.saveFile(
     fileName: resolvedName,
   );
@@ -2489,32 +2496,26 @@ String _sanitizeShareFileName({
   required String? explicitName,
   required String fallbackPath,
 }) {
-  final trimmedName = explicitName?.trim();
-  final candidate =
-      trimmedName?.isNotEmpty == true ? trimmedName! : p.basename(fallbackPath);
-  final normalized = p.basename(candidate).trim();
-  final resolved =
-      normalized.isNotEmpty ? normalized : _attachmentShareFallbackName;
-  return _truncateShareFileName(resolved);
+  final fallbackName = _resolveAttachmentFallbackName(
+    fallbackPath: fallbackPath,
+    fallbackName: _attachmentShareFallbackName,
+  );
+  return sanitizeAttachmentFileName(
+    rawName: explicitName,
+    fallbackName: fallbackName,
+    maxLength: _attachmentShareNameMaxLength,
+  );
 }
 
-String _truncateShareFileName(String name) {
-  if (name.length <= _attachmentShareNameMaxLength) {
-    return name;
+String _resolveAttachmentFallbackName({
+  required String fallbackPath,
+  required String fallbackName,
+}) {
+  final trimmedPath = fallbackPath.trim();
+  if (trimmedPath.isNotEmpty) {
+    return trimmedPath;
   }
-  final extension = p.extension(name);
-  if (extension.isEmpty || extension.length >= _attachmentShareNameMaxLength) {
-    return name.substring(
-      _attachmentShareNameSubstringStart,
-      _attachmentShareNameMaxLength,
-    );
-  }
-  final maxBaseLength = _attachmentShareNameMaxLength - extension.length;
-  final base = name.substring(
-    _attachmentShareNameSubstringStart,
-    maxBaseLength,
-  );
-  return '$base$extension';
+  return fallbackName;
 }
 
 Future<void> _applyDownloadProtections(File destination) async {
