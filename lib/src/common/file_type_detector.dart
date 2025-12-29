@@ -153,6 +153,10 @@ class FileTypeReport {
       _normalizeMimeType(extensionMimeType);
 }
 
+extension FileTypeReportPreferredMimeType on FileTypeReport {
+  String? get preferredMimeType => detectedLabel ?? declaredLabel;
+}
+
 Future<FileTypeReport> inspectFileType({
   required File file,
   required String? declaredMimeType,
@@ -185,6 +189,36 @@ Future<FileTypeReport> inspectFileType({
   }
 }
 
+Future<String?> resolveMimeTypeFromPath({
+  required String path,
+  String? fileName,
+  String? declaredMimeType,
+}) async {
+  final File file = File(path);
+  final FileTypeReport report = await inspectFileType(
+    file: file,
+    declaredMimeType: declaredMimeType,
+    fileName: fileName,
+  );
+  return report.preferredMimeType;
+}
+
+FileTypeReport buildDeclaredFileTypeReport({
+  required String? declaredMimeType,
+  required String? fileName,
+  String? path,
+}) {
+  final String? resolvedName = _resolveMimeTypeFileName(fileName, path);
+  final String? extensionMimeType = resolvedName == null
+      ? null
+      : _normalizeMimeType(lookupMimeType(resolvedName));
+  return FileTypeReport(
+    detectedMimeType: null,
+    declaredMimeType: declaredMimeType,
+    extensionMimeType: extensionMimeType,
+  );
+}
+
 Future<Uint8List> _readHeaderBytes(File file) async {
   final handle = await file.open();
   try {
@@ -204,6 +238,18 @@ String? _normalizeMimeType(String? mimeType) {
   if (trimmed == null || trimmed.isEmpty) return null;
   if (trimmed == _jpegAliasMimeType) return _jpegMimeType;
   return trimmed;
+}
+
+String? _resolveMimeTypeFileName(String? fileName, String? path) {
+  final String? trimmedName = fileName?.trim();
+  if (trimmedName?.isNotEmpty == true) {
+    return trimmedName;
+  }
+  final String? trimmedPath = path?.trim();
+  if (trimmedPath?.isNotEmpty == true) {
+    return trimmedPath;
+  }
+  return null;
 }
 
 bool _isReliableMimeType(String? mimeType) {

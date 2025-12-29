@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -78,6 +79,8 @@ class _PendingAttachmentPreview extends StatefulWidget {
 class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
   late final ShadContextMenuController _menuController =
       ShadContextMenuController();
+  Future<FileTypeReport>? _typeReportFuture;
+  String? _typeReportPath;
 
   @override
   void dispose() {
@@ -85,9 +88,45 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant _PendingAttachmentPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final String oldPath = oldWidget.pending.attachment.path.trim();
+    final String newPath = widget.pending.attachment.path.trim();
+    if (oldPath != newPath) {
+      _typeReportPath = null;
+      _typeReportFuture = null;
+    }
+  }
+
   void _showMenu() {
     if (!mounted) return;
     _menuController.show();
+  }
+
+  Future<FileTypeReport> _resolveTypeReport(EmailAttachment attachment) {
+    final String path = attachment.path.trim();
+    final String? resolvedPath = path.isEmpty ? null : path;
+    final Future<FileTypeReport>? cached = _typeReportFuture;
+    if (cached != null && resolvedPath == _typeReportPath) {
+      return cached;
+    }
+    _typeReportPath = resolvedPath;
+    if (resolvedPath == null) {
+      final FileTypeReport report = buildDeclaredFileTypeReport(
+        declaredMimeType: attachment.mimeType,
+        fileName: attachment.fileName,
+        path: attachment.path,
+      );
+      return Future<FileTypeReport>.value(report);
+    }
+    final Future<FileTypeReport> nextFuture = inspectFileType(
+      file: File(resolvedPath),
+      declaredMimeType: attachment.mimeType,
+      fileName: attachment.fileName,
+    );
+    _typeReportFuture = nextFuture;
+    return nextFuture;
   }
 
   @override
@@ -96,17 +135,27 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
     Widget preview;
     if (pending.isPreparing) {
       preview = _PendingAttachmentSkeleton(pending: pending);
-    } else if (pending.attachment.isImage) {
-      preview = _PendingImageAttachment(
-        pending: pending,
-        onRetry: widget.onRetry,
-        onRemove: widget.onRemove,
-      );
     } else {
-      preview = _PendingFileAttachment(
-        pending: pending,
-        onRetry: widget.onRetry,
-        onRemove: widget.onRemove,
+      preview = FutureBuilder<FileTypeReport>(
+        future: _resolveTypeReport(pending.attachment),
+        builder: (context, snapshot) {
+          final FileTypeReport? report = snapshot.data;
+          final bool isImage = report?.isDetectedImage ?? false;
+          if (isImage) {
+            return _PendingImageAttachment(
+              pending: pending,
+              onRetry: widget.onRetry,
+              onRemove: widget.onRemove,
+              typeReport: report,
+            );
+          }
+          return _PendingFileAttachment(
+            pending: pending,
+            onRetry: widget.onRetry,
+            onRemove: widget.onRemove,
+            typeReport: report,
+          );
+        },
       );
     }
     final hasGesture = widget.onPressed != null || widget.onLongPress != null;
@@ -197,11 +246,13 @@ class _PendingImageAttachment extends StatelessWidget {
     required this.pending,
     required this.onRetry,
     required this.onRemove,
+    this.typeReport,
   });
 
   final PendingAttachment pending;
   final VoidCallback onRetry;
   final VoidCallback onRemove;
+  final FileTypeReport? typeReport;
 
   @override
   Widget build(BuildContext context) {
@@ -228,7 +279,10 @@ class _PendingImageAttachment extends StatelessWidget {
                 errorBuilder: (_, __, ___) => ColoredBox(
                   color: colors.card,
                   child: Icon(
-                    attachmentIcon(pending.attachment),
+                    attachmentIcon(
+                      pending.attachment,
+                      typeReport: typeReport,
+                    ),
                     color: colors.mutedForeground,
                   ),
                 ),
@@ -260,11 +314,13 @@ class _PendingFileAttachment extends StatelessWidget {
     required this.pending,
     required this.onRetry,
     required this.onRemove,
+    this.typeReport,
   });
 
   final PendingAttachment pending;
   final VoidCallback onRetry;
   final VoidCallback onRemove;
+  final FileTypeReport? typeReport;
 
   @override
   Widget build(BuildContext context) {
@@ -300,7 +356,10 @@ class _PendingFileAttachment extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  attachmentIcon(pending.attachment),
+                  attachmentIcon(
+                    pending.attachment,
+                    typeReport: typeReport,
+                  ),
                   color: foreground,
                 ),
               ),
@@ -848,7 +907,12 @@ String _statusLabel(PendingAttachmentStatus status, AppLocalizations l10n) {
   };
 }
 
-IconData attachmentIcon(EmailAttachment attachment) {
+IconData attachmentIcon(
+  EmailAttachment attachment, {
+  FileTypeReport? typeReport,
+}) {
+  if (typeReport?.isDetectedImage ?? false) return Icons.image_outlined;
+  if (typeReport?.isDetectedVideo ?? false) return Icons.videocam_outlined;
   if (attachment.isImage) return Icons.image_outlined;
   if (attachment.isVideo) return Icons.videocam_outlined;
   if (attachment.isAudio) return Icons.audiotrack;

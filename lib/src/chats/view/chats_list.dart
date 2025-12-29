@@ -136,7 +136,6 @@ class ChatsList extends StatelessWidget {
                           : a.lastChangeTimestamp
                               .compareTo(b.lastChangeTimestamp),
                     );
-
                     Widget body;
                     if (visibleItems.isEmpty) {
                       body = Column(

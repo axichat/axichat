@@ -31,6 +31,8 @@ const String _carbonOriginRejectedLog =
     'Rejected carbon message with unexpected sender.';
 const String _mamOriginRejectedLog =
     'Rejected archive message without local account routing.';
+const String _mucMutationRejectedLog =
+    'Rejected group chat mutation from unknown occupant.';
 const String _pinPubSubNamespace = 'urn:axi:pins';
 const String _pinPubSubNodePrefix = 'urn:axi:pins:';
 const String _pinTag = 'pin';
@@ -3940,6 +3942,10 @@ mixin MessageService
   Future<bool> _handleCorrection(mox.MessageEvent event, String jid) async {
     final correction = event.extensions.get<mox.LastMessageCorrectionData>();
     if (correction == null) return false;
+    if (!_isGroupChatMutationAuthorized(event)) {
+      _log.warning(_mucMutationRejectedLog);
+      return true;
+    }
 
     final mox.OccupantIdData? occupantData =
         event.extensions.get<mox.OccupantIdData>();
@@ -3968,6 +3974,10 @@ mixin MessageService
   Future<bool> _handleRetraction(mox.MessageEvent event, String jid) async {
     final retraction = event.extensions.get<mox.MessageRetractionData>();
     if (retraction == null) return false;
+    if (!_isGroupChatMutationAuthorized(event)) {
+      _log.warning(_mucMutationRejectedLog);
+      return true;
+    }
 
     final mox.OccupantIdData? occupantData =
         event.extensions.get<mox.OccupantIdData>();
@@ -3992,6 +4002,10 @@ mixin MessageService
   Future<bool> _handleReactions(mox.MessageEvent event) async {
     final reactions = event.extensions.get<mox.MessageReactionsData>();
     if (reactions == null) return false;
+    if (!_isGroupChatMutationAuthorized(event)) {
+      _log.warning(_mucMutationRejectedLog);
+      return true;
+    }
     final sanitizedEmojis = reactions.emojis.clampReactionEmojis();
     if (reactions.emojis.isNotEmpty && sanitizedEmojis.isEmpty) {
       _log.fine('Dropping reactions with no valid emoji payload');
@@ -4207,6 +4221,13 @@ mixin MessageService
     mox.MessageEvent event, {
     required RoomState roomState,
   }) {
+    return _mucOccupantForSender(event, roomState: roomState);
+  }
+
+  Occupant? _mucOccupantForSender(
+    mox.MessageEvent event, {
+    required RoomState roomState,
+  }) {
     final sender = event.from.toString();
     final Occupant? direct = roomState.occupants[sender];
     if (direct != null) {
@@ -4222,6 +4243,26 @@ mixin MessageService
       }
     }
     return null;
+  }
+
+  bool _isGroupChatMutationAuthorized(mox.MessageEvent event) {
+    if (event.type != _messageTypeGroupchat) {
+      return true;
+    }
+    if (event.isFromMAM) {
+      return true;
+    }
+    final roomJid = event.from.toBare().toString();
+    if (hasLeftRoom(roomJid)) {
+      return false;
+    }
+    final RoomState? roomState = roomStateFor(roomJid);
+    if (roomState == null) {
+      return false;
+    }
+    final Occupant? occupant =
+        _mucOccupantForSender(event, roomState: roomState);
+    return occupant?.isPresent ?? false;
   }
 
   bool _isReadOnlyTaskSyncBlocked({

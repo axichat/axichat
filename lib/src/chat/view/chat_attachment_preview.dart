@@ -16,10 +16,13 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart'
     show XmppFileTooBigException, XmppService;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
@@ -72,6 +75,11 @@ const int _attachmentVideoMaxPixels = 32 * 1024 * 1024;
 const int _attachmentVideoMinDimensionPixels = 1;
 const int _attachmentVideoMinBytes = 1;
 const double _attachmentVideoMinDimension = 1.0;
+const String _attachmentShareDirName = 'attachment_shares';
+const String _attachmentShareDirPrefix = 'share_';
+const String _attachmentShareFallbackName = 'attachment';
+const int _attachmentShareNameMaxLength = 120;
+const int _attachmentShareNameSubstringStart = 0;
 const Duration _attachmentImageDecodeTimeout = Duration(seconds: 2);
 const Duration _attachmentVideoInitTimeout = Duration(seconds: 3);
 const ImageDecodeLimits _attachmentImageDecodeLimits = ImageDecodeLimits(
@@ -183,6 +191,11 @@ class ChatAttachmentPreview extends StatelessWidget {
               message: l10n.chatAttachmentUnavailable,
             );
           }
+          final FileTypeReport declaredReport = buildDeclaredFileTypeReport(
+            declaredMimeType: metadata.mimeType,
+            fileName: metadata.filename,
+            path: metadata.path,
+          );
 
           final shouldAutoDownload = _shouldAutoDownload(metadata);
           final path = metadata.path?.trim();
@@ -206,7 +219,8 @@ class ChatAttachmentPreview extends StatelessWidget {
                     ),
                   );
                 }
-                final report = typeSnapshot.data;
+                final FileTypeReport? report = typeSnapshot.data;
+                final FileTypeReport resolvedReport = report ?? declaredReport;
                 if (report?.isDetectedImage ?? false) {
                   return _ImageAttachment(
                     metadata: metadata,
@@ -214,7 +228,7 @@ class ChatAttachmentPreview extends StatelessWidget {
                     autoDownload: shouldAutoDownload,
                     autoDownloadUserInitiated: autoDownloadUserInitiated,
                     downloadDelegate: downloadDelegate,
-                    typeReport: report,
+                    typeReport: resolvedReport,
                   );
                 }
                 if (report?.isDetectedVideo ?? false) {
@@ -224,7 +238,7 @@ class ChatAttachmentPreview extends StatelessWidget {
                     autoDownload: shouldAutoDownload,
                     autoDownloadUserInitiated: autoDownloadUserInitiated,
                     downloadDelegate: downloadDelegate,
-                    typeReport: report,
+                    typeReport: resolvedReport,
                   );
                 }
                 return _FileAttachment(
@@ -233,7 +247,7 @@ class ChatAttachmentPreview extends StatelessWidget {
                   autoDownload: shouldAutoDownload,
                   autoDownloadUserInitiated: autoDownloadUserInitiated,
                   downloadDelegate: downloadDelegate,
-                  typeReport: report,
+                  typeReport: resolvedReport,
                 );
               },
             );
@@ -251,6 +265,7 @@ class ChatAttachmentPreview extends StatelessWidget {
               autoDownload: shouldAutoDownload,
               autoDownloadUserInitiated: autoDownloadUserInitiated,
               downloadDelegate: downloadDelegate,
+              typeReport: declaredReport,
             );
           }
           if (metadata.isVideo) {
@@ -260,6 +275,7 @@ class ChatAttachmentPreview extends StatelessWidget {
               autoDownload: shouldAutoDownload,
               autoDownloadUserInitiated: autoDownloadUserInitiated,
               downloadDelegate: downloadDelegate,
+              typeReport: declaredReport,
             );
           }
           return _FileAttachment(
@@ -268,6 +284,7 @@ class ChatAttachmentPreview extends StatelessWidget {
             autoDownload: shouldAutoDownload,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: downloadDelegate,
+            typeReport: declaredReport,
           );
         },
       ),
@@ -686,25 +703,48 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       metadata: metadata,
       controller: controller,
     );
-    final saveButton = Positioned(
+    final actionButtons = Positioned(
       top: _attachmentOverlayPadding,
       right: _attachmentOverlayPadding,
-      child: ShadButton.ghost(
-        size: ShadButtonSize.sm,
-        onPressed: _downloading
-            ? null
-            : () async {
-                if (localFile == null) return;
-                await _saveAttachmentToDevice(
-                  context,
-                  file: localFile,
-                  filename: metadata.filename,
-                );
-              },
-        child: const Icon(
-          LucideIcons.save,
-          size: _attachmentOverlayIconSize,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ShadButton.ghost(
+            size: ShadButtonSize.sm,
+            onPressed: _downloading
+                ? null
+                : () async {
+                    if (localFile == null) return;
+                    await _saveAttachmentToDevice(
+                      context,
+                      file: localFile,
+                      filename: metadata.filename,
+                    );
+                  },
+            child: const Icon(
+              LucideIcons.save,
+              size: _attachmentOverlayIconSize,
+            ),
+          ),
+          const SizedBox(width: _attachmentActionSpacing),
+          ShadButton.ghost(
+            size: ShadButtonSize.sm,
+            onPressed: _downloading
+                ? null
+                : () async {
+                    if (localFile == null) return;
+                    await _shareAttachmentFromFile(
+                      context,
+                      file: localFile,
+                      filename: metadata.filename,
+                    );
+                  },
+            child: const Icon(
+              LucideIcons.share2,
+              size: _attachmentOverlayIconSize,
+            ),
+          ),
+        ],
       ),
     );
 
@@ -758,7 +798,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
                             ),
                           ),
                         ),
-                      if (initialized) saveButton,
+                      if (initialized) actionButtons,
                     ],
                   ),
                 ),
@@ -1080,6 +1120,21 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                 const SizedBox(width: _attachmentActionSpacing),
                 ShadButton.ghost(
                   size: ShadButtonSize.sm,
+                  onPressed: () async {
+                    await _shareAttachmentFromFile(
+                      context,
+                      file: file,
+                      filename: metadata.filename,
+                    );
+                  },
+                  child: const Icon(
+                    LucideIcons.share2,
+                    size: _attachmentOverlayIconSize,
+                  ),
+                ),
+                const SizedBox(width: _attachmentActionSpacing),
+                ShadButton.ghost(
+                  size: ShadButtonSize.sm,
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Icon(
                     LucideIcons.x,
@@ -1168,6 +1223,10 @@ class _FileAttachment extends StatefulWidget {
   State<_FileAttachment> createState() => _FileAttachmentState();
 }
 
+class _AttachmentDownloadCancelledException implements Exception {
+  const _AttachmentDownloadCancelledException();
+}
+
 class _FileAttachmentState extends State<_FileAttachment> {
   var _downloading = false;
   var _autoDownloadRequested = false;
@@ -1177,7 +1236,12 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final metadata = widget.metadata;
-    final report = widget.typeReport;
+    final FileTypeReport report = widget.typeReport ??
+        buildDeclaredFileTypeReport(
+          declaredMimeType: metadata.mimeType,
+          fileName: metadata.filename,
+          path: metadata.path,
+        );
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
@@ -1185,12 +1249,11 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final localFile = path == null || path.isEmpty ? null : File(path);
     final hasLocalFile = localFile?.existsSync() ?? false;
     final canDownload = url != null || widget.downloadDelegate != null;
-    final risk = report == null
-        ? FileOpenRisk.safe
-        : assessFileOpenRisk(
-            report: report,
-            fileName: metadata.filename,
-          );
+    final bool shareEnabled = hasLocalFile || canDownload;
+    final FileOpenRisk risk = assessFileOpenRisk(
+      report: report,
+      fileName: metadata.filename,
+    );
     final showWarningOpen = hasLocalFile && risk.isWarning;
     final IconData openIconData = showWarningOpen
         ? Icons.warning_amber_outlined
@@ -1212,7 +1275,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
               typeReport: widget.typeReport,
             )
         : canDownload
-            ? () => _downloadOnly(showFeedback: true)
+            ? () => _downloadOnly(showFeedback: true, requireConfirmation: true)
             : null;
     if (widget.autoDownload &&
         !_autoDownloadRequested &&
@@ -1293,6 +1356,12 @@ class _FileAttachmentState extends State<_FileAttachment> {
                 ),
                 const SizedBox(width: _attachmentActionSpacing),
                 AxiIconButton(
+                  iconData: LucideIcons.share2,
+                  tooltip: l10n.chatActionShare,
+                  onPressed: shareEnabled ? _shareAttachment : null,
+                ),
+                const SizedBox(width: _attachmentActionSpacing),
+                AxiIconButton(
                   iconData: openIconData,
                   tooltip: openTooltip,
                   color: openColor,
@@ -1313,7 +1382,11 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
-      final path = await _resolveLocalPath(existingPath: widget.metadata.path);
+      final path = await _resolveLocalPath(
+        existingPath: widget.metadata.path,
+        requireConfirmation: true,
+        typeReport: widget.typeReport,
+      );
       if (!mounted) return;
       if (path == null || path.trim().isEmpty) {
         _showToast(
@@ -1330,6 +1403,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
         file: file,
         filename: widget.metadata.filename,
       );
+    } on _AttachmentDownloadCancelledException {
+      return;
     } on XmppFileTooBigException catch (error) {
       if (!mounted) return;
       _showToast(
@@ -1355,7 +1430,71 @@ class _FileAttachmentState extends State<_FileAttachment> {
     }
   }
 
-  Future<void> _downloadOnly({required bool showFeedback}) async {
+  Future<void> _shareAttachment() async {
+    if (_downloading) return;
+    final approved = await _confirmAttachmentShare(context);
+    if (!mounted) return;
+    if (approved != true) return;
+    setState(() {
+      _downloading = true;
+    });
+    final l10n = context.l10n;
+    final toaster = ShadToaster.maybeOf(context);
+    try {
+      final path = await _resolveLocalPath(
+        existingPath: widget.metadata.path,
+        requireConfirmation: true,
+        typeReport: widget.typeReport,
+      );
+      if (!mounted) return;
+      final trimmedPath = path?.trim();
+      if (trimmedPath == null || trimmedPath.isEmpty) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+        return;
+      }
+      final file = File(trimmedPath);
+      await _shareAttachmentFromFile(
+        context,
+        file: file,
+        filename: widget.metadata.filename,
+        skipConfirm: true,
+      );
+    } on _AttachmentDownloadCancelledException {
+      return;
+    } on XmppFileTooBigException catch (error) {
+      if (!mounted) return;
+      _showToast(
+        l10n,
+        toaster,
+        _attachmentTooLargeMessage(l10n, error.maxBytes),
+        destructive: true,
+      );
+    } on Exception {
+      if (!mounted) return;
+      _showToast(
+        l10n,
+        toaster,
+        l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _downloadOnly({
+    required bool showFeedback,
+    bool requireConfirmation = false,
+  }) async {
     if (_downloading) return;
     setState(() {
       _downloading = true;
@@ -1363,8 +1502,11 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
-      final resolvedPath =
-          await _resolveLocalPath(existingPath: widget.metadata.path);
+      final resolvedPath = await _resolveLocalPath(
+        existingPath: widget.metadata.path,
+        requireConfirmation: requireConfirmation,
+        typeReport: widget.typeReport,
+      );
       final downloaded = resolvedPath?.trim().isNotEmpty == true;
       if (!mounted) return;
       if (!downloaded && showFeedback) {
@@ -1375,6 +1517,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
           destructive: true,
         );
       }
+    } on _AttachmentDownloadCancelledException {
+      return;
     } on XmppFileTooBigException catch (error) {
       if (!mounted) return;
       if (showFeedback) {
@@ -1404,6 +1548,35 @@ class _FileAttachmentState extends State<_FileAttachment> {
     }
   }
 
+  Future<bool> _confirmHighRiskDownload(FileTypeReport? report) async {
+    final FileTypeReport resolvedReport = report ??
+        buildDeclaredFileTypeReport(
+          declaredMimeType: widget.metadata.mimeType,
+          fileName: widget.metadata.filename,
+          path: widget.metadata.path,
+        );
+    final FileOpenRisk risk = assessFileOpenRisk(
+      report: resolvedReport,
+      fileName: widget.metadata.filename,
+    );
+    if (!risk.isWarning) {
+      return true;
+    }
+    if (!mounted) {
+      return false;
+    }
+    final l10n = context.l10n;
+    final approved = await confirm(
+      context,
+      title: l10n.chatAttachmentHighRiskTitle,
+      message: l10n.chatAttachmentHighRiskMessage,
+      confirmLabel: l10n.chatAttachmentDownload,
+      cancelLabel: l10n.commonCancel,
+      destructiveConfirm: true,
+    );
+    return approved == true;
+  }
+
   Future<String?> _downloadViaXmpp() async {
     final xmpp = context.read<XmppService>();
     return xmpp.downloadInboundAttachment(
@@ -1414,12 +1587,20 @@ class _FileAttachmentState extends State<_FileAttachment> {
 
   Future<String?> _resolveLocalPath({
     required String? existingPath,
+    bool requireConfirmation = false,
+    FileTypeReport? typeReport,
   }) async {
     final resolvedExisting = existingPath?.trim();
     final existingFile = resolvedExisting == null || resolvedExisting.isEmpty
         ? null
         : File(resolvedExisting);
     if (existingFile?.existsSync() ?? false) return existingFile!.path;
+    if (requireConfirmation) {
+      final allowed = await _confirmHighRiskDownload(typeReport);
+      if (!allowed) {
+        throw const _AttachmentDownloadCancelledException();
+      }
+    }
     final downloadDelegate = widget.downloadDelegate;
     if (downloadDelegate != null) {
       final downloaded = await downloadDelegate.download();
@@ -1882,23 +2063,105 @@ Future<void> _openAttachment(
   }
 }
 
+Future<bool> _confirmAttachmentShare(BuildContext context) async {
+  final l10n = context.l10n;
+  final approved = await confirm(
+    context,
+    title: l10n.chatActionShare,
+    message: l10n.chatAttachmentExportMessage,
+    confirmLabel: l10n.chatActionShare,
+    cancelLabel: l10n.commonCancel,
+    destructiveConfirm: false,
+  );
+  return approved == true;
+}
+
+Future<void> _shareAttachmentFromFile(
+  BuildContext context, {
+  required File file,
+  required String filename,
+  bool skipConfirm = false,
+}) async {
+  final l10n = context.l10n;
+  final toaster = ShadToaster.maybeOf(context);
+  if (!skipConfirm) {
+    final confirmed = await _confirmAttachmentShare(context);
+    if (!context.mounted) return;
+    if (!confirmed) return;
+  }
+  final exists = await file.exists();
+  if (!context.mounted) return;
+  if (!exists) {
+    _showToast(
+      l10n,
+      toaster,
+      l10n.chatAttachmentUnavailableDevice,
+      destructive: true,
+    );
+    return;
+  }
+  if (defaultTargetPlatform == TargetPlatform.linux) {
+    await _saveAttachmentToDevice(
+      context,
+      file: file,
+      filename: filename,
+      skipConfirm: true,
+    );
+    return;
+  }
+  try {
+    final sharedFile = await _prepareShareAttachmentFile(
+      file: file,
+      filename: filename,
+    );
+    if (!context.mounted) return;
+    if (sharedFile == null) {
+      _showToast(
+        l10n,
+        toaster,
+        l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+      return;
+    }
+    await Share.shareXFiles([XFile(sharedFile.path)]);
+  } on PlatformException {
+    _showToast(
+      l10n,
+      toaster,
+      l10n.chatAttachmentUnavailable,
+      destructive: true,
+    );
+  } on Exception {
+    _showToast(
+      l10n,
+      toaster,
+      l10n.chatAttachmentUnavailable,
+      destructive: true,
+    );
+  }
+}
+
 Future<void> _saveAttachmentToDevice(
   BuildContext context, {
   required File file,
   required String filename,
+  bool skipConfirm = false,
 }) async {
   final l10n = context.l10n;
   final toaster = ShadToaster.maybeOf(context);
-  final approved = await confirm(
-    context,
-    title: l10n.chatAttachmentExportTitle,
-    message: l10n.chatAttachmentExportMessage,
-    confirmLabel: l10n.chatAttachmentExportConfirm,
-    cancelLabel: l10n.chatAttachmentExportCancel,
-    destructiveConfirm: false,
-  );
-  if (approved != true) {
-    return;
+  if (!skipConfirm) {
+    final approved = await confirm(
+      context,
+      title: l10n.chatAttachmentExportTitle,
+      message: l10n.chatAttachmentExportMessage,
+      confirmLabel: l10n.chatAttachmentExportConfirm,
+      cancelLabel: l10n.chatAttachmentExportCancel,
+      destructiveConfirm: false,
+    );
+    if (approved != true) {
+      return;
+    }
   }
   if (!await file.exists()) {
     _showToast(
@@ -1932,6 +2195,78 @@ Future<void> _saveAttachmentToDevice(
       destructive: true,
     );
   }
+}
+
+Future<File?> _prepareShareAttachmentFile({
+  required File file,
+  required String filename,
+}) async {
+  if (!await file.exists()) {
+    return null;
+  }
+  final entityType = await FileSystemEntity.type(
+    file.path,
+    followLinks: false,
+  );
+  if (entityType != FileSystemEntityType.file) {
+    return null;
+  }
+  final shareDir = await _createAttachmentShareDir();
+  final shareFileName = _sanitizeShareFileName(
+    explicitName: filename,
+    fallbackPath: file.path,
+  );
+  final sharePath = p.join(shareDir.path, shareFileName);
+  final sharedFile = await file.copy(sharePath);
+  await _applyDownloadProtections(sharedFile);
+  return sharedFile;
+}
+
+Future<Directory> _createAttachmentShareDir() async {
+  final tempDir = await getTemporaryDirectory();
+  final shareRoot = Directory(p.join(tempDir.path, _attachmentShareDirName));
+  if (!await shareRoot.exists()) {
+    await shareRoot.create(recursive: true);
+  }
+  final timestamp = DateTime.now().microsecondsSinceEpoch;
+  final shareDirName = '$_attachmentShareDirPrefix$timestamp';
+  final shareDir = Directory(p.join(shareRoot.path, shareDirName));
+  if (!await shareDir.exists()) {
+    await shareDir.create(recursive: true);
+  }
+  return shareDir;
+}
+
+String _sanitizeShareFileName({
+  required String? explicitName,
+  required String fallbackPath,
+}) {
+  final trimmedName = explicitName?.trim();
+  final candidate =
+      trimmedName?.isNotEmpty == true ? trimmedName! : p.basename(fallbackPath);
+  final normalized = p.basename(candidate).trim();
+  final resolved =
+      normalized.isNotEmpty ? normalized : _attachmentShareFallbackName;
+  return _truncateShareFileName(resolved);
+}
+
+String _truncateShareFileName(String name) {
+  if (name.length <= _attachmentShareNameMaxLength) {
+    return name;
+  }
+  final extension = p.extension(name);
+  if (extension.isEmpty || extension.length >= _attachmentShareNameMaxLength) {
+    return name.substring(
+      _attachmentShareNameSubstringStart,
+      _attachmentShareNameMaxLength,
+    );
+  }
+  final maxBaseLength = _attachmentShareNameMaxLength - extension.length;
+  final base = name.substring(
+    _attachmentShareNameSubstringStart,
+    maxBaseLength,
+  );
+  return '$base$extension';
 }
 
 Future<void> _applyDownloadProtections(File destination) async {

@@ -13,6 +13,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // Harden DLL search order to avoid loading from unsafe directories.
+  const DWORD dll_search_flags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+  const wchar_t *empty_search_path = L"";
+  if (!::SetDefaultDllDirectories(dll_search_flags)) {
+    ::SetDllDirectoryW(empty_search_path);
+  }
+
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

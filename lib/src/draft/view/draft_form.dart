@@ -13,6 +13,7 @@ import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -29,7 +30,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mime/mime.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _draftComposerControlExtent = 42;
@@ -519,14 +519,32 @@ class _DraftFormState extends State<DraftForm> {
     if (metadataIds.isEmpty) return const [];
     final hydrated =
         await _messageService.loadDraftAttachments(metadataIds.toList());
-    return hydrated
-        .map(
-          (attachment) => PendingAttachment(
-            id: attachment.metadataId ?? _nextPendingAttachmentId(),
-            attachment: attachment,
-          ),
-        )
-        .toList();
+    final List<PendingAttachment> pending = <PendingAttachment>[];
+    for (final attachment in hydrated) {
+      final EmailAttachment resolvedAttachment =
+          await _resolveAttachmentMimeType(attachment);
+      pending.add(
+        PendingAttachment(
+          id: resolvedAttachment.metadataId ?? _nextPendingAttachmentId(),
+          attachment: resolvedAttachment,
+        ),
+      );
+    }
+    return pending;
+  }
+
+  Future<EmailAttachment> _resolveAttachmentMimeType(
+    EmailAttachment attachment,
+  ) async {
+    final String? resolvedMimeType = await resolveMimeTypeFromPath(
+      path: attachment.path,
+      fileName: attachment.fileName,
+      declaredMimeType: attachment.mimeType,
+    );
+    if (resolvedMimeType == null || resolvedMimeType == attachment.mimeType) {
+      return attachment;
+    }
+    return attachment.copyWith(mimeType: resolvedMimeType);
   }
 
   void _handleRecipientAdded(FanOutTarget target) {
@@ -581,14 +599,12 @@ class _DraftFormState extends State<DraftForm> {
         _showToast(l10n.draftAttachmentInaccessible);
         return;
       }
-      final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
       final pendingId = _nextPendingAttachmentId();
       final fileName = file.name.isNotEmpty ? file.name : path.split('/').last;
       var attachment = EmailAttachment(
         path: path,
         fileName: fileName,
         sizeBytes: file.size > 0 ? file.size : 0,
-        mimeType: mimeType,
       );
       setState(() {
         _pendingAttachments = [
@@ -601,6 +617,11 @@ class _DraftFormState extends State<DraftForm> {
         ];
       });
 
+      final String? resolvedMimeType = await resolveMimeTypeFromPath(
+        path: path,
+        fileName: fileName,
+      );
+      attachment = attachment.copyWith(mimeType: resolvedMimeType);
       if (attachment.sizeBytes <= 0) {
         try {
           final resolvedSize = await File(path).length();
