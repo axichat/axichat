@@ -47,13 +47,11 @@ class TypingGlyphAnimation {
   const TypingGlyphAnimation({
     required this.text,
     required this.targetRect,
-    required this.startOffset,
     required this.style,
   });
 
   final String text;
   final Rect targetRect;
-  final Offset startOffset;
   final TextStyle style;
 }
 
@@ -246,33 +244,55 @@ class TypingTextEditingController extends TextEditingController {
 
 class TypingCaretPainter extends RenderEditablePainter {
   TypingCaretPainter({
-    required Color dotColor,
-    required double dotRadius,
-  })  : _dotColor = dotColor,
-        _dotRadius = dotRadius;
+    required Color caretColor,
+    required double cursorWidth,
+    required Radius? cursorRadius,
+  })  : _caretColor = caretColor,
+        _cursorWidth = cursorWidth,
+        _cursorRadius = cursorRadius;
 
-  Color _dotColor;
-  double _dotRadius;
+  Color _caretColor;
+  double _cursorWidth;
+  Radius? _cursorRadius;
+  double _caretHeight = 0.0;
   Offset _caretOffset = Offset.zero;
   bool _showCaret = true;
   TypingGlyphAnimation? _glyphAnimation;
   double _glyphProgress = _glyphStartOpacity;
 
-  Color get dotColor => _dotColor;
-  set dotColor(Color value) {
-    if (_dotColor == value) {
+  Color get caretColor => _caretColor;
+  set caretColor(Color value) {
+    if (_caretColor == value) {
       return;
     }
-    _dotColor = value;
+    _caretColor = value;
     notifyListeners();
   }
 
-  double get dotRadius => _dotRadius;
-  set dotRadius(double value) {
-    if (_dotRadius == value) {
+  double get cursorWidth => _cursorWidth;
+  set cursorWidth(double value) {
+    if (_cursorWidth == value) {
       return;
     }
-    _dotRadius = value;
+    _cursorWidth = value;
+    notifyListeners();
+  }
+
+  Radius? get cursorRadius => _cursorRadius;
+  set cursorRadius(Radius? value) {
+    if (_cursorRadius == value) {
+      return;
+    }
+    _cursorRadius = value;
+    notifyListeners();
+  }
+
+  double get caretHeight => _caretHeight;
+  set caretHeight(double value) {
+    if (_caretHeight == value) {
+      return;
+    }
+    _caretHeight = value;
     notifyListeners();
   }
 
@@ -328,10 +348,7 @@ class TypingCaretPainter extends RenderEditablePainter {
     if (!shouldPaintCaret) {
       return;
     }
-    final Paint dotPaint = Paint()
-      ..color = _dotColor
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(_caretOffset, _dotRadius, dotPaint);
+    _paintCaretBar(canvas, renderEditable, _caretOffset, _glyphEndOpacity);
   }
 
   void _paintGlyphMorph(
@@ -345,7 +362,7 @@ class TypingCaretPainter extends RenderEditablePainter {
       return;
     }
     final Rect glyphRect = glyphAnimation.targetRect;
-    final Color baseColor = glyphAnimation.style.color ?? _dotColor;
+    final Color baseColor = glyphAnimation.style.color ?? _caretColor;
     final double glyphAlpha =
         (baseColor.a * progress).clamp(_glyphStartOpacity, _glyphEndOpacity);
     final Color glyphColor = baseColor.withValues(alpha: glyphAlpha.toDouble());
@@ -368,17 +385,53 @@ class TypingCaretPainter extends RenderEditablePainter {
       ..translate(-glyphCenter.dx, -glyphCenter.dy);
     painter.paint(canvas, glyphRect.topLeft);
     canvas.restore();
+  }
 
-    final double dotAlpha = (_glyphEndOpacity - progress)
-        .clamp(_glyphStartOpacity, _glyphEndOpacity)
-        .toDouble();
-    if (dotAlpha <= _glyphStartOpacity) {
+  void _paintCaretBar(
+    Canvas canvas,
+    RenderEditable renderEditable,
+    Offset center,
+    double opacity,
+  ) {
+    if (opacity <= 0) {
       return;
     }
-    final Paint dotPaint = Paint()
-      ..color = _dotColor.withValues(alpha: _dotColor.a * dotAlpha)
+    final double cursorWidth = _resolvedCursorWidth(renderEditable);
+    final double caretHeight = _resolvedCaretHeight(renderEditable);
+    if (cursorWidth <= 0 || caretHeight <= 0) {
+      return;
+    }
+    final Rect caretRect = Rect.fromCenter(
+      center: center,
+      width: cursorWidth,
+      height: caretHeight,
+    );
+    final double alpha = (_caretColor.a * opacity)
+        .clamp(_glyphStartOpacity, _glyphEndOpacity)
+        .toDouble();
+    final Color color = _caretColor.withValues(alpha: alpha);
+    final Paint paint = Paint()
+      ..color = color
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(glyphAnimation.startOffset, _dotRadius, dotPaint);
+    final Radius? radius = _resolvedCursorRadius(renderEditable);
+    if (radius != null && radius != Radius.zero) {
+      canvas.drawRRect(RRect.fromRectAndRadius(caretRect, radius), paint);
+      return;
+    }
+    canvas.drawRect(caretRect, paint);
+  }
+
+  double _resolvedCursorWidth(RenderEditable renderEditable) =>
+      _cursorWidth > 0 ? _cursorWidth : renderEditable.cursorWidth;
+
+  Radius? _resolvedCursorRadius(RenderEditable renderEditable) =>
+      _cursorRadius ?? renderEditable.cursorRadius;
+
+  double _resolvedCaretHeight(RenderEditable renderEditable) {
+    if (_caretHeight > 0) {
+      return _caretHeight;
+    }
+    return renderEditable.cursorHeight;
   }
 
   TextStyle _glyphTextStyle(TextStyle style, Color color) {
