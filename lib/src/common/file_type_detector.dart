@@ -136,6 +136,9 @@ class FileTypeReport {
 
   bool get isDetectedImage => _isImageMimeType(detectedMimeType);
   bool get isDetectedVideo => _isVideoMimeType(detectedMimeType);
+  bool get isDeclaredImage => _isImageMimeType(declaredLabel);
+  bool get isDeclaredVideo => _isVideoMimeType(declaredLabel);
+  bool get hasReliableDetection => _isReliableMimeType(detectedLabel);
 
   bool get hasMismatch {
     final normalizedDetected = _normalizeMimeType(detectedMimeType);
@@ -154,7 +157,8 @@ class FileTypeReport {
 }
 
 extension FileTypeReportPreferredMimeType on FileTypeReport {
-  String? get preferredMimeType => detectedLabel ?? declaredLabel;
+  String? get preferredMimeType =>
+      hasReliableDetection ? detectedLabel ?? declaredLabel : declaredLabel;
 }
 
 Future<FileTypeReport> inspectFileType({

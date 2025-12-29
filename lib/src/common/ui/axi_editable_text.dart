@@ -17,6 +17,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
     show ContentInsertionConfiguration, TextEditingController, ToolbarOptions;
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:flutter/src/widgets/_web_browser_detection_io.dart'
     if (dart.library.js_interop) 'package:flutter/src/widgets/_web_browser_detection_web.dart';
@@ -58,7 +59,6 @@ import 'package:flutter/src/widgets/ticker_provider.dart';
 import 'package:flutter/src/widgets/undo_history.dart';
 import 'package:flutter/src/widgets/view.dart';
 import 'package:flutter/src/widgets/widget_span.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'axi_spell_check.dart';
 import 'typing_text_input.dart';
@@ -106,13 +106,9 @@ typedef _ApplyTextBoundary = TextPosition Function(
 // to transparent, is twice this duration.
 const Duration _kCursorBlinkHalfPeriod = Duration(milliseconds: 500);
 const Duration _typingCaretSlideDuration = Duration(milliseconds: 120);
-const int _typingGlyphHoldMs = 120;
-const int _typingGlyphMorphMs = 380;
-const int _typingGlyphTotalMs = _typingGlyphHoldMs + _typingGlyphMorphMs;
-const double _typingGlyphHoldFraction =
-    _typingGlyphHoldMs / _typingGlyphTotalMs;
-const Duration _typingGlyphTotalDuration =
-    Duration(milliseconds: _typingGlyphTotalMs);
+const int _typingGlyphMorphMs = 300;
+const Duration _typingGlyphMorphDuration =
+    Duration(milliseconds: _typingGlyphMorphMs);
 const Curve _typingCaretSlideCurve = Curves.easeInOutCubic;
 const Curve _typingGlyphMorphCurve = Curves.easeInOutCubic;
 const double _typingCursorDotDiameter = 6.0;
@@ -120,10 +116,6 @@ const double _typingCursorDotRadius = _typingCursorDotDiameter / 2;
 const double _typingCursorDotTextGap = 2.0;
 const double _typingGlyphStartOpacity = 0.0;
 const double _typingGlyphEndOpacity = 1.0;
-const String _typingSdfPrewarmCharacters = 'abcdefghijklmnopqrstuvwxyz'
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    '0123456789'
-    '.,:;!?\'"@#\$%&()[]{}<>+-*/=_\\|';
 
 // Number of cursor ticks during which the most recently entered character
 // is shown in an obscured text field.
@@ -2276,7 +2268,7 @@ class EditableTextState extends State<EditableText>
   );
   late final AnimationController _typingGlyphController = AnimationController(
     vsync: this,
-    duration: _typingGlyphTotalDuration,
+    duration: _typingGlyphMorphDuration,
   )
     ..addListener(_handleTypingGlyphTick)
     ..addStatusListener(_handleTypingGlyphStatus);
@@ -2287,13 +2279,9 @@ class EditableTextState extends State<EditableText>
   Offset _typingCaretOffset = Offset.zero;
   TypingGlyphAnimation? _typingGlyphAnimation;
   TypingCaretPainter? _typingCaretPainter;
-  final TypingGlyphSdfCache _typingGlyphSdfCache = TypingGlyphSdfCache();
-  ui.FragmentProgram? _typingGlyphMorphProgram;
-  int _typingGlyphSdfRequestId = 0;
   int? _typingGlyphSelectionOffset;
   TextRange? _typingGlyphRange;
   String? _typingGlyphText;
-  TypingGlyphSdfPrewarmKey? _typingGlyphSdfPrewarmKey;
   TypingTextChange? _pendingTypingChange;
   TextEditingValue _previousTypingValue = const TextEditingValue();
   bool _suppressTypingControllerNotifications = false;
@@ -3091,7 +3079,6 @@ class EditableTextState extends State<EditableText>
     _appLifecycleListener =
         AppLifecycleListener(onResume: () => _justResumed = true);
     _initProcessTextActions();
-    _loadTypingGlyphMorphProgram();
     _refreshTypingGlyphCurve();
   }
 
@@ -3122,10 +3109,8 @@ class EditableTextState extends State<EditableText>
     _typingCaretPainter
       ?..dotColor = dotColor
       ..dotRadius = _typingCursorDotRadius
-      ..caretOffset = _typingCaretOffset
-      ..morphProgram = _typingGlyphMorphProgram;
+      ..caretOffset = _typingCaretOffset;
     _handleTypingCursorVisibilityChanged();
-    _prewarmTypingGlyphSdfs();
 
     final AutofillGroupState? newAutofillGroup = AutofillGroup.maybeOf(context);
     if (currentAutofillScope != newAutofillGroup) {
@@ -3301,7 +3286,6 @@ class EditableTextState extends State<EditableText>
     if (widget.selectionEnabled && pasteEnabled && canPaste) {
       clipboardStatus.update();
     }
-    _prewarmTypingGlyphSdfs();
   }
 
   void _disposeScrollNotificationObserver() {
@@ -3342,7 +3326,6 @@ class EditableTextState extends State<EditableText>
     clipboardStatus.dispose();
     _cursorVisibilityNotifier.dispose();
     _appLifecycleListener.dispose();
-    _typingGlyphSdfCache.dispose();
     FocusManager.instance.removeListener(_unflagInternalFocus);
     _disposeScrollNotificationObserver();
     super.dispose();
@@ -4680,55 +4663,8 @@ class EditableTextState extends State<EditableText>
   void _refreshTypingGlyphCurve() {
     _typingGlyphCurve = CurvedAnimation(
       parent: _typingGlyphController,
-      curve: const Interval(
-        _typingGlyphHoldFraction,
-        1.0,
-        curve: _typingGlyphMorphCurve,
-      ),
+      curve: _typingGlyphMorphCurve,
     );
-  }
-
-  TextScaler _effectiveTypingTextScaler() {
-    return switch ((widget.textScaler, widget.textScaleFactor)) {
-      (final TextScaler textScaler, _) => textScaler,
-      (null, final double textScaleFactor) =>
-        TextScaler.linear(textScaleFactor),
-      (null, null) => MediaQuery.textScalerOf(context),
-    };
-  }
-
-  void _prewarmTypingGlyphSdfs() {
-    if (_typingController == null) {
-      return;
-    }
-    final double textScaleFactor = _effectiveTypingTextScaler().scale(1.0);
-    final TypingGlyphSdfPrewarmKey key = TypingGlyphSdfPrewarmKey(
-      style: _style,
-      textDirection: _textDirection,
-      textScaleFactor: textScaleFactor,
-    );
-    if (_typingGlyphSdfPrewarmKey == key) {
-      return;
-    }
-    _typingGlyphSdfPrewarmKey = key;
-    for (final int rune in _typingSdfPrewarmCharacters.runes) {
-      _typingGlyphSdfCache.resolve(
-        text: String.fromCharCode(rune),
-        style: _style,
-        textDirection: _textDirection,
-        textScaleFactor: textScaleFactor,
-      );
-    }
-  }
-
-  void _loadTypingGlyphMorphProgram() {
-    loadTypingGlyphMorphProgram().then((ui.FragmentProgram program) {
-      if (!mounted) {
-        return;
-      }
-      _typingGlyphMorphProgram = program;
-      _typingCaretPainter?.morphProgram = program;
-    }).catchError((Object _) {});
   }
 
   void _handleTypingControllerChange() {
@@ -4744,6 +4680,24 @@ class EditableTextState extends State<EditableText>
     final TypingTextChange change =
         _describeTypingChange(_previousTypingValue, nextValue);
     _previousTypingValue = nextValue;
+    final TypingTextChange? pendingChange = _pendingTypingChange;
+    final bool hasPendingInsertion =
+        pendingChange?.isSingleCharacterInsertion ?? false;
+    final bool isSelectionOnlyUpdate =
+        change.kind == TypingTextChangeKind.selection;
+    final bool preservesPendingText = pendingChange != null &&
+        pendingChange.currentValue.text == change.currentValue.text;
+    if (hasPendingInsertion && isSelectionOnlyUpdate && preservesPendingText) {
+      _pendingTypingChange = TypingTextChange(
+        kind: pendingChange.kind,
+        previousValue: pendingChange.previousValue,
+        currentValue: change.currentValue,
+        insertedRange: pendingChange.insertedRange,
+        insertedText: pendingChange.insertedText,
+      );
+      _applyPendingTypingChange();
+      return;
+    }
     _pendingTypingChange = change;
     final bool shouldAnimateTyping = _hasFocus && !widget.readOnly;
     if (shouldAnimateTyping && change.isSingleCharacterInsertion) {
@@ -4831,9 +4785,6 @@ class EditableTextState extends State<EditableText>
   }
 
   bool _shouldKeepTypingGlyphMorph(TextEditingValue value) {
-    if (_typingGlyphAnimation == null || !_typingGlyphController.isAnimating) {
-      return false;
-    }
     final TextRange? range = _typingGlyphRange;
     final String? text = _typingGlyphText;
     if (range == null || text == null || range.isCollapsed) {
@@ -5035,54 +4986,17 @@ class EditableTextState extends State<EditableText>
         selection.isCollapsed ? selection.extentOffset : null;
     _typingGlyphRange = range;
     _typingGlyphText = text;
-    painter
-      ..glyphAnimation = null
-      ..glyphSdf = null;
     _typingGlyphController.stop();
-    _typingGlyphAnimation = null;
-    final int requestId = ++_typingGlyphSdfRequestId;
-    final double textScaleFactor = renderEditable.textScaler.scale(1.0);
-    final Future<TypingGlyphSdf?> sdfFuture = _typingGlyphSdfCache.resolve(
-      text: animation.text,
-      style: animation.style,
-      textDirection: renderEditable.textDirection,
-      textScaleFactor: textScaleFactor,
-    );
-    final Future<ui.FragmentProgram> programFuture =
-        _typingGlyphMorphProgram != null
-            ? Future<ui.FragmentProgram>.value(_typingGlyphMorphProgram!)
-            : loadTypingGlyphMorphProgram();
-    Future.wait(<Future<Object?>>[sdfFuture, programFuture]).then((
-      List<Object?> results,
-    ) {
-      if (!mounted || requestId != _typingGlyphSdfRequestId) {
-        return;
-      }
-      final TypingGlyphSdf? sdf = results.first as TypingGlyphSdf?;
-      final ui.FragmentProgram program = results.last! as ui.FragmentProgram;
-      if (sdf == null) {
-        _applyHiddenRange(null);
-        return;
-      }
-      _typingGlyphMorphProgram = program;
-      _applyHiddenRange(range);
-      _typingGlyphAnimation = animation;
-      painter
-        ..glyphAnimation = animation
-        ..glyphSdf = sdf
-        ..glyphProgress = _typingGlyphStartOpacity
-        ..morphProgram = program;
-      _refreshTypingGlyphCurve();
-      _typingGlyphController
-        ..duration = _typingGlyphTotalDuration
-        ..reset()
-        ..forward();
-    }).catchError((Object _) {
-      if (!mounted || requestId != _typingGlyphSdfRequestId) {
-        return;
-      }
-      _applyHiddenRange(null);
-    });
+    _typingGlyphAnimation = animation;
+    painter
+      ..glyphAnimation = animation
+      ..glyphProgress = _typingGlyphStartOpacity;
+    _applyHiddenRange(range);
+    _refreshTypingGlyphCurve();
+    _typingGlyphController
+      ..duration = _typingGlyphMorphDuration
+      ..reset()
+      ..forward();
   }
 
   void _handleTypingGlyphTick() {
@@ -5105,14 +5019,12 @@ class EditableTextState extends State<EditableText>
     }
     _typingGlyphController.stop();
     _typingGlyphAnimation = null;
-    _typingGlyphSdfRequestId++;
     _typingGlyphSelectionOffset = null;
     _typingGlyphRange = null;
     _typingGlyphText = null;
     _typingCaretPainter
       ?..glyphAnimation = null
-      ..glyphProgress = _typingGlyphEndOpacity
-      ..glyphSdf = null;
+      ..glyphProgress = _typingGlyphEndOpacity;
     _applyHiddenRange(null);
   }
 
@@ -6744,32 +6656,6 @@ class _ScribbleCacheKey {
 }
 
 @immutable
-class TypingGlyphSdfPrewarmKey {
-  const TypingGlyphSdfPrewarmKey({
-    required this.style,
-    required this.textDirection,
-    required this.textScaleFactor,
-  });
-
-  final TextStyle style;
-  final TextDirection textDirection;
-  final double textScaleFactor;
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) {
-      return true;
-    }
-    return other is TypingGlyphSdfPrewarmKey &&
-        other.style == style &&
-        other.textDirection == textDirection &&
-        other.textScaleFactor == textScaleFactor;
-  }
-
-  @override
-  int get hashCode => Object.hash(style, textDirection, textScaleFactor);
-}
-
 class _ScribbleFocusable extends StatefulWidget {
   const _ScribbleFocusable({
     required this.child,

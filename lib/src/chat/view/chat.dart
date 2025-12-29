@@ -2478,7 +2478,10 @@ class _ChatState extends State<Chat> {
       fileName: attachment.fileName,
     );
     if (!mounted) return;
-    if (!report.isDetectedImage) {
+    final bool useDeclaredFallback = !report.hasReliableDetection;
+    final bool isImage = report.isDetectedImage ||
+        (useDeclaredFallback && report.isDeclaredImage);
+    if (!isImage) {
       _showSnackbar(l10n.chatAttachmentUnavailable);
       return;
     }

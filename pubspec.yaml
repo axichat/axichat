@@ -160,8 +160,6 @@ flutter:
     - assets/licenses/document.txt
     - assets/licenses/document2.txt
     - shorebird.yaml
-  shaders:
-    - assets/shaders/typing_glyph_morph.frag
   fonts:
     - family: Inter
       fonts:
