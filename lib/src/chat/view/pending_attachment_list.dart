@@ -140,20 +140,29 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
         future: _resolveTypeReport(pending.attachment),
         builder: (context, snapshot) {
           final FileTypeReport? report = snapshot.data;
-          final bool isImage = report?.isDetectedImage ?? false;
+          final FileTypeReport fallbackReport = buildDeclaredFileTypeReport(
+            declaredMimeType: pending.attachment.mimeType,
+            fileName: pending.attachment.fileName,
+            path: pending.attachment.path,
+          );
+          final FileTypeReport resolvedReport = report ?? fallbackReport;
+          final bool useDeclaredFallback =
+              report != null && !resolvedReport.hasReliableDetection;
+          final bool isImage = resolvedReport.isDetectedImage ||
+              (useDeclaredFallback && resolvedReport.isDeclaredImage);
           if (isImage) {
             return _PendingImageAttachment(
               pending: pending,
               onRetry: widget.onRetry,
               onRemove: widget.onRemove,
-              typeReport: report,
+              typeReport: resolvedReport,
             );
           }
           return _PendingFileAttachment(
             pending: pending,
             onRetry: widget.onRetry,
             onRemove: widget.onRemove,
-            typeReport: report,
+            typeReport: resolvedReport,
           );
         },
       );

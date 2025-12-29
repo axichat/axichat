@@ -476,6 +476,10 @@ const int _attachmentMaxMimeTypeLength = 128;
 const int _attachmentSourceMaxCount = 8;
 const String _attachmentFallbackName = 'attachment';
 const int _attachmentSizeFallbackBytes = 0;
+const int _attachmentCacheEmptyByteCount = 0;
+const int _attachmentCacheMaxBytes = 256 * 1024 * 1024;
+const String _attachmentCacheTempPrefix = '.';
+const bool _attachmentCacheFollowLinks = false;
 const Duration _inboundAttachmentAutoDownloadRateLimitWindow =
     Duration(minutes: 1);
 const Duration _inboundAttachmentAutoDownloadRateLimitCleanupInterval =
@@ -5249,6 +5253,9 @@ mixin MessageService
         (db) => db.saveFileMetadata(updatedMetadata),
         awaitDatabase: true,
       );
+      unawaited(
+        _enforceAttachmentCacheLimit(exemptPaths: {finalFile.path}),
+      );
       return finalFile.path;
     } on XmppAbortedException {
       return null;
@@ -5312,6 +5319,77 @@ mixin MessageService
     }
     _attachmentDirectory = directory;
     return directory;
+  }
+
+  Future<void> _enforceAttachmentCacheLimit({
+    Set<String> exemptPaths = const <String>{},
+  }) async {
+    if (_attachmentCacheMaxBytes <= _attachmentCacheEmptyByteCount) {
+      return;
+    }
+    final Directory directory;
+    try {
+      directory = await _attachmentCacheDirectory();
+    } on Exception {
+      return;
+    }
+    if (!await directory.exists()) {
+      return;
+    }
+    final normalizedExempt = <String>{}..addAll(
+        exemptPaths
+            .map((path) => p.normalize(path.trim()))
+            .where((path) => path.isNotEmpty),
+      );
+    final entries = <_AttachmentCacheEntry>[];
+    var totalBytes = _attachmentCacheEmptyByteCount;
+    await for (final entity in directory.list(
+      followLinks: _attachmentCacheFollowLinks,
+    )) {
+      if (entity is! File) continue;
+      final path = p.normalize(entity.path);
+      if (normalizedExempt.contains(path)) {
+        continue;
+      }
+      final baseName = p.basename(path);
+      if (baseName.startsWith(_attachmentCacheTempPrefix)) {
+        continue;
+      }
+      FileStat stat;
+      try {
+        stat = await entity.stat();
+      } on Exception {
+        continue;
+      }
+      final size = stat.size;
+      if (size <= _attachmentCacheEmptyByteCount) {
+        continue;
+      }
+      totalBytes += size;
+      entries.add(
+        _AttachmentCacheEntry(
+          file: entity,
+          sizeBytes: size,
+          lastModified: stat.modified,
+        ),
+      );
+    }
+    if (totalBytes <= _attachmentCacheMaxBytes) {
+      return;
+    }
+    entries.sort((a, b) => a.lastModified.compareTo(b.lastModified));
+    var remainingBytes = totalBytes;
+    for (final entry in entries) {
+      if (remainingBytes <= _attachmentCacheMaxBytes) {
+        break;
+      }
+      try {
+        await entry.file.delete();
+        remainingBytes -= entry.sizeBytes;
+      } on Exception {
+        continue;
+      }
+    }
   }
 
   String _attachmentFileName(FileMetadataData metadata) {
@@ -6284,6 +6362,9 @@ mixin MessageService
         isTrusted = await _dbOpReturning<XmppDatabase, bool>(
           (db) async {
             final chat = await db.getChat(message.chatJid);
+            if (chat?.spam ?? false) {
+              return false;
+            }
             if (chat != null && chat.type == ChatType.groupChat) {
               return chat.attachmentAutoDownload.isAllowed;
             }
@@ -6318,6 +6399,18 @@ mixin MessageService
 //   });
 //   return allowed;
 // }
+}
+
+final class _AttachmentCacheEntry {
+  const _AttachmentCacheEntry({
+    required this.file,
+    required this.sizeBytes,
+    required this.lastModified,
+  });
+
+  final File file;
+  final int sizeBytes;
+  final DateTime lastModified;
 }
 
 class _UploadSlot {
