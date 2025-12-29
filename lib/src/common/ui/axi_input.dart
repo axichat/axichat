@@ -5,10 +5,13 @@ import 'package:flutter/cupertino.dart' hide SpellCheckConfiguration;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide SpellCheckConfiguration;
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/src/components/disabled.dart';
 import 'package:shadcn_ui/src/theme/components/decorator.dart';
 import 'package:shadcn_ui/src/theme/theme.dart';
 import 'package:shadcn_ui/src/utils/separated_iterable.dart';
+
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 
 import 'axi_editable_text.dart' as axi;
 import 'axi_spell_check.dart';
@@ -675,6 +678,9 @@ class AxiInputState extends State<AxiInput>
                                             cursorColor: transparentCursorColor,
                                             typingCaretColor:
                                                 resolvedCursorColor,
+                                            typingAnimationDuration: context
+                                                .watch<SettingsCubit>()
+                                                .animationDuration,
                                             backgroundCursorColor: Colors.grey,
                                             keyboardType: widget.keyboardType,
                                             keyboardAppearance:

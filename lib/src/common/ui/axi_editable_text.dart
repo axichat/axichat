@@ -58,8 +58,9 @@ import 'package:flutter/src/widgets/undo_history.dart';
 import 'package:flutter/src/widgets/view.dart';
 import 'package:flutter/src/widgets/widget_span.dart';
 
+import 'package:axichat/src/common/ui/ui.dart';
+
 import 'axi_spell_check.dart';
-import 'typing_text_input.dart';
 
 export 'package:flutter/services.dart'
     show
@@ -103,14 +104,26 @@ typedef _ApplyTextBoundary = TextPosition Function(
 // transparent and vice versa. A full cursor blink, from transparent to opaque
 // to transparent, is twice this duration.
 const Duration _kCursorBlinkHalfPeriod = Duration(milliseconds: 500);
-const Duration _typingCaretSlideDuration = Duration(milliseconds: 120);
-const int _typingGlyphMorphMs = 300;
-const Duration _typingGlyphMorphDuration =
-    Duration(milliseconds: _typingGlyphMorphMs);
-const Curve _typingCaretSlideCurve = Curves.easeInOutCubic;
-const Curve _typingGlyphMorphCurve = Curves.easeInOutCubic;
+const double _typingCaretMinDurationScale = 0.1;
+const double _typingCaretMaxDurationScale = 0.25;
+const double _typingGlyphDurationScale = 0.5;
+const double _typingCaretDistanceMinLines = 0.0;
+const double _typingCaretDistanceMaxLines = 3.0;
+const double _typingCaretLineHeightFallback = 16.0;
+const Curve _typingCaretSlideCurve = Curves.easeOutCubic;
+const Curve _typingGlyphMorphCurve = Curves.easeOutCubic;
 const double _typingGlyphStartOpacity = 0.0;
 const double _typingGlyphEndOpacity = 1.0;
+
+extension _DurationScale on Duration {
+  Duration scale(double factor) {
+    if (factor <= 0) {
+      return Duration.zero;
+    }
+    final double micros = inMicroseconds.toDouble() * factor;
+    return Duration(microseconds: micros.round());
+  }
+}
 
 // Number of cursor ticks during which the most recently entered character
 // is shown in an obscured text field.
@@ -557,6 +570,7 @@ class EditableText extends StatefulWidget {
     required this.cursorColor,
     required this.backgroundCursorColor,
     this.typingCaretColor,
+    this.typingAnimationDuration = baseAnimationDuration,
     this.textAlign = TextAlign.start,
     this.textDirection,
     this.locale,
@@ -915,6 +929,8 @@ class EditableText extends StatefulWidget {
 
   /// Optional override for the animated typing caret color.
   final Color? typingCaretColor;
+
+  final Duration typingAnimationDuration;
 
   /// The color to use when painting the autocorrection Rect.
   ///
@@ -2120,6 +2136,13 @@ class EditableText extends StatefulWidget {
     properties.add(DiagnosticsProperty<bool>('autocorrect', autocorrect,
         defaultValue: null));
     properties.add(
+      DiagnosticsProperty<Duration>(
+        'typingAnimationDuration',
+        typingAnimationDuration,
+        defaultValue: baseAnimationDuration,
+      ),
+    );
+    properties.add(
       EnumProperty<SmartDashesType>(
         'smartDashesType',
         smartDashesType,
@@ -2257,9 +2280,16 @@ class EditableTextState extends State<EditableText>
   final ValueNotifier<bool> _cursorVisibilityNotifier =
       ValueNotifier<bool>(true);
   final GlobalKey _editableKey = GlobalKey();
+  Duration _typingAnimationDuration = baseAnimationDuration;
+  Duration _typingGlyphDuration =
+      baseAnimationDuration.scale(_typingGlyphDurationScale);
+  Duration _typingCaretMinDuration =
+      baseAnimationDuration.scale(_typingCaretMinDurationScale);
+  Duration _typingCaretMaxDuration =
+      baseAnimationDuration.scale(_typingCaretMaxDurationScale);
   late final AnimationController _typingCaretController = AnimationController(
     vsync: this,
-    duration: _typingCaretSlideDuration,
+    duration: _typingCaretMaxDuration,
   )..addListener(_handleTypingCaretTick);
   late final Animation<double> _typingCaretCurve = CurvedAnimation(
     parent: _typingCaretController,
@@ -2277,6 +2307,7 @@ class EditableTextState extends State<EditableText>
   TextEditingValue _previousTypingValue = const TextEditingValue();
   bool _suppressTypingControllerNotifications = false;
   bool _typingLayoutCallbackScheduled = false;
+  bool get _typingAnimationsEnabled => _typingAnimationDuration > Duration.zero;
 
   /// Detects whether the clipboard can paste.
   final ClipboardStatusNotifier clipboardStatus = kIsWeb
@@ -3074,6 +3105,7 @@ class EditableTextState extends State<EditableText>
     _cursorVisibilityNotifier.value = widget.showCursor;
     _previousTypingValue = widget.controller.value;
     _cursorVisibilityNotifier.addListener(_handleTypingCursorVisibilityChanged);
+    _updateTypingAnimationDuration(widget.typingAnimationDuration);
     _spellCheckConfiguration =
         _inferSpellCheckConfiguration(widget.spellCheckConfiguration);
     _appLifecycleListener =
@@ -3193,7 +3225,12 @@ class EditableTextState extends State<EditableText>
       widget.controller.addListener(_didChangeTextEditingValue);
       _updateRemoteEditingValueIfNeeded();
       _previousTypingValue = widget.controller.value;
+      _pendingTypingChanges.clear();
+      _pendingTypingHiddenRanges.clear();
       _stopTypingGlyphMorphs();
+    }
+    if (widget.typingAnimationDuration != oldWidget.typingAnimationDuration) {
+      _updateTypingAnimationDuration(widget.typingAnimationDuration);
     }
 
     if (_selectionOverlay != null &&
@@ -4662,6 +4699,26 @@ class EditableTextState extends State<EditableText>
     _typingCaretPainter?.showCaret = _cursorVisibilityNotifier.value;
   }
 
+  void _updateTypingAnimationDuration(Duration duration) {
+    if (_typingAnimationDuration == duration) {
+      return;
+    }
+    final bool animationsWereEnabled = _typingAnimationDuration > Duration.zero;
+    _typingAnimationDuration = duration;
+    _typingGlyphDuration = duration.scale(_typingGlyphDurationScale);
+    _typingCaretMinDuration = duration.scale(_typingCaretMinDurationScale);
+    _typingCaretMaxDuration = duration.scale(_typingCaretMaxDurationScale);
+    _typingCaretController.duration = _typingCaretMaxDuration;
+    if (animationsWereEnabled && !_typingAnimationsEnabled) {
+      _pendingTypingChanges.clear();
+      _pendingTypingHiddenRanges.clear();
+      _typingCaretController.stop();
+      _stopTypingGlyphMorphs();
+      _applyHiddenRanges(const <TextRange>[]);
+      _syncTypingCaretToSelection();
+    }
+  }
+
   void _handleTypingControllerChange() {
     if (_suppressTypingControllerNotifications) {
       return;
@@ -4708,7 +4765,8 @@ class EditableTextState extends State<EditableText>
       return;
     }
     _pendingTypingChanges.add(change);
-    final bool shouldAnimateTyping = _hasFocus && !widget.readOnly;
+    final bool shouldAnimateTyping =
+        _hasFocus && !widget.readOnly && _typingAnimationsEnabled;
     if (shouldAnimateTyping && change.isSingleCharacterInsertion) {
       final TextRange? insertedRange = change.insertedRange;
       if (insertedRange != null) {
@@ -4738,11 +4796,7 @@ class EditableTextState extends State<EditableText>
       }
       _typingLayoutCallbackScheduled = false;
       _applyPendingTypingChanges();
-      if (_pendingTypingChanges.isNotEmpty ||
-          _typingCaretController.isAnimating) {
-        return;
-      }
-      _syncTypingCaretToSelection();
+      _syncTypingCaretToSelection(animate: true);
     });
   }
 
@@ -4808,12 +4862,24 @@ class EditableTextState extends State<EditableText>
     }
 
     if (change.kind.isInsertion || change.kind.isDeletion) {
-      _animateTypingCaret(startOffset ?? endOffset, endOffset);
+      final bool shouldAnimateTyping =
+          _typingAnimationsEnabled && !widget.readOnly;
+      if (shouldAnimateTyping) {
+        _animateTypingCaret(
+          startOffset ?? endOffset,
+          endOffset,
+          renderEditable,
+        );
+      } else {
+        _jumpTypingCaret(endOffset);
+      }
     } else {
       _jumpTypingCaret(endOffset);
     }
 
-    if (change.isSingleCharacterInsertion) {
+    if (change.isSingleCharacterInsertion &&
+        _typingAnimationsEnabled &&
+        !widget.readOnly) {
       _startTypingGlyphMorph(change, renderEditable);
     }
   }
@@ -4999,7 +5065,15 @@ class EditableTextState extends State<EditableText>
     return Offset(snappedDx, snappedDy);
   }
 
-  void _animateTypingCaret(Offset start, Offset end) {
+  void _animateTypingCaret(
+    Offset start,
+    Offset end,
+    AxiRenderEditable renderEditable,
+  ) {
+    if (!_typingAnimationsEnabled) {
+      _jumpTypingCaret(end);
+      return;
+    }
     final Offset effectiveStart = _typingCaretController.isAnimating
         ? _typingCaretAnimation.value
         : start;
@@ -5007,13 +5081,63 @@ class EditableTextState extends State<EditableText>
       _jumpTypingCaret(end);
       return;
     }
+    final double distance = (end - effectiveStart).distance;
+    final Duration duration =
+        _typingCaretDurationForDistance(distance, renderEditable);
     _typingCaretAnimation =
         Tween<Offset>(begin: effectiveStart, end: end).animate(
       _typingCaretCurve,
     );
     _typingCaretController
+      ..duration = duration
       ..reset()
       ..forward();
+  }
+
+  Duration _typingCaretDurationForDistance(
+    double distance,
+    AxiRenderEditable renderEditable,
+  ) {
+    if (!_typingAnimationsEnabled) {
+      return Duration.zero;
+    }
+    if (distance <= 0) {
+      return _typingCaretMinDuration;
+    }
+    final double lineHeight = _effectiveTypingLineHeight(renderEditable);
+    final double normalizedLines = (distance / lineHeight).clamp(
+      _typingCaretDistanceMinLines,
+      _typingCaretDistanceMaxLines,
+    );
+    final double t = (normalizedLines / _typingCaretDistanceMaxLines).clamp(
+      _typingGlyphStartOpacity,
+      _typingGlyphEndOpacity,
+    );
+    return _lerpDuration(_typingCaretMinDuration, _typingCaretMaxDuration, t);
+  }
+
+  double _effectiveTypingLineHeight(AxiRenderEditable renderEditable) {
+    final double preferredLineHeight = renderEditable.preferredLineHeight;
+    if (preferredLineHeight > 0) {
+      return preferredLineHeight;
+    }
+    final double cursorHeight = renderEditable.cursorHeight;
+    if (cursorHeight > 0) {
+      return cursorHeight;
+    }
+    return _typingCaretLineHeightFallback;
+  }
+
+  Duration _lerpDuration(Duration start, Duration end, double t) {
+    final double clamped = t.clamp(
+      _typingGlyphStartOpacity,
+      _typingGlyphEndOpacity,
+    );
+    final double startMicros = start.inMicroseconds.toDouble();
+    final double endMicros = end.inMicroseconds.toDouble();
+    final double micros =
+        ui.lerpDouble(startMicros, endMicros, clamped) ?? startMicros;
+    return Duration(microseconds: micros.round());
   }
 
   void _jumpTypingCaret(Offset target) {
@@ -5031,7 +5155,7 @@ class EditableTextState extends State<EditableText>
     _typingCaretPainter?.caretOffset = offset;
   }
 
-  void _syncTypingCaretToSelection() {
+  void _syncTypingCaretToSelection({bool animate = false}) {
     final AxiRenderEditable? renderEditable = _typingRenderEditable;
     if (renderEditable == null || !renderEditable.hasSize) {
       return;
@@ -5048,8 +5172,16 @@ class EditableTextState extends State<EditableText>
     if (caretOffset == null) {
       return;
     }
-    _typingCaretAnimation = AlwaysStoppedAnimation<Offset>(caretOffset);
-    _updateTypingCaretOffset(caretOffset);
+    final bool shouldAnimate = animate &&
+        _hasFocus &&
+        !widget.readOnly &&
+        _cursorVisibilityNotifier.value &&
+        _typingAnimationsEnabled;
+    if (shouldAnimate) {
+      _animateTypingCaret(_typingCaretOffset, caretOffset, renderEditable);
+      return;
+    }
+    _jumpTypingCaret(caretOffset);
   }
 
   void _startTypingGlyphMorph(
@@ -5148,8 +5280,7 @@ class EditableTextState extends State<EditableText>
     if (delta <= Duration.zero) {
       return _typingGlyphStartOpacity;
     }
-    final double totalMicros =
-        _typingGlyphMorphDuration.inMicroseconds.toDouble();
+    final double totalMicros = _typingGlyphDuration.inMicroseconds.toDouble();
     if (totalMicros <= 0) {
       return _typingGlyphEndOpacity;
     }
