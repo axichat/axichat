@@ -400,25 +400,34 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       );
     }
 
+    var hadParseFailure = false;
     final parsed = <EmailBlocklistSyncPayload>[];
     for (final item in items) {
       final payload = item.payload;
-      if (payload == null) continue;
+      if (payload == null) {
+        hadParseFailure = true;
+        continue;
+      }
       final parsedPayload = EmailBlocklistSyncPayload.fromXml(
         payload,
         itemId: item.id,
       );
-      if (parsedPayload == null) continue;
+      if (parsedPayload == null) {
+        hadParseFailure = true;
+        continue;
+      }
       parsed.add(parsedPayload);
     }
+    final isComplete = !hadParseFailure &&
+        _isSnapshotComplete(
+          itemsCount: items.length,
+          maxItems: limit,
+        );
 
     return PubSubFetchResult(
       items: List<EmailBlocklistSyncPayload>.unmodifiable(parsed),
       isSuccess: true,
-      isComplete: _isSnapshotComplete(
-        itemsCount: items.length,
-        maxItems: limit,
-      ),
+      isComplete: isComplete,
     );
   }
 
@@ -566,16 +575,26 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   }
 
   Future<void> _refreshFromServer() async {
-    final previousCache = Map<String, EmailBlocklistSyncPayload>.from(_cache);
-    final items = await fetchAll();
+    final snapshot = await fetchAllWithStatus();
+    if (!snapshot.isSuccess) return;
+    final items = snapshot.items;
     final freshIds = items.map((item) => item.itemId).toSet();
-    _cache
-      ..clear()
-      ..addEntries(items.map((item) => MapEntry(item.itemId, item)));
+    final previousCache = Map<String, EmailBlocklistSyncPayload>.from(_cache);
+    if (snapshot.isComplete) {
+      _cache
+        ..clear()
+        ..addEntries(items.map((item) => MapEntry(item.itemId, item)));
+    } else {
+      for (final item in items) {
+        _cache[item.itemId] = item;
+      }
+    }
     for (final item in items) {
       _emitUpdate(item);
     }
-
+    if (!snapshot.isComplete) {
+      return;
+    }
     final removedIds =
         previousCache.keys.where((id) => !freshIds.contains(id)).toList();
     for (final id in removedIds) {

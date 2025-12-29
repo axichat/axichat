@@ -3087,6 +3087,8 @@ mixin MessageService
     _mucMamUnsupportedRooms.clear();
     _mucJoinMamDeferredRooms.clear();
     _mamGlobalDeniedUntil = null;
+    _mamGlobalDeniedUntilScope = null;
+    _mamGlobalDeniedUntilLoaded = false;
     _mamGlobalMaxTimestamp = null;
     _resetStableKeyCache();
     _lastSeenKeys.clear();
