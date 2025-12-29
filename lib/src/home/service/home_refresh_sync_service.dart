@@ -7,7 +7,7 @@ import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:logging/logging.dart';
 
-final class HomeRefreshSyncService {
+class HomeRefreshSyncService {
   HomeRefreshSyncService({
     required XmppService xmppService,
     EmailService? emailService,

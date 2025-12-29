@@ -1,6 +1,8 @@
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../security_corpus/security_corpus.dart';
+
 void main() {
   const int safeLinkMaxLength = 2048;
   const int safeAttachmentMaxLength = 2048;
@@ -10,6 +12,7 @@ void main() {
   const String punycodeHost = 'https://xn--example.com';
   const String bidiTestUrl = '$httpsBase${bidiOverride}txt';
   const String zeroWidthTestUrl = '$httpsBase$zeroWidthSpace';
+  final SecurityCorpus corpus = SecurityCorpus.load();
 
   group('isSafeLinkUri', () {
     test('allows https links without credentials', () {
@@ -36,6 +39,18 @@ void main() {
       const int overflowLength = safeLinkMaxLength - httpsBase.length + 1;
       final longPath = List.filled(overflowLength, 'a').join();
       expect(isSafeLinkUri(Uri.parse('$httpsBase$longPath')), isFalse);
+    });
+
+    test('matches corpus unsafe schemes', () {
+      final unsafeCases = corpus.linkCases
+          .where((entry) => entry.expectation == LinkSafetyExpectation.unsafe);
+      for (final entry in unsafeCases) {
+        final report = assessLinkSafety(
+          raw: entry.url,
+          kind: LinkSafetyKind.message,
+        );
+        expect(report == null || !report.isSafe, isTrue);
+      }
     });
   });
 
@@ -93,6 +108,34 @@ void main() {
       );
       expect(report, isNotNull);
       expect(report!.needsWarning, isTrue);
+    });
+
+    test('matches corpus warnings', () {
+      final warnCases = corpus.linkCases
+          .where((entry) => entry.expectation == LinkSafetyExpectation.warn);
+      for (final entry in warnCases) {
+        final report = assessLinkSafety(
+          raw: entry.url,
+          kind: LinkSafetyKind.message,
+        );
+        expect(report, isNotNull);
+        expect(report!.warnings, containsAll(entry.expectedWarnings));
+        expect(report.isSafe, isTrue);
+      }
+    });
+
+    test('matches corpus safe links', () {
+      final safeCases = corpus.linkCases
+          .where((entry) => entry.expectation == LinkSafetyExpectation.safe);
+      for (final entry in safeCases) {
+        final report = assessLinkSafety(
+          raw: entry.url,
+          kind: LinkSafetyKind.message,
+        );
+        expect(report, isNotNull);
+        expect(report!.isSafe, isTrue);
+        expect(report.warnings, entry.expectedWarnings);
+      }
     });
   });
 }

@@ -1,6 +1,8 @@
 import 'package:axichat/src/common/html_content.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../security_corpus/security_corpus.dart';
+
 const int _glyphRepeatCount = 5000;
 const int _nestedMarkupDepth = 60;
 const int _whitespaceRepeatCount = 1000;
@@ -8,6 +10,8 @@ const int _combiningRepeatCount = 2000;
 const String _nestedTextToken = 'ok';
 
 void main() {
+  final SecurityCorpus corpus = SecurityCorpus.load();
+
   group('HtmlContentCodec.sanitizeHtml', () {
     test('strips script tags', () {
       final sanitized = HtmlContentCodec.sanitizeHtml(
@@ -39,6 +43,30 @@ void main() {
       );
       expect(sanitized.contains('https://example.com/x.png'), isTrue);
       expect(sanitized.contains('onerror'), isFalse);
+    });
+
+    test('matches corpus unsafe cases', () {
+      for (final entry in corpus.htmlUnsafeCases) {
+        final sanitized = HtmlContentCodec.sanitizeHtml(entry.input);
+        for (final required in entry.expectContains) {
+          expect(sanitized.contains(required), isTrue);
+        }
+        for (final blocked in entry.expectNotContains) {
+          expect(sanitized.contains(blocked), isFalse);
+        }
+      }
+    });
+
+    test('matches corpus safe cases', () {
+      for (final entry in corpus.htmlSafeCases) {
+        final sanitized = HtmlContentCodec.sanitizeHtml(entry.input);
+        for (final required in entry.expectContains) {
+          expect(sanitized.contains(required), isTrue);
+        }
+        for (final blocked in entry.expectNotContains) {
+          expect(sanitized.contains(blocked), isFalse);
+        }
+      }
     });
   });
 

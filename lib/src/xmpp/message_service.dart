@@ -5397,6 +5397,14 @@ mixin MessageService
     return '${metadata.id}_$sanitized';
   }
 
+  @visibleForTesting
+  String sanitizeAttachmentFilenameForTest(String filename) =>
+      _sanitizeAttachmentFilename(filename);
+
+  @visibleForTesting
+  String buildAttachmentFileNameForTest(FileMetadataData metadata) =>
+      _attachmentFileName(metadata);
+
   String _sanitizeAttachmentFilename(String filename) {
     final base = p.basename(filename).trim();
     if (base.isEmpty) return _attachmentFallbackName;

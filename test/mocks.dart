@@ -8,6 +8,7 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -42,6 +43,9 @@ class MockChatsService extends Mock implements ChatsService {}
 class MockMucService extends Mock implements MucService {}
 
 class MockEmailService extends Mock implements EmailService {}
+
+class MockHomeRefreshSyncService extends Mock
+    implements HomeRefreshSyncService {}
 
 class MockEmailProvisioningClient extends Mock
     implements EmailProvisioningClient {}

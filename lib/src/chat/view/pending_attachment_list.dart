@@ -146,8 +146,7 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
             path: pending.attachment.path,
           );
           final FileTypeReport resolvedReport = report ?? fallbackReport;
-          final bool useDeclaredFallback =
-              report != null && !resolvedReport.hasReliableDetection;
+          final bool useDeclaredFallback = !resolvedReport.hasReliableDetection;
           final bool isImage = resolvedReport.isDetectedImage ||
               (useDeclaredFallback && resolvedReport.isDeclaredImage);
           if (isImage) {
