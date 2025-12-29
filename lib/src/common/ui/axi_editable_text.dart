@@ -2278,9 +2278,13 @@ class EditableTextState extends State<EditableText>
   Offset _typingCaretOffset = Offset.zero;
   TypingGlyphAnimation? _typingGlyphAnimation;
   TypingCaretPainter? _typingCaretPainter;
+  final TypingGlyphSdfCache _typingGlyphSdfCache = TypingGlyphSdfCache();
+  ui.FragmentProgram? _typingGlyphMorphProgram;
+  int _typingGlyphSdfRequestId = 0;
   TypingTextChange? _pendingTypingChange;
   TextEditingValue _previousTypingValue = const TextEditingValue();
   bool _suppressTypingControllerNotifications = false;
+  bool _typingLayoutCallbackScheduled = false;
 
   /// Detects whether the clipboard can paste.
   final ClipboardStatusNotifier clipboardStatus = kIsWeb
@@ -3074,6 +3078,7 @@ class EditableTextState extends State<EditableText>
     _appLifecycleListener =
         AppLifecycleListener(onResume: () => _justResumed = true);
     _initProcessTextActions();
+    _loadTypingGlyphMorphProgram();
   }
 
   /// Query the engine to initialize the list of text processing actions to show
@@ -3103,7 +3108,8 @@ class EditableTextState extends State<EditableText>
     _typingCaretPainter
       ?..dotColor = dotColor
       ..dotRadius = _typingCursorDotRadius
-      ..caretOffset = _typingCaretOffset;
+      ..caretOffset = _typingCaretOffset
+      ..morphProgram = _typingGlyphMorphProgram;
     _handleTypingCursorVisibilityChanged();
 
     final AutofillGroupState? newAutofillGroup = AutofillGroup.maybeOf(context);
@@ -3320,6 +3326,7 @@ class EditableTextState extends State<EditableText>
     clipboardStatus.dispose();
     _cursorVisibilityNotifier.dispose();
     _appLifecycleListener.dispose();
+    _typingGlyphSdfCache.dispose();
     FocusManager.instance.removeListener(_unflagInternalFocus);
     _disposeScrollNotificationObserver();
     super.dispose();
@@ -4654,6 +4661,16 @@ class EditableTextState extends State<EditableText>
     _typingCaretPainter?.showCaret = _cursorVisibilityNotifier.value;
   }
 
+  void _loadTypingGlyphMorphProgram() {
+    loadTypingGlyphMorphProgram().then((ui.FragmentProgram program) {
+      if (!mounted) {
+        return;
+      }
+      _typingGlyphMorphProgram = program;
+      _typingCaretPainter?.morphProgram = program;
+    }).catchError((Object _) {});
+  }
+
   void _handleTypingControllerChange() {
     if (_suppressTypingControllerNotifications) {
       return;
@@ -4668,6 +4685,10 @@ class EditableTextState extends State<EditableText>
         _describeTypingChange(_previousTypingValue, nextValue);
     _previousTypingValue = nextValue;
     _pendingTypingChange = change;
+    final bool shouldAnimateTyping = _hasFocus && !widget.readOnly;
+    if (shouldAnimateTyping && change.isSingleCharacterInsertion) {
+      _applyHiddenRange(change.insertedRange);
+    }
     _applyPendingTypingChange();
   }
 
@@ -4675,11 +4696,26 @@ class EditableTextState extends State<EditableText>
     if (!mounted) {
       return;
     }
-    _applyPendingTypingChange();
-    if (_pendingTypingChange != null || _typingCaretController.isAnimating) {
+    _scheduleTypingLayoutCallback();
+  }
+
+  void _scheduleTypingLayoutCallback() {
+    if (_typingLayoutCallbackScheduled) {
       return;
     }
-    _syncTypingCaretToSelection();
+    _typingLayoutCallbackScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((Duration _) {
+      if (!mounted) {
+        _typingLayoutCallbackScheduled = false;
+        return;
+      }
+      _typingLayoutCallbackScheduled = false;
+      _applyPendingTypingChange();
+      if (_pendingTypingChange != null || _typingCaretController.isAnimating) {
+        return;
+      }
+      _syncTypingCaretToSelection();
+    });
   }
 
   void _applyPendingTypingChange() {
@@ -4889,6 +4925,7 @@ class EditableTextState extends State<EditableText>
       startOffset: startOffset,
       style: style,
     );
+    _queueTypingGlyphSdf(animation, renderEditable);
     _applyHiddenRange(range);
     _typingGlyphAnimation = animation;
     _typingCaretPainter
@@ -4897,6 +4934,32 @@ class EditableTextState extends State<EditableText>
     _typingGlyphController
       ..reset()
       ..forward();
+  }
+
+  void _queueTypingGlyphSdf(
+    TypingGlyphAnimation animation,
+    AxiRenderEditable renderEditable,
+  ) {
+    final TypingCaretPainter? painter = _typingCaretPainter;
+    if (painter == null) {
+      return;
+    }
+    painter.glyphSdf = null;
+    final int requestId = ++_typingGlyphSdfRequestId;
+    final double textScaleFactor = renderEditable.textScaler.scale(1.0);
+    _typingGlyphSdfCache
+        .resolve(
+      text: animation.text,
+      style: animation.style,
+      textDirection: renderEditable.textDirection,
+      textScaleFactor: textScaleFactor,
+    )
+        .then((TypingGlyphSdf? sdf) {
+      if (!mounted || requestId != _typingGlyphSdfRequestId) {
+        return;
+      }
+      painter.glyphSdf = sdf;
+    });
   }
 
   void _handleTypingGlyphTick() {
@@ -4916,9 +4979,11 @@ class EditableTextState extends State<EditableText>
     }
     _typingGlyphController.stop();
     _typingGlyphAnimation = null;
+    _typingGlyphSdfRequestId++;
     _typingCaretPainter
       ?..glyphAnimation = null
-      ..glyphProgress = _typingGlyphEndOpacity;
+      ..glyphProgress = _typingGlyphEndOpacity
+      ..glyphSdf = null;
     _applyHiddenRange(null);
   }
 
