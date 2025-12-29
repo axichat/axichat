@@ -106,13 +106,24 @@ typedef _ApplyTextBoundary = TextPosition Function(
 // to transparent, is twice this duration.
 const Duration _kCursorBlinkHalfPeriod = Duration(milliseconds: 500);
 const Duration _typingCaretSlideDuration = Duration(milliseconds: 120);
-const Duration _typingGlyphMorphDuration = Duration(milliseconds: 180);
-const Curve _typingCaretSlideCurve = Curves.easeOutCubic;
-const Curve _typingGlyphMorphCurve = Curves.easeOutCubic;
+const int _typingGlyphHoldMs = 120;
+const int _typingGlyphMorphMs = 380;
+const int _typingGlyphTotalMs = _typingGlyphHoldMs + _typingGlyphMorphMs;
+const double _typingGlyphHoldFraction =
+    _typingGlyphHoldMs / _typingGlyphTotalMs;
+const Duration _typingGlyphTotalDuration =
+    Duration(milliseconds: _typingGlyphTotalMs);
+const Curve _typingCaretSlideCurve = Curves.easeInOutCubic;
+const Curve _typingGlyphMorphCurve = Curves.easeInOutCubic;
 const double _typingCursorDotDiameter = 6.0;
 const double _typingCursorDotRadius = _typingCursorDotDiameter / 2;
+const double _typingCursorDotTextGap = 2.0;
 const double _typingGlyphStartOpacity = 0.0;
 const double _typingGlyphEndOpacity = 1.0;
+const String _typingSdfPrewarmCharacters = 'abcdefghijklmnopqrstuvwxyz'
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    '0123456789'
+    '.,:;!?\'"@#\$%&()[]{}<>+-*/=_\\|';
 
 // Number of cursor ticks during which the most recently entered character
 // is shown in an obscured text field.
@@ -2265,14 +2276,12 @@ class EditableTextState extends State<EditableText>
   );
   late final AnimationController _typingGlyphController = AnimationController(
     vsync: this,
-    duration: _typingGlyphMorphDuration,
+    duration: _typingGlyphTotalDuration,
   )
     ..addListener(_handleTypingGlyphTick)
     ..addStatusListener(_handleTypingGlyphStatus);
-  late final Animation<double> _typingGlyphCurve = CurvedAnimation(
-    parent: _typingGlyphController,
-    curve: _typingGlyphMorphCurve,
-  );
+  Animation<double> _typingGlyphCurve =
+      const AlwaysStoppedAnimation<double>(_typingGlyphStartOpacity);
   Animation<Offset> _typingCaretAnimation =
       const AlwaysStoppedAnimation<Offset>(Offset.zero);
   Offset _typingCaretOffset = Offset.zero;
@@ -2281,6 +2290,10 @@ class EditableTextState extends State<EditableText>
   final TypingGlyphSdfCache _typingGlyphSdfCache = TypingGlyphSdfCache();
   ui.FragmentProgram? _typingGlyphMorphProgram;
   int _typingGlyphSdfRequestId = 0;
+  int? _typingGlyphSelectionOffset;
+  TextRange? _typingGlyphRange;
+  String? _typingGlyphText;
+  TypingGlyphSdfPrewarmKey? _typingGlyphSdfPrewarmKey;
   TypingTextChange? _pendingTypingChange;
   TextEditingValue _previousTypingValue = const TextEditingValue();
   bool _suppressTypingControllerNotifications = false;
@@ -3079,6 +3092,7 @@ class EditableTextState extends State<EditableText>
         AppLifecycleListener(onResume: () => _justResumed = true);
     _initProcessTextActions();
     _loadTypingGlyphMorphProgram();
+    _refreshTypingGlyphCurve();
   }
 
   /// Query the engine to initialize the list of text processing actions to show
@@ -3111,6 +3125,7 @@ class EditableTextState extends State<EditableText>
       ..caretOffset = _typingCaretOffset
       ..morphProgram = _typingGlyphMorphProgram;
     _handleTypingCursorVisibilityChanged();
+    _prewarmTypingGlyphSdfs();
 
     final AutofillGroupState? newAutofillGroup = AutofillGroup.maybeOf(context);
     if (currentAutofillScope != newAutofillGroup) {
@@ -3286,6 +3301,7 @@ class EditableTextState extends State<EditableText>
     if (widget.selectionEnabled && pasteEnabled && canPaste) {
       clipboardStatus.update();
     }
+    _prewarmTypingGlyphSdfs();
   }
 
   void _disposeScrollNotificationObserver() {
@@ -4661,6 +4677,50 @@ class EditableTextState extends State<EditableText>
     _typingCaretPainter?.showCaret = _cursorVisibilityNotifier.value;
   }
 
+  void _refreshTypingGlyphCurve() {
+    _typingGlyphCurve = CurvedAnimation(
+      parent: _typingGlyphController,
+      curve: const Interval(
+        _typingGlyphHoldFraction,
+        1.0,
+        curve: _typingGlyphMorphCurve,
+      ),
+    );
+  }
+
+  TextScaler _effectiveTypingTextScaler() {
+    return switch ((widget.textScaler, widget.textScaleFactor)) {
+      (final TextScaler textScaler, _) => textScaler,
+      (null, final double textScaleFactor) =>
+        TextScaler.linear(textScaleFactor),
+      (null, null) => MediaQuery.textScalerOf(context),
+    };
+  }
+
+  void _prewarmTypingGlyphSdfs() {
+    if (_typingController == null) {
+      return;
+    }
+    final double textScaleFactor = _effectiveTypingTextScaler().scale(1.0);
+    final TypingGlyphSdfPrewarmKey key = TypingGlyphSdfPrewarmKey(
+      style: _style,
+      textDirection: _textDirection,
+      textScaleFactor: textScaleFactor,
+    );
+    if (_typingGlyphSdfPrewarmKey == key) {
+      return;
+    }
+    _typingGlyphSdfPrewarmKey = key;
+    for (final int rune in _typingSdfPrewarmCharacters.runes) {
+      _typingGlyphSdfCache.resolve(
+        text: String.fromCharCode(rune),
+        style: _style,
+        textDirection: _textDirection,
+        textScaleFactor: textScaleFactor,
+      );
+    }
+  }
+
   void _loadTypingGlyphMorphProgram() {
     loadTypingGlyphMorphProgram().then((ui.FragmentProgram program) {
       if (!mounted) {
@@ -4760,11 +4820,38 @@ class EditableTextState extends State<EditableText>
       _jumpTypingCaret(endOffset);
     }
 
+    final bool shouldKeepMorph =
+        _shouldKeepTypingGlyphMorph(change.currentValue);
+
     if (change.isSingleCharacterInsertion) {
       _startTypingGlyphMorph(change, renderEditable);
-    } else {
+    } else if (!shouldKeepMorph) {
       _stopTypingGlyphMorph();
     }
+  }
+
+  bool _shouldKeepTypingGlyphMorph(TextEditingValue value) {
+    if (_typingGlyphAnimation == null || !_typingGlyphController.isAnimating) {
+      return false;
+    }
+    final TextRange? range = _typingGlyphRange;
+    final String? text = _typingGlyphText;
+    if (range == null || text == null || range.isCollapsed) {
+      return false;
+    }
+    if (range.end > value.text.length || range.start < 0) {
+      return false;
+    }
+    final String currentText = value.text.substring(range.start, range.end);
+    if (currentText != text) {
+      return false;
+    }
+    final TextSelection selection = value.selection;
+    final int? selectionOffset = _typingGlyphSelectionOffset;
+    if (!selection.isCollapsed || selectionOffset == null) {
+      return false;
+    }
+    return selection.extentOffset == selectionOffset;
   }
 
   TypingTextChange _describeTypingChange(
@@ -4832,8 +4919,16 @@ class EditableTextState extends State<EditableText>
     }
     final TextPosition position = TextPosition(offset: selection.extentOffset);
     final Rect caretRect = renderEditable.getLocalRectForCaret(position);
-    final Offset centered = caretRect.center;
-    return _snapTypingOffset(centered, renderEditable.devicePixelRatio);
+    final double dotRadius =
+        _typingCaretPainter?.dotRadius ?? _typingCursorDotRadius;
+    final double direction =
+        renderEditable.textDirection == TextDirection.rtl ? -1.0 : 1.0;
+    final double dotOffset = dotRadius + _typingCursorDotTextGap;
+    final Offset adjusted = Offset(
+      caretRect.center.dx + direction * dotOffset,
+      caretRect.center.dy,
+    );
+    return _snapTypingOffset(adjusted, renderEditable.devicePixelRatio);
   }
 
   Offset _snapTypingOffset(Offset offset, double devicePixelRatio) {
@@ -4901,13 +4996,23 @@ class EditableTextState extends State<EditableText>
     TypingTextChange change,
     AxiRenderEditable renderEditable,
   ) {
+    _typingGlyphSelectionOffset = null;
+    _typingGlyphRange = null;
+    _typingGlyphText = null;
+    final TypingCaretPainter? painter = _typingCaretPainter;
+    if (painter == null) {
+      _applyHiddenRange(null);
+      return;
+    }
     final TextRange? range = change.insertedRange;
     final String? text = change.insertedText;
     if (range == null || text == null) {
+      _applyHiddenRange(null);
       return;
     }
     final Rect? glyphRect = _typingGlyphRectForRange(renderEditable, range);
     if (glyphRect == null) {
+      _applyHiddenRange(null);
       return;
     }
     final TextStyle style = _typingTextStyleForOffset(
@@ -4925,40 +5030,58 @@ class EditableTextState extends State<EditableText>
       startOffset: startOffset,
       style: style,
     );
-    _queueTypingGlyphSdf(animation, renderEditable);
-    _applyHiddenRange(range);
-    _typingGlyphAnimation = animation;
-    _typingCaretPainter
-      ?..glyphAnimation = animation
-      ..glyphProgress = _typingGlyphStartOpacity;
-    _typingGlyphController
-      ..reset()
-      ..forward();
-  }
-
-  void _queueTypingGlyphSdf(
-    TypingGlyphAnimation animation,
-    AxiRenderEditable renderEditable,
-  ) {
-    final TypingCaretPainter? painter = _typingCaretPainter;
-    if (painter == null) {
-      return;
-    }
-    painter.glyphSdf = null;
+    final TextSelection selection = change.currentValue.selection;
+    _typingGlyphSelectionOffset =
+        selection.isCollapsed ? selection.extentOffset : null;
+    _typingGlyphRange = range;
+    _typingGlyphText = text;
+    painter
+      ..glyphAnimation = null
+      ..glyphSdf = null;
+    _typingGlyphController.stop();
+    _typingGlyphAnimation = null;
     final int requestId = ++_typingGlyphSdfRequestId;
     final double textScaleFactor = renderEditable.textScaler.scale(1.0);
-    _typingGlyphSdfCache
-        .resolve(
+    final Future<TypingGlyphSdf?> sdfFuture = _typingGlyphSdfCache.resolve(
       text: animation.text,
       style: animation.style,
       textDirection: renderEditable.textDirection,
       textScaleFactor: textScaleFactor,
-    )
-        .then((TypingGlyphSdf? sdf) {
+    );
+    final Future<ui.FragmentProgram> programFuture =
+        _typingGlyphMorphProgram != null
+            ? Future<ui.FragmentProgram>.value(_typingGlyphMorphProgram!)
+            : loadTypingGlyphMorphProgram();
+    Future.wait(<Future<Object?>>[sdfFuture, programFuture]).then((
+      List<Object?> results,
+    ) {
       if (!mounted || requestId != _typingGlyphSdfRequestId) {
         return;
       }
-      painter.glyphSdf = sdf;
+      final TypingGlyphSdf? sdf = results.first as TypingGlyphSdf?;
+      final ui.FragmentProgram program = results.last! as ui.FragmentProgram;
+      if (sdf == null) {
+        _applyHiddenRange(null);
+        return;
+      }
+      _typingGlyphMorphProgram = program;
+      _applyHiddenRange(range);
+      _typingGlyphAnimation = animation;
+      painter
+        ..glyphAnimation = animation
+        ..glyphSdf = sdf
+        ..glyphProgress = _typingGlyphStartOpacity
+        ..morphProgram = program;
+      _refreshTypingGlyphCurve();
+      _typingGlyphController
+        ..duration = _typingGlyphTotalDuration
+        ..reset()
+        ..forward();
+    }).catchError((Object _) {
+      if (!mounted || requestId != _typingGlyphSdfRequestId) {
+        return;
+      }
+      _applyHiddenRange(null);
     });
   }
 
@@ -4974,12 +5097,18 @@ class EditableTextState extends State<EditableText>
 
   void _stopTypingGlyphMorph() {
     if (_typingGlyphAnimation == null) {
+      _typingGlyphSelectionOffset = null;
+      _typingGlyphRange = null;
+      _typingGlyphText = null;
       _applyHiddenRange(null);
       return;
     }
     _typingGlyphController.stop();
     _typingGlyphAnimation = null;
     _typingGlyphSdfRequestId++;
+    _typingGlyphSelectionOffset = null;
+    _typingGlyphRange = null;
+    _typingGlyphText = null;
     _typingCaretPainter
       ?..glyphAnimation = null
       ..glyphProgress = _typingGlyphEndOpacity
@@ -6612,6 +6741,33 @@ class _ScribbleCacheKey {
         ? RenderComparison.layout
         : inlineSpan.compareTo(other.inlineSpan);
   }
+}
+
+@immutable
+class TypingGlyphSdfPrewarmKey {
+  const TypingGlyphSdfPrewarmKey({
+    required this.style,
+    required this.textDirection,
+    required this.textScaleFactor,
+  });
+
+  final TextStyle style;
+  final TextDirection textDirection;
+  final double textScaleFactor;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is TypingGlyphSdfPrewarmKey &&
+        other.style == style &&
+        other.textDirection == textDirection &&
+        other.textScaleFactor == textScaleFactor;
+  }
+
+  @override
+  int get hashCode => Object.hash(style, textDirection, textScaleFactor);
 }
 
 class _ScribbleFocusable extends StatefulWidget {

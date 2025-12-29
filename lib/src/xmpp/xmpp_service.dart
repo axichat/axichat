@@ -406,12 +406,12 @@ class XmppService extends XmppBase
         MucService,
         ChatsService,
         DraftSyncService,
+        BlockingService,
         MessageService,
         AvatarService,
         // OmemoService,
         RosterService,
         PresenceService,
-        BlockingService,
         SpamSyncService,
         EmailBlocklistSyncService {
   XmppService._(

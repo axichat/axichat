@@ -81,3 +81,85 @@ final class SyncRateLimiter {
     }
   }
 }
+
+final class WindowRateLimit {
+  const WindowRateLimit({
+    required this.maxEvents,
+    required this.window,
+  });
+
+  final int maxEvents;
+  final Duration window;
+}
+
+final class WindowRateLimiter {
+  WindowRateLimiter(this.limit);
+
+  final WindowRateLimit limit;
+  final Queue<int> _events = Queue<int>();
+
+  bool allowEvent({int? nowMs}) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    _prune(now);
+    if (_events.length >= limit.maxEvents) {
+      return false;
+    }
+    _events.addLast(now);
+    return true;
+  }
+
+  int prune({int? nowMs}) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    _prune(now);
+    return _events.length;
+  }
+
+  void reset() => _events.clear();
+
+  void _prune(int nowMs) {
+    final cutoff = nowMs - limit.window.inMilliseconds;
+    while (_events.isNotEmpty && _events.first < cutoff) {
+      _events.removeFirst();
+    }
+  }
+}
+
+final class KeyedWindowRateLimiter {
+  KeyedWindowRateLimiter({
+    required this.limit,
+    required this.cleanupInterval,
+  });
+
+  final WindowRateLimit limit;
+  final Duration cleanupInterval;
+  final Map<String, WindowRateLimiter> _limiters = {};
+  int? _lastCleanupMs;
+
+  bool allowEvent(String key, {int? nowMs}) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    final limiter = _limiters.putIfAbsent(
+      key,
+      () => WindowRateLimiter(limit),
+    );
+    final allowed = limiter.allowEvent(nowMs: now);
+    _cleanup(now);
+    return allowed;
+  }
+
+  void reset() {
+    _limiters.clear();
+    _lastCleanupMs = null;
+  }
+
+  void _cleanup(int nowMs) {
+    final lastCleanup = _lastCleanupMs;
+    if (lastCleanup != null &&
+        nowMs - lastCleanup < cleanupInterval.inMilliseconds) {
+      return;
+    }
+    _lastCleanupMs = nowMs;
+    _limiters.removeWhere(
+      (_, limiter) => limiter.prune(nowMs: nowMs) == 0,
+    );
+  }
+}
