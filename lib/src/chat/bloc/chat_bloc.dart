@@ -1641,13 +1641,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (state.emailRawHeadersByDeltaId.containsKey(deltaMessageId)) {
       return;
     }
-    if (state.emailRawHeadersLoading.contains(deltaMessageId) ||
-        state.emailRawHeadersUnavailable.contains(deltaMessageId)) {
+    if (state.emailRawHeadersLoading.contains(deltaMessageId)) {
       return;
     }
     final loading = Set<int>.from(state.emailRawHeadersLoading)
       ..add(deltaMessageId);
-    emit(state.copyWith(emailRawHeadersLoading: loading));
+    final unavailable = Set<int>.from(state.emailRawHeadersUnavailable)
+      ..remove(deltaMessageId);
+    emit(
+      state.copyWith(
+        emailRawHeadersLoading: loading,
+        emailRawHeadersUnavailable: unavailable,
+      ),
+    );
     final emailService = _emailService;
     if (emailService == null) {
       final updatedLoading = Set<int>.from(state.emailRawHeadersLoading)
@@ -1699,8 +1705,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (state.emailRawHeadersByDeltaId.containsKey(deltaMessageId)) {
       return;
     }
-    if (state.emailRawHeadersLoading.contains(deltaMessageId) ||
-        state.emailRawHeadersUnavailable.contains(deltaMessageId)) {
+    if (state.emailRawHeadersLoading.contains(deltaMessageId)) {
       return;
     }
     add(ChatEmailHeadersRequested(deltaMessageId));

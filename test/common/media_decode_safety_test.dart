@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:axichat/src/common/media_decode_safety.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../security_corpus/security_corpus.dart';
+
 const String _tinyPngBase64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
 const List<int> _invalidImageBytes = <int>[0, 1, 2, 3, 4];
@@ -27,6 +29,8 @@ const ImageDecodeLimits _decodeLimits = ImageDecodeLimits(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  final SecurityCorpus corpus = SecurityCorpus.load();
 
   setUp(() {
     MediaDecodeGuard.instance.registerSuccess(_decodeGuardKey);
@@ -53,6 +57,14 @@ void main() {
       final Uint8List bytes = Uint8List(_oversizedByteCount);
       final isSafe = await isSafeImageBytes(bytes, _decodeLimits);
       expect(isSafe, isFalse);
+    });
+
+    test('matches corpus decode cases', () async {
+      for (final entry in corpus.mediaDecodeCases) {
+        final Uint8List bytes = base64Decode(entry.bytesBase64);
+        final isSafe = await isSafeImageBytes(bytes, _decodeLimits);
+        expect(isSafe, entry.expectSafe);
+      }
     });
   });
 

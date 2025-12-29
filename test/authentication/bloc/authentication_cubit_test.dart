@@ -45,6 +45,7 @@ void main() {
   late Client mockHttpClient;
   late MockEmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
+  late MockHomeRefreshSyncService mockHomeRefreshSyncService;
   late Map<String, String?> credentialStorage;
 
   setUp(() {
@@ -54,6 +55,7 @@ void main() {
     mockStateStore = MockXmppStateStore();
     mockNotificationService = MockNotificationService();
     mockEmailService = MockEmailService();
+    mockHomeRefreshSyncService = MockHomeRefreshSyncService();
     mockHttpClient = MockHttpClient();
     mockProvisioningClient = MockEmailProvisioningClient();
 
@@ -100,6 +102,12 @@ void main() {
     when(() => mockXmppService.databasesInitialized).thenReturn(false);
     when(() => mockXmppService.myJid).thenReturn(null);
     when(() => mockXmppService.setClientState(any())).thenAnswer((_) async {});
+    when(() => mockXmppService.clearSessionTokens()).thenAnswer((_) async {});
+
+    when(() => mockHomeRefreshSyncService.start()).thenAnswer((_) {});
+    when(() => mockHomeRefreshSyncService.close()).thenAnswer((_) async {});
+    when(() => mockHomeRefreshSyncService.syncOnLogin())
+        .thenAnswer((_) async {});
 
     credentialStorage = <String, String?>{
       'password_prehashed_v1': true.toString(),
@@ -1101,6 +1109,7 @@ void main() {
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
+        homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
         initialState: const AuthenticationComplete(),
@@ -1112,6 +1121,8 @@ void main() {
             .called(1);
         verify(() => mockCredentialStore.delete(key: bloc.passwordStorageKey))
             .called(1);
+        verify(() => mockXmppService.clearSessionTokens()).called(1);
+        verify(() => mockHomeRefreshSyncService.close()).called(1);
         verify(() => mockXmppService.disconnect()).called(1);
       },
     );

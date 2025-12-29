@@ -8,6 +8,7 @@ import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/attachments/attachment_metadata_extensions.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/media_decode_safety.dart';
+import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -52,6 +53,27 @@ class _AttachmentSpinner extends StatelessWidget {
   }
 }
 
+class _AttachmentFileNameText extends StatelessWidget {
+  const _AttachmentFileNameText({
+    required this.filename,
+    required this.style,
+  });
+
+  final String filename;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final UnicodeSanitizedText sanitized = sanitizeUnicodeControls(filename);
+    return Text(
+      sanitized.value,
+      maxLines: _attachmentFileNameMaxLines,
+      overflow: _attachmentFileNameOverflow,
+      style: style,
+    );
+  }
+}
+
 const double _attachmentPreviewCornerRadius = 18.0;
 const double _attachmentActionSpacing = 8.0;
 const double _attachmentOverlayIconSize = 16.0;
@@ -63,6 +85,8 @@ const double _attachmentVideoFallbackAspectRatio = 16 / 9;
 const double _attachmentRemoteIconSize = 18.0;
 const double _attachmentRemoteSpacing = 8.0;
 const double _attachmentRemoteBodySpacing = 12.0;
+const int _attachmentFileNameMaxLines = 1;
+const TextOverflow _attachmentFileNameOverflow = TextOverflow.ellipsis;
 const double _attachmentUnknownMaxWidth = 420.0;
 const double _attachmentMaxWidthFraction = 0.9;
 const int _attachmentImagePreviewMaxBytes = 16 * 1024 * 1024;
@@ -434,10 +458,8 @@ class _BlockedAttachment extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          Text(
-            metadata.filename,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          _AttachmentFileNameText(
+            filename: metadata.filename,
             style: context.textTheme.small.copyWith(
               color: colors.mutedForeground,
             ),
@@ -1525,10 +1547,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
               crossAxisAlignment: CrossAxisAlignment.start,
               spacing: 4,
               children: [
-                Text(
-                  metadata.filename,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                _AttachmentFileNameText(
+                  filename: metadata.filename,
                   style: context.textTheme.small.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1865,10 +1885,8 @@ class _EncryptedAttachment extends StatelessWidget {
                       ),
                       const SizedBox(width: _attachmentRemoteSpacing),
                       Expanded(
-                        child: Text(
-                          filename,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: _AttachmentFileNameText(
+                          filename: filename,
                           style: context.textTheme.small.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
@@ -1946,10 +1964,8 @@ class _RemoteImageAttachment extends StatelessWidget {
                       ),
                       const SizedBox(width: _attachmentRemoteSpacing),
                       Expanded(
-                        child: Text(
-                          filename,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: _AttachmentFileNameText(
+                          filename: filename,
                           style: context.textTheme.small.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
@@ -2027,10 +2043,8 @@ class _RemoteVideoAttachment extends StatelessWidget {
                       ),
                       const SizedBox(width: _attachmentRemoteSpacing),
                       Expanded(
-                        child: Text(
-                          filename,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: _AttachmentFileNameText(
+                          filename: filename,
                           style: context.textTheme.small.copyWith(
                             fontWeight: FontWeight.w600,
                           ),

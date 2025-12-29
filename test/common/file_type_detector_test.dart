@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../security_corpus/security_corpus.dart';
 
 const String _safeJpegMimeType = 'image/jpeg';
 const String _safePngMimeType = 'image/png';
@@ -31,6 +34,8 @@ const FileTypeReport _safeReport = FileTypeReport(
 );
 
 void main() {
+  final SecurityCorpus corpus = SecurityCorpus.load();
+
   group('FileTypeReport.hasMismatch', () {
     test('flags reliable mime mismatches', () {
       const report = FileTypeReport(
@@ -48,6 +53,17 @@ void main() {
         extensionMimeType: _safeJpegMimeType,
       );
       expect(report.hasMismatch, isFalse);
+    });
+  });
+
+  group('FileTypeReport.preferredMimeType', () {
+    test('prefers declared mime types when detection is generic', () {
+      final preferredCases = corpus.attachmentRiskCases
+          .where((entry) => entry.expectedPreferredMimeType != null);
+      for (final entry in preferredCases) {
+        final report = entry.toReport();
+        expect(report.preferredMimeType, entry.expectedPreferredMimeType);
+      }
     });
   });
 
@@ -80,6 +96,18 @@ void main() {
       );
       expect(risk.isWarning, isTrue);
     });
+
+    test('matches corpus risk expectations', () {
+      for (final entry in corpus.attachmentRiskCases) {
+        final report = entry.toReport();
+        final risk = assessFileOpenRisk(
+          report: report,
+          fileName: entry.fileName,
+        );
+        expect(risk, entry.expectedRisk);
+        expect(report.hasMismatch, entry.expectMismatch);
+      }
+    });
   });
 
   group('inspectFileType', () {
@@ -97,6 +125,28 @@ void main() {
         );
         expect(report.detectedLabel, _safePngMimeType);
         expect(report.hasMismatch, isTrue);
+      } finally {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('matches corpus sniff cases', () async {
+      final tempDir = await Directory.systemTemp.createTemp(_tempDirPrefix);
+      try {
+        for (final entry in corpus.attachmentSniffCases) {
+          final filePath =
+              '${tempDir.path}${Platform.pathSeparator}${entry.label}.bin';
+          final file = File(filePath);
+          final bytes = base64Decode(entry.bytesBase64);
+          await file.writeAsBytes(bytes, flush: true);
+          final report = await inspectFileType(
+            file: file,
+            declaredMimeType: entry.declaredMimeType,
+            fileName: entry.fileName,
+          );
+          expect(report.detectedLabel, entry.expectedDetectedMimeType);
+          expect(report.hasMismatch, entry.expectMismatch);
+        }
       } finally {
         await tempDir.delete(recursive: true);
       }
