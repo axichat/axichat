@@ -264,6 +264,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String chatOpenLinkWarningMessage(Object url, Object host) {
+    return 'Du bist dabei, zu öffnen:\n$url\n\nDieser Link enthält ungewöhnliche oder unsichtbare Zeichen. Prüfe die Adresse sorgfältig (Host: $host).';
+  }
+
+  @override
   String get chatOpenLinkConfirm => 'Link öffnen';
 
   @override
@@ -425,6 +430,33 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatActionAddToCalendar => 'Zum Kalender hinzufügen';
+
+  @override
+  String get chatCalendarTaskCopyActionLabel => 'In den Kalender kopieren';
+
+  @override
+  String get chatCalendarTaskImportConfirmTitle => 'Zum Kalender hinzufügen?';
+
+  @override
+  String get chatCalendarTaskImportConfirmMessage =>
+      'Diese Aufgabe stammt aus dem Chat. Füge sie deinem Kalender hinzu, um sie zu verwalten oder zu bearbeiten.';
+
+  @override
+  String get chatCalendarTaskImportConfirmLabel => 'Zum Kalender hinzufügen';
+
+  @override
+  String get chatCalendarTaskImportCancelLabel => 'Nicht jetzt';
+
+  @override
+  String get chatCalendarTaskCopyUnavailableMessage =>
+      'Kalender ist nicht verfügbar.';
+
+  @override
+  String get chatCalendarTaskCopyAlreadyAddedMessage =>
+      'Aufgabe bereits hinzugefügt.';
+
+  @override
+  String get chatCalendarTaskCopySuccessMessage => 'Aufgabe kopiert.';
 
   @override
   String get chatActionDetails => 'Einzelheiten';
@@ -613,6 +645,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatForwardDialogTitle => 'Weiterleiten an...';
 
   @override
+  String get chatForwardEmailWarningTitle => 'Forward email?';
+
+  @override
+  String get chatForwardEmailWarningMessage =>
+      'Forwarding email can include original headers and external image links. Choose how to send.';
+
+  @override
+  String get chatForwardEmailOptionSafe => 'Forward as new message';
+
+  @override
+  String get chatForwardEmailOptionOriginal => 'Forward original';
+
+  @override
   String get chatComposerAttachmentWarning =>
       'Große Anhänge werden separat an jeden Empfänger gesendet und können länger dauern.';
 
@@ -649,6 +694,24 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatAttachmentTooltip => 'Anhänge';
+
+  @override
+  String get chatPinnedMessagesTooltip => 'Pinned messages';
+
+  @override
+  String get chatPinnedMessagesTitle => 'Pinned messages';
+
+  @override
+  String get chatPinMessage => 'Pin message';
+
+  @override
+  String get chatUnpinMessage => 'Unpin message';
+
+  @override
+  String get chatPinnedEmptyState => 'No pinned messages yet.';
+
+  @override
+  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
 
   @override
   String get chatSendMessageTooltip => 'Nachricht senden';
@@ -1763,6 +1826,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authUnregisterTitle => 'Abmelden';
 
   @override
+  String get authUnregisterConfirmTitle => 'Delete account?';
+
+  @override
+  String get authUnregisterConfirmMessage =>
+      'This will permanently delete your account and local data. This cannot be undone.';
+
+  @override
+  String get authUnregisterConfirmAction => 'Delete account';
+
+  @override
   String get authUnregisterProgressLabel => 'Warten auf Kontolöschung';
 
   @override
@@ -1839,6 +1912,37 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatAttachmentDownload => 'Anhang herunterladen';
 
   @override
+  String get chatAttachmentExportTitle => 'Anhang speichern?';
+
+  @override
+  String get chatAttachmentExportMessage =>
+      'Dies kopiert den Anhang in den gemeinsamen Speicher. Exporte sind unverschlüsselt und können von anderen Apps gelesen werden. Fortfahren?';
+
+  @override
+  String get chatAttachmentExportConfirm => 'Speichern';
+
+  @override
+  String get chatAttachmentExportCancel => 'Abbrechen';
+
+  @override
+  String get chatMediaMetadataWarningTitle =>
+      'Medien können Metadaten enthalten';
+
+  @override
+  String get chatMediaMetadataWarningMessage =>
+      'Fotos und Videos können Standort- und Gerätedaten enthalten. Trotzdem fortfahren?';
+
+  @override
+  String get chatNotificationPreviewOptionInherit =>
+      'App-Einstellung verwenden';
+
+  @override
+  String get chatNotificationPreviewOptionShow => 'Vorschau immer anzeigen';
+
+  @override
+  String get chatNotificationPreviewOptionHide => 'Vorschau immer verbergen';
+
+  @override
   String get chatAttachmentUnavailableDevice =>
       'Anhang ist auf diesem Gerät nicht mehr verfügbar';
 
@@ -1849,6 +1953,24 @@ class AppLocalizationsDe extends AppLocalizations {
   String chatAttachmentOpenFailed(Object target) {
     return 'Konnte $target nicht öffnen';
   }
+
+  @override
+  String get chatAttachmentTypeMismatchTitle => 'Attachment type mismatch';
+
+  @override
+  String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
+    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
+  }
+
+  @override
+  String get chatAttachmentTypeMismatchConfirm => 'Open anyway';
+
+  @override
+  String get chatAttachmentHighRiskTitle => 'Potentially unsafe file';
+
+  @override
+  String get chatAttachmentHighRiskMessage =>
+      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
 
   @override
   String get chatAttachmentUnknownSize => 'Unbekannte Größe';
@@ -2195,6 +2317,13 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatsExportFailure => 'Chat kann nicht exportiert werden';
+
+  @override
+  String get chatExportWarningTitle => 'Chatverlauf exportieren?';
+
+  @override
+  String get chatExportWarningMessage =>
+      'Chat-Exporte sind unverschlüsselt und können von anderen Apps oder Cloud-Diensten gelesen werden. Fortfahren?';
 
   @override
   String get chatsArchivedRestored => 'Chat wiederhergestellt';
@@ -2997,6 +3126,32 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get settingsAutoLoadEmailImagesDescription =>
       'Kann Ihre IP-Adresse an Absender preisgeben';
+
+  @override
+  String get settingsAutoDownloadImages => 'Auto-download images';
+
+  @override
+  String get settingsAutoDownloadImagesDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadVideos => 'Auto-download videos';
+
+  @override
+  String get settingsAutoDownloadVideosDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+
+  @override
+  String get settingsAutoDownloadDocumentsDescription =>
+      'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadArchives => 'Auto-download archives';
+
+  @override
+  String get settingsAutoDownloadArchivesDescription =>
+      'Only for trusted chats.';
 
   @override
   String get chatChooseTextToAdd => 'Text zum Hinzufügen auswählen';

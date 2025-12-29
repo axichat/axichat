@@ -70,7 +70,7 @@ class JidInput extends StatelessWidget {
         ),
       ),
       fieldViewBuilder: (context, controller, focus, __) {
-        Widget child = ShadInput(
+        Widget child = AxiTextInput(
           controller: controller,
           focusNode: focus,
           autocorrect: false,

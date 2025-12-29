@@ -549,6 +549,12 @@ abstract class AppLocalizations {
   /// **'You are about to open:\n{url}\n\nOnly tap OK if you trust the site (host: {host}).'**
   String chatOpenLinkMessage(Object url, Object host);
 
+  /// No description provided for @chatOpenLinkWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You are about to open:\n{url}\n\nThis link contains unusual or invisible characters. Verify the address carefully (host: {host}).'**
+  String chatOpenLinkWarningMessage(Object url, Object host);
+
   /// No description provided for @chatOpenLinkConfirm.
   ///
   /// In en, this message translates to:
@@ -848,6 +854,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add to calendar'**
   String get chatActionAddToCalendar;
+
+  /// No description provided for @chatCalendarTaskCopyActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy to calendar'**
+  String get chatCalendarTaskCopyActionLabel;
+
+  /// No description provided for @chatCalendarTaskImportConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to calendar?'**
+  String get chatCalendarTaskImportConfirmTitle;
+
+  /// No description provided for @chatCalendarTaskImportConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This task came from chat. Add it to your calendar to manage or edit it.'**
+  String get chatCalendarTaskImportConfirmMessage;
+
+  /// No description provided for @chatCalendarTaskImportConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to calendar'**
+  String get chatCalendarTaskImportConfirmLabel;
+
+  /// No description provided for @chatCalendarTaskImportCancelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get chatCalendarTaskImportCancelLabel;
+
+  /// No description provided for @chatCalendarTaskCopyUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar is unavailable.'**
+  String get chatCalendarTaskCopyUnavailableMessage;
+
+  /// No description provided for @chatCalendarTaskCopyAlreadyAddedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task already added.'**
+  String get chatCalendarTaskCopyAlreadyAddedMessage;
+
+  /// No description provided for @chatCalendarTaskCopySuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task copied.'**
+  String get chatCalendarTaskCopySuccessMessage;
 
   /// No description provided for @chatActionDetails.
   ///
@@ -1185,6 +1239,30 @@ abstract class AppLocalizations {
   /// **'Forward to...'**
   String get chatForwardDialogTitle;
 
+  /// No description provided for @chatForwardEmailWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward email?'**
+  String get chatForwardEmailWarningTitle;
+
+  /// No description provided for @chatForwardEmailWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding email can include original headers and external image links. Choose how to send.'**
+  String get chatForwardEmailWarningMessage;
+
+  /// No description provided for @chatForwardEmailOptionSafe.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward as new message'**
+  String get chatForwardEmailOptionSafe;
+
+  /// No description provided for @chatForwardEmailOptionOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward original'**
+  String get chatForwardEmailOptionOriginal;
+
   /// No description provided for @chatComposerAttachmentWarning.
   ///
   /// In en, this message translates to:
@@ -1233,6 +1311,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Attachments'**
   String get chatAttachmentTooltip;
+
+  /// No description provided for @chatPinnedMessagesTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned messages'**
+  String get chatPinnedMessagesTooltip;
+
+  /// No description provided for @chatPinnedMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned messages'**
+  String get chatPinnedMessagesTitle;
+
+  /// No description provided for @chatPinMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin message'**
+  String get chatPinMessage;
+
+  /// No description provided for @chatUnpinMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin message'**
+  String get chatUnpinMessage;
+
+  /// No description provided for @chatPinnedEmptyState.
+  ///
+  /// In en, this message translates to:
+  /// **'No pinned messages yet.'**
+  String get chatPinnedEmptyState;
+
+  /// No description provided for @chatPinnedMissingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message is unavailable.'**
+  String get chatPinnedMissingMessage;
 
   /// No description provided for @chatSendMessageTooltip.
   ///
@@ -3170,6 +3284,24 @@ abstract class AppLocalizations {
   /// **'Unregister'**
   String get authUnregisterTitle;
 
+  /// No description provided for @authUnregisterConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account?'**
+  String get authUnregisterConfirmTitle;
+
+  /// No description provided for @authUnregisterConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will permanently delete your account and local data. This cannot be undone.'**
+  String get authUnregisterConfirmMessage;
+
+  /// No description provided for @authUnregisterConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get authUnregisterConfirmAction;
+
   /// No description provided for @authUnregisterProgressLabel.
   ///
   /// In en, this message translates to:
@@ -3314,6 +3446,60 @@ abstract class AppLocalizations {
   /// **'Download attachment'**
   String get chatAttachmentDownload;
 
+  /// No description provided for @chatAttachmentExportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save attachment?'**
+  String get chatAttachmentExportTitle;
+
+  /// No description provided for @chatAttachmentExportMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will copy the attachment to shared storage. Exports are unencrypted and may be readable by other apps. Continue?'**
+  String get chatAttachmentExportMessage;
+
+  /// No description provided for @chatAttachmentExportConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get chatAttachmentExportConfirm;
+
+  /// No description provided for @chatAttachmentExportCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get chatAttachmentExportCancel;
+
+  /// No description provided for @chatMediaMetadataWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Media may include metadata'**
+  String get chatMediaMetadataWarningTitle;
+
+  /// No description provided for @chatMediaMetadataWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos and videos can include location and device details. Continue?'**
+  String get chatMediaMetadataWarningMessage;
+
+  /// No description provided for @chatNotificationPreviewOptionInherit.
+  ///
+  /// In en, this message translates to:
+  /// **'Use app setting'**
+  String get chatNotificationPreviewOptionInherit;
+
+  /// No description provided for @chatNotificationPreviewOptionShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Always show previews'**
+  String get chatNotificationPreviewOptionShow;
+
+  /// No description provided for @chatNotificationPreviewOptionHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Always hide previews'**
+  String get chatNotificationPreviewOptionHide;
+
   /// No description provided for @chatAttachmentUnavailableDevice.
   ///
   /// In en, this message translates to:
@@ -3331,6 +3517,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not open {target}'**
   String chatAttachmentOpenFailed(Object target);
+
+  /// No description provided for @chatAttachmentTypeMismatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment type mismatch'**
+  String get chatAttachmentTypeMismatchTitle;
+
+  /// No description provided for @chatAttachmentTypeMismatchMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This attachment says it is {declared}, but the file looks like {detected}. Opening it could be unsafe. Continue?'**
+  String chatAttachmentTypeMismatchMessage(Object declared, Object detected);
+
+  /// No description provided for @chatAttachmentTypeMismatchConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Open anyway'**
+  String get chatAttachmentTypeMismatchConfirm;
+
+  /// No description provided for @chatAttachmentHighRiskTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Potentially unsafe file'**
+  String get chatAttachmentHighRiskTitle;
+
+  /// No description provided for @chatAttachmentHighRiskMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?'**
+  String get chatAttachmentHighRiskMessage;
 
   /// No description provided for @chatAttachmentUnknownSize.
   ///
@@ -3979,6 +4195,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to export chat'**
   String get chatsExportFailure;
+
+  /// No description provided for @chatExportWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export chat history?'**
+  String get chatExportWarningTitle;
+
+  /// No description provided for @chatExportWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat exports are unencrypted and may be readable by other apps or cloud services. Continue?'**
+  String get chatExportWarningMessage;
 
   /// No description provided for @chatsArchivedRestored.
   ///
@@ -5419,6 +5647,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'May reveal your IP address to senders'**
   String get settingsAutoLoadEmailImagesDescription;
+
+  /// No description provided for @settingsAutoDownloadImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download images'**
+  String get settingsAutoDownloadImages;
+
+  /// No description provided for @settingsAutoDownloadImagesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted chats.'**
+  String get settingsAutoDownloadImagesDescription;
+
+  /// No description provided for @settingsAutoDownloadVideos.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download videos'**
+  String get settingsAutoDownloadVideos;
+
+  /// No description provided for @settingsAutoDownloadVideosDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted chats.'**
+  String get settingsAutoDownloadVideosDescription;
+
+  /// No description provided for @settingsAutoDownloadDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download documents'**
+  String get settingsAutoDownloadDocuments;
+
+  /// No description provided for @settingsAutoDownloadDocumentsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted chats.'**
+  String get settingsAutoDownloadDocumentsDescription;
+
+  /// No description provided for @settingsAutoDownloadArchives.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-download archives'**
+  String get settingsAutoDownloadArchives;
+
+  /// No description provided for @settingsAutoDownloadArchivesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted chats.'**
+  String get settingsAutoDownloadArchivesDescription;
 
   /// No description provided for @chatChooseTextToAdd.
   ///

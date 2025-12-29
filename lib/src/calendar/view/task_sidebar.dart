@@ -24,8 +24,8 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
@@ -41,6 +41,7 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/calendar/view/calendar_critical_path_share_sheet.dart';
 import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
 import 'calendar_task_search.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -726,6 +727,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                       onCreatePath: _handleCreateCriticalPath,
                       onRenamePath: _handleRenameCriticalPath,
                       onDeletePath: _handleDeleteCriticalPath,
+                      onSharePath: _handleShareCriticalPath,
                       onFocusPath: _handleFocusCriticalPath,
                       onOpenPath: _handleOpenCriticalPath,
                       onReorderPath: _handleCriticalPathReorder,
@@ -2180,6 +2182,17 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     context.read<B>().add(
           CalendarEvent.criticalPathDeleted(pathId: path.id),
         );
+  }
+
+  Future<void> _handleShareCriticalPath(
+    CalendarCriticalPath path,
+    List<CalendarTask> tasks,
+  ) async {
+    await showCalendarCriticalPathShareSheet(
+      context: context,
+      path: path,
+      tasks: tasks,
+    );
   }
 
   void _handleFocusCriticalPath(CalendarCriticalPath? path) {

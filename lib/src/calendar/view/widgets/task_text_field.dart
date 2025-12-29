@@ -73,7 +73,7 @@ class TaskTextField extends StatelessWidget {
     final Color focusedColor = focusBorderColor ?? calendarPrimaryColor;
     final Color effectiveFill = fillColor ?? calendarContainerColor;
 
-    return TextField(
+    return AxiTextField(
       controller: controller,
       focusNode: focusNode,
       minLines: minLines,

@@ -200,7 +200,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
+            AxiTextField(
               controller: _messageController,
               decoration: InputDecoration(
                 labelText: context.l10n.emailDemoMessageLabel,

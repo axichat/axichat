@@ -257,6 +257,7 @@ class Invites extends Table {
 }
 
 const int attachmentAutoDownloadDefaultIndex = 0;
+const int notificationPreviewSettingDefaultIndex = 0;
 
 enum ChatType { chat, groupChat, note }
 
@@ -267,6 +268,28 @@ enum AttachmentAutoDownload {
   bool get isBlocked => this == blocked;
 
   bool get isAllowed => this == allowed;
+}
+
+enum NotificationPreviewSetting {
+  inherit,
+  show,
+  hide,
+}
+
+extension NotificationPreviewSettingExtensions on NotificationPreviewSetting {
+  bool get isInherited => this == NotificationPreviewSetting.inherit;
+
+  bool get isShown => this == NotificationPreviewSetting.show;
+
+  bool get isHidden => this == NotificationPreviewSetting.hide;
+
+  bool? get previewOverride => switch (this) {
+        NotificationPreviewSetting.inherit => null,
+        NotificationPreviewSetting.show => true,
+        NotificationPreviewSetting.hide => false,
+      };
+
+  bool resolvePreview(bool globalSetting) => previewOverride ?? globalSetting;
 }
 
 @Freezed(toJson: false, fromJson: false)
@@ -284,6 +307,8 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(0) int unreadCount,
     @Default(false) bool open,
     @Default(false) bool muted,
+    @Default(NotificationPreviewSetting.inherit)
+    NotificationPreviewSetting notificationPreviewSetting,
     @Default(false) bool favorited,
     @Default(false) bool archived,
     @Default(false) bool hidden,
@@ -317,6 +342,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required int unreadCount,
     required bool open,
     required bool muted,
+    required NotificationPreviewSetting notificationPreviewSetting,
     required bool favorited,
     required bool archived,
     required bool hidden,
@@ -357,6 +383,8 @@ class Chat with _$Chat implements Insertable<Chat> {
       'unread_count': Variable<int>(unreadCount),
       'open': Variable<bool>(open),
       'muted': Variable<bool>(muted),
+      'notification_preview_setting':
+          Variable<int>(notificationPreviewSetting.index),
       'favorited': Variable<bool>(favorited),
       'archived': Variable<bool>(archived),
       'hidden': Variable<bool>(hidden),
@@ -435,6 +463,11 @@ class Chats extends Table {
 
   BoolColumn get muted => boolean().withDefault(const Constant(false))();
 
+  IntColumn get notificationPreviewSetting =>
+      intEnum<NotificationPreviewSetting>().withDefault(
+        const Constant(notificationPreviewSettingDefaultIndex),
+      )();
+
   BoolColumn get favorited => boolean().withDefault(const Constant(false))();
 
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
@@ -504,6 +537,17 @@ extension ChatTransportExtension on Chat {
       return false;
     }
     return remoteJid.isEmailJid;
+  }
+
+  bool get isEmailBacked {
+    if (deltaChatId != null) {
+      return true;
+    }
+    final address = emailAddress?.trim();
+    if (address != null && address.isNotEmpty) {
+      return true;
+    }
+    return defaultTransport.isEmail;
   }
 
   MessageTransport get defaultTransport {

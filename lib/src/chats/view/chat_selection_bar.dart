@@ -112,19 +112,23 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
   }
 
   Future<void> _exportSelectedChats(BuildContext context) async {
-    final l10n = context.l10n;
     if (_exporting) return;
     if (widget.selectedChats.isEmpty) return;
+    final l10n = context.l10n;
+    final chatsCubit = context.read<ChatsCubit>();
+    final showToast = ShadToaster.maybeOf(context)?.show;
+    final String? fileLabel =
+        widget.selectedChats.length == 1 ? null : l10n.chatsExportFileLabel;
+    final confirmed = await _confirmChatExport();
+    if (!mounted || !confirmed) return;
     setState(() {
       _exporting = true;
     });
-    final showToast = ShadToaster.maybeOf(context)?.show;
     try {
       final result = await ChatHistoryExporter.exportChats(
         chats: widget.selectedChats,
-        loadHistory: context.read<ChatsCubit>().loadChatHistory,
-        fileLabel:
-            widget.selectedChats.length == 1 ? null : l10n.chatsExportFileLabel,
+        loadHistory: chatsCubit.loadChatHistory,
+        fileLabel: fileLabel,
       );
       final file = result.file;
       if (file == null) {
@@ -177,5 +181,18 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     );
     if (!mounted || confirmed != true) return;
     await context.read<ChatsCubit>().bulkDeleteSelectedChats();
+  }
+
+  Future<bool> _confirmChatExport() async {
+    final l10n = context.l10n;
+    final confirmed = await confirm(
+      context,
+      title: l10n.chatExportWarningTitle,
+      message: l10n.chatExportWarningMessage,
+      confirmLabel: l10n.commonContinue,
+      cancelLabel: l10n.commonCancel,
+      destructiveConfirm: false,
+    );
+    return confirmed == true;
   }
 }

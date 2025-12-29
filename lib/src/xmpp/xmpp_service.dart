@@ -6,7 +6,9 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/calendar/constants.dart';
+import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -15,6 +17,7 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
+import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
@@ -26,15 +29,20 @@ import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
 import 'package:axichat/src/common/network_safety.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -72,6 +80,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
 import 'package:uuid/uuid.dart';
+import 'package:xml/xml_events.dart';
 
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 
@@ -297,6 +306,12 @@ abstract interface class XmppBase {
 
   Stream<PubSubSupport> get pubSubSupportStream;
 
+  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings;
+
+  void updateAttachmentAutoDownloadSettings(
+    AttachmentAutoDownloadSettings settings,
+  );
+
   Future<PubSubSupport> refreshPubSubSupport({bool force = false});
 
   RegisteredStateKey get selfAvatarPathKey;
@@ -391,12 +406,12 @@ class XmppService extends XmppBase
         MucService,
         ChatsService,
         DraftSyncService,
+        BlockingService,
         MessageService,
         AvatarService,
         // OmemoService,
         RosterService,
         PresenceService,
-        BlockingService,
         SpamSyncService,
         EmailBlocklistSyncService {
   XmppService._(
@@ -410,6 +425,10 @@ class XmppService extends XmppBase
   static XmppService? _instance;
   static const bool _enableStreamManagement = true;
   static const String _capabilityHashBase = 'https://axichat.im/caps';
+  static const NotificationPayloadCodec _notificationPayloadCodec =
+      NotificationPayloadCodec();
+  static const int _notificationPayloadLookupStart = 0;
+  static const int _notificationPayloadLookupEnd = 0;
 
   factory XmppService({
     required FutureOr<XmppConnection> Function() buildConnection,
@@ -443,6 +462,8 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _databaseFactory;
   final NotificationService _notificationService;
   final Capability _capability;
+  AttachmentAutoDownloadSettings _attachmentAutoDownloadSettings =
+      const AttachmentAutoDownloadSettings();
 
   // Calendar sync message callback
   Future<bool> Function(CalendarSyncInbound)? _calendarSyncCallback;
@@ -479,6 +500,17 @@ class XmppService extends XmppBase
   @override
   Stream<PubSubSupport> get pubSubSupportStream =>
       _pubSubSupportController.stream;
+
+  @override
+  AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
+      _attachmentAutoDownloadSettings;
+
+  @override
+  void updateAttachmentAutoDownloadSettings(
+    AttachmentAutoDownloadSettings settings,
+  ) {
+    _attachmentAutoDownloadSettings = settings;
+  }
 
   @override
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
@@ -553,6 +585,22 @@ class XmppService extends XmppBase
 
   @override
   mox.JID? _myJid;
+
+  Future<String?> resolveNotificationPayload(String payload) async {
+    final trimmed = payload.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final db = await database;
+    final chats = await db.getChats(
+      start: _notificationPayloadLookupStart,
+      end: _notificationPayloadLookupEnd,
+    );
+    return _notificationPayloadCodec.resolveChatJid(
+      payload: trimmed,
+      chatJids: chats.map((chat) => chat.jid),
+    );
+  }
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -1043,14 +1091,26 @@ class XmppService extends XmppBase
         if (chat?.muted ?? false) {
           return;
         }
+        final previewSetting = chat?.notificationPreviewSetting ??
+            NotificationPreviewSetting.inherit;
+        final showPreview = previewSetting
+            .resolvePreview(_notificationService.notificationPreviewsEnabled);
+        final threadKey = _notificationPayloadCodec.encodeChatJid(
+              message.chatJid,
+            ) ??
+            message.chatJid.trim();
+        if (threadKey.isEmpty) {
+          return;
+        }
         await _notificationService.sendMessageNotification(
           title: chat?.title ?? message.senderJid,
           body: message.body,
           extraConditions: [
             message.senderJid != myJid,
           ],
-          payload: message.chatJid,
-          threadKey: message.chatJid,
+          payload: threadKey,
+          threadKey: threadKey,
+          showPreviewOverride: showPreview,
         );
       },
     );
@@ -1098,6 +1158,7 @@ class XmppService extends XmppBase
       smNegotiator.resource = storedResource;
     }
     final featureNegotiators = <mox.XmppFeatureNegotiatorBase>[
+      XmppTlsRequirementNegotiator(),
       mox.StartTlsNegotiator(),
       mox.CSINegotiator(),
       mox.RosterFeatureNegotiator(),
@@ -1749,6 +1810,18 @@ class XmppService extends XmppBase
     }
     await _reset();
     _xmppLogger.info('Logged out.');
+  }
+
+  Future<void> clearSessionTokens() async {
+    final sm = _connection.getManager<XmppStreamManagementManager>();
+    await sm?.resetState();
+    await sm?.clearPersistedState();
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        await ss.delete(key: fastTokenStorageKey);
+      },
+      awaitDatabase: true,
+    );
   }
 
   Future<void> setClientState([bool active = true]) async {
@@ -2452,6 +2525,52 @@ class XmppClientNegotiator extends mox.ClientToServerNegotiator {
   XmppClientNegotiator() : super();
 }
 
+class XmppTlsRequirementNegotiator extends mox.XmppFeatureNegotiatorBase {
+  XmppTlsRequirementNegotiator()
+      : super(
+          _tlsRequirementNegotiatorPriority,
+          _tlsRequirementSendStreamHeader,
+          _tlsRequirementNegotiatorXmlns,
+          _tlsRequirementNegotiatorId,
+        );
+
+  @override
+  bool matchesFeature(List<mox.XMLNode> features) =>
+      _tlsRequirementMatchesAllFeatures;
+
+  @override
+  Future<moxlib.Result<mox.NegotiatorState, mox.NegotiatorError>> negotiate(
+    mox.XMLNode nonza,
+  ) async {
+    if (attributes.getSocket().isSecure()) {
+      return const moxlib.Result(mox.NegotiatorState.done);
+    }
+    if (!_hasStartTlsFeature(nonza)) {
+      return moxlib.Result(_XmppTlsRequiredError());
+    }
+    return const moxlib.Result(mox.NegotiatorState.done);
+  }
+
+  bool _hasStartTlsFeature(mox.XMLNode nonza) {
+    if (nonza.tag != _streamFeaturesTag) {
+      return _tlsRequirementNonFeatureDefault;
+    }
+    return nonza.children.any(
+      (feature) => feature.attributes['xmlns'] == mox.startTlsXmlns,
+    );
+  }
+}
+
+class _XmppTlsRequiredError extends mox.NegotiatorError {
+  _XmppTlsRequiredError();
+
+  @override
+  bool isRecoverable() => _tlsRequirementErrorRecoverable;
+
+  @override
+  String toString() => _tlsRequirementErrorMessage;
+}
+
 class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
   XmppResourceNegotiator({required this.resource}) : super();
 
@@ -2507,6 +2626,139 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
   }
 }
 
+final class _ListConversionSink<T> implements Sink<List<T>> {
+  _ListConversionSink(this._onData);
+
+  final void Function(List<T>) _onData;
+
+  @override
+  void add(List<T> data) => _onData(data);
+
+  @override
+  void close() {}
+}
+
+final class _ChunkedConversionBuffer<S, T> {
+  _ChunkedConversionBuffer(Converter<S, List<T>> converter) {
+    _outputSink = _ListConversionSink<T>(_results.addAll);
+    _inputSink = converter.startChunkedConversion(_outputSink);
+  }
+
+  final List<T> _results = List<T>.empty(growable: true);
+  late Sink<List<T>> _outputSink;
+  late Sink<S> _inputSink;
+
+  void close() {
+    _inputSink.close();
+    _outputSink.close();
+  }
+
+  List<T> convert(S input) {
+    _results.clear();
+    _inputSink.add(input);
+    return _results;
+  }
+}
+
+enum _XmppStanzaGuardResult {
+  allowed,
+  oversize,
+  depthExceeded,
+  malformed,
+}
+
+final class _XmppStanzaSizeGuard {
+  _XmppStanzaSizeGuard({
+    required this.maxStanzaBytes,
+    required this.maxStanzaDepth,
+  });
+
+  final int maxStanzaBytes;
+  final int maxStanzaDepth;
+  var _inStream = false;
+  var _depth = 0;
+  var _currentStanzaBytes = 0;
+  _ChunkedConversionBuffer<String, XmlEvent> _eventBuffer =
+      _ChunkedConversionBuffer<String, XmlEvent>(XmlEventDecoder());
+
+  _XmppStanzaGuardResult evaluateChunk(String data) {
+    final chunkBytes = utf8ByteLength(data);
+    var stanzaTouched = _inStream && _depth > 0;
+    var endedTopLevel = false;
+    try {
+      final events = _eventBuffer.convert(data);
+      for (final event in events) {
+        if (event is XmlStartElementEvent) {
+          if (event.name == 'stream:stream') {
+            _inStream = true;
+            if (event.isSelfClosing) {
+              _resetCounters();
+            }
+            continue;
+          }
+          if (_inStream) {
+            _depth += 1;
+            stanzaTouched = true;
+            if (_depth > maxStanzaDepth) {
+              return _XmppStanzaGuardResult.depthExceeded;
+            }
+            if (event.isSelfClosing) {
+              _depth -= 1;
+              if (_depth == 0) {
+                endedTopLevel = true;
+              }
+            }
+          }
+          continue;
+        }
+        if (event is XmlEndElementEvent) {
+          if (event.name == 'stream:stream') {
+            _resetCounters();
+            continue;
+          }
+          if (_inStream && _depth > 0) {
+            _depth -= 1;
+            if (_depth == 0) {
+              endedTopLevel = true;
+            }
+          }
+        }
+      }
+    } on Exception {
+      return _XmppStanzaGuardResult.malformed;
+    }
+
+    if (stanzaTouched) {
+      _currentStanzaBytes += chunkBytes;
+      if (_currentStanzaBytes > maxStanzaBytes) {
+        return _XmppStanzaGuardResult.oversize;
+      }
+    }
+
+    if (_inStream && _depth == 0 && endedTopLevel) {
+      _currentStanzaBytes = 0;
+    }
+    return _XmppStanzaGuardResult.allowed;
+  }
+
+  void reset() {
+    _resetCounters();
+    try {
+      _eventBuffer.close();
+    } on Exception {
+      // ignore; stream parser may already be closed
+    }
+    _eventBuffer =
+        _ChunkedConversionBuffer<String, XmlEvent>(XmlEventDecoder());
+  }
+
+  void _resetCounters() {
+    _inStream = false;
+    _depth = 0;
+    _currentStanzaBytes = 0;
+  }
+}
+
 /// Stream management negotiator that tolerates missing managers and avoids null
 /// dereferences during feature matching.
 class XmppSocketWrapper implements mox.BaseSocketWrapper {
@@ -2515,16 +2767,39 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
   static final _log = Logger('XmppSocketWrapper');
   static const _socketClosedWithErrorLog = 'Socket closed with error.';
+  static const TlsProtocolVersion _minTlsProtocolVersion =
+      TlsProtocolVersion.tls1_2;
+  static const String _xmlDoctypeToken = '<!doctype';
+  static const String _xmlEntityToken = '<!entity';
+  static const int _xmlTokenCarryLength =
+      _xmlDoctypeToken.length > _xmlEntityToken.length
+          ? _xmlDoctypeToken.length - 1
+          : _xmlEntityToken.length - 1;
+  static const String _xmlForbiddenLog =
+      'Blocked XML containing DTD/entity declaration.';
+  static const String _xmlForbiddenError =
+      'XML DTD/entity declarations are not supported.';
+  static const String _stanzaOversizeError =
+      'Incoming stanza exceeds size limit.';
+  static const String _stanzaDepthError =
+      'Incoming stanza exceeds nesting depth limit.';
+  static const String _stanzaMalformedError =
+      'Incoming stanza rejected due to parse error.';
 
   final bool _logIncomingOutgoing;
   final StreamController<String> _dataStream = StreamController.broadcast();
   final StreamController<mox.XmppSocketEvent> _eventStream =
       StreamController.broadcast();
+  final _XmppStanzaSizeGuard _stanzaSizeGuard = _XmppStanzaSizeGuard(
+    maxStanzaBytes: maxXmppStanzaBytes,
+    maxStanzaDepth: maxXmppStanzaDepth,
+  );
 
   Socket? _socket;
   StreamSubscription<dynamic>? _socketSubscription;
   final Set<Socket> _expectedClosures = {};
   bool _secure = false;
+  String _xmlTokenCarry = '';
 
   @override
   bool isSecure() => _secure;
@@ -2605,6 +2880,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
       _log.severe('Failed to setup streams as _socket is null');
       return;
     }
+    _xmlTokenCarry = '';
+    _stanzaSizeGuard.reset();
 
     final StreamSubscription<dynamic>? priorSubscription = _socketSubscription;
     if (priorSubscription != null) {
@@ -2614,6 +2891,55 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     _socketSubscription = socket.listen(
       (List<int> event) {
         final data = utf8.decode(event);
+        if (_containsForbiddenXml(data)) {
+          _log.warning(_xmlForbiddenLog);
+          _eventStream.add(
+            mox.XmppSocketErrorEvent(
+              const FormatException(_xmlForbiddenError),
+            ),
+          );
+          _dropSocket(expectClosure: false);
+          return;
+        }
+        final guardResult = _stanzaSizeGuard.evaluateChunk(data);
+        if (guardResult != _XmppStanzaGuardResult.allowed) {
+          switch (guardResult) {
+            case _XmppStanzaGuardResult.oversize:
+              _log.warning(
+                'Blocked inbound stanza exceeding $maxXmppStanzaBytes bytes.',
+              );
+              _eventStream.add(
+                mox.XmppSocketErrorEvent(
+                  const FormatException(_stanzaOversizeError),
+                ),
+              );
+              break;
+            case _XmppStanzaGuardResult.depthExceeded:
+              _log.warning(
+                'Blocked inbound stanza exceeding $maxXmppStanzaDepth depth.',
+              );
+              _eventStream.add(
+                mox.XmppSocketErrorEvent(
+                  const FormatException(_stanzaDepthError),
+                ),
+              );
+              break;
+            case _XmppStanzaGuardResult.malformed:
+              _log.warning(
+                'Blocked inbound stanza due to parse error.',
+              );
+              _eventStream.add(
+                mox.XmppSocketErrorEvent(
+                  const FormatException(_stanzaMalformedError),
+                ),
+              );
+              break;
+            case _XmppStanzaGuardResult.allowed:
+              break;
+          }
+          _dropSocket(expectClosure: false);
+          return;
+        }
         if (_logIncomingOutgoing) {
           _log.finest('<== $data');
         }
@@ -2643,6 +2969,20 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
     });
   }
 
+  bool _containsForbiddenXml(String data) {
+    final combined = (_xmlTokenCarry + data).toLowerCase();
+    final hasForbidden = combined.contains(_xmlDoctypeToken) ||
+        combined.contains(_xmlEntityToken);
+    if (combined.length <= _xmlTokenCarryLength) {
+      _xmlTokenCarry = combined;
+    } else {
+      _xmlTokenCarry = combined.substring(
+        combined.length - _xmlTokenCarryLength,
+      );
+    }
+    return hasForbidden;
+  }
+
   @override
   Future<bool> secure(String domain) async {
     if (_secure) {
@@ -2658,9 +2998,13 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper {
 
     try {
       _expectedClosures.add(socket);
+      final context = SecurityContext(withTrustedRoots: true)
+        ..minimumTlsProtocolVersion = _minTlsProtocolVersion
+        ..allowLegacyUnsafeRenegotiation = false;
       _socket = await SecureSocket.secure(
         socket,
         host: domain,
+        context: context,
         supportedProtocols: const [mox.xmppClientALPNId],
         onBadCertificate: (cert) => onBadCertificate(cert, domain),
       );
@@ -2873,6 +3217,14 @@ class SaslScramNegotiator extends mox.SaslScramNegotiator {
   }) : super(10, '', '', mox.ScramHashType.sha512);
 
   final bool preHashed;
+
+  @override
+  bool matchesFeature(List<mox.XMLNode> features) {
+    if (!super.matchesFeature(features)) {
+      return false;
+    }
+    return attributes.getSocket().isSecure();
+  }
 
   String? get saltedPassword =>
       _saltedPassword != null ? base64Encode(_saltedPassword!) : null;

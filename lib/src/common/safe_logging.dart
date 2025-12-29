@@ -1,3 +1,5 @@
+import 'package:logging/logging.dart';
+
 class SafeLogging {
   static const String redactedAccount = '<account>';
   static const String redactedPath = '<path>';
@@ -223,5 +225,36 @@ class SafeLogging {
       return normalized;
     }
     return null;
+  }
+}
+
+extension SafeLogger on Logger {
+  void safeFine(String message, [Object? error, StackTrace? stackTrace]) {
+    _safeLog(Level.FINE, message, error, stackTrace);
+  }
+
+  void safeWarning(String message, [Object? error, StackTrace? stackTrace]) {
+    _safeLog(Level.WARNING, message, error, stackTrace);
+  }
+
+  void _safeLog(
+    Level level,
+    String message,
+    Object? error,
+    StackTrace? stackTrace,
+  ) {
+    final safeMessage = SafeLogging.sanitizeMessage(message);
+    final safeError = SafeLogging.sanitizeError(error);
+    final safeStackTrace = stackTrace == null
+        ? null
+        : StackTrace.fromString(
+            SafeLogging.sanitizeStackTrace(stackTrace),
+          );
+    log(
+      level,
+      safeMessage,
+      safeError.isEmpty ? null : safeError,
+      safeStackTrace,
+    );
   }
 }

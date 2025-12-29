@@ -255,6 +255,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String chatOpenLinkWarningMessage(Object url, Object host) {
+    return '你将要打开：\n$url\n\n该链接包含异常或不可见字符。请仔细核对地址（主机：$host）。';
+  }
+
+  @override
   String get chatOpenLinkConfirm => '打开链接';
 
   @override
@@ -407,6 +412,30 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatActionAddToCalendar => '添加到日历';
+
+  @override
+  String get chatCalendarTaskCopyActionLabel => '复制到日历';
+
+  @override
+  String get chatCalendarTaskImportConfirmTitle => '添加到日历？';
+
+  @override
+  String get chatCalendarTaskImportConfirmMessage => '此任务来自聊天。添加到你的日历以便管理或编辑。';
+
+  @override
+  String get chatCalendarTaskImportConfirmLabel => '添加到日历';
+
+  @override
+  String get chatCalendarTaskImportCancelLabel => '暂不';
+
+  @override
+  String get chatCalendarTaskCopyUnavailableMessage => '日历不可用。';
+
+  @override
+  String get chatCalendarTaskCopyAlreadyAddedMessage => '任务已添加。';
+
+  @override
+  String get chatCalendarTaskCopySuccessMessage => '任务已复制。';
 
   @override
   String get chatActionDetails => '详情';
@@ -585,6 +614,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatForwardDialogTitle => '转发到...';
 
   @override
+  String get chatForwardEmailWarningTitle => 'Forward email?';
+
+  @override
+  String get chatForwardEmailWarningMessage =>
+      'Forwarding email can include original headers and external image links. Choose how to send.';
+
+  @override
+  String get chatForwardEmailOptionSafe => 'Forward as new message';
+
+  @override
+  String get chatForwardEmailOptionOriginal => 'Forward original';
+
+  @override
   String get chatComposerAttachmentWarning => '大附件会分别发送给每个收件人，可能需要更长时间送达。';
 
   @override
@@ -620,6 +662,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatAttachmentTooltip => '附件';
+
+  @override
+  String get chatPinnedMessagesTooltip => 'Pinned messages';
+
+  @override
+  String get chatPinnedMessagesTitle => 'Pinned messages';
+
+  @override
+  String get chatPinMessage => 'Pin message';
+
+  @override
+  String get chatUnpinMessage => 'Unpin message';
+
+  @override
+  String get chatPinnedEmptyState => 'No pinned messages yet.';
+
+  @override
+  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
 
   @override
   String get chatSendMessageTooltip => '发送消息';
@@ -1678,6 +1738,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authUnregisterTitle => '注销';
 
   @override
+  String get authUnregisterConfirmTitle => 'Delete account?';
+
+  @override
+  String get authUnregisterConfirmMessage =>
+      'This will permanently delete your account and local data. This cannot be undone.';
+
+  @override
+  String get authUnregisterConfirmAction => 'Delete account';
+
+  @override
   String get authUnregisterProgressLabel => '正在等待删除账户';
 
   @override
@@ -1752,6 +1822,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentDownload => '下载附件';
 
   @override
+  String get chatAttachmentExportTitle => '保存附件？';
+
+  @override
+  String get chatAttachmentExportMessage =>
+      '这会将附件复制到共享存储。导出内容未加密，可能会被其他应用读取。继续？';
+
+  @override
+  String get chatAttachmentExportConfirm => '保存';
+
+  @override
+  String get chatAttachmentExportCancel => '取消';
+
+  @override
+  String get chatMediaMetadataWarningTitle => '媒体可能包含元数据';
+
+  @override
+  String get chatMediaMetadataWarningMessage => '照片和视频可能包含位置和设备信息。继续？';
+
+  @override
+  String get chatNotificationPreviewOptionInherit => '使用应用设置';
+
+  @override
+  String get chatNotificationPreviewOptionShow => '始终显示预览';
+
+  @override
+  String get chatNotificationPreviewOptionHide => '始终隐藏预览';
+
+  @override
   String get chatAttachmentUnavailableDevice => '此设备上已无法获取该附件';
 
   @override
@@ -1761,6 +1859,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String chatAttachmentOpenFailed(Object target) {
     return '无法打开 $target';
   }
+
+  @override
+  String get chatAttachmentTypeMismatchTitle => 'Attachment type mismatch';
+
+  @override
+  String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
+    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
+  }
+
+  @override
+  String get chatAttachmentTypeMismatchConfirm => 'Open anyway';
+
+  @override
+  String get chatAttachmentHighRiskTitle => 'Potentially unsafe file';
+
+  @override
+  String get chatAttachmentHighRiskMessage =>
+      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';
@@ -2101,6 +2217,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatsExportFailure => '无法导出聊天';
+
+  @override
+  String get chatExportWarningTitle => '导出聊天记录？';
+
+  @override
+  String get chatExportWarningMessage => '聊天导出未加密，可能会被其他应用或云服务读取。继续？';
 
   @override
   String get chatsArchivedRestored => '聊天已恢复';
@@ -2889,6 +3011,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAutoLoadEmailImagesDescription => '可能会向发件人泄露您的IP地址';
 
   @override
+  String get settingsAutoDownloadImages => 'Auto-download images';
+
+  @override
+  String get settingsAutoDownloadImagesDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadVideos => 'Auto-download videos';
+
+  @override
+  String get settingsAutoDownloadVideosDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+
+  @override
+  String get settingsAutoDownloadDocumentsDescription =>
+      'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadArchives => 'Auto-download archives';
+
+  @override
+  String get settingsAutoDownloadArchivesDescription =>
+      'Only for trusted chats.';
+
+  @override
   String get chatChooseTextToAdd => '选择要添加的文本';
 }
 
@@ -3143,6 +3291,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
+  String chatOpenLinkWarningMessage(Object url, Object host) {
+    return '你將要開啟：\n$url\n\n該連結包含異常或不可見字元。請仔細核對地址（主機：$host）。';
+  }
+
+  @override
   String get chatOpenLinkConfirm => '開啟連結';
 
   @override
@@ -3295,6 +3448,30 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatActionAddToCalendar => '加入行事曆';
+
+  @override
+  String get chatCalendarTaskCopyActionLabel => '複製到行事曆';
+
+  @override
+  String get chatCalendarTaskImportConfirmTitle => '加入行事曆？';
+
+  @override
+  String get chatCalendarTaskImportConfirmMessage => '此任務來自聊天。加入你的行事曆以便管理或編輯。';
+
+  @override
+  String get chatCalendarTaskImportConfirmLabel => '加入行事曆';
+
+  @override
+  String get chatCalendarTaskImportCancelLabel => '暫不';
+
+  @override
+  String get chatCalendarTaskCopyUnavailableMessage => '行事曆無法使用。';
+
+  @override
+  String get chatCalendarTaskCopyAlreadyAddedMessage => '任務已加入。';
+
+  @override
+  String get chatCalendarTaskCopySuccessMessage => '任務已複製。';
 
   @override
   String get chatActionDetails => '詳細資料';
@@ -3473,6 +3650,19 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatForwardDialogTitle => '轉寄到...';
 
   @override
+  String get chatForwardEmailWarningTitle => 'Forward email?';
+
+  @override
+  String get chatForwardEmailWarningMessage =>
+      'Forwarding email can include original headers and external image links. Choose how to send.';
+
+  @override
+  String get chatForwardEmailOptionSafe => 'Forward as new message';
+
+  @override
+  String get chatForwardEmailOptionOriginal => 'Forward original';
+
+  @override
   String get chatComposerAttachmentWarning => '大型附件會分別傳送給每位收件者，可能需要更長時間。';
 
   @override
@@ -3508,6 +3698,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatAttachmentTooltip => '附件';
+
+  @override
+  String get chatPinnedMessagesTooltip => 'Pinned messages';
+
+  @override
+  String get chatPinnedMessagesTitle => 'Pinned messages';
+
+  @override
+  String get chatPinMessage => 'Pin message';
+
+  @override
+  String get chatUnpinMessage => 'Unpin message';
+
+  @override
+  String get chatPinnedEmptyState => 'No pinned messages yet.';
+
+  @override
+  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
 
   @override
   String get chatSendMessageTooltip => '傳送訊息';
@@ -4566,6 +4774,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get authUnregisterTitle => '註銷';
 
   @override
+  String get authUnregisterConfirmTitle => 'Delete account?';
+
+  @override
+  String get authUnregisterConfirmMessage =>
+      'This will permanently delete your account and local data. This cannot be undone.';
+
+  @override
+  String get authUnregisterConfirmAction => 'Delete account';
+
+  @override
   String get authUnregisterProgressLabel => '正在等待刪除帳戶';
 
   @override
@@ -4640,6 +4858,34 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatAttachmentDownload => '下載附件';
 
   @override
+  String get chatAttachmentExportTitle => '儲存附件？';
+
+  @override
+  String get chatAttachmentExportMessage =>
+      '這會把附件複製到共享儲存空間。匯出內容未加密，可能會被其他應用程式讀取。繼續？';
+
+  @override
+  String get chatAttachmentExportConfirm => '儲存';
+
+  @override
+  String get chatAttachmentExportCancel => '取消';
+
+  @override
+  String get chatMediaMetadataWarningTitle => '媒體可能包含中繼資料';
+
+  @override
+  String get chatMediaMetadataWarningMessage => '相片和影片可能包含位置及裝置資訊。繼續？';
+
+  @override
+  String get chatNotificationPreviewOptionInherit => '使用應用程式設定';
+
+  @override
+  String get chatNotificationPreviewOptionShow => '一律顯示預覽';
+
+  @override
+  String get chatNotificationPreviewOptionHide => '一律隱藏預覽';
+
+  @override
   String get chatAttachmentUnavailableDevice => '此裝置上已無法取得該附件';
 
   @override
@@ -4649,6 +4895,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String chatAttachmentOpenFailed(Object target) {
     return '無法開啟 $target';
   }
+
+  @override
+  String get chatAttachmentTypeMismatchTitle => 'Attachment type mismatch';
+
+  @override
+  String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
+    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
+  }
+
+  @override
+  String get chatAttachmentTypeMismatchConfirm => 'Open anyway';
+
+  @override
+  String get chatAttachmentHighRiskTitle => 'Potentially unsafe file';
+
+  @override
+  String get chatAttachmentHighRiskMessage =>
+      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';
@@ -4989,6 +5253,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatsExportFailure => '無法匯出聊天';
+
+  @override
+  String get chatExportWarningTitle => '匯出聊天記錄？';
+
+  @override
+  String get chatExportWarningMessage => '聊天匯出未加密，可能會被其他應用程式或雲端服務讀取。繼續？';
 
   @override
   String get chatsArchivedRestored => '聊天已還原';
@@ -5775,6 +6045,32 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsAutoLoadEmailImagesDescription => '可能會向寄件人洩露您的IP地址';
+
+  @override
+  String get settingsAutoDownloadImages => 'Auto-download images';
+
+  @override
+  String get settingsAutoDownloadImagesDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadVideos => 'Auto-download videos';
+
+  @override
+  String get settingsAutoDownloadVideosDescription => 'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+
+  @override
+  String get settingsAutoDownloadDocumentsDescription =>
+      'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadArchives => 'Auto-download archives';
+
+  @override
+  String get settingsAutoDownloadArchivesDescription =>
+      'Only for trusted chats.';
 
   @override
   String get chatChooseTextToAdd => '選擇要新增的文字';

@@ -2082,11 +2082,15 @@ const int SIG_ATOMIC_MIN = -2147483648;
 
 const int SIG_ATOMIC_MAX = 2147483647;
 
+const int DC_MSG_UNDEFINED = 0;
+
 const int DC_MSG_TEXT = 10;
 
 const int DC_MSG_IMAGE = 20;
 
 const int DC_MSG_GIF = 21;
+
+const int DC_MSG_STICKER = 23;
 
 const int DC_MSG_AUDIO = 40;
 
@@ -2096,29 +2100,239 @@ const int DC_MSG_VIDEO = 50;
 
 const int DC_MSG_FILE = 60;
 
+const int DC_MSG_CALL = 71;
+
+const int DC_MSG_WEBXDC = 80;
+
+const int DC_MSG_VCARD = 90;
+
+const int DC_INFO_UNKNOWN = 0;
+
+const int DC_INFO_GROUP_NAME_CHANGED = 2;
+
+const int DC_INFO_GROUP_IMAGE_CHANGED = 3;
+
+const int DC_INFO_MEMBER_ADDED_TO_GROUP = 4;
+
+const int DC_INFO_MEMBER_REMOVED_FROM_GROUP = 5;
+
+const int DC_INFO_AUTOCRYPT_SETUP_MESSAGE = 6;
+
+const int DC_INFO_SECURE_JOIN_MESSAGE = 7;
+
+const int DC_INFO_LOCATIONSTREAMING_ENABLED = 8;
+
+const int DC_INFO_LOCATION_ONLY = 9;
+
+const int DC_INFO_EPHEMERAL_TIMER_CHANGED = 10;
+
+const int DC_INFO_PROTECTION_ENABLED = 11;
+
+const int DC_INFO_INVALID_UNENCRYPTED_MAIL = 13;
+
+const int DC_INFO_WEBXDC_INFO_MESSAGE = 32;
+
+const int DC_INFO_CHAT_E2EE = 50;
+
+const int DC_STATE_UNDEFINED = 0;
+
+const int DC_STATE_IN_FRESH = 10;
+
+const int DC_STATE_IN_NOTICED = 13;
+
+const int DC_STATE_IN_SEEN = 16;
+
+const int DC_STATE_OUT_PREPARING = 18;
+
+const int DC_STATE_OUT_DRAFT = 19;
+
+const int DC_STATE_OUT_PENDING = 20;
+
+const int DC_STATE_OUT_FAILED = 24;
+
+const int DC_STATE_OUT_DELIVERED = 26;
+
+const int DC_STATE_OUT_MDN_RCVD = 28;
+
+const int DC_MSG_NO_ID = 0;
+
+const int DC_MSG_ID_MARKER1 = 1;
+
+const int DC_MSG_ID_DAYMARKER = 9;
+
+const int DC_VIDEOCHATTYPE_UNKNOWN = 0;
+
+const int DC_VIDEOCHATTYPE_BASICWEBRTC = 1;
+
 const int DC_CHAT_TYPE_UNDEFINED = 0;
 
 const int DC_CHAT_TYPE_SINGLE = 100;
 
-const int DC_CHAT_TYPE_GROUP = 200;
+const int DC_CHAT_TYPE_GROUP = 120;
 
-const int DC_CHAT_TYPE_VERIFIED_GROUP = 300;
+const int DC_CHAT_TYPE_MAILINGLIST = 140;
 
-const int DC_CHAT_TYPE_BROADCAST = 400;
+const int DC_CHAT_TYPE_OUT_BROADCAST = 160;
+
+const int DC_CHAT_TYPE_IN_BROADCAST = 165;
+
+const int DC_CHAT_NO_CHAT = 0;
+
+const int DC_CHAT_ID_ARCHIVED_LINK = 6;
+
+const int DC_CHAT_ID_ALLDONE_HINT = 7;
+
+const int DC_CHAT_ID_LAST_SPECIAL = 9;
+
+const int DC_CONTACT_ID_SELF = 1;
+
+const int DC_CONTACT_ID_INFO = 2;
+
+const int DC_CONTACT_ID_DEVICE = 5;
+
+const int DC_CONTACT_ID_LAST_SPECIAL = 9;
+
+const int DC_EVENT_INFO = 100;
+
+const int DC_EVENT_WARNING = 300;
 
 const int DC_EVENT_ERROR = 400;
 
 const int DC_EVENT_ERROR_SELF_NOT_IN_GROUP = 410;
 
-const int DC_EVENT_CONFIGURE_PROGRESS = 2041;
+const int DC_EVENT_MSGS_CHANGED = 2000;
+
+const int DC_EVENT_REACTIONS_CHANGED = 2001;
+
+const int DC_EVENT_INCOMING_REACTION = 2002;
+
+const int DC_EVENT_INCOMING_WEBXDC_NOTIFY = 2003;
+
+const int DC_EVENT_MSGS_NOTICED = 2008;
+
+const int DC_EVENT_INCOMING_MSG = 2005;
 
 const int DC_EVENT_INCOMING_MSG_BUNCH = 2006;
 
-const int DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE = 2200;
+const int DC_EVENT_MSG_DELIVERED = 2010;
+
+const int DC_EVENT_MSG_FAILED = 2012;
+
+const int DC_EVENT_MSG_READ = 2015;
+
+const int DC_EVENT_CHAT_MODIFIED = 2020;
+
+const int DC_EVENT_CHAT_EPHEMERAL_TIMER_MODIFIED = 2021;
+
+const int DC_EVENT_CHAT_DELETED = 2023;
+
+const int DC_EVENT_CONTACTS_CHANGED = 2030;
+
+const int DC_EVENT_LOCATION_CHANGED = 2035;
+
+const int DC_EVENT_CONFIGURE_PROGRESS = 2041;
+
+const int DC_EVENT_IMEX_PROGRESS = 2051;
+
+const int DC_EVENT_IMEX_FILE_WRITTEN = 2052;
+
+const int DC_EVENT_SECUREJOIN_INVITER_PROGRESS = 2060;
+
+const int DC_EVENT_SECUREJOIN_JOINER_PROGRESS = 2061;
 
 const int DC_EVENT_CONNECTIVITY_CHANGED = 2100;
 
+const int DC_EVENT_SELFAVATAR_CHANGED = 2110;
+
+const int DC_EVENT_WEBXDC_STATUS_UPDATE = 2120;
+
+const int DC_EVENT_WEBXDC_INSTANCE_DELETED = 2121;
+
+const int DC_EVENT_WEBXDC_REALTIME_DATA = 2150;
+
+const int DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE = 2200;
+
 const int DC_EVENT_CHANNEL_OVERFLOW = 2400;
+
+const int DC_EVENT_INCOMING_CALL = 2550;
+
+const int DC_EVENT_INCOMING_CALL_ACCEPTED = 2560;
+
+const int DC_EVENT_OUTGOING_CALL_ACCEPTED = 2570;
+
+const int DC_EVENT_CALL_ENDED = 2580;
+
+const int DC_IMEX_EXPORT_SELF_KEYS = 1;
+
+const int DC_IMEX_IMPORT_SELF_KEYS = 2;
+
+const int DC_IMEX_EXPORT_BACKUP = 11;
+
+const int DC_IMEX_IMPORT_BACKUP = 12;
+
+const int DC_GCM_ADDDAYMARKER = 1;
+
+const int DC_QR_ASK_VERIFYCONTACT = 200;
+
+const int DC_QR_ASK_VERIFYGROUP = 202;
+
+const int DC_QR_ASK_JOIN_BROADCAST = 204;
+
+const int DC_QR_FPR_OK = 210;
+
+const int DC_QR_FPR_MISMATCH = 220;
+
+const int DC_QR_FPR_WITHOUT_ADDR = 230;
+
+const int DC_QR_ACCOUNT = 250;
+
+const int DC_QR_BACKUP2 = 252;
+
+const int DC_QR_BACKUP_TOO_NEW = 255;
+
+const int DC_QR_WEBRTC = 260;
+
+const int DC_QR_PROXY = 271;
+
+const int DC_QR_ADDR = 320;
+
+const int DC_QR_TEXT = 330;
+
+const int DC_QR_URL = 332;
+
+const int DC_QR_ERROR = 400;
+
+const int DC_QR_WITHDRAW_VERIFYCONTACT = 500;
+
+const int DC_QR_WITHDRAW_VERIFYGROUP = 502;
+
+const int DC_QR_WITHDRAW_JOINBROADCAST = 504;
+
+const int DC_QR_REVIVE_VERIFYCONTACT = 510;
+
+const int DC_QR_REVIVE_VERIFYGROUP = 512;
+
+const int DC_QR_REVIVE_JOINBROADCAST = 514;
+
+const int DC_QR_LOGIN = 520;
+
+const int DC_SOCKET_AUTO = 0;
+
+const int DC_SOCKET_SSL = 1;
+
+const int DC_SOCKET_STARTTLS = 2;
+
+const int DC_SOCKET_PLAIN = 3;
+
+const int DC_SHOW_EMAILS_OFF = 0;
+
+const int DC_SHOW_EMAILS_ACCEPTED_CONTACTS = 1;
+
+const int DC_SHOW_EMAILS_ALL = 2;
+
+const int DC_MEDIA_QUALITY_BALANCED = 0;
+
+const int DC_MEDIA_QUALITY_WORSE = 1;
 
 const int DC_CONNECTIVITY_NOT_CONNECTED = 1000;
 
@@ -2144,14 +2358,16 @@ const int DC_CHAT_VISIBILITY_ARCHIVED = 1;
 
 const int DC_CHAT_VISIBILITY_PINNED = 2;
 
-const int DC_GCL_ADD_SELF = 1;
+const int DC_GCL_VERIFIED_ONLY = 1;
 
-const int DC_GCL_VERIFIED_ONLY = 2;
+const int DC_GCL_ADD_SELF = 2;
 
-const int DC_GCL_ADD_RECENT = 4;
+const int DC_GCL_ADDRESS = 4;
 
-const int DC_EVENT_MSGS_CHANGED = 2000;
+const int DC_GCL_ARCHIVED_ONLY = 1;
 
-const int DC_EVENT_CHAT_MODIFIED = 2020;
+const int DC_GCL_NO_SPECIALS = 2;
 
-const int DC_EVENT_MSGS_NOTICED = 2004;
+const int DC_GCL_ADD_ALLDONE_HINT = 4;
+
+const int DC_GCL_FOR_FORWARDING = 8;

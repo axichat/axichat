@@ -5,6 +5,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -19,19 +20,70 @@ import 'chat_transport.dart';
 
 const _selfDomain = 'user.delta.chat';
 const _deltaConfigClearedValue = '';
+const _deltaConfigKeyAddress = 'addr';
+const _deltaConfigKeyMailPassword = 'mail_pw';
+const _deltaConfigKeySendPassword = 'send_pw';
+const _deltaConfigKeyDisplayName = 'displayname';
+const _deltaConfigKeyMailServer = 'mail_server';
+const _deltaConfigKeyMailPort = 'mail_port';
+const _deltaConfigKeyMailSecurity = 'mail_security';
+const _deltaConfigKeyMailUser = 'mail_user';
+const _deltaConfigKeySendServer = 'send_server';
+const _deltaConfigKeySendPort = 'send_port';
+const _deltaConfigKeySendSecurity = 'send_security';
+const _deltaConfigKeySendUser = 'send_user';
+const String _deltaSecurityModeAutomatic = 'automatic';
+const String _deltaSecurityModeAuto = 'auto';
+const String _deltaSecurityModeSsl = 'ssl';
+const String _deltaSecurityModeStartTls = 'starttls';
+const String _deltaSecurityModePlain = 'plain';
+const String _deltaSecurityModeAutoNumeric = '0';
+const String _deltaSecurityModeSslNumeric = '1';
+const String _deltaSecurityModeStartTlsNumeric = '2';
+const String _deltaSecurityModePlainNumeric = '3';
+const int _imapImplicitTlsPort = 993;
+const int _smtpImplicitTlsPort = 465;
+const String _mailTransportLabel = 'mail';
+const String _sendTransportLabel = 'send';
+const String _emailSecurityModePlainError =
+    'Cleartext email security modes are not allowed.';
+const String _emailSecurityModeUnknownPrefix =
+    'Unsupported email security mode for ';
+const String _emailSecurityModeUnknownSuffix = ' connections.';
+
+enum _DeltaSecurityModeResolution {
+  auto,
+  ssl,
+  startTls,
+  plain,
+  unknown,
+}
+
 const _deltaCredentialConfigKeys = <String>[
-  'addr',
-  'mail_pw',
-  'send_pw',
-  'displayname',
-  'mail_server',
-  'mail_port',
-  'mail_security',
-  'mail_user',
-  'send_server',
-  'send_port',
-  'send_security',
-  'send_user',
+  _deltaConfigKeyAddress,
+  _deltaConfigKeyMailPassword,
+  _deltaConfigKeySendPassword,
+  _deltaConfigKeyDisplayName,
+  _deltaConfigKeyMailServer,
+  _deltaConfigKeyMailPort,
+  _deltaConfigKeyMailSecurity,
+  _deltaConfigKeyMailUser,
+  _deltaConfigKeySendServer,
+  _deltaConfigKeySendPort,
+  _deltaConfigKeySendSecurity,
+  _deltaConfigKeySendUser,
+];
+
+const _deltaOverrideConfigKeys = <String>[
+  _deltaConfigKeySendPassword,
+  _deltaConfigKeyMailServer,
+  _deltaConfigKeyMailPort,
+  _deltaConfigKeyMailSecurity,
+  _deltaConfigKeyMailUser,
+  _deltaConfigKeySendServer,
+  _deltaConfigKeySendPort,
+  _deltaConfigKeySendSecurity,
+  _deltaConfigKeySendUser,
 ];
 
 class EmailDeltaTransport implements ChatTransport {
@@ -143,6 +195,12 @@ class EmailDeltaTransport implements ChatTransport {
     await _ensureContextReady();
     _accountAddress = address;
     final context = _context!;
+    final overrideKeys = additional.keys.toSet();
+    for (final key in _deltaOverrideConfigKeys) {
+      if (!overrideKeys.contains(key)) {
+        await context.setConfig(key: key, value: _deltaConfigClearedValue);
+      }
+    }
     final completer = Completer<void>();
     late final StreamSubscription<DeltaCoreEvent> subscription;
     subscription = context.events().listen((event) {
@@ -186,6 +244,7 @@ class EmailDeltaTransport implements ChatTransport {
           onTimeout: () {
         throw const DeltaSafeException('Email configuration timed out');
       });
+      await _enforceTransportSecurity();
     } finally {
       await subscription.cancel();
     }
@@ -194,6 +253,7 @@ class EmailDeltaTransport implements ChatTransport {
   @override
   Future<void> start() async {
     await _ensureContextReady();
+    await _enforceTransportSecurity();
     await _eventConsumer?.purgeDeltaStockMessages();
     if (_accounts != null) {
       await _accounts!.startIo();
@@ -202,14 +262,133 @@ class EmailDeltaTransport implements ChatTransport {
     }
     _eventSubscription ??= _context!.events().listen((event) async {
       try {
+        final notifyBeforeHandle = event.type == DeltaEventCode.chatDeleted;
+        if (notifyBeforeHandle) {
+          for (final listener in List.of(_eventListeners)) {
+            listener(event);
+          }
+        }
         await _eventConsumer?.handle(event);
-        for (final listener in List.of(_eventListeners)) {
-          listener(event);
+        if (!notifyBeforeHandle) {
+          for (final listener in List.of(_eventListeners)) {
+            listener(event);
+          }
         }
       } on Exception catch (error, stackTrace) {
         _log.severe('Failed to handle Delta event', error, stackTrace);
       }
     });
+  }
+
+  Future<void> _enforceTransportSecurity() async {
+    final context = _context;
+    if (context == null) {
+      return;
+    }
+    await _enforceSecurityMode(
+      context: context,
+      securityKey: _deltaConfigKeyMailSecurity,
+      portKey: _deltaConfigKeyMailPort,
+      implicitTlsPort: _imapImplicitTlsPort,
+      transportLabel: _mailTransportLabel,
+    );
+    await _enforceSecurityMode(
+      context: context,
+      securityKey: _deltaConfigKeySendSecurity,
+      portKey: _deltaConfigKeySendPort,
+      implicitTlsPort: _smtpImplicitTlsPort,
+      transportLabel: _sendTransportLabel,
+    );
+  }
+
+  Future<void> _enforceSecurityMode({
+    required DeltaContextHandle context,
+    required String securityKey,
+    required String portKey,
+    required int implicitTlsPort,
+    required String transportLabel,
+  }) async {
+    final rawMode = await context.getConfig(securityKey);
+    final normalizedMode = _normalizeSecurityMode(rawMode);
+    if (normalizedMode.isEmpty) {
+      final fallbackMode = await _fallbackSecurityMode(
+        context: context,
+        portKey: portKey,
+        implicitTlsPort: implicitTlsPort,
+      );
+      await context.setConfig(key: securityKey, value: fallbackMode);
+      return;
+    }
+    final resolvedMode = _resolveSecurityMode(normalizedMode);
+    switch (resolvedMode) {
+      case _DeltaSecurityModeResolution.auto:
+        final fallbackMode = await _fallbackSecurityMode(
+          context: context,
+          portKey: portKey,
+          implicitTlsPort: implicitTlsPort,
+        );
+        await context.setConfig(key: securityKey, value: fallbackMode);
+        return;
+      case _DeltaSecurityModeResolution.ssl:
+      case _DeltaSecurityModeResolution.startTls:
+        final mappedMode = resolvedMode == _DeltaSecurityModeResolution.ssl
+            ? _deltaSecurityModeSsl
+            : _deltaSecurityModeStartTls;
+        if (normalizedMode != mappedMode) {
+          await context.setConfig(key: securityKey, value: mappedMode);
+        }
+        return;
+      case _DeltaSecurityModeResolution.plain:
+        throw const DeltaSafeException(_emailSecurityModePlainError);
+      case _DeltaSecurityModeResolution.unknown:
+        throw DeltaSafeException(
+          '$_emailSecurityModeUnknownPrefix$transportLabel'
+          '$_emailSecurityModeUnknownSuffix',
+        );
+    }
+  }
+
+  Future<String> _fallbackSecurityMode({
+    required DeltaContextHandle context,
+    required String portKey,
+    required int implicitTlsPort,
+  }) async {
+    final rawPort = await context.getConfig(portKey);
+    final port = _parsePort(rawPort);
+    if (port == implicitTlsPort) {
+      return _deltaSecurityModeSsl;
+    }
+    return _deltaSecurityModeStartTls;
+  }
+
+  String _normalizeSecurityMode(String? value) {
+    final trimmed = value?.trim().toLowerCase();
+    return trimmed ?? '';
+  }
+
+  _DeltaSecurityModeResolution _resolveSecurityMode(String value) {
+    switch (value) {
+      case _deltaSecurityModeAutomatic:
+      case _deltaSecurityModeAuto:
+      case _deltaSecurityModeAutoNumeric:
+        return _DeltaSecurityModeResolution.auto;
+      case _deltaSecurityModeSsl:
+      case _deltaSecurityModeSslNumeric:
+        return _DeltaSecurityModeResolution.ssl;
+      case _deltaSecurityModeStartTls:
+      case _deltaSecurityModeStartTlsNumeric:
+        return _DeltaSecurityModeResolution.startTls;
+      case _deltaSecurityModePlain:
+      case _deltaSecurityModePlainNumeric:
+        return _DeltaSecurityModeResolution.plain;
+      default:
+        return _DeltaSecurityModeResolution.unknown;
+    }
+  }
+
+  int? _parsePort(String? value) {
+    if (value == null) return null;
+    return int.tryParse(value.trim());
   }
 
   @override
@@ -572,6 +751,7 @@ class EmailDeltaTransport implements ChatTransport {
     _eventSubscription = null;
     _eventConsumer = null;
     _contextOpened = false;
+    await _context?.close();
     _context = null;
     if (_accounts != null) {
       await _accounts!.dispose();
@@ -591,10 +771,11 @@ class EmailDeltaTransport implements ChatTransport {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
+    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
     final msgId = await _context!.sendText(
       chatId: chatId,
       message: body,
-      subject: subject,
+      subject: sanitizedSubject,
       html: htmlBody,
     );
     final deltaMessage = await _context!.getMessage(msgId);
@@ -622,14 +803,20 @@ class EmailDeltaTransport implements ChatTransport {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
+    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
+    final sanitizedFileName = sanitizeEmailAttachmentFilename(
+      attachment.fileName,
+      fallbackPath: attachment.path,
+    );
+    final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
     final msgId = await _context!.sendFileMessage(
       chatId: chatId,
       viewType: _viewTypeFor(attachment),
       filePath: attachment.path,
-      fileName: attachment.fileName,
-      mimeType: attachment.mimeType,
+      fileName: sanitizedFileName,
+      mimeType: sanitizedMimeType,
       text: attachment.caption,
-      subject: subject,
+      subject: sanitizedSubject,
       html: htmlCaption,
     );
     final deltaMessage = await _context!.getMessage(msgId);
@@ -826,7 +1013,9 @@ class EmailDeltaTransport implements ChatTransport {
   ChatType _mapChatType(int? type) {
     switch (type) {
       case DeltaChatType.group:
-      case DeltaChatType.verifiedGroup:
+      case DeltaChatType.mailingList:
+      case DeltaChatType.outBroadcast:
+      case DeltaChatType.inBroadcast:
         return ChatType.groupChat;
       default:
         return ChatType.chat;
@@ -837,11 +1026,16 @@ class EmailDeltaTransport implements ChatTransport {
     EmailAttachment attachment,
     int msgId,
   ) {
+    final sanitizedFileName = sanitizeEmailAttachmentFilename(
+      attachment.fileName,
+      fallbackPath: attachment.path,
+    );
+    final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
     return FileMetadataData(
       id: deltaFileMetadataId(msgId),
-      filename: attachment.fileName,
+      filename: sanitizedFileName,
       path: attachment.path,
-      mimeType: attachment.mimeType,
+      mimeType: sanitizedMimeType,
       sizeBytes: attachment.sizeBytes,
       width: attachment.width,
       height: attachment.height,
@@ -1101,11 +1295,12 @@ class EmailDeltaTransport implements ChatTransport {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
+    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
     return _context!.sendTextWithQuote(
       chatId: chatId,
       message: body,
       quotedMessageId: quotedMessageId,
-      subject: subject,
+      subject: sanitizedSubject,
       html: htmlBody,
     );
   }

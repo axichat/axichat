@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:app_settings/app_settings.dart';
+import 'package:axichat/src/common/notification_privacy.dart';
+import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:flutter/foundation.dart';
@@ -15,6 +17,20 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+
+const Duration _messageNotificationRateLimitWindow = Duration(minutes: 1);
+const Duration _messageNotificationRateLimitCleanupInterval =
+    Duration(minutes: 5);
+const int _messageNotificationMaxPerThread = 30;
+const int _messageNotificationMaxGlobal = 120;
+const WindowRateLimit _messageNotificationPerThreadRateLimit = WindowRateLimit(
+  maxEvents: _messageNotificationMaxPerThread,
+  window: _messageNotificationRateLimitWindow,
+);
+const WindowRateLimit _messageNotificationGlobalRateLimit = WindowRateLimit(
+  maxEvents: _messageNotificationMaxGlobal,
+  window: _messageNotificationRateLimitWindow,
+);
 
 ///Call [init].
 class NotificationService {
@@ -30,6 +46,13 @@ class NotificationService {
   final Map<int, Timer> _inAppTimers = {};
   Completer<void>? _initializationCompleter;
   bool _foregroundCheckUnavailable = false;
+  final WindowRateLimiter _messageNotificationGlobalLimiter =
+      WindowRateLimiter(_messageNotificationGlobalRateLimit);
+  final KeyedWindowRateLimiter _messageNotificationPerThreadLimiter =
+      KeyedWindowRateLimiter(
+    limit: _messageNotificationPerThreadRateLimit,
+    cleanupInterval: _messageNotificationRateLimitCleanupInterval,
+  );
 
   bool mute = false;
   bool notificationPreviewsEnabled = false;
@@ -199,11 +222,12 @@ class NotificationService {
 
     await _ensureInitialized();
     final notificationDetails = await _notificationDetails();
+    final String? sanitizedBody = sanitizeNotificationPreview(body);
 
     await _plugin.show(
       Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
       title,
-      body,
+      sanitizedBody,
       notificationDetails,
       payload: payload,
     );
@@ -216,6 +240,7 @@ class NotificationService {
     bool allowForeground = false,
     String? payload,
     String? threadKey,
+    bool? showPreviewOverride,
   }) async {
     if (mute) return;
     if (!await hasAllNotificationPermissions()) return;
@@ -227,22 +252,34 @@ class NotificationService {
       if (!await condition) return;
     }
 
-    await _ensureInitialized();
-    final notificationDetails = await _messageNotificationDetails(
-      showPreview: notificationPreviewsEnabled,
-    );
     final stableKey = (threadKey ?? payload)?.trim();
+    if (!_allowMessageNotification(stableKey)) {
+      return;
+    }
+
+    await _ensureInitialized();
+    final showPreview = showPreviewOverride ?? notificationPreviewsEnabled;
+    final notificationDetails = await _messageNotificationDetails(
+      showPreview: showPreview,
+    );
     final notificationId = stableKey == null || stableKey.isEmpty
         ? Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000)
         : _stableNotificationId(stableKey);
+    final String? sanitizedBody = sanitizeNotificationPreview(body);
 
     await _plugin.show(
       notificationId,
       _sanitizeMessageNotificationTitle(title),
-      notificationPreviewsEnabled ? body : null,
+      showPreview ? sanitizedBody : null,
       notificationDetails,
       payload: payload,
     );
+  }
+
+  Future<void> dismissMessageNotification({required String threadKey}) async {
+    final normalized = threadKey.trim();
+    if (normalized.isEmpty) return;
+    await cancelNotification(_stableNotificationId(normalized));
   }
 
   Future<void> dismissNotifications() async {
@@ -416,6 +453,7 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
       icon: androidIconPath,
+      visibility: NotificationVisibility.private,
     );
     const windowsDetails = WindowsNotificationDetails();
     const linuxDetails = LinuxNotificationDetails();
@@ -453,6 +491,21 @@ class NotificationService {
       windows: windowsDetails,
       linux: linuxDetails,
     );
+  }
+
+  bool _allowMessageNotification(String? threadKey) {
+    final normalized = threadKey?.trim();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (normalized != null && normalized.isNotEmpty) {
+      final threadAllowed = _messageNotificationPerThreadLimiter.allowEvent(
+        normalized,
+        nowMs: nowMs,
+      );
+      if (!threadAllowed) {
+        return false;
+      }
+    }
+    return _messageNotificationGlobalLimiter.allowEvent(nowMs: nowMs);
   }
 
   String _sanitizeMessageNotificationTitle(String title) {

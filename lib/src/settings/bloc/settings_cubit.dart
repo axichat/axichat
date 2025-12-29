@@ -1,6 +1,8 @@
+import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -10,7 +12,13 @@ part 'settings_cubit.g.dart';
 part 'settings_state.dart';
 
 class SettingsCubit extends HydratedCubit<SettingsState> {
-  SettingsCubit() : super(const SettingsState());
+  SettingsCubit({XmppService? xmppService})
+      : _xmppService = xmppService,
+        super(const SettingsState()) {
+    _syncAttachmentAutoDownloadSettings(state);
+  }
+
+  final XmppService? _xmppService;
 
   Duration get animationDuration =>
       state.lowMotion ? Duration.zero : baseAnimationDuration;
@@ -85,6 +93,50 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(autoLoadEmailImages: enabled));
   }
 
+  void toggleAutoDownloadImages(bool enabled) {
+    emit(state.copyWith(autoDownloadImages: enabled));
+  }
+
+  void toggleAutoDownloadVideos(bool enabled) {
+    emit(state.copyWith(autoDownloadVideos: enabled));
+  }
+
+  void toggleAutoDownloadDocuments(bool enabled) {
+    emit(state.copyWith(autoDownloadDocuments: enabled));
+  }
+
+  void toggleAutoDownloadArchives(bool enabled) {
+    emit(state.copyWith(autoDownloadArchives: enabled));
+  }
+
+  @override
+  void onChange(Change<SettingsState> change) {
+    super.onChange(change);
+    _syncAttachmentAutoDownloadSettings(change.nextState,
+        previous: change.currentState);
+  }
+
+  void _syncAttachmentAutoDownloadSettings(
+    SettingsState next, {
+    SettingsState? previous,
+  }) {
+    final previousState = previous;
+    if (previousState != null &&
+        previousState.autoDownloadImages == next.autoDownloadImages &&
+        previousState.autoDownloadVideos == next.autoDownloadVideos &&
+        previousState.autoDownloadDocuments == next.autoDownloadDocuments &&
+        previousState.autoDownloadArchives == next.autoDownloadArchives) {
+      return;
+    }
+    final settings = AttachmentAutoDownloadSettings(
+      imagesEnabled: next.autoDownloadImages,
+      videosEnabled: next.autoDownloadVideos,
+      documentsEnabled: next.autoDownloadDocuments,
+      archivesEnabled: next.autoDownloadArchives,
+    );
+    _xmppService?.updateAttachmentAutoDownloadSettings(settings);
+  }
+
   @override
   SettingsState? fromJson(Map<String, dynamic> json) {
     try {
@@ -105,6 +157,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'unscheduledSidebarOrder': 'unscheduled_sidebar_order',
         'reminderSidebarOrder': 'reminder_sidebar_order',
         'autoLoadEmailImages': 'auto_load_email_images',
+        'autoDownloadImages': 'auto_download_images',
+        'autoDownloadVideos': 'auto_download_videos',
+        'autoDownloadDocuments': 'auto_download_documents',
+        'autoDownloadArchives': 'auto_download_archives',
       };
       for (final entry in keyMap.entries) {
         if (migrated.containsKey(entry.key) &&

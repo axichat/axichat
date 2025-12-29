@@ -5,6 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -38,6 +39,7 @@ const ShortcutActivator _lastItemActivator =
     SingleActivator(LogicalKeyboardKey.end);
 const ShortcutActivator _activateItemActivator =
     SingleActivator(LogicalKeyboardKey.enter);
+const bool _accessibilityAutoDownloadAllowed = false;
 const ShortcutActivator _escapeActivator =
     SingleActivator(LogicalKeyboardKey.escape);
 
@@ -1848,7 +1850,7 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
             padding: const EdgeInsets.all(2),
             child: Shortcuts(
               shortcuts: navigationShortcuts,
-              child: ShadInput(
+              child: AxiTextInput(
                 controller: _controller,
                 focusNode: _focusNode,
                 enabled: widget.enabled,
@@ -2098,6 +2100,11 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                         metadataStream:
                             Stream<FileMetadataData?>.value(attachment),
                         allowed: true,
+                        autoDownloadSettings: context
+                            .read<SettingsCubit>()
+                            .state
+                            .attachmentAutoDownloadSettings,
+                        autoDownloadAllowed: _accessibilityAutoDownloadAllowed,
                       ),
                     )
                   else if (attachmentLabel != null && rawBody.isEmpty)

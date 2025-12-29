@@ -238,6 +238,50 @@ class SettingsControls extends StatelessWidget {
                     .toggleAutoLoadEmailImages(enabled),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsAutoDownloadImages),
+                sublabel: Text(l10n.settingsAutoDownloadImagesDescription),
+                value: state.autoDownloadImages,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleAutoDownloadImages(enabled),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsAutoDownloadVideos),
+                sublabel: Text(l10n.settingsAutoDownloadVideosDescription),
+                value: state.autoDownloadVideos,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleAutoDownloadVideos(enabled),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsAutoDownloadDocuments),
+                sublabel: Text(l10n.settingsAutoDownloadDocumentsDescription),
+                value: state.autoDownloadDocuments,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleAutoDownloadDocuments(enabled),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsAutoDownloadArchives),
+                sublabel: Text(l10n.settingsAutoDownloadArchivesDescription),
+                value: state.autoDownloadArchives,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleAutoDownloadArchives(enabled),
+              ),
+            ),
             const AxiListDivider(),
           ],
         );

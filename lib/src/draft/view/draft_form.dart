@@ -13,6 +13,7 @@ import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -29,7 +30,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mime/mime.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _draftComposerControlExtent = 42;
@@ -82,6 +82,7 @@ class _DraftFormState extends State<DraftForm> {
   int _pendingAttachmentSeed = 0;
   bool _sendingDraft = false;
   bool _sendCompletionHandled = false;
+  bool _seedAttachmentCleanupHandled = false;
 
   @override
   void initState() {
@@ -97,6 +98,9 @@ class _DraftFormState extends State<DraftForm> {
 
   @override
   void dispose() {
+    if (_dependenciesInitialized && _shouldCleanupSeedAttachments) {
+      unawaited(_cleanupSeedAttachmentMetadata());
+    }
     _bodyTextController.removeListener(_bodyListener);
     _bodyTextController.dispose();
     _subjectTextController.removeListener(_subjectListener);
@@ -105,6 +109,11 @@ class _DraftFormState extends State<DraftForm> {
     _subjectFocusNode.dispose();
     super.dispose();
   }
+
+  bool get _shouldCleanupSeedAttachments =>
+      !_seedAttachmentCleanupHandled &&
+      id == null &&
+      widget.attachmentMetadataIds.isNotEmpty;
 
   void _bodyListener() => setState(() => _sendErrorMessage = null);
 
@@ -510,14 +519,32 @@ class _DraftFormState extends State<DraftForm> {
     if (metadataIds.isEmpty) return const [];
     final hydrated =
         await _messageService.loadDraftAttachments(metadataIds.toList());
-    return hydrated
-        .map(
-          (attachment) => PendingAttachment(
-            id: attachment.metadataId ?? _nextPendingAttachmentId(),
-            attachment: attachment,
-          ),
-        )
-        .toList();
+    final List<PendingAttachment> pending = <PendingAttachment>[];
+    for (final attachment in hydrated) {
+      final EmailAttachment resolvedAttachment =
+          await _resolveAttachmentMimeType(attachment);
+      pending.add(
+        PendingAttachment(
+          id: resolvedAttachment.metadataId ?? _nextPendingAttachmentId(),
+          attachment: resolvedAttachment,
+        ),
+      );
+    }
+    return pending;
+  }
+
+  Future<EmailAttachment> _resolveAttachmentMimeType(
+    EmailAttachment attachment,
+  ) async {
+    final String? resolvedMimeType = await resolveMimeTypeFromPath(
+      path: attachment.path,
+      fileName: attachment.fileName,
+      declaredMimeType: attachment.mimeType,
+    );
+    if (resolvedMimeType == null || resolvedMimeType == attachment.mimeType) {
+      return attachment;
+    }
+    return attachment.copyWith(mimeType: resolvedMimeType);
   }
 
   void _handleRecipientAdded(FanOutTarget target) {
@@ -572,14 +599,12 @@ class _DraftFormState extends State<DraftForm> {
         _showToast(l10n.draftAttachmentInaccessible);
         return;
       }
-      final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
       final pendingId = _nextPendingAttachmentId();
       final fileName = file.name.isNotEmpty ? file.name : path.split('/').last;
       var attachment = EmailAttachment(
         path: path,
         fileName: fileName,
         sizeBytes: file.size > 0 ? file.size : 0,
-        mimeType: mimeType,
       );
       setState(() {
         _pendingAttachments = [
@@ -592,6 +617,11 @@ class _DraftFormState extends State<DraftForm> {
         ];
       });
 
+      final String? resolvedMimeType = await resolveMimeTypeFromPath(
+        path: path,
+        fileName: fileName,
+      );
+      attachment = attachment.copyWith(mimeType: resolvedMimeType);
       if (attachment.sizeBytes <= 0) {
         try {
           final resolvedSize = await File(path).length();
@@ -674,6 +704,23 @@ class _DraftFormState extends State<DraftForm> {
       metadataIds: result.attachmentMetadataIds,
       expectedAttachmentIds: attachmentIds,
     );
+    if (wasNewDraft && widget.attachmentMetadataIds.isNotEmpty) {
+      final Set<String> retainedMetadataIds =
+          result.attachmentMetadataIds.toSet();
+      final List<String> staleMetadataIds = widget.attachmentMetadataIds
+          .where((metadataId) => !retainedMetadataIds.contains(metadataId))
+          .toList();
+      if (staleMetadataIds.isNotEmpty) {
+        for (final metadataId in staleMetadataIds) {
+          try {
+            await _messageService.deleteFileMetadata(metadataId);
+          } on Exception {
+            // Best-effort cleanup for share intent attachment metadata.
+          }
+        }
+      }
+      _seedAttachmentCleanupHandled = true;
+    }
   }
 
   Future<void> _applyAttachmentMetadataIds({
@@ -713,8 +760,12 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _handleDiscard() async {
     final l10n = context.l10n;
+    final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
     if (id != null && context.read<DraftCubit?>() != null) {
       await context.read<DraftCubit>().deleteDraft(id: id!);
+    }
+    if (shouldCleanupSeedAttachments) {
+      await _cleanupSeedAttachmentMetadata();
     }
     setState(() {
       id = null;
@@ -726,6 +777,24 @@ class _DraftFormState extends State<DraftForm> {
     });
     _showToast(l10n.draftDiscarded);
     widget.onDiscarded?.call();
+  }
+
+  Future<void> _cleanupSeedAttachmentMetadata() async {
+    if (!_dependenciesInitialized || !_shouldCleanupSeedAttachments) {
+      return;
+    }
+    _seedAttachmentCleanupHandled = true;
+    final List<String> metadataIds = widget.attachmentMetadataIds;
+    if (metadataIds.isEmpty) {
+      return;
+    }
+    for (final metadataId in metadataIds) {
+      try {
+        await _messageService.deleteFileMetadata(metadataId);
+      } on Exception {
+        // Best-effort cleanup for share intent attachment metadata.
+      }
+    }
   }
 
   Future<void> _handleSendDraft() async {
@@ -820,6 +889,7 @@ class _DraftFormState extends State<DraftForm> {
     }
     _sendCompletionHandled = true;
     if (!mounted) return;
+    final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
     setState(() {
       _sendingDraft = false;
       _pendingAttachments = const [];
@@ -828,6 +898,9 @@ class _DraftFormState extends State<DraftForm> {
     ShadToaster.maybeOf(context)?.show(
       FeedbackToast.success(title: l10n.draftSent),
     );
+    if (shouldCleanupSeedAttachments) {
+      unawaited(_cleanupSeedAttachmentMetadata());
+    }
     final onClosed = widget.onClosed;
     if (onClosed != null) {
       onClosed();

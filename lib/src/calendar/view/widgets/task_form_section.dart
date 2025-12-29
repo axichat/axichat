@@ -172,7 +172,7 @@ class TaskCompletionToggle extends StatelessWidget {
 /// Styled [TextFormField] counterpart to [TaskTextField] for use inside forms
 /// that require validation. Mirrors the calendar styling so validators can be
 /// added without reimplementing decoration logic everywhere.
-class TaskTextFormField extends StatelessWidget {
+class TaskTextFormField extends StatefulWidget {
   const TaskTextFormField({
     super.key,
     required this.controller,
@@ -229,66 +229,111 @@ class TaskTextFormField extends StatelessWidget {
   final TextStyle? errorStyle;
 
   @override
-  Widget build(BuildContext context) {
-    final double radius = borderRadius ?? 8;
-    final Color focusedColor = focusBorderColor ?? calendarPrimaryColor;
-    final Color effectiveFill = fillColor ?? calendarContainerColor;
+  State<TaskTextFormField> createState() => _TaskTextFormFieldState();
+}
 
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      minLines: minLines,
-      maxLines: maxLines,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      textCapitalization: textCapitalization,
-      textInputAction: textInputAction,
-      autofocus: autofocus,
-      autovalidateMode: autovalidateMode,
-      onChanged: onChanged,
-      onFieldSubmitted: onFieldSubmitted,
-      onSaved: onSaved,
-      validator: validator,
-      style: textStyle ??
-          TextStyle(
-            color: calendarTitleColor,
-            fontSize: 14,
+class _TaskTextFormFieldState extends State<TaskTextFormField> {
+  final GlobalKey<FormFieldState<String>> _fieldKey =
+      GlobalKey<FormFieldState<String>>();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant TaskTextFormField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handleControllerChanged);
+      widget.controller.addListener(_handleControllerChanged);
+      _fieldKey.currentState?.didChange(widget.controller.text);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
+
+  void _handleControllerChanged() {
+    _fieldKey.currentState?.didChange(widget.controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double radius = widget.borderRadius ?? 8;
+    final Color focusedColor = widget.focusBorderColor ?? calendarPrimaryColor;
+    final Color effectiveFill = widget.fillColor ?? calendarContainerColor;
+
+    return FormField<String>(
+      key: _fieldKey,
+      initialValue: widget.controller.text,
+      validator: widget.validator,
+      onSaved: widget.onSaved,
+      autovalidateMode: widget.autovalidateMode,
+      enabled: widget.enabled,
+      builder: (state) {
+        final String? errorText = widget.errorText ?? state.errorText;
+        return AxiTextField(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          minLines: widget.minLines,
+          maxLines: widget.maxLines,
+          enabled: widget.enabled,
+          keyboardType: widget.keyboardType,
+          textCapitalization: widget.textCapitalization,
+          textInputAction: widget.textInputAction,
+          autofocus: widget.autofocus,
+          onChanged: (value) {
+            state.didChange(value);
+            widget.onChanged?.call(value);
+          },
+          onSubmitted: widget.onFieldSubmitted,
+          style: widget.textStyle ??
+              TextStyle(
+                color: calendarTitleColor,
+                fontSize: 14,
+              ),
+          decoration: InputDecoration(
+            labelText: widget.labelText,
+            labelStyle: widget.labelStyle ??
+                TextStyle(
+                  color: calendarSubtitleColor,
+                  fontSize: 14,
+                ),
+            hintText: widget.hintText,
+            hintStyle: widget.hintStyle ??
+                TextStyle(
+                  color: calendarTimeLabelColor,
+                  fontSize: 14,
+                ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(radius),
+              borderSide: BorderSide(color: calendarBorderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(radius),
+              borderSide: BorderSide(color: calendarBorderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(radius),
+              borderSide: BorderSide(color: focusedColor, width: 2),
+            ),
+            contentPadding: widget.contentPadding ??
+                const EdgeInsets.symmetric(
+                  horizontal: calendarGutterMd,
+                  vertical: calendarGutterMd,
+                ),
+            filled: true,
+            fillColor: effectiveFill,
+            errorText: errorText,
+            errorStyle: widget.errorStyle,
           ),
-      decoration: InputDecoration(
-        labelText: labelText,
-        labelStyle: labelStyle ??
-            TextStyle(
-              color: calendarSubtitleColor,
-              fontSize: 14,
-            ),
-        hintText: hintText,
-        hintStyle: hintStyle ??
-            TextStyle(
-              color: calendarTimeLabelColor,
-              fontSize: 14,
-            ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: calendarBorderColor),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: calendarBorderColor),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: focusedColor, width: 2),
-        ),
-        contentPadding: contentPadding ??
-            const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterMd,
-            ),
-        filled: true,
-        fillColor: effectiveFill,
-        errorText: errorText,
-        errorStyle: errorStyle,
-      ),
+        );
+      },
     );
   }
 }
@@ -304,6 +349,7 @@ class TaskTitleField extends StatelessWidget {
     this.labelText,
     this.textInputAction,
     this.autofocus = false,
+    this.enabled = true,
     this.validator,
     this.autovalidateMode,
     this.onChanged,
@@ -318,6 +364,7 @@ class TaskTitleField extends StatelessWidget {
   final String? labelText;
   final TextInputAction? textInputAction;
   final bool autofocus;
+  final bool enabled;
   final FormFieldValidator<String>? validator;
   final AutovalidateMode? autovalidateMode;
   final ValueChanged<String>? onChanged;
@@ -337,6 +384,7 @@ class TaskTitleField extends StatelessWidget {
       textInputAction: textInputAction,
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted == null ? null : (_) => onSubmitted!(),
+      enabled: enabled,
       validator: validator,
       autovalidateMode: autovalidateMode,
       borderRadius: calendarBorderRadius,
@@ -440,6 +488,7 @@ class TaskScheduleSection extends StatelessWidget {
     this.minDate,
     this.maxDate,
     this.onClear,
+    this.enabled = true,
   });
 
   final DateTime? start;
@@ -459,11 +508,13 @@ class TaskScheduleSection extends StatelessWidget {
   final DateTime? minDate;
   final DateTime? maxDate;
   final VoidCallback? onClear;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final bool hasSelection = start != null || end != null;
-    final VoidCallback? clearHandler = hasSelection
+    final bool allowClear = enabled && hasSelection;
+    final VoidCallback? clearHandler = allowClear
         ? onClear ??
             () {
               onStartChanged(null);
@@ -516,6 +567,7 @@ class TaskScheduleSection extends StatelessWidget {
             showTimeSelectors: showTimeSelectors,
             minDate: minDate,
             maxDate: maxDate,
+            enabled: enabled,
           ),
         ],
       ),
@@ -977,6 +1029,7 @@ class TaskDescriptionField extends StatelessWidget {
     this.maxLines,
     this.textCapitalization = TextCapitalization.sentences,
     this.autofocus = false,
+    this.enabled = true,
     this.onChanged,
     this.borderRadius,
     this.focusBorderColor,
@@ -991,6 +1044,7 @@ class TaskDescriptionField extends StatelessWidget {
   final int? maxLines;
   final TextCapitalization textCapitalization;
   final bool autofocus;
+  final bool enabled;
   final ValueChanged<String>? onChanged;
   final double? borderRadius;
   final Color? focusBorderColor;
@@ -1008,6 +1062,7 @@ class TaskDescriptionField extends StatelessWidget {
       textCapitalization: textCapitalization,
       autofocus: autofocus,
       onChanged: onChanged,
+      enabled: enabled,
       borderRadius: borderRadius,
       focusBorderColor: focusBorderColor,
       contentPadding: contentPadding ??

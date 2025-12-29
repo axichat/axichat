@@ -71,6 +71,7 @@ mixin AvatarService on XmppBase {
   static const Duration _avatarPublishVerificationTimeout =
       Duration(seconds: 5);
   static const Duration _selfAvatarRefreshInterval = Duration(minutes: 1);
+  static const bool _allowAvatarPublisherFallback = true;
   static const String _mimePng = 'image/png';
   static const String _mimeJpeg = 'image/jpeg';
   static const List<int> _pngMagicBytes = <int>[
@@ -649,7 +650,13 @@ mixin AvatarService on XmppBase {
     final items = result.get<List<mox.PubSubItem>>();
     if (items.isEmpty) return const _AvatarMetadataMissing();
 
-    final payload = items.first.payload;
+    final filteredItems = _filterAvatarItemsByPublisher(
+      items: items,
+      ownerBare: jid,
+    );
+    if (filteredItems.isEmpty) return const _AvatarMetadataMissing();
+
+    final payload = filteredItems.first.payload;
     if (payload == null) return const _AvatarMetadataLoadFailed();
 
     final metadata = payload
@@ -1404,6 +1411,32 @@ mixin AvatarService on XmppBase {
     } on Exception {
       return null;
     }
+  }
+
+  bool _isAvatarItemPublisherTrusted({
+    required mox.PubSubItem item,
+    required String ownerBare,
+  }) {
+    final publisher = item.publisher?.trim();
+    if (publisher == null || publisher.isEmpty) {
+      return _allowAvatarPublisherFallback;
+    }
+    final normalizedPublisher = _avatarSafeBareJid(publisher);
+    if (normalizedPublisher == null) return false;
+    return normalizedPublisher == ownerBare;
+  }
+
+  List<mox.PubSubItem> _filterAvatarItemsByPublisher({
+    required List<mox.PubSubItem> items,
+    required String ownerBare,
+  }) {
+    final List<mox.PubSubItem> filtered = items
+        .where(
+          (item) =>
+              _isAvatarItemPublisherTrusted(item: item, ownerBare: ownerBare),
+        )
+        .toList(growable: false);
+    return filtered;
   }
 
   Future<bool> _hasCachedAvatarFile(String? path) async {

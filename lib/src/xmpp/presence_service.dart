@@ -4,7 +4,7 @@ final _presenceStatusesKey = XmppStateStore.registerKey('presence_statuses');
 final _directedPresenceTargetsKey =
     XmppStateStore.registerKey('presence_directed_targets');
 
-mixin PresenceService on XmppBase, BaseStreamService {
+mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
   final presenceStorageKey = XmppStateStore.registerKey('my_presence');
   final statusStorageKey = XmppStateStore.registerKey('my_status');
   final Map<String, Map<String, String>> _presenceStatuses = {};
@@ -73,6 +73,18 @@ mixin PresenceService on XmppBase, BaseStreamService {
       to: to,
       trackDirected: trackDirected,
     );
+  }
+
+  Future<bool> _isBlockedPresenceSender(mox.JID from) async {
+    final fromBare = _normalizeBareJidValue(from.toBare().toString());
+    if (fromBare == null) {
+      return false;
+    }
+    final accountBare = _normalizeBareJidValue(myJid?.toString());
+    if (accountBare != null && fromBare == accountBare) {
+      return false;
+    }
+    return isJidBlocked(fromBare);
   }
 
   Future<void> receivePresence(
@@ -285,6 +297,10 @@ class XmppPresenceManager extends mox.PresenceManager {
             final stanzaType = stanza.type;
             _log.info('Incoming presence from: ${from.toString()} '
                 'type: ${stanzaType ?? 'available'}');
+            if (await owner._isBlockedPresenceSender(from)) {
+              state.done = true;
+              return state;
+            }
 
             switch (stanzaType) {
               case 'probe':

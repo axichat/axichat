@@ -17,12 +17,14 @@ class CalendarCategoriesField extends StatefulWidget {
     required this.onChanged,
     this.title = _categoriesSectionTitle,
     this.hintText = _categoriesHintText,
+    this.enabled = true,
   });
 
   final List<String> categories;
   final ValueChanged<List<String>> onChanged;
   final String title;
   final String hintText;
+  final bool enabled;
 
   @override
   State<CalendarCategoriesField> createState() =>
@@ -147,11 +149,12 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _submitInput(),
                 textCapitalization: TextCapitalization.words,
+                enabled: widget.enabled,
               ),
             ),
             const SizedBox(width: calendarGutterSm),
             _CategoryAddButton(
-              enabled: canSubmit,
+              enabled: widget.enabled && canSubmit,
               onPressed: _submitInput,
             ),
           ],
@@ -159,7 +162,7 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
       },
     );
 
-    return Column(
+    final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: widget.title),
@@ -171,6 +174,10 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
         ],
       ],
     );
+    if (widget.enabled) {
+      return content;
+    }
+    return IgnorePointer(child: content);
   }
 }
 

@@ -1285,7 +1285,7 @@ class _RecurrenceEndControls extends StatelessWidget {
           ],
         ] else if (mode.isCount) ...[
           const SizedBox(height: calendarInsetLg),
-          TextField(
+          AxiTextField(
             controller: countController,
             enabled: enabled,
             keyboardType: TextInputType.number,
