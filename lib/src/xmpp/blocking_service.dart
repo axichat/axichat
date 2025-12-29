@@ -60,12 +60,71 @@ mixin BlockingService on XmppBase, BaseStreamService {
       );
 
   final Logger _blockingLogger = Logger('BlockingService');
+  final Set<String> _blockedJids = <String>{};
+  StreamSubscription<List<BlocklistData>>? _blocklistSubscription;
+  bool _blocklistCacheReady = false;
   bool _spamReportingSupportResolved = false;
   bool _spamReportingSupported = false;
+
+  void _startBlocklistCache() {
+    if (_blocklistSubscription != null) {
+      return;
+    }
+    _blocklistSubscription = blocklistStream().listen(_updateBlocklistCache);
+  }
+
+  void _updateBlocklistCache(List<BlocklistData> items) {
+    final previous = Set<String>.from(_blockedJids);
+    final next = <String>{
+      for (final entry in items)
+        if (_normalizeBareJidValue(entry.jid) case final jid?) jid,
+    };
+    _blockedJids
+      ..clear()
+      ..addAll(next);
+    _blocklistCacheReady = true;
+    final newlyBlocked = next.difference(previous);
+    if (newlyBlocked.isEmpty) {
+      return;
+    }
+    unawaited(
+      _dbOp<XmppDatabase>(
+        (db) async {
+          for (final jid in newlyBlocked) {
+            await db.updatePresence(
+              jid: jid,
+              presence: Presence.unavailable,
+              status: null,
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Future<bool> isJidBlocked(String jid) async {
+    final normalized = _normalizeBareJidValue(jid);
+    if (normalized == null) {
+      return false;
+    }
+    if (_blockedJids.contains(normalized)) {
+      return true;
+    }
+    if (_blocklistCacheReady) {
+      return false;
+    }
+    final db = await database;
+    final blocked = await db.isJidBlocked(normalized);
+    if (blocked) {
+      _blockedJids.add(normalized);
+    }
+    return blocked;
+  }
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
+    _startBlocklistCache();
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
         _spamReportingSupportResolved = false;
@@ -87,6 +146,15 @@ mixin BlockingService on XmppBase, BaseStreamService {
           (db) => db.deleteBlocklist(),
         );
       });
+  }
+
+  @override
+  Future<void> _reset() async {
+    await _blocklistSubscription?.cancel();
+    _blocklistSubscription = null;
+    _blockedJids.clear();
+    _blocklistCacheReady = false;
+    await super._reset();
   }
 
   @override

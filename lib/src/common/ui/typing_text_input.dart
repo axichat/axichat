@@ -7,10 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _glyphStartScale = 0.2;
-const double _glyphEndScale = 1.0;
 const double _glyphStartOpacity = 0.0;
-const double _glyphEndOpacity = 1.0;
 const double _hiddenTextAlpha = 0.0;
 const String typingGlyphMorphShaderAsset =
     'assets/shaders/typing_glyph_morph.frag';
@@ -343,13 +340,14 @@ class TypingTextEditingController extends TextEditingController {
     }
 
     final TextStyle baseStyle = DefaultTextStyle.of(context).style.merge(style);
+    final TextStyle hiddenBaseStyle = _stripForeground(baseStyle);
     final TextStyle composingStyle = baseStyle.merge(
       const TextStyle(decoration: TextDecoration.underline),
     );
     final Color baseColor =
         baseStyle.color ?? ShadTheme.of(context).colorScheme.foreground;
     final Color hiddenColor = baseColor.withValues(alpha: _hiddenTextAlpha);
-    final TextStyle hiddenStyle = baseStyle.copyWith(
+    final TextStyle hiddenStyle = hiddenBaseStyle.copyWith(
       color: hiddenColor,
       decorationColor: hiddenColor,
       decoration: TextDecoration.none,
@@ -405,6 +403,39 @@ class TypingTextEditingController extends TextEditingController {
       return null;
     }
     return hiddenRange;
+  }
+
+  TextStyle _stripForeground(TextStyle style) {
+    if (style.foreground == null) {
+      return style;
+    }
+    return TextStyle(
+      inherit: style.inherit,
+      color: style.color,
+      backgroundColor: style.backgroundColor,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      fontStyle: style.fontStyle,
+      letterSpacing: style.letterSpacing,
+      wordSpacing: style.wordSpacing,
+      textBaseline: style.textBaseline,
+      height: style.height,
+      leadingDistribution: style.leadingDistribution,
+      locale: style.locale,
+      background: style.background,
+      shadows: style.shadows,
+      fontFeatures: style.fontFeatures,
+      fontVariations: style.fontVariations,
+      decoration: style.decoration,
+      decorationColor: style.decorationColor,
+      decorationStyle: style.decorationStyle,
+      decorationThickness: style.decorationThickness,
+      debugLabel: style.debugLabel,
+      fontFamily: style.fontFamily,
+      fontFamilyFallback: style.fontFamilyFallback,
+      package: style.package,
+      overflow: style.overflow,
+    );
   }
 
   void _handleSourceChanged() {
@@ -557,57 +588,16 @@ class TypingCaretPainter extends RenderEditablePainter {
   ) {
     final TypingGlyphSdf? glyphSdf = _glyphSdf;
     final ui.FragmentProgram? morphProgram = _morphProgram;
-    if (glyphSdf != null && morphProgram != null) {
-      _paintGlyphSdfMorph(
-        canvas,
-        renderEditable,
-        glyphAnimation,
-        glyphSdf,
-        morphProgram,
-      );
+    if (glyphSdf == null || morphProgram == null) {
       return;
     }
-
-    final double progress = _glyphProgress.clamp(0.0, 1.0);
-    final double dotOpacity = _lerpDouble(
-      _glyphEndOpacity,
-      _glyphStartOpacity,
-      progress,
+    _paintGlyphSdfMorph(
+      canvas,
+      renderEditable,
+      glyphAnimation,
+      glyphSdf,
+      morphProgram,
     );
-    final double glyphOpacity = _lerpDouble(
-      _glyphStartOpacity,
-      _glyphEndOpacity,
-      progress,
-    );
-    final double glyphScale = _lerpDouble(
-      _glyphStartScale,
-      _glyphEndScale,
-      progress,
-    );
-
-    final Paint dotPaint = Paint()
-      ..color = _dotColor.withValues(alpha: dotOpacity)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(glyphAnimation.startOffset, _dotRadius, dotPaint);
-
-    final Color baseColor = glyphAnimation.style.color ?? _dotColor;
-    final TextStyle glyphStyle = glyphAnimation.style.copyWith(
-      color: baseColor.withValues(alpha: glyphOpacity),
-    );
-    final TextPainter textPainter = TextPainter(
-      text: TextSpan(text: glyphAnimation.text, style: glyphStyle),
-      textDirection: renderEditable.textDirection,
-      textScaler: renderEditable.textScaler,
-    )..layout();
-
-    final Offset center = glyphAnimation.targetRect.center;
-    canvas
-      ..save()
-      ..translate(center.dx, center.dy)
-      ..scale(glyphScale, glyphScale)
-      ..translate(-center.dx, -center.dy);
-    textPainter.paint(canvas, glyphAnimation.targetRect.topLeft);
-    canvas.restore();
   }
 
   void _paintGlyphSdfMorph(
@@ -654,10 +644,6 @@ class TypingCaretPainter extends RenderEditablePainter {
 
     final Paint paint = Paint()..shader = shader;
     canvas.drawRect(morphRect, paint);
-  }
-
-  double _lerpDouble(double start, double end, double t) {
-    return start + (end - start) * t;
   }
 
   @override

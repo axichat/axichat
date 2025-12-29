@@ -219,6 +219,25 @@ bool _hasInvalidArchiveOrigin(mox.MessageEvent event, String? accountJid) {
   return fromBare != normalizedAccount && toBare != normalizedAccount;
 }
 
+Future<bool> _isBlockedInboundSender(
+  mox.MessageEvent event,
+  Future<bool> Function(String jid) isJidBlocked,
+  String? accountJid,
+) async {
+  if (event.type == _messageTypeGroupchat) {
+    return false;
+  }
+  final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
+  if (fromBare == null) {
+    return false;
+  }
+  final accountBare = _normalizeBareJidValue(accountJid);
+  if (accountBare != null && fromBare == accountBare) {
+    return false;
+  }
+  return isJidBlocked(fromBare);
+}
+
 String? _normalizePinJid(String raw) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return null;
@@ -457,6 +476,22 @@ const int _attachmentMaxMimeTypeLength = 128;
 const int _attachmentSourceMaxCount = 8;
 const String _attachmentFallbackName = 'attachment';
 const int _attachmentSizeFallbackBytes = 0;
+const Duration _inboundAttachmentAutoDownloadRateLimitWindow =
+    Duration(minutes: 1);
+const Duration _inboundAttachmentAutoDownloadRateLimitCleanupInterval =
+    Duration(minutes: 5);
+const int _inboundAttachmentAutoDownloadMaxEventsPerChat = 30;
+const int _inboundAttachmentAutoDownloadMaxEventsGlobal = 120;
+const WindowRateLimit _inboundAttachmentAutoDownloadPerChatRateLimit =
+    WindowRateLimit(
+  maxEvents: _inboundAttachmentAutoDownloadMaxEventsPerChat,
+  window: _inboundAttachmentAutoDownloadRateLimitWindow,
+);
+const WindowRateLimit _inboundAttachmentAutoDownloadGlobalRateLimit =
+    WindowRateLimit(
+  maxEvents: _inboundAttachmentAutoDownloadMaxEventsGlobal,
+  window: _inboundAttachmentAutoDownloadRateLimitWindow,
+);
 const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
 const int _emptyMessageCount = 0;
@@ -560,7 +595,13 @@ class XmppUploadHeader {
 }
 
 mixin MessageService
-    on XmppBase, BaseStreamService, MucService, ChatsService, DraftSyncService {
+    on
+        XmppBase,
+        BaseStreamService,
+        MucService,
+        ChatsService,
+        DraftSyncService,
+        BlockingService {
   ImpatientCompleter<XmppDatabase> get _database;
 
   set _database(ImpatientCompleter<XmppDatabase> value);
@@ -1520,6 +1561,13 @@ mixin MessageService
       <String, Map<String, String>>{};
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
   Directory? _attachmentDirectory;
+  final WindowRateLimiter _inboundAttachmentAutoDownloadGlobalLimiter =
+      WindowRateLimiter(_inboundAttachmentAutoDownloadGlobalRateLimit);
+  final KeyedWindowRateLimiter _inboundAttachmentAutoDownloadChatLimiter =
+      KeyedWindowRateLimiter(
+    limit: _inboundAttachmentAutoDownloadPerChatRateLimit,
+    cleanupInterval: _inboundAttachmentAutoDownloadRateLimitCleanupInterval,
+  );
   bool _pendingPinSyncLoaded = false;
   final Map<String, Set<String>> _pinAuthorizedPublishersByChat = {};
   final Map<String, Set<String>> _pendingPinPublishesByChat = {};
@@ -1546,6 +1594,14 @@ mixin MessageService
           return;
         }
         _trackMamGlobalAnchor(event);
+        final accountJidValue = myJid?.toString();
+        if (await _isBlockedInboundSender(
+          event,
+          isJidBlocked,
+          accountJidValue,
+        )) {
+          return;
+        }
 
         final reactionOnly = await _handleReactions(event);
         if (reactionOnly) return;
@@ -1678,7 +1734,8 @@ mixin MessageService
             chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
           );
         }
-        if (metadata != null) {
+        if (metadata != null &&
+            _allowInboundAttachmentAutoDownload(message.chatJid)) {
           unawaited(
             _autoDownloadTrustedInboundAttachment(
               message: message,
@@ -3836,6 +3893,8 @@ mixin MessageService
     _capabilityCache.clear();
     _capabilityCacheLoaded = false;
     _inboundAttachmentDownloads.clear();
+    _inboundAttachmentAutoDownloadGlobalLimiter.reset();
+    _inboundAttachmentAutoDownloadChatLimiter.reset();
     _attachmentDirectory = null;
   }
 
@@ -6188,6 +6247,24 @@ mixin MessageService
       result |= left[index] ^ right[index];
     }
     return result == 0;
+  }
+
+  bool _allowInboundAttachmentAutoDownload(String chatJid) {
+    final normalized = _normalizeBareJidValue(chatJid);
+    if (normalized == null) {
+      return true;
+    }
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final chatAllowed = _inboundAttachmentAutoDownloadChatLimiter.allowEvent(
+      normalized,
+      nowMs: nowMs,
+    );
+    if (!chatAllowed) {
+      return false;
+    }
+    return _inboundAttachmentAutoDownloadGlobalLimiter.allowEvent(
+      nowMs: nowMs,
+    );
   }
 
   Future<void> _autoDownloadTrustedInboundAttachment({

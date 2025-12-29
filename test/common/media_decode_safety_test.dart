@@ -15,6 +15,7 @@ const int _decodeTimeoutMs = 250;
 const Duration _decodeTimeout = Duration(milliseconds: _decodeTimeoutMs);
 const int _maxFailureAttempts = 3;
 const String _decodeGuardKey = 'decode-guard-key';
+const int _oversizedByteCount = _maxImageBytes + 1;
 
 const ImageDecodeLimits _decodeLimits = ImageDecodeLimits(
   maxBytes: _maxImageBytes,
@@ -25,6 +26,16 @@ const ImageDecodeLimits _decodeLimits = ImageDecodeLimits(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    MediaDecodeGuard.instance.registerSuccess(_decodeGuardKey);
+  });
+
+  tearDown(() {
+    MediaDecodeGuard.instance.registerSuccess(_decodeGuardKey);
+  });
+
   group('isSafeImageBytes', () {
     test('accepts a tiny valid png', () async {
       final Uint8List bytes = base64Decode(_tinyPngBase64);
@@ -34,6 +45,12 @@ void main() {
 
     test('rejects invalid bytes', () async {
       final Uint8List bytes = Uint8List.fromList(_invalidImageBytes);
+      final isSafe = await isSafeImageBytes(bytes, _decodeLimits);
+      expect(isSafe, isFalse);
+    });
+
+    test('rejects oversized payloads', () async {
+      final Uint8List bytes = Uint8List(_oversizedByteCount);
       final isSafe = await isSafeImageBytes(bytes, _decodeLimits);
       expect(isSafe, isFalse);
     });

@@ -487,6 +487,8 @@ abstract interface class XmppDatabase implements Database {
     required int end,
   });
 
+  Future<bool> isJidBlocked(String jid);
+
   Future<void> blockJid(String jid);
 
   Future<void> blockJids(List<String> jids);
@@ -3521,6 +3523,16 @@ $limitClause
     required int end,
   }) {
     return blocklistAccessor.selectAll();
+  }
+
+  @override
+  Future<bool> isJidBlocked(String jid) async {
+    final normalized = jid.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final entry = await blocklistAccessor.selectOne(normalized);
+    return entry != null;
   }
 
   @override
