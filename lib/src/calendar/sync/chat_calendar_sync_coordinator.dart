@@ -87,9 +87,6 @@ class ChatCalendarSyncCoordinator {
     required ChatType chatType,
     required CalendarTask task,
   }) async {
-    if (chatType == ChatType.note) {
-      return;
-    }
     final context = _ensureContext(chatJid: chatJid, chatType: chatType);
     final manager = _ensureManager(chatJid: chatJid, chatType: chatType);
     final model = context.readModel();
@@ -193,6 +190,9 @@ class _ChatCalendarSyncContext {
       _syncStateStore.write(chatJid, state);
 
   Future<void> send(CalendarSyncOutbound outbound) async {
+    if (_chatType == ChatType.note) {
+      return;
+    }
     await _sendMessage(
       jid: chatJid,
       outbound: outbound,

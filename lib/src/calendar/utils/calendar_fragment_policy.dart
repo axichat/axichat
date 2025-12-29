@@ -1,8 +1,11 @@
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/models/calendar_acl.dart';
+import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -14,6 +17,7 @@ const String _fallbackEventTitle = 'Untitled event';
 const String _fragmentLabelChecklist = 'Checklist';
 const String _fragmentLabelDayEvent = 'Day event';
 const String _fragmentLabelAvailability = 'Availability';
+const String _fragmentLabelCriticalPath = 'Critical path';
 
 const String _fragmentRangeSeparator = ' - ';
 const String _fragmentChecklistSeparator = ', ';
@@ -32,15 +36,10 @@ const String _fragmentFreeBusyLabelBusy = 'Busy';
 const String _fragmentFreeBusyLabelBusyUnavailable = 'Busy (unavailable)';
 const String _fragmentFreeBusyLabelBusyTentative = 'Busy (tentative)';
 const String _emptyText = '';
+const String _fragmentCriticalPathProgressSeparator = '/';
+const String _fragmentCriticalPathProgressSuffix = ' done';
 
 const int _fragmentChecklistPreviewLimit = 4;
-
-const List<OccupantAffiliation> _calendarAffiliationsAllowed =
-    <OccupantAffiliation>[
-  OccupantAffiliation.member,
-  OccupantAffiliation.admin,
-  OccupantAffiliation.owner,
-];
 
 class CalendarFragmentShareDecision {
   const CalendarFragmentShareDecision({required this.canWrite});
@@ -61,20 +60,18 @@ class CalendarFragmentPolicy {
     if (chat.type != ChatType.groupChat) {
       return const CalendarFragmentShareDecision(canWrite: true);
     }
-    final OccupantAffiliation affiliation =
-        roomState?.myAffiliation ?? OccupantAffiliation.none;
-    final bool canWrite = affiliation.isMemberOrAbove;
+    if (roomState == null) {
+      return const CalendarFragmentShareDecision(canWrite: false);
+    }
+    final CalendarChatRole role = roomState.myRole.calendarChatRole;
+    final CalendarChatAcl acl = chat.type.calendarDefaultAcl;
+    final bool canWrite = role.allows(acl.write);
     return CalendarFragmentShareDecision(canWrite: canWrite);
   }
 }
 
-extension OccupantAffiliationCalendarX on OccupantAffiliation {
-  bool get isMemberOrAbove => _calendarAffiliationsAllowed.contains(this);
-}
-
 extension ChatCalendarSupportX on Chat {
-  bool get supportsChatCalendar =>
-      defaultTransport.isXmpp && type != ChatType.note;
+  bool get supportsChatCalendar => defaultTransport.isXmpp;
 }
 
 extension CalendarFreeBusyTypeLabelX on CalendarFreeBusyType {
@@ -97,6 +94,7 @@ class CalendarFragmentFormatter {
       checklist: (taskId, checklist) => _formatChecklist(checklist),
       reminder: (taskId, reminders) => _formatReminders(reminders),
       dayEvent: (event) => _formatDayEvent(event),
+      criticalPath: (path, tasks) => _formatCriticalPath(path, tasks),
       freeBusy: (interval) => _formatFreeBusy(interval),
       availability: (window) => _formatAvailability(window),
     );
@@ -178,6 +176,24 @@ class CalendarFragmentFormatter {
     );
     return '${interval.type.label}$_fragmentDetailOpen'
         '$_fragmentFreeBusyLabel$_fragmentInfoSeparator$range'
+        '$_fragmentDetailClose';
+  }
+
+  String _formatCriticalPath(
+    CalendarCriticalPath path,
+    List<CalendarTask> tasks,
+  ) {
+    final String name = path.name.trim().isNotEmpty
+        ? path.name.trim()
+        : _fragmentLabelCriticalPath;
+    if (tasks.isEmpty) {
+      return '$_fragmentLabelCriticalPath$_fragmentInfoSeparator$name';
+    }
+    final int completed = tasks.where((task) => task.isCompleted).length;
+    final String progress = '$completed$_fragmentCriticalPathProgressSeparator'
+        '${tasks.length}$_fragmentCriticalPathProgressSuffix';
+    return '$name$_fragmentDetailOpen'
+        '$_fragmentLabelCriticalPath$_fragmentInfoSeparator$progress'
         '$_fragmentDetailClose';
   }
 

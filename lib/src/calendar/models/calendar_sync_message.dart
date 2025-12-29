@@ -5,6 +5,18 @@ import 'package:xml/xml.dart';
 part 'calendar_sync_message.freezed.dart';
 part 'calendar_sync_message.g.dart';
 
+const int _calendarSyncEnvelopeMaxLength = 256 * 1024;
+const int _calendarSyncTypeMaxLength = 64;
+const int _calendarSyncEntityMaxLength = 64;
+const int _calendarSyncChecksumMaxLength = 256;
+const int _calendarSyncSnapshotChecksumMaxLength = 256;
+const int _calendarSyncTaskIdMaxLength = 128;
+const int _calendarSyncOperationMaxLength = 64;
+const int _calendarSyncSnapshotUrlMaxLength = 2048;
+const int _calendarSyncDataMaxLength = 200000;
+const int _calendarSyncTimestampMaxLength = 64;
+const int _calendarSyncSnapshotVersionMaxLength = 16;
+
 /// Valid message types for calendar sync.
 abstract final class CalendarSyncType {
   static const String request = 'calendar_request';
@@ -55,6 +67,8 @@ class CalendarSyncInbound {
 
 @freezed
 class CalendarSyncMessage with _$CalendarSyncMessage {
+  static const int maxEnvelopeLength = _calendarSyncEnvelopeMaxLength;
+
   const factory CalendarSyncMessage({
     /// Message type: request, full, update, or snapshot.
     required String type,
@@ -203,25 +217,43 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     String? getText(String name) =>
         calendarExt.findElements(name).firstOrNull?.innerText;
 
-    final type = getText('type');
+    final type = _trimmedBoundedText(
+      getText('type'),
+      _calendarSyncTypeMaxLength,
+    );
     if (type == null || !CalendarSyncType.all.contains(type)) {
       throw ArgumentError('Invalid or missing sync message type');
     }
 
-    final timestampStr = getText('timestamp');
+    final timestampStr = _trimmedBoundedText(
+      getText('timestamp'),
+      _calendarSyncTimestampMaxLength,
+    );
     if (timestampStr == null) {
       throw ArgumentError('Missing timestamp');
     }
 
     final timestamp = DateTime.parse(timestampStr);
-    final checksum = getText('checksum');
-    final taskId = getText('task_id');
-    final operation = getText('operation');
-    final entity = getText('entity') ?? 'task';
+    final checksum = _trimmedBoundedText(
+        getText('checksum'), _calendarSyncChecksumMaxLength);
+    final taskId =
+        _trimmedBoundedText(getText('task_id'), _calendarSyncTaskIdMaxLength);
+    final operation = _trimmedBoundedText(
+      getText('operation'),
+      _calendarSyncOperationMaxLength,
+    );
+    final entity = _trimmedBoundedText(
+          getText('entity'),
+          _calendarSyncEntityMaxLength,
+        ) ??
+        'task';
 
     Map<String, dynamic>? data;
     final dataStr = getText('data');
     if (dataStr != null && dataStr.isNotEmpty) {
+      if (dataStr.length > _calendarSyncDataMaxLength) {
+        throw ArgumentError('Invalid data size');
+      }
       try {
         data = jsonDecode(dataStr) as Map<String, dynamic>;
       } catch (e) {
@@ -230,11 +262,20 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     }
 
     final isSnapshot = getText('is_snapshot') == 'true';
-    final snapshotChecksum = getText('snapshot_checksum');
-    final snapshotVersionStr = getText('snapshot_version');
+    final snapshotChecksum = _trimmedBoundedText(
+      getText('snapshot_checksum'),
+      _calendarSyncSnapshotChecksumMaxLength,
+    );
+    final snapshotVersionStr = _trimmedBoundedText(
+      getText('snapshot_version'),
+      _calendarSyncSnapshotVersionMaxLength,
+    );
     final snapshotVersion =
         snapshotVersionStr != null ? int.tryParse(snapshotVersionStr) : null;
-    final snapshotUrl = getText('snapshot_url');
+    final snapshotUrl = _trimmedBoundedText(
+      getText('snapshot_url'),
+      _calendarSyncSnapshotUrlMaxLength,
+    );
 
     return CalendarSyncMessage(
       type: type,
@@ -253,6 +294,9 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
 
   static CalendarSyncMessage? tryParseEnvelope(String raw) {
     try {
+      if (raw.length > _calendarSyncEnvelopeMaxLength) {
+        return null;
+      }
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) {
         return null;
@@ -261,7 +305,11 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       if (payload is! Map<String, dynamic>) {
         return null;
       }
-      return CalendarSyncMessage.fromJson(payload);
+      final message = CalendarSyncMessage.fromJson(payload);
+      if (!_isCalendarSyncMessageValid(message)) {
+        return null;
+      }
+      return message;
     } catch (_) {
       return null;
     }
@@ -270,3 +318,52 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
   static bool isCalendarSyncEnvelope(String raw) =>
       tryParseEnvelope(raw) != null;
 }
+
+String? _trimmedBoundedText(String? value, int maxLength) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  if (trimmed.length > maxLength) return null;
+  return trimmed;
+}
+
+bool _isCalendarSyncMessageValid(CalendarSyncMessage message) {
+  if (message.type.length > _calendarSyncTypeMaxLength) return false;
+  if (!CalendarSyncType.all.contains(message.type)) return false;
+  if (message.entity.length > _calendarSyncEntityMaxLength) return false;
+  if (_exceedsMaxLength(message.checksum, _calendarSyncChecksumMaxLength)) {
+    return false;
+  }
+  if (_exceedsMaxLength(message.taskId, _calendarSyncTaskIdMaxLength)) {
+    return false;
+  }
+  if (_exceedsMaxLength(message.operation, _calendarSyncOperationMaxLength)) {
+    return false;
+  }
+  if (_exceedsMaxLength(
+    message.snapshotChecksum,
+    _calendarSyncSnapshotChecksumMaxLength,
+  )) {
+    return false;
+  }
+  if (_exceedsMaxLength(
+    message.snapshotUrl,
+    _calendarSyncSnapshotUrlMaxLength,
+  )) {
+    return false;
+  }
+  final data = message.data;
+  if (data != null) {
+    try {
+      final encoded = jsonEncode(data);
+      if (encoded.length > _calendarSyncDataMaxLength) {
+        return false;
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _exceedsMaxLength(String? value, int maxLength) =>
+    value != null && value.length > maxLength;

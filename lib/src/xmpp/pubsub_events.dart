@@ -51,3 +51,28 @@ final class PubSubFetchResult<T> {
 }
 
 const bool _pubSubFetchCompleteDefault = true;
+
+extension PubSubPepNotificationAuthorization on mox.PubSubNotificationEvent {
+  bool isFromPepOwner(mox.JID owner) {
+    final publisher = item.publisher?.trim();
+    if (publisher != null && publisher.isNotEmpty) {
+      return _matchesPepOwner(publisher, owner);
+    }
+    return _matchesPepOwner(from, owner);
+  }
+}
+
+extension PubSubPepRetractionAuthorization on mox.PubSubItemsRetractedEvent {
+  bool isFromPepOwner(mox.JID owner) => _matchesPepOwner(from, owner);
+}
+
+bool _matchesPepOwner(String raw, mox.JID owner) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return false;
+  final ownerBare = owner.toBare().toString();
+  try {
+    return mox.JID.fromString(trimmed).toBare().toString() == ownerBare;
+  } on Exception {
+    return trimmed == ownerBare;
+  }
+}

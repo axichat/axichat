@@ -16,6 +16,65 @@ const String _availabilityResponseAcceptedFallbackText =
     'Availability accepted';
 const String _availabilityResponseDeclinedFallbackText =
     'Availability declined';
+const String _calendarSyncOperationUpdate = 'update';
+const String _calendarSyncOperationDelete = 'delete';
+const String _calendarSyncEntityTask = 'task';
+const String _calendarSyncMissingRoleLog =
+    'Rejected calendar sync message; sender role unavailable.';
+const String _calendarSyncUnauthorizedLog =
+    'Rejected calendar sync message; sender role insufficient.';
+const String _calendarSyncMamBypassLog =
+    'Allowing calendar sync message without sender role (MAM history).';
+const String _calendarSyncReadOnlyRejectedLog =
+    'Rejected calendar sync message targeting read-only task.';
+const String _carbonOriginRejectedLog =
+    'Rejected carbon message with unexpected sender.';
+const String _mamOriginRejectedLog =
+    'Rejected archive message without local account routing.';
+const String _mucMutationRejectedLog =
+    'Rejected group chat mutation from unknown occupant.';
+const String _pinPubSubNamespace = 'urn:axi:pins';
+const String _pinPubSubNodePrefix = 'urn:axi:pins:';
+const String _pinTag = 'pin';
+const String _pinMessageIdAttr = 'message_id';
+const String _pinPinnedAtAttr = 'pinned_at';
+const String _pinChatJidAttr = 'chat_jid';
+const String _pinPublishModelOpen = 'open';
+const String _pinPublishModelPublishers = 'publishers';
+const mox.PubSubAffiliation _pinAffiliationOwner = mox.PubSubAffiliation.owner;
+const mox.PubSubAffiliation _pinAffiliationPublisher =
+    mox.PubSubAffiliation.publisher;
+const String _pinSendLastOnSubscribe = 'on_subscribe';
+const int _pinSyncMaxItems = 500;
+const String _pinSyncMaxItemsValue = '500';
+const bool _pinNotifyEnabled = true;
+const bool _pinDeliverNotificationsEnabled = true;
+const bool _pinDeliverPayloadsEnabled = true;
+const bool _pinPersistItemsEnabled = true;
+const bool _pinPresenceBasedDeliveryDisabled = false;
+const mox.AccessModel _pinAccessModelOpen = mox.AccessModel.open;
+const mox.AccessModel _pinAccessModelRestricted = mox.AccessModel.whitelist;
+const String _pinPubSubHostPrefix = 'pubsub.';
+const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
+const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
+const Set<String> _emptyPinPublisherSet = <String>{};
+final _pinPendingPublishesKey =
+    XmppStateStore.registerKey(_pinPendingPublishesKeyName);
+final _pinPendingRetractionsKey =
+    XmppStateStore.registerKey(_pinPendingRetractionsKeyName);
+const String _pinBase64PaddingChar = '=';
+const int _pinBase64Quantum = 4;
+final RegExp _pinBase64PaddingPattern = RegExp(r'=+$');
+const int _tlsRequirementNegotiatorPriority = 95;
+const bool _tlsRequirementSendStreamHeader = false;
+const bool _tlsRequirementErrorRecoverable = false;
+const bool _tlsRequirementMatchesAllFeatures = true;
+const bool _tlsRequirementNonFeatureDefault = true;
+const String _tlsRequirementNegotiatorId = 'axi.im.tls.required';
+const String _tlsRequirementNegotiatorXmlns = 'axi.im.tls.required';
+const String _tlsRequirementErrorMessage =
+    'TLS is required before authentication.';
+const String _streamFeaturesTag = 'stream:features';
 
 final class _MessageStatusSyncEnvelope {
   const _MessageStatusSyncEnvelope({
@@ -105,6 +164,261 @@ extension MessageEvent on mox.MessageEvent {
   }
 }
 
+bool _isOversizedMessage(mox.MessageEvent event, Logger log) {
+  final body = event.extensions.get<mox.MessageBodyData>()?.body;
+  if (body != null && !isMessageTextWithinLimit(body)) {
+    final trimmedBody = body.trimLeft();
+    final looksLikeCalendarSync =
+        trimmedBody.startsWith(_calendarSyncEnvelopeJsonPrefix) &&
+            body.contains(_calendarSyncEnvelopeKeyLiteral);
+    final maxBytes = looksLikeCalendarSync
+        ? CalendarSyncMessage.maxEnvelopeLength
+        : maxMessageTextBytes;
+    if (!isWithinUtf8ByteLimit(body, maxBytes: maxBytes)) {
+      final sizeBytes = utf8ByteLength(body);
+      log.warning('Dropped message with oversized text payload ($sizeBytes)');
+      return true;
+    }
+  }
+  final htmlBody = event.extensions.get<XhtmlImData>()?.xhtmlBody;
+  if (htmlBody != null && !isMessageHtmlWithinLimit(htmlBody)) {
+    final sizeBytes = utf8ByteLength(htmlBody);
+    log.warning('Dropped message with oversized HTML payload ($sizeBytes)');
+    return true;
+  }
+  return false;
+}
+
+String? _normalizeBareJidValue(String? jid) {
+  final trimmed = jid?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  try {
+    return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
+  } on Exception {
+    return trimmed.toLowerCase();
+  }
+}
+
+bool _hasInvalidArchiveOrigin(mox.MessageEvent event, String? accountJid) {
+  final normalizedAccount = _normalizeBareJidValue(accountJid);
+  if (normalizedAccount == null) return false;
+  if (event.isCarbon) {
+    final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
+    if (fromBare == null || fromBare != normalizedAccount) {
+      return true;
+    }
+  }
+  if (!event.isFromMAM) return false;
+  final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
+  final toBare = _normalizeBareJidValue(event.to.toBare().toString());
+  final bool isGroupChat = event.type == _messageTypeGroupchat;
+  if (isGroupChat) {
+    return toBare == null || toBare != normalizedAccount;
+  }
+  if (fromBare == null && toBare == null) return true;
+  return fromBare != normalizedAccount && toBare != normalizedAccount;
+}
+
+Future<bool> _isBlockedInboundSender(
+  mox.MessageEvent event,
+  Future<bool> Function(String jid) isJidBlocked,
+  String? accountJid,
+) async {
+  if (event.type == _messageTypeGroupchat) {
+    return false;
+  }
+  final fromBare = _normalizeBareJidValue(event.from.toBare().toString());
+  if (fromBare == null) {
+    return false;
+  }
+  final accountBare = _normalizeBareJidValue(accountJid);
+  if (accountBare != null && fromBare == accountBare) {
+    return false;
+  }
+  return isJidBlocked(fromBare);
+}
+
+String? _normalizePinJid(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  try {
+    return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
+  } on Exception {
+    return trimmed.toLowerCase();
+  }
+}
+
+String? _normalizePinChatJid(String raw) => _normalizePinJid(raw);
+
+String? _normalizePinPublisherJid(String raw) => _normalizePinJid(raw);
+
+String _encodePinChatJid(String chatJid) {
+  final bytes = utf8.encode(chatJid);
+  final encoded = base64Url.encode(bytes);
+  return encoded.replaceAll(_pinBase64PaddingPattern, '');
+}
+
+String? _decodePinChatJid(String encoded) {
+  final trimmed = encoded.trim();
+  if (trimmed.isEmpty) return null;
+  var normalized = trimmed;
+  final paddingRemainder = normalized.length % _pinBase64Quantum;
+  if (paddingRemainder != 0) {
+    final paddingLength = _pinBase64Quantum - paddingRemainder;
+    normalized = '$normalized${_pinBase64PaddingChar * paddingLength}';
+  }
+  try {
+    final bytes = base64Url.decode(normalized);
+    final decoded = utf8.decode(bytes);
+    return _normalizePinChatJid(decoded);
+  } on FormatException {
+    return null;
+  }
+}
+
+String? _pinNodeForChat(String chatJid) {
+  final normalized = _normalizePinChatJid(chatJid);
+  if (normalized == null) return null;
+  final encoded = _encodePinChatJid(normalized);
+  return '$_pinPubSubNodePrefix$encoded';
+}
+
+String? _chatJidFromPinNode(String nodeId) {
+  if (!nodeId.startsWith(_pinPubSubNodePrefix)) return null;
+  final encoded = nodeId.substring(_pinPubSubNodePrefix.length);
+  return _decodePinChatJid(encoded);
+}
+
+enum _PinNodePolicy {
+  shared,
+  restricted,
+}
+
+final class _PinNodeContext {
+  const _PinNodeContext({
+    required this.policy,
+    required this.chat,
+    this.affiliations,
+  });
+
+  final _PinNodePolicy policy;
+  final Chat? chat;
+  final Map<String, mox.PubSubAffiliation>? affiliations;
+}
+
+final class _PinNodeConfigResult {
+  const _PinNodeConfigResult({
+    required this.host,
+    required this.policy,
+  });
+
+  final mox.JID host;
+  final _PinNodePolicy policy;
+}
+
+mox.AccessModel _pinAccessModelForPolicy(_PinNodePolicy policy) =>
+    switch (policy) {
+      _PinNodePolicy.restricted => _pinAccessModelRestricted,
+      _PinNodePolicy.shared => _pinAccessModelOpen,
+    };
+
+String _pinPublishModelForPolicy(_PinNodePolicy policy) => switch (policy) {
+      _PinNodePolicy.restricted => _pinPublishModelPublishers,
+      _PinNodePolicy.shared => _pinPublishModelOpen,
+    };
+
+AxiPubSubNodeConfig _pinNodeConfig(_PinNodePolicy policy) =>
+    AxiPubSubNodeConfig(
+      accessModel: _pinAccessModelForPolicy(policy),
+      publishModel: _pinPublishModelForPolicy(policy),
+      deliverNotifications: _pinDeliverNotificationsEnabled,
+      deliverPayloads: _pinDeliverPayloadsEnabled,
+      maxItems: _pinSyncMaxItemsValue,
+      notifyRetract: _pinNotifyEnabled,
+      notifyDelete: _pinNotifyEnabled,
+      notifyConfig: _pinNotifyEnabled,
+      notifySub: _pinNotifyEnabled,
+      presenceBasedDelivery: _pinPresenceBasedDeliveryDisabled,
+      persistItems: _pinPersistItemsEnabled,
+      sendLastPublishedItem: _pinSendLastOnSubscribe,
+    );
+
+mox.NodeConfig _pinCreateNodeConfig(_PinNodePolicy policy) =>
+    _pinNodeConfig(policy).toNodeConfig();
+
+mox.PubSubPublishOptions _pinPublishOptions(_PinNodePolicy policy) =>
+    mox.PubSubPublishOptions(
+      accessModel: _pinAccessModelForPolicy(policy).value,
+      maxItems: _pinSyncMaxItemsValue,
+      persistItems: _pinPersistItemsEnabled,
+      publishModel: _pinPublishModelForPolicy(policy),
+      sendLastPublishedItem: _pinSendLastOnSubscribe,
+    );
+
+final class _PinnedMessageSyncPayload {
+  const _PinnedMessageSyncPayload({
+    required this.messageStanzaId,
+    required this.chatJid,
+    required this.pinnedAt,
+  });
+
+  final String messageStanzaId;
+  final String chatJid;
+  final DateTime pinnedAt;
+
+  String get itemId => messageStanzaId;
+
+  static _PinnedMessageSyncPayload? fromXml(
+    mox.XMLNode node, {
+    required String chatJid,
+    String? itemId,
+  }) {
+    if (node.tag != _pinTag) return null;
+    if (node.attributes['xmlns']?.toString() != _pinPubSubNamespace) {
+      return null;
+    }
+    final rawMessageId = node.attributes[_pinMessageIdAttr]?.toString().trim();
+    final resolvedMessageId = rawMessageId == null || rawMessageId.isEmpty
+        ? itemId?.trim()
+        : rawMessageId;
+    if (resolvedMessageId == null || resolvedMessageId.isEmpty) {
+      return null;
+    }
+    final rawPinnedAt = node.attributes[_pinPinnedAtAttr]?.toString().trim();
+    if (rawPinnedAt == null || rawPinnedAt.isEmpty) {
+      return null;
+    }
+    final parsedPinnedAt = DateTime.tryParse(rawPinnedAt);
+    if (parsedPinnedAt == null) return null;
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) return null;
+    final rawChat = node.attributes[_pinChatJidAttr]?.toString().trim();
+    if (rawChat != null && rawChat.isNotEmpty) {
+      final normalizedRawChat = _normalizePinChatJid(rawChat);
+      if (normalizedRawChat != null && normalizedRawChat != normalizedChat) {
+        return null;
+      }
+    }
+    return _PinnedMessageSyncPayload(
+      messageStanzaId: resolvedMessageId,
+      chatJid: normalizedChat,
+      pinnedAt: parsedPinnedAt.toUtc(),
+    );
+  }
+
+  mox.XMLNode toXml() {
+    return mox.XMLNode.xmlns(
+      tag: _pinTag,
+      xmlns: _pinPubSubNamespace,
+      attributes: {
+        _pinMessageIdAttr: messageStanzaId,
+        _pinChatJidAttr: chatJid,
+        _pinPinnedAtAttr: pinnedAt.toUtc().toIso8601String(),
+      },
+    );
+  }
+}
+
 class MamPageResult {
   const MamPageResult({
     required this.complete,
@@ -157,13 +471,42 @@ const int _xmppAttachmentDownloadLimitFallbackBytes = 50 * 1024 * 1024;
 const int _xmppAttachmentDownloadMaxRedirects = 5;
 const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
+const int _attachmentMaxUrlLength = 2048;
+const int _attachmentMaxMimeTypeLength = 128;
+const int _attachmentSourceMaxCount = 8;
+const String _attachmentFallbackName = 'attachment';
 const int _attachmentSizeFallbackBytes = 0;
+const int _attachmentCacheEmptyByteCount = 0;
+const int _attachmentCacheMaxBytes = 256 * 1024 * 1024;
+const String _attachmentCacheTempPrefix = '.';
+const bool _attachmentCacheFollowLinks = false;
+const Duration _inboundAttachmentAutoDownloadRateLimitWindow =
+    Duration(minutes: 1);
+const Duration _inboundAttachmentAutoDownloadRateLimitCleanupInterval =
+    Duration(minutes: 5);
+const int _inboundAttachmentAutoDownloadMaxEventsPerChat = 30;
+const int _inboundAttachmentAutoDownloadMaxEventsGlobal = 120;
+const WindowRateLimit _inboundAttachmentAutoDownloadPerChatRateLimit =
+    WindowRateLimit(
+  maxEvents: _inboundAttachmentAutoDownloadMaxEventsPerChat,
+  window: _inboundAttachmentAutoDownloadRateLimitWindow,
+);
+const WindowRateLimit _inboundAttachmentAutoDownloadGlobalRateLimit =
+    WindowRateLimit(
+  maxEvents: _inboundAttachmentAutoDownloadMaxEventsGlobal,
+  window: _inboundAttachmentAutoDownloadRateLimitWindow,
+);
 const int serverOnlyChatMessageCap = 500;
 const int mamLoginBackfillMessageLimit = 50;
 const int _emptyMessageCount = 0;
 const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
 const int _calendarMamPageSize = 100;
-const int _calendarSnapshotDownloadMaxBytes = 10 * 1024 * 1024;
+const int _calendarSnapshotDownloadMaxBytes =
+    CalendarSnapshotCodec.maxCompressedBytes;
+const Duration _calendarSyncInboundWindow = Duration(seconds: 60);
+const int _calendarSyncInboundMaxMessages = 120;
+const String _calendarSyncEnvelopeKeyLiteral = '"calendar_sync"';
+const String _calendarSyncEnvelopeJsonPrefix = '{';
 const String _calendarSnapshotDefaultName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _calendarSnapshotNoJidMessage =
@@ -256,7 +599,13 @@ class XmppUploadHeader {
 }
 
 mixin MessageService
-    on XmppBase, BaseStreamService, MucService, ChatsService, DraftSyncService {
+    on
+        XmppBase,
+        BaseStreamService,
+        MucService,
+        ChatsService,
+        DraftSyncService,
+        BlockingService {
   ImpatientCompleter<XmppDatabase> get _database;
 
   set _database(ImpatientCompleter<XmppDatabase> value);
@@ -811,6 +1160,374 @@ mixin MessageService
         getFunction: (db) => db.getDrafts(start: start, end: end),
       );
 
+  Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String chatJid) =>
+      createPaginatedStream<PinnedMessageEntry, XmppDatabase>(
+        watchFunction: (db) async => db.watchPinnedMessages(chatJid),
+        getFunction: (db) => db.getPinnedMessages(chatJid),
+      );
+
+  String? _selfBareJid() {
+    final selfJid = myJid?.trim();
+    if (selfJid == null || selfJid.isEmpty) {
+      return null;
+    }
+    try {
+      return mox.JID.fromString(selfJid).toBare().toString();
+    } on Exception {
+      return selfJid;
+    }
+  }
+
+  Map<String, mox.PubSubAffiliation>? _basePinAffiliations() {
+    final selfBare = _selfBareJid();
+    if (selfBare == null || selfBare.isEmpty) {
+      return null;
+    }
+    return <String, mox.PubSubAffiliation>{selfBare: _pinAffiliationOwner};
+  }
+
+  Map<String, mox.PubSubAffiliation>? _pinDirectAffiliations(Chat chat) {
+    final affiliations = _basePinAffiliations();
+    if (affiliations == null) {
+      return null;
+    }
+    final peerJid = chat.remoteJid.trim();
+    if (peerJid.isEmpty) {
+      return null;
+    }
+    affiliations[peerJid] = _pinAffiliationPublisher;
+    return affiliations;
+  }
+
+  int _appendPinAffiliations(
+    Map<String, mox.PubSubAffiliation> affiliations,
+    List<MucAffiliationEntry> entries,
+  ) {
+    var added = 0;
+    for (final entry in entries) {
+      final jid = entry.jid?.trim();
+      if (jid == null || jid.isEmpty) {
+        continue;
+      }
+      if (affiliations.containsKey(jid)) {
+        continue;
+      }
+      affiliations[jid] = _pinAffiliationPublisher;
+      added += 1;
+    }
+    return added;
+  }
+
+  Future<Map<String, mox.PubSubAffiliation>?> _pinGroupAffiliations(
+    Chat chat,
+  ) async {
+    final affiliations = _basePinAffiliations();
+    if (affiliations == null) {
+      return null;
+    }
+    final roomJid = chat.jid.trim();
+    if (roomJid.isEmpty) {
+      return null;
+    }
+    try {
+      final members = await fetchRoomMembers(roomJid: roomJid);
+      final admins = await fetchRoomAdmins(roomJid: roomJid);
+      final owners = await fetchRoomOwners(roomJid: roomJid);
+      final entries = <MucAffiliationEntry>[
+        ...members,
+        ...admins,
+        ...owners,
+      ];
+      final added = _appendPinAffiliations(affiliations, entries);
+      if (added == 0) {
+        return null;
+      }
+      return affiliations;
+    } on Exception {
+      return null;
+    }
+  }
+
+  Future<_PinNodeContext> _resolvePinNodeContext(String chatJid) async {
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(chatJid),
+    );
+    if (chat == null) {
+      return _PinNodeContext(
+        policy: _PinNodePolicy.restricted,
+        chat: null,
+        affiliations: _basePinAffiliations(),
+      );
+    }
+    if (chat.isEmailBacked) {
+      return _PinNodeContext(
+        policy: _PinNodePolicy.restricted,
+        chat: chat,
+        affiliations: _basePinAffiliations(),
+      );
+    }
+    if (chat.type == ChatType.groupChat) {
+      final affiliations = await _pinGroupAffiliations(chat);
+      return _PinNodeContext(
+        policy: _PinNodePolicy.restricted,
+        chat: chat,
+        affiliations: affiliations,
+      );
+    }
+    final affiliations = _pinDirectAffiliations(chat);
+    return _PinNodeContext(
+      policy: _PinNodePolicy.restricted,
+      chat: chat,
+      affiliations: affiliations,
+    );
+  }
+
+  Set<String> _normalizePinPublishers(Iterable<String> publishers) {
+    final normalized = <String>{};
+    for (final publisher in publishers) {
+      final resolved = _normalizePinPublisherJid(publisher);
+      if (resolved != null) {
+        normalized.add(resolved);
+      }
+    }
+    return normalized;
+  }
+
+  Set<String> _pinAuthorizedPublishersFromContext(_PinNodeContext context) {
+    final candidates = <String>[];
+    final selfBare = _selfBareJid();
+    if (selfBare != null && selfBare.isNotEmpty) {
+      candidates.add(selfBare);
+    }
+    final chat = context.chat;
+    if (chat != null &&
+        !chat.isEmailBacked &&
+        chat.type != ChatType.groupChat) {
+      final peerJid = chat.remoteJid.trim();
+      if (peerJid.isNotEmpty) {
+        candidates.add(peerJid);
+      }
+    }
+    final affiliations = context.affiliations;
+    if (affiliations != null && affiliations.isNotEmpty) {
+      candidates.addAll(affiliations.keys);
+    }
+    return _normalizePinPublishers(candidates);
+  }
+
+  void _cachePinAuthorizedPublishers(
+    String chatJid,
+    _PinNodeContext context,
+  ) {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    final publishers = _pinAuthorizedPublishersFromContext(context);
+    if (publishers.isEmpty) {
+      return;
+    }
+    _pinAuthorizedPublishersByChat[normalizedChat] = publishers;
+  }
+
+  Future<Set<String>?> _resolvePinAuthorizedPublishers(String chatJid) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return null;
+    }
+    final cached = _pinAuthorizedPublishersByChat[normalizedChat];
+    if (cached != null) {
+      return cached;
+    }
+    final context = await _resolvePinNodeContext(normalizedChat);
+    _cachePinAuthorizedPublishers(normalizedChat, context);
+    return _pinAuthorizedPublishersByChat[normalizedChat];
+  }
+
+  bool _isPinPublisherAllowed({
+    required Set<String>? allowedPublishers,
+    required Set<String> pendingPublishes,
+    required String messageStanzaId,
+    required String? publisher,
+  }) {
+    if (pendingPublishes.contains(messageStanzaId)) {
+      return true;
+    }
+    final rawPublisher = publisher?.trim();
+    if (rawPublisher == null || rawPublisher.isEmpty) {
+      return false;
+    }
+    final normalizedPublisher = _normalizePinPublisherJid(rawPublisher);
+    if (normalizedPublisher == null) {
+      return false;
+    }
+    if (allowedPublishers == null || allowedPublishers.isEmpty) {
+      return false;
+    }
+    return allowedPublishers.contains(normalizedPublisher);
+  }
+
+  Future<bool> _isPinPublisherAuthorized({
+    required String chatJid,
+    required String messageStanzaId,
+    required String? publisher,
+  }) async {
+    await _ensurePendingPinSyncLoaded();
+    final pendingPublishes =
+        _pendingPinPublishesByChat[chatJid] ?? _emptyPinPublisherSet;
+    final allowedPublishers = await _resolvePinAuthorizedPublishers(chatJid);
+    return _isPinPublisherAllowed(
+      allowedPublishers: allowedPublishers,
+      pendingPublishes: pendingPublishes,
+      messageStanzaId: messageStanzaId,
+      publisher: publisher,
+    );
+  }
+
+  Future<void> pinMessage({
+    required String chatJid,
+    required Message message,
+  }) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    final stanzaId = message.stanzaID.trim();
+    if (normalizedChat == null || stanzaId.isEmpty) {
+      return;
+    }
+    final pinnedAt = DateTime.timestamp().toUtc();
+    await _dbOp<XmppDatabase>(
+      (db) => db.upsertPinnedMessage(
+        PinnedMessageEntry(
+          messageStanzaId: stanzaId,
+          chatJid: normalizedChat,
+          pinnedAt: pinnedAt,
+        ),
+      ),
+    );
+    await _queuePinPublish(normalizedChat, stanzaId);
+    await _flushPendingPinSyncForChat(normalizedChat);
+  }
+
+  Future<void> unpinMessage({
+    required String chatJid,
+    required Message message,
+  }) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    final stanzaId = message.stanzaID.trim();
+    if (normalizedChat == null || stanzaId.isEmpty) {
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.deletePinnedMessage(
+        chatJid: normalizedChat,
+        messageStanzaId: stanzaId,
+      ),
+    );
+    await _queuePinRetraction(normalizedChat, stanzaId);
+    await _flushPendingPinSyncForChat(normalizedChat);
+  }
+
+  Future<void> syncPinnedMessagesForChat(String chatJid) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    if (_pinSyncInFlight.contains(normalizedChat)) {
+      return;
+    }
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
+    final context = await _resolvePinNodeContext(normalizedChat);
+    _cachePinAuthorizedPublishers(normalizedChat, context);
+    _pinSyncInFlight.add(normalizedChat);
+    try {
+      await database;
+      if (connectionState != ConnectionState.connected) {
+        return;
+      }
+      await _ensurePendingPinSyncLoaded();
+      final support = await refreshPubSubSupport();
+      if (!support.pubSubSupported) {
+        return;
+      }
+      final nodeConfig =
+          await _ensurePinNodeForChat(normalizedChat, context: context);
+      if (nodeConfig == null) {
+        return;
+      }
+      final host = nodeConfig.host;
+      final nodeId = _pinNodeForChat(normalizedChat);
+      if (nodeId == null) {
+        return;
+      }
+      await _subscribeToPins(host: host, nodeId: nodeId);
+      await _flushPendingPinSyncForChat(normalizedChat);
+      final snapshot = await _fetchPinSnapshot(
+        host: host,
+        nodeId: nodeId,
+        chatJid: normalizedChat,
+      );
+      if (snapshot == null) {
+        return;
+      }
+      await _applyPinSnapshot(
+        chatJid: normalizedChat,
+        items: snapshot,
+      );
+      await _flushPendingPinSyncForChat(normalizedChat);
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _pinSyncInFlight.remove(normalizedChat);
+    }
+  }
+
+  Future<void> _syncEmailPinnedMessagesOnReconnect() async {
+    if (_emailPinSnapshotInFlight) {
+      return;
+    }
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
+    _emailPinSnapshotInFlight = true;
+    try {
+      await database;
+      if (connectionState != ConnectionState.connected) {
+        return;
+      }
+      final support = await refreshPubSubSupport();
+      if (!support.pubSubSupported) {
+        return;
+      }
+      final emailChats = await _dbOpReturning<XmppDatabase, List<Chat>>(
+        (db) => db.getDeltaChats(),
+      );
+      for (final chat in emailChats) {
+        if (connectionState != ConnectionState.connected) {
+          return;
+        }
+        if (!chat.isEmailBacked) {
+          continue;
+        }
+        final chatJid = chat.jid.trim();
+        if (chatJid.isEmpty) {
+          continue;
+        }
+        await syncPinnedMessagesForChat(chatJid);
+      }
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _emailPinSnapshotInFlight = false;
+    }
+  }
+
   final _log = Logger('MessageService');
 
   final _messageStream = StreamController<Message>.broadcast();
@@ -824,6 +1541,7 @@ mixin MessageService
   bool _calendarMamRehydrateInFlight = false;
   bool _calendarMamSnapshotSeen = false;
   bool _calendarMamSnapshotUnavailableNotified = false;
+  final Queue<DateTime> _calendarSyncInboundTimestamps = Queue<DateTime>();
   final Set<String> _mucMamUnsupportedRooms = {};
   final Set<String> _mucJoinMamSyncRooms = {};
   final Set<String> _mucJoinMamDeferredRooms = {};
@@ -843,8 +1561,25 @@ mixin MessageService
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
   var _capabilityCacheLoaded = false;
+  final Map<String, Map<String, String>> _readOnlyTaskOwnersByChat =
+      <String, Map<String, String>>{};
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
   Directory? _attachmentDirectory;
+  final WindowRateLimiter _inboundAttachmentAutoDownloadGlobalLimiter =
+      WindowRateLimiter(_inboundAttachmentAutoDownloadGlobalRateLimit);
+  final KeyedWindowRateLimiter _inboundAttachmentAutoDownloadChatLimiter =
+      KeyedWindowRateLimiter(
+    limit: _inboundAttachmentAutoDownloadPerChatRateLimit,
+    cleanupInterval: _inboundAttachmentAutoDownloadRateLimitCleanupInterval,
+  );
+  bool _pendingPinSyncLoaded = false;
+  final Map<String, Set<String>> _pinAuthorizedPublishersByChat = {};
+  final Map<String, Set<String>> _pendingPinPublishesByChat = {};
+  final Map<String, Set<String>> _pendingPinRetractionsByChat = {};
+  final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
+  final Set<String> _pinSyncInFlight = {};
+  bool _emailPinSnapshotInFlight = false;
+  mox.JID? _pinPubSubHost;
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -852,7 +1587,25 @@ mixin MessageService
     manager
       ..registerHandler<mox.MessageEvent>((event) async {
         if (await _handleError(event)) return;
+        if (_isOversizedMessage(event, _log)) return;
+        if (_hasInvalidArchiveOrigin(event, myJid)) {
+          if (event.isCarbon) {
+            _log.warning(_carbonOriginRejectedLog);
+          }
+          if (event.isFromMAM) {
+            _log.warning(_mamOriginRejectedLog);
+          }
+          return;
+        }
         _trackMamGlobalAnchor(event);
+        final accountJidValue = myJid?.toString();
+        if (await _isBlockedInboundSender(
+          event,
+          isJidBlocked,
+          accountJidValue,
+        )) {
+          return;
+        }
 
         final reactionOnly = await _handleReactions(event);
         if (reactionOnly) return;
@@ -977,13 +1730,16 @@ mixin MessageService
           handleMucIdentifiersFromMessage(event, message);
         }
 
+        _rememberReadOnlyTaskShare(message);
+
         if (!message.noStore) {
           await _storeMessage(
             message,
             chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
           );
         }
-        if (metadata != null) {
+        if (metadata != null &&
+            _allowInboundAttachmentAutoDownload(message.chatJid)) {
           unawaited(
             _autoDownloadTrustedInboundAttachment(
               message: message,
@@ -1069,6 +1825,17 @@ mixin MessageService
           received: true,
           displayed: false,
         );
+      })
+      ..registerHandler<mox.PubSubNotificationEvent>((event) async {
+        await _handlePinNotification(event);
+      })
+      ..registerHandler<mox.PubSubItemsRetractedEvent>((event) async {
+        await _handlePinRetraction(event);
+      })
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        if (connectionState != ConnectionState.connected) return;
+        unawaited(_flushPendingPinSync());
+        unawaited(_syncEmailPinnedMessagesOnReconnect());
       });
   }
 
@@ -1437,7 +2204,11 @@ mixin MessageService
       throw XmppMessageException();
     }
     if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
-      _log.warning('Blocked XMPP send to foreign domain: $jid');
+      _log.warning(
+        SafeLogging.sanitizeMessage(
+          'Blocked XMPP send to foreign domain: $jid',
+        ),
+      );
       throw XmppForeignDomainException();
     }
     if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
@@ -1524,6 +2295,7 @@ mixin MessageService
     _log.info(
       'Sending message ${message.stanzaID} (length=${resolvedText.length} chars)',
     );
+    _rememberReadOnlyTaskShare(message);
     if (shouldStore) {
       await _storeMessage(message, chatType: chatType);
     }
@@ -2357,7 +3129,14 @@ mixin MessageService
     required String stanzaID,
     required String emoji,
   }) async {
-    if (emoji.isEmpty) return;
+    final normalizedEmoji = emoji.trim();
+    if (normalizedEmoji.isEmpty) return;
+    if (!isWithinUtf8ByteLimit(
+      normalizedEmoji,
+      maxBytes: maxReactionEmojiBytes,
+    )) {
+      return;
+    }
     final sender = myJid;
     final fromJid = _myJid;
     if (sender == null || fromJid == null) return;
@@ -2372,17 +3151,18 @@ mixin MessageService
       ),
     );
     final emojis = existing.map((reaction) => reaction.emoji).toList();
-    if (emojis.contains(emoji)) {
-      emojis.remove(emoji);
+    if (emojis.contains(normalizedEmoji)) {
+      emojis.remove(normalizedEmoji);
     } else {
-      emojis.add(emoji);
+      emojis.add(normalizedEmoji);
     }
+    final sanitizedEmojis = emojis.clampReactionEmojis();
     final reactionEvent = mox.MessageEvent(
       fromJid,
       mox.JID.fromString(message.chatJid),
       false,
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageReactionsData(message.stanzaID, emojis),
+        mox.MessageReactionsData(message.stanzaID, sanitizedEmojis),
       ]),
       id: _connection.generateId(),
     );
@@ -2403,7 +3183,7 @@ mixin MessageService
       (db) => db.replaceReactions(
         messageId: message.stanzaID,
         senderJid: sender,
-        emojis: emojis,
+        emojis: sanitizedEmojis,
       ),
     );
   }
@@ -2579,6 +3359,20 @@ mixin MessageService
     );
   }
 
+  Future<List<String>> persistDraftAttachmentMetadata(
+    Iterable<EmailAttachment> attachments,
+  ) async {
+    if (attachments.isEmpty) {
+      return const <String>[];
+    }
+    final List<String> metadataIds = <String>[];
+    for (final attachment in attachments) {
+      final metadataId = await _persistDraftAttachmentMetadata(attachment);
+      metadataIds.add(metadataId);
+    }
+    return List.unmodifiable(metadataIds);
+  }
+
   Future<DraftSaveResult> saveDraft({
     int? id,
     required List<String> jids,
@@ -2714,6 +3508,16 @@ mixin MessageService
     if (syncId.trim().isNotEmpty) {
       unawaited(retractDraftSync(syncId));
     }
+  }
+
+  Future<void> deleteFileMetadata(String id) async {
+    final String trimmed = id.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.deleteFileMetadata(trimmed),
+    );
   }
 
   Future<void> _handleMessageSendFailure(String stanzaID) async {
@@ -3095,6 +3899,8 @@ mixin MessageService
     _capabilityCache.clear();
     _capabilityCacheLoaded = false;
     _inboundAttachmentDownloads.clear();
+    _inboundAttachmentAutoDownloadGlobalLimiter.reset();
+    _inboundAttachmentAutoDownloadChatLimiter.reset();
     _attachmentDirectory = null;
   }
 
@@ -3201,11 +4007,22 @@ mixin MessageService
   Future<bool> _handleCorrection(mox.MessageEvent event, String jid) async {
     final correction = event.extensions.get<mox.LastMessageCorrectionData>();
     if (correction == null) return false;
+    if (!_isGroupChatMutationAuthorized(event)) {
+      _log.warning(_mucMutationRejectedLog);
+      return true;
+    }
 
+    final mox.OccupantIdData? occupantData =
+        event.extensions.get<mox.OccupantIdData>();
+    final String? occupantId = occupantData?.id;
     return await _dbOpReturning<XmppDatabase, bool>(
       (db) async {
         if (await db.getMessageByOriginID(correction.id) case final message?) {
-          if (!message.authorized(event.from) || !message.editable) {
+          if (!message.authorizedForMutation(
+                from: event.from,
+                occupantId: occupantId,
+              ) ||
+              !message.editable) {
             return false;
           }
           await db.saveMessageEdit(
@@ -3222,11 +4039,23 @@ mixin MessageService
   Future<bool> _handleRetraction(mox.MessageEvent event, String jid) async {
     final retraction = event.extensions.get<mox.MessageRetractionData>();
     if (retraction == null) return false;
+    if (!_isGroupChatMutationAuthorized(event)) {
+      _log.warning(_mucMutationRejectedLog);
+      return true;
+    }
 
+    final mox.OccupantIdData? occupantData =
+        event.extensions.get<mox.OccupantIdData>();
+    final String? occupantId = occupantData?.id;
     return await _dbOpReturning<XmppDatabase, bool>(
       (db) async {
         if (await db.getMessageByOriginID(retraction.id) case final message?) {
-          if (!message.authorized(event.from)) return false;
+          if (!message.authorizedForMutation(
+            from: event.from,
+            occupantId: occupantId,
+          )) {
+            return false;
+          }
           await db.markMessageRetracted(message.stanzaID);
           return true;
         }
@@ -3238,6 +4067,15 @@ mixin MessageService
   Future<bool> _handleReactions(mox.MessageEvent event) async {
     final reactions = event.extensions.get<mox.MessageReactionsData>();
     if (reactions == null) return false;
+    if (!_isGroupChatMutationAuthorized(event)) {
+      _log.warning(_mucMutationRejectedLog);
+      return true;
+    }
+    final sanitizedEmojis = reactions.emojis.clampReactionEmojis();
+    if (reactions.emojis.isNotEmpty && sanitizedEmojis.isEmpty) {
+      _log.fine('Dropping reactions with no valid emoji payload');
+      return !event.displayable;
+    }
     return await _dbOpReturning<XmppDatabase, bool>(
       (db) async {
         final message = await db.getMessageByStanzaID(reactions.messageId);
@@ -3247,10 +4085,14 @@ mixin MessageService
           );
           return !event.displayable;
         }
+        final bool isGroupChat = event.type == _messageTypeGroupchat;
+        final String senderJid = isGroupChat
+            ? event.from.toString()
+            : event.from.toBare().toString();
         await db.replaceReactions(
           messageId: message.stanzaID,
-          senderJid: event.from.toBare().toString(),
-          emojis: reactions.emojis,
+          senderJid: senderJid,
+          emojis: sanitizedEmojis,
         );
         return !event.displayable;
       },
@@ -3264,8 +4106,17 @@ mixin MessageService
     // Check if this is a calendar sync message by looking at the message body
     final messageText = event.text;
     if (messageText.isEmpty) return false;
+    if (!isWithinUtf8ByteLimit(
+      messageText,
+      maxBytes: CalendarSyncMessage.maxEnvelopeLength,
+    )) {
+      _log.warning('Dropped calendar sync message exceeding size limits');
+      return true;
+    }
 
-    final senderJid = event.from.toBare().toString();
+    final bool isGroupChat = event.type == _messageTypeGroupchat;
+    final senderJid =
+        isGroupChat ? event.from.toString() : event.from.toBare().toString();
     final selfJid = myJid;
     final chatJid = _calendarSyncChatJid(event, selfJid);
     final chatType = _calendarSyncChatType(event);
@@ -3274,19 +4125,46 @@ mixin MessageService
     final bool isSelfCalendar =
         selfJid != null && chatJid.toLowerCase() == selfJid.toLowerCase();
 
-    final syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
+    final trimmedMessageText = messageText.trimLeft();
+    final looksLikeCalendarSync =
+        trimmedMessageText.startsWith(_calendarSyncEnvelopeJsonPrefix) &&
+            messageText.contains(_calendarSyncEnvelopeKeyLiteral);
+    final syncMessage = looksLikeCalendarSync
+        ? CalendarSyncMessage.tryParseEnvelope(messageText)
+        : null;
     if (syncMessage == null) {
-      if (selfJid != null &&
-          senderJid == selfJid &&
-          messageText.contains('"calendar_sync"')) {
-        _log.info('Dropped malformed calendar sync envelope from self');
+      if (looksLikeCalendarSync) {
+        _log.info('Dropped malformed calendar sync envelope');
         return true;
       }
       return false;
     }
 
+    if (_isCalendarSyncRateLimited()) {
+      _log.warning('Dropping calendar sync message due to rate limits');
+      return true;
+    }
+
     if (isSelfCalendar && !isSelfSender) {
       _log.warning('Rejected calendar sync message from unauthorized sender');
+      return true;
+    }
+    if (!isSelfCalendar &&
+        !_canApplyChatCalendarSync(
+          syncMessage: syncMessage,
+          event: event,
+          chatJid: chatJid,
+          chatType: chatType,
+        )) {
+      return true;
+    }
+    if (!isSelfCalendar &&
+        _isReadOnlyTaskSyncBlocked(
+          syncMessage: syncMessage,
+          event: event,
+          chatJid: chatJid,
+        )) {
+      _log.warning(_calendarSyncReadOnlyRejectedLog);
       return true;
     }
 
@@ -3330,6 +4208,228 @@ mixin MessageService
     }
 
     return true; // Handled - don't process as regular chat message
+  }
+
+  bool _canApplyChatCalendarSync({
+    required CalendarSyncMessage syncMessage,
+    required mox.MessageEvent event,
+    required String chatJid,
+    required ChatType chatType,
+  }) {
+    final CalendarChatAcl acl = chatType.calendarDefaultAcl;
+    final CalendarChatRole requiredRole =
+        _calendarSyncRequiredRole(syncMessage, acl: acl);
+    final CalendarChatRole? senderRole = _calendarSyncSenderRole(
+      event,
+      chatJid: chatJid,
+      chatType: chatType,
+    );
+    if (senderRole == null) {
+      if (event.isFromMAM) {
+        _log.fine(_calendarSyncMamBypassLog);
+        return true;
+      }
+      _log.warning(_calendarSyncMissingRoleLog);
+      return false;
+    }
+    if (!senderRole.allows(requiredRole)) {
+      _log.warning(_calendarSyncUnauthorizedLog);
+      return false;
+    }
+    return true;
+  }
+
+  CalendarChatRole _calendarSyncRequiredRole(
+    CalendarSyncMessage message, {
+    required CalendarChatAcl acl,
+  }) {
+    switch (message.type) {
+      case CalendarSyncType.request:
+        return acl.read;
+      case CalendarSyncType.update:
+        final String operation =
+            message.operation ?? _calendarSyncOperationUpdate;
+        if (operation == _calendarSyncOperationDelete) {
+          return acl.delete;
+        }
+        return acl.write;
+      case CalendarSyncType.full:
+      case CalendarSyncType.snapshot:
+        return acl.write;
+    }
+    return acl.write;
+  }
+
+  CalendarChatRole? _calendarSyncSenderRole(
+    mox.MessageEvent event, {
+    required String chatJid,
+    required ChatType chatType,
+  }) {
+    if (chatType != ChatType.groupChat) {
+      return CalendarChatRole.participant;
+    }
+    final RoomState? roomState = roomStateFor(chatJid);
+    if (roomState == null) {
+      return null;
+    }
+    final Occupant? occupant = _calendarSyncOccupantForSender(
+      event,
+      roomState: roomState,
+    );
+    if (occupant == null) {
+      return null;
+    }
+    return occupant.role.calendarChatRole;
+  }
+
+  Occupant? _calendarSyncOccupantForSender(
+    mox.MessageEvent event, {
+    required RoomState roomState,
+  }) {
+    return _mucOccupantForSender(event, roomState: roomState);
+  }
+
+  Occupant? _mucOccupantForSender(
+    mox.MessageEvent event, {
+    required RoomState roomState,
+  }) {
+    final sender = event.from.toString();
+    final Occupant? direct = roomState.occupants[sender];
+    if (direct != null) {
+      return direct;
+    }
+    final String nick = event.from.resource;
+    if (nick.isEmpty) {
+      return null;
+    }
+    for (final occupant in roomState.occupants.values) {
+      if (occupant.nick == nick) {
+        return occupant;
+      }
+    }
+    return null;
+  }
+
+  bool _isGroupChatMutationAuthorized(mox.MessageEvent event) {
+    if (event.type != _messageTypeGroupchat) {
+      return true;
+    }
+    if (event.isFromMAM) {
+      return true;
+    }
+    final roomJid = event.from.toBare().toString();
+    if (hasLeftRoom(roomJid)) {
+      return false;
+    }
+    final RoomState? roomState = roomStateFor(roomJid);
+    if (roomState == null) {
+      return false;
+    }
+    final Occupant? occupant =
+        _mucOccupantForSender(event, roomState: roomState);
+    return occupant?.isPresent ?? false;
+  }
+
+  bool _isReadOnlyTaskSyncBlocked({
+    required CalendarSyncMessage syncMessage,
+    required mox.MessageEvent event,
+    required String chatJid,
+  }) {
+    if (syncMessage.type != CalendarSyncType.update) {
+      return false;
+    }
+    if (syncMessage.entity != _calendarSyncEntityTask) {
+      return false;
+    }
+    final String? taskId = syncMessage.taskId?.trim();
+    if (taskId == null || taskId.isEmpty) {
+      return false;
+    }
+    final Map<String, String>? owners = _readOnlyTaskOwnersByChat[chatJid];
+    if (owners == null || owners.isEmpty) {
+      return false;
+    }
+    final String? owner = owners[taskId];
+    if (owner == null || owner.trim().isEmpty) {
+      return false;
+    }
+    final String senderIdentity = event.type == _messageTypeGroupchat
+        ? event.from.toString()
+        : event.from.toBare().toString();
+    return !_calendarReadOnlyOwnerMatchesSender(
+      senderJid: senderIdentity,
+      ownerJid: owner,
+    );
+  }
+
+  bool _calendarReadOnlyOwnerMatchesSender({
+    required String senderJid,
+    required String ownerJid,
+  }) {
+    final String sender = senderJid.trim();
+    final String owner = ownerJid.trim();
+    if (sender.isEmpty || owner.isEmpty) {
+      return false;
+    }
+    try {
+      final senderParsed = mox.JID.fromString(sender);
+      final ownerParsed = mox.JID.fromString(owner);
+      final String senderBare = senderParsed.toBare().toString().toLowerCase();
+      final String ownerBare = ownerParsed.toBare().toString().toLowerCase();
+      if (senderBare != ownerBare) {
+        return false;
+      }
+      final String senderResource = senderParsed.resource.trim().toLowerCase();
+      final String ownerResource = ownerParsed.resource.trim().toLowerCase();
+      if (senderResource.isEmpty && ownerResource.isEmpty) {
+        return true;
+      }
+      return senderResource == ownerResource;
+    } on Exception {
+      return sender.toLowerCase() == owner.toLowerCase();
+    }
+  }
+
+  void _rememberReadOnlyTaskShare(Message message) {
+    final CalendarTask? task = message.calendarTaskIcs;
+    if (task == null) {
+      return;
+    }
+    if (!message.calendarTaskIcsReadOnly) {
+      return;
+    }
+    final String taskId = task.id.trim();
+    if (taskId.isEmpty) {
+      return;
+    }
+    final String chatJid = message.chatJid.trim();
+    if (chatJid.isEmpty) {
+      return;
+    }
+    final String owner = message.senderJid.trim();
+    if (owner.isEmpty) {
+      return;
+    }
+    final Map<String, String> owners = _readOnlyTaskOwnersByChat.putIfAbsent(
+      chatJid,
+      () => <String, String>{},
+    );
+    owners[taskId] = owner;
+  }
+
+  bool _isCalendarSyncRateLimited() {
+    final now = DateTime.now();
+    final windowStart = now.subtract(_calendarSyncInboundWindow);
+    while (_calendarSyncInboundTimestamps.isNotEmpty &&
+        _calendarSyncInboundTimestamps.first.isBefore(windowStart)) {
+      _calendarSyncInboundTimestamps.removeFirst();
+    }
+    if (_calendarSyncInboundTimestamps.length >=
+        _calendarSyncInboundMaxMessages) {
+      return true;
+    }
+    _calendarSyncInboundTimestamps.addLast(now);
+    return false;
   }
 
   bool _isSnapshotCalendarMessage(CalendarSyncMessage message) {
@@ -3388,6 +4488,7 @@ mixin MessageService
         metadata: metadata,
         allowHttpOverride: allowSelfOverride,
         allowInsecureHostsOverride: allowSelfOverride,
+        allowRemoteDownload: allowSelfDownload,
       );
       if (decoded == null) {
         _log.warning(_calendarSnapshotDecodeFailedMessage);
@@ -3434,16 +4535,21 @@ mixin MessageService
     FileMetadataData? metadata,
     bool? allowHttpOverride,
     bool? allowInsecureHostsOverride,
+    required bool allowRemoteDownload,
   }) async {
     if (metadata != null) {
       final decoded = await _decodeSnapshotFromMetadata(
         metadata,
         allowHttpOverride: allowHttpOverride,
         allowInsecureHostsOverride: allowInsecureHostsOverride,
+        allowRemoteDownload: allowRemoteDownload,
       );
       if (decoded != null) {
         return decoded;
       }
+    }
+    if (!allowRemoteDownload) {
+      return null;
     }
     return _downloadAndDecodeSnapshot(
       url,
@@ -3456,10 +4562,21 @@ mixin MessageService
     FileMetadataData metadata, {
     bool? allowHttpOverride,
     bool? allowInsecureHostsOverride,
+    required bool allowRemoteDownload,
   }) async {
     await _dbOp<XmppDatabase>(
       (db) => db.saveFileMetadata(metadata),
     );
+    final existingPath = metadata.path?.trim();
+    final existingFile = existingPath == null || existingPath.isEmpty
+        ? null
+        : File(existingPath);
+    if (existingFile?.existsSync() ?? false) {
+      return CalendarSnapshotCodec.decodeFile(existingFile!);
+    }
+    if (!allowRemoteDownload) {
+      return null;
+    }
     final path = await downloadInboundAttachment(
       metadataId: metadata.id,
       allowHttpOverride: allowHttpOverride,
@@ -3863,19 +4980,25 @@ mixin MessageService
     final fun = event.extensions.get<mox.FileUploadNotificationData>();
     final statelessData = event.extensions.get<mox.StatelessFileSharingData>();
     final oob = event.extensions.get<mox.OOBData>();
-    final oobUrl = oob?.url;
+    final oobUrl = _sanitizeAttachmentUrl(oob?.url);
     final oobDesc = oob?.desc?.trim();
-    final oobName = oobDesc?.isNotEmpty == true ? oobDesc : null;
+    final oobName = oobDesc?.isNotEmpty == true
+        ? _sanitizeAttachmentFilename(oobDesc!)
+        : null;
     if (statelessData == null || statelessData.sources.isEmpty) {
       if (fun != null) {
         final name = fun.metadata.name;
         final fallbackName =
             oobName ?? (oobUrl == null ? null : _filenameFromUrl(oobUrl));
+        final resolvedName = _sanitizeAttachmentFilename(
+          name ?? fallbackName ?? _attachmentFallbackName,
+        );
+        final mimeType = _sanitizeAttachmentMimeType(fun.metadata.mediaType);
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: oobUrl == null ? null : [oobUrl],
-          filename: p.normalize(name ?? fallbackName ?? 'attachment'),
-          mimeType: fun.metadata.mediaType,
+          filename: resolvedName,
+          mimeType: mimeType,
           sizeBytes: fun.metadata.size,
           width: fun.metadata.width,
           height: fun.metadata.height,
@@ -3886,22 +5009,41 @@ mixin MessageService
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: [oobUrl],
-          filename: oobName ?? _filenameFromUrl(oobUrl),
+          filename: _sanitizeAttachmentFilename(
+            oobName ?? _filenameFromUrl(oobUrl),
+          ),
         );
       }
       return null;
     }
-    final urls = statelessData.sources
-        .whereType<mox.StatelessFileSharingUrlSource>()
-        .map((e) => e.url)
-        .toList();
+    final urls = <String>[];
+    var exceededSourceLimit = false;
+    for (final source in statelessData.sources
+        .whereType<mox.StatelessFileSharingUrlSource>()) {
+      if (urls.length >= _attachmentSourceMaxCount) {
+        exceededSourceLimit = true;
+        break;
+      }
+      final sanitizedUrl = _sanitizeAttachmentUrl(source.url);
+      if (sanitizedUrl == null) {
+        continue;
+      }
+      urls.add(sanitizedUrl);
+    }
+    if (exceededSourceLimit) {
+      _log.warning('Attachment source list exceeded safe limits');
+    }
     if (urls.isNotEmpty) {
+      final resolvedName = _sanitizeAttachmentFilename(
+        statelessData.metadata.name ?? p.basename(urls.first),
+      );
+      final mimeType =
+          _sanitizeAttachmentMimeType(statelessData.metadata.mediaType);
       return FileMetadataData(
         id: uuid.v4(),
         sourceUrls: urls,
-        filename:
-            p.normalize(statelessData.metadata.name ?? p.basename(urls.first)),
-        mimeType: statelessData.metadata.mediaType,
+        filename: resolvedName,
+        mimeType: mimeType,
         sizeBytes: statelessData.metadata.size,
         width: statelessData.metadata.width,
         height: statelessData.metadata.height,
@@ -3917,17 +5059,27 @@ mixin MessageService
           return FileMetadataData(
             id: uuid.v4(),
             sourceUrls: [oobUrl],
-            filename: oobName ?? _filenameFromUrl(oobUrl),
+            filename: _sanitizeAttachmentFilename(
+              oobName ?? _filenameFromUrl(oobUrl),
+            ),
           );
         }
         return null;
       }
+      final encryptedUrl = _sanitizeAttachmentUrl(encryptedSource.source.url);
+      if (encryptedUrl == null) {
+        return null;
+      }
+      final resolvedName = _sanitizeAttachmentFilename(
+        statelessData.metadata.name ?? p.basename(encryptedUrl),
+      );
+      final mimeType =
+          _sanitizeAttachmentMimeType(statelessData.metadata.mediaType);
       return FileMetadataData(
         id: uuid.v4(),
-        sourceUrls: [encryptedSource.source.url],
-        filename: p.normalize(statelessData.metadata.name ??
-            p.basename(encryptedSource.source.url)),
-        mimeType: statelessData.metadata.mediaType,
+        sourceUrls: [encryptedUrl],
+        filename: resolvedName,
+        mimeType: mimeType,
         encryptionKey: base64Encode(encryptedSource.key),
         encryptionIV: base64Encode(encryptedSource.iv),
         encryptionScheme: encryptedSource.encryption.toNamespace(),
@@ -3947,7 +5099,7 @@ mixin MessageService
         ? segments.last
         : p.basename(url);
     final normalized = p.basename(candidate).trim();
-    return normalized.isEmpty ? 'attachment' : normalized;
+    return normalized.isEmpty ? _attachmentFallbackName : normalized;
   }
 
   Stream<FileMetadataData?> fileMetadataStream(String id) =>
@@ -4103,6 +5255,9 @@ mixin MessageService
         (db) => db.saveFileMetadata(updatedMetadata),
         awaitDatabase: true,
       );
+      unawaited(
+        _enforceAttachmentCacheLimit(exemptPaths: {finalFile.path}),
+      );
       return finalFile.path;
     } on XmppAbortedException {
       return null;
@@ -4168,6 +5323,77 @@ mixin MessageService
     return directory;
   }
 
+  Future<void> _enforceAttachmentCacheLimit({
+    Set<String> exemptPaths = const <String>{},
+  }) async {
+    if (_attachmentCacheMaxBytes <= _attachmentCacheEmptyByteCount) {
+      return;
+    }
+    final Directory directory;
+    try {
+      directory = await _attachmentCacheDirectory();
+    } on Exception {
+      return;
+    }
+    if (!await directory.exists()) {
+      return;
+    }
+    final normalizedExempt = <String>{}..addAll(
+        exemptPaths
+            .map((path) => p.normalize(path.trim()))
+            .where((path) => path.isNotEmpty),
+      );
+    final entries = <_AttachmentCacheEntry>[];
+    var totalBytes = _attachmentCacheEmptyByteCount;
+    await for (final entity in directory.list(
+      followLinks: _attachmentCacheFollowLinks,
+    )) {
+      if (entity is! File) continue;
+      final path = p.normalize(entity.path);
+      if (normalizedExempt.contains(path)) {
+        continue;
+      }
+      final baseName = p.basename(path);
+      if (baseName.startsWith(_attachmentCacheTempPrefix)) {
+        continue;
+      }
+      FileStat stat;
+      try {
+        stat = await entity.stat();
+      } on Exception {
+        continue;
+      }
+      final size = stat.size;
+      if (size <= _attachmentCacheEmptyByteCount) {
+        continue;
+      }
+      totalBytes += size;
+      entries.add(
+        _AttachmentCacheEntry(
+          file: entity,
+          sizeBytes: size,
+          lastModified: stat.modified,
+        ),
+      );
+    }
+    if (totalBytes <= _attachmentCacheMaxBytes) {
+      return;
+    }
+    entries.sort((a, b) => a.lastModified.compareTo(b.lastModified));
+    var remainingBytes = totalBytes;
+    for (final entry in entries) {
+      if (remainingBytes <= _attachmentCacheMaxBytes) {
+        break;
+      }
+      try {
+        await entry.file.delete();
+        remainingBytes -= entry.sizeBytes;
+      } on Exception {
+        continue;
+      }
+    }
+  }
+
   String _attachmentFileName(FileMetadataData metadata) {
     final sanitized = _sanitizeAttachmentFilename(metadata.filename);
     return '${metadata.id}_$sanitized';
@@ -4175,17 +5401,17 @@ mixin MessageService
 
   String _sanitizeAttachmentFilename(String filename) {
     final base = p.basename(filename).trim();
-    if (base.isEmpty) return 'attachment';
+    if (base.isEmpty) return _attachmentFallbackName;
     final strippedSeparators = base.replaceAll(RegExp(r'[\\/]'), '_');
     final collapsedWhitespace =
         strippedSeparators.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (collapsedWhitespace.isEmpty) return 'attachment';
+    if (collapsedWhitespace.isEmpty) return _attachmentFallbackName;
     final safe = collapsedWhitespace.replaceAll(
       RegExp(r'[^a-zA-Z0-9._() \[\]-]'),
       '_',
     );
     final normalized = safe.trim();
-    if (normalized.isEmpty) return 'attachment';
+    if (normalized.isEmpty) return _attachmentFallbackName;
     if (normalized.length <= _attachmentMaxFilenameLength) return normalized;
     final extension = p.extension(normalized);
     final baseName = p.basenameWithoutExtension(normalized);
@@ -4194,6 +5420,24 @@ mixin MessageService
       return normalized.substring(0, _attachmentMaxFilenameLength);
     }
     return '${baseName.substring(0, maxBase)}$extension';
+  }
+
+  String? _sanitizeAttachmentMimeType(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (trimmed.length > _attachmentMaxMimeTypeLength) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String? _sanitizeAttachmentUrl(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (trimmed.length > _attachmentMaxUrlLength) {
+      return null;
+    }
+    return trimmed;
   }
 
   Future<void> _replaceFile({
@@ -4442,6 +5686,633 @@ mixin MessageService
     }
   }
 
+  bool _shouldProcessPinSyncEvent(String chatJid) {
+    if (_pinSyncRateLimiter.allowEvent()) {
+      return true;
+    }
+    if (_pinSyncRateLimiter.shouldRefreshNow()) {
+      unawaited(syncPinnedMessagesForChat(chatJid));
+    }
+    return false;
+  }
+
+  Future<void> _handlePinNotification(
+    mox.PubSubNotificationEvent event,
+  ) async {
+    final nodeId = event.item.node;
+    final chatJid = _chatJidFromPinNode(nodeId);
+    if (chatJid == null) return;
+    if (!_shouldProcessPinSyncEvent(chatJid)) return;
+    await _ensurePendingPinSyncLoaded();
+    final itemId = event.item.id.trim();
+    if (itemId.isNotEmpty &&
+        _pendingPinRetractionsByChat[chatJid]?.contains(itemId) == true) {
+      return;
+    }
+    final payload = event.item.payload;
+    if (payload == null) {
+      unawaited(syncPinnedMessagesForChat(chatJid));
+      return;
+    }
+    final parsed = _PinnedMessageSyncPayload.fromXml(
+      payload,
+      chatJid: chatJid,
+      itemId: itemId.isEmpty ? null : itemId,
+    );
+    if (parsed == null) {
+      return;
+    }
+    if (_pendingPinRetractionsByChat[chatJid]
+            ?.contains(parsed.messageStanzaId) ==
+        true) {
+      return;
+    }
+    final publisher = event.item.publisher;
+    final canApply = await _isPinPublisherAuthorized(
+      chatJid: chatJid,
+      messageStanzaId: parsed.messageStanzaId,
+      publisher: publisher,
+    );
+    if (!canApply) {
+      if (publisher == null || publisher.trim().isEmpty) {
+        unawaited(syncPinnedMessagesForChat(chatJid));
+      }
+      return;
+    }
+    await _applyPinSyncUpdate(parsed);
+  }
+
+  Future<void> _handlePinRetraction(
+    mox.PubSubItemsRetractedEvent event,
+  ) async {
+    final chatJid = _chatJidFromPinNode(event.node);
+    if (chatJid == null) return;
+    if (event.itemIds.isEmpty) return;
+    if (!_shouldProcessPinSyncEvent(chatJid)) return;
+    await _ensurePendingPinSyncLoaded();
+    var pendingChanged = false;
+    for (final itemId in event.itemIds) {
+      final normalized = itemId.trim();
+      if (normalized.isEmpty) continue;
+      await _applyPinSyncRetraction(
+        chatJid: chatJid,
+        messageStanzaId: normalized,
+      );
+      pendingChanged =
+          _pendingPinPublishesByChat[chatJid]?.remove(normalized) == true ||
+              _pendingPinRetractionsByChat[chatJid]?.remove(normalized) ==
+                  true ||
+              pendingChanged;
+    }
+    if (pendingChanged) {
+      await _persistPendingPinSync();
+    }
+  }
+
+  Future<void> _applyPinSyncUpdate(
+    _PinnedMessageSyncPayload payload,
+  ) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.upsertPinnedMessage(
+        PinnedMessageEntry(
+          messageStanzaId: payload.messageStanzaId,
+          chatJid: payload.chatJid,
+          pinnedAt: payload.pinnedAt,
+        ),
+      ),
+    );
+    final pending = _pendingPinPublishesByChat[payload.chatJid];
+    if (pending?.remove(payload.messageStanzaId) == true) {
+      await _persistPendingPinSync();
+    }
+  }
+
+  Future<void> _applyPinSyncRetraction({
+    required String chatJid,
+    required String messageStanzaId,
+  }) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.deletePinnedMessage(
+        chatJid: chatJid,
+        messageStanzaId: messageStanzaId,
+      ),
+    );
+  }
+
+  SafePubSubManager? _pinPubSub() =>
+      _connection.getManager<SafePubSubManager>();
+
+  List<mox.JID> _pinPubSubHosts() {
+    final domain = _myJid?.domain.trim();
+    if (domain == null || domain.isEmpty) {
+      return const <mox.JID>[];
+    }
+    final candidates = <mox.JID>[];
+    final seen = <String>{};
+    void addCandidate(String raw) {
+      final normalized = raw.trim();
+      if (normalized.isEmpty || seen.contains(normalized)) return;
+      try {
+        candidates.add(mox.JID.fromString(normalized));
+        seen.add(normalized);
+      } on Exception {
+        return;
+      }
+    }
+
+    final cachedHost = _pinPubSubHost?.toString();
+    if (cachedHost != null && cachedHost.isNotEmpty) {
+      addCandidate(cachedHost);
+    }
+    addCandidate('$_pinPubSubHostPrefix$domain');
+    addCandidate(domain);
+    return candidates;
+  }
+
+  Future<_PinNodeConfigResult?> _ensurePinNodeForChat(
+    String chatJid, {
+    required _PinNodeContext context,
+  }) async {
+    final nodeId = _pinNodeForChat(chatJid);
+    if (nodeId == null) return null;
+    final pubsub = _pinPubSub();
+    if (pubsub == null) return null;
+    for (final host in _pinPubSubHosts()) {
+      final appliedPolicy = await _configurePinNode(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        context: context,
+      );
+      if (appliedPolicy == null) continue;
+      _pinPubSubHost = host;
+      return _PinNodeConfigResult(host: host, policy: appliedPolicy);
+    }
+    return null;
+  }
+
+  Future<_PinNodePolicy?> _configurePinNode({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required _PinNodeContext context,
+  }) async {
+    final applied = await _configurePinNodeWithPolicy(
+      pubsub: pubsub,
+      host: host,
+      nodeId: nodeId,
+      policy: context.policy,
+      affiliations: context.affiliations,
+    );
+    if (!applied) {
+      return null;
+    }
+    return context.policy;
+  }
+
+  Future<bool> _configurePinNodeWithPolicy({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required _PinNodePolicy policy,
+    Map<String, mox.PubSubAffiliation>? affiliations,
+  }) async {
+    final config = _pinNodeConfig(policy);
+    final configured = await pubsub.configureNode(host, nodeId, config);
+    if (!configured.isType<mox.PubSubError>()) {
+      return _applyPinAffiliationsIfNeeded(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        policy: policy,
+        affiliations: affiliations,
+      );
+    }
+
+    try {
+      final created = await pubsub.createNodeWithConfig(
+        host,
+        _pinCreateNodeConfig(policy),
+        nodeId: nodeId,
+      );
+      if (created != null) {
+        final applied = await pubsub.configureNode(host, nodeId, config);
+        if (applied.isType<mox.PubSubError>()) {
+          return false;
+        }
+        return _applyPinAffiliationsIfNeeded(
+          pubsub: pubsub,
+          host: host,
+          nodeId: nodeId,
+          policy: policy,
+          affiliations: affiliations,
+        );
+      }
+    } on Exception {
+      // Ignore and try fallback creation.
+    }
+
+    try {
+      final created = await pubsub.createNode(host, nodeId: nodeId);
+      if (created == null) return false;
+      final applied = await pubsub.configureNode(host, nodeId, config);
+      if (applied.isType<mox.PubSubError>()) {
+        return false;
+      }
+      return _applyPinAffiliationsIfNeeded(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        policy: policy,
+        affiliations: affiliations,
+      );
+    } on Exception {
+      return false;
+    }
+  }
+
+  Future<bool> _applyPinAffiliationsIfNeeded({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required _PinNodePolicy policy,
+    Map<String, mox.PubSubAffiliation>? affiliations,
+  }) async {
+    if (policy != _PinNodePolicy.restricted) {
+      return true;
+    }
+    if (affiliations == null || affiliations.isEmpty) {
+      return false;
+    }
+    final result = await pubsub.setAffiliations(host, nodeId, affiliations);
+    return !result.isType<mox.PubSubError>();
+  }
+
+  Future<void> _subscribeToPins({
+    required mox.JID host,
+    required String nodeId,
+  }) async {
+    final pubsub = _pinPubSub();
+    if (pubsub == null) return;
+    final result = await pubsub.subscribe(host, nodeId);
+    if (!result.isType<mox.PubSubError>()) {
+      return;
+    }
+    final error = result.get<mox.PubSubError>();
+    if (error is mox.MalformedResponseError) {
+      return;
+    }
+  }
+
+  Future<List<_PinnedMessageSyncPayload>?> _fetchPinSnapshot({
+    required mox.JID host,
+    required String nodeId,
+    required String chatJid,
+  }) async {
+    final pubsub = _pinPubSub();
+    if (pubsub == null) return null;
+    final result = await pubsub.getItems(
+      host,
+      nodeId,
+      maxItems: _pinSyncMaxItems,
+    );
+    if (result.isType<mox.PubSubError>()) {
+      return null;
+    }
+    await _ensurePendingPinSyncLoaded();
+    final allowedPublishers = await _resolvePinAuthorizedPublishers(chatJid);
+    final pendingPublishes =
+        _pendingPinPublishesByChat[chatJid] ?? _emptyPinPublisherSet;
+    final items = result.get<List<mox.PubSubItem>>();
+    final parsed = <_PinnedMessageSyncPayload>[];
+    for (final item in items) {
+      final payload = item.payload;
+      if (payload == null) continue;
+      final entry = _PinnedMessageSyncPayload.fromXml(
+        payload,
+        chatJid: chatJid,
+        itemId: item.id,
+      );
+      if (entry != null &&
+          _isPinPublisherAllowed(
+            allowedPublishers: allowedPublishers,
+            pendingPublishes: pendingPublishes,
+            messageStanzaId: entry.messageStanzaId,
+            publisher: item.publisher,
+          )) {
+        parsed.add(entry);
+      }
+    }
+    return parsed;
+  }
+
+  Future<void> _applyPinSnapshot({
+    required String chatJid,
+    required List<_PinnedMessageSyncPayload> items,
+  }) async {
+    await _ensurePendingPinSyncLoaded();
+    final pendingPublishes =
+        _pendingPinPublishesByChat[chatJid] ?? const <String>{};
+    final pendingRetractions =
+        _pendingPinRetractionsByChat[chatJid] ?? const <String>{};
+    for (final item in items) {
+      if (pendingRetractions.contains(item.messageStanzaId)) {
+        continue;
+      }
+      await _applyPinSyncUpdate(item);
+    }
+    final remoteById = <String, _PinnedMessageSyncPayload>{
+      for (final item in items) item.messageStanzaId: item,
+    };
+    final localItems =
+        await _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
+      (db) => db.getPinnedMessages(chatJid),
+    );
+    for (final local in localItems) {
+      final messageId = local.messageStanzaId;
+      if (remoteById.containsKey(messageId)) {
+        continue;
+      }
+      if (pendingPublishes.contains(messageId)) {
+        continue;
+      }
+      await _applyPinSyncRetraction(
+        chatJid: chatJid,
+        messageStanzaId: messageId,
+      );
+    }
+  }
+
+  Future<void> _queuePinPublish(
+    String chatJid,
+    String messageStanzaId,
+  ) async {
+    await _ensurePendingPinSyncLoaded();
+    final publishes = _pendingPinPublishesByChat.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    final retractions = _pendingPinRetractionsByChat.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    retractions.remove(messageStanzaId);
+    publishes.add(messageStanzaId);
+    await _persistPendingPinSync();
+  }
+
+  Future<void> _queuePinRetraction(
+    String chatJid,
+    String messageStanzaId,
+  ) async {
+    await _ensurePendingPinSyncLoaded();
+    final retractions = _pendingPinRetractionsByChat.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    final publishes = _pendingPinPublishesByChat.putIfAbsent(
+      chatJid,
+      () => <String>{},
+    );
+    publishes.remove(messageStanzaId);
+    retractions.add(messageStanzaId);
+    await _persistPendingPinSync();
+  }
+
+  Map<String, Set<String>> _decodePendingPinMap(Object? raw) {
+    final decoded = <String, Set<String>>{};
+    if (raw is! Map) {
+      return decoded;
+    }
+    for (final entry in raw.entries) {
+      final key = entry.key;
+      if (key is! String) continue;
+      final value = entry.value;
+      if (value is! Iterable) continue;
+      final normalized = value
+          .whereType<String>()
+          .map((id) => id.trim())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      if (normalized.isEmpty) continue;
+      decoded[key] = normalized;
+    }
+    return decoded;
+  }
+
+  Map<String, List<String>> _encodePendingPinMap(
+    Map<String, Set<String>> source,
+  ) {
+    final encoded = <String, List<String>>{};
+    for (final entry in source.entries) {
+      if (entry.value.isEmpty) continue;
+      encoded[entry.key] = entry.value.toList(growable: false);
+    }
+    return encoded;
+  }
+
+  Future<void> _ensurePendingPinSyncLoaded() async {
+    if (_pendingPinSyncLoaded) {
+      return;
+    }
+    final rawPublishes = await _dbOpReturning<XmppStateStore, Object?>(
+      (ss) => ss.read(key: _pinPendingPublishesKey),
+    );
+    final rawRetractions = await _dbOpReturning<XmppStateStore, Object?>(
+      (ss) => ss.read(key: _pinPendingRetractionsKey),
+    );
+    _pendingPinPublishesByChat
+      ..clear()
+      ..addAll(_decodePendingPinMap(rawPublishes));
+    _pendingPinRetractionsByChat
+      ..clear()
+      ..addAll(_decodePendingPinMap(rawRetractions));
+    _pendingPinSyncLoaded = true;
+  }
+
+  Future<void> _persistPendingPinSync() async {
+    if (!_pendingPinSyncLoaded) {
+      return;
+    }
+    _pendingPinPublishesByChat.removeWhere((_, ids) => ids.isEmpty);
+    _pendingPinRetractionsByChat.removeWhere((_, ids) => ids.isEmpty);
+    final publishes = _encodePendingPinMap(_pendingPinPublishesByChat);
+    final retractions = _encodePendingPinMap(_pendingPinRetractionsByChat);
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        if (publishes.isEmpty) {
+          await ss.delete(key: _pinPendingPublishesKey);
+        } else {
+          await ss.write(key: _pinPendingPublishesKey, value: publishes);
+        }
+        if (retractions.isEmpty) {
+          await ss.delete(key: _pinPendingRetractionsKey);
+        } else {
+          await ss.write(key: _pinPendingRetractionsKey, value: retractions);
+        }
+      },
+      awaitDatabase: true,
+    );
+  }
+
+  Future<void> _flushPendingPinSync() async {
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
+    await _ensurePendingPinSyncLoaded();
+    if (_pendingPinPublishesByChat.isEmpty &&
+        _pendingPinRetractionsByChat.isEmpty) {
+      return;
+    }
+    final chatIds = <String>{
+      ..._pendingPinPublishesByChat.keys,
+      ..._pendingPinRetractionsByChat.keys,
+    };
+    for (final chatJid in chatIds) {
+      await _flushPendingPinSyncForChat(chatJid);
+    }
+  }
+
+  Future<void> _flushPendingPinSyncForChat(String chatJid) async {
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
+    await _ensurePendingPinSyncLoaded();
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    final context = await _resolvePinNodeContext(normalizedChat);
+    final support = await refreshPubSubSupport();
+    if (!support.pubSubSupported) {
+      return;
+    }
+    final pubsub = _pinPubSub();
+    if (pubsub == null) {
+      return;
+    }
+    final nodeConfig =
+        await _ensurePinNodeForChat(normalizedChat, context: context);
+    if (nodeConfig == null) {
+      return;
+    }
+    final host = nodeConfig.host;
+    final policy = nodeConfig.policy;
+    final nodeId = _pinNodeForChat(normalizedChat);
+    if (nodeId == null) {
+      return;
+    }
+    await _subscribeToPins(host: host, nodeId: nodeId);
+    final pendingRetractions =
+        _pendingPinRetractionsByChat[normalizedChat]?.toList(growable: false) ??
+            const <String>[];
+    final pendingPublishes =
+        _pendingPinPublishesByChat[normalizedChat]?.toList(growable: false) ??
+            const <String>[];
+    final pinnedEntries =
+        await _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
+      (db) => db.getPinnedMessages(normalizedChat),
+    );
+    final pinnedById = <String, PinnedMessageEntry>{
+      for (final entry in pinnedEntries) entry.messageStanzaId: entry,
+    };
+    var pendingChanged = false;
+    for (final messageId in pendingRetractions) {
+      final trimmed = messageId.trim();
+      if (trimmed.isEmpty) continue;
+      final success = await _retractPinFromServer(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        messageStanzaId: trimmed,
+      );
+      if (!success) {
+        continue;
+      }
+      pendingChanged =
+          _pendingPinRetractionsByChat[normalizedChat]?.remove(trimmed) ==
+                  true ||
+              pendingChanged;
+    }
+    for (final messageId in pendingPublishes) {
+      final trimmed = messageId.trim();
+      if (trimmed.isEmpty) continue;
+      final entry = pinnedById[trimmed];
+      if (entry == null) {
+        pendingChanged =
+            _pendingPinPublishesByChat[normalizedChat]?.remove(trimmed) ==
+                    true ||
+                pendingChanged;
+        continue;
+      }
+      final success = await _publishPinToServer(
+        pubsub: pubsub,
+        host: host,
+        nodeId: nodeId,
+        entry: entry,
+        policy: policy,
+      );
+      if (!success) {
+        continue;
+      }
+      pendingChanged =
+          _pendingPinPublishesByChat[normalizedChat]?.remove(trimmed) == true ||
+              pendingChanged;
+    }
+    if (pendingChanged) {
+      await _persistPendingPinSync();
+    }
+  }
+
+  Future<bool> _publishPinToServer({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required PinnedMessageEntry entry,
+    required _PinNodePolicy policy,
+  }) async {
+    final messageId = entry.messageStanzaId.trim();
+    if (messageId.isEmpty) return false;
+    final payload = _PinnedMessageSyncPayload(
+      messageStanzaId: messageId,
+      chatJid: entry.chatJid,
+      pinnedAt: entry.pinnedAt,
+    );
+    final result = await pubsub.publish(
+      host,
+      nodeId,
+      payload.toXml(),
+      id: payload.itemId,
+      options: _pinPublishOptions(policy),
+      autoCreate: true,
+      createNodeConfig: _pinCreateNodeConfig(policy),
+    );
+    return !result.isType<mox.PubSubError>();
+  }
+
+  Future<bool> _retractPinFromServer({
+    required SafePubSubManager pubsub,
+    required mox.JID host,
+    required String nodeId,
+    required String messageStanzaId,
+  }) async {
+    final trimmed = messageStanzaId.trim();
+    if (trimmed.isEmpty) return false;
+    final result = await pubsub.retract(
+      host,
+      nodeId,
+      trimmed,
+      notify: _pinNotifyEnabled,
+    );
+    return !result.isType<mox.PubSubError>();
+  }
+
   String _normalizeBase64(String input) {
     final sanitized = input.replaceAll('-', '+').replaceAll('_', '/');
     final padding = sanitized.length % 4;
@@ -4456,6 +6327,24 @@ mixin MessageService
       result |= left[index] ^ right[index];
     }
     return result == 0;
+  }
+
+  bool _allowInboundAttachmentAutoDownload(String chatJid) {
+    final normalized = _normalizeBareJidValue(chatJid);
+    if (normalized == null) {
+      return true;
+    }
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final chatAllowed = _inboundAttachmentAutoDownloadChatLimiter.allowEvent(
+      normalized,
+      nowMs: nowMs,
+    );
+    if (!chatAllowed) {
+      return false;
+    }
+    return _inboundAttachmentAutoDownloadGlobalLimiter.allowEvent(
+      nowMs: nowMs,
+    );
   }
 
   Future<void> _autoDownloadTrustedInboundAttachment({
@@ -4475,6 +6364,9 @@ mixin MessageService
         isTrusted = await _dbOpReturning<XmppDatabase, bool>(
           (db) async {
             final chat = await db.getChat(message.chatJid);
+            if (chat?.spam ?? false) {
+              return false;
+            }
             if (chat != null && chat.type == ChatType.groupChat) {
               return chat.attachmentAutoDownload.isAllowed;
             }
@@ -4483,6 +6375,13 @@ mixin MessageService
         );
       }
       if (!isTrusted) return;
+      final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+        (db) => db.getFileMetadata(trimmedMetadataId),
+      );
+      if (metadata == null) return;
+      if (!attachmentAutoDownloadSettings.allowsMetadata(metadata)) {
+        return;
+      }
       await downloadInboundAttachment(
         metadataId: trimmedMetadataId,
         stanzaId: stanzaId,
@@ -4502,6 +6401,18 @@ mixin MessageService
 //   });
 //   return allowed;
 // }
+}
+
+final class _AttachmentCacheEntry {
+  const _AttachmentCacheEntry({
+    required this.file,
+    required this.sizeBytes,
+    required this.lastModified,
+  });
+
+  final File file;
+  final int sizeBytes;
+  final DateTime lastModified;
 }
 
 class _UploadSlot {

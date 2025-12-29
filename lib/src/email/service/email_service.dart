@@ -21,12 +21,15 @@ import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 const _defaultPageSize = 50;
 const _maxFanOutRecipients = 20;
@@ -34,22 +37,41 @@ const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
 const _foregroundKeepaliveInterval = Duration(seconds: 45);
 const _foregroundFetchTimeout = Duration(seconds: 8);
 const _notificationFlushDelay = Duration(milliseconds: 500);
+const _contactsSyncDebounce = Duration(seconds: 2);
 const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
 const _coreDraftMessageId = 0;
+const int _deltaEventMessageUnset = 0;
 const _defaultImapPort = '993';
-const _defaultSecurityMode = 'ssl';
+const String _securityModeSsl = 'ssl';
+const String _securityModeStartTls = 'starttls';
 const _emailDownloadLimitKey = 'download_limit';
 const _emailDownloadLimitDisabledValue = '0';
 const _unknownEmailPassword = '';
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
 const _notificationAttachmentLabel = 'Attachment';
 const _notificationAttachmentPrefix = 'Attachment: ';
+const _reactionNotificationFallback = 'New reaction';
+const _reactionNotificationPrefix = 'Reaction: ';
+const _webxdcNotificationFallback = 'New update';
+const _showEmailsConfigKey = 'show_emails';
+const _showEmailsAllValue = '2';
+const _mdnsEnabledConfigKey = 'mdns_enabled';
+const _mdnsEnabledValue = '1';
+const _mailServerConfigKey = 'mail_server';
+const _mailPortConfigKey = 'mail_port';
+const _mailSecurityConfigKey = 'mail_security';
+const _mailUserConfigKey = 'mail_user';
+const _sendServerConfigKey = 'send_server';
+const _sendPortConfigKey = 'send_port';
+const _sendSecurityConfigKey = 'send_security';
+const _sendUserConfigKey = 'send_user';
+const _portUnsetValue = 0;
 const List<EmailAttachment> _emptyEmailAttachments = <EmailAttachment>[];
 const _deltaContactIdPrefix = 'delta_contact_';
 const _deltaContactListFlags =
-    DeltaContactListFlags.addSelf | DeltaContactListFlags.addRecent;
+    DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
 const _imapIdleConfigKey = 'imap_idle';
 const _imapIdleTimeoutConfigKey = 'imap_idle_timeout';
 const _imapMaxConnectionsConfigKey = 'imap_max_connections';
@@ -138,12 +160,16 @@ class FanOutValidationException implements Exception {
 }
 
 class EmailService {
+  static const NotificationPayloadCodec _notificationPayloadCodec =
+      NotificationPayloadCodec();
+
   EmailService({
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
     EmailDeltaTransport? transport,
     EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
+    MessageService? messageService,
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
     EndpointConfig endpointConfig = const EndpointConfig(),
@@ -159,6 +185,7 @@ class EmailService {
             connectionConfigBuilder ?? _defaultConnectionConfig,
         _log = logger ?? Logger('EmailService'),
         _notificationService = notificationService,
+        _messageService = messageService,
         _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     blocking = EmailBlockingService(
       databaseBuilder: databaseBuilder,
@@ -182,6 +209,7 @@ class EmailService {
   final Logger _log;
   EndpointConfig _endpointConfig;
   final NotificationService? _notificationService;
+  final MessageService? _messageService;
   final ForegroundTaskBridge? _foregroundBridge;
   late final EmailBlockingService blocking;
   late final EmailSpamService spam;
@@ -206,6 +234,7 @@ class EmailService {
   int _foregroundKeepaliveOperationId = 0;
   final List<_PendingNotification> _pendingNotifications = [];
   Timer? _notificationFlushTimer;
+  Timer? _contactsSyncTimer;
   String? _pendingPushToken;
   final _syncStateController =
       StreamController<EmailSyncState>.broadcast(sync: true);
@@ -226,6 +255,7 @@ class EmailService {
   var _imapSyncInFlight = false;
   var _reconnectCatchUpInFlight = false;
   var _contactsSyncInFlight = false;
+  var _contactsSyncPending = false;
   var _chatlistSyncInFlight = false;
 
   void updateEndpointConfig(EndpointConfig config) {
@@ -410,9 +440,10 @@ class EmailService {
           error,
           operation: 'configure email account',
         );
+        final errorType = error.runtimeType;
         _log.warning(
-          'Failed to configure email account',
-          error,
+          'Failed to configure email account ($errorType)',
+          null,
           stackTrace,
         );
         final shouldClearCredentials =
@@ -505,6 +536,8 @@ class EmailService {
     await _transport.stop();
     _running = false;
     _stopImapSyncLoop();
+    _cancelContactsSyncTimer();
+    _contactsSyncPending = false;
   }
 
   Future<void> ensureEventChannelActive() async {
@@ -941,11 +974,7 @@ class EmailService {
   }
 
   String? _normalizeSubject(String? subject) {
-    final trimmed = subject?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return null;
-    }
-    return trimmed;
+    return sanitizeEmailHeaderValue(subject);
   }
 
   String? _normalizeDraftHtml({
@@ -1141,7 +1170,11 @@ class EmailService {
   }
 
   Future<void> syncContactsFromCore() async {
-    if (_contactsSyncInFlight) return;
+    if (_contactsSyncInFlight) {
+      _contactsSyncPending = true;
+      return;
+    }
+    _cancelContactsSyncTimer();
     _contactsSyncInFlight = true;
     try {
       await _ensureReady();
@@ -1176,6 +1209,10 @@ class EmailService {
       );
     } finally {
       _contactsSyncInFlight = false;
+      if (_contactsSyncPending) {
+        _contactsSyncPending = false;
+        _scheduleContactsSyncFromCore();
+      }
     }
   }
 
@@ -1444,6 +1481,13 @@ class EmailService {
     );
   }
 
+  Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String jid) async* {
+    await _ensureReady();
+    final db = await _databaseBuilder();
+    yield await db.getPinnedMessages(jid);
+    yield* db.watchPinnedMessages(jid);
+  }
+
   Stream<List<Draft>> draftsStream({
     int start = 0,
     int end = _defaultPageSize,
@@ -1471,6 +1515,54 @@ class EmailService {
     yield* db.watchChat(jid);
   }
 
+  Future<void> pinMessage({
+    required Chat chat,
+    required Message message,
+  }) async {
+    await _ensureReady();
+    final chatJid = chat.jid.trim();
+    final stanzaId = message.stanzaID.trim();
+    if (chatJid.isEmpty || stanzaId.isEmpty) {
+      return;
+    }
+    final messageService = _messageService;
+    if (messageService != null) {
+      await messageService.pinMessage(chatJid: chatJid, message: message);
+      return;
+    }
+    final pinnedAt = DateTime.timestamp().toUtc();
+    final db = await _databaseBuilder();
+    await db.upsertPinnedMessage(
+      PinnedMessageEntry(
+        messageStanzaId: stanzaId,
+        chatJid: chatJid,
+        pinnedAt: pinnedAt,
+      ),
+    );
+  }
+
+  Future<void> unpinMessage({
+    required Chat chat,
+    required Message message,
+  }) async {
+    await _ensureReady();
+    final chatJid = chat.jid.trim();
+    final stanzaId = message.stanzaID.trim();
+    if (chatJid.isEmpty || stanzaId.isEmpty) {
+      return;
+    }
+    final messageService = _messageService;
+    if (messageService != null) {
+      await messageService.unpinMessage(chatJid: chatJid, message: message);
+      return;
+    }
+    final db = await _databaseBuilder();
+    await db.deletePinnedMessage(
+      chatJid: chatJid,
+      messageStanzaId: stanzaId,
+    );
+  }
+
   Future<void> _processDeltaEvent(DeltaCoreEvent event) async {
     final eventType = DeltaEventType.fromCode(event.type);
     if (eventType == null) {
@@ -1484,17 +1576,37 @@ class EmailService {
         _handleSelfNotInGroup(event.data2Text);
         break;
       case DeltaEventType.incomingMsg:
-        _queueNotification(chatId: event.data1, msgId: event.data2);
+        if (event.data2 > _deltaEventMessageUnset) {
+          _queueNotification(chatId: event.data1, msgId: event.data2);
+        }
         break;
       case DeltaEventType.incomingMsgBunch:
         await _flushQueuedNotifications();
         break;
-      case DeltaEventType.msgsChanged:
+      case DeltaEventType.incomingReaction:
+        await _handleIncomingReaction(
+          chatId: event.data1,
+          msgId: event.data2,
+          reaction: event.data2Text,
+        );
+        break;
+      case DeltaEventType.incomingWebxdcNotify:
+        await _handleIncomingWebxdcNotify(
+          chatId: event.data1,
+          msgId: event.data2,
+          text: event.data2Text,
+        );
+        break;
+      case DeltaEventType.msgsNoticed:
+        await _handleMessagesNoticed(event.data1);
+        break;
       case DeltaEventType.chatModified:
         break;
-      case DeltaEventType.msgDelivered:
-      case DeltaEventType.msgFailed:
-      case DeltaEventType.msgRead:
+      case DeltaEventType.chatDeleted:
+        await _handleChatDeleted(event.data1);
+        break;
+      case DeltaEventType.contactsChanged:
+        _scheduleContactsSyncFromCore();
         break;
       case DeltaEventType.accountsBackgroundFetchDone:
         _handleBackgroundFetchDone();
@@ -1523,6 +1635,25 @@ class EmailService {
     });
   }
 
+  void _scheduleContactsSyncFromCore() {
+    if (_contactsSyncInFlight) {
+      _contactsSyncPending = true;
+      return;
+    }
+    if (_contactsSyncTimer != null) {
+      return;
+    }
+    _contactsSyncTimer = Timer(_contactsSyncDebounce, () {
+      _contactsSyncTimer = null;
+      unawaited(syncContactsFromCore());
+    });
+  }
+
+  void _cancelContactsSyncTimer() {
+    _contactsSyncTimer?.cancel();
+    _contactsSyncTimer = null;
+  }
+
   Future<void> _flushQueuedNotifications() async {
     _notificationFlushTimer?.cancel();
     _notificationFlushTimer = null;
@@ -1534,6 +1665,65 @@ class EmailService {
     }
   }
 
+  Future<void> _handleMessagesNoticed(int chatId) async {
+    await _flushQueuedNotifications();
+    final notificationService = _notificationService;
+    if (notificationService == null) return;
+    final db = await _databaseBuilder();
+    final chat = await db.getChatByDeltaChatId(chatId);
+    if (chat == null) return;
+    await notificationService.dismissMessageNotification(
+      threadKey: _notificationThreadKey(chat.jid),
+    );
+  }
+
+  Future<void> _handleChatDeleted(int chatId) async {
+    await _flushQueuedNotifications();
+    final notificationService = _notificationService;
+    if (notificationService == null) return;
+    final db = await _databaseBuilder();
+    final chat = await db.getChatByDeltaChatId(chatId);
+    if (chat == null) return;
+    await notificationService.dismissMessageNotification(
+      threadKey: _notificationThreadKey(chat.jid),
+    );
+  }
+
+  Future<_DeltaNotificationContext?> _notificationContextForMessage({
+    required XmppDatabase db,
+    required int msgId,
+    int? chatId,
+  }) async {
+    final message = await db.getMessageByStanzaID(_stanzaId(msgId));
+    if (message == null) {
+      return null;
+    }
+    if (message.warning == MessageWarning.emailSpamQuarantined) {
+      return null;
+    }
+    String bare(String value) => value.split('/').first;
+    final selfJid = selfSenderJid;
+    if (selfJid != null && bare(message.senderJid) == bare(selfJid)) {
+      return null;
+    }
+    var chat = await db.getChat(message.chatJid);
+    if (chat == null && chatId != null) {
+      chat = await db.getChatByDeltaChatId(chatId);
+    }
+    if (chat?.muted ?? false) {
+      return null;
+    }
+    return _DeltaNotificationContext(message: message, chat: chat);
+  }
+
+  String _notificationThreadKey(String chatJid) {
+    final normalized = chatJid.trim();
+    if (normalized.isEmpty) {
+      return normalized;
+    }
+    return _notificationPayloadCodec.encodeChatJid(normalized) ?? normalized;
+  }
+
   Future<void> _notifyIncoming({
     required int chatId,
     required int msgId,
@@ -1542,36 +1732,130 @@ class EmailService {
     if (notificationService == null) return;
     try {
       final db = await _databaseBuilder();
-      final message = await db.getMessageByStanzaID(_stanzaId(msgId));
-      if (message == null) {
-        return;
-      }
-      if (message.warning == MessageWarning.emailSpamQuarantined) {
-        return;
-      }
-      String bare(String value) => value.split('/').first;
-      final selfJid = selfSenderJid;
-      if (selfJid != null && bare(message.senderJid) == bare(selfJid)) {
+      final context = await _notificationContextForMessage(
+        db: db,
+        msgId: msgId,
+        chatId: chatId,
+      );
+      if (context == null) {
         return;
       }
       final notificationBody =
-          await _notificationBody(db: db, message: message);
+          await _notificationBody(db: db, message: context.message);
       if (notificationBody == null) {
         return;
       }
-      final chat = await db.getChat(message.chatJid);
-      if (chat?.muted ?? false) {
+      final previewSetting = context.chat?.notificationPreviewSetting ??
+          NotificationPreviewSetting.inherit;
+      final showPreview = previewSetting
+          .resolvePreview(notificationService.notificationPreviewsEnabled);
+      final notificationTarget = context.chat?.jid ?? context.message.chatJid;
+      final threadKey = _notificationThreadKey(notificationTarget);
+      if (threadKey.isEmpty) {
         return;
       }
       await notificationService.sendMessageNotification(
-        title: chat?.title ?? message.senderJid,
+        title: context.chat?.title ?? context.message.senderJid,
         body: notificationBody,
-        payload: chat?.jid,
-        threadKey: message.chatJid,
+        payload: threadKey,
+        threadKey: threadKey,
+        showPreviewOverride: showPreview,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to raise notification for email message ${_stanzaId(msgId)}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _handleIncomingReaction({
+    required int chatId,
+    required int msgId,
+    String? reaction,
+  }) async {
+    final notificationService = _notificationService;
+    if (notificationService == null) return;
+    try {
+      final db = await _databaseBuilder();
+      final context = await _notificationContextForMessage(
+        db: db,
+        msgId: msgId,
+        chatId: chatId,
+      );
+      if (context == null) {
+        return;
+      }
+      final normalizedReaction = reaction?.trim();
+      final body = normalizedReaction == null || normalizedReaction.isEmpty
+          ? _reactionNotificationFallback
+          : '$_reactionNotificationPrefix$normalizedReaction';
+      final previewSetting = context.chat?.notificationPreviewSetting ??
+          NotificationPreviewSetting.inherit;
+      final showPreview = previewSetting
+          .resolvePreview(notificationService.notificationPreviewsEnabled);
+      final notificationTarget = context.chat?.jid ?? context.message.chatJid;
+      final threadKey = _notificationThreadKey(notificationTarget);
+      if (threadKey.isEmpty) {
+        return;
+      }
+      await notificationService.sendMessageNotification(
+        title: context.chat?.title ?? context.message.senderJid,
+        body: body,
+        payload: threadKey,
+        threadKey: threadKey,
+        showPreviewOverride: showPreview,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to raise reaction notification for email message ${_stanzaId(msgId)}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _handleIncomingWebxdcNotify({
+    required int chatId,
+    required int msgId,
+    String? text,
+  }) async {
+    final notificationService = _notificationService;
+    if (notificationService == null) return;
+    try {
+      final db = await _databaseBuilder();
+      final context = await _notificationContextForMessage(
+        db: db,
+        msgId: msgId,
+        chatId: chatId,
+      );
+      if (context == null) {
+        return;
+      }
+      final normalizedText = text?.trim();
+      final body = normalizedText == null || normalizedText.isEmpty
+          ? _webxdcNotificationFallback
+          : normalizedText;
+      final previewSetting = context.chat?.notificationPreviewSetting ??
+          NotificationPreviewSetting.inherit;
+      final showPreview = previewSetting
+          .resolvePreview(notificationService.notificationPreviewsEnabled);
+      final notificationTarget = context.chat?.jid ?? context.message.chatJid;
+      final threadKey = _notificationThreadKey(notificationTarget);
+      if (threadKey.isEmpty) {
+        return;
+      }
+      await notificationService.sendMessageNotification(
+        title: context.chat?.title ?? context.message.senderJid,
+        body: body,
+        payload: threadKey,
+        threadKey: threadKey,
+        showPreviewOverride: showPreview,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to raise webxdc notification for email message ${_stanzaId(msgId)}',
         error,
         stackTrace,
       );
@@ -2192,59 +2476,45 @@ class EmailService {
     String address,
     EndpointConfig config,
   ) {
-    final host = _connectionHostFor(address, config);
-    final localPart = _localPartFromAddress(address) ?? address;
-    return {
-      'mail_server': host,
-      'mail_port': _defaultImapPort,
-      'mail_security': _defaultSecurityMode,
-      'mail_user': localPart,
-      'send_server': host,
-      'send_port': (config.smtpPort > 0
-              ? config.smtpPort
-              : EndpointConfig.defaultSmtpPort)
-          .toString(),
-      'send_security': _defaultSecurityMode,
-      'send_user': localPart,
-      'show_emails': '2',
+    final configValues = <String, String>{
+      _showEmailsConfigKey: _showEmailsAllValue,
       _emailDownloadLimitKey: _emailDownloadLimitDisabledValue,
-      'mdns_enabled': '1',
+      _mdnsEnabledConfigKey: _mdnsEnabledValue,
     };
+    final smtpHost = config.smtpHost?.trim();
+    if (smtpHost == null || smtpHost.isEmpty) {
+      return configValues;
+    }
+    final normalizedAddress = address.trim();
+    final mailPortValue = int.parse(_defaultImapPort);
+    final sendPortValue = config.smtpPort > _portUnsetValue
+        ? config.smtpPort
+        : EndpointConfig.defaultSmtpPort;
+    final mailSecurityMode = _securityModeForPort(
+      port: mailPortValue,
+      implicitTlsPort: mailPortValue,
+    );
+    final sendSecurityMode = _securityModeForPort(
+      port: sendPortValue,
+      implicitTlsPort: EndpointConfig.defaultSmtpPort,
+    );
+    configValues
+      ..[_mailServerConfigKey] = smtpHost
+      ..[_mailPortConfigKey] = _defaultImapPort
+      ..[_mailSecurityConfigKey] = mailSecurityMode
+      ..[_mailUserConfigKey] = normalizedAddress
+      ..[_sendServerConfigKey] = smtpHost
+      ..[_sendPortConfigKey] = sendPortValue.toString()
+      ..[_sendSecurityConfigKey] = sendSecurityMode
+      ..[_sendUserConfigKey] = normalizedAddress;
+    return configValues;
   }
 
-  static String _connectionHostFor(String address, EndpointConfig config) {
-    final customHost = config.smtpHost?.trim();
-    if (customHost != null && customHost.isNotEmpty) {
-      return customHost;
-    }
-    final domain = _domainFromAddress(address) ?? config.domain;
-    if (domain.isEmpty) {
-      throw StateError('Unable to resolve email server host.');
-    }
-    return domain;
-  }
-
-  static String? _domainFromAddress(String address) {
-    final parts = address.split('@');
-    if (parts.length != 2) {
-      return null;
-    }
-    final domain = parts[1].trim().toLowerCase();
-    return domain.isEmpty ? null : domain;
-  }
-
-  static String? _localPartFromAddress(String address) {
-    if (address.isEmpty) {
-      return null;
-    }
-    final index = address.indexOf('@');
-    final localPart =
-        index == -1 ? address.trim() : address.substring(0, index).trim();
-    if (localPart.isEmpty) {
-      return null;
-    }
-    return localPart;
-  }
+  static String _securityModeForPort({
+    required int port,
+    required int implicitTlsPort,
+  }) =>
+      port == implicitTlsPort ? _securityModeSsl : _securityModeStartTls;
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)
     ..sort((a, b) {
@@ -2524,6 +2794,7 @@ class EmailService {
       );
     }
     await _ensureReady();
+    final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();
     final resolvedBody = trimmedBody.isNotEmpty
@@ -2537,7 +2808,7 @@ class EmailService {
         chatId: chatId,
         body: resolvedBody,
         quotedMessageId: quotedMsgId,
-        subject: subject,
+        subject: normalizedSubject,
         htmlBody: normalizedHtml,
       ),
     );
@@ -2717,4 +2988,14 @@ class _PendingNotification {
 
   final int chatId;
   final int msgId;
+}
+
+class _DeltaNotificationContext {
+  const _DeltaNotificationContext({
+    required this.message,
+    required this.chat,
+  });
+
+  final Message message;
+  final Chat? chat;
 }

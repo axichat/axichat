@@ -9,7 +9,6 @@ import 'package:axichat/src/calendar/models/calendar_availability_share_state.da
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
-import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/calendar_availability_share_sheet.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
 import 'package:axichat/src/calendar/view/calendar_task_search.dart';
@@ -19,6 +18,7 @@ import 'package:axichat/src/calendar/view/task_sidebar.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
@@ -49,6 +49,22 @@ CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   } on FlutterError {
     return null;
   }
+}
+
+String? _resolveAvailabilityOwnerJid({
+  required XmppService xmppService,
+  required Chat chat,
+}) {
+  final String? accountJid = xmppService.myJid?.trim();
+  if (chat.type != ChatType.groupChat) {
+    return accountJid;
+  }
+  final String? occupantId =
+      xmppService.roomStateFor(chat.jid)?.myOccupantId?.trim();
+  if (occupantId != null && occupantId.isNotEmpty) {
+    return occupantId;
+  }
+  return null;
 }
 
 class ChatCalendarWidget extends StatefulWidget {
@@ -263,7 +279,10 @@ class _ChatCalendarWidgetState
     CalendarAvailabilityShareCoordinator coordinator,
   ) async {
     final xmpp = context.read<XmppService>();
-    final ownerJid = xmpp.myJid?.trim();
+    final String? ownerJid = _resolveAvailabilityOwnerJid(
+      xmppService: xmpp,
+      chat: widget.chat,
+    );
     if (ownerJid == null || ownerJid.isEmpty) {
       FeedbackSystem.showError(
         context,

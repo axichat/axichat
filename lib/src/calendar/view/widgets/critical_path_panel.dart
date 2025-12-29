@@ -12,6 +12,8 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const String _criticalPathShareActionLabel = 'Share to chat';
+
 class CriticalPathPanel extends StatelessWidget {
   const CriticalPathPanel({
     super.key,
@@ -22,6 +24,7 @@ class CriticalPathPanel extends StatelessWidget {
     required this.onCreatePath,
     required this.onRenamePath,
     required this.onDeletePath,
+    required this.onSharePath,
     required this.onFocusPath,
     required this.onOpenPath,
     required this.animationDuration,
@@ -44,6 +47,8 @@ class CriticalPathPanel extends StatelessWidget {
   final VoidCallback onCreatePath;
   final void Function(CalendarCriticalPath path) onRenamePath;
   final void Function(CalendarCriticalPath path) onDeletePath;
+  final void Function(CalendarCriticalPath path, List<CalendarTask> tasks)
+      onSharePath;
   final void Function(CalendarCriticalPath? path) onFocusPath;
   final void Function(CalendarCriticalPath path) onOpenPath;
   final Duration animationDuration;
@@ -206,6 +211,10 @@ class CriticalPathPanel extends StatelessWidget {
                         ),
                         onRename: () => onRenamePath(path),
                         onDelete: () => onDeletePath(path),
+                        onShare: () => onSharePath(
+                          path,
+                          _tasksForPath(path),
+                        ),
                         onOpen: () {
                           _handleExpand();
                           onOpenPath(path);
@@ -319,6 +328,7 @@ class CriticalPathCard extends StatelessWidget {
     required this.onFocus,
     required this.onRename,
     required this.onDelete,
+    required this.onShare,
     required this.animationDuration,
     required this.onOpen,
   });
@@ -330,6 +340,7 @@ class CriticalPathCard extends StatelessWidget {
   final VoidCallback onFocus;
   final VoidCallback onRename;
   final VoidCallback onDelete;
+  final VoidCallback onShare;
   final Duration animationDuration;
   final VoidCallback onOpen;
 
@@ -377,6 +388,7 @@ class CriticalPathCard extends StatelessWidget {
                   onFocus: onFocus,
                   onRename: onRename,
                   onDelete: onDelete,
+                  onShare: onShare,
                   isFocused: isFocused,
                 ),
               ],
@@ -504,12 +516,14 @@ class _PathActions extends StatefulWidget {
     required this.onFocus,
     required this.onRename,
     required this.onDelete,
+    required this.onShare,
     required this.isFocused,
   });
 
   final VoidCallback onFocus;
   final VoidCallback onRename;
   final VoidCallback onDelete;
+  final VoidCallback onShare;
   final bool isFocused;
 
   @override
@@ -575,6 +589,14 @@ class _PathActionsState extends State<_PathActions> {
                     onPressed: () {
                       _closeMenu();
                       widget.onRename();
+                    },
+                  ),
+                  AxiMenuAction(
+                    icon: Icons.send,
+                    label: _criticalPathShareActionLabel,
+                    onPressed: () {
+                      _closeMenu();
+                      widget.onShare();
                     },
                   ),
                   AxiMenuAction(

@@ -9,6 +9,9 @@ class ChatState with _$ChatState {
     Map<String, List<String>> attachmentMetadataIdsByMessageId,
     @Default(<String, String>{})
     Map<String, String> attachmentGroupLeaderByMessageId,
+    @Default(<PinnedMessageItem>[]) List<PinnedMessageItem> pinnedMessages,
+    @Default(false) bool pinnedMessagesLoaded,
+    @Default(false) bool pinnedMessagesHydrating,
     Chat? chat,
     RoomState? roomState,
     Message? focused,

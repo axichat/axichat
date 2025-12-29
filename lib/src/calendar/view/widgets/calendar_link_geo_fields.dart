@@ -24,6 +24,7 @@ class CalendarLinkGeoFields extends StatefulWidget {
     required this.onUrlChanged,
     required this.onGeoChanged,
     this.title = _linkGeoSectionTitle,
+    this.enabled = true,
   });
 
   final String? url;
@@ -31,6 +32,7 @@ class CalendarLinkGeoFields extends StatefulWidget {
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
   final String title;
+  final bool enabled;
 
   @override
   State<CalendarLinkGeoFields> createState() => _CalendarLinkGeoFieldsState();
@@ -154,7 +156,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
     }
     final bool hasChips = chips.isNotEmpty;
 
-    return Column(
+    final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: widget.title),
@@ -175,6 +177,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
           textCapitalization: TextCapitalization.none,
           keyboardType: TextInputType.url,
           onChanged: _handleUrlChanged,
+          enabled: widget.enabled,
         ),
         const SizedBox(height: calendarGutterMd),
         Row(
@@ -188,6 +191,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
                 textCapitalization: TextCapitalization.none,
                 keyboardType: geoKeyboard,
                 onChanged: (_) => _handleGeoChanged(),
+                enabled: widget.enabled,
               ),
             ),
             const SizedBox(width: calendarGutterSm),
@@ -200,12 +204,17 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
                 textCapitalization: TextCapitalization.none,
                 keyboardType: geoKeyboard,
                 onChanged: (_) => _handleGeoChanged(),
+                enabled: widget.enabled,
               ),
             ),
           ],
         ),
       ],
     );
+    if (widget.enabled) {
+      return content;
+    }
+    return IgnorePointer(child: content);
   }
 }
 

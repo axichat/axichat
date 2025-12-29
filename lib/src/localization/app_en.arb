@@ -117,6 +117,13 @@
       "host": {}
     }
   },
+  "chatOpenLinkWarningMessage": "You are about to open:\n{url}\n\nThis link contains unusual or invisible characters. Verify the address carefully (host: {host}).",
+  "@chatOpenLinkWarningMessage": {
+    "placeholders": {
+      "url": {},
+      "host": {}
+    }
+  },
   "chatOpenLinkConfirm": "Open link",
   "chatInvalidLink": "Invalid link: {url}",
   "@chatInvalidLink": {
@@ -177,6 +184,14 @@
   "chatActionCopy": "Copy",
   "chatActionShare": "Share",
   "chatActionAddToCalendar": "Add to calendar",
+  "chatCalendarTaskCopyActionLabel": "Copy to calendar",
+  "chatCalendarTaskImportConfirmTitle": "Add to calendar?",
+  "chatCalendarTaskImportConfirmMessage": "This task came from chat. Add it to your calendar to manage or edit it.",
+  "chatCalendarTaskImportConfirmLabel": "Add to calendar",
+  "chatCalendarTaskImportCancelLabel": "Not now",
+  "chatCalendarTaskCopyUnavailableMessage": "Calendar is unavailable.",
+  "chatCalendarTaskCopyAlreadyAddedMessage": "Task already added.",
+  "chatCalendarTaskCopySuccessMessage": "Task copied.",
   "chatActionDetails": "Details",
   "chatActionSelect": "Select",
   "chatActionReact": "React",
@@ -258,6 +273,10 @@
   "chatForwardInviteForbidden": "Invites cannot be forwarded.",
   "chatAddToCalendarNoText": "Selected messages have no text to add to calendar",
   "chatForwardDialogTitle": "Forward to...",
+  "chatForwardEmailWarningTitle": "Forward email?",
+  "chatForwardEmailWarningMessage": "Forwarding email can include original headers and external image links. Choose how to send.",
+  "chatForwardEmailOptionSafe": "Forward as new message",
+  "chatForwardEmailOptionOriginal": "Forward original",
   "chatComposerAttachmentWarning": "Large attachments are sent separately to each recipient and may take longer to deliver.",
   "chatFanOutRecipientLabel": "{count, plural, one {recipient} other {recipients}}",
   "@chatFanOutRecipientLabel": {
@@ -290,6 +309,12 @@
   "chatSubjectSemantics": "Email subject",
   "chatSubjectHint": "Subject",
   "chatAttachmentTooltip": "Attachments",
+  "chatPinnedMessagesTooltip": "Pinned messages",
+  "chatPinnedMessagesTitle": "Pinned messages",
+  "chatPinMessage": "Pin message",
+  "chatUnpinMessage": "Unpin message",
+  "chatPinnedEmptyState": "No pinned messages yet.",
+  "chatPinnedMissingMessage": "Pinned message is unavailable.",
   "chatSendMessageTooltip": "Send message",
   "chatBlockAction": "Block",
   "chatReactionMore": "More",
@@ -750,6 +775,9 @@
   "authCustomServerOpenSettings": "Open custom server settings",
   "authCustomServerAdvancedHint": "Advanced server options stay hidden until you tap the username suffix.",
   "authUnregisterTitle": "Unregister",
+  "authUnregisterConfirmTitle": "Delete account?",
+  "authUnregisterConfirmMessage": "This will permanently delete your account and local data. This cannot be undone.",
+  "authUnregisterConfirmAction": "Delete account",
   "authUnregisterProgressLabel": "Waiting for account deletion",
   "authPasswordPlaceholder": "Password",
   "authPasswordCurrentPlaceholder": "Old password",
@@ -779,6 +807,15 @@
     }
   },
   "chatAttachmentDownload": "Download attachment",
+  "chatAttachmentExportTitle": "Save attachment?",
+  "chatAttachmentExportMessage": "This will copy the attachment to shared storage. Exports are unencrypted and may be readable by other apps. Continue?",
+  "chatAttachmentExportConfirm": "Save",
+  "chatAttachmentExportCancel": "Cancel",
+  "chatMediaMetadataWarningTitle": "Media may include metadata",
+  "chatMediaMetadataWarningMessage": "Photos and videos can include location and device details. Continue?",
+  "chatNotificationPreviewOptionInherit": "Use app setting",
+  "chatNotificationPreviewOptionShow": "Always show previews",
+  "chatNotificationPreviewOptionHide": "Always hide previews",
   "chatAttachmentUnavailableDevice": "Attachment is no longer available on this device",
   "chatAttachmentInvalidLink": "Invalid attachment link",
   "chatAttachmentOpenFailed": "Could not open {target}",
@@ -787,6 +824,17 @@
       "target": {}
     }
   },
+  "chatAttachmentTypeMismatchTitle": "Attachment type mismatch",
+  "chatAttachmentTypeMismatchMessage": "This attachment says it is {declared}, but the file looks like {detected}. Opening it could be unsafe. Continue?",
+  "@chatAttachmentTypeMismatchMessage": {
+    "placeholders": {
+      "declared": {},
+      "detected": {}
+    }
+  },
+  "chatAttachmentTypeMismatchConfirm": "Open anyway",
+  "chatAttachmentHighRiskTitle": "Potentially unsafe file",
+  "chatAttachmentHighRiskMessage": "This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?",
   "chatAttachmentUnknownSize": "Unknown size",
   "chatAttachmentErrorTooltip": "{message} ({fileName})",
   "@chatAttachmentErrorTooltip": {
@@ -936,6 +984,8 @@
   },
   "chatsExportSuccess": "Chat exported",
   "chatsExportFailure": "Unable to export chat",
+  "chatExportWarningTitle": "Export chat history?",
+  "chatExportWarningMessage": "Chat exports are unencrypted and may be readable by other apps or cloud services. Continue?",
   "chatsArchivedRestored": "Chat restored",
   "chatsArchivedHint": "Chat archived (Profile → Archived chats)",
   "chatsVisibleNotice": "Chat is visible again",
@@ -1281,5 +1331,13 @@
   "calendarRemindersSection": "Reminders",
   "settingsAutoLoadEmailImages": "Auto-load email images",
   "settingsAutoLoadEmailImagesDescription": "May reveal your IP address to senders",
+  "settingsAutoDownloadImages": "Auto-download images",
+  "settingsAutoDownloadImagesDescription": "Only for trusted chats.",
+  "settingsAutoDownloadVideos": "Auto-download videos",
+  "settingsAutoDownloadVideosDescription": "Only for trusted chats.",
+  "settingsAutoDownloadDocuments": "Auto-download documents",
+  "settingsAutoDownloadDocumentsDescription": "Only for trusted chats.",
+  "settingsAutoDownloadArchives": "Auto-download archives",
+  "settingsAutoDownloadArchivesDescription": "Only for trusted chats.",
   "chatChooseTextToAdd": "Choose text to add"
 }

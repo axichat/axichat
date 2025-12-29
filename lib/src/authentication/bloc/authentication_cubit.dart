@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:axichat/main.dart';
@@ -37,6 +38,18 @@ const _smtpProvisioningMaxAttempts = 3;
 const _smtpProvisioningMaxDuration = Duration(seconds: 20);
 const _smtpProvisioningInitialDelay = Duration(seconds: 2);
 const _smtpProvisioningMaxDelay = Duration(seconds: 8);
+const int _loginBackoffBaseSeconds = 2;
+const int _loginBackoffMaxMinutes = 2;
+const int _loginBackoffMinSeconds = 1;
+const int _loginBackoffMultiplier = 2;
+const int _loginBackoffAttemptIncrement = 1;
+const int _loginBackoffExponentOffset = 1;
+const Duration _loginBackoffBaseDelay =
+    Duration(seconds: _loginBackoffBaseSeconds);
+const Duration _loginBackoffMaxDelay =
+    Duration(minutes: _loginBackoffMaxMinutes);
+const String _loginBackoffMessagePrefix = 'Too many attempts. Wait ';
+const String _loginBackoffMessageSuffix = ' seconds before trying again.';
 
 enum LogoutSeverity {
   auto,
@@ -108,13 +121,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           launchedFromNotification = false;
           final payload = takeLaunchedNotificationChatJid();
           if (payload != null) {
-            xmppService.openChat(payload);
+            final chatJid =
+                await xmppService.resolveNotificationPayload(payload);
+            if (chatJid != null) {
+              xmppService.openChat(chatJid);
+            }
           } else {
             final appLaunchDetails =
                 await notificationService?.getAppNotificationAppLaunchDetails();
             if (appLaunchDetails?.notificationResponse?.payload
-                case final chatJid?) {
-              xmppService.openChat(chatJid);
+                case final launchPayload?) {
+              final chatJid =
+                  await xmppService.resolveNotificationPayload(launchPayload);
+              if (chatJid != null) {
+                xmppService.openChat(chatJid);
+              }
             }
           }
         }
@@ -208,6 +229,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   late final Future<void> _endpointConfigRecoveryFuture;
   bool get _stickyAuthActive => state is AuthenticationComplete;
   bool _loginInFlight = false;
+  int _failedLoginAttempts = 0;
+  DateTime? _nextLoginAllowedAt;
   bool _demoLoginInProgress = false;
   bool _demoSessionReady = false;
 
@@ -265,7 +288,58 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   void _emit(AuthenticationState state) {
     // Always allow transitions away from an authenticated session (e.g. logout).
+    _updateLoginBackoff(state);
     emit(state.copyWithConfig(_endpointConfig));
+  }
+
+  void _updateLoginBackoff(AuthenticationState nextState) {
+    if (nextState is AuthenticationComplete) {
+      _resetLoginBackoff();
+      return;
+    }
+    if (_loginInFlight && nextState is AuthenticationFailure) {
+      _recordLoginFailure();
+    }
+  }
+
+  void _recordLoginFailure() {
+    _failedLoginAttempts += _loginBackoffAttemptIncrement;
+    final delay = _loginBackoffDelay(_failedLoginAttempts);
+    _nextLoginAllowedAt = DateTime.now().add(delay);
+  }
+
+  void _resetLoginBackoff() {
+    _failedLoginAttempts = 0;
+    _nextLoginAllowedAt = null;
+  }
+
+  Duration _loginBackoffDelay(int attempt) {
+    final exponent = attempt - _loginBackoffExponentOffset;
+    final multiplier = math.pow(_loginBackoffMultiplier, exponent).round();
+    final baseSeconds = _loginBackoffBaseDelay.inSeconds;
+    final rawSeconds = baseSeconds * multiplier;
+    final clampedSeconds = rawSeconds.clamp(
+      _loginBackoffBaseDelay.inSeconds,
+      _loginBackoffMaxDelay.inSeconds,
+    );
+    return Duration(seconds: clampedSeconds);
+  }
+
+  String _loginBackoffMessage(Duration remaining) {
+    final seconds = remaining.inSeconds;
+    final normalizedSeconds =
+        seconds < _loginBackoffMinSeconds ? _loginBackoffMinSeconds : seconds;
+    return '$_loginBackoffMessagePrefix'
+        '$normalizedSeconds$_loginBackoffMessageSuffix';
+  }
+
+  String? _activeLoginBackoffMessage(DateTime now) {
+    final allowedAt = _nextLoginAllowedAt;
+    if (allowedAt == null || !now.isBefore(allowedAt)) {
+      return null;
+    }
+    final remaining = allowedAt.difference(now);
+    return _loginBackoffMessage(remaining);
   }
 
   Future<void> _recoverAuthTransaction() async {
@@ -643,6 +717,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     if (kEnableDemoChats) {
       await _loginToDemoMode();
+      return;
+    }
+    final now = DateTime.now();
+    final backoffMessage = _activeLoginBackoffMessage(now);
+    if (backoffMessage != null) {
+      _emit(AuthenticationFailure(backoffMessage));
       return;
     }
     if (_loginInFlight) {
@@ -1702,6 +1782,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _xmppService.burn();
     }
 
+    if (severity == LogoutSeverity.normal) {
+      await _xmppService.clearSessionTokens();
+    }
     await _xmppService.disconnect();
     if (_endpointConfig.enableSmtp) {
       if (severity == LogoutSeverity.burn) {

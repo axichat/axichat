@@ -2,14 +2,18 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
@@ -26,6 +30,39 @@ String? _bareJid(String? jid) {
     return jid;
   }
 }
+
+const double _messageDetailsCopyIconSize = 16.0;
+const double _messageDetailsCopySpacing = 6.0;
+const double _messageDetailsSectionSpacing = 8.0;
+const double _messageDetailsMetadataSpacing = 12.0;
+const double _messageDetailsHeadersDialogMaxHeight = 320.0;
+const double _messageDetailsHeadersCardPadding = 12.0;
+const String _messageDetailsSenderLabel = 'Sender address';
+const String _messageDetailsMetadataLabel = 'Message metadata';
+const String _messageDetailsHeadersLabel = 'Raw headers';
+const String _messageDetailsHeadersActionLabel = 'View headers';
+const String _messageDetailsHeadersNote =
+    'Headers are derived from stored metadata.';
+const String _messageDetailsStanzaIdLabel = 'Stanza ID';
+const String _messageDetailsOriginIdLabel = 'Origin ID';
+const String _messageDetailsOccupantIdLabel = 'Occupant ID';
+const String _messageDetailsDeltaIdLabel = 'Delta message ID';
+const String _messageDetailsLocalIdLabel = 'Local message ID';
+const String _rawHeaderSeparator = ': ';
+const String _rawHeaderLineBreak = '\n';
+const String _rawHeaderRecipientSeparator = ', ';
+const String _rawHeaderFromLabel = 'From';
+const String _rawHeaderToLabel = 'To';
+const String _rawHeaderDateLabel = 'Date';
+const String _rawHeaderSubjectLabel = 'Subject';
+const String _rawHeaderMessageIdLabel = 'Message-ID';
+const String _rawHeaderStanzaIdLabel = 'X-Axichat-Stanza-ID';
+const String _rawHeaderOccupantIdLabel = 'X-Axichat-Occupant-ID';
+const String _rawHeaderLocalIdLabel = 'X-Axichat-Local-ID';
+const String _rawHeaderDeltaMsgIdLabel = 'X-Axichat-Delta-Message-ID';
+const String _rawHeaderDeltaChatIdLabel = 'X-Axichat-Delta-Chat-ID';
+const String _rawHeaderChatJidLabel = 'X-Axichat-Chat-JID';
+const String _rawHeaderTransportLabel = 'X-Axichat-Transport';
 
 class ChatMessageDetails extends StatelessWidget {
   const ChatMessageDetails({super.key});
@@ -80,6 +117,76 @@ class ChatMessageDetails extends StatelessWidget {
                 shareParticipants.isNotEmpty;
             final showReactions = (transport == null || transport.isXmpp) &&
                 message.reactionsPreview.isNotEmpty;
+            final copyLabel = l10n.chatActionCopy;
+            final senderAddress = message.senderJid.trim();
+            final String? rawHeaders = isEmailMessage
+                ? _composeRawHeaders(
+                    message: message,
+                    chat: state.chat,
+                    shareParticipants: shareParticipants,
+                    isFromSelf: isFromSelf,
+                    selfJid: emailSelfJid ?? profileJid,
+                    subject: shareContext?.subject,
+                    transportLabel: protocolLabel,
+                  )
+                : null;
+            final metadataItems = <Widget>[];
+            final stanzaId = message.stanzaID.trim();
+            if (stanzaId.isNotEmpty) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsStanzaIdLabel,
+                  value: stanzaId,
+                  copyValue: stanzaId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final originId = message.originID?.trim();
+            if (originId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsOriginIdLabel,
+                  value: originId!,
+                  copyValue: originId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final occupantId = message.occupantID?.trim();
+            if (occupantId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsOccupantIdLabel,
+                  value: occupantId!,
+                  copyValue: occupantId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final deltaMessageId = message.deltaMsgId;
+            if (deltaMessageId != null) {
+              final deltaLabel = deltaMessageId.toString();
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsDeltaIdLabel,
+                  value: deltaLabel,
+                  copyValue: deltaLabel,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final localId = message.id?.trim();
+            if (localId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: _messageDetailsLocalIdLabel,
+                  value: localId!,
+                  copyValue: localId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
             return SingleChildScrollView(
               child: Container(
                 width: double.maxFinite,
@@ -101,7 +208,9 @@ class ChatMessageDetails extends StatelessWidget {
                                   state.loadedImageMessageIds
                                       .contains(messageId));
                           return html_widget.Html(
-                            data: message.htmlBody,
+                            data: HtmlContentCodec.sanitizeHtml(
+                              message.htmlBody ?? '',
+                            ),
                             extensions: [
                               createEmailImageExtension(
                                 shouldLoad: shouldLoadImages,
@@ -290,6 +399,37 @@ class ChatMessageDetails extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (senderAddress.isNotEmpty)
+                      _MessageDetailsInfo(
+                        label: _messageDetailsSenderLabel,
+                        value: senderAddress,
+                        copyValue: senderAddress,
+                        copyLabel: copyLabel,
+                      ),
+                    if (metadataItems.isNotEmpty)
+                      Column(
+                        spacing: _messageDetailsSectionSpacing,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            _messageDetailsMetadataLabel,
+                            style: context.textTheme.muted,
+                          ),
+                          Wrap(
+                            spacing: _messageDetailsMetadataSpacing,
+                            runSpacing: _messageDetailsMetadataSpacing,
+                            alignment: WrapAlignment.center,
+                            children: metadataItems,
+                          ),
+                        ],
+                      ),
+                    if (rawHeaders?.isNotEmpty == true)
+                      _MessageHeadersSection(
+                        headers: rawHeaders!,
+                        title: _messageDetailsHeadersLabel,
+                        buttonLabel: _messageDetailsHeadersActionLabel,
+                        note: _messageDetailsHeadersNote,
+                      ),
                     if (message.error.isNotNone)
                       Column(
                         spacing: 8,
@@ -422,19 +562,292 @@ class ChatMessageDetails extends StatelessWidget {
   }
 }
 
+class _MessageHeadersSection extends StatelessWidget {
+  const _MessageHeadersSection({
+    required this.headers,
+    required this.title,
+    required this.buttonLabel,
+    required this.note,
+  });
+
+  final String headers;
+  final String title;
+  final String buttonLabel;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      spacing: _messageDetailsSectionSpacing,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          title,
+          style: context.textTheme.muted,
+        ),
+        ShadButton.secondary(
+          size: ShadButtonSize.sm,
+          onPressed: () => _showHeadersDialog(context),
+          child: Text(buttonLabel),
+        ).withTapBounce(),
+      ],
+    );
+  }
+
+  Future<void> _showHeadersDialog(BuildContext context) async {
+    final l10n = context.l10n;
+    await showShadDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return _RawHeadersDialog(
+          headers: headers,
+          title: title,
+          note: note,
+          copyLabel: l10n.chatActionCopy,
+          closeLabel: l10n.commonClose,
+        );
+      },
+    );
+  }
+}
+
+class _RawHeadersDialog extends StatelessWidget {
+  const _RawHeadersDialog({
+    required this.headers,
+    required this.title,
+    required this.note,
+    required this.copyLabel,
+    required this.closeLabel,
+  });
+
+  final String headers;
+  final String title;
+  final String note;
+  final String copyLabel;
+  final String closeLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmedNote = note.trim();
+    final hasNote = trimmedNote.isNotEmpty;
+    return ShadDialog(
+      title: Text(
+        title,
+        style: context.modalHeaderTextStyle,
+      ),
+      actions: [
+        ShadButton.secondary(
+          size: ShadButtonSize.sm,
+          onPressed: () async {
+            await Clipboard.setData(
+              ClipboardData(text: headers),
+            );
+          },
+          child: Text(copyLabel),
+        ).withTapBounce(),
+        ShadButton.outline(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(closeLabel),
+        ).withTapBounce(),
+      ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxHeight: _messageDetailsHeadersDialogMaxHeight,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            spacing: _messageDetailsSectionSpacing,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (hasNote)
+                Text(
+                  trimmedNote,
+                  style: context.textTheme.muted,
+                ),
+              ShadCard(
+                padding:
+                    const EdgeInsets.all(_messageDetailsHeadersCardPadding),
+                child: SelectableText(
+                  headers,
+                  style: context.textTheme.small,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String? _composeRawHeaders({
+  required Message message,
+  required Chat? chat,
+  required List<Chat> shareParticipants,
+  required bool isFromSelf,
+  required String? selfJid,
+  required String? subject,
+  required String? transportLabel,
+}) {
+  final lines = <String>[];
+  _appendHeaderLine(lines, _rawHeaderFromLabel, message.senderJid);
+  final String? recipients = _resolveHeaderRecipients(
+    isFromSelf: isFromSelf,
+    shareParticipants: shareParticipants,
+    chat: chat,
+    selfJid: selfJid,
+  );
+  _appendHeaderLine(lines, _rawHeaderToLabel, recipients);
+  _appendHeaderLine(lines, _rawHeaderSubjectLabel, subject);
+  _appendHeaderLine(
+    lines,
+    _rawHeaderDateLabel,
+    _formatHeaderDate(message.timestamp),
+  );
+  _appendHeaderLine(lines, _rawHeaderMessageIdLabel, message.originID);
+  _appendHeaderLine(lines, _rawHeaderStanzaIdLabel, message.stanzaID);
+  _appendHeaderLine(lines, _rawHeaderOccupantIdLabel, message.occupantID);
+  _appendHeaderLine(lines, _rawHeaderLocalIdLabel, message.id);
+  _appendHeaderLine(
+    lines,
+    _rawHeaderDeltaMsgIdLabel,
+    message.deltaMsgId?.toString(),
+  );
+  _appendHeaderLine(
+    lines,
+    _rawHeaderDeltaChatIdLabel,
+    message.deltaChatId?.toString(),
+  );
+  _appendHeaderLine(lines, _rawHeaderChatJidLabel, message.chatJid);
+  _appendHeaderLine(lines, _rawHeaderTransportLabel, transportLabel);
+  if (lines.isEmpty) return null;
+  return lines.join(_rawHeaderLineBreak);
+}
+
+void _appendHeaderLine(
+  List<String> lines,
+  String label,
+  String? value,
+) {
+  final sanitized = _sanitizeHeaderValue(value);
+  if (sanitized == null) return;
+  lines.add('$label$_rawHeaderSeparator$sanitized');
+}
+
+String? _sanitizeHeaderValue(String? value) {
+  final sanitized = sanitizeEmailHeaderValue(value);
+  if (sanitized == null) return null;
+  final unicodeSanitized = sanitizeUnicodeControls(sanitized);
+  final normalized = unicodeSanitized.value.trim();
+  if (normalized.isEmpty) return null;
+  return normalized;
+}
+
+String? _resolveHeaderRecipients({
+  required bool isFromSelf,
+  required List<Chat> shareParticipants,
+  required Chat? chat,
+  required String? selfJid,
+}) {
+  if (isFromSelf) {
+    final recipients = _resolveParticipantAddresses(shareParticipants);
+    if (recipients.isNotEmpty) {
+      return recipients.join(_rawHeaderRecipientSeparator);
+    }
+    final chatAddress = chat?.emailAddress?.trim();
+    if (chatAddress?.isNotEmpty == true) {
+      return chatAddress;
+    }
+    return chat?.jid;
+  }
+  return selfJid;
+}
+
+List<String> _resolveParticipantAddresses(List<Chat> participants) {
+  final addresses = <String>{};
+  for (final participant in participants) {
+    final email = participant.emailAddress?.trim();
+    if (email?.isNotEmpty == true) {
+      addresses.add(email!);
+      continue;
+    }
+    final jid = participant.jid.trim();
+    if (jid.isNotEmpty) {
+      addresses.add(jid);
+    }
+  }
+  return addresses.toList(growable: false);
+}
+
+String? _formatHeaderDate(DateTime? timestamp) {
+  if (timestamp == null) return null;
+  return timestamp.toUtc().toIso8601String();
+}
+
 class _MessageDetailsInfo extends StatelessWidget {
   const _MessageDetailsInfo({
     required this.label,
     required this.value,
     this.leading,
+    this.copyValue,
+    this.copyLabel,
   });
 
   final String label;
   final String value;
   final Widget? leading;
+  final String? copyValue;
+  final String? copyLabel;
 
   @override
   Widget build(BuildContext context) {
+    final trimmedCopyValue = copyValue?.trim();
+    final canCopy = trimmedCopyValue?.isNotEmpty == true;
+    final resolvedCopyLabel = copyLabel ?? context.l10n.chatActionCopy;
+    final copyButton = canCopy
+        ? AxiTooltip(
+            builder: (context) => Text(resolvedCopyLabel),
+            child: ShadIconButton.ghost(
+              onPressed: () async {
+                await Clipboard.setData(
+                  ClipboardData(text: trimmedCopyValue!),
+                );
+              },
+              icon: Icon(
+                LucideIcons.copy,
+                size: _messageDetailsCopyIconSize,
+                color: context.colorScheme.mutedForeground,
+              ),
+              decoration: const ShadDecoration(
+                secondaryBorder: ShadBorder.none,
+                secondaryFocusedBorder: ShadBorder.none,
+              ),
+            ).withTapBounce(),
+          )
+        : null;
+    final valueText = SelectableText(
+      value,
+      textAlign: TextAlign.center,
+      style: context.textTheme.small,
+    );
+    final valueRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (leading != null) ...[
+          leading!,
+          const SizedBox(width: _messageDetailsCopySpacing),
+        ],
+        Flexible(
+          fit: FlexFit.loose,
+          child: valueText,
+        ),
+        if (copyButton != null) ...[
+          const SizedBox(width: _messageDetailsCopySpacing),
+          copyButton,
+        ],
+      ],
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -443,28 +856,7 @@ class _MessageDetailsInfo extends StatelessWidget {
           label,
           style: context.textTheme.muted,
         ),
-        if (leading == null)
-          SelectableText(
-            value,
-            textAlign: TextAlign.center,
-            style: context.textTheme.small,
-          )
-        else
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              leading!,
-              const SizedBox(width: 6),
-              Flexible(
-                child: SelectableText(
-                  value,
-                  textAlign: TextAlign.center,
-                  style: context.textTheme.small,
-                ),
-              ),
-            ],
-          ),
+        valueRow,
       ],
     );
   }

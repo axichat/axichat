@@ -9,10 +9,12 @@ import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -28,7 +30,8 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/database.dart' show MessageAttachmentData;
+import 'package:axichat/src/storage/database.dart'
+    show MessageAttachmentData, PinnedMessageEntry;
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -59,6 +62,13 @@ const _sendSignatureAttachmentFieldSeparator = '|';
 const _emptySignatureValue = '';
 const _bundledAttachmentSendFailureLogMessage =
     'Failed to send bundled email attachment';
+const _pinPermissionDeniedMessage =
+    'You do not have permission to pin messages in this room.';
+const _pinRoomStateLoadingMessage = 'Room members are still loading.';
+const _pinSyncFailedLogMessage = 'Failed to sync pinned messages.';
+const int _pinnedMessagesFetchPageLimit = 4;
+const _emptyPinnedMessageItems = <PinnedMessageItem>[];
+const _emptyPinnedAttachmentIds = <String>[];
 
 class ComposerRecipient extends Equatable {
   const ComposerRecipient({
@@ -150,6 +160,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
+    on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
+    on<ChatPinnedMessagesOpened>(_onChatPinnedMessagesOpened);
     on<_RoomStateUpdated>(_onRoomStateUpdated);
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
@@ -163,6 +175,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     on<ChatAvailabilityMessageSent>(_onChatAvailabilityMessageSent);
     on<ChatMuted>(_onChatMuted);
+    on<ChatNotificationPreviewSettingChanged>(
+      _onChatNotificationPreviewSettingChanged,
+    );
     on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
     on<ChatAttachmentAutoDownloadToggled>(
       _onChatAttachmentAutoDownloadToggled,
@@ -174,6 +189,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatAlertHidden>(_onChatAlertHidden);
     on<ChatQuoteRequested>(_onChatQuoteRequested);
     on<ChatQuoteCleared>(_onChatQuoteCleared);
+    on<ChatMessagePinRequested>(_onChatMessagePinRequested);
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
@@ -227,6 +243,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             if (chat != null && _xmppAllowedForChat(chat)) {
               unawaited(_catchUpFromMam());
               unawaited(_prefetchPeerAvatar(chat));
+              unawaited(_syncPinnedMessagesForChat(chat));
             }
           }
         },
@@ -287,6 +304,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
+  StreamSubscription<List<PinnedMessageEntry>>? _pinnedSubscription;
   StreamSubscription<RoomState>? _roomSubscription;
   StreamSubscription<List<String>>? _typingParticipantsSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
@@ -301,6 +319,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _mamLoading = false;
   bool _mamCatchingUp = false;
   bool _emailHistoryLoading = false;
+  bool _pinHydrationInFlight = false;
   Completer<void>? _mamLoadingCompleter;
 
   RestartableTimer? _typingTimer;
@@ -412,7 +431,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         direction: MamPageDirection.before,
       );
     } on Exception catch (error, stackTrace) {
-      _log.fine(
+      _log.safeFine(
         'Failed to load older MAM page for ${chat.jid}',
         error,
         stackTrace,
@@ -491,7 +510,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         afterId = nextAfter;
       }
     } on Exception catch (error, stackTrace) {
-      _log.fine(
+      _log.safeFine(
         'Failed to catch up via MAM for ${chat.jid}',
         error,
         stackTrace,
@@ -508,7 +527,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final filter = await _chatsService.loadChatViewFilter(jid!);
       add(ChatViewFilterChanged(filter: filter, persist: false));
     } on Exception catch (error, stackTrace) {
-      _log.fine('Failed to load view filter for $jid', error, stackTrace);
+      _log.safeFine(
+        'Failed to load view filter for $jid',
+        error,
+        stackTrace,
+      );
     }
   }
 
@@ -541,7 +564,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         direction: MamPageDirection.before,
       );
     } on Exception catch (error, stackTrace) {
-      _log.fine(
+      _log.safeFine(
         'Failed to hydrate MAM for chat ${chat.jid}',
         error,
         stackTrace,
@@ -588,7 +611,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         nickname: chat.myNickname,
       );
     } on Exception catch (error, stackTrace) {
-      _log.fine(
+      _log.safeFine(
         'Failed to ensure membership for ${chat.jid}',
         error,
         stackTrace,
@@ -638,6 +661,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
+  String? _resolvePinnedMessagesChatJid(Chat chat) {
+    final resolvedChatJid = chat.isEmailBacked ? chat.jid : chat.remoteJid;
+    final trimmedChatJid = resolvedChatJid.trim();
+    if (trimmedChatJid.isEmpty) {
+      return null;
+    }
+    return trimmedChatJid;
+  }
+
+  void _subscribeToPinnedMessages(Chat chat) {
+    final trimmedChatJid = _resolvePinnedMessagesChatJid(chat);
+    unawaited(_pinnedSubscription?.cancel());
+    if (trimmedChatJid == null) {
+      _pinnedSubscription = null;
+      return;
+    }
+    final emailService = _emailService;
+    final useEmailService = chat.isEmailBacked;
+    if (useEmailService && emailService != null) {
+      _pinnedSubscription = emailService
+          .pinnedMessagesStream(trimmedChatJid)
+          .listen((items) => add(_PinnedMessagesUpdated(items)));
+    } else {
+      _pinnedSubscription = _messageService
+          .pinnedMessagesStream(trimmedChatJid)
+          .listen((items) => add(_PinnedMessagesUpdated(items)));
+    }
+    unawaited(_syncPinnedMessagesForChat(chat));
+  }
+
   void _subscribeToTypingParticipants(Chat chat) {
     if (!_xmppAllowedForChat(chat)) {
       unawaited(_typingParticipantsSubscription?.cancel());
@@ -651,10 +704,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             (participants) => add(_TypingParticipantsUpdated(participants)));
   }
 
+  Future<void> _syncPinnedMessagesForChat(Chat chat) async {
+    final chatJid = _resolvePinnedMessagesChatJid(chat);
+    if (chatJid == null) {
+      return;
+    }
+    try {
+      await _messageService.syncPinnedMessagesForChat(chatJid);
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_pinSyncFailedLogMessage, error, stackTrace);
+    }
+  }
+
   @override
   Future<void> close() async {
     await _chatSubscription.cancel();
     await _messageSubscription?.cancel();
+    await _pinnedSubscription?.cancel();
     await _roomSubscription?.cancel();
     await _typingParticipantsSubscription?.cancel();
     await _emailSyncSubscription?.cancel();
@@ -673,6 +739,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final previousChat = state.chat;
     final resetContext = previousChat?.jid != event.chat.jid;
     final typingContextChanged = resetContext ||
+        previousChat?.defaultTransport != event.chat.defaultTransport;
+    final pinnedContextChanged = resetContext ||
         previousChat?.defaultTransport != event.chat.defaultTransport;
     final typingShouldClear =
         typingContextChanged || event.chat.defaultTransport.isEmail;
@@ -695,6 +763,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
       roomState: resetContext ? null : state.roomState,
+      pinnedMessages:
+          resetContext ? _emptyPinnedMessageItems : state.pinnedMessages,
+      pinnedMessagesLoaded: resetContext ? false : state.pinnedMessagesLoaded,
+      pinnedMessagesHydrating:
+          resetContext ? false : state.pinnedMessagesHydrating,
       typingParticipants:
           typingShouldClear ? const [] : state.typingParticipants,
       typing: event.chat.defaultTransport.isEmail ? false : state.typing,
@@ -709,6 +782,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (typingContextChanged) {
       _subscribeToTypingParticipants(event.chat);
+    }
+    if (pinnedContextChanged) {
+      _subscribeToPinnedMessages(event.chat);
     }
     _resetMamCursors(resetContext);
     if (_xmppAllowedForChat(event.chat)) {
@@ -758,7 +834,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (state.roomState != null) return;
         add(_RoomStateUpdated(warmed));
       } on Exception catch (error, stackTrace) {
-        _log.fine(
+        _log.safeFine(
           'Failed to warm room state for ${chat.jid}',
           error,
           stackTrace,
@@ -876,6 +952,201 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _markEmailMessagesDisplayedLocally(seenCandidates);
       }
     }
+  }
+
+  Future<void> _onPinnedMessagesUpdated(
+    _PinnedMessagesUpdated event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (event.items.isEmpty) {
+      emit(
+        state.copyWith(
+          pinnedMessages: _emptyPinnedMessageItems,
+          pinnedMessagesLoaded: true,
+        ),
+      );
+      return;
+    }
+    final orderedIds = <String>{};
+    for (final entry in event.items) {
+      final stanzaId = entry.messageStanzaId.trim();
+      if (stanzaId.isEmpty) {
+        continue;
+      }
+      orderedIds.add(stanzaId);
+    }
+    if (orderedIds.isEmpty) {
+      emit(
+        state.copyWith(
+          pinnedMessages: _emptyPinnedMessageItems,
+          pinnedMessagesLoaded: true,
+        ),
+      );
+      return;
+    }
+    final db = await _messageService.database;
+    final messages = await db.getMessagesByStanzaIds(orderedIds);
+    final messageByStanza = <String, Message>{
+      for (final message in messages) message.stanzaID: message,
+    };
+    final attachmentMaps = await _loadAttachmentMaps(messages);
+    final pinnedItems = <PinnedMessageItem>[];
+    for (final entry in event.items) {
+      final stanzaId = entry.messageStanzaId.trim();
+      if (stanzaId.isEmpty) {
+        continue;
+      }
+      final message = messageByStanza[stanzaId];
+      final attachmentIds = message == null
+          ? _emptyPinnedAttachmentIds
+          : attachmentMaps.attachmentsByMessageId[_messageKey(message)] ??
+              _emptyPinnedAttachmentIds;
+      pinnedItems.add(
+        PinnedMessageItem(
+          messageStanzaId: stanzaId,
+          chatJid: entry.chatJid,
+          pinnedAt: entry.pinnedAt,
+          message: message,
+          attachmentMetadataIds: attachmentIds,
+        ),
+      );
+    }
+    emit(
+      state.copyWith(
+        pinnedMessages: pinnedItems,
+        pinnedMessagesLoaded: true,
+      ),
+    );
+  }
+
+  Future<void> _onChatPinnedMessagesOpened(
+    ChatPinnedMessagesOpened event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    if (_pinHydrationInFlight) {
+      return;
+    }
+    var missing = _missingPinnedMessageIds(state.pinnedMessages);
+    if (missing.isEmpty) {
+      if (state.pinnedMessagesHydrating) {
+        emit(state.copyWith(pinnedMessagesHydrating: false));
+      }
+      return;
+    }
+    _pinHydrationInFlight = true;
+    emit(state.copyWith(pinnedMessagesHydrating: true));
+    try {
+      if (chat.isEmailBacked) {
+        await _hydratePinnedMessagesFromEmail(chat, missing);
+      } else {
+        await _hydratePinnedMessagesFromMam(chat, missing);
+      }
+    } finally {
+      _pinHydrationInFlight = false;
+      emit(state.copyWith(pinnedMessagesHydrating: false));
+    }
+  }
+
+  Set<String> _missingPinnedMessageIds(
+    List<PinnedMessageItem> items,
+  ) {
+    final missing = <String>{};
+    for (final item in items) {
+      if (item.message != null) {
+        continue;
+      }
+      final stanzaId = item.messageStanzaId.trim();
+      if (stanzaId.isEmpty) {
+        continue;
+      }
+      missing.add(stanzaId);
+    }
+    return missing;
+  }
+
+  Future<void> _hydratePinnedMessagesFromMam(
+    Chat chat,
+    Set<String> missingStanzaIds,
+  ) async {
+    if (!_xmppAllowedForChat(chat)) {
+      return;
+    }
+    if (_mamBeforeId == null && state.items.isEmpty) {
+      await _hydrateLatestFromMam(chat);
+      missingStanzaIds = await _pruneResolvedPinnedMessages(
+        missingStanzaIds,
+      );
+      await _refreshPinnedMessagesFromDatabase(chat);
+    }
+    for (var attempt = 0;
+        attempt < _pinnedMessagesFetchPageLimit && missingStanzaIds.isNotEmpty;
+        attempt += 1) {
+      final localCount = await _archivedMessageCount(chat);
+      final desiredWindow = localCount + messageBatchSize;
+      await _loadEarlierFromMam(desiredWindow: desiredWindow);
+      missingStanzaIds = await _pruneResolvedPinnedMessages(
+        missingStanzaIds,
+      );
+      await _refreshPinnedMessagesFromDatabase(chat);
+      if (_mamComplete) {
+        break;
+      }
+    }
+  }
+
+  Future<void> _hydratePinnedMessagesFromEmail(
+    Chat chat,
+    Set<String> missingStanzaIds,
+  ) async {
+    for (var attempt = 0;
+        attempt < _pinnedMessagesFetchPageLimit && missingStanzaIds.isNotEmpty;
+        attempt += 1) {
+      final localCount = await _archivedMessageCount(chat);
+      final desiredWindow = localCount + messageBatchSize;
+      await _loadEarlierFromEmail(desiredWindow: desiredWindow);
+      missingStanzaIds = await _pruneResolvedPinnedMessages(
+        missingStanzaIds,
+      );
+      await _refreshPinnedMessagesFromDatabase(chat);
+    }
+  }
+
+  Future<Set<String>> _pruneResolvedPinnedMessages(
+    Set<String> missingStanzaIds,
+  ) async {
+    if (missingStanzaIds.isEmpty) {
+      return missingStanzaIds;
+    }
+    final db = await _messageService.database;
+    final resolvedMessages = await db.getMessagesByStanzaIds(
+      missingStanzaIds,
+    );
+    if (resolvedMessages.isEmpty) {
+      return missingStanzaIds;
+    }
+    final resolvedIds = <String>{};
+    for (final message in resolvedMessages) {
+      final stanzaId = message.stanzaID.trim();
+      if (stanzaId.isNotEmpty) {
+        resolvedIds.add(stanzaId);
+      }
+    }
+    missingStanzaIds.removeAll(resolvedIds);
+    return missingStanzaIds;
+  }
+
+  Future<void> _refreshPinnedMessagesFromDatabase(Chat chat) async {
+    final pinnedChatJid = _resolvePinnedMessagesChatJid(chat);
+    if (pinnedChatJid == null) {
+      return;
+    }
+    final db = await _messageService.database;
+    final entries = await db.getPinnedMessages(pinnedChatJid);
+    add(_PinnedMessagesUpdated(entries));
   }
 
   Future<void> _onChatInviteRequested(
@@ -1110,7 +1381,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to change nickname for $chatJid', error, stackTrace);
+      _log.safeWarning(
+        'Failed to change nickname for $chatJid',
+        error,
+        stackTrace,
+      );
       emit(
         state.copyWith(
           toast: const ChatToast(
@@ -1146,7 +1421,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to rename contact ${chat.jid}', error, stackTrace);
+      _log.safeWarning(
+        'Failed to rename contact ${chat.jid}',
+        error,
+        stackTrace,
+      );
       emit(
         state.copyWith(
           toast: ChatToast(
@@ -1742,7 +2021,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _lastXmppSendSignature = xmppSignature;
       }
     } on DeltaChatException catch (error, stackTrace) {
-      _log.warning(
+      _log.safeWarning(
         'Failed to send email message for chat ${chat.jid}',
         error,
         stackTrace,
@@ -1767,7 +2046,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emit: emit,
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning(
+      _log.safeWarning(
         'Failed to send message for chat ${chat.jid}',
         error,
         stackTrace,
@@ -1831,6 +2110,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     if (jid == null) return;
     await _chatsService.toggleChatMuted(jid: jid!, muted: event.muted);
+  }
+
+  Future<void> _onChatNotificationPreviewSettingChanged(
+    ChatNotificationPreviewSettingChanged event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) return;
+    await _chatsService.setChatNotificationPreviewSetting(
+      jid: chat.jid,
+      setting: event.setting,
+    );
+    emit(
+      state.copyWith(
+        chat: chat.copyWith(notificationPreviewSetting: event.setting),
+      ),
+    );
   }
 
   Future<void> _onChatShareSignatureToggled(
@@ -1935,6 +2231,71 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<void> _onChatMessagePinRequested(
+    ChatMessagePinRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    final stanzaId = event.message.stanzaID.trim();
+    if (stanzaId.isEmpty) {
+      return;
+    }
+    final isEmailBacked = chat.isEmailBacked;
+    if (chat.type == ChatType.groupChat && !isEmailBacked) {
+      final roomState = state.roomState;
+      if (roomState == null) {
+        emit(
+          _attachToast(
+            state,
+            const ChatToast(
+              message: _pinRoomStateLoadingMessage,
+              variant: ChatToastVariant.warning,
+            ),
+          ),
+        );
+        return;
+      }
+      if (!roomState.myAffiliation.canManagePins) {
+        emit(
+          _attachToast(
+            state,
+            const ChatToast(
+              message: _pinPermissionDeniedMessage,
+              variant: ChatToastVariant.warning,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    final emailService = _emailService;
+    if (isEmailBacked) {
+      if (emailService == null) {
+        return;
+      }
+      if (event.pin) {
+        await emailService.pinMessage(chat: chat, message: event.message);
+      } else {
+        await emailService.unpinMessage(chat: chat, message: event.message);
+      }
+      return;
+    }
+    if (event.pin) {
+      await _messageService.pinMessage(
+        chatJid: chat.remoteJid,
+        message: event.message,
+      );
+    } else {
+      await _messageService.unpinMessage(
+        chatJid: chat.remoteJid,
+        message: event.message,
+      );
+    }
+  }
+
   Future<void> _onChatMessageReactionToggled(
     ChatMessageReactionToggled event,
     Emitter<ChatState> emit,
@@ -1963,9 +2324,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final plainText = message.plainText.trim();
     final htmlBody = message.normalizedHtmlBody;
     final isEmailTarget = _isEmailCapableChat(target);
+    final forwardingMode = event.forwardingMode;
+    final safeForward = isEmailTarget && forwardingMode.isSafe;
+    final resolvedHtmlBody = safeForward ? null : htmlBody;
     final emailService = _emailService;
     try {
-      if (isEmailTarget && emailService != null && message.deltaMsgId != null) {
+      if (isEmailTarget &&
+          emailService != null &&
+          message.deltaMsgId != null &&
+          forwardingMode.isOriginal) {
         final forwarded = await emailService.forwardMessages(
           messages: [message],
           toChat: target,
@@ -1977,6 +2344,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final attachments = await _attachmentsForMessage(message);
       if (attachments.isNotEmpty) {
         final caption = plainText.isNotEmpty ? plainText : null;
+        final htmlCaption = safeForward ? null : htmlBody;
         if (isEmailTarget) {
           if (emailService == null) return;
           final bundled = await _bundleEmailAttachmentList(
@@ -1991,7 +2359,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             await emailService.sendAttachment(
               chat: target,
               attachment: captionedAttachment,
-              htmlCaption: index == 0 ? htmlBody : null,
+              htmlCaption: index == 0 ? htmlCaption : null,
             );
           }
           return;
@@ -2008,26 +2376,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             attachment: captionedAttachment,
             encryptionProtocol: target.encryptionProtocol,
             chatType: target.type,
-            htmlCaption: shouldApplyCaption ? htmlBody : null,
+            htmlCaption: shouldApplyCaption ? resolvedHtmlBody : null,
             transportGroupId: attachmentGroupId,
             attachmentOrder: index,
           );
         }
         return;
       }
-      if (plainText.isEmpty && htmlBody == null) return;
+      if (plainText.isEmpty && resolvedHtmlBody == null) return;
       if (isEmailTarget) {
         if (emailService == null) return;
         await emailService.sendMessage(
           chat: target,
           body: plainText,
-          htmlBody: htmlBody,
+          htmlBody: resolvedHtmlBody,
         );
       } else {
         await _messageService.sendMessage(
           jid: target.jid,
           text: plainText,
-          htmlBody: htmlBody,
+          htmlBody: resolvedHtmlBody,
           encryptionProtocol: target.encryptionProtocol,
           chatType: target.type,
         );
@@ -2469,7 +2837,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return true;
     } on DeltaChatException catch (error, stackTrace) {
-      _log.warning(
+      _log.safeWarning(
         'Failed to send attachment for chat ${chat.jid}',
         error,
         stackTrace,
@@ -2483,7 +2851,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       emit(state.copyWith(composerError: readableMessage));
     } on Exception catch (error, stackTrace) {
-      _log.warning(
+      _log.safeWarning(
         'Failed to send attachment for chat ${chat.jid}',
         error,
         stackTrace,
@@ -2902,7 +3270,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
         return false;
       } on Exception catch (error, stackTrace) {
-        _log.warning(
+        _log.safeWarning(
           'Failed to send XMPP attachment for chat ${chat.jid}',
           error,
           stackTrace,
@@ -3000,7 +3368,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } on Exception catch (error, stackTrace) {
-      _log.warning(
+      _log.safeWarning(
         'Failed to save offline email draft for chat ${chat.jid}',
         error,
         stackTrace,
@@ -3849,7 +4217,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     } catch (error, stackTrace) {
-      _log.fine(
+      _log.safeFine(
         'Failed to save XMPP draft for chat ${chat.jid}',
         error,
         stackTrace,
