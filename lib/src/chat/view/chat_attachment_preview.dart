@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -80,6 +81,8 @@ const String _attachmentShareDirPrefix = 'share_';
 const String _attachmentShareFallbackName = 'attachment';
 const int _attachmentShareNameMaxLength = 120;
 const int _attachmentShareNameSubstringStart = 0;
+const Duration _attachmentShareCleanupAge = Duration(days: 1);
+const bool _attachmentShareCleanupFollowLinks = false;
 const Duration _attachmentImageDecodeTimeout = Duration(seconds: 2);
 const Duration _attachmentVideoInitTimeout = Duration(seconds: 3);
 const ImageDecodeLimits _attachmentImageDecodeLimits = ImageDecodeLimits(
@@ -118,7 +121,9 @@ const String _attachmentTooLargeMessageDefault =
 const String _attachmentTooLargeMessagePrefix =
     'Attachment exceeds the server limit (';
 const String _attachmentTooLargeMessageSuffix = ').';
-final Set<String> _acknowledgedHighRiskAttachmentIds = <String>{};
+const int _acknowledgedHighRiskAttachmentMaxEntries = 256;
+final LinkedHashSet<String> _acknowledgedHighRiskAttachmentIds =
+    LinkedHashSet<String>();
 
 extension _FileMetadataRiskExtension on FileMetadataData {
   FileTypeReport get declaredTypeReport => buildDeclaredFileTypeReport(
@@ -143,7 +148,18 @@ void _registerHighRiskAcknowledgement(String? attachmentId) {
   if (resolvedId == null || resolvedId.isEmpty) {
     return;
   }
-  _acknowledgedHighRiskAttachmentIds.add(resolvedId);
+  _acknowledgedHighRiskAttachmentIds
+    ..remove(resolvedId)
+    ..add(resolvedId);
+  _evictAcknowledgedHighRiskAttachmentIdsIfNeeded();
+}
+
+void _evictAcknowledgedHighRiskAttachmentIdsIfNeeded() {
+  while (_acknowledgedHighRiskAttachmentIds.length >
+      _acknowledgedHighRiskAttachmentMaxEntries) {
+    _acknowledgedHighRiskAttachmentIds
+        .remove(_acknowledgedHighRiskAttachmentIds.first);
+  }
 }
 
 Future<bool> _confirmHighRiskAction(
@@ -200,6 +216,22 @@ Future<bool> _confirmDownloadAllowed(
     confirmLabel: context.l10n.chatAttachmentDownload,
     acknowledgementId: metadata.riskAcknowledgementId,
     requireConfirmation: requireConfirmation,
+  );
+}
+
+Future<bool> _confirmExportAllowed(
+  BuildContext context, {
+  required FileMetadataData metadata,
+  required FileTypeReport report,
+  required String confirmLabel,
+}) {
+  return _confirmHighRiskAction(
+    context,
+    report: report,
+    fileName: metadata.filename,
+    confirmLabel: confirmLabel,
+    acknowledgementId: metadata.riskAcknowledgementId,
+    requireConfirmation: true,
   );
 }
 
@@ -301,7 +333,13 @@ class ChatAttachmentPreview extends StatelessWidget {
                 }
                 final FileTypeReport? report = typeSnapshot.data;
                 final FileTypeReport resolvedReport = report ?? declaredReport;
-                if (report?.isDetectedImage ?? false) {
+                final bool useDeclaredFallback =
+                    !resolvedReport.hasReliableDetection;
+                final bool isImage = resolvedReport.isDetectedImage ||
+                    (useDeclaredFallback && resolvedReport.isDeclaredImage);
+                final bool isVideo = resolvedReport.isDetectedVideo ||
+                    (useDeclaredFallback && resolvedReport.isDeclaredVideo);
+                if (isImage) {
                   return _ImageAttachment(
                     metadata: metadata,
                     stanzaId: stanzaId,
@@ -311,7 +349,7 @@ class ChatAttachmentPreview extends StatelessWidget {
                     typeReport: resolvedReport,
                   );
                 }
-                if (report?.isDetectedVideo ?? false) {
+                if (isVideo) {
                   return _VideoAttachment(
                     metadata: metadata,
                     stanzaId: stanzaId,
@@ -577,6 +615,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
                         context,
                         file: previewFile,
                         metadata: metadata,
+                        typeReport: widget.typeReport,
                       ),
                       child: AspectRatio(
                         aspectRatio: _aspectRatio(metadata),
@@ -825,11 +864,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
                 ? null
                 : () async {
                     if (localFile == null) return;
-                    await _saveAttachmentToDevice(
-                      context,
-                      file: localFile,
-                      filename: metadata.filename,
-                    );
+                    await _handleSaveAttachment(localFile);
                   },
             child: const Icon(
               LucideIcons.save,
@@ -843,11 +878,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
                 ? null
                 : () async {
                     if (localFile == null) return;
-                    await _shareAttachmentFromFile(
-                      context,
-                      file: localFile,
-                      filename: metadata.filename,
-                    );
+                    await _handleShareAttachment(localFile);
                   },
             child: const Icon(
               LucideIcons.share2,
@@ -987,6 +1018,42 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       stanzaId: widget.stanzaId,
     );
     return downloadedPath?.trim().isNotEmpty == true;
+  }
+
+  Future<void> _handleSaveAttachment(File file) async {
+    final l10n = context.l10n;
+    final FileTypeReport report =
+        widget.typeReport ?? widget.metadata.declaredTypeReport;
+    final bool allowed = await _confirmExportAllowed(
+      context,
+      metadata: widget.metadata,
+      report: report,
+      confirmLabel: l10n.chatAttachmentExportConfirm,
+    );
+    if (!mounted || !allowed) return;
+    await _saveAttachmentToDevice(
+      context,
+      file: file,
+      filename: widget.metadata.filename,
+    );
+  }
+
+  Future<void> _handleShareAttachment(File file) async {
+    final l10n = context.l10n;
+    final FileTypeReport report =
+        widget.typeReport ?? widget.metadata.declaredTypeReport;
+    final bool allowed = await _confirmExportAllowed(
+      context,
+      metadata: widget.metadata,
+      report: report,
+      confirmLabel: l10n.chatActionShare,
+    );
+    if (!mounted || !allowed) return;
+    await _shareAttachmentFromFile(
+      context,
+      file: file,
+      filename: widget.metadata.filename,
+    );
   }
 
   void _togglePlayback() {
@@ -1144,6 +1211,7 @@ Future<void> _openImagePreview(
   BuildContext context, {
   required File file,
   required FileMetadataData metadata,
+  FileTypeReport? typeReport,
 }) async {
   if (!await file.exists()) return;
   if (!context.mounted) return;
@@ -1154,6 +1222,7 @@ Future<void> _openImagePreview(
       return _ImageAttachmentPreviewDialog(
         file: file,
         metadata: metadata,
+        typeReport: typeReport,
       );
     },
   );
@@ -1163,10 +1232,12 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
   const _ImageAttachmentPreviewDialog({
     required this.file,
     required this.metadata,
+    this.typeReport,
   });
 
   final File file;
   final FileMetadataData metadata;
+  final FileTypeReport? typeReport;
 
   @override
   Widget build(BuildContext context) {
@@ -1180,6 +1251,7 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
       maxHeight: maxHeight,
     );
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
     final borderSide = BorderSide(color: colors.border);
     return ShadDialog(
@@ -1226,6 +1298,15 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                 ShadButton.ghost(
                   size: ShadButtonSize.sm,
                   onPressed: () async {
+                    final FileTypeReport report =
+                        typeReport ?? metadata.declaredTypeReport;
+                    final bool allowed = await _confirmExportAllowed(
+                      context,
+                      metadata: metadata,
+                      report: report,
+                      confirmLabel: l10n.chatAttachmentExportConfirm,
+                    );
+                    if (!context.mounted || !allowed) return;
                     await _saveAttachmentToDevice(
                       context,
                       file: file,
@@ -1241,6 +1322,15 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                 ShadButton.ghost(
                   size: ShadButtonSize.sm,
                   onPressed: () async {
+                    final FileTypeReport report =
+                        typeReport ?? metadata.declaredTypeReport;
+                    final bool allowed = await _confirmExportAllowed(
+                      context,
+                      metadata: metadata,
+                      report: report,
+                      confirmLabel: l10n.chatActionShare,
+                    );
+                    if (!context.mounted || !allowed) return;
                     await _shareAttachmentFromFile(
                       context,
                       file: file,
@@ -1496,10 +1586,19 @@ class _FileAttachmentState extends State<_FileAttachment> {
 
   Future<void> _saveAttachment() async {
     if (_downloading) return;
+    final l10n = context.l10n;
+    final FileTypeReport report =
+        widget.typeReport ?? widget.metadata.declaredTypeReport;
+    final bool allowed = await _confirmExportAllowed(
+      context,
+      metadata: widget.metadata,
+      report: report,
+      confirmLabel: l10n.chatAttachmentExportConfirm,
+    );
+    if (!allowed || !mounted) return;
     setState(() {
       _downloading = true;
     });
-    final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
       final path = await _resolveLocalPath(
@@ -1552,13 +1651,22 @@ class _FileAttachmentState extends State<_FileAttachment> {
 
   Future<void> _shareAttachment() async {
     if (_downloading) return;
+    final l10n = context.l10n;
+    final FileTypeReport report =
+        widget.typeReport ?? widget.metadata.declaredTypeReport;
+    final bool allowed = await _confirmExportAllowed(
+      context,
+      metadata: widget.metadata,
+      report: report,
+      confirmLabel: l10n.chatActionShare,
+    );
+    if (!allowed || !mounted) return;
     final approved = await _confirmAttachmentShare(context);
     if (!mounted) return;
     if (approved != true) return;
     setState(() {
       _downloading = true;
     });
-    final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
       final path = await _resolveLocalPath(
@@ -2320,6 +2428,7 @@ Future<Directory> _createAttachmentShareDir() async {
   if (!await shareRoot.exists()) {
     await shareRoot.create(recursive: true);
   }
+  await _cleanupAttachmentShareRoot(shareRoot);
   final timestamp = DateTime.now().microsecondsSinceEpoch;
   final shareDirName = '$_attachmentShareDirPrefix$timestamp';
   final shareDir = Directory(p.join(shareRoot.path, shareDirName));
@@ -2327,6 +2436,39 @@ Future<Directory> _createAttachmentShareDir() async {
     await shareDir.create(recursive: true);
   }
   return shareDir;
+}
+
+Future<void> _cleanupAttachmentShareRoot(Directory shareRoot) async {
+  final cutoff = DateTime.now().subtract(_attachmentShareCleanupAge);
+  try {
+    await for (final entity in shareRoot.list(
+      followLinks: _attachmentShareCleanupFollowLinks,
+    )) {
+      if (entity is! Directory) {
+        continue;
+      }
+      final baseName = p.basename(entity.path);
+      if (!baseName.startsWith(_attachmentShareDirPrefix)) {
+        continue;
+      }
+      FileStat stat;
+      try {
+        stat = await entity.stat();
+      } on Exception {
+        continue;
+      }
+      if (stat.modified.isAfter(cutoff)) {
+        continue;
+      }
+      try {
+        await entity.delete(recursive: true);
+      } on Exception {
+        continue;
+      }
+    }
+  } on Exception {
+    return;
+  }
 }
 
 String _sanitizeShareFileName({

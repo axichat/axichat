@@ -1213,6 +1213,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   bool get isInMemory => _inMemory;
   String _normalizeEmail(String address) => address.trim().toLowerCase();
+  String? _normalizeBlocklistJid(String jid) {
+    final trimmed = jid.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
+    } catch (_) {
+      return trimmed.toLowerCase();
+    }
+  }
 
   String _chatTitleForIdentifier(String identifier) {
     final trimmed = identifier.trim();
@@ -3527,20 +3536,34 @@ $limitClause
 
   @override
   Future<bool> isJidBlocked(String jid) async {
-    final normalized = jid.trim();
-    if (normalized.isEmpty) {
+    final normalized = _normalizeBlocklistJid(jid);
+    if (normalized == null) {
       return false;
     }
     final entry = await blocklistAccessor.selectOne(normalized);
-    return entry != null;
+    if (entry != null) {
+      return true;
+    }
+    final entries = await blocklistAccessor.selectAll();
+    for (final storedEntry in entries) {
+      final stored = _normalizeBlocklistJid(storedEntry.jid);
+      if (stored != null && stored == normalized) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @override
   Future<void> blockJid(String jid) async {
     _log.info('Adding to blocklist');
+    final normalized = _normalizeBlocklistJid(jid);
+    if (normalized == null) {
+      return;
+    }
     await blocklistAccessor.insertOne(
       BlocklistCompanion.insert(
-        jid: jid,
+        jid: normalized,
         blockedAt: Value(DateTime.timestamp().toUtc()),
       ),
     );
@@ -3548,8 +3571,18 @@ $limitClause
 
   @override
   Future<void> blockJids(List<String> jids) async {
+    final normalizedJids = <String>{};
+    for (final jid in jids) {
+      final normalized = _normalizeBlocklistJid(jid);
+      if (normalized != null) {
+        normalizedJids.add(normalized);
+      }
+    }
+    if (normalizedJids.isEmpty) {
+      return;
+    }
     await transaction(() async {
-      for (final jid in jids) {
+      for (final jid in normalizedJids) {
         _log.info('Adding to blocklist');
         await blocklistAccessor.insertOne(
           BlocklistCompanion.insert(
@@ -3564,13 +3597,27 @@ $limitClause
   @override
   Future<void> unblockJid(String jid) async {
     _log.info('Removing from blocklist');
-    await blocklistAccessor.deleteOne(jid);
+    final normalized = _normalizeBlocklistJid(jid);
+    if (normalized == null) {
+      return;
+    }
+    await blocklistAccessor.deleteOne(normalized);
   }
 
   @override
   Future<void> unblockJids(List<String> jids) async {
+    final normalizedJids = <String>{};
+    for (final jid in jids) {
+      final normalized = _normalizeBlocklistJid(jid);
+      if (normalized != null) {
+        normalizedJids.add(normalized);
+      }
+    }
+    if (normalizedJids.isEmpty) {
+      return;
+    }
     await transaction(() async {
-      for (final jid in jids) {
+      for (final jid in normalizedJids) {
         _log.info('Removing from blocklist');
         await blocklistAccessor.deleteOne(jid);
       }
@@ -3582,11 +3629,20 @@ $limitClause
     _log.info('Replacing blocklist...');
     final existing = await blocklistAccessor.selectAll();
     final blockedAtByJid = <String, DateTime>{
-      for (final entry in existing) entry.jid: entry.blockedAt,
+      for (final entry in existing)
+        if (_normalizeBlocklistJid(entry.jid) case final normalized?)
+          normalized: entry.blockedAt,
     };
+    final normalizedBlocks = <String>{};
+    for (final blocked in blocks) {
+      final normalized = _normalizeBlocklistJid(blocked);
+      if (normalized != null) {
+        normalizedBlocks.add(normalized);
+      }
+    }
     await transaction(() async {
       await blocklistAccessor.deleteAll();
-      for (final blocked in blocks) {
+      for (final blocked in normalizedBlocks) {
         final blockedAt =
             (blockedAtByJid[blocked] ?? DateTime.timestamp()).toUtc();
         await blocklistAccessor.insertOne(

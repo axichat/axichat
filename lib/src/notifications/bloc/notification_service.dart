@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:app_settings/app_settings.dart';
+import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
@@ -221,11 +222,12 @@ class NotificationService {
 
     await _ensureInitialized();
     final notificationDetails = await _notificationDetails();
+    final String? sanitizedBody = sanitizeNotificationPreview(body);
 
     await _plugin.show(
       Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
       title,
-      body,
+      sanitizedBody,
       notificationDetails,
       payload: payload,
     );
@@ -263,11 +265,12 @@ class NotificationService {
     final notificationId = stableKey == null || stableKey.isEmpty
         ? Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000)
         : _stableNotificationId(stableKey);
+    final String? sanitizedBody = sanitizeNotificationPreview(body);
 
     await _plugin.show(
       notificationId,
       _sanitizeMessageNotificationTitle(title),
-      showPreview ? body : null,
+      showPreview ? sanitizedBody : null,
       notificationDetails,
       payload: payload,
     );
