@@ -118,6 +118,90 @@ const String _attachmentTooLargeMessageDefault =
 const String _attachmentTooLargeMessagePrefix =
     'Attachment exceeds the server limit (';
 const String _attachmentTooLargeMessageSuffix = ').';
+final Set<String> _acknowledgedHighRiskAttachmentIds = <String>{};
+
+extension _FileMetadataRiskExtension on FileMetadataData {
+  FileTypeReport get declaredTypeReport => buildDeclaredFileTypeReport(
+        declaredMimeType: mimeType,
+        fileName: filename,
+        path: path,
+      );
+
+  String get riskAcknowledgementId => id;
+}
+
+bool _hasAcknowledgedHighRisk(String? attachmentId) {
+  final String? resolvedId = attachmentId?.trim();
+  if (resolvedId == null || resolvedId.isEmpty) {
+    return false;
+  }
+  return _acknowledgedHighRiskAttachmentIds.contains(resolvedId);
+}
+
+void _registerHighRiskAcknowledgement(String? attachmentId) {
+  final String? resolvedId = attachmentId?.trim();
+  if (resolvedId == null || resolvedId.isEmpty) {
+    return;
+  }
+  _acknowledgedHighRiskAttachmentIds.add(resolvedId);
+}
+
+Future<bool> _confirmHighRiskAction(
+  BuildContext context, {
+  required FileTypeReport report,
+  required String? fileName,
+  required String confirmLabel,
+  required String? acknowledgementId,
+  required bool requireConfirmation,
+}) async {
+  final FileOpenRisk risk = assessFileOpenRisk(
+    report: report,
+    fileName: fileName,
+  );
+  if (!risk.isWarning) {
+    return true;
+  }
+  if (_hasAcknowledgedHighRisk(acknowledgementId)) {
+    return true;
+  }
+  if (!requireConfirmation) {
+    return false;
+  }
+  if (!context.mounted) {
+    return false;
+  }
+  final l10n = context.l10n;
+  final approved = await confirm(
+    context,
+    title: l10n.chatAttachmentHighRiskTitle,
+    message: l10n.chatAttachmentHighRiskMessage,
+    confirmLabel: confirmLabel,
+    cancelLabel: l10n.commonCancel,
+    destructiveConfirm: true,
+  );
+  if (approved == true) {
+    _registerHighRiskAcknowledgement(acknowledgementId);
+    return true;
+  }
+  return false;
+}
+
+Future<bool> _confirmDownloadAllowed(
+  BuildContext context, {
+  required FileMetadataData metadata,
+  required FileTypeReport? report,
+  required bool requireConfirmation,
+}) async {
+  final FileTypeReport resolvedReport = report ?? metadata.declaredTypeReport;
+  return _confirmHighRiskAction(
+    context,
+    report: resolvedReport,
+    fileName: metadata.filename,
+    confirmLabel: context.l10n.chatAttachmentDownload,
+    acknowledgementId: metadata.riskAcknowledgementId,
+    requireConfirmation: requireConfirmation,
+  );
+}
 
 class AttachmentDownloadDelegate {
   const AttachmentDownloadDelegate(this._download);
@@ -191,11 +275,7 @@ class ChatAttachmentPreview extends StatelessWidget {
               message: l10n.chatAttachmentUnavailable,
             );
           }
-          final FileTypeReport declaredReport = buildDeclaredFileTypeReport(
-            declaredMimeType: metadata.mimeType,
-            fileName: metadata.filename,
-            path: metadata.path,
-          );
+          final FileTypeReport declaredReport = metadata.declaredTypeReport;
 
           final shouldAutoDownload = _shouldAutoDownload(metadata);
           final path = metadata.path?.trim();
@@ -407,7 +487,10 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
       _autoDownloadRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _downloadAttachment(showFeedback: widget.autoDownloadUserInitiated);
+        _downloadAttachment(
+          showFeedback: widget.autoDownloadUserInitiated,
+          requireConfirmation: widget.autoDownloadUserInitiated,
+        );
       });
     }
     final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
@@ -418,14 +501,21 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
           downloading: _downloading,
           onPressed: _downloading
               ? null
-              : () => _downloadAttachment(showFeedback: true),
+              : () => _downloadAttachment(
+                    showFeedback: true,
+                    requireConfirmation: true,
+                  ),
         );
       }
       return _RemoteImageAttachment(
         filename: metadata.filename,
         downloading: _downloading,
-        onPressed:
-            _downloading ? null : () => _downloadAttachment(showFeedback: true),
+        onPressed: _downloading
+            ? null
+            : () => _downloadAttachment(
+                  showFeedback: true,
+                  requireConfirmation: true,
+                ),
       );
     }
     final previewFile = localFile!;
@@ -521,7 +611,10 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     return nextFuture;
   }
 
-  Future<void> _downloadAttachment({required bool showFeedback}) async {
+  Future<void> _downloadAttachment({
+    required bool showFeedback,
+    required bool requireConfirmation,
+  }) async {
     if (_downloading) return;
     setState(() {
       _downloading = true;
@@ -529,6 +622,13 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
     final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
+      final allowed = await _confirmDownloadAllowed(
+        context,
+        metadata: widget.metadata,
+        report: widget.typeReport,
+        requireConfirmation: requireConfirmation,
+      );
+      if (!allowed || !mounted) return;
       final downloadDelegate = widget.downloadDelegate;
       final downloaded = downloadDelegate == null
           ? await _downloadViaXmpp()
@@ -663,7 +763,10 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       _autoDownloadRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _downloadAttachment(showFeedback: widget.autoDownloadUserInitiated);
+        _downloadAttachment(
+          showFeedback: widget.autoDownloadUserInitiated,
+          requireConfirmation: widget.autoDownloadUserInitiated,
+        );
       });
     }
     final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
@@ -674,14 +777,21 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
           downloading: _downloading,
           onPressed: _downloading
               ? null
-              : () => _downloadAttachment(showFeedback: true),
+              : () => _downloadAttachment(
+                    showFeedback: true,
+                    requireConfirmation: true,
+                  ),
         );
       }
       return _RemoteVideoAttachment(
         filename: metadata.filename,
         downloading: _downloading,
-        onPressed:
-            _downloading ? null : () => _downloadAttachment(showFeedback: true),
+        onPressed: _downloading
+            ? null
+            : () => _downloadAttachment(
+                  showFeedback: true,
+                  requireConfirmation: true,
+                ),
       );
     }
     if (_initFailed) {
@@ -810,7 +920,10 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     );
   }
 
-  Future<void> _downloadAttachment({required bool showFeedback}) async {
+  Future<void> _downloadAttachment({
+    required bool showFeedback,
+    required bool requireConfirmation,
+  }) async {
     if (_downloading) return;
     setState(() {
       _downloading = true;
@@ -818,6 +931,13 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     final l10n = context.l10n;
     final toaster = ShadToaster.maybeOf(context);
     try {
+      final allowed = await _confirmDownloadAllowed(
+        context,
+        metadata: widget.metadata,
+        report: widget.typeReport,
+        requireConfirmation: requireConfirmation,
+      );
+      if (!allowed || !mounted) return;
       final downloadDelegate = widget.downloadDelegate;
       final downloaded = downloadDelegate == null
           ? await _downloadViaXmpp()
@@ -1236,12 +1356,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final metadata = widget.metadata;
-    final FileTypeReport report = widget.typeReport ??
-        buildDeclaredFileTypeReport(
-          declaredMimeType: metadata.mimeType,
-          fileName: metadata.filename,
-          path: metadata.path,
-        );
+    final FileTypeReport report =
+        widget.typeReport ?? metadata.declaredTypeReport;
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
@@ -1273,6 +1389,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
               declaredMimeType: metadata.mimeType,
               fileName: metadata.filename,
               typeReport: widget.typeReport,
+              riskAcknowledgementId: metadata.riskAcknowledgementId,
             )
         : canDownload
             ? () => _downloadOnly(showFeedback: true, requireConfirmation: true)
@@ -1285,7 +1402,10 @@ class _FileAttachmentState extends State<_FileAttachment> {
       _autoDownloadRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _downloadOnly(showFeedback: widget.autoDownloadUserInitiated);
+        _downloadOnly(
+          showFeedback: widget.autoDownloadUserInitiated,
+          requireConfirmation: widget.autoDownloadUserInitiated,
+        );
       });
     }
     return _AttachmentSurface(
@@ -1548,35 +1668,6 @@ class _FileAttachmentState extends State<_FileAttachment> {
     }
   }
 
-  Future<bool> _confirmHighRiskDownload(FileTypeReport? report) async {
-    final FileTypeReport resolvedReport = report ??
-        buildDeclaredFileTypeReport(
-          declaredMimeType: widget.metadata.mimeType,
-          fileName: widget.metadata.filename,
-          path: widget.metadata.path,
-        );
-    final FileOpenRisk risk = assessFileOpenRisk(
-      report: resolvedReport,
-      fileName: widget.metadata.filename,
-    );
-    if (!risk.isWarning) {
-      return true;
-    }
-    if (!mounted) {
-      return false;
-    }
-    final l10n = context.l10n;
-    final approved = await confirm(
-      context,
-      title: l10n.chatAttachmentHighRiskTitle,
-      message: l10n.chatAttachmentHighRiskMessage,
-      confirmLabel: l10n.chatAttachmentDownload,
-      cancelLabel: l10n.commonCancel,
-      destructiveConfirm: true,
-    );
-    return approved == true;
-  }
-
   Future<String?> _downloadViaXmpp() async {
     final xmpp = context.read<XmppService>();
     return xmpp.downloadInboundAttachment(
@@ -1595,11 +1686,14 @@ class _FileAttachmentState extends State<_FileAttachment> {
         ? null
         : File(resolvedExisting);
     if (existingFile?.existsSync() ?? false) return existingFile!.path;
-    if (requireConfirmation) {
-      final allowed = await _confirmHighRiskDownload(typeReport);
-      if (!allowed) {
-        throw const _AttachmentDownloadCancelledException();
-      }
+    final allowed = await _confirmDownloadAllowed(
+      context,
+      metadata: widget.metadata,
+      report: typeReport,
+      requireConfirmation: requireConfirmation,
+    );
+    if (!allowed || !mounted) {
+      throw const _AttachmentDownloadCancelledException();
     }
     final downloadDelegate = widget.downloadDelegate;
     if (downloadDelegate != null) {
@@ -1932,6 +2026,7 @@ Future<void> _openAttachment(
   String? declaredMimeType,
   String? fileName,
   FileTypeReport? typeReport,
+  String? riskAcknowledgementId,
 }) async {
   final l10n = context.l10n;
   final toaster = ShadToaster.maybeOf(context);
@@ -1970,21 +2065,18 @@ Future<void> _openAttachment(
       );
       if (approved != true) return;
       if (!context.mounted) return;
+      _registerHighRiskAcknowledgement(riskAcknowledgementId);
     }
-    final risk = assessFileOpenRisk(
-      report: report,
-      fileName: fileName ?? path,
-    );
-    if (!hasMismatchWarning && risk.isWarning) {
-      final approved = await confirm(
+    if (!hasMismatchWarning) {
+      final allowed = await _confirmHighRiskAction(
         context,
-        title: l10n.chatAttachmentHighRiskTitle,
-        message: l10n.chatAttachmentHighRiskMessage,
+        report: report,
+        fileName: fileName ?? path,
         confirmLabel: l10n.chatAttachmentTypeMismatchConfirm,
-        destructiveConfirm: true,
+        acknowledgementId: riskAcknowledgementId,
+        requireConfirmation: true,
       );
-      if (approved != true) return;
-      if (!context.mounted) return;
+      if (!allowed || !context.mounted) return;
     }
     final launched = await launchUrl(
       Uri.file(file.path),
