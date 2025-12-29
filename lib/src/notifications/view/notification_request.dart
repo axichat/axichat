@@ -1,6 +1,7 @@
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/view/notification_dialog.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -52,8 +53,13 @@ class _NotificationRequestState extends State<NotificationRequest> {
               sublabel: Text(l10n.notificationsRequiresRestart),
               value: snapshot.requireData,
               onChanged: (enabled) async {
-                await widget.notificationService
-                    .requestAllNotificationPermissions();
+                final confirmed = await showNotificationDialog(
+                  context,
+                  widget.notificationService,
+                );
+                if (!mounted || confirmed != true) {
+                  return;
+                }
                 setState(() {
                   _future = widget.notificationService
                       .hasAllNotificationPermissions();

@@ -41,6 +41,19 @@ UPDATE drafts
 SET draft_source_id = ?
 WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
 ''';
+const String _attachmentRootDirectoryName = 'attachments';
+const String _databaseFileSuffix = '.axichat.drift';
+const String _attachmentPrefixFallback = 'shared';
+const String _attachmentPrefixReplacement = '_';
+const String _databaseWalSuffix = '-wal';
+const String _databaseShmSuffix = '-shm';
+const String _databaseJournalSuffix = '-journal';
+const int _messageAttachmentMaxCount = 50;
+const int _messageAttachmentSortOrderStart = 0;
+const int _messageAttachmentSortOrderStep = 1;
+const int _pinnedMessagesSchemaVersion = 24;
+const int _schemaVersion = _pinnedMessagesSchemaVersion;
+final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
 abstract interface class XmppDatabase implements Database {
   Stream<List<Message>> watchChatMessages(
@@ -84,6 +97,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByOriginID(String originID);
 
+  Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
+
   Stream<List<Reaction>> watchReactionsForChat(String jid);
 
   Future<List<Reaction>> getReactionsForChat(String jid);
@@ -103,6 +118,8 @@ abstract interface class XmppDatabase implements Database {
     Message message, {
     ChatType chatType = ChatType.chat,
   });
+
+  Future<void> updateMessage(Message message);
 
   Future<void> saveMessageError({
     required String stanzaID,
@@ -151,6 +168,17 @@ abstract interface class XmppDatabase implements Database {
   );
 
   Future<List<String>> deleteMessageAttachments(String messageId);
+
+  Stream<List<PinnedMessageEntry>> watchPinnedMessages(String chatJid);
+
+  Future<List<PinnedMessageEntry>> getPinnedMessages(String chatJid);
+
+  Future<void> upsertPinnedMessage(PinnedMessageEntry entry);
+
+  Future<void> deletePinnedMessage({
+    required String chatJid,
+    required String messageStanzaId,
+  });
 
   Future<void> markMessageRetracted(String stanzaID);
 
@@ -306,6 +334,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Chat>> getChats({required int start, required int end});
 
+  Future<List<Chat>> getDeltaChats();
+
   Stream<List<String>> watchRecipientAddressSuggestions({int? limit});
 
   Future<List<String>> getRecipientAddressSuggestions({int? limit});
@@ -329,6 +359,11 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markChatMuted({
     required String jid,
     required bool muted,
+  });
+
+  Future<void> setChatNotificationPreviewSetting({
+    required String jid,
+    required NotificationPreviewSetting setting,
   });
 
   Future<void> setChatShareSignature({
@@ -451,6 +486,8 @@ abstract interface class XmppDatabase implements Database {
     required int start,
     required int end,
   });
+
+  Future<bool> isJidBlocked(String jid);
 
   Future<void> blockJid(String jid);
 
@@ -1103,6 +1140,7 @@ class EmailSpamlistAccessor
 
 @DriftDatabase(tables: [
   Messages,
+  PinnedMessages,
   MessageAttachments,
   MessageShares,
   MessageParticipants,
@@ -1175,6 +1213,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   bool get isInMemory => _inMemory;
   String _normalizeEmail(String address) => address.trim().toLowerCase();
+  String? _normalizeBlocklistJid(String jid) {
+    final trimmed = jid.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
+    } catch (_) {
+      return trimmed.toLowerCase();
+    }
+  }
 
   String _chatTitleForIdentifier(String identifier) {
     final trimmed = identifier.trim();
@@ -1189,7 +1236,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => _schemaVersion;
 
   @override
   MigrationStrategy get migration {
@@ -1363,6 +1410,12 @@ WHERE source_id IS NULL OR trim(source_id) = ''
 ''',
             [syncLegacySourceId],
           );
+        }
+        if (from < 24) {
+          await m.addColumn(chats, chats.notificationPreviewSetting);
+        }
+        if (from < _pinnedMessagesSchemaVersion) {
+          await m.createTable(pinnedMessages);
         }
       },
       beforeOpen: (_) async {
@@ -1621,6 +1674,21 @@ WHERE source_id IS NULL OR trim(source_id) = ''
   @override
   Future<Message?> getMessageByOriginID(String originID) =>
       messagesAccessor.selectOneByOriginID(originID);
+
+  @override
+  Future<List<Message>> getMessagesByStanzaIds(
+    Iterable<String> stanzaIds,
+  ) async {
+    final normalized = stanzaIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    if (normalized.isEmpty) {
+      return const <Message>[];
+    }
+    return (select(messages)..where((tbl) => tbl.stanzaID.isIn(normalized)))
+        .get();
+  }
 
   @override
   Stream<List<Reaction>> watchReactionsForChat(String jid) =>
@@ -1952,24 +2020,30 @@ WHERE jid = ?
   @override
   Future<void> markMessageRetracted(String stanzaID) async {
     _log.info('Retracting message');
+    final existing = await messagesAccessor.selectOne(stanzaID);
+    if (existing == null) return;
+    final metadataIds = <String>{};
+    final directMetadataId = existing.fileMetadataID?.trim();
+    if (directMetadataId != null && directMetadataId.isNotEmpty) {
+      metadataIds.add(directMetadataId);
+    }
     await transaction(() async {
-      final message = await (update(messages)
+      await (update(messages)
             ..where((messages) => messages.stanzaID.equals(stanzaID)))
-          .writeReturning(const MessagesCompanion(
+          .write(const MessagesCompanion(
         retracted: Value(true),
         body: Value(null),
         fileMetadataID: Value(null),
         error: Value(MessageError.none),
         warning: Value(MessageWarning.none),
       ));
-      final resolved = message.firstOrNull;
-      if (resolved?.id != null) {
-        await messageAttachmentsAccessor.deleteForMessage(resolved!.id!);
-      }
-      if (resolved?.fileMetadataID case final id?) {
-        await fileMetadataAccessor.deleteOne(id);
+      if (existing.id != null) {
+        metadataIds.addAll(await deleteMessageAttachments(existing.id!));
       }
     });
+    for (final metadataId in metadataIds) {
+      await _deleteFileMetadataIfOrphaned(metadataId);
+    }
   }
 
   @override
@@ -2022,11 +2096,20 @@ WHERE jid = ?
     _log.info('Deleting message');
     final existing = await messagesAccessor.selectOne(stanzaID);
     if (existing == null) return;
+    final metadataIds = <String>{};
+    final directMetadataId = existing.fileMetadataID?.trim();
+    if (directMetadataId != null && directMetadataId.isNotEmpty) {
+      metadataIds.add(directMetadataId);
+    }
     await transaction(() async {
       await reactionsAccessor.deleteByMessage(stanzaID);
       if (existing.id != null) {
-        await messageAttachmentsAccessor.deleteForMessage(existing.id!);
+        metadataIds.addAll(await deleteMessageAttachments(existing.id!));
       }
+      await deletePinnedMessage(
+        chatJid: existing.chatJid,
+        messageStanzaId: existing.stanzaID,
+      );
       await messagesAccessor.deleteOne(stanzaID);
       final chat = await getChat(existing.chatJid);
       if (chat == null) return;
@@ -2054,11 +2137,16 @@ WHERE jid = ?
         unreadCount: nextUnreadCount,
       ));
     });
+    for (final metadataId in metadataIds) {
+      await _deleteFileMetadataIfOrphaned(metadataId);
+    }
   }
 
   @override
   Future<void> clearMessageHistory() async {
     _log.info('Clearing message history...');
+    final metadataToDelete = await select(fileMetadata).get();
+    bool cleared = false;
     await customStatement('PRAGMA foreign_keys = OFF');
     try {
       await transaction(() async {
@@ -2068,6 +2156,7 @@ WHERE jid = ?
         await delete(messageShares).go();
         await delete(messageAttachments).go();
         await delete(messages).go();
+        await delete(pinnedMessages).go();
         await delete(drafts).go();
         await delete(fileMetadata).go();
         await delete(notifications).go();
@@ -2079,8 +2168,12 @@ WHERE jid = ?
           ),
         );
       });
+      cleared = true;
     } finally {
       await customStatement('PRAGMA foreign_keys = ON');
+    }
+    if (cleared) {
+      await _deleteManagedAttachmentFiles(metadataToDelete);
     }
   }
 
@@ -2128,6 +2221,36 @@ WHERE jid = ?
       }
     }
 
+    final metadataIds = <String>{};
+    if (messageIds.isNotEmpty) {
+      for (final batch in chunked(messageIds)) {
+        final rows = await (selectOnly(messageAttachments)
+              ..addColumns([messageAttachments.fileMetadataId])
+              ..where(messageAttachments.messageId.isIn(batch)))
+            .get();
+        for (final row in rows) {
+          final metadataId = row.read(messageAttachments.fileMetadataId);
+          if (metadataId != null && metadataId.isNotEmpty) {
+            metadataIds.add(metadataId);
+          }
+        }
+      }
+    }
+    if (stanzaIds.isNotEmpty) {
+      for (final batch in chunked(stanzaIds)) {
+        final rows = await (selectOnly(messages)
+              ..addColumns([messages.fileMetadataID])
+              ..where(messages.stanzaID.isIn(batch)))
+            .get();
+        for (final row in rows) {
+          final metadataId = row.read(messages.fileMetadataID)?.trim();
+          if (metadataId != null && metadataId.isNotEmpty) {
+            metadataIds.add(metadataId);
+          }
+        }
+      }
+    }
+
     await transaction(() async {
       final shareIds = <String>{};
       if (deltaMsgIds.isNotEmpty) {
@@ -2150,6 +2273,12 @@ WHERE jid = ?
         for (final batch in chunked(messageIds)) {
           await (delete(messageAttachments)
                 ..where((tbl) => tbl.messageId.isIn(batch)))
+              .go();
+        }
+        for (final batch in chunked(stanzaIds)) {
+          await (delete(pinnedMessages)
+                ..where((tbl) => tbl.messageStanzaId.isIn(batch))
+                ..where((tbl) => tbl.chatJid.equals(jid)))
               .go();
         }
         for (final batch in chunked(stanzaIds)) {
@@ -2189,6 +2318,10 @@ WHERE jid = ?
         }
       }
     });
+
+    for (final metadataId in metadataIds) {
+      await _deleteFileMetadataIfOrphaned(metadataId);
+    }
   }
 
   @override
@@ -2202,6 +2335,12 @@ WHERE jid = ?
         await messageParticipantsAccessor.insertOrUpdateOne(participant);
       }
     });
+  }
+
+  @override
+  Future<void> updateMessage(Message message) async {
+    _log.fine('Updating message');
+    await update(messages).replace(message);
   }
 
   @override
@@ -2557,7 +2696,120 @@ WHERE jid = ?
 
   @override
   Future<void> deleteFileMetadata(String id) async {
-    await fileMetadataAccessor.deleteOne(id);
+    await _deleteFileMetadataIfOrphaned(id);
+  }
+
+  Future<void> _deleteFileMetadataIfOrphaned(String id) async {
+    final trimmedId = id.trim();
+    if (trimmedId.isEmpty) return;
+    final metadata = await fileMetadataAccessor.selectOne(trimmedId);
+    if (metadata == null) return;
+    final isReferenced = await _isFileMetadataReferenced(trimmedId);
+    if (isReferenced) return;
+    await fileMetadataAccessor.deleteOne(trimmedId);
+    await _deleteManagedAttachmentFile(metadata);
+  }
+
+  Future<bool> _isFileMetadataReferenced(String id) async {
+    final messageAttachmentRefs = await (selectOnly(messageAttachments)
+          ..addColumns([messageAttachments.fileMetadataId])
+          ..where(messageAttachments.fileMetadataId.equals(id)))
+        .get();
+    if (messageAttachmentRefs.isNotEmpty) return true;
+
+    final messageRefs = await (selectOnly(messages)
+          ..addColumns([messages.fileMetadataID])
+          ..where(messages.fileMetadataID.equals(id)))
+        .get();
+    if (messageRefs.isNotEmpty) return true;
+
+    final stickerRefs = await (selectOnly(stickers)
+          ..addColumns([stickers.fileMetadataID])
+          ..where(stickers.fileMetadataID.equals(id)))
+        .get();
+    if (stickerRefs.isNotEmpty) return true;
+
+    final draftRows = await select(drafts).get();
+    for (final draft in draftRows) {
+      if (draft.attachmentMetadataIds.contains(id)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  Future<Directory> _attachmentRootDirectory() async {
+    final supportDir = await getApplicationSupportDirectory();
+    return Directory(
+      p.join(supportDir.path, _attachmentRootDirectoryName),
+    );
+  }
+
+  String? _databasePrefixFromFilePath() {
+    final path = _file.path;
+    if (path.isEmpty) return null;
+    final baseName = p.basename(path);
+    if (!baseName.endsWith(_databaseFileSuffix)) {
+      return null;
+    }
+    final prefix =
+        baseName.substring(0, baseName.length - _databaseFileSuffix.length);
+    final trimmed = prefix.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String _normalizeAttachmentPrefix(String prefix) {
+    final trimmed = prefix.trim();
+    if (trimmed.isEmpty) {
+      return _attachmentPrefixFallback;
+    }
+    return trimmed.replaceAll(
+      _attachmentPrefixSanitizer,
+      _attachmentPrefixReplacement,
+    );
+  }
+
+  Future<Directory> _attachmentDirectoryForPrefix(String prefix) async {
+    final root = await _attachmentRootDirectory();
+    final normalizedPrefix = _normalizeAttachmentPrefix(prefix);
+    return Directory(p.join(root.path, normalizedPrefix));
+  }
+
+  Future<bool> _isManagedAttachmentPath(String path) async {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) return false;
+    final root = await _attachmentRootDirectory();
+    final normalizedPath = p.normalize(trimmed);
+    final normalizedRoot = p.normalize(root.path);
+    return p.isWithin(normalizedRoot, normalizedPath);
+  }
+
+  Future<void> _deleteManagedAttachmentFile(
+    FileMetadataData metadata,
+  ) async {
+    final path = metadata.path?.trim();
+    if (path == null || path.isEmpty) return;
+    if (!await _isManagedAttachmentPath(path)) return;
+    final file = File(path);
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } on Exception {
+      // Ignore deletion failures.
+    }
+  }
+
+  Future<void> _deleteManagedAttachmentFiles(
+    Iterable<FileMetadataData> metadataItems,
+  ) async {
+    for (final metadata in metadataItems) {
+      await _deleteManagedAttachmentFile(metadata);
+    }
   }
 
   @override
@@ -2596,6 +2848,10 @@ WHERE jid = ?
         await messageAttachmentsAccessor.nextSortOrder(
           messageId,
         );
+    if (nextOrder >= _messageAttachmentMaxCount) {
+      _log.warning('Skipping attachment insert after reaching max count.');
+      return;
+    }
     await into(messageAttachments).insert(
       MessageAttachmentsCompanion.insert(
         messageId: messageId,
@@ -2613,11 +2869,19 @@ WHERE jid = ?
     required List<String> fileMetadataIds,
     String? transportGroupId,
   }) async {
+    final trimmedIds = fileMetadataIds.length > _messageAttachmentMaxCount
+        ? fileMetadataIds
+            .take(_messageAttachmentMaxCount)
+            .toList(growable: false)
+        : fileMetadataIds;
+    if (trimmedIds.length < fileMetadataIds.length) {
+      _log.warning('Dropping message attachments beyond max count.');
+    }
     await transaction(() async {
       await messageAttachmentsAccessor.deleteForMessage(messageId);
-      if (fileMetadataIds.isEmpty) return;
-      var order = 0;
-      for (final metadataId in fileMetadataIds) {
+      if (trimmedIds.isEmpty) return;
+      var order = _messageAttachmentSortOrderStart;
+      for (final metadataId in trimmedIds) {
         await into(messageAttachments).insert(
           MessageAttachmentsCompanion.insert(
             messageId: messageId,
@@ -2627,7 +2891,7 @@ WHERE jid = ?
           ),
           mode: InsertMode.insertOrIgnore,
         );
-        order += 1;
+        order += _messageAttachmentSortOrderStep;
       }
     });
   }
@@ -2666,6 +2930,52 @@ WHERE jid = ?
   }
 
   @override
+  Stream<List<PinnedMessageEntry>> watchPinnedMessages(String chatJid) {
+    final query = select(pinnedMessages)
+      ..where((tbl) => tbl.chatJid.equals(chatJid))
+      ..orderBy([
+        (tbl) =>
+            OrderingTerm(expression: tbl.pinnedAt, mode: OrderingMode.desc),
+        (tbl) => OrderingTerm(
+              expression: tbl.messageStanzaId,
+              mode: OrderingMode.desc,
+            ),
+      ]);
+    return query.watch();
+  }
+
+  @override
+  Future<List<PinnedMessageEntry>> getPinnedMessages(String chatJid) {
+    final query = select(pinnedMessages)
+      ..where((tbl) => tbl.chatJid.equals(chatJid))
+      ..orderBy([
+        (tbl) =>
+            OrderingTerm(expression: tbl.pinnedAt, mode: OrderingMode.desc),
+        (tbl) => OrderingTerm(
+              expression: tbl.messageStanzaId,
+              mode: OrderingMode.desc,
+            ),
+      ]);
+    return query.get();
+  }
+
+  @override
+  Future<void> upsertPinnedMessage(PinnedMessageEntry entry) async {
+    await into(pinnedMessages).insertOnConflictUpdate(entry);
+  }
+
+  @override
+  Future<void> deletePinnedMessage({
+    required String chatJid,
+    required String messageStanzaId,
+  }) async {
+    await (delete(pinnedMessages)
+          ..where((tbl) => tbl.chatJid.equals(chatJid))
+          ..where((tbl) => tbl.messageStanzaId.equals(messageStanzaId)))
+        .go();
+  }
+
+  @override
   Stream<List<Chat>> watchChats({required int start, required int end}) {
     return chatsAccessor.watchAll();
   }
@@ -2673,6 +2983,11 @@ WHERE jid = ?
   @override
   Future<List<Chat>> getChats({required int start, required int end}) {
     return chatsAccessor.selectAll();
+  }
+
+  @override
+  Future<List<Chat>> getDeltaChats() {
+    return (select(chats)..where((tbl) => tbl.deltaChatId.isNotNull())).get();
   }
 
   Selectable<String> _recipientAddressSuggestionsQuery({int? limit}) {
@@ -2812,6 +3127,17 @@ $limitClause
     _log.info('Updating chat muted state');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(muted: Value(muted)));
+  }
+
+  @override
+  Future<void> setChatNotificationPreviewSetting({
+    required String jid,
+    required NotificationPreviewSetting setting,
+  }) async {
+    _log.info('Updating chat notification preview setting');
+    await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
+      ChatsCompanion(notificationPreviewSetting: Value(setting)),
+    );
   }
 
   @override
@@ -3209,11 +3535,35 @@ $limitClause
   }
 
   @override
+  Future<bool> isJidBlocked(String jid) async {
+    final normalized = _normalizeBlocklistJid(jid);
+    if (normalized == null) {
+      return false;
+    }
+    final entry = await blocklistAccessor.selectOne(normalized);
+    if (entry != null) {
+      return true;
+    }
+    final entries = await blocklistAccessor.selectAll();
+    for (final storedEntry in entries) {
+      final stored = _normalizeBlocklistJid(storedEntry.jid);
+      if (stored != null && stored == normalized) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
   Future<void> blockJid(String jid) async {
     _log.info('Adding to blocklist');
+    final normalized = _normalizeBlocklistJid(jid);
+    if (normalized == null) {
+      return;
+    }
     await blocklistAccessor.insertOne(
       BlocklistCompanion.insert(
-        jid: jid,
+        jid: normalized,
         blockedAt: Value(DateTime.timestamp().toUtc()),
       ),
     );
@@ -3221,8 +3571,18 @@ $limitClause
 
   @override
   Future<void> blockJids(List<String> jids) async {
+    final normalizedJids = <String>{};
+    for (final jid in jids) {
+      final normalized = _normalizeBlocklistJid(jid);
+      if (normalized != null) {
+        normalizedJids.add(normalized);
+      }
+    }
+    if (normalizedJids.isEmpty) {
+      return;
+    }
     await transaction(() async {
-      for (final jid in jids) {
+      for (final jid in normalizedJids) {
         _log.info('Adding to blocklist');
         await blocklistAccessor.insertOne(
           BlocklistCompanion.insert(
@@ -3237,13 +3597,27 @@ $limitClause
   @override
   Future<void> unblockJid(String jid) async {
     _log.info('Removing from blocklist');
-    await blocklistAccessor.deleteOne(jid);
+    final normalized = _normalizeBlocklistJid(jid);
+    if (normalized == null) {
+      return;
+    }
+    await blocklistAccessor.deleteOne(normalized);
   }
 
   @override
   Future<void> unblockJids(List<String> jids) async {
+    final normalizedJids = <String>{};
+    for (final jid in jids) {
+      final normalized = _normalizeBlocklistJid(jid);
+      if (normalized != null) {
+        normalizedJids.add(normalized);
+      }
+    }
+    if (normalizedJids.isEmpty) {
+      return;
+    }
     await transaction(() async {
-      for (final jid in jids) {
+      for (final jid in normalizedJids) {
         _log.info('Removing from blocklist');
         await blocklistAccessor.deleteOne(jid);
       }
@@ -3255,11 +3629,20 @@ $limitClause
     _log.info('Replacing blocklist...');
     final existing = await blocklistAccessor.selectAll();
     final blockedAtByJid = <String, DateTime>{
-      for (final entry in existing) entry.jid: entry.blockedAt,
+      for (final entry in existing)
+        if (_normalizeBlocklistJid(entry.jid) case final normalized?)
+          normalized: entry.blockedAt,
     };
+    final normalizedBlocks = <String>{};
+    for (final blocked in blocks) {
+      final normalized = _normalizeBlocklistJid(blocked);
+      if (normalized != null) {
+        normalizedBlocks.add(normalized);
+      }
+    }
     await transaction(() async {
       await blocklistAccessor.deleteAll();
-      for (final blocked in blocks) {
+      for (final blocked in normalizedBlocks) {
         final blockedAt =
             (blockedAtByJid[blocked] ?? DateTime.timestamp()).toUtc();
         await blocklistAccessor.insertOne(
@@ -3600,8 +3983,46 @@ ON CONFLICT(address) DO UPDATE SET
   }
 
   @override
-  Future<void> deleteFile() =>
-      _inMemory || _file.path.isEmpty ? Future.value() : _file.delete();
+  Future<void> deleteFile() async {
+    if (_inMemory || _file.path.isEmpty) {
+      return;
+    }
+    final basePath = _file.path;
+    final candidates = <File>[
+      File(basePath),
+      File('$basePath$_databaseWalSuffix'),
+      File('$basePath$_databaseShmSuffix'),
+      File('$basePath$_databaseJournalSuffix'),
+    ];
+    for (final candidate in candidates) {
+      if (!await candidate.exists()) {
+        continue;
+      }
+      try {
+        await candidate.delete();
+      } on Exception {
+        // Ignore deletion failures for cleanup operations.
+      }
+    }
+    await _deleteAttachmentRootDirectory();
+  }
+
+  Future<void> _deleteAttachmentRootDirectory() async {
+    final String? prefix = _databasePrefixFromFilePath();
+    if (prefix == null) {
+      return;
+    }
+    final Directory directory = await _attachmentDirectoryForPrefix(prefix);
+    if (!await directory.exists()) {
+      return;
+    }
+    const bool recursiveDelete = true;
+    try {
+      await directory.delete(recursive: recursiveDelete);
+    } on Exception {
+      // Ignore cleanup failures.
+    }
+  }
 }
 
 QueryExecutor _openDatabase(File file, String passphrase) {

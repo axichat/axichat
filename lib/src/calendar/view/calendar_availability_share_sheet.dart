@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -68,6 +69,17 @@ const EdgeInsets _availabilityChatTilePadding = EdgeInsets.symmetric(
   horizontal: _availabilityChatTilePaddingHorizontal,
   vertical: _availabilityChatTilePaddingVertical,
 );
+
+XmppService? _maybeReadXmppService(BuildContext context) {
+  try {
+    return RepositoryProvider.of<XmppService>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
+  }
+}
 
 Future<void> showCalendarAvailabilityShareSheet({
   required BuildContext context,
@@ -265,13 +277,28 @@ class _CalendarAvailabilityShareSheetState
     });
   }
 
+  String? _resolveOwnerJid(Chat chat) {
+    final String ownerJid = widget.ownerJid.trim();
+    if (ownerJid.isEmpty) {
+      return null;
+    }
+    if (chat.type != ChatType.groupChat) {
+      return ownerJid;
+    }
+    final XmppService? xmppService = _maybeReadXmppService(context);
+    if (xmppService == null) {
+      return null;
+    }
+    final String? occupantId =
+        xmppService.roomStateFor(chat.jid)?.myOccupantId?.trim();
+    if (occupantId == null || occupantId.isEmpty) {
+      return null;
+    }
+    return occupantId;
+  }
+
   Future<void> _handleSharePressed() async {
     if (_isSending) {
-      return;
-    }
-    final ownerJid = widget.ownerJid.trim();
-    if (ownerJid.isEmpty) {
-      FeedbackSystem.showError(context, _availabilityShareMissingJidMessage);
       return;
     }
     final start = _rangeStart;
@@ -284,6 +311,11 @@ class _CalendarAvailabilityShareSheetState
     if (targetChat == null) {
       FeedbackSystem.showError(
           context, _availabilityShareTargetRequiredMessage);
+      return;
+    }
+    final String? ownerJid = _resolveOwnerJid(targetChat);
+    if (ownerJid == null || ownerJid.isEmpty) {
+      FeedbackSystem.showError(context, _availabilityShareMissingJidMessage);
       return;
     }
     setState(() {

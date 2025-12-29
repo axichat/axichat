@@ -48,6 +48,7 @@ const List<CalendarRawComponent> _emptyCalendarRawComponents =
     <CalendarRawComponent>[];
 const Map<String, TaskOccurrenceOverride> _emptyTaskOccurrenceOverrides =
     <String, TaskOccurrenceOverride>{};
+const Uuid _calendarTaskCopyIdGenerator = Uuid();
 
 @freezed
 @HiveType(typeId: 36)
@@ -451,4 +452,46 @@ extension CalendarTaskExtensions on CalendarTask {
       occurrenceOverrides: _emptyTaskOccurrenceOverrides,
     );
   }
+}
+
+enum CalendarTaskCopyStyle {
+  linked,
+  shallowClone;
+
+  bool get isLinked => this == CalendarTaskCopyStyle.linked;
+
+  bool get isShallowClone => this == CalendarTaskCopyStyle.shallowClone;
+}
+
+extension CalendarTaskCopying on CalendarTask {
+  CalendarTask copyForCalendar(CalendarTaskCopyStyle style) {
+    if (style.isLinked) {
+      return this;
+    }
+    final DateTime now = DateTime.now();
+    final String copyId = _calendarTaskCopyIdGenerator.v4();
+    final CalendarIcsMeta? clonedMeta = _cloneIcsMeta(now, icsMeta);
+    return copyWith(
+      id: copyId,
+      createdAt: now,
+      modifiedAt: now,
+      icsMeta: clonedMeta,
+    );
+  }
+}
+
+CalendarIcsMeta? _cloneIcsMeta(
+  DateTime now,
+  CalendarIcsMeta? meta,
+) {
+  if (meta == null) {
+    return null;
+  }
+  final String copyUid = _calendarTaskCopyIdGenerator.v4();
+  return meta.copyWith(
+    uid: copyUid,
+    dtStamp: now,
+    created: now,
+    lastModified: now,
+  );
 }

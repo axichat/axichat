@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/ui/jid_input.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -991,7 +992,11 @@ class AccessibilityActionBloc
         AccessibilityMessagesUpdated(jid: jid, messages: messages),
       ),
       onError: (error, stackTrace) {
-        _log.warning('Message stream error for $jid', error, stackTrace);
+        _log.safeWarning(
+          'Message stream error for $jid',
+          error,
+          stackTrace,
+        );
       },
     );
   }

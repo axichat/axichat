@@ -484,19 +484,20 @@ final class BookmarksManager extends mox.XmppManagerBase {
 
   Future<void> _handleNotification(mox.PubSubNotificationEvent event) async {
     if (event.item.node != _bookmarksNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
 
     MucBookmark? parsed;
     if (event.item.payload case final payload?) {
       parsed = MucBookmark.fromBookmarks2Xml(payload, itemId: event.item.id);
     } else {
       final pubsub = _pubSub();
-      final host = _selfPepHost();
       final itemId = event.item.id.trim();
       if (itemId.isEmpty) {
         await _refreshFromServer();
         return;
       }
-      if (pubsub != null && host != null && itemId.isNotEmpty) {
+      if (pubsub != null && itemId.isNotEmpty) {
         final itemResult = await pubsub.getItem(host, _bookmarksNode, itemId);
         if (!itemResult.isType<mox.PubSubError>()) {
           parsed = _parseItem(itemResult.get<mox.PubSubItem>());
@@ -513,6 +514,8 @@ final class BookmarksManager extends mox.XmppManagerBase {
 
   Future<void> _handleRetractions(mox.PubSubItemsRetractedEvent event) async {
     if (event.node != _bookmarksNode) return;
+    final host = _selfPepHost();
+    if (host == null || !event.isFromPepOwner(host)) return;
     if (event.itemIds.isEmpty) return;
     for (final itemId in event.itemIds) {
       final normalized = itemId.trim();

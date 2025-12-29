@@ -6,6 +6,8 @@ import 'dart:ui' as ui;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
@@ -26,6 +28,7 @@ import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
@@ -39,18 +42,23 @@ import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_availability_card.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_availability_request_sheet.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
+import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/unicode_safety.dart';
+import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -69,6 +77,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/xmpp/jid_extensions.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -79,7 +88,6 @@ import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mime/mime.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -99,13 +107,19 @@ enum _ChatRoute {
   main,
   details,
   attachments,
+  pins,
   calendar,
 }
 
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 const _bubbleRadius = 18.0;
+const double _senderLabelBottomSpacing = 6.0;
+const double _senderLabelSecondarySpacing = 2.0;
+const double _senderLabelNoInset = 0.0;
+const String _senderLabelAddressPrefix = 'JID: ';
 const _reactionBubbleInset = 12.0;
 const _reactionCutoutDepth = 14.0;
+const List<BlocklistEntry> _emptyBlocklistEntries = <BlocklistEntry>[];
 const _reactionCutoutMinThickness = 28.0;
 const _reactionCutoutRadius = 16.0;
 const _reactionStripOffset = Offset(0, -2);
@@ -121,6 +135,7 @@ const _regularBubbleWidthFraction = 0.7;
 const _reactionOverflowGlyphWidth = 18.0;
 const String _chatAttachmentPanelKeyPrefix = 'chat-attachments-';
 const String _chatCalendarPanelKeyPrefix = 'chat-calendar-';
+const String _chatPinnedPanelKeyPrefix = 'chat-pins-';
 const String _chatPanelKeyFallback = '';
 const _recipientCutoutDepth = 16.0;
 const _recipientCutoutRadius = 18.0;
@@ -142,6 +157,19 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
 const _chatHeaderActionSpacing = 4.0;
+const double _chatHeaderIdentityIconSize = 14.0;
+const double _chatHeaderIdentityCopyIconSize = 16.0;
+const double _chatHeaderIdentitySpacing = 6.0;
+const String _chatHeaderDisplayNameBadgeLabel = 'Display name';
+const double _unknownSenderCardPadding = 12.0;
+const double _unknownSenderIconSize = 18.0;
+const double _unknownSenderTextSpacing = 8.0;
+const double _unknownSenderActionSpacing = 8.0;
+const _chatSettingsSectionSpacing = 12.0;
+const _chatSettingsFieldSpacing = 8.0;
+const _chatSettingsSelectMinWidth = 220.0;
+const _messageActionIconSize = 16.0;
+const _pinnedListLoadingIndicatorSize = 28.0;
 const String _calendarFragmentShareDeniedMessage =
     'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
@@ -387,7 +415,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                 Row(
                   children: [
                     Expanded(
-                      child: ShadInput(
+                      child: AxiTextInput(
                         controller: _controller,
                         focusNode: _focusNode,
                         placeholder: Text(l10n.chatSearchMessages),
@@ -562,6 +590,129 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+class _UnknownSenderBanner extends StatelessWidget {
+  const _UnknownSenderBanner({
+    required this.readOnly,
+    required this.onAddContact,
+    required this.onReportSpam,
+  });
+
+  final bool readOnly;
+  final Future<void> Function()? onAddContact;
+  final Future<void> Function()? onReportSpam;
+
+  @override
+  Widget build(BuildContext context) {
+    if (readOnly) {
+      return const SizedBox.shrink();
+    }
+    return BlocBuilder<ChatBloc, ChatState>(
+      builder: (context, state) {
+        final chat = state.chat;
+        if (chat == null || chat.type != ChatType.chat || chat.spam) {
+          return const SizedBox.shrink();
+        }
+        return BlocBuilder<RosterCubit, RosterState>(
+          buildWhen: (_, current) => current is RosterAvailable,
+          builder: (context, rosterState) {
+            final cached = rosterState is RosterAvailable
+                ? rosterState.items
+                : context.read<RosterCubit>()['items'] as List<RosterItem>?;
+            final rosterItems = cached ?? const <RosterItem>[];
+            final rosterEntry = rosterItems
+                .where((entry) => entry.jid == chat.remoteJid)
+                .singleOrNull;
+            final inRoster =
+                rosterEntry != null && !rosterEntry.subscription.isNone;
+            final hasContactRecord =
+                chat.contactID?.trim().isNotEmpty == true ||
+                    chat.contactDisplayName?.trim().isNotEmpty == true;
+            final isEmailChat = chat.isEmailBacked;
+            final showBanner = (isEmailChat && !hasContactRecord) ||
+                (!isEmailChat && !inRoster);
+            if (!showBanner) {
+              return const SizedBox.shrink();
+            }
+            EmailService? emailService;
+            try {
+              emailService = RepositoryProvider.of<EmailService>(
+                context,
+                listen: false,
+              );
+            } on Exception {
+              emailService = null;
+            }
+            final canAddContact = !isEmailChat || emailService != null;
+            final l10n = context.l10n;
+            final actions = <Widget>[
+              if (onAddContact != null && canAddContact)
+                ContextActionButton(
+                  icon: const Icon(
+                    LucideIcons.userPlus,
+                    size: _unknownSenderIconSize,
+                  ),
+                  label: l10n.rosterAddTitle,
+                  onPressed: () => unawaited(onAddContact!.call()),
+                ),
+              if (onReportSpam != null)
+                ContextActionButton(
+                  icon: const Icon(
+                    LucideIcons.shieldAlert,
+                    size: _unknownSenderIconSize,
+                  ),
+                  label: l10n.chatReportSpam,
+                  onPressed: () => unawaited(onReportSpam!.call()),
+                  destructive: true,
+                ),
+            ];
+            return ListItemPadding(
+              child: ShadCard(
+                padding: const EdgeInsets.all(_unknownSenderCardPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          LucideIcons.userX,
+                          size: _unknownSenderIconSize,
+                          color: context.colorScheme.destructive,
+                        ),
+                        const SizedBox(width: _unknownSenderTextSpacing),
+                        Expanded(
+                          child: Text(
+                            l10n.accessibilityUnknownContact,
+                            style: context.textTheme.small.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: _unknownSenderTextSpacing),
+                    Text(
+                      l10n.chatAttachmentBlockedDescription,
+                      style: context.textTheme.muted,
+                    ),
+                    if (actions.isNotEmpty) ...[
+                      const SizedBox(height: _unknownSenderActionSpacing),
+                      Wrap(
+                        spacing: _unknownSenderActionSpacing,
+                        runSpacing: _unknownSenderActionSpacing,
+                        children: actions,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1232,6 +1383,12 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  String? _normalizeBareJid(String? jid) {
+    final bare = _bareJid(jid)?.trim();
+    if (bare == null || bare.isEmpty) return null;
+    return bare.toLowerCase();
+  }
+
   String? _normalizeOccupantId(String? jid) {
     final trimmed = jid?.trim();
     if (trimmed == null || trimmed.isEmpty) {
@@ -1248,6 +1405,159 @@ class _ChatState extends State<Chat> {
     } on Exception {
       return trimmed.toLowerCase();
     }
+  }
+
+  bool _isMucOccupantSender({
+    required String senderJid,
+    required String? chatJid,
+  }) {
+    final senderBare = _normalizeBareJid(senderJid);
+    final chatBare = _normalizeBareJid(chatJid);
+    if (senderBare == null || chatBare == null) {
+      return false;
+    }
+    final String? nick = _nickFromSender(senderJid);
+    if (nick == null) {
+      return false;
+    }
+    return senderBare == chatBare;
+  }
+
+  Occupant? _resolveOccupantForSender({
+    required String senderJid,
+    required RoomState? roomState,
+  }) {
+    if (roomState == null) {
+      return null;
+    }
+    final Occupant? direct = roomState.occupants[senderJid];
+    if (direct != null) {
+      return direct;
+    }
+    final String? nick = _nickFromSender(senderJid);
+    if (nick == null) {
+      return null;
+    }
+    for (final occupant in roomState.occupants.values) {
+      if (occupant.nick == nick) {
+        return occupant;
+      }
+    }
+    return null;
+  }
+
+  bool _availabilitySenderMatchesClaim({
+    required String senderJid,
+    required String? chatJid,
+    required String claimedJid,
+    required RoomState? roomState,
+  }) {
+    final String trimmedClaimed = claimedJid.trim();
+    if (trimmedClaimed.isEmpty) {
+      return false;
+    }
+    final bool isMucSender = _isMucOccupantSender(
+      senderJid: senderJid,
+      chatJid: chatJid,
+    );
+    if (!isMucSender) {
+      return _normalizeBareJid(senderJid) == _normalizeBareJid(trimmedClaimed);
+    }
+    final String? normalizedSender = _normalizeOccupantId(senderJid);
+    final String? normalizedClaimed = _normalizeOccupantId(trimmedClaimed);
+    if (normalizedSender != null && normalizedSender == normalizedClaimed) {
+      return true;
+    }
+    final Occupant? occupant = _resolveOccupantForSender(
+      senderJid: senderJid,
+      roomState: roomState,
+    );
+    final String? realJid = occupant?.realJid;
+    if (realJid == null) {
+      return false;
+    }
+    return _normalizeBareJid(realJid) == _normalizeBareJid(trimmedClaimed);
+  }
+
+  String? _availabilityActorId({
+    required chat_models.Chat? chat,
+    required String? currentUserId,
+    required RoomState? roomState,
+  }) {
+    final String? trimmedCurrent = currentUserId?.trim();
+    if (chat?.type != ChatType.groupChat) {
+      return trimmedCurrent?.isEmpty == true ? null : trimmedCurrent;
+    }
+    final String? occupantId = roomState?.myOccupantId?.trim();
+    if (occupantId != null && occupantId.isNotEmpty) {
+      return occupantId;
+    }
+    return null;
+  }
+
+  CalendarAvailabilityMessage? _validatedAvailabilityMessage({
+    required Message message,
+    required RoomState? roomState,
+    required Map<String, String> shareOwnersById,
+    required CalendarAvailabilityShareCoordinator? availabilityCoordinator,
+  }) {
+    final CalendarAvailabilityMessage? raw =
+        message.calendarAvailabilityMessage;
+    if (raw == null) {
+      return null;
+    }
+    final String senderJid = message.senderJid;
+    final String chatJid = message.chatJid;
+    final bool isValid = raw.map(
+      share: (value) => _availabilitySenderMatchesClaim(
+        senderJid: senderJid,
+        chatJid: chatJid,
+        claimedJid: value.share.overlay.owner,
+        roomState: roomState,
+      ),
+      request: (value) {
+        final CalendarAvailabilityRequest request = value.request;
+        final bool senderMatches = _availabilitySenderMatchesClaim(
+          senderJid: senderJid,
+          chatJid: chatJid,
+          claimedJid: request.requesterJid,
+          roomState: roomState,
+        );
+        if (!senderMatches) {
+          return false;
+        }
+        final String? claimedOwner = request.ownerJid?.trim();
+        if (claimedOwner == null || claimedOwner.isEmpty) {
+          return true;
+        }
+        final String? knownOwner = shareOwnersById[request.shareId] ??
+            availabilityCoordinator?.ownerJidForShare(request.shareId);
+        if (knownOwner == null || knownOwner.trim().isEmpty) {
+          return true;
+        }
+        return _availabilitySenderMatchesClaim(
+          senderJid: claimedOwner,
+          chatJid: chatJid,
+          claimedJid: knownOwner,
+          roomState: roomState,
+        );
+      },
+      response: (value) {
+        final CalendarAvailabilityResponse response = value.response;
+        final String? ownerJid = shareOwnersById[response.shareId] ??
+            availabilityCoordinator?.ownerJidForShare(response.shareId);
+        if (ownerJid == null || ownerJid.trim().isEmpty) {
+          return true;
+        }
+        return _availabilitySenderMatchesClaim(
+          senderJid: senderJid,
+          chatJid: chatJid,
+          claimedJid: ownerJid,
+          roomState: roomState,
+        );
+      },
+    );
+    return isValid ? raw : null;
   }
 
   bool _isSameOccupantId(String? first, String? second) {
@@ -1413,6 +1723,63 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  Future<void> _handleAddContact() async {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) return;
+    final address = chat.remoteJid.trim();
+    if (address.isEmpty) return;
+    final l10n = context.l10n;
+    final showToast = ShadToaster.maybeOf(context)?.show;
+    final rawDisplayName = chat.contactDisplayName?.trim();
+    final rosterTitle =
+        rawDisplayName?.isNotEmpty == true ? rawDisplayName! : chat.title;
+    try {
+      if (chat.isEmailBacked) {
+        EmailService? emailService;
+        try {
+          emailService = RepositoryProvider.of<EmailService>(
+            context,
+            listen: false,
+          );
+        } on Exception {
+          emailService = null;
+        }
+        if (emailService == null) return;
+        await emailService.ensureChatForAddress(
+          address: address,
+          displayName: rosterTitle,
+        );
+      } else {
+        await context.read<XmppService>().addToRoster(
+              jid: address,
+              title: rosterTitle.isNotEmpty ? rosterTitle : null,
+            );
+      }
+    } on Exception {
+      if (!mounted) return;
+      showToast?.call(
+        FeedbackToast.error(
+          title: l10n.rosterAddTitle,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    showToast?.call(
+      FeedbackToast.success(
+        title: l10n.rosterAddTitle,
+      ),
+    );
+  }
+
+  Future<void> _copyChatAddress(String address) async {
+    final trimmed = address.trim();
+    if (trimmed.isEmpty) return;
+    await Clipboard.setData(
+      ClipboardData(text: trimmed),
+    );
+  }
+
   void _handleSubjectChanged() {
     final text = _subjectController.text;
     if (_lastSubjectValue == text) {
@@ -1513,6 +1880,54 @@ class _ChatState extends State<Chat> {
     return false;
   }
 
+  List<BlocklistEntry> _resolveBlocklistEntries() {
+    final BlocklistCubit? blocklistCubit = context.watch<BlocklistCubit?>();
+    final BlocklistState? blocklistState = blocklistCubit?.state;
+    final List<BlocklistEntry>? cachedEntries =
+        blocklistState is BlocklistAvailable
+            ? blocklistState.items
+            : blocklistCubit?[blocklistItemsCacheKey] as List<BlocklistEntry>?;
+    return cachedEntries ?? _emptyBlocklistEntries;
+  }
+
+  bool _isChatBlocked({
+    required chat_models.Chat chat,
+    required List<BlocklistEntry> entries,
+  }) {
+    if (chat.type != ChatType.chat) {
+      return false;
+    }
+    if (entries.isEmpty) {
+      return false;
+    }
+    final transport = chat.defaultTransport;
+    if (transport.isEmail) {
+      final String? address = chat.emailAddress?.trim();
+      final String candidate =
+          address?.isNotEmpty == true ? address! : chat.remoteJid.trim();
+      if (candidate.isEmpty) {
+        return false;
+      }
+      final String normalizedCandidate = candidate.toLowerCase();
+      return entries.any(
+        (entry) =>
+            entry.transport.isEmail &&
+            entry.address.trim().toLowerCase() == normalizedCandidate,
+      );
+    }
+    final String? chatBareJid = _normalizeBareJid(chat.remoteJid);
+    if (chatBareJid == null || chatBareJid.isEmpty) {
+      return false;
+    }
+    return entries.any((entry) {
+      if (!entry.transport.isXmpp) {
+        return false;
+      }
+      final String? entryBareJid = _normalizeBareJid(entry.address);
+      return entryBareJid != null && entryBareJid == chatBareJid;
+    });
+  }
+
   bool _shouldAllowAttachment({
     required String senderJid,
     required bool isSelf,
@@ -1590,9 +2005,11 @@ class _ChatState extends State<Chat> {
     final chatBloc = context.read<ChatBloc>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
     final showToast = ShadToaster.maybeOf(context)?.show;
+    var shouldEnableAutoDownload = false;
     if (decision.alwaysAllow && canAddToRoster) {
       try {
         await xmpp.addToRoster(jid: senderBare);
+        shouldEnableAutoDownload = true;
       } on Exception {
         const title = 'Unable to add contact';
         const message =
@@ -1601,6 +2018,9 @@ class _ChatState extends State<Chat> {
       }
     }
     if (decision.alwaysAllow && canTrustChat) {
+      shouldEnableAutoDownload = true;
+    }
+    if (shouldEnableAutoDownload) {
       chatBloc.add(const ChatAttachmentAutoDownloadToggled(true));
     }
     if (isEmailChat) {
@@ -1619,27 +2039,46 @@ class _ChatState extends State<Chat> {
   Future<void> _handleLinkTap(String url) async {
     if (!mounted) return;
     final l10n = context.l10n;
-    final trimmed = url.trim();
-    final uri = Uri.tryParse(trimmed);
-    final host = uri?.host.isNotEmpty == true ? uri!.host : trimmed;
-    final approved = await confirm(
+    final report = assessLinkSafety(
+      raw: url,
+      kind: LinkSafetyKind.message,
+    );
+    if (report == null || !report.isSafe) {
+      _showSnackbar(l10n.chatInvalidLink(url.trim()));
+      return;
+    }
+    final hostLabel = formatLinkSchemeHostLabel(report);
+    final baseMessage = report.needsWarning
+        ? l10n.chatOpenLinkWarningMessage(
+            report.displayUri,
+            hostLabel,
+          )
+        : l10n.chatOpenLinkMessage(
+            report.displayUri,
+            hostLabel,
+          );
+    final warningBlock = formatLinkWarningText(report.warnings);
+    final action = await showLinkActionDialog(
       context,
       title: l10n.chatOpenLinkTitle,
-      message: l10n.chatOpenLinkMessage(trimmed, host),
-      confirmLabel: l10n.chatOpenLinkConfirm,
-      destructiveConfirm: false,
+      message: '$baseMessage$warningBlock',
+      openLabel: l10n.chatOpenLinkConfirm,
+      copyLabel: l10n.chatActionCopy,
+      cancelLabel: l10n.commonCancel,
     );
-    if (approved != true) return;
-    if (uri == null) {
-      _showSnackbar(l10n.chatInvalidLink(trimmed));
+    if (action == null) return;
+    if (action == LinkAction.copy) {
+      await Clipboard.setData(
+        ClipboardData(text: report.displayUri),
+      );
       return;
     }
     final launched = await launchUrl(
-      uri,
+      report.uri,
       mode: LaunchMode.externalApplication,
     );
     if (!launched) {
-      _showSnackbar(l10n.chatUnableToOpenHost(host));
+      _showSnackbar(l10n.chatUnableToOpenHost(report.displayHost));
     }
   }
 
@@ -1653,24 +2092,30 @@ class _ChatState extends State<Chat> {
       );
   }
 
-  void _handleSendMessage() {
+  Future<void> _handleSendMessage() async {
     final rawText = _textController.text.trim();
     final seedText = _pendingCalendarSeedText;
     final String resolvedText =
         rawText.isNotEmpty ? rawText : (seedText ?? _emptyText);
-    final bool hasPreparingAttachments =
-        context.read<ChatBloc>().state.pendingAttachments.any(
-              (attachment) => attachment.isPreparing,
-            );
-    final bool hasQueuedAttachments =
-        context.read<ChatBloc>().state.pendingAttachments.any(
-              (attachment) =>
-                  attachment.status == PendingAttachmentStatus.queued,
-            );
+    final pendingAttachments =
+        context.read<ChatBloc>().state.pendingAttachments;
+    final hasPreparingAttachments = pendingAttachments.any(
+      (attachment) => attachment.isPreparing,
+    );
+    final queuedAttachments = pendingAttachments
+        .where(
+          (attachment) =>
+              attachment.status == PendingAttachmentStatus.queued &&
+              !attachment.isPreparing,
+        )
+        .toList();
+    final hasQueuedAttachments = queuedAttachments.isNotEmpty;
     final hasSubject = _subjectController.text.trim().isNotEmpty;
     final canSend = !hasPreparingAttachments &&
         (resolvedText.isNotEmpty || hasQueuedAttachments || hasSubject);
     if (!canSend) return;
+    final confirmed = await _confirmMediaMetadataIfNeeded(queuedAttachments);
+    if (!confirmed || !mounted) return;
     context.read<ChatBloc>().add(
           ChatMessageSent(
             text: resolvedText,
@@ -1689,6 +2134,29 @@ class _ChatState extends State<Chat> {
       });
     }
     _focusNode.requestFocus();
+  }
+
+  Future<bool> _confirmMediaMetadataIfNeeded(
+    List<PendingAttachment> attachments,
+  ) async {
+    if (!mounted) return false;
+    final hasMedia = attachments.any(
+      (attachment) =>
+          attachment.attachment.isImage || attachment.attachment.isVideo,
+    );
+    if (!hasMedia) {
+      return true;
+    }
+    final l10n = context.l10n;
+    final approved = await confirm(
+      context,
+      title: l10n.chatMediaMetadataWarningTitle,
+      message: l10n.chatMediaMetadataWarningMessage,
+      confirmLabel: l10n.commonContinue,
+      cancelLabel: l10n.commonCancel,
+      destructiveConfirm: false,
+    );
+    return approved == true;
   }
 
   Future<void> _handleSendButtonLongPress() async {
@@ -1899,13 +2367,18 @@ class _ChatState extends State<Chat> {
           hasInvalidPath = true;
           continue;
         }
-        final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
+        final String fileName =
+            file.name.isNotEmpty ? file.name : path.split('/').last;
+        final String? resolvedMimeType = await resolveMimeTypeFromPath(
+          path: path,
+          fileName: fileName,
+        );
         attachments.add(
           EmailAttachment(
             path: path,
-            fileName: file.name.isNotEmpty ? file.name : path.split('/').last,
+            fileName: fileName,
             sizeBytes: file.size > 0 ? file.size : 0,
-            mimeType: mimeType,
+            mimeType: resolvedMimeType,
           ),
         );
       }
@@ -1997,6 +2470,19 @@ class _ChatState extends State<Chat> {
     final file = File(attachment.path);
     if (!await file.exists()) {
       _showSnackbar(l10n.chatAttachmentInaccessible);
+      return;
+    }
+    final FileTypeReport report = await inspectFileType(
+      file: file,
+      declaredMimeType: attachment.mimeType,
+      fileName: attachment.fileName,
+    );
+    if (!mounted) return;
+    final bool useDeclaredFallback = !report.hasReliableDetection;
+    final bool isImage = report.isDetectedImage ||
+        (useDeclaredFallback && report.isDeclaredImage);
+    if (!isImage) {
+      _showSnackbar(l10n.chatAttachmentUnavailable);
       return;
     }
     final intrinsicSize = await _resolveAttachmentSize(attachment);
@@ -2821,6 +3307,16 @@ class _ChatState extends State<Chat> {
                 );
                 final emailSelfJid = emailService?.selfSenderJid;
                 final chatEntity = state.chat;
+                final List<BlocklistEntry> blocklistEntries =
+                    _resolveBlocklistEntries();
+                final bool isChatBlocked = chatEntity == null
+                    ? false
+                    : _isChatBlocked(
+                        chat: chatEntity,
+                        entries: blocklistEntries,
+                      );
+                final bool attachmentsBlockedForChat =
+                    isChatBlocked || (chatEntity?.spam ?? false);
                 final jid = chatEntity?.jid;
                 final isDefaultEmail =
                     chatEntity?.defaultTransport.isEmail ?? false;
@@ -2832,6 +3328,11 @@ class _ChatState extends State<Chat> {
                 final myOccupant = myOccupantId == null
                     ? null
                     : state.roomState?.occupants[myOccupantId];
+                final String? availabilityActorId = _availabilityActorId(
+                  chat: chatEntity,
+                  currentUserId: currentUserId,
+                  roomState: state.roomState,
+                );
                 final shareContexts = state.shareContexts;
                 final shareReplies = state.shareReplies;
                 final recipients = state.recipients;
@@ -2932,22 +3433,18 @@ class _ChatState extends State<Chat> {
                     storageManager.isAuthStorageReady;
                 final bool supportsChatCalendar =
                     chatEntity?.supportsChatCalendar ?? false;
-                final OccupantAffiliation calendarAffiliation =
-                    state.roomState?.myAffiliation ?? OccupantAffiliation.none;
-                final bool chatCalendarAllowed = supportsChatCalendar &&
-                    (!isGroupChat || calendarAffiliation.isMemberOrAbove);
                 final bool chatCalendarReady =
                     storageManager.isAuthStorageReady &&
                         chatCalendarCoordinator != null;
                 final bool chatCalendarAvailable =
-                    chatCalendarAllowed && chatCalendarReady;
+                    supportsChatCalendar && chatCalendarReady;
                 final ChatCalendarBloc? chatCalendarBloc =
                     _resolveChatCalendarBloc(
                   chat: chatEntity,
                   calendarAvailable: chatCalendarAvailable,
                 );
                 final List<String> chatCalendarParticipants =
-                    chatCalendarAllowed
+                    supportsChatCalendar
                         ? _resolveChatCalendarParticipants(
                             chat: chatEntity,
                             roomState: state.roomState,
@@ -3022,6 +3519,11 @@ class _ChatState extends State<Chat> {
                     !readOnly &&
                     jid != null &&
                     _chatRoute == _ChatRoute.main;
+                final isEmailBacked = chatEntity?.isEmailBacked ?? false;
+                final canManagePins = !isGroupChat ||
+                    isEmailBacked ||
+                    (state.roomState?.myAffiliation.canManagePins ?? false);
+                final canTogglePins = !readOnly && canManagePins;
                 if (!chatCalendarAvailable &&
                     _chatRoute == _ChatRoute.calendar) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3161,6 +3663,29 @@ class _ChatState extends State<Chat> {
                               final titleStyle = baseTitleStyle.copyWith(
                                 fontSize: context.textTheme.large.fontSize,
                               );
+                              final l10n = context.l10n;
+                              final chatAddress = chatEntity?.remoteJid ?? jid;
+                              final trimmedAddress = chatAddress.trim();
+                              final normalizedAddress = trimmedAddress.isEmpty
+                                  ? null
+                                  : trimmedAddress.toBareJidOrNull(
+                                      maxBytes: syncAddressMaxBytes,
+                                    );
+                              final isAddressMalformed =
+                                  normalizedAddress == null &&
+                                      trimmedAddress.isNotEmpty;
+                              final displayAddress = isAddressMalformed
+                                  ? trimmedAddress
+                                  : (normalizedAddress ?? trimmedAddress);
+                              final trimmedDisplayName =
+                                  (state.chat?.displayName ?? '').trim();
+                              final showDisplayNameBadge =
+                                  trimmedDisplayName.isNotEmpty &&
+                                      displayAddress.isNotEmpty &&
+                                      trimmedDisplayName != displayAddress;
+                              final addressColor = isAddressMalformed
+                                  ? context.colorScheme.destructive
+                                  : context.colorScheme.mutedForeground;
                               return Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -3197,6 +3722,19 @@ class _ChatState extends State<Chat> {
                                                   style: titleStyle,
                                                 ),
                                               ),
+                                              if (showDisplayNameBadge)
+                                                const Padding(
+                                                  padding: EdgeInsetsDirectional
+                                                      .only(
+                                                    start:
+                                                        _chatHeaderIdentitySpacing,
+                                                  ),
+                                                  child: ShadBadge.secondary(
+                                                    child: Text(
+                                                      _chatHeaderDisplayNameBadgeLabel,
+                                                    ),
+                                                  ),
+                                                ),
                                               if (canRenameContact)
                                                 Padding(
                                                   padding:
@@ -3229,6 +3767,71 @@ class _ChatState extends State<Chat> {
                                                 ),
                                             ],
                                           ),
+                                          if (displayAddress.isNotEmpty)
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isAddressMalformed
+                                                      ? LucideIcons
+                                                          .triangleAlert
+                                                      : LucideIcons.atSign,
+                                                  size:
+                                                      _chatHeaderIdentityIconSize,
+                                                  color: addressColor,
+                                                ),
+                                                const SizedBox(
+                                                  width:
+                                                      _chatHeaderIdentitySpacing,
+                                                ),
+                                                Flexible(
+                                                  fit: FlexFit.loose,
+                                                  child: Text(
+                                                    displayAddress,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: context
+                                                        .textTheme.small
+                                                        .copyWith(
+                                                      color: addressColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .only(
+                                                    start:
+                                                        _chatHeaderIdentitySpacing,
+                                                  ),
+                                                  child: AxiTooltip(
+                                                    builder: (context) => Text(
+                                                      l10n.chatActionCopy,
+                                                    ),
+                                                    child: ShadIconButton.ghost(
+                                                      onPressed: () =>
+                                                          _copyChatAddress(
+                                                        displayAddress,
+                                                      ),
+                                                      icon: Icon(
+                                                        LucideIcons.copy,
+                                                        size:
+                                                            _chatHeaderIdentityCopyIconSize,
+                                                        color: addressColor,
+                                                      ),
+                                                      decoration:
+                                                          const ShadDecoration(
+                                                        secondaryBorder:
+                                                            ShadBorder.none,
+                                                        secondaryFocusedBorder:
+                                                            ShadBorder.none,
+                                                      ),
+                                                    ).withTapBounce(),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           if (statusLabel.isNotEmpty)
                                             Text(
                                               statusLabel,
@@ -3258,18 +3861,18 @@ class _ChatState extends State<Chat> {
                           tooltip: context.l10n.chatAttachmentTooltip,
                           onPressed: _openChatAttachments,
                         ),
+                        const SizedBox(width: _chatHeaderActionSpacing),
+                        AxiIconButton(
+                          iconData: LucideIcons.pin,
+                          tooltip: context.l10n.chatPinnedMessagesTooltip,
+                          onPressed: _openPinnedMessages,
+                        ),
                         if (supportsChatCalendar) ...[
                           const SizedBox(width: _chatHeaderActionSpacing),
                           AxiIconButton(
                             iconData: LucideIcons.calendarClock,
                             tooltip: context.l10n.homeRailCalendar,
                             onPressed: () {
-                              if (!chatCalendarAllowed) {
-                                _showSnackbar(
-                                  _calendarFragmentShareDeniedMessage,
-                                );
-                                return;
-                              }
                               if (!chatCalendarAvailable) {
                                 _showSnackbar(
                                   context.l10n.chatCalendarUnavailable,
@@ -3309,6 +3912,13 @@ class _ChatState extends State<Chat> {
                         ),
                       ),
                       const ChatAlert(),
+                      _UnknownSenderBanner(
+                        readOnly: readOnly,
+                        onAddContact: _handleAddContact,
+                        onReportSpam: () => _handleSpamToggle(
+                          sendToSpam: true,
+                        ),
+                      ),
                       const _ChatSearchPanel(),
                       Expanded(
                         child: AnimatedSwitcher(
@@ -3337,6 +3947,9 @@ class _ChatState extends State<Chat> {
                                     for (final item in state.items)
                                       item.stanzaID: item,
                                   };
+                                  final pinnedStanzaIds = state.pinnedMessages
+                                      .map((item) => item.messageStanzaId)
+                                      .toSet();
                                   if (searchFiltering) {
                                     for (final item in searchResults) {
                                       messageById[item.stanzaID] = item;
@@ -3405,13 +4018,22 @@ class _ChatState extends State<Chat> {
                                     if (availabilityMessage == null) {
                                       continue;
                                     }
-                                    availabilityMessage.map(
+                                    availabilityMessage.maybeMap(
                                       share: (value) {
-                                        availabilityShareOwnersById[value.share
-                                            .id] = value.share.overlay.owner;
+                                        final owner = value.share.overlay.owner;
+                                        final bool isValid =
+                                            _availabilitySenderMatchesClaim(
+                                          senderJid: item.senderJid,
+                                          chatJid: item.chatJid,
+                                          claimedJid: owner,
+                                          roomState: state.roomState,
+                                        );
+                                        if (isValid) {
+                                          availabilityShareOwnersById[
+                                              value.share.id] = owner;
+                                        }
                                       },
-                                      request: (_) {},
-                                      response: (_) {},
+                                      orElse: () {},
                                     );
                                   }
                                   final isEmailChat =
@@ -3651,6 +4273,16 @@ class _ChatState extends State<Chat> {
                                                 hasRenderableSubjectHeader ||
                                                 e.retracted ||
                                                 e.edited);
+                                    final CalendarAvailabilityMessage?
+                                        validatedAvailabilityMessage =
+                                        _validatedAvailabilityMessage(
+                                      message: e,
+                                      roomState: state.roomState,
+                                      shareOwnersById:
+                                          availabilityShareOwnersById,
+                                      availabilityCoordinator:
+                                          availabilityCoordinator,
+                                    );
                                     dashMessages.add(
                                       ChatMessage(
                                         user: author,
@@ -3680,7 +4312,7 @@ class _ChatState extends State<Chat> {
                                           _calendarTaskIcsReadOnlyPropertyKey:
                                               e.calendarTaskIcsReadOnly,
                                           _calendarAvailabilityPropertyKey:
-                                              e.calendarAvailabilityMessage,
+                                              validatedAvailabilityMessage,
                                           'quoted': quotedMessage,
                                           'reactions': e.reactionsPreview,
                                           'shareContext': shareContext,
@@ -4415,6 +5047,8 @@ class _ChatState extends State<Chat> {
                                                                 .links,
                                                             onLinkTap:
                                                                 _handleLinkTap,
+                                                            onLinkLongPress:
+                                                                _handleLinkTap,
                                                           ),
                                                         ]);
                                                       } else if (isInviteMessage ||
@@ -4436,6 +5070,8 @@ class _ChatState extends State<Chat> {
                                                             ),
                                                             details: [time],
                                                             onLinkTap:
+                                                                _handleLinkTap,
+                                                            onLinkLongPress:
                                                                 _handleLinkTap,
                                                           ),
                                                         );
@@ -4642,23 +5278,32 @@ class _ChatState extends State<Chat> {
                                                             share: (value) {
                                                               final bool
                                                                   isOwner =
-                                                                  _bareJid(
-                                                                        value
+                                                                  availabilityActorId !=
+                                                                          null &&
+                                                                      _availabilitySenderMatchesClaim(
+                                                                        senderJid:
+                                                                            availabilityActorId,
+                                                                        chatJid:
+                                                                            chatEntity?.jid,
+                                                                        claimedJid: value
                                                                             .share
                                                                             .overlay
                                                                             .owner,
-                                                                      ) ==
-                                                                      _bareJid(
-                                                                        currentUserId,
+                                                                        roomState:
+                                                                            state.roomState,
                                                                       );
                                                               if (!isOwner) {
-                                                                availabilityOnRequest =
-                                                                    () =>
-                                                                        _handleAvailabilityRequest(
-                                                                          value
-                                                                              .share,
-                                                                          currentUserId,
-                                                                        );
+                                                                final actorId =
+                                                                    availabilityActorId;
+                                                                if (actorId !=
+                                                                    null) {
+                                                                  availabilityOnRequest =
+                                                                      () =>
+                                                                          _handleAvailabilityRequest(
+                                                                            value.share,
+                                                                            actorId,
+                                                                          );
+                                                                }
                                                               }
                                                             },
                                                             request: (value) {
@@ -4666,7 +5311,7 @@ class _ChatState extends State<Chat> {
                                                                   value.request
                                                                       .ownerJid
                                                                       ?.trim();
-                                                              final ownerJid = requestOwnerJid ==
+                                                              final String? ownerJid = requestOwnerJid ==
                                                                           null ||
                                                                       requestOwnerJid
                                                                           .isEmpty
@@ -4680,24 +5325,50 @@ class _ChatState extends State<Chat> {
                                                                             .shareId,
                                                                       )
                                                                   : requestOwnerJid;
-                                                              final bool isOwner = ownerJid !=
-                                                                      null
-                                                                  ? _bareJid(
-                                                                        ownerJid,
-                                                                      ) ==
-                                                                      _bareJid(
-                                                                        currentUserId,
-                                                                      )
-                                                                  : (chatEntity
-                                                                              ?.type ==
-                                                                          ChatType
-                                                                              .chat &&
-                                                                      _bareJid(
-                                                                            value.request.requesterJid,
-                                                                          ) !=
-                                                                          _bareJid(
-                                                                            currentUserId,
-                                                                          ));
+                                                              bool isOwner =
+                                                                  false;
+                                                              if (ownerJid !=
+                                                                      null &&
+                                                                  ownerJid
+                                                                      .trim()
+                                                                      .isNotEmpty &&
+                                                                  availabilityActorId !=
+                                                                      null) {
+                                                                isOwner =
+                                                                    _availabilitySenderMatchesClaim(
+                                                                  senderJid:
+                                                                      availabilityActorId,
+                                                                  chatJid:
+                                                                      chatEntity
+                                                                          ?.jid,
+                                                                  claimedJid:
+                                                                      ownerJid,
+                                                                  roomState: state
+                                                                      .roomState,
+                                                                );
+                                                              } else if (chatEntity
+                                                                      ?.type ==
+                                                                  ChatType
+                                                                      .chat) {
+                                                                final currentActor =
+                                                                    availabilityActorId;
+                                                                if (currentActor !=
+                                                                    null) {
+                                                                  isOwner =
+                                                                      !_availabilitySenderMatchesClaim(
+                                                                    senderJid:
+                                                                        currentActor,
+                                                                    chatJid:
+                                                                        chatEntity
+                                                                            ?.jid,
+                                                                    claimedJid: value
+                                                                        .request
+                                                                        .requesterJid,
+                                                                    roomState: state
+                                                                        .roomState,
+                                                                  );
+                                                                }
+                                                              }
                                                               if (isOwner) {
                                                                 availabilityOnAccept =
                                                                     () =>
@@ -4756,19 +5427,36 @@ class _ChatState extends State<Chat> {
                                                                         calendarTaskIcs,
                                                                     readOnly:
                                                                         calendarTaskIcsReadOnly,
+                                                                    requireImportConfirmation:
+                                                                        !self,
                                                                     footerDetails:
                                                                         taskFooterDetails,
                                                                   ),
                                                           );
                                                         } else if (displayFragment !=
                                                             null) {
-                                                          bubbleChildren.add(
-                                                            CalendarFragmentCard(
+                                                          final Widget
+                                                              fragmentCard =
+                                                              displayFragment
+                                                                  .maybeMap(
+                                                            criticalPath: (value) =>
+                                                                ChatCalendarCriticalPathCard(
+                                                              path: value.path,
+                                                              tasks:
+                                                                  value.tasks,
+                                                              footerDetails:
+                                                                  fragmentFooterDetails,
+                                                            ),
+                                                            orElse: () =>
+                                                                CalendarFragmentCard(
                                                               fragment:
                                                                   displayFragment,
                                                               footerDetails:
                                                                   fragmentFooterDetails,
                                                             ),
+                                                          );
+                                                          bubbleChildren.add(
+                                                            fragmentCard,
                                                           );
                                                         }
                                                         final String?
@@ -4861,6 +5549,8 @@ class _ChatState extends State<Chat> {
                                                                   ],
                                                                   onLinkTap:
                                                                       _handleLinkTap,
+                                                                  onLinkLongPress:
+                                                                      _handleLinkTap,
                                                                 );
                                                               },
                                                             ),
@@ -4887,8 +5577,12 @@ class _ChatState extends State<Chat> {
                                                             html_widget.Html(
                                                               key: ValueKey(
                                                                   bubbleContentKey),
-                                                              data: messageModel
-                                                                  .htmlBody,
+                                                              data: HtmlContentCodec
+                                                                  .sanitizeHtml(
+                                                                messageModel
+                                                                        .htmlBody ??
+                                                                    '',
+                                                              ),
                                                               extensions: [
                                                                 createEmailImageExtension(
                                                                   shouldLoad:
@@ -5005,6 +5699,8 @@ class _ChatState extends State<Chat> {
                                                                   .links,
                                                               onLinkTap:
                                                                   _handleLinkTap,
+                                                              onLinkLongPress:
+                                                                  _handleLinkTap,
                                                             ),
                                                           );
                                                         }
@@ -5053,12 +5749,30 @@ class _ChatState extends State<Chat> {
                                                           chat: state.chat,
                                                         );
                                                         final allowAttachmentOnce =
-                                                            _isOneTimeAttachmentAllowed(
-                                                                messageModel
-                                                                    .stanzaID);
+                                                            attachmentsBlockedForChat
+                                                                ? false
+                                                                : _isOneTimeAttachmentAllowed(
+                                                                    messageModel
+                                                                        .stanzaID,
+                                                                  );
                                                         final allowAttachment =
-                                                            allowAttachmentByTrust ||
-                                                                allowAttachmentOnce;
+                                                            !attachmentsBlockedForChat &&
+                                                                (allowAttachmentByTrust ||
+                                                                    allowAttachmentOnce);
+                                                        final autoDownloadSettings = context
+                                                            .watch<
+                                                                SettingsCubit>()
+                                                            .state
+                                                            .attachmentAutoDownloadSettings;
+                                                        final chatAutoDownloadAllowed =
+                                                            state
+                                                                    .chat
+                                                                    ?.attachmentAutoDownload
+                                                                    .isAllowed ??
+                                                                false;
+                                                        final autoDownloadAllowed =
+                                                            allowAttachment &&
+                                                                chatAutoDownloadAllowed;
                                                         final emailService =
                                                             RepositoryProvider
                                                                 .of<EmailService?>(
@@ -5074,12 +5788,8 @@ class _ChatState extends State<Chat> {
                                                                     ),
                                                                   )
                                                                 : null;
-                                                        final autoDownload =
-                                                            allowAttachment &&
-                                                                !isEmailChat;
                                                         final autoDownloadUserInitiated =
-                                                            allowAttachmentOnce &&
-                                                                !isEmailChat;
+                                                            allowAttachmentOnce;
                                                         for (var index = 0;
                                                             index <
                                                                 attachmentIds
@@ -5109,8 +5819,10 @@ class _ChatState extends State<Chat> {
                                                                       attachmentId),
                                                               allowed:
                                                                   allowAttachment,
-                                                              autoDownload:
-                                                                  autoDownload,
+                                                              autoDownloadSettings:
+                                                                  autoDownloadSettings,
+                                                              autoDownloadAllowed:
+                                                                  autoDownloadAllowed,
                                                               autoDownloadUserInitiated:
                                                                   autoDownloadUserInitiated,
                                                               downloadDelegate:
@@ -5118,23 +5830,18 @@ class _ChatState extends State<Chat> {
                                                               onAllowPressed:
                                                                   allowAttachment
                                                                       ? null
-                                                                      : () =>
-                                                                          _approveAttachment(
-                                                                            message:
-                                                                                messageModel,
-                                                                            senderJid:
-                                                                                messageModel.senderJid,
-                                                                            stanzaId:
-                                                                                messageModel.stanzaID,
-                                                                            metadataId:
-                                                                                attachmentId,
-                                                                            isGroupChat:
-                                                                                isGroupChat,
-                                                                            isEmailChat:
-                                                                                isEmailChat,
-                                                                            senderEmail:
-                                                                                state.chat?.emailAddress,
-                                                                          ),
+                                                                      : attachmentsBlockedForChat
+                                                                          ? null
+                                                                          : () =>
+                                                                              _approveAttachment(
+                                                                                message: messageModel,
+                                                                                senderJid: messageModel.senderJid,
+                                                                                stanzaId: messageModel.stanzaID,
+                                                                                metadataId: attachmentId,
+                                                                                isGroupChat: isGroupChat,
+                                                                                isEmailChat: isEmailChat,
+                                                                                senderEmail: state.chat?.emailAddress,
+                                                                              ),
                                                             ),
                                                           );
                                                         }
@@ -5565,6 +6272,13 @@ class _ChatState extends State<Chat> {
                                                           MessageStatus.failed;
                                                       final includeSelectAction =
                                                           !_multiSelectActive;
+                                                      final isPinned =
+                                                          pinnedStanzaIds
+                                                              .contains(
+                                                        messageModel.stanzaID,
+                                                      );
+                                                      final pinActionCount =
+                                                          canTogglePins ? 1 : 0;
                                                       List<GlobalKey>?
                                                           actionButtonKeys;
                                                       if (isSingleSelection) {
@@ -5572,6 +6286,7 @@ class _ChatState extends State<Chat> {
                                                             6;
                                                         final actionCount =
                                                             baseActionCount +
+                                                                pinActionCount +
                                                                 (canResend
                                                                     ? 1
                                                                     : 0) +
@@ -5665,6 +6380,21 @@ class _ChatState extends State<Chat> {
                                                                   ),
                                                                 );
                                                       }
+                                                      VoidCallback? onPinToggle;
+                                                      if (canTogglePins) {
+                                                        onPinToggle = () =>
+                                                            context
+                                                                .read<
+                                                                    ChatBloc>()
+                                                                .add(
+                                                                  ChatMessagePinRequested(
+                                                                    message:
+                                                                        messageModel,
+                                                                    pin:
+                                                                        !isPinned,
+                                                                  ),
+                                                                );
+                                                      }
                                                       VoidCallback?
                                                           onRevokeInvite;
                                                       if (isInviteMessage &&
@@ -5692,6 +6422,9 @@ class _ChatState extends State<Chat> {
                                                         onSelect: onSelect,
                                                         onResend: onResend,
                                                         onEdit: onEdit,
+                                                        onPinToggle:
+                                                            onPinToggle,
+                                                        isPinned: isPinned,
                                                         hitRegionKeys:
                                                             actionButtonKeys,
                                                         onRevokeInvite:
@@ -5976,20 +6709,17 @@ class _ChatState extends State<Chat> {
                                                                 message,
                                                                 previous,
                                                               );
-                                                      final fullName = message
-                                                          .user
-                                                          .getFullName()
-                                                          .trim();
-                                                      final displayName = self
-                                                          ? l10n.chatSenderYou
-                                                          : (fullName.isEmpty
-                                                              ? message.user.id
-                                                              : fullName);
                                                       Widget bubbleWithSlack =
                                                           bubbleStack;
-                                                      if (shouldShowSenderLabel &&
-                                                          displayName
-                                                              .isNotEmpty) {
+                                                      if (shouldShowSenderLabel) {
+                                                        final double
+                                                            senderLabelLeftInset =
+                                                            !self &&
+                                                                    hasAvatarSlot
+                                                                ? _messageAvatarContentInset +
+                                                                    _bubblePadding
+                                                                        .left
+                                                                : _senderLabelNoInset;
                                                         bubbleWithSlack =
                                                             Column(
                                                           mainAxisSize:
@@ -6000,36 +6730,14 @@ class _ChatState extends State<Chat> {
                                                               : CrossAxisAlignment
                                                                   .start,
                                                           children: [
-                                                            Padding(
-                                                              padding:
-                                                                  EdgeInsets
-                                                                      .only(
-                                                                bottom: 6,
-                                                                left: (!self &&
-                                                                        hasAvatarSlot)
-                                                                    ? _messageAvatarContentInset +
-                                                                        _bubblePadding
-                                                                            .left
-                                                                    : 0,
-                                                              ),
-                                                              child: Text(
-                                                                displayName,
-                                                                style: context
-                                                                    .textTheme
-                                                                    .small
-                                                                    .copyWith(
-                                                                  color: colors
-                                                                      .mutedForeground,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
-                                                                textAlign: self
-                                                                    ? TextAlign
-                                                                        .right
-                                                                    : TextAlign
-                                                                        .left,
-                                                              ),
+                                                            _MessageSenderLabel(
+                                                              user:
+                                                                  message.user,
+                                                              isSelf: self,
+                                                              selfLabel: l10n
+                                                                  .chatSenderYou,
+                                                              leftInset:
+                                                                  senderLabelLeftInset,
                                                             ),
                                                             bubbleStack,
                                                           ],
@@ -6385,6 +7093,29 @@ class _ChatState extends State<Chat> {
                                 onClose: _closeChatAttachments,
                                 chat: chatEntity,
                               ),
+                              _ChatPinnedMessagesPanel(
+                                key: ValueKey(
+                                  '$_chatPinnedPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                                ),
+                                chat: chatEntity,
+                                visible: _chatRoute == _ChatRoute.pins,
+                                pinnedMessages: state.pinnedMessages,
+                                pinnedMessagesLoaded:
+                                    state.pinnedMessagesLoaded,
+                                pinnedMessagesHydrating:
+                                    state.pinnedMessagesHydrating,
+                                onClose: _closePinnedMessages,
+                                canTogglePins: canTogglePins,
+                                canShowCalendarTasks: chatCalendarBloc != null,
+                                roomState: state.roomState,
+                                metadataStreamFor: _metadataStreamFor,
+                                metadataInitialFor: _metadataInitialFor,
+                                attachmentsBlocked: attachmentsBlockedForChat,
+                                isOneTimeAttachmentAllowed:
+                                    _isOneTimeAttachmentAllowed,
+                                shouldAllowAttachment: _shouldAllowAttachment,
+                                onApproveAttachment: _approveAttachment,
+                              ),
                               _ChatCalendarPanel(
                                 key: ValueKey(
                                   '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
@@ -6478,14 +7209,74 @@ class _ChatState extends State<Chat> {
     _toggleQuickReactionForMessages(messages, selected);
   }
 
+  bool _shouldPromptEmailForwarding({
+    required chat_models.Chat target,
+    required List<Message> messages,
+  }) {
+    if (!target.supportsEmail) {
+      return false;
+    }
+    return messages.any((message) => message.deltaMsgId != null);
+  }
+
+  Future<EmailForwardingMode?> _resolveForwardingMode({
+    required chat_models.Chat target,
+    required List<Message> messages,
+  }) async {
+    if (!_shouldPromptEmailForwarding(
+      target: target,
+      messages: messages,
+    )) {
+      return EmailForwardingMode.original;
+    }
+    if (!mounted) return null;
+    return _showEmailForwardDialog();
+  }
+
+  Future<EmailForwardingMode?> _showEmailForwardDialog() async {
+    final l10n = context.l10n;
+    return showShadDialog<EmailForwardingMode>(
+      context: context,
+      builder: (dialogContext) => ShadDialog(
+        title: Text(
+          l10n.chatForwardEmailWarningTitle,
+          style: dialogContext.modalHeaderTextStyle,
+        ),
+        actions: [
+          ShadButton.ghost(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.commonCancel),
+          ).withTapBounce(),
+          ShadButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(EmailForwardingMode.safe),
+            child: Text(l10n.chatForwardEmailOptionSafe),
+          ).withTapBounce(),
+          ShadButton.destructive(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(EmailForwardingMode.original),
+            child: Text(l10n.chatForwardEmailOptionOriginal),
+          ).withTapBounce(),
+        ],
+        child: Text(l10n.chatForwardEmailWarningMessage),
+      ),
+    );
+  }
+
   Future<void> _handleForward(Message message) async {
     _clearAllSelections();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
+    final forwardingMode = await _resolveForwardingMode(
+      target: target,
+      messages: [message],
+    );
+    if (!mounted || forwardingMode == null) return;
     context.read<ChatBloc>().add(
           ChatMessageForwardRequested(
             message: message,
             target: target,
+            forwardingMode: forwardingMode,
           ),
         );
   }
@@ -6745,11 +7536,17 @@ class _ChatState extends State<Chat> {
     final candidates = forwardable.toList();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
+    final forwardingMode = await _resolveForwardingMode(
+      target: target,
+      messages: candidates,
+    );
+    if (!mounted || forwardingMode == null) return;
     for (final message in candidates) {
       context.read<ChatBloc>().add(
             ChatMessageForwardRequested(
               message: message,
               target: target,
+              forwardingMode: forwardingMode,
             ),
           );
     }
@@ -6833,6 +7630,17 @@ class _ChatState extends State<Chat> {
     });
   }
 
+  void _openPinnedMessages() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.pins;
+      _settingsPanelExpanded = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
+  }
+
   void _closeChatCalendar() {
     if (!mounted) return;
     context.read<ChatsCubit>().setChatCalendarOpen(open: false);
@@ -6842,6 +7650,13 @@ class _ChatState extends State<Chat> {
   }
 
   void _closeChatAttachments() {
+    if (!mounted) return;
+    setState(() {
+      _chatRoute = _ChatRoute.main;
+    });
+  }
+
+  void _closePinnedMessages() {
     if (!mounted) return;
     setState(() {
       _chatRoute = _ChatRoute.main;
@@ -7011,6 +7826,440 @@ class _ChatState extends State<Chat> {
       }
     }
     return null;
+  }
+}
+
+class _ChatPinnedMessagesPanel extends StatefulWidget {
+  const _ChatPinnedMessagesPanel({
+    super.key,
+    required this.chat,
+    required this.visible,
+    required this.pinnedMessages,
+    required this.pinnedMessagesLoaded,
+    required this.pinnedMessagesHydrating,
+    required this.onClose,
+    required this.canTogglePins,
+    required this.canShowCalendarTasks,
+    required this.roomState,
+    required this.metadataStreamFor,
+    required this.metadataInitialFor,
+    required this.attachmentsBlocked,
+    required this.isOneTimeAttachmentAllowed,
+    required this.shouldAllowAttachment,
+    required this.onApproveAttachment,
+  });
+
+  final chat_models.Chat? chat;
+  final bool visible;
+  final List<PinnedMessageItem> pinnedMessages;
+  final bool pinnedMessagesLoaded;
+  final bool pinnedMessagesHydrating;
+  final VoidCallback onClose;
+  final bool canTogglePins;
+  final bool canShowCalendarTasks;
+  final RoomState? roomState;
+  final Stream<FileMetadataData?> Function(String) metadataStreamFor;
+  final FileMetadataData? Function(String) metadataInitialFor;
+  final bool attachmentsBlocked;
+  final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
+  final bool Function({
+    required String senderJid,
+    required bool isSelf,
+    required Set<String> knownContacts,
+    required chat_models.Chat? chat,
+  }) shouldAllowAttachment;
+  final Future<void> Function({
+    required Message message,
+    required String senderJid,
+    required String stanzaId,
+    required String metadataId,
+    required bool isGroupChat,
+    required bool isEmailChat,
+    String? senderEmail,
+  }) onApproveAttachment;
+
+  @override
+  State<_ChatPinnedMessagesPanel> createState() =>
+      _ChatPinnedMessagesPanelState();
+}
+
+class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
+  @override
+  void initState() {
+    super.initState();
+    _requestPinnedHydration();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatPinnedMessagesPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final bool becameVisible = !oldWidget.visible && widget.visible;
+    final bool pinnedChanged =
+        oldWidget.pinnedMessages != widget.pinnedMessages;
+    if (becameVisible || (widget.visible && pinnedChanged)) {
+      _requestPinnedHydration();
+    }
+  }
+
+  void _requestPinnedHydration() {
+    if (!widget.visible) {
+      return;
+    }
+    final hasMissingMessage = widget.pinnedMessages.any(
+      (item) => item.message == null && item.messageStanzaId.trim().isNotEmpty,
+    );
+    if (!hasMissingMessage) {
+      return;
+    }
+    context.read<ChatBloc>().add(const ChatPinnedMessagesOpened());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChat = widget.chat;
+    if (resolvedChat == null) {
+      return const SizedBox.shrink();
+    }
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    final showLoading = widget.visible && !widget.pinnedMessagesLoaded;
+    final Widget body = showLoading
+        ? Center(
+            child: AxiProgressIndicator(
+              dimension: _pinnedListLoadingIndicatorSize,
+              color: colors.mutedForeground,
+            ),
+          )
+        : widget.pinnedMessages.isEmpty
+            ? Center(
+                child: Text(
+                  l10n.chatPinnedEmptyState,
+                  textAlign: TextAlign.center,
+                  style: context.textTheme.muted.copyWith(
+                    color: colors.mutedForeground,
+                  ),
+                ),
+              )
+            : ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: widget.pinnedMessages.length,
+                separatorBuilder: (_, __) => const AxiListDivider(),
+                itemBuilder: (context, index) {
+                  final item = widget.pinnedMessages[index];
+                  return _PinnedMessageTile(
+                    item: item,
+                    chat: resolvedChat,
+                    roomState: widget.roomState,
+                    canTogglePins: widget.canTogglePins,
+                    canShowCalendarTasks: widget.canShowCalendarTasks,
+                    isHydrating: widget.pinnedMessagesHydrating,
+                    metadataStreamFor: widget.metadataStreamFor,
+                    metadataInitialFor: widget.metadataInitialFor,
+                    attachmentsBlocked: widget.attachmentsBlocked,
+                    isOneTimeAttachmentAllowed:
+                        widget.isOneTimeAttachmentAllowed,
+                    shouldAllowAttachment: widget.shouldAllowAttachment,
+                    onApproveAttachment: widget.onApproveAttachment,
+                  );
+                },
+              );
+    return AxiSheetScaffold(
+      header: AxiSheetHeader(
+        title: Text(l10n.chatPinnedMessagesTitle),
+        subtitle: Text(resolvedChat.displayName),
+        onClose: widget.onClose,
+      ),
+      body: body,
+    );
+  }
+}
+
+class _PinnedMessageTile extends StatelessWidget {
+  const _PinnedMessageTile({
+    required this.item,
+    required this.chat,
+    required this.roomState,
+    required this.canTogglePins,
+    required this.canShowCalendarTasks,
+    required this.isHydrating,
+    required this.metadataStreamFor,
+    required this.metadataInitialFor,
+    required this.attachmentsBlocked,
+    required this.isOneTimeAttachmentAllowed,
+    required this.shouldAllowAttachment,
+    required this.onApproveAttachment,
+  });
+
+  final PinnedMessageItem item;
+  final chat_models.Chat chat;
+  final RoomState? roomState;
+  final bool canTogglePins;
+  final bool canShowCalendarTasks;
+  final bool isHydrating;
+  final Stream<FileMetadataData?> Function(String) metadataStreamFor;
+  final FileMetadataData? Function(String) metadataInitialFor;
+  final bool attachmentsBlocked;
+  final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
+  final bool Function({
+    required String senderJid,
+    required bool isSelf,
+    required Set<String> knownContacts,
+    required chat_models.Chat? chat,
+  }) shouldAllowAttachment;
+  final Future<void> Function({
+    required Message message,
+    required String senderJid,
+    required String stanzaId,
+    required String metadataId,
+    required bool isGroupChat,
+    required bool isEmailChat,
+    String? senderEmail,
+  }) onApproveAttachment;
+
+  Message? _resolveMessageForPin() {
+    final message = item.message;
+    if (message != null) {
+      return message;
+    }
+    final chatJid = item.chatJid.trim();
+    final stanzaId = item.messageStanzaId.trim();
+    if (chatJid.isEmpty || stanzaId.isEmpty) {
+      return null;
+    }
+    return Message(
+      stanzaID: stanzaId,
+      senderJid: chatJid,
+      chatJid: chatJid,
+      timestamp: item.pinnedAt,
+    );
+  }
+
+  bool _isSelfMessage({
+    required Message message,
+    required String? accountJid,
+  }) {
+    if (chat.type == ChatType.groupChat) {
+      final myOccupantId = roomState?.myOccupantId;
+      final occupantId = message.occupantID;
+      if (myOccupantId == null || occupantId == null) {
+        return false;
+      }
+      return myOccupantId == occupantId;
+    }
+    final resolvedAccountJid = accountJid?.trim();
+    if (resolvedAccountJid == null || resolvedAccountJid.isEmpty) {
+      return false;
+    }
+    try {
+      return message.authorized(mox.JID.fromString(resolvedAccountJid));
+    } on Exception {
+      return false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    final message = item.message;
+    final messageText = message?.plainText.trim();
+    final hasMessageText = messageText?.isNotEmpty == true;
+    final CalendarTask? calendarTask = message?.calendarTaskIcs;
+    final bool hasCalendarTask = calendarTask != null;
+    final String? taskShareText = calendarTask?.toShareText().trim();
+    final bool hideTaskText = taskShareText != null &&
+        taskShareText.isNotEmpty &&
+        taskShareText == messageText;
+    final CalendarFragment? calendarFragment = message?.calendarFragment;
+    final CalendarCriticalPathFragment? criticalPathFragment =
+        calendarFragment?.maybeMap(
+      criticalPath: (value) => value,
+      orElse: () => null,
+    );
+    final bool hasCriticalPath = criticalPathFragment != null;
+    final String? criticalPathShareText = hasCriticalPath
+        ? const CalendarFragmentFormatter().describe(calendarFragment!).trim()
+        : null;
+    final bool hideCriticalPathText = criticalPathShareText != null &&
+        criticalPathShareText.isNotEmpty &&
+        criticalPathShareText == messageText;
+    final attachmentIds = item.attachmentMetadataIds;
+    final hasAttachments = message != null && attachmentIds.isNotEmpty;
+    final showMessageText =
+        hasMessageText && !hideTaskText && !hideCriticalPathText;
+    final showLoading = message == null && isHydrating;
+    final showMissing = !showLoading &&
+        !showMessageText &&
+        !hasAttachments &&
+        !hasCalendarTask &&
+        !hasCriticalPath;
+    final messageStyle = Theme.of(context)
+        .textTheme
+        .bodyMedium
+        ?.copyWith(color: colors.foreground);
+    final messageWidget = showLoading
+        ? Align(
+            alignment: Alignment.centerLeft,
+            child: AxiProgressIndicator(
+              dimension: _messageActionIconSize,
+              color: colors.mutedForeground,
+            ),
+          )
+        : showMessageText
+            ? Text(
+                messageText ?? _emptyText,
+                style: messageStyle,
+              )
+            : showMissing
+                ? Text(
+                    l10n.chatPinnedMissingMessage,
+                    style: context.textTheme.muted.copyWith(
+                      color: colors.mutedForeground,
+                    ),
+                  )
+                : null;
+    final messageForPin = _resolveMessageForPin();
+    final unpinButton = canTogglePins && messageForPin != null
+        ? ShadButton.ghost(
+            size: ShadButtonSize.sm,
+            onPressed: () => context.read<ChatBloc>().add(
+                  ChatMessagePinRequested(
+                    message: messageForPin,
+                    pin: false,
+                  ),
+                ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  LucideIcons.pinOff,
+                  size: _messageActionIconSize,
+                  color: colors.mutedForeground,
+                ),
+                const SizedBox(width: _attachmentPreviewSpacing),
+                Text(
+                  l10n.chatUnpinMessage,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ).withTapBounce()
+        : null;
+    final accountJid = context.read<XmppService>().myJid?.toString();
+    final isSelf = message == null
+        ? false
+        : _isSelfMessage(
+            message: message,
+            accountJid: accountJid,
+          );
+    final contentChildren = <Widget>[
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: messageWidget ?? const SizedBox.shrink()),
+          if (unpinButton != null) unpinButton,
+        ],
+      ),
+    ];
+    if (hasCalendarTask) {
+      final bool taskReadOnly =
+          message?.calendarTaskIcsReadOnly ?? _calendarTaskIcsReadOnlyFallback;
+      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      contentChildren.add(
+        canShowCalendarTasks
+            ? ChatCalendarTaskCard(
+                task: calendarTask,
+                readOnly: taskReadOnly,
+                requireImportConfirmation: !isSelf,
+                footerDetails: _emptyInlineSpans,
+              )
+            : CalendarFragmentCard(
+                fragment: CalendarFragment.task(task: calendarTask),
+                footerDetails: _emptyInlineSpans,
+              ),
+      );
+    }
+    final resolvedCriticalPath = criticalPathFragment;
+    if (resolvedCriticalPath != null) {
+      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      contentChildren.add(
+        ChatCalendarCriticalPathCard(
+          path: resolvedCriticalPath.path,
+          tasks: resolvedCriticalPath.tasks,
+          footerDetails: _emptyInlineSpans,
+        ),
+      );
+    }
+    if (hasAttachments) {
+      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      final isGroupChat = chat.type == ChatType.groupChat;
+      final isEmailBacked = chat.isEmailBacked;
+      final bool attachmentsBlockedForPin = attachmentsBlocked;
+      final allowAttachmentByTrust = shouldAllowAttachment(
+        senderJid: message.senderJid,
+        isSelf: isSelf,
+        knownContacts: context.watch<RosterCubit>().contacts,
+        chat: chat,
+      );
+      final allowAttachmentOnce = attachmentsBlockedForPin
+          ? false
+          : isOneTimeAttachmentAllowed(message.stanzaID);
+      final allowAttachment = !attachmentsBlockedForPin &&
+          (allowAttachmentByTrust || allowAttachmentOnce);
+      final autoDownloadSettings =
+          context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
+      final chatAutoDownloadAllowed = chat.attachmentAutoDownload.isAllowed;
+      final autoDownloadAllowed = allowAttachment && chatAutoDownloadAllowed;
+      final emailService = RepositoryProvider.of<EmailService?>(context);
+      final emailDownloadDelegate = isEmailBacked && emailService != null
+          ? AttachmentDownloadDelegate(
+              () => emailService.downloadFullMessage(message),
+            )
+          : null;
+      final autoDownloadUserInitiated = allowAttachmentOnce;
+      for (var index = 0; index < attachmentIds.length; index += 1) {
+        final attachmentId = attachmentIds[index];
+        if (index > 0) {
+          contentChildren.add(
+            const SizedBox(height: _attachmentPreviewSpacing),
+          );
+        }
+        contentChildren.add(
+          ChatAttachmentPreview(
+            stanzaId: message.stanzaID,
+            metadataStream: metadataStreamFor(attachmentId),
+            initialMetadata: metadataInitialFor(attachmentId),
+            allowed: allowAttachment,
+            autoDownloadSettings: autoDownloadSettings,
+            autoDownloadAllowed: autoDownloadAllowed,
+            autoDownloadUserInitiated: autoDownloadUserInitiated,
+            downloadDelegate: emailDownloadDelegate,
+            onAllowPressed: allowAttachment
+                ? null
+                : attachmentsBlockedForPin
+                    ? null
+                    : () => onApproveAttachment(
+                          message: message,
+                          senderJid: message.senderJid,
+                          stanzaId: message.stanzaID,
+                          metadataId: attachmentId,
+                          isGroupChat: isGroupChat,
+                          isEmailChat: isEmailBacked,
+                          senderEmail: chat.emailAddress,
+                        ),
+          ),
+        );
+      }
+    }
+    return ListItemPadding(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: contentChildren,
+      ),
+    );
   }
 }
 
@@ -8346,12 +9595,11 @@ class _SubjectTextField extends StatelessWidget {
       child: Semantics(
         label: l10n.chatSubjectSemantics,
         textField: true,
-        child: TextField(
+        child: AxiTextField(
           controller: controller,
           focusNode: focusNode,
           textInputAction: TextInputAction.next,
           textCapitalization: TextCapitalization.sentences,
-          cursorColor: colors.primary,
           onSubmitted: (_) => onSubmitted(),
           onEditingComplete: onSubmitted,
           style: subjectStyle,
@@ -8755,6 +10003,8 @@ class _MessageActionBar extends StatelessWidget {
     this.onSelect,
     this.onResend,
     this.onEdit,
+    this.onPinToggle,
+    required this.isPinned,
     this.hitRegionKeys,
     this.onRevokeInvite,
   });
@@ -8768,6 +10018,8 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback? onSelect;
   final VoidCallback? onResend;
   final VoidCallback? onEdit;
+  final VoidCallback? onPinToggle;
+  final bool isPinned;
   final List<GlobalKey>? hitRegionKeys;
   final VoidCallback? onRevokeInvite;
 
@@ -8786,7 +10038,7 @@ class _MessageActionBar extends StatelessWidget {
     final actions = <Widget>[
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.reply, size: 16),
+        icon: const Icon(LucideIcons.reply, size: _messageActionIconSize),
         label: l10n.chatActionReply,
         onPressed: onReply,
       ),
@@ -8794,7 +10046,7 @@ class _MessageActionBar extends StatelessWidget {
         key: nextKey(),
         icon: Transform.scale(
           scaleX: -1,
-          child: const Icon(LucideIcons.reply, size: 16),
+          child: const Icon(LucideIcons.reply, size: _messageActionIconSize),
         ),
         label: l10n.chatActionForward,
         onPressed: onForward,
@@ -8802,45 +10054,57 @@ class _MessageActionBar extends StatelessWidget {
       if (onResend != null)
         ContextActionButton(
           key: nextKey(),
-          icon: const Icon(LucideIcons.repeat, size: 16),
+          icon: const Icon(LucideIcons.repeat, size: _messageActionIconSize),
           label: l10n.chatActionResend,
           onPressed: onResend!,
         ),
       if (onEdit != null)
         ContextActionButton(
           key: nextKey(),
-          icon: const Icon(LucideIcons.pencilLine, size: 16),
+          icon:
+              const Icon(LucideIcons.pencilLine, size: _messageActionIconSize),
           label: l10n.chatActionEdit,
           onPressed: onEdit!,
         ),
       if (onRevokeInvite != null)
         ContextActionButton(
           key: nextKey(),
-          icon: const Icon(LucideIcons.ban, size: 16),
+          icon: const Icon(LucideIcons.ban, size: _messageActionIconSize),
           label: l10n.chatActionRevoke,
           onPressed: onRevokeInvite!,
         ),
+      if (onPinToggle != null)
+        ContextActionButton(
+          key: nextKey(),
+          icon: Icon(
+            isPinned ? LucideIcons.pinOff : LucideIcons.pin,
+            size: _messageActionIconSize,
+          ),
+          label: isPinned ? l10n.chatUnpinMessage : l10n.chatPinMessage,
+          onPressed: onPinToggle!,
+        ),
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.copy, size: 16),
+        icon: const Icon(LucideIcons.copy, size: _messageActionIconSize),
         label: l10n.chatActionCopy,
         onPressed: onCopy,
       ),
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.share2, size: 16),
+        icon: const Icon(LucideIcons.share2, size: _messageActionIconSize),
         label: l10n.chatActionShare,
         onPressed: onShare,
       ),
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.calendarPlus, size: 16),
+        icon:
+            const Icon(LucideIcons.calendarPlus, size: _messageActionIconSize),
         label: l10n.chatActionAddToCalendar,
         onPressed: onAddToCalendar,
       ),
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.info, size: 16),
+        icon: const Icon(LucideIcons.info, size: _messageActionIconSize),
         label: l10n.chatActionDetails,
         onPressed: onDetails,
       ),
@@ -8849,7 +10113,8 @@ class _MessageActionBar extends StatelessWidget {
       actions.add(
         ContextActionButton(
           key: nextKey(),
-          icon: const Icon(LucideIcons.squareCheck, size: 16),
+          icon:
+              const Icon(LucideIcons.squareCheck, size: _messageActionIconSize),
           label: l10n.chatActionSelect,
           onPressed: onSelect,
         ),
@@ -9203,7 +10468,7 @@ class _CalendarTextSelectionDialogState
                         ),
                       ),
                       const SizedBox(height: 12),
-                      ShadInput(
+                      AxiTextInput(
                         controller: _controller,
                         focusNode: _focusNode,
                         minLines: 4,
@@ -9359,19 +10624,26 @@ class _ChatSettingsButtons extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: _chatSettingsSectionSpacing),
+        _ChatNotificationPreviewControl(
+          setting: chat.notificationPreviewSetting,
+          onChanged: (setting) => context.read<ChatBloc>().add(
+                ChatNotificationPreviewSettingChanged(setting),
+              ),
+        ),
         if (showRosterAttachmentToggle) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: _chatSettingsSectionSpacing),
           _ChatAttachmentAutoDownloadToggle(
             jid: chat.jid,
             displayName: chat.displayName,
           ),
         ],
         if (showChatAttachmentToggle) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: _chatSettingsSectionSpacing),
           _ChatAttachmentTrustToggle(chat: chat),
         ],
         if (chat.supportsEmail) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: _chatSettingsSectionSpacing),
           ShadSwitch(
             label: Text(l10n.chatSignatureToggleLabel),
             sublabel: Text(
@@ -9403,6 +10675,66 @@ class _ChatAttachmentAutoDownloadToggle extends StatefulWidget {
   @override
   State<_ChatAttachmentAutoDownloadToggle> createState() =>
       _ChatAttachmentAutoDownloadToggleState();
+}
+
+class _ChatNotificationPreviewControl extends StatelessWidget {
+  const _ChatNotificationPreviewControl({
+    required this.setting,
+    required this.onChanged,
+  });
+
+  final NotificationPreviewSetting setting;
+  final ValueChanged<NotificationPreviewSetting> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.settingsNotificationPreviews,
+          style: context.textTheme.muted,
+        ),
+        const SizedBox(height: _chatSettingsFieldSpacing),
+        SizedBox(
+          width: _chatSettingsSelectMinWidth,
+          child: ShadSelect<NotificationPreviewSetting>(
+            initialValue: setting,
+            onChanged: (value) {
+              if (value == null) return;
+              onChanged(value);
+            },
+            options: NotificationPreviewSetting.values
+                .map(
+                  (option) => ShadOption<NotificationPreviewSetting>(
+                    value: option,
+                    child: Text(
+                      _notificationPreviewSettingLabel(option, l10n),
+                    ),
+                  ),
+                )
+                .toList(),
+            selectedOptionBuilder: (_, value) => Text(
+              _notificationPreviewSettingLabel(value, l10n),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _notificationPreviewSettingLabel(
+  NotificationPreviewSetting setting,
+  AppLocalizations l10n,
+) {
+  return switch (setting) {
+    NotificationPreviewSetting.inherit =>
+      l10n.chatNotificationPreviewOptionInherit,
+    NotificationPreviewSetting.show => l10n.chatNotificationPreviewOptionShow,
+    NotificationPreviewSetting.hide => l10n.chatNotificationPreviewOptionHide,
+  };
 }
 
 class _ChatAttachmentAutoDownloadToggleState
@@ -10382,27 +11714,18 @@ class _GuestMessageBubble extends StatelessWidget {
       ),
     );
     final showSenderLabel = !chainedPrev;
-    final fullName = message.user.getFullName().trim();
-    final displayName = isSelf
-        ? context.l10n.chatSenderYou
-        : (fullName.isEmpty ? message.user.id : fullName);
     Widget bubbleWithLabel = bubble;
-    if (showSenderLabel && displayName.isNotEmpty) {
+    if (showSenderLabel) {
       bubbleWithLabel = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment:
             isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              displayName,
-              style: context.textTheme.small.copyWith(
-                color: colors.mutedForeground,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: isSelf ? TextAlign.right : TextAlign.left,
-            ),
+          _MessageSenderLabel(
+            user: message.user,
+            isSelf: isSelf,
+            selfLabel: context.l10n.chatSenderYou,
+            leftInset: _senderLabelNoInset,
           ),
           bubble,
         ],
@@ -10422,6 +11745,114 @@ class _GuestMessageBubble extends StatelessWidget {
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: bubbleWithLabel,
         ),
+      ),
+    );
+  }
+}
+
+class _MessageSenderLabel extends StatelessWidget {
+  const _MessageSenderLabel({
+    required this.user,
+    required this.isSelf,
+    required this.selfLabel,
+    required this.leftInset,
+  });
+
+  final ChatUser user;
+  final bool isSelf;
+  final String selfLabel;
+  final double leftInset;
+
+  @override
+  Widget build(BuildContext context) {
+    final String trimmedSelfLabel = selfLabel.trim();
+    final UnicodeSanitizedText displayName = sanitizeUnicodeControls(
+      user.getFullName().trim(),
+    );
+    final UnicodeSanitizedText address = sanitizeUnicodeControls(
+      user.id.trim(),
+    );
+    final String safeDisplayName = displayName.value.trim();
+    final String safeAddress = address.value.trim();
+    if (isSelf) {
+      if (trimmedSelfLabel.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return _SenderLabelBlock(
+        primaryLabel: trimmedSelfLabel,
+        secondaryLabel: null,
+        isSelf: isSelf,
+        leftInset: leftInset,
+      );
+    }
+    if (safeDisplayName.isEmpty && safeAddress.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final String primaryLabel =
+        safeDisplayName.isNotEmpty ? safeDisplayName : safeAddress;
+    final String normalizedPrimary = primaryLabel.toLowerCase();
+    final String normalizedAddress = safeAddress.toLowerCase();
+    final bool showSecondary =
+        safeAddress.isNotEmpty && normalizedPrimary != normalizedAddress;
+    final String? secondaryLabel =
+        showSecondary ? '$_senderLabelAddressPrefix$safeAddress' : null;
+    return _SenderLabelBlock(
+      primaryLabel: primaryLabel,
+      secondaryLabel: secondaryLabel,
+      isSelf: isSelf,
+      leftInset: leftInset,
+    );
+  }
+}
+
+class _SenderLabelBlock extends StatelessWidget {
+  const _SenderLabelBlock({
+    required this.primaryLabel,
+    required this.secondaryLabel,
+    required this.isSelf,
+    required this.leftInset,
+  });
+
+  final String primaryLabel;
+  final String? secondaryLabel;
+  final bool isSelf;
+  final double leftInset;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textAlign = isSelf ? TextAlign.right : TextAlign.left;
+    final crossAxis =
+        isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final primaryStyle = context.textTheme.small.copyWith(
+      color: colors.mutedForeground,
+      fontWeight: FontWeight.w600,
+    );
+    final secondaryStyle = context.textTheme.muted.copyWith(
+      color: colors.mutedForeground,
+    );
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: _senderLabelBottomSpacing,
+        left: leftInset,
+      ),
+      child: Column(
+        spacing: _senderLabelSecondarySpacing,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: crossAxis,
+        children: [
+          Text(
+            primaryLabel,
+            style: primaryStyle,
+            textAlign: textAlign,
+          ),
+          if (secondaryLabel != null)
+            Text(
+              secondaryLabel!,
+              style: secondaryStyle,
+              textAlign: textAlign,
+            ),
+        ],
       ),
     );
   }

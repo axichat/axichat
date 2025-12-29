@@ -1,4 +1,6 @@
 const String syncLegacySourceId = 'legacy';
+const int syncAddressMaxBytes = 512;
+const int syncSourceIdMaxBytes = 64;
 
 enum SyncOrigin {
   local,
