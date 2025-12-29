@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -49,6 +50,7 @@ import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
@@ -86,7 +88,6 @@ import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mime/mime.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -118,6 +119,7 @@ const double _senderLabelNoInset = 0.0;
 const String _senderLabelAddressPrefix = 'JID: ';
 const _reactionBubbleInset = 12.0;
 const _reactionCutoutDepth = 14.0;
+const List<BlocklistEntry> _emptyBlocklistEntries = <BlocklistEntry>[];
 const _reactionCutoutMinThickness = 28.0;
 const _reactionCutoutRadius = 16.0;
 const _reactionStripOffset = Offset(0, -2);
@@ -1878,6 +1880,54 @@ class _ChatState extends State<Chat> {
     return false;
   }
 
+  List<BlocklistEntry> _resolveBlocklistEntries() {
+    final BlocklistCubit? blocklistCubit = context.watch<BlocklistCubit?>();
+    final BlocklistState? blocklistState = blocklistCubit?.state;
+    final List<BlocklistEntry>? cachedEntries =
+        blocklistState is BlocklistAvailable
+            ? blocklistState.items
+            : blocklistCubit?[blocklistItemsCacheKey] as List<BlocklistEntry>?;
+    return cachedEntries ?? _emptyBlocklistEntries;
+  }
+
+  bool _isChatBlocked({
+    required chat_models.Chat chat,
+    required List<BlocklistEntry> entries,
+  }) {
+    if (chat.type != ChatType.chat) {
+      return false;
+    }
+    if (entries.isEmpty) {
+      return false;
+    }
+    final transport = chat.defaultTransport;
+    if (transport.isEmail) {
+      final String? address = chat.emailAddress?.trim();
+      final String candidate =
+          address?.isNotEmpty == true ? address! : chat.remoteJid.trim();
+      if (candidate.isEmpty) {
+        return false;
+      }
+      final String normalizedCandidate = candidate.toLowerCase();
+      return entries.any(
+        (entry) =>
+            entry.transport.isEmail &&
+            entry.address.trim().toLowerCase() == normalizedCandidate,
+      );
+    }
+    final String? chatBareJid = _normalizeBareJid(chat.remoteJid);
+    if (chatBareJid == null || chatBareJid.isEmpty) {
+      return false;
+    }
+    return entries.any((entry) {
+      if (!entry.transport.isXmpp) {
+        return false;
+      }
+      final String? entryBareJid = _normalizeBareJid(entry.address);
+      return entryBareJid != null && entryBareJid == chatBareJid;
+    });
+  }
+
   bool _shouldAllowAttachment({
     required String senderJid,
     required bool isSelf,
@@ -2317,13 +2367,18 @@ class _ChatState extends State<Chat> {
           hasInvalidPath = true;
           continue;
         }
-        final mimeType = lookupMimeType(file.name) ?? lookupMimeType(path);
+        final String fileName =
+            file.name.isNotEmpty ? file.name : path.split('/').last;
+        final String? resolvedMimeType = await resolveMimeTypeFromPath(
+          path: path,
+          fileName: fileName,
+        );
         attachments.add(
           EmailAttachment(
             path: path,
-            fileName: file.name.isNotEmpty ? file.name : path.split('/').last,
+            fileName: fileName,
             sizeBytes: file.size > 0 ? file.size : 0,
-            mimeType: mimeType,
+            mimeType: resolvedMimeType,
           ),
         );
       }
@@ -2415,6 +2470,16 @@ class _ChatState extends State<Chat> {
     final file = File(attachment.path);
     if (!await file.exists()) {
       _showSnackbar(l10n.chatAttachmentInaccessible);
+      return;
+    }
+    final FileTypeReport report = await inspectFileType(
+      file: file,
+      declaredMimeType: attachment.mimeType,
+      fileName: attachment.fileName,
+    );
+    if (!mounted) return;
+    if (!report.isDetectedImage) {
+      _showSnackbar(l10n.chatAttachmentUnavailable);
       return;
     }
     final intrinsicSize = await _resolveAttachmentSize(attachment);
@@ -3239,6 +3304,16 @@ class _ChatState extends State<Chat> {
                 );
                 final emailSelfJid = emailService?.selfSenderJid;
                 final chatEntity = state.chat;
+                final List<BlocklistEntry> blocklistEntries =
+                    _resolveBlocklistEntries();
+                final bool isChatBlocked = chatEntity == null
+                    ? false
+                    : _isChatBlocked(
+                        chat: chatEntity,
+                        entries: blocklistEntries,
+                      );
+                final bool attachmentsBlockedForChat =
+                    isChatBlocked || (chatEntity?.spam ?? false);
                 final jid = chatEntity?.jid;
                 final isDefaultEmail =
                     chatEntity?.defaultTransport.isEmail ?? false;
@@ -4969,6 +5044,8 @@ class _ChatState extends State<Chat> {
                                                                 .links,
                                                             onLinkTap:
                                                                 _handleLinkTap,
+                                                            onLinkLongPress:
+                                                                _handleLinkTap,
                                                           ),
                                                         ]);
                                                       } else if (isInviteMessage ||
@@ -4990,6 +5067,8 @@ class _ChatState extends State<Chat> {
                                                             ),
                                                             details: [time],
                                                             onLinkTap:
+                                                                _handleLinkTap,
+                                                            onLinkLongPress:
                                                                 _handleLinkTap,
                                                           ),
                                                         );
@@ -5467,6 +5546,8 @@ class _ChatState extends State<Chat> {
                                                                   ],
                                                                   onLinkTap:
                                                                       _handleLinkTap,
+                                                                  onLinkLongPress:
+                                                                      _handleLinkTap,
                                                                 );
                                                               },
                                                             ),
@@ -5615,6 +5696,8 @@ class _ChatState extends State<Chat> {
                                                                   .links,
                                                               onLinkTap:
                                                                   _handleLinkTap,
+                                                              onLinkLongPress:
+                                                                  _handleLinkTap,
                                                             ),
                                                           );
                                                         }
@@ -5663,12 +5746,16 @@ class _ChatState extends State<Chat> {
                                                           chat: state.chat,
                                                         );
                                                         final allowAttachmentOnce =
-                                                            _isOneTimeAttachmentAllowed(
-                                                                messageModel
-                                                                    .stanzaID);
+                                                            attachmentsBlockedForChat
+                                                                ? false
+                                                                : _isOneTimeAttachmentAllowed(
+                                                                    messageModel
+                                                                        .stanzaID,
+                                                                  );
                                                         final allowAttachment =
-                                                            allowAttachmentByTrust ||
-                                                                allowAttachmentOnce;
+                                                            !attachmentsBlockedForChat &&
+                                                                (allowAttachmentByTrust ||
+                                                                    allowAttachmentOnce);
                                                         final autoDownloadSettings = context
                                                             .watch<
                                                                 SettingsCubit>()
@@ -5740,23 +5827,18 @@ class _ChatState extends State<Chat> {
                                                               onAllowPressed:
                                                                   allowAttachment
                                                                       ? null
-                                                                      : () =>
-                                                                          _approveAttachment(
-                                                                            message:
-                                                                                messageModel,
-                                                                            senderJid:
-                                                                                messageModel.senderJid,
-                                                                            stanzaId:
-                                                                                messageModel.stanzaID,
-                                                                            metadataId:
-                                                                                attachmentId,
-                                                                            isGroupChat:
-                                                                                isGroupChat,
-                                                                            isEmailChat:
-                                                                                isEmailChat,
-                                                                            senderEmail:
-                                                                                state.chat?.emailAddress,
-                                                                          ),
+                                                                      : attachmentsBlockedForChat
+                                                                          ? null
+                                                                          : () =>
+                                                                              _approveAttachment(
+                                                                                message: messageModel,
+                                                                                senderJid: messageModel.senderJid,
+                                                                                stanzaId: messageModel.stanzaID,
+                                                                                metadataId: attachmentId,
+                                                                                isGroupChat: isGroupChat,
+                                                                                isEmailChat: isEmailChat,
+                                                                                senderEmail: state.chat?.emailAddress,
+                                                                              ),
                                                             ),
                                                           );
                                                         }
@@ -7025,6 +7107,7 @@ class _ChatState extends State<Chat> {
                                 roomState: state.roomState,
                                 metadataStreamFor: _metadataStreamFor,
                                 metadataInitialFor: _metadataInitialFor,
+                                attachmentsBlocked: attachmentsBlockedForChat,
                                 isOneTimeAttachmentAllowed:
                                     _isOneTimeAttachmentAllowed,
                                 shouldAllowAttachment: _shouldAllowAttachment,
@@ -7757,6 +7840,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.roomState,
     required this.metadataStreamFor,
     required this.metadataInitialFor,
+    required this.attachmentsBlocked,
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
     required this.onApproveAttachment,
@@ -7773,6 +7857,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final RoomState? roomState;
   final Stream<FileMetadataData?> Function(String) metadataStreamFor;
   final FileMetadataData? Function(String) metadataInitialFor;
+  final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
   final bool Function({
     required String senderJid,
@@ -7867,6 +7952,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                     isHydrating: widget.pinnedMessagesHydrating,
                     metadataStreamFor: widget.metadataStreamFor,
                     metadataInitialFor: widget.metadataInitialFor,
+                    attachmentsBlocked: widget.attachmentsBlocked,
                     isOneTimeAttachmentAllowed:
                         widget.isOneTimeAttachmentAllowed,
                     shouldAllowAttachment: widget.shouldAllowAttachment,
@@ -7895,6 +7981,7 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.isHydrating,
     required this.metadataStreamFor,
     required this.metadataInitialFor,
+    required this.attachmentsBlocked,
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
     required this.onApproveAttachment,
@@ -7908,6 +7995,7 @@ class _PinnedMessageTile extends StatelessWidget {
   final bool isHydrating;
   final Stream<FileMetadataData?> Function(String) metadataStreamFor;
   final FileMetadataData? Function(String) metadataInitialFor;
+  final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
   final bool Function({
     required String senderJid,
@@ -8106,14 +8194,18 @@ class _PinnedMessageTile extends StatelessWidget {
       contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
       final isGroupChat = chat.type == ChatType.groupChat;
       final isEmailBacked = chat.isEmailBacked;
+      final bool attachmentsBlockedForPin = attachmentsBlocked;
       final allowAttachmentByTrust = shouldAllowAttachment(
         senderJid: message.senderJid,
         isSelf: isSelf,
         knownContacts: context.watch<RosterCubit>().contacts,
         chat: chat,
       );
-      final allowAttachmentOnce = isOneTimeAttachmentAllowed(message.stanzaID);
-      final allowAttachment = allowAttachmentByTrust || allowAttachmentOnce;
+      final allowAttachmentOnce = attachmentsBlockedForPin
+          ? false
+          : isOneTimeAttachmentAllowed(message.stanzaID);
+      final allowAttachment = !attachmentsBlockedForPin &&
+          (allowAttachmentByTrust || allowAttachmentOnce);
       final autoDownloadSettings =
           context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
       final chatAutoDownloadAllowed = chat.attachmentAutoDownload.isAllowed;
@@ -8144,15 +8236,17 @@ class _PinnedMessageTile extends StatelessWidget {
             downloadDelegate: emailDownloadDelegate,
             onAllowPressed: allowAttachment
                 ? null
-                : () => onApproveAttachment(
-                      message: message,
-                      senderJid: message.senderJid,
-                      stanzaId: message.stanzaID,
-                      metadataId: attachmentId,
-                      isGroupChat: isGroupChat,
-                      isEmailChat: isEmailBacked,
-                      senderEmail: chat.emailAddress,
-                    ),
+                : attachmentsBlockedForPin
+                    ? null
+                    : () => onApproveAttachment(
+                          message: message,
+                          senderJid: message.senderJid,
+                          stanzaId: message.stanzaID,
+                          metadataId: attachmentId,
+                          isGroupChat: isGroupChat,
+                          isEmailChat: isEmailBacked,
+                          senderEmail: chat.emailAddress,
+                        ),
           ),
         );
       }

@@ -17,6 +17,7 @@ import 'axi_text_selection.dart';
 import 'typing_text_input.dart';
 
 const double _transparentCursorAlpha = 0.0;
+const int _singleLineCount = 1;
 
 class AxiInput extends StatefulWidget {
   const AxiInput({
@@ -43,7 +44,7 @@ class AxiInput extends StatefulWidget {
     SmartDashesType? smartDashesType,
     SmartQuotesType? smartQuotesType,
     this.enableSuggestions = true,
-    this.maxLines = 1,
+    this.maxLines = _singleLineCount,
     this.minLines,
     this.expands = false,
     this.maxLength,
@@ -385,7 +386,11 @@ class AxiInputState extends State<AxiInput>
 
   axi.EditableTextState? get _editableText => editableTextKey.currentState;
 
-  bool get isMultiline => widget.maxLines != 1;
+  bool get isMultiline {
+    final int? maxLines =
+        widget.obscureText ? _singleLineCount : widget.maxLines;
+    return maxLines != _singleLineCount;
+  }
 
   @override
   void restoreState(RestorationBucket? oldBucket, bool initialRestore) {
@@ -549,6 +554,12 @@ class AxiInputState extends State<AxiInput>
           maxLengthEnforcement: effectiveMaxLengthEnforcement,
         ),
     ];
+    final bool isObscured = widget.obscureText;
+    final int? effectiveMaxLines =
+        isObscured ? _singleLineCount : widget.maxLines;
+    final int? effectiveMinLines =
+        isObscured ? _singleLineCount : widget.minLines;
+    final bool effectiveExpands = isObscured ? false : widget.expands;
 
     final textScaler = MediaQuery.textScalerOf(context);
 
@@ -682,9 +693,9 @@ class AxiInputState extends State<AxiInput>
                                                 widget.smartQuotesType,
                                             enableSuggestions:
                                                 widget.enableSuggestions,
-                                            maxLines: widget.maxLines,
-                                            minLines: widget.minLines,
-                                            expands: widget.expands,
+                                            maxLines: effectiveMaxLines,
+                                            minLines: effectiveMinLines,
+                                            expands: effectiveExpands,
                                             onChanged: widget.onChanged,
                                             onEditingComplete:
                                                 widget.onEditingComplete,

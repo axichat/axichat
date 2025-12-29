@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/gestures.dart' show kLongPressTimeout, kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -22,12 +24,14 @@ class DynamicInlineText extends LeafRenderObjectWidget {
     required this.details,
     this.links = const [],
     this.onLinkTap,
+    this.onLinkLongPress,
   });
 
   final TextSpan text;
   final List<InlineSpan> details;
   final List<DynamicTextLink> links;
   final LinkTapCallback? onLinkTap;
+  final LinkTapCallback? onLinkLongPress;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -39,6 +43,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
         links: links,
         onLinkTap: onLinkTap,
+        onLinkLongPress: onLinkLongPress,
       );
 
   @override
@@ -53,7 +58,8 @@ class DynamicInlineText extends LeafRenderObjectWidget {
       ..textScaler =
           MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling
       ..links = links
-      ..onLinkTap = onLinkTap;
+      ..onLinkTap = onLinkTap
+      ..onLinkLongPress = onLinkLongPress;
   }
 }
 
@@ -65,12 +71,14 @@ class DynamicInlineTextRenderObject extends RenderBox {
     required TextScaler textScaler,
     List<DynamicTextLink> links = const [],
     LinkTapCallback? onLinkTap,
+    LinkTapCallback? onLinkLongPress,
   })  : _text = text,
         _details = details,
         _textDirection = textDirection,
         _textScaler = textScaler,
         _links = List.unmodifiable(links),
-        _onLinkTap = onLinkTap;
+        _onLinkTap = onLinkTap,
+        _onLinkLongPress = onLinkLongPress;
 
   TextSpan get text => _text;
   TextSpan _text;
@@ -116,6 +124,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
   List<DynamicTextLink> _links;
 
   set links(List<DynamicTextLink> value) {
+    _cancelLinkLongPress();
+    _linkLongPressTriggered = false;
     _links = List.unmodifiable(value);
   }
 
@@ -125,28 +135,44 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _onLinkTap = value;
   }
 
+  LinkTapCallback? _onLinkLongPress;
+
+  set onLinkLongPress(LinkTapCallback? value) {
+    _onLinkLongPress = value;
+    if (value == null) {
+      _cancelLinkLongPress();
+    }
+  }
+
   @override
-  bool hitTestSelf(Offset position) => _links.isNotEmpty && _onLinkTap != null;
+  bool hitTestSelf(Offset position) =>
+      _links.isNotEmpty && (_onLinkTap != null || _onLinkLongPress != null);
 
   @override
   void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
-    if (_links.isEmpty || _onLinkTap == null) return;
-    if (event is! PointerUpEvent) return;
-    if (_textPainter.text == null) return;
-    if (entry.localPosition.dy < 0 ||
-        entry.localPosition.dy > _textPainter.height) {
+    if (_links.isEmpty || _textPainter.text == null) return;
+    if (event is PointerDownEvent) {
+      _startLinkLongPress(entry.localPosition, event.pointer);
       return;
     }
-    final textPosition = _textPainter.getPositionForOffset(
-      entry.localPosition,
-    );
-    final offset = textPosition.offset;
-    for (final link in _links) {
-      if (offset >= link.range.start && offset < link.range.end) {
-        _onLinkTap?.call(link.url);
-        break;
-      }
+    if (event is PointerMoveEvent) {
+      _trackLinkLongPress(entry.localPosition, event.pointer);
+      return;
     }
+    if (event is PointerCancelEvent) {
+      _linkLongPressTriggered = false;
+      _cancelLinkLongPress();
+      return;
+    }
+    if (event is! PointerUpEvent) return;
+    final resolvedLink = _linkAtOffset(entry.localPosition);
+    _cancelLinkLongPress();
+    if (_linkLongPressTriggered) {
+      _linkLongPressTriggered = false;
+      return;
+    }
+    if (_onLinkTap == null || resolvedLink == null) return;
+    _onLinkTap?.call(resolvedLink.url);
   }
 
   @override
@@ -184,6 +210,11 @@ class DynamicInlineTextRenderObject extends RenderBox {
   late TextPainter _textPainter;
   late List<TextPainter> _detailPainters;
 
+  Timer? _linkLongPressTimer;
+  Offset? _linkLongPressOrigin;
+  int? _linkLongPressPointer;
+  bool _linkLongPressTriggered = false;
+
   bool _hasWidgetSpan(InlineSpan span) {
     var found = false;
     span.visitChildren((child) {
@@ -201,6 +232,57 @@ class DynamicInlineTextRenderObject extends RenderBox {
       !_hasWidgetSpan(text) && _details.every((span) => !_hasWidgetSpan(span)),
       'DynamicInlineText does not support WidgetSpans. Use glyph-based spans instead.',
     );
+  }
+
+  DynamicTextLink? _linkAtOffset(Offset position) {
+    if (position.dy < 0 || position.dy > _textPainter.height) {
+      return null;
+    }
+    final textPosition = _textPainter.getPositionForOffset(position);
+    final offset = textPosition.offset;
+    for (final link in _links) {
+      if (offset >= link.range.start && offset < link.range.end) {
+        return link;
+      }
+    }
+    return null;
+  }
+
+  void _startLinkLongPress(Offset position, int pointer) {
+    if (_onLinkLongPress == null) return;
+    final target = _linkAtOffset(position);
+    if (target == null) return;
+    _cancelLinkLongPress();
+    _linkLongPressOrigin = position;
+    _linkLongPressPointer = pointer;
+    _linkLongPressTriggered = false;
+    _linkLongPressTimer = Timer(kLongPressTimeout, () {
+      _linkLongPressTriggered = true;
+      _onLinkLongPress?.call(target.url);
+    });
+  }
+
+  void _trackLinkLongPress(Offset position, int pointer) {
+    if (_linkLongPressPointer != pointer || _linkLongPressOrigin == null) {
+      return;
+    }
+    final origin = _linkLongPressOrigin!;
+    if ((position - origin).distance > kTouchSlop) {
+      _cancelLinkLongPress();
+    }
+  }
+
+  void _cancelLinkLongPress() {
+    _linkLongPressTimer?.cancel();
+    _linkLongPressTimer = null;
+    _linkLongPressOrigin = null;
+    _linkLongPressPointer = null;
+  }
+
+  @override
+  void detach() {
+    _cancelLinkLongPress();
+    super.detach();
   }
 
   Size _layout(double maxWidth) {

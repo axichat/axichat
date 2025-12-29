@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
@@ -45,7 +46,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
-import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -644,7 +644,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       final int resolvedSizeBytes = sizeBytes >= _shareAttachmentMinSizeBytes
           ? sizeBytes
           : _shareAttachmentUnknownSizeBytes;
-      final String mimeType = _resolveSharedAttachmentMimeType(
+      final String mimeType = await _resolveSharedAttachmentMimeType(
         fileName: fileName,
         path: normalizedPath,
         attachment: attachment,
@@ -688,14 +688,17 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     return path;
   }
 
-  String _resolveSharedAttachmentMimeType({
+  Future<String> _resolveSharedAttachmentMimeType({
     required String fileName,
     required String path,
     required ShareAttachmentPayload attachment,
-  }) {
-    return lookupMimeType(fileName) ??
-        lookupMimeType(path) ??
-        attachment.type.mimeTypeFallback;
+  }) async {
+    final String? resolvedMimeType = await resolveMimeTypeFromPath(
+      path: path,
+      fileName: fileName,
+      declaredMimeType: attachment.type.mimeTypeFallback,
+    );
+    return resolvedMimeType ?? attachment.type.mimeTypeFallback;
   }
 
   Future<int> _resolveSharedAttachmentSizeBytes(File file) async {
