@@ -120,8 +120,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return AppExitResponse.exit;
       },
       onStateChange: (lifeCycleState) async {
-        if (!withForeground) return;
-
         if (launchedFromNotification) {
           launchedFromNotification = false;
           final payload = takeLaunchedNotificationChatJid();

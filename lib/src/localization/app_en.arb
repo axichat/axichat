@@ -770,6 +770,7 @@
   "authCustomServerXmppHostPlaceholder": "XMPP host (optional)",
   "authCustomServerPortPlaceholder": "Port",
   "authCustomServerSmtpHostPlaceholder": "SMTP host (optional)",
+  "authCustomServerImapHostPlaceholder": "IMAP host (optional)",
   "authCustomServerApiPortPlaceholder": "API port",
   "authCustomServerReset": "Reset to axi.im",
   "authCustomServerOpenSettings": "Open custom server settings",

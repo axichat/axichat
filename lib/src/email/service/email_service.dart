@@ -44,13 +44,16 @@ const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
 const _coreDraftMessageId = 0;
 const int _deltaEventMessageUnset = 0;
-const _defaultImapPort = '993';
 const String _securityModeSsl = 'ssl';
 const String _securityModeStartTls = 'starttls';
 const _emailDownloadLimitKey = 'download_limit';
 const _emailDownloadLimitDisabledValue = '0';
 const _unknownEmailPassword = '';
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
+const _connectionOverrideKeyPrefix = 'email_connection_overrides_v1';
+const _credentialTrueValue = 'true';
+const _credentialFalseValue = 'false';
+const _connectionOverrideClearedValue = '';
 const _notificationAttachmentLabel = 'Attachment';
 const _notificationAttachmentPrefix = 'Attachment: ';
 const _reactionNotificationFallback = 'New reaction';
@@ -69,6 +72,18 @@ const _sendPortConfigKey = 'send_port';
 const _sendSecurityConfigKey = 'send_security';
 const _sendUserConfigKey = 'send_user';
 const _portUnsetValue = 0;
+const String _smtpHostToken = 'smtp';
+const String _imapHostToken = 'imap';
+const List<String> _connectionOverrideConfigKeys = <String>[
+  _mailServerConfigKey,
+  _mailPortConfigKey,
+  _mailSecurityConfigKey,
+  _mailUserConfigKey,
+  _sendServerConfigKey,
+  _sendPortConfigKey,
+  _sendSecurityConfigKey,
+  _sendUserConfigKey,
+];
 const List<EmailAttachment> _emptyEmailAttachments = <EmailAttachment>[];
 const _deltaContactIdPrefix = 'delta_contact_';
 const _deltaContactListFlags =
@@ -216,6 +231,7 @@ class EmailService {
   late final EmailBlockingService blocking;
   late final EmailSpamService spam;
   final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
+  final Map<String, RegisteredCredentialKey> _connectionOverrideKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
 
@@ -227,6 +243,7 @@ class EmailService {
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
   final Set<String> _ephemeralProvisionedScopes = {};
+  final Set<String> _ephemeralConnectionOverrideScopes = {};
   final _authFailureController =
       StreamController<DeltaChatException>.broadcast(sync: true);
   bool _foregroundKeepaliveEnabled = false;
@@ -271,6 +288,131 @@ class EmailService {
 
   Map<String, String> _buildConnectionConfig(String address) =>
       _connectionConfigBuilder(address, _endpointConfig);
+
+  bool _hasConnectionOverrides(Map<String, String> connectionOverrides) =>
+      _connectionOverrideConfigKeys.any(connectionOverrides.containsKey);
+
+  Future<bool> _isConnectionOverrideApplied({
+    required String scope,
+    required bool persistCredentials,
+  }) async {
+    if (_ephemeralConnectionOverrideScopes.contains(scope)) {
+      return true;
+    }
+    if (!persistCredentials) {
+      return false;
+    }
+    final stored = await _credentialStore.read(
+      key: _connectionOverrideKeyForScope(scope),
+    );
+    return stored == _credentialTrueValue;
+  }
+
+  Future<void> _markConnectionOverridesApplied({
+    required String scope,
+    required bool persistCredentials,
+    required Map<String, String> connectionOverrides,
+  }) async {
+    if (!_hasConnectionOverrides(connectionOverrides)) {
+      return;
+    }
+    _ephemeralConnectionOverrideScopes.add(scope);
+    if (!persistCredentials) {
+      return;
+    }
+    await _credentialStore.write(
+      key: _connectionOverrideKeyForScope(scope),
+      value: _credentialTrueValue,
+    );
+  }
+
+  Future<bool> _shouldReconfigureTransport({
+    required String scope,
+    required Map<String, String> connectionOverrides,
+    required bool persistCredentials,
+  }) async {
+    if (!_hasConnectionOverrides(connectionOverrides)) {
+      return false;
+    }
+    final overridesApplied = await _isConnectionOverrideApplied(
+      scope: scope,
+      persistCredentials: persistCredentials,
+    );
+    if (!overridesApplied) {
+      return true;
+    }
+    try {
+      for (final key in _connectionOverrideConfigKeys) {
+        final expectedValue = connectionOverrides[key];
+        final currentValue = await _transport.getCoreConfig(key);
+        final normalizedExpected = _normalizeConnectionConfigValue(
+          key: key,
+          value: expectedValue,
+        );
+        final normalizedCurrent = _normalizeConnectionConfigValue(
+          key: key,
+          value: currentValue,
+        );
+        if (normalizedExpected == null) {
+          if (normalizedCurrent != null) {
+            return true;
+          }
+          continue;
+        }
+        if (normalizedExpected != normalizedCurrent) {
+          return true;
+        }
+      }
+    } on Exception {
+      _log.finer(
+        'Failed to read email transport overrides for reconfiguration check.',
+      );
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _applyConnectionOverridesWithoutPassword({
+    required Map<String, String> connectionOverrides,
+  }) async {
+    if (!_hasConnectionOverrides(connectionOverrides)) {
+      return;
+    }
+    for (final key in _connectionOverrideConfigKeys) {
+      final normalizedValue = _normalizeConnectionConfigValue(
+        key: key,
+        value: connectionOverrides[key],
+      );
+      await _transport.setCoreConfig(
+        key: key,
+        value: normalizedValue ?? _connectionOverrideClearedValue,
+      );
+    }
+  }
+
+  String? _normalizeConnectionConfigValue({
+    required String key,
+    required String? value,
+  }) {
+    if (value == null) {
+      return null;
+    }
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    if (_isPortConfigKey(key)) {
+      final parsed = int.tryParse(trimmed);
+      if (parsed == null || parsed <= _portUnsetValue) {
+        return null;
+      }
+      return parsed.toString();
+    }
+    return trimmed.toLowerCase();
+  }
+
+  bool _isPortConfigKey(String key) =>
+      key == _mailPortConfigKey || key == _sendPortConfigKey;
 
   EmailAccount? get activeAccount => _activeAccount;
 
@@ -372,6 +514,8 @@ class EmailService {
       }
     }
 
+    final connectionOverrides = _buildConnectionConfig(resolvedAddress);
+
     final resolvedPasswordOverride = passwordOverride;
     if (resolvedPasswordOverride != null &&
         resolvedPasswordOverride.isNotEmpty &&
@@ -384,27 +528,74 @@ class EmailService {
     }
 
     var alreadyProvisioned =
-        (await _credentialStore.read(key: provisionedKey)) == 'true';
+        (await _credentialStore.read(key: provisionedKey)) ==
+            _credentialTrueValue;
     if (!shouldPersistCredentials &&
         _ephemeralProvisionedScopes.contains(scope)) {
       alreadyProvisioned = true;
     }
+    var transportConfigured = false;
     final shouldForceProvisioning =
         shouldPersistCredentials && credentialsMutated;
     if (shouldForceProvisioning) {
       alreadyProvisioned = false;
       _ephemeralProvisionedScopes.remove(scope);
       if (shouldPersistCredentials) {
-        await _credentialStore.write(key: provisionedKey, value: 'false');
+        await _credentialStore.write(
+          key: provisionedKey,
+          value: _credentialFalseValue,
+        );
       }
     }
     // Always verify with transport - credential store may be stale after cold start
     if (!shouldForceProvisioning) {
       try {
-        alreadyProvisioned = await _transport.isConfigured();
+        transportConfigured = await _transport.isConfigured();
+        alreadyProvisioned = transportConfigured;
       } on Exception {
         alreadyProvisioned = false;
       }
+    }
+    var requiresReconfigure = false;
+    if (alreadyProvisioned) {
+      requiresReconfigure = await _shouldReconfigureTransport(
+        scope: scope,
+        connectionOverrides: connectionOverrides,
+        persistCredentials: shouldPersistCredentials,
+      );
+      if (requiresReconfigure) {
+        alreadyProvisioned = false;
+        _ephemeralProvisionedScopes.remove(scope);
+        if (shouldPersistCredentials) {
+          await _credentialStore.write(
+            key: provisionedKey,
+            value: _credentialFalseValue,
+          );
+        }
+      }
+    }
+
+    final hasPassword = password != null && password.isNotEmpty;
+    if (!alreadyProvisioned &&
+        !hasPassword &&
+        requiresReconfigure &&
+        transportConfigured) {
+      await _applyConnectionOverridesWithoutPassword(
+        connectionOverrides: connectionOverrides,
+      );
+      await _markConnectionOverridesApplied(
+        scope: scope,
+        persistCredentials: shouldPersistCredentials,
+        connectionOverrides: connectionOverrides,
+      );
+      if (shouldPersistCredentials) {
+        await _credentialStore.write(
+          key: provisionedKey,
+          value: _credentialTrueValue,
+        );
+      }
+      alreadyProvisioned = true;
+      requiresReconfigure = false;
     }
 
     final needsProvisioning = !alreadyProvisioned;
@@ -414,7 +605,7 @@ class EmailService {
     }
 
     final normalizedAddress = address;
-    if (needsProvisioning && (password == null || password.isEmpty)) {
+    if (needsProvisioning && !hasPassword) {
       throw StateError('Failed to resolve email password.');
     }
     final normalizedPassword = password;
@@ -426,18 +617,29 @@ class EmailService {
           address: normalizedAddress,
           password: normalizedPassword!,
           displayName: displayName,
-          additional: _buildConnectionConfig(normalizedAddress),
+          additional: connectionOverrides,
         );
         _resetImapCapabilities();
         await _transport.purgeStockMessages();
+        await _markConnectionOverridesApplied(
+          scope: scope,
+          persistCredentials: shouldPersistCredentials,
+          connectionOverrides: connectionOverrides,
+        );
         if (shouldPersistCredentials) {
-          await _credentialStore.write(key: provisionedKey, value: 'true');
+          await _credentialStore.write(
+            key: provisionedKey,
+            value: _credentialTrueValue,
+          );
         } else {
           _ephemeralProvisionedScopes.add(scope);
         }
       } on DeltaSafeException catch (error, stackTrace) {
         if (shouldPersistCredentials) {
-          await _credentialStore.write(key: provisionedKey, value: 'false');
+          await _credentialStore.write(
+            key: provisionedKey,
+            value: _credentialFalseValue,
+          );
         } else {
           _ephemeralProvisionedScopes.remove(scope);
         }
@@ -517,16 +719,22 @@ class EmailService {
       key: _passwordKeyForScope(scope),
       value: password,
     );
+    final connectionOverrides = _buildConnectionConfig(address);
     await _transport.configureAccount(
       address: address,
       password: password,
       displayName: displayName,
-      additional: _buildConnectionConfig(address),
+      additional: connectionOverrides,
     );
     _resetImapCapabilities();
     unawaited(_refreshImapCapabilities(force: true));
     _activeCredentialScope = scope;
     _activeAccount = EmailAccount(address: address, password: password);
+    await _markConnectionOverridesApplied(
+      scope: scope,
+      persistCredentials: true,
+      connectionOverrides: connectionOverrides,
+    );
   }
 
   Future<void> start() async {
@@ -1850,6 +2058,7 @@ class EmailService {
       operation: 'email transport',
       message: message,
     );
+    _log.warning('Email transport error (${exception.code}).');
     if (exception.code == DeltaChatErrorCode.auth ||
         exception.code == DeltaChatErrorCode.permission) {
       _authFailureController.add(exception);
@@ -2489,32 +2698,41 @@ class EmailService {
       _emailDownloadLimitKey: _emailDownloadLimitDisabledValue,
       _mdnsEnabledConfigKey: _mdnsEnabledValue,
     };
-    final smtpHost = config.smtpHost?.trim();
-    if (smtpHost == null || smtpHost.isEmpty) {
-      return configValues;
-    }
     final normalizedAddress = address.trim();
-    final mailPortValue = int.parse(_defaultImapPort);
-    final sendPortValue = config.smtpPort > _portUnsetValue
-        ? config.smtpPort
-        : EndpointConfig.defaultSmtpPort;
-    final mailSecurityMode = _securityModeForPort(
-      port: mailPortValue,
-      implicitTlsPort: mailPortValue,
+    final smtpHost = config.smtpHost?.trim();
+    final imapHost = config.imapHost?.trim();
+    if (smtpHost != null && smtpHost.isNotEmpty) {
+      final sendPortValue = config.smtpPort > _portUnsetValue
+          ? config.smtpPort
+          : EndpointConfig.defaultSmtpPort;
+      final sendSecurityMode = _securityModeForPort(
+        port: sendPortValue,
+        implicitTlsPort: EndpointConfig.defaultSmtpPort,
+      );
+      configValues
+        ..[_sendServerConfigKey] = smtpHost
+        ..[_sendPortConfigKey] = sendPortValue.toString()
+        ..[_sendSecurityConfigKey] = sendSecurityMode
+        ..[_sendUserConfigKey] = normalizedAddress;
+    }
+    final resolvedMailHost = _resolveMailHost(
+      imapHost: imapHost,
+      smtpHost: smtpHost,
     );
-    final sendSecurityMode = _securityModeForPort(
-      port: sendPortValue,
-      implicitTlsPort: EndpointConfig.defaultSmtpPort,
-    );
-    configValues
-      ..[_mailServerConfigKey] = smtpHost
-      ..[_mailPortConfigKey] = _defaultImapPort
-      ..[_mailSecurityConfigKey] = mailSecurityMode
-      ..[_mailUserConfigKey] = normalizedAddress
-      ..[_sendServerConfigKey] = smtpHost
-      ..[_sendPortConfigKey] = sendPortValue.toString()
-      ..[_sendSecurityConfigKey] = sendSecurityMode
-      ..[_sendUserConfigKey] = normalizedAddress;
+    if (resolvedMailHost != null && resolvedMailHost.isNotEmpty) {
+      final mailPortValue = config.imapPort > _portUnsetValue
+          ? config.imapPort
+          : EndpointConfig.defaultImapPort;
+      final mailSecurityMode = _securityModeForPort(
+        port: mailPortValue,
+        implicitTlsPort: EndpointConfig.defaultImapPort,
+      );
+      configValues
+        ..[_mailServerConfigKey] = resolvedMailHost
+        ..[_mailPortConfigKey] = mailPortValue.toString()
+        ..[_mailSecurityConfigKey] = mailSecurityMode
+        ..[_mailUserConfigKey] = normalizedAddress;
+    }
     return configValues;
   }
 
@@ -2523,6 +2741,38 @@ class EmailService {
     required int implicitTlsPort,
   }) =>
       port == implicitTlsPort ? _securityModeSsl : _securityModeStartTls;
+
+  static String? _deriveMailHost(String host) {
+    final normalized = host.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final parts = normalized.split('.');
+    var replaced = false;
+    final derived = parts.map((part) {
+      if (!replaced && part.startsWith(_smtpHostToken)) {
+        replaced = true;
+        return part.replaceFirst(_smtpHostToken, _imapHostToken);
+      }
+      return part;
+    }).toList();
+    return replaced ? derived.join('.') : null;
+  }
+
+  static String? _resolveMailHost({
+    required String? imapHost,
+    required String? smtpHost,
+  }) {
+    final normalizedImap = imapHost?.trim();
+    if (normalizedImap != null && normalizedImap.isNotEmpty) {
+      return normalizedImap;
+    }
+    final normalizedSmtp = smtpHost?.trim();
+    if (normalizedSmtp == null || normalizedSmtp.isEmpty) {
+      return null;
+    }
+    return _deriveMailHost(normalizedSmtp) ?? normalizedSmtp;
+  }
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)
     ..sort((a, b) {
@@ -2553,6 +2803,14 @@ class EmailService {
     );
   }
 
+  RegisteredCredentialKey _connectionOverrideKeyForScope(String scope) {
+    final identifier = '${_connectionOverrideKeyPrefix}_$scope';
+    return _connectionOverrideKeys.putIfAbsent(
+      scope,
+      () => CredentialStore.registerKey(identifier),
+    );
+  }
+
   RegisteredCredentialKey _bootstrapKeyFor({
     required String scope,
     required String databasePrefix,
@@ -2575,11 +2833,13 @@ class EmailService {
     await _credentialStore.delete(key: _addressKeyForScope(scope));
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
     await _credentialStore.delete(key: _provisionedKeyForScope(scope));
+    await _credentialStore.delete(key: _connectionOverrideKeyForScope(scope));
     if (_activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;
     }
     _ephemeralProvisionedScopes.remove(scope);
+    _ephemeralConnectionOverrideScopes.remove(scope);
   }
 
   Future<T> _guardDeltaOperation<T>({
@@ -2611,8 +2871,16 @@ class EmailService {
         key: addressKey, value: _activeAccount!.address);
     await _credentialStore.write(
         key: passwordKey, value: _activeAccount!.password);
-    await _credentialStore.write(key: provisionedKey, value: 'true');
+    await _credentialStore.write(
+      key: provisionedKey,
+      value: _credentialTrueValue,
+    );
     _ephemeralProvisionedScopes.add(scope);
+    await _markConnectionOverridesApplied(
+      scope: scope,
+      persistCredentials: true,
+      connectionOverrides: _buildConnectionConfig(_activeAccount!.address),
+    );
   }
 
   Future<void> clearStoredCredentials({
@@ -2623,12 +2891,14 @@ class EmailService {
     await _credentialStore.delete(key: _addressKeyForScope(scope));
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
     await _credentialStore.delete(key: _provisionedKeyForScope(scope));
+    await _credentialStore.delete(key: _connectionOverrideKeyForScope(scope));
     if (!preserveActiveSession && _activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;
     }
     if (!preserveActiveSession) {
       _ephemeralProvisionedScopes.remove(scope);
+      _ephemeralConnectionOverrideScopes.remove(scope);
     }
   }
 
