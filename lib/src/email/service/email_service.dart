@@ -81,6 +81,7 @@ const _imapSentPollIntervalSingleConnection = Duration(seconds: 60);
 const _imapPollIntervalNoIdle = Duration(seconds: 30);
 const _imapSyncFetchTimeout = Duration(seconds: 25);
 const _imapCapabilityRefreshInterval = Duration(minutes: 10);
+const _reconnectRestartDelay = Duration(seconds: 2);
 const _imapConnectionLimitSingle = 1;
 const _imapConnectionLimitMulti = 2;
 const Set<String> _imapConfigBoolTrueValues = {
@@ -233,6 +234,7 @@ class EmailService {
   bool _foregroundKeepaliveServiceAcquired = false;
   bool _foregroundKeepaliveTickScheduled = false;
   int _foregroundKeepaliveOperationId = 0;
+  bool _reconnectRestartInFlight = false;
   final List<_PendingNotification> _pendingNotifications = [];
   Timer? _notificationFlushTimer;
   Timer? _contactsSyncTimer;
@@ -1156,6 +1158,7 @@ class EmailService {
     await _transport.notifyNetworkAvailable();
     unawaited(_bootstrapActiveAccountIfNeeded());
     unawaited(_runReconnectCatchUp().whenComplete(_refreshConnectivityState));
+    unawaited(_scheduleReconnectRestartIfOffline());
   }
 
   Future<void> handleNetworkLost() async {
@@ -2288,6 +2291,32 @@ class EmailService {
       await refreshChatlistFromCore();
     } finally {
       _reconnectCatchUpInFlight = false;
+    }
+  }
+
+  Future<void> _scheduleReconnectRestartIfOffline() async {
+    if (_reconnectRestartInFlight) {
+      return;
+    }
+    _reconnectRestartInFlight = true;
+    try {
+      await Future.delayed(_reconnectRestartDelay);
+      final connectivity = await _transport.connectivity();
+      if (connectivity == null ||
+          connectivity >= _connectivityConnectingMin) {
+        return;
+      }
+      _log.warning(
+        'Email transport still offline after network available; restarting.',
+      );
+      await stop();
+      await start();
+      await _transport.notifyNetworkAvailable();
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Email transport restart failed', error, stackTrace);
+    } finally {
+      _reconnectRestartInFlight = false;
+      unawaited(_refreshConnectivityState());
     }
   }
 

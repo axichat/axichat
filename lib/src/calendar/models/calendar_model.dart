@@ -243,6 +243,41 @@ class CalendarModel with _$CalendarModel {
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
 
+  CalendarModel upsertAvailabilityOverlay({
+    required String overlayId,
+    required CalendarAvailabilityOverlay overlay,
+  }) {
+    final String trimmedId = overlayId.trim();
+    if (trimmedId.isEmpty) {
+      return this;
+    }
+    final Map<String, CalendarAvailabilityOverlay> updatedOverlays =
+        Map<String, CalendarAvailabilityOverlay>.from(availabilityOverlays)
+          ..[trimmedId] = overlay;
+    final DateTime now = DateTime.now();
+    final CalendarModel updated = copyWith(
+      availabilityOverlays: updatedOverlays,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel removeAvailabilityOverlay(String overlayId) {
+    final String trimmedId = overlayId.trim();
+    if (trimmedId.isEmpty || !availabilityOverlays.containsKey(trimmedId)) {
+      return this;
+    }
+    final Map<String, CalendarAvailabilityOverlay> updatedOverlays =
+        Map<String, CalendarAvailabilityOverlay>.from(availabilityOverlays)
+          ..remove(trimmedId);
+    final DateTime now = DateTime.now();
+    final CalendarModel updated = copyWith(
+      availabilityOverlays: updatedOverlays,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
   CalendarModel addJournal(CalendarJournal journal) {
     final updatedJournals = <String, CalendarJournal>{
       ...journals,

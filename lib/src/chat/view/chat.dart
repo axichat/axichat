@@ -107,7 +107,6 @@ enum _ChatRoute {
   main,
   details,
   attachments,
-  pins,
   calendar,
 }
 
@@ -217,6 +216,11 @@ const _bubbleSizeSnapDuration = Duration(milliseconds: 1);
 const _messageArrivalDuration = Duration(milliseconds: 420);
 const _messageArrivalCurve = Curves.easeOutCubic;
 const _chatHorizontalPadding = 16.0;
+const _chatPinnedPanelHorizontalPadding = _chatHorizontalPadding;
+const _chatPinnedPanelVerticalPadding = 12.0;
+const _chatPinnedPanelHeaderSpacing = 12.0;
+const _chatPinnedPanelEmptyStatePadding = 12.0;
+const _chatPinnedPanelMinHeight = 0.0;
 const _selectionAutoscrollSlop = 4.0;
 const _selectionAutoscrollReboundCurve = Curves.easeOutCubic;
 const _selectionAutoscrollReboundDuration = Duration(milliseconds: 260);
@@ -592,6 +596,47 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
   }
 }
 
+class _SizeReportingWidget extends SingleChildRenderObjectWidget {
+  const _SizeReportingWidget({
+    required this.onSizeChange,
+    required super.child,
+  });
+
+  final ValueChanged<Size> onSizeChange;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _SizeReportingRenderObject(onSizeChange);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _SizeReportingRenderObject renderObject,
+  ) {
+    renderObject.onSizeChange = onSizeChange;
+  }
+}
+
+class _SizeReportingRenderObject extends RenderProxyBox {
+  _SizeReportingRenderObject(this.onSizeChange);
+
+  ValueChanged<Size> onSizeChange;
+  Size? _lastSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final newSize = size;
+    if (_lastSize == newSize) {
+      return;
+    }
+    _lastSize = newSize;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      onSizeChange(newSize);
+    });
+  }
+}
+
 class _UnknownSenderBanner extends StatelessWidget {
   const _UnknownSenderBanner({
     required this.readOnly,
@@ -901,6 +946,7 @@ class _ChatState extends State<Chat> {
 
   var _chatRoute = _ChatRoute.main;
   var _settingsPanelExpanded = false;
+  bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
   final _multiSelectedMessageIds = <String>{};
   final _selectedMessageSnapshots = <String, Message>{};
@@ -913,6 +959,7 @@ class _ChatState extends State<Chat> {
   double _selectionSpacerBaseHeight = 0;
   double _selectionSpacerHeight = 0;
   double _selectionControlsHeight = 0;
+  double _bottomSectionHeight = 0.0;
   bool _selectionAutoscrollActive = false;
   bool _selectionAutoscrollScheduled = false;
   bool _selectionAutoscrollInProgress = false;
@@ -964,6 +1011,16 @@ class _ChatState extends State<Chat> {
     setState(() {
       _pendingCalendarTaskIcs = null;
       _pendingCalendarSeedText = null;
+    });
+  }
+
+  void _updateBottomSectionHeight(Size size) {
+    final height = size.height;
+    if (!mounted || height == _bottomSectionHeight) {
+      return;
+    }
+    setState(() {
+      _bottomSectionHeight = height;
     });
   }
 
@@ -3512,6 +3569,7 @@ class _ChatState extends State<Chat> {
                     setState(() {
                       _chatRoute = _ChatRoute.main;
                       _settingsPanelExpanded = false;
+                      _pinnedPanelVisible = false;
                     });
                     return false;
                   }
@@ -3792,9 +3850,13 @@ class _ChatState extends State<Chat> {
                         ),
                         const SizedBox(width: _chatHeaderActionSpacing),
                         AxiIconButton(
-                          iconData: LucideIcons.pin,
-                          tooltip: context.l10n.chatPinnedMessagesTooltip,
-                          onPressed: _openPinnedMessages,
+                          iconData: _pinnedPanelVisible
+                              ? LucideIcons.x
+                              : LucideIcons.pin,
+                          tooltip: _pinnedPanelVisible
+                              ? context.l10n.commonClose
+                              : context.l10n.chatPinnedMessagesTooltip,
+                          onPressed: _togglePinnedMessages,
                         ),
                         if (supportsChatCalendar) ...[
                           const SizedBox(width: _chatHeaderActionSpacing),
@@ -3873,6 +3935,11 @@ class _ChatState extends State<Chat> {
                                   );
                                   final isCompact =
                                       availableWidth < smallScreen;
+                                  final pinnedPanelMaxHeight = math.max(
+                                    _chatPinnedPanelMinHeight,
+                                    constraints.maxHeight -
+                                        _bottomSectionHeight,
+                                  );
                                   final messageById = {
                                     for (final item in state.items)
                                       item.stanzaID: item,
@@ -4405,8 +4472,170 @@ class _ChatState extends State<Chat> {
                                       remoteTyping ||
                                       typingAvatars.isNotEmpty ||
                                       demoTypingAvatars.isNotEmpty;
+                                  final bottomSection = _SizeReportingWidget(
+                                    onSizeChange: _updateBottomSectionHeight,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        quoteSection,
+                                        if (_multiSelectActive &&
+                                            selectedMessages.isNotEmpty)
+                                          () {
+                                            final targets = List<Message>.of(
+                                              selectedMessages,
+                                              growable: false,
+                                            );
+                                            final canReact = !isEmailChat;
+                                            return _MessageSelectionToolbar(
+                                              count: targets.length,
+                                              onClear: _clearMultiSelection,
+                                              onCopy: () =>
+                                                  _copySelectedMessages(
+                                                List<Message>.of(targets),
+                                              ),
+                                              onShare: () =>
+                                                  _shareSelectedMessages(
+                                                List<Message>.of(targets),
+                                              ),
+                                              onForward: () =>
+                                                  _forwardSelectedMessages(
+                                                List<Message>.of(targets),
+                                              ),
+                                              onAddToCalendar: () =>
+                                                  _addSelectedToCalendar(
+                                                List<Message>.of(targets),
+                                              ),
+                                              showReactions: canReact,
+                                              onReactionSelected: canReact
+                                                  ? (emoji) =>
+                                                      _toggleQuickReactionForMessages(
+                                                        targets,
+                                                        emoji,
+                                                      )
+                                                  : null,
+                                              onReactionPicker: canReact
+                                                  ? () =>
+                                                      _handleMultiReactionSelection(
+                                                        List<Message>.of(
+                                                          targets,
+                                                        ),
+                                                      )
+                                                  : null,
+                                            );
+                                          }()
+                                        else
+                                          () {
+                                            if (widget.readOnly) {
+                                              _ensureRecipientBarHeightCleared();
+                                              return const _ReadOnlyComposerBanner();
+                                            }
+                                            final visibilityLabel =
+                                                _recipientVisibilityLabel(
+                                              chat: state.chat,
+                                              recipients: recipients,
+                                            );
+                                            return _ChatComposerSection(
+                                              hintText: composerHintText,
+                                              recipients: recipients,
+                                              availableChats: availableChats,
+                                              latestStatuses: latestStatuses,
+                                              visibilityLabel: visibilityLabel,
+                                              pendingAttachments:
+                                                  pendingAttachments,
+                                              composerHasText: _composerHasText,
+                                              composerError:
+                                                  state.composerError,
+                                              showAttachmentWarning:
+                                                  showAttachmentWarning,
+                                              retryReport: retryReport,
+                                              retryShareId: retryShareId,
+                                              subjectController:
+                                                  _subjectController,
+                                              subjectFocusNode:
+                                                  _subjectFocusNode,
+                                              textController: _textController,
+                                              textFocusNode: _focusNode,
+                                              onSubjectSubmitted: () =>
+                                                  _focusNode.requestFocus(),
+                                              onRecipientAdded: (target) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatComposerRecipientAdded(
+                                                          target,
+                                                        ),
+                                                      ),
+                                              onRecipientRemoved: (key) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatComposerRecipientRemoved(
+                                                          key,
+                                                        ),
+                                                      ),
+                                              onRecipientToggled: (key) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatComposerRecipientToggled(
+                                                          key,
+                                                        ),
+                                                      ),
+                                              onAttachmentRetry: (id) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatAttachmentRetryRequested(
+                                                          id,
+                                                        ),
+                                                      ),
+                                              onAttachmentRemove: (id) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatPendingAttachmentRemoved(
+                                                          id,
+                                                        ),
+                                                      ),
+                                              onPendingAttachmentPressed:
+                                                  _handlePendingAttachmentPressed,
+                                              onPendingAttachmentLongPressed:
+                                                  _handlePendingAttachmentLongPressed,
+                                              pendingAttachmentMenuBuilder:
+                                                  _pendingAttachmentMenuItems,
+                                              buildComposerAccessories:
+                                                  ({required bool canSend}) =>
+                                                      _composerAccessories(
+                                                canSend: canSend,
+                                                attachmentsEnabled:
+                                                    attachmentsEnabled,
+                                              ),
+                                              onTaskDropped: _handleTaskDrop,
+                                              onSend: _handleSendMessage,
+                                            );
+                                          }(),
+                                      ],
+                                    ),
+                                  );
                                   return Column(
                                     children: [
+                                      _ChatPinnedMessagesPanel(
+                                        key: ValueKey(
+                                          '$_chatPinnedPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                                        ),
+                                        chat: chatEntity,
+                                        visible: _pinnedPanelVisible,
+                                        maxHeight: pinnedPanelMaxHeight,
+                                        pinnedMessages: state.pinnedMessages,
+                                        pinnedMessagesLoaded:
+                                            state.pinnedMessagesLoaded,
+                                        pinnedMessagesHydrating:
+                                            state.pinnedMessagesHydrating,
+                                        onClose: _closePinnedMessages,
+                                        canTogglePins: canTogglePins,
+                                        canShowCalendarTasks:
+                                            chatCalendarBloc != null,
+                                        roomState: state.roomState,
+                                        metadataStreamFor: _metadataStreamFor,
+                                        metadataInitialFor: _metadataInitialFor,
+                                        attachmentsBlocked:
+                                            attachmentsBlockedForChat,
+                                        isOneTimeAttachmentAllowed:
+                                            _isOneTimeAttachmentAllowed,
+                                        shouldAllowAttachment:
+                                            _shouldAllowAttachment,
+                                        onApproveAttachment: _approveAttachment,
+                                      ),
                                       Expanded(
                                         child: KeyedSubtree(
                                           key: _messageListKey,
@@ -6878,130 +7107,7 @@ class _ChatState extends State<Chat> {
                                           ),
                                         ),
                                       ),
-                                      quoteSection,
-                                      if (_multiSelectActive &&
-                                          selectedMessages.isNotEmpty)
-                                        () {
-                                          final targets = List<Message>.of(
-                                            selectedMessages,
-                                            growable: false,
-                                          );
-                                          final canReact = !isEmailChat;
-                                          return _MessageSelectionToolbar(
-                                            count: targets.length,
-                                            onClear: _clearMultiSelection,
-                                            onCopy: () => _copySelectedMessages(
-                                              List<Message>.of(targets),
-                                            ),
-                                            onShare: () =>
-                                                _shareSelectedMessages(
-                                              List<Message>.of(targets),
-                                            ),
-                                            onForward: () =>
-                                                _forwardSelectedMessages(
-                                              List<Message>.of(targets),
-                                            ),
-                                            onAddToCalendar: () =>
-                                                _addSelectedToCalendar(
-                                              List<Message>.of(targets),
-                                            ),
-                                            showReactions: canReact,
-                                            onReactionSelected: canReact
-                                                ? (emoji) =>
-                                                    _toggleQuickReactionForMessages(
-                                                      targets,
-                                                      emoji,
-                                                    )
-                                                : null,
-                                            onReactionPicker: canReact
-                                                ? () =>
-                                                    _handleMultiReactionSelection(
-                                                      List<Message>.of(
-                                                        targets,
-                                                      ),
-                                                    )
-                                                : null,
-                                          );
-                                        }()
-                                      else
-                                        () {
-                                          if (widget.readOnly) {
-                                            _ensureRecipientBarHeightCleared();
-                                            return const _ReadOnlyComposerBanner();
-                                          }
-                                          final visibilityLabel =
-                                              _recipientVisibilityLabel(
-                                            chat: state.chat,
-                                            recipients: recipients,
-                                          );
-                                          return _ChatComposerSection(
-                                            hintText: composerHintText,
-                                            recipients: recipients,
-                                            availableChats: availableChats,
-                                            latestStatuses: latestStatuses,
-                                            visibilityLabel: visibilityLabel,
-                                            pendingAttachments:
-                                                pendingAttachments,
-                                            composerHasText: _composerHasText,
-                                            composerError: state.composerError,
-                                            showAttachmentWarning:
-                                                showAttachmentWarning,
-                                            retryReport: retryReport,
-                                            retryShareId: retryShareId,
-                                            subjectController:
-                                                _subjectController,
-                                            subjectFocusNode: _subjectFocusNode,
-                                            textController: _textController,
-                                            textFocusNode: _focusNode,
-                                            onSubjectSubmitted: () =>
-                                                _focusNode.requestFocus(),
-                                            onRecipientAdded: (target) =>
-                                                context.read<ChatBloc>().add(
-                                                      ChatComposerRecipientAdded(
-                                                        target,
-                                                      ),
-                                                    ),
-                                            onRecipientRemoved: (key) =>
-                                                context.read<ChatBloc>().add(
-                                                      ChatComposerRecipientRemoved(
-                                                        key,
-                                                      ),
-                                                    ),
-                                            onRecipientToggled: (key) =>
-                                                context.read<ChatBloc>().add(
-                                                      ChatComposerRecipientToggled(
-                                                        key,
-                                                      ),
-                                                    ),
-                                            onAttachmentRetry: (id) =>
-                                                context.read<ChatBloc>().add(
-                                                      ChatAttachmentRetryRequested(
-                                                        id,
-                                                      ),
-                                                    ),
-                                            onAttachmentRemove: (id) =>
-                                                context.read<ChatBloc>().add(
-                                                      ChatPendingAttachmentRemoved(
-                                                        id,
-                                                      ),
-                                                    ),
-                                            onPendingAttachmentPressed:
-                                                _handlePendingAttachmentPressed,
-                                            onPendingAttachmentLongPressed:
-                                                _handlePendingAttachmentLongPressed,
-                                            pendingAttachmentMenuBuilder:
-                                                _pendingAttachmentMenuItems,
-                                            buildComposerAccessories: (
-                                                    {required bool canSend}) =>
-                                                _composerAccessories(
-                                              canSend: canSend,
-                                              attachmentsEnabled:
-                                                  attachmentsEnabled,
-                                            ),
-                                            onTaskDropped: _handleTaskDrop,
-                                            onSend: _handleSendMessage,
-                                          );
-                                        }(),
+                                      bottomSection,
                                     ],
                                   );
                                 },
@@ -7014,29 +7120,6 @@ class _ChatState extends State<Chat> {
                                 title: context.l10n.draftAttachmentsLabel,
                                 onClose: _closeChatAttachments,
                                 chat: chatEntity,
-                              ),
-                              _ChatPinnedMessagesPanel(
-                                key: ValueKey(
-                                  '$_chatPinnedPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
-                                ),
-                                chat: chatEntity,
-                                visible: _chatRoute == _ChatRoute.pins,
-                                pinnedMessages: state.pinnedMessages,
-                                pinnedMessagesLoaded:
-                                    state.pinnedMessagesLoaded,
-                                pinnedMessagesHydrating:
-                                    state.pinnedMessagesHydrating,
-                                onClose: _closePinnedMessages,
-                                canTogglePins: canTogglePins,
-                                canShowCalendarTasks: chatCalendarBloc != null,
-                                roomState: state.roomState,
-                                metadataStreamFor: _metadataStreamFor,
-                                metadataInitialFor: _metadataInitialFor,
-                                attachmentsBlocked: attachmentsBlockedForChat,
-                                isOneTimeAttachmentAllowed:
-                                    _isOneTimeAttachmentAllowed,
-                                shouldAllowAttachment: _shouldAllowAttachment,
-                                onApproveAttachment: _approveAttachment,
                               ),
                               _ChatCalendarPanel(
                                 key: ValueKey(
@@ -7523,6 +7606,7 @@ class _ChatState extends State<Chat> {
     setState(() {
       _chatRoute = _ChatRoute.details;
       _settingsPanelExpanded = false;
+      _pinnedPanelVisible = false;
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
       }
@@ -7535,6 +7619,7 @@ class _ChatState extends State<Chat> {
     setState(() {
       _chatRoute = _ChatRoute.calendar;
       _settingsPanelExpanded = false;
+      _pinnedPanelVisible = false;
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
       }
@@ -7546,16 +7631,17 @@ class _ChatState extends State<Chat> {
     setState(() {
       _chatRoute = _ChatRoute.attachments;
       _settingsPanelExpanded = false;
+      _pinnedPanelVisible = false;
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
       }
     });
   }
 
-  void _openPinnedMessages() {
+  void _togglePinnedMessages() {
     if (!mounted) return;
     setState(() {
-      _chatRoute = _ChatRoute.pins;
+      _pinnedPanelVisible = !_pinnedPanelVisible;
       _settingsPanelExpanded = false;
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
@@ -7581,7 +7667,7 @@ class _ChatState extends State<Chat> {
   void _closePinnedMessages() {
     if (!mounted) return;
     setState(() {
-      _chatRoute = _ChatRoute.main;
+      _pinnedPanelVisible = false;
     });
   }
 
@@ -7756,6 +7842,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     super.key,
     required this.chat,
     required this.visible,
+    required this.maxHeight,
     required this.pinnedMessages,
     required this.pinnedMessagesLoaded,
     required this.pinnedMessagesHydrating,
@@ -7773,6 +7860,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
 
   final chat_models.Chat? chat;
   final bool visible;
+  final double maxHeight;
   final List<PinnedMessageItem> pinnedMessages;
   final bool pinnedMessagesLoaded;
   final bool pinnedMessagesHydrating;
@@ -7841,26 +7929,50 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
     }
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final showLoading = widget.visible && !widget.pinnedMessagesLoaded;
-    final Widget body = showLoading
-        ? Center(
-            child: AxiProgressIndicator(
-              dimension: _pinnedListLoadingIndicatorSize,
-              color: colors.mutedForeground,
+    final showPanel =
+        widget.visible && widget.maxHeight > _chatPinnedPanelMinHeight;
+    final showLoading = showPanel && !widget.pinnedMessagesLoaded;
+    final subtitle = resolvedChat.displayName.trim();
+    final Widget panelBody = showLoading
+        ? Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: _chatPinnedPanelEmptyStatePadding,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AxiProgressIndicator(
+                  dimension: _pinnedListLoadingIndicatorSize,
+                  color: colors.mutedForeground,
+                ),
+              ],
             ),
           )
         : widget.pinnedMessages.isEmpty
-            ? Center(
-                child: Text(
-                  l10n.chatPinnedEmptyState,
-                  textAlign: TextAlign.center,
-                  style: context.textTheme.muted.copyWith(
-                    color: colors.mutedForeground,
-                  ),
+            ? Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: _chatPinnedPanelEmptyStatePadding,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        l10n.chatPinnedEmptyState,
+                        textAlign: TextAlign.center,
+                        style: context.textTheme.muted.copyWith(
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               )
             : ListView.separated(
                 padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                primary: false,
+                physics: const ClampingScrollPhysics(),
                 itemCount: widget.pinnedMessages.length,
                 separatorBuilder: (_, __) => const AxiListDivider(),
                 itemBuilder: (context, index) {
@@ -7882,13 +7994,72 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                   );
                 },
               );
-    return AxiSheetScaffold(
-      header: AxiSheetHeader(
-        title: Text(l10n.chatPinnedMessagesTitle),
-        subtitle: Text(resolvedChat.displayName),
-        onClose: widget.onClose,
+    final panel = ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: widget.maxHeight),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: _chatPinnedPanelHorizontalPadding,
+          vertical: _chatPinnedPanelVerticalPadding,
+        ),
+        decoration: BoxDecoration(
+          color: colors.card,
+          border: Border(
+            bottom: BorderSide(color: colors.border),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.chatPinnedMessagesTitle,
+                        style: context.textTheme.large,
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: _chatHeaderActionSpacing,
+                          ),
+                          child: Text(
+                            subtitle,
+                            style: context.textTheme.muted.copyWith(
+                              color: colors.mutedForeground,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                AxiIconButton(
+                  iconData: LucideIcons.x,
+                  tooltip: l10n.commonClose,
+                  onPressed: widget.onClose,
+                ),
+              ],
+            ),
+            const SizedBox(height: _chatPinnedPanelHeaderSpacing),
+            Flexible(
+              fit: FlexFit.loose,
+              child: panelBody,
+            ),
+          ],
+        ),
       ),
-      body: body,
+    );
+    return AnimatedCrossFade(
+      duration: context.watch<SettingsCubit>().animationDuration,
+      reverseDuration: context.watch<SettingsCubit>().animationDuration,
+      sizeCurve: Curves.easeInOutCubic,
+      crossFadeState:
+          showPanel ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      firstChild: const SizedBox.shrink(),
+      secondChild: panel,
     );
   }
 }
