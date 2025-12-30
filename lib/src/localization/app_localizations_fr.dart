@@ -1810,6 +1810,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authCustomServerSmtpHostPlaceholder => 'Hôte SMTP (optionnel)';
 
   @override
+  String get authCustomServerImapHostPlaceholder => 'Hôte IMAP (optionnel)';
+
+  @override
   String get authCustomServerApiPortPlaceholder => 'Port API';
 
   @override
@@ -1926,7 +1929,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatAttachmentDownloadAndShare => 'Télécharger et partager';
 
   @override
-  String get chatAttachmentExportTitle => 'Enregistrer la pièce jointe ?';
+  String get chatAttachmentExportTitle => 'Enregistrer la pièce jointe ?';
 
   @override
   String get chatAttachmentExportMessage =>
