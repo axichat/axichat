@@ -88,6 +88,17 @@ const double _attachmentRemoteSpacing = 8.0;
 const double _attachmentRemoteBodySpacing = 12.0;
 const int _attachmentFileNameMaxLines = 1;
 const TextOverflow _attachmentFileNameOverflow = TextOverflow.ellipsis;
+const double _attachmentFileIconWidth = 42.0;
+const double _attachmentFileIconHeight = 46.0;
+const double _attachmentFileIconSize = 20.0;
+const double _attachmentFileRowSpacing = 12.0;
+const int _attachmentActionButtonCount = 3;
+const double _attachmentActionRowMinWidth =
+    (AxiIconButton.kTapTargetSize * _attachmentActionButtonCount) +
+        (_attachmentActionSpacing * (_attachmentActionButtonCount - 1));
+const double _attachmentInlineActionsMinWidth = _attachmentFileIconWidth +
+    (_attachmentFileRowSpacing * 2) +
+    _attachmentActionRowMinWidth;
 const double _attachmentUnknownMaxWidth = 420.0;
 const double _attachmentMaxWidthFraction = 0.9;
 const int _attachmentImagePreviewMaxBytes = 16 * 1024 * 1024;
@@ -1521,86 +1532,110 @@ class _FileAttachmentState extends State<_FileAttachment> {
         );
       });
     }
+    final Widget attachmentIcon = DecoratedBox(
+      decoration: ShapeDecoration(
+        color: colors.muted.withValues(alpha: 0.15),
+        shape: SquircleBorder(
+          cornerRadius: 12,
+          side: BorderSide(color: colors.border),
+        ),
+      ),
+      child: const SizedBox(
+        width: _attachmentFileIconWidth,
+        height: _attachmentFileIconHeight,
+        child: Icon(
+          LucideIcons.paperclip,
+          size: _attachmentFileIconSize,
+        ),
+      ),
+    );
+    final Widget attachmentDetails = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 4,
+      children: [
+        _AttachmentFileNameText(
+          filename: metadata.filename,
+          style: context.textTheme.small.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          _formatSize(metadata.sizeBytes, l10n),
+          style: context.textTheme.small.copyWith(
+            color: colors.mutedForeground,
+          ),
+        ),
+      ],
+    );
+    final Widget attachmentActions = _downloading
+        ? SizedBox(
+            width: 48,
+            height: 48,
+            child: Center(
+              child: _AttachmentSpinner(
+                size: 18,
+                color: colors.primary,
+              ),
+            ),
+          )
+        : Wrap(
+            alignment: WrapAlignment.end,
+            spacing: _attachmentActionSpacing,
+            runSpacing: _attachmentActionSpacing,
+            children: [
+              AxiIconButton(
+                iconData: LucideIcons.save,
+                tooltip: l10n.commonSave,
+                onPressed: hasLocalFile || canDownload ? _saveAttachment : null,
+              ),
+              AxiIconButton(
+                iconData: LucideIcons.share2,
+                tooltip: l10n.chatActionShare,
+                onPressed: shareEnabled ? _shareAttachment : null,
+              ),
+              AxiIconButton(
+                iconData: openIconData,
+                tooltip: openTooltip,
+                color: openColor,
+                onPressed: openAction,
+              ),
+            ],
+          );
     return _AttachmentSurface(
-      child: Row(
-        children: [
-          DecoratedBox(
-            decoration: ShapeDecoration(
-              color: colors.muted.withValues(alpha: 0.15),
-              shape: SquircleBorder(
-                cornerRadius: 12,
-                side: BorderSide(color: colors.border),
-              ),
-            ),
-            child: const SizedBox(
-              width: 42,
-              height: 46,
-              child: Icon(
-                LucideIcons.paperclip,
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                _AttachmentFileNameText(
-                  filename: metadata.filename,
-                  style: context.textTheme.small.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  _formatSize(metadata.sizeBytes, l10n),
-                  style: context.textTheme.small.copyWith(
-                    color: colors.mutedForeground,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          if (_downloading)
-            SizedBox(
-              width: 48,
-              height: 48,
-              child: Center(
-                child: _AttachmentSpinner(
-                  size: 18,
-                  color: colors.primary,
-                ),
-              ),
-            )
-          else
-            Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool stackActions =
+              constraints.maxWidth < _attachmentInlineActionsMinWidth;
+          if (stackActions) {
+            return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AxiIconButton(
-                  iconData: LucideIcons.save,
-                  tooltip: l10n.commonSave,
-                  onPressed:
-                      hasLocalFile || canDownload ? _saveAttachment : null,
+                Row(
+                  children: [
+                    attachmentIcon,
+                    const SizedBox(width: _attachmentFileRowSpacing),
+                    Expanded(child: attachmentDetails),
+                  ],
                 ),
-                const SizedBox(width: _attachmentActionSpacing),
-                AxiIconButton(
-                  iconData: LucideIcons.share2,
-                  tooltip: l10n.chatActionShare,
-                  onPressed: shareEnabled ? _shareAttachment : null,
-                ),
-                const SizedBox(width: _attachmentActionSpacing),
-                AxiIconButton(
-                  iconData: openIconData,
-                  tooltip: openTooltip,
-                  color: openColor,
-                  onPressed: openAction,
+                const SizedBox(height: _attachmentActionSpacing),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: attachmentActions,
                 ),
               ],
-            ),
-        ],
+            );
+          }
+          return Row(
+            children: [
+              attachmentIcon,
+              const SizedBox(width: _attachmentFileRowSpacing),
+              Expanded(child: attachmentDetails),
+              const SizedBox(width: _attachmentFileRowSpacing),
+              attachmentActions,
+            ],
+          );
+        },
       ),
     );
   }

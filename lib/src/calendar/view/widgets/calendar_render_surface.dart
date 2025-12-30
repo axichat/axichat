@@ -1505,6 +1505,9 @@ class RenderCalendarSurface extends RenderBox
     _geometryDispatchPending = true;
     _controller?._markGeometryDirty();
     markNeedsPaint();
+    invokeLayoutCallback((_) {
+      _flushGeometryCallbacks();
+    });
   }
 
   Iterable<_DayColumnGeometry> _resolveDayGeometries() {
@@ -1596,7 +1599,6 @@ class RenderCalendarSurface extends RenderBox
     if (_metrics != null) {
       _paintCurrentTimeIndicator(context.canvas, offset, _metrics!);
     }
-    _flushGeometryCallbacks();
   }
 
   void _flushGeometryCallbacks() {

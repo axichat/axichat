@@ -38,6 +38,7 @@ import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -65,7 +66,6 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
@@ -400,6 +400,18 @@ abstract interface class XmppBase {
   bool get demoOfflineMode;
 }
 
+class XmppStreamReady {
+  const XmppStreamReady({
+    required this.resumed,
+    required this.timestamp,
+  });
+
+  final bool resumed;
+  final DateTime timestamp;
+
+  bool get isResumed => resumed;
+}
+
 class XmppService extends XmppBase
     with
         BaseStreamService,
@@ -483,6 +495,8 @@ class XmppService extends XmppBase
     bookmarks2Supported: false,
   );
   var _pubSubSupportResolved = false;
+  final _streamReadyController = StreamController<XmppStreamReady>.broadcast();
+  XmppStreamReady? _lastStreamReady;
 
   bool get mamSupported => _mamSupported;
 
@@ -500,6 +514,11 @@ class XmppService extends XmppBase
   @override
   Stream<PubSubSupport> get pubSubSupportStream =>
       _pubSubSupportController.stream;
+
+  Stream<XmppStreamReady> get streamReadyStream =>
+      _streamReadyController.stream;
+
+  XmppStreamReady? get lastStreamReady => _lastStreamReady;
 
   @override
   AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
@@ -621,6 +640,7 @@ class XmppService extends XmppBase
             (db) => db.markMessageAcked(event.stanza.id!));
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        _recordStreamReady(event.resumed);
         _repairConnectionStateFromTraffic(
           reason: _connectivityRepairReasonStreamNegotiationsDone,
         );
@@ -804,6 +824,21 @@ class XmppService extends XmppBase
   static const _reconnectEnableFailedLog =
       'Failed to enable reconnection before requesting reconnect.';
 
+  Future<XmppStreamReady?> waitForStreamReady(Duration timeout) async {
+    if (connectionState != ConnectionState.connected) {
+      return null;
+    }
+    final lastReady = _lastStreamReady;
+    if (lastReady != null) {
+      return lastReady;
+    }
+    try {
+      return await streamReadyStream.first.timeout(timeout);
+    } on TimeoutException {
+      return null;
+    }
+  }
+
   void _setConnectionState(ConnectionState state) {
     if (_connectionState == state) {
       return;
@@ -816,11 +851,26 @@ class XmppService extends XmppBase
 
     if (state != ConnectionState.connected) {
       _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+      _clearStreamReady();
     }
 
     if (withForeground) {
       unawaited(_connection.updateConnectivityNotification(state));
     }
+  }
+
+  void _recordStreamReady(bool resumed) {
+    final ready = XmppStreamReady(
+      resumed: resumed,
+      timestamp: DateTime.timestamp(),
+    );
+    _lastStreamReady = ready;
+    if (_streamReadyController.isClosed) return;
+    _streamReadyController.add(ready);
+  }
+
+  void _clearStreamReady() {
+    _lastStreamReady = null;
   }
 
   void _repairConnectionStateFromTraffic({required String reason}) {
@@ -935,16 +985,6 @@ class XmppService extends XmppBase
   static const _foregroundSocketMigrationCooldown = Duration(seconds: 30);
   static const _foregroundSocketWarmupClientId =
       '${foregroundClientXmpp}_warmup';
-  static const bool _foregroundServiceRunningFallback = false;
-
-  Future<bool> _isForegroundServiceRunning() async {
-    try {
-      return await FlutterForegroundTask.isRunningService;
-    } on Exception {
-      return _foregroundServiceRunningFallback;
-    }
-  }
-
   void _scheduleForegroundSocketMigration() {
     if (!withForeground) {
       return;
@@ -1115,7 +1155,7 @@ class XmppService extends XmppBase
       },
     );
 
-    await _resolveMamSupportForAccount();
+    unawaited(_resolveMamSupportForAccount());
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
     unawaited(refreshSelfAvatarIfNeeded());
@@ -1911,10 +1951,9 @@ class XmppService extends XmppBase
     if (await _connection.isReconnecting()) {
       return;
     }
-    final bool serviceRunning = await _isForegroundServiceRunning();
     final bool usingForegroundSocket =
         _connection.socketWrapper is ForegroundSocketWrapper;
-    if (serviceRunning && usingForegroundSocket) {
+    if (usingForegroundSocket) {
       return;
     }
     if (!_connection.hasConnectionSettings) {
@@ -2227,6 +2266,9 @@ class XmppService extends XmppBase
     if (!_mamSupportController.isClosed) {
       await _mamSupportController.close();
     }
+    if (!_streamReadyController.isClosed) {
+      await _streamReadyController.close();
+    }
     if (!_databaseReloadController.isClosed) {
       await _databaseReloadController.close();
     }
@@ -2443,12 +2485,7 @@ class XmppService extends XmppBase
   Future<void> _syncAfterReconnect() async {
     if (connectionState != ConnectionState.connected) return;
     try {
-      final outcome = await syncGlobalMamCatchUp();
-      final includeDirect = outcome.shouldFallbackToPerChat;
-      await syncMessageArchiveOnLogin(
-        includeDirect: includeDirect,
-        includeMuc: true,
-      );
+      await syncGlobalMamCatchUp();
     } on Exception catch (error, stackTrace) {
       _xmppLogger.fine('Reconnect MAM catch-up failed.', error, stackTrace);
     }

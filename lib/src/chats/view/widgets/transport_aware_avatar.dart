@@ -1,7 +1,12 @@
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 class TransportAwareAvatar extends StatelessWidget {
   const TransportAwareAvatar({
@@ -25,6 +30,45 @@ class TransportAwareAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ProfileState? profile;
+    try {
+      profile = context.watch<ProfileCubit?>()?.state;
+    } on Exception {
+      profile = null;
+    }
+    EmailService? emailService;
+    try {
+      emailService = RepositoryProvider.of<EmailService>(
+        context,
+        listen: false,
+      );
+    } on Exception {
+      emailService = null;
+    }
+    XmppService? xmppService;
+    try {
+      xmppService = RepositoryProvider.of<XmppService>(
+        context,
+        listen: false,
+      );
+    } on Exception {
+      xmppService = null;
+    }
+    final String? normalizedChatJid = _normalizeBareJid(chat.remoteJid);
+    final resolvedProfileJid = profile?.jid.trim();
+    final String? selfXmppJid = resolvedProfileJid?.isNotEmpty == true
+        ? resolvedProfileJid
+        : xmppService?.myJid;
+    final String? normalizedXmppSelfJid = _normalizeBareJid(selfXmppJid);
+    final String? normalizedEmailSelfJid =
+        _normalizeBareJid(emailService?.selfSenderJid);
+    final bool isSelfChat = normalizedChatJid != null &&
+        ((normalizedXmppSelfJid != null &&
+                normalizedChatJid == normalizedXmppSelfJid) ||
+            (normalizedEmailSelfJid != null &&
+                normalizedChatJid == normalizedEmailSelfJid));
+    final String? selfAvatarPath = profile?.avatarPath?.trim();
+    final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
     final avatarIdentifier = chat.contactDisplayName?.trim().isNotEmpty == true
         ? chat.contactDisplayName!.trim()
         : chat.title.trim().isNotEmpty
@@ -66,7 +110,9 @@ class TransportAwareAvatar extends StatelessWidget {
               presence: presence,
               status: status,
               subscription: effectiveSubscription,
-              avatarPath: chat.avatarPath ?? chat.contactAvatarPath,
+              avatarPath: isSelfChat && hasSelfAvatarPath
+                  ? selfAvatarPath
+                  : chat.avatarPath ?? chat.contactAvatarPath,
             ),
           ),
           if (badge != null)
@@ -78,5 +124,17 @@ class TransportAwareAvatar extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+String? _normalizeBareJid(String? jid) {
+  final trimmed = jid?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  try {
+    return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
+  } on Exception {
+    return trimmed.toLowerCase();
   }
 }

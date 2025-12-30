@@ -438,6 +438,7 @@ enum MamGlobalSyncOutcome {
   skippedUnsupported,
   skippedDenied,
   skippedInFlight,
+  skippedResumed,
   failed;
 }
 
@@ -448,6 +449,7 @@ extension MamGlobalSyncOutcomeBehavior on MamGlobalSyncOutcome {
         MamGlobalSyncOutcome.completed => false,
         MamGlobalSyncOutcome.skippedUnsupported => false,
         MamGlobalSyncOutcome.skippedInFlight => false,
+        MamGlobalSyncOutcome.skippedResumed => false,
       };
 }
 
@@ -627,16 +629,8 @@ mixin MessageService
     List<Message> filteredMessagesForChat(
       List<Message> messages,
     ) {
-      final selfJid = myJid;
-      if (selfJid == null || jid != selfJid) {
-        return messages;
-      }
-
       final filtered = messages.where((message) {
-        final body = message.body;
-        if (body == null || body.isEmpty) return true;
-        return !CalendarSyncMessage.isCalendarSyncEnvelope(body) &&
-            !_MessageStatusSyncEnvelope.isEnvelope(body);
+        return !_isInternalSyncEnvelope(message.body);
       }).toList(growable: false);
 
       return List<Message>.unmodifiable(filtered);
@@ -648,6 +642,13 @@ mixin MessageService
       end: end,
       filter: filter,
     ).map(filteredMessagesForChat);
+  }
+
+  bool _isInternalSyncEnvelope(String? body) {
+    final trimmed = body?.trim();
+    if (trimmed == null || trimmed.isEmpty) return false;
+    return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed) ||
+        _MessageStatusSyncEnvelope.isEnvelope(trimmed);
   }
 
   Stream<List<Message>> _localMessageStreamForChat({
@@ -1664,6 +1665,10 @@ mixin MessageService
 
         if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event, metadata: metadata)) return;
+        if (_isInternalSyncEnvelope(message.body)) {
+          unawaited(_acknowledgeMessage(event));
+          return;
+        }
 
         final hasInvite = event.get<DirectMucInviteData>() != null ||
             event.get<AxiMucInvitePayload>() != null;
@@ -2034,12 +2039,10 @@ mixin MessageService
 
       String? after = await _loadMamGlobalLastId();
       final anchor = await _loadMamGlobalLastSync();
-      String? before;
-      DateTime? start;
-      if (after == null) {
-        before = '';
-        start = anchor;
-      }
+      DateTime? start = after == null ? anchor : null;
+      String? before = after == null && start == null
+          ? ''
+          : null; // Seed last page only on first-run.
 
       while (true) {
         final result = await _fetchGlobalMamPage(
@@ -6373,10 +6376,8 @@ mixin MessageService
             if (chat?.spam ?? false) {
               return false;
             }
-            if (chat != null && chat.type == ChatType.groupChat) {
-              return chat.attachmentAutoDownload.isAllowed;
-            }
-            return (await db.getRosterItem(message.chatJid)) != null;
+            if (chat == null) return false;
+            return chat.attachmentAutoDownload.isAllowed;
           },
         );
       }

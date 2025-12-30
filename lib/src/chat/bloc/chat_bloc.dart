@@ -4,8 +4,10 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
+import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
@@ -901,20 +903,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final attachmentMaps = await _loadAttachmentMaps(event.items);
+    final filtered = await _filterInternalMessages(
+      messages: event.items,
+      attachmentsByMessageId: attachmentMaps.attachmentsByMessageId,
+      groupLeaderByMessageId: attachmentMaps.groupLeaderByMessageId,
+    );
+    final filteredItems = filtered.messages;
     emit(
       state.copyWith(
-        items: event.items,
+        items: filteredItems,
         messagesLoaded: true,
-        attachmentMetadataIdsByMessageId: attachmentMaps.attachmentsByMessageId,
-        attachmentGroupLeaderByMessageId: attachmentMaps.groupLeaderByMessageId,
+        attachmentMetadataIdsByMessageId: filtered.attachmentsByMessageId,
+        attachmentGroupLeaderByMessageId: filtered.groupLeaderByMessageId,
       ),
     );
     if (state.chat?.type == ChatType.groupChat) {
-      _mucService.trackOccupantsFromMessages(state.chat!.jid, event.items);
+      _mucService.trackOccupantsFromMessages(state.chat!.jid, filteredItems);
     }
     if (state.chat?.supportsEmail == true) {
-      await _hydrateShareContexts(event.items, emit);
-      await _hydrateShareReplies(event.items, emit);
+      await _hydrateShareContexts(filteredItems, emit);
+      await _hydrateShareReplies(filteredItems, emit);
     }
 
     final chat = state.chat;
@@ -924,7 +932,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         chat.type != ChatType.groupChat &&
         lifecycleState == AppLifecycleState.resumed) {
       final selfBare = _bareJid(_chatsService.myJid);
-      for (final item in event.items) {
+      for (final item in filteredItems) {
         if (!item.displayed &&
             _bareJid(item.senderJid) != selfBare &&
             item.body?.isNotEmpty == true) {
@@ -939,7 +947,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         lifecycleState == AppLifecycleState.resumed) {
       await emailService.markNoticedChat(chat);
       final selfBare = _bareJid(_chatsService.myJid);
-      final seenCandidates = event.items
+      final seenCandidates = filteredItems
           .where((message) => message.deltaMsgId != null)
           .where((message) => !message.displayed)
           .where((message) => _bareJid(message.senderJid) != selfBare)
@@ -3561,6 +3569,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   String _messageKey(Message message) => message.id ?? message.stanzaID;
 
+  List<String> _orderedUniqueAttachmentIds(
+    Iterable<MessageAttachmentData> attachments,
+  ) {
+    final orderedIds = <String>{};
+    for (final attachment in attachments) {
+      final id = attachment.fileMetadataId;
+      if (id.isEmpty) {
+        continue;
+      }
+      orderedIds.add(id);
+    }
+    return orderedIds.toList(growable: false);
+  }
+
   Future<
       ({
         Map<String, List<String>> attachmentsByMessageId,
@@ -3593,8 +3615,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             .whereType<MessageAttachmentData>()
             .toList(growable: false)
           ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-        attachmentByMessageId[entry.key] =
-            sorted.map((attachment) => attachment.fileMetadataId).toList();
+        attachmentByMessageId[entry.key] = _orderedUniqueAttachmentIds(sorted);
       }
 
       final grouped = <String, List<MessageAttachmentData>>{};
@@ -3626,9 +3647,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         final orderedGroup = List<MessageAttachmentData>.from(groupEntries)
           ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-        attachmentByMessageId[leaderId] = orderedGroup
-            .map((attachment) => attachment.fileMetadataId)
-            .toList();
+        attachmentByMessageId[leaderId] =
+            _orderedUniqueAttachmentIds(orderedGroup);
       }
     }
 
@@ -3644,6 +3664,123 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return (
       attachmentsByMessageId: attachmentByMessageId,
       groupLeaderByMessageId: groupLeaderByMessageId,
+    );
+  }
+
+  bool _isCalendarSyncEnvelope(String? body) {
+    final trimmed = body?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return false;
+    }
+    return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed);
+  }
+
+  Future<Set<String>> _snapshotMetadataIdsFor(
+    Map<String, List<String>> attachmentsByMessageId,
+  ) async {
+    if (attachmentsByMessageId.isEmpty) {
+      return const <String>{};
+    }
+    final allIds = <String>{};
+    for (final entry in attachmentsByMessageId.values) {
+      allIds.addAll(entry);
+    }
+    if (allIds.isEmpty) {
+      return const <String>{};
+    }
+    final db = await _messageService.database;
+    final snapshotIds = <String>{};
+    for (final metadataId in allIds) {
+      final metadata = await db.getFileMetadata(metadataId);
+      final mimeType = metadata?.mimeType?.trim();
+      if (mimeType == CalendarSnapshotCodec.mimeType) {
+        snapshotIds.add(metadataId);
+      }
+    }
+    return snapshotIds;
+  }
+
+  Future<
+      ({
+        List<Message> messages,
+        Map<String, List<String>> attachmentsByMessageId,
+        Map<String, String> groupLeaderByMessageId,
+      })> _filterInternalMessages({
+    required List<Message> messages,
+    required Map<String, List<String>> attachmentsByMessageId,
+    required Map<String, String> groupLeaderByMessageId,
+  }) async {
+    if (messages.isEmpty) {
+      return (
+        messages: messages,
+        attachmentsByMessageId: attachmentsByMessageId,
+        groupLeaderByMessageId: groupLeaderByMessageId,
+      );
+    }
+    final snapshotIds = await _snapshotMetadataIdsFor(attachmentsByMessageId);
+    final blockedKeys = <String>{};
+    for (final entry in attachmentsByMessageId.entries) {
+      if (entry.value.any(snapshotIds.contains)) {
+        blockedKeys.add(entry.key);
+      }
+    }
+    final filteredMessages = <Message>[];
+    for (final message in messages) {
+      final key = _messageKey(message);
+      if (_isCalendarSyncEnvelope(message.body)) {
+        blockedKeys.add(key);
+      }
+    }
+    if (blockedKeys.isNotEmpty) {
+      for (final entry in groupLeaderByMessageId.entries) {
+        if (blockedKeys.contains(entry.value)) {
+          blockedKeys.add(entry.key);
+        }
+      }
+    }
+    for (final message in messages) {
+      final key = _messageKey(message);
+      if (blockedKeys.contains(key)) {
+        continue;
+      }
+      filteredMessages.add(message);
+    }
+    if (blockedKeys.isEmpty) {
+      return (
+        messages: messages,
+        attachmentsByMessageId: attachmentsByMessageId,
+        groupLeaderByMessageId: groupLeaderByMessageId,
+      );
+    }
+    if (filteredMessages.length == messages.length) {
+      return (
+        messages: messages,
+        attachmentsByMessageId: attachmentsByMessageId,
+        groupLeaderByMessageId: groupLeaderByMessageId,
+      );
+    }
+    final retainedKeys = filteredMessages.map(_messageKey).toSet();
+    final filteredAttachments = <String, List<String>>{};
+    for (final entry in attachmentsByMessageId.entries) {
+      if (retainedKeys.contains(entry.key)) {
+        filteredAttachments[entry.key] = entry.value;
+      }
+    }
+    final filteredLeaders = <String, String>{};
+    for (final entry in groupLeaderByMessageId.entries) {
+      if (!retainedKeys.contains(entry.key)) {
+        continue;
+      }
+      final leaderId = entry.value;
+      if (!retainedKeys.contains(leaderId)) {
+        continue;
+      }
+      filteredLeaders[entry.key] = leaderId;
+    }
+    return (
+      messages: filteredMessages,
+      attachmentsByMessageId: filteredAttachments,
+      groupLeaderByMessageId: filteredLeaders,
     );
   }
 

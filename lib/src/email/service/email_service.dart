@@ -277,6 +277,9 @@ class EmailService {
 
   bool get isRunning => _running;
 
+  bool get hasActiveSession =>
+      _databasePrefix != null && _databasePassphrase != null;
+
   Stream<DeltaCoreEvent> get events => _transport.events;
 
   EmailSyncState get syncState => _syncState;
@@ -1149,9 +1152,10 @@ class EmailService {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
+    await ensureEventChannelActive();
     await _transport.notifyNetworkAvailable();
     unawaited(_bootstrapActiveAccountIfNeeded());
-    unawaited(_runReconnectCatchUp());
+    unawaited(_runReconnectCatchUp().whenComplete(_refreshConnectivityState));
   }
 
   Future<void> handleNetworkLost() async {

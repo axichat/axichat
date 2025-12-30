@@ -28,7 +28,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         _rosterLog.info('Fetching roster...');
-        await requestRoster();
+        unawaited(requestRoster());
       })
       ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
         final requester = event.from.toBare().toString();

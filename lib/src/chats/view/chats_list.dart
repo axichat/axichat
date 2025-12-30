@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
@@ -706,6 +707,9 @@ class _ChatListTileState extends State<ChatListTile> {
   String? _subtitlePreview(String? rawMessage) {
     final String? trimmed = rawMessage?.trim();
     if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    if (CalendarSyncMessage.isCalendarSyncEnvelope(trimmed)) {
       return null;
     }
     final split = ChatSubjectCodec.splitXmppBody(trimmed);

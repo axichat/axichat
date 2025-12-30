@@ -16,6 +16,7 @@ class HomeRefreshSyncService {
 
   static const Duration _connectionTimeout = Duration(seconds: 20);
   static const int _mamHistoryPageSize = 50;
+  static const Duration _streamReadyTimeout = Duration(seconds: 5);
   static const Duration _emailUnreadFetchTimeout = Duration(seconds: 8);
   static const Duration _emailHistoryFetchTimeout = Duration(seconds: 25);
 
@@ -56,9 +57,24 @@ class HomeRefreshSyncService {
 
   Future<void> syncOnLogin() async {
     try {
-      await refresh();
+      await refreshUnreadOnly();
     } on Exception {
       _log.fine('Post-login sync failed.');
+    }
+  }
+
+  Future<DateTime> refreshUnreadOnly() async {
+    if (_syncInFlight) {
+      return _lastSyncAt ?? DateTime.timestamp();
+    }
+    _syncInFlight = true;
+    try {
+      await _healTransports();
+      await _pullUnreadFromNewContacts();
+      _lastSyncAt = DateTime.timestamp();
+      return _lastSyncAt!;
+    } finally {
+      _syncInFlight = false;
     }
   }
 
@@ -69,13 +85,12 @@ class HomeRefreshSyncService {
     _syncInFlight = true;
     try {
       await _healTransports();
-      final mamOutcome = await _pullUnreadFromNewContacts();
+      await _pullUnreadFromNewContacts();
       await _syncEmailContacts();
       await _refreshAntiAbuseLists();
       await _refreshConversationIndex();
       await _refreshMucBookmarks();
       await _refreshEmailHistory();
-      await _refreshXmppHistory(mamOutcome: mamOutcome);
       await _rehydrateCalendar();
       await _refreshAvatars();
       await _refreshDrafts();
@@ -109,7 +124,7 @@ class HomeRefreshSyncService {
       return;
     }
     try {
-      await refresh();
+      await refreshUnreadOnly();
     } on Exception {
       _log.fine('Reconnect sync failed.');
     }
@@ -138,6 +153,11 @@ class HomeRefreshSyncService {
   Future<MamGlobalSyncOutcome> _refreshXmppUnread() async {
     if (_xmppService.connectionState != ConnectionState.connected) {
       return MamGlobalSyncOutcome.failed;
+    }
+    final streamReady =
+        await _xmppService.waitForStreamReady(_streamReadyTimeout);
+    if (streamReady?.isResumed ?? false) {
+      return MamGlobalSyncOutcome.skippedResumed;
     }
     return _xmppService.syncGlobalMamCatchUp(
       pageSize: _mamHistoryPageSize,
@@ -218,17 +238,6 @@ class HomeRefreshSyncService {
     if (_xmppService.connectionState != ConnectionState.connected) return;
     await _xmppService.syncSpamSnapshot();
     await _xmppService.syncEmailBlocklistSnapshot();
-  }
-
-  Future<void> _refreshXmppHistory({
-    required MamGlobalSyncOutcome mamOutcome,
-  }) async {
-    if (_xmppService.connectionState != ConnectionState.connected) return;
-    final includeDirect = mamOutcome.shouldFallbackToPerChat;
-    await _xmppService.syncMessageArchiveOnLogin(
-      includeDirect: includeDirect,
-      includeMuc: true,
-    );
   }
 
   Future<void> _refreshAvatars() async {
