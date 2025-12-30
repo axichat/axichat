@@ -206,9 +206,13 @@ mixin MucService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
         if (connectionState != ConnectionState.connected) return;
-        await discoverMucServiceHost();
-        unawaited(syncMucBookmarksOnLogin());
+        unawaited(_bootstrapMucOnLogin());
       });
+  }
+
+  Future<void> _bootstrapMucOnLogin() async {
+    await discoverMucServiceHost();
+    await syncMucBookmarksOnLogin();
   }
 
   Stream<RoomState> roomStateStream(String roomJid) {

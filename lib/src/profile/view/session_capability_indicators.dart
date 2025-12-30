@@ -9,6 +9,16 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const _capabilityChipSpacing = 8.0;
 const _capabilityChipRunSpacing = 6.0;
+const double _capabilityChipCornerRadius = 12.0;
+const double _capabilityChipIconSize = 14.0;
+const double _capabilityChipIconSpacing = 6.0;
+const double _capabilityChipHorizontalPadding = 10.0;
+const double _capabilityChipVerticalPadding = 6.0;
+const double _capabilityChipCompactHorizontalPadding = 8.0;
+const double _capabilityChipCompactVerticalPadding = 4.0;
+const int _capabilityChipMaxLines = 2;
+const int _capabilityChipCompactMaxLines = 1;
+const String _capabilityChipSeparator = ' • ';
 
 class SessionCapabilityIndicators extends StatelessWidget {
   const SessionCapabilityIndicators({
@@ -144,13 +154,33 @@ class _CapabilityChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final chipPadding = compact
-        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
-        : const EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+        ? const EdgeInsets.symmetric(
+            horizontal: _capabilityChipCompactHorizontalPadding,
+            vertical: _capabilityChipCompactVerticalPadding,
+          )
+        : const EdgeInsets.symmetric(
+            horizontal: _capabilityChipHorizontalPadding,
+            vertical: _capabilityChipVerticalPadding,
+          );
+    final labelStyle = context.textTheme.small.copyWith(
+      color: colors.foreground,
+      fontWeight: FontWeight.w600,
+    );
+    final separatorStyle = context.textTheme.small.copyWith(
+      color: colors.mutedForeground,
+      fontWeight: FontWeight.w600,
+    );
+    final statusStyle = context.textTheme.small.copyWith(
+      color: data.foreground,
+      fontWeight: FontWeight.w700,
+    );
+    final maxLines =
+        compact ? _capabilityChipCompactMaxLines : _capabilityChipMaxLines;
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: data.background,
         shape: SquircleBorder(
-          cornerRadius: 12,
+          cornerRadius: _capabilityChipCornerRadius,
           side: BorderSide(color: colors.border),
         ),
       ),
@@ -159,33 +189,28 @@ class _CapabilityChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(data.icon, size: 14, color: colors.foreground),
-            const SizedBox(width: 6),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  data.label,
-                  style: context.textTheme.small.copyWith(
-                    color: colors.foreground,
-                    fontWeight: FontWeight.w600,
-                  ),
+            Icon(
+              data.icon,
+              size: _capabilityChipIconSize,
+              color: colors.foreground,
+            ),
+            const SizedBox(width: _capabilityChipIconSpacing),
+            Flexible(
+              fit: FlexFit.loose,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: data.label, style: labelStyle),
+                    TextSpan(
+                      text: _capabilityChipSeparator,
+                      style: separatorStyle,
+                    ),
+                    TextSpan(text: data.status, style: statusStyle),
+                  ],
                 ),
-                Text(
-                  ' • ',
-                  style: context.textTheme.small.copyWith(
-                    color: colors.mutedForeground,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  data.status,
-                  style: context.textTheme.small.copyWith(
-                    color: data.foreground,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+                maxLines: maxLines,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

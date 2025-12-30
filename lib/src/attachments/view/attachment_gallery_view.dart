@@ -8,18 +8,15 @@ import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _attachmentGalleryHorizontalPadding = 16.0;
@@ -67,6 +64,11 @@ enum AttachmentGallerySourceFilter {
   all,
   sent,
   received,
+}
+
+enum AttachmentGalleryLayout {
+  grid,
+  list,
 }
 
 extension AttachmentGallerySortOptionLabels on AttachmentGallerySortOption {
@@ -210,6 +212,35 @@ extension AttachmentGallerySourceFilterLabels on AttachmentGallerySourceFilter {
   }
 }
 
+bool _isSelfMessage(
+  Message message, {
+  required XmppService xmppService,
+  required EmailService? emailService,
+}) {
+  if (!message.received) return true;
+  final sender = message.senderJid.trim().toLowerCase();
+  final xmppJid = xmppService.myJid?.trim().toLowerCase();
+  if (xmppJid != null && sender == xmppJid) return true;
+  final emailJid = emailService?.selfSenderJid?.trim().toLowerCase();
+  if (emailJid != null && sender == emailJid) return true;
+  return false;
+}
+
+String? _resolveMetaText({
+  required Chat? chat,
+  required bool showChatLabel,
+}) {
+  final parts = <String>[];
+  if (showChatLabel && chat != null) {
+    final label = chat.displayName.trim();
+    if (label.isNotEmpty) {
+      parts.add(label);
+    }
+  }
+  if (parts.isEmpty) return null;
+  return parts.join(_attachmentGalleryMetaSeparator);
+}
+
 class AttachmentGalleryGridMetrics {
   const AttachmentGalleryGridMetrics({
     required this.crossAxisCount,
@@ -292,45 +323,13 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
   }
 
   bool _shouldAllowAttachment({
-    required String senderJid,
     required bool isSelf,
-    required Set<String> knownContacts,
     required Chat? chat,
   }) {
     if (isSelf) return true;
-    if (chat == null) return false;
-    final isGroupChat = chat.type == ChatType.groupChat;
-    final isEmailChat = chat.defaultTransport.isEmail;
-    if (isGroupChat || isEmailChat) {
-      return chat.attachmentAutoDownload.isAllowed;
-    }
-    final senderBare = _bareJid(senderJid) ?? senderJid;
-    final normalizedSender =
-        senderBare.trim().isNotEmpty ? senderBare.trim() : senderJid.trim();
-    return knownContacts.contains(normalizedSender);
-  }
-
-  String? _bareJid(String? jid) {
-    if (jid == null || jid.isEmpty) return null;
-    try {
-      return mox.JID.fromString(jid).toBare().toString();
-    } on Exception {
-      return jid;
-    }
-  }
-
-  bool _isSelfMessage(
-    Message message, {
-    required XmppService xmppService,
-    required EmailService? emailService,
-  }) {
-    if (!message.received) return true;
-    final sender = message.senderJid.trim().toLowerCase();
-    final xmppJid = xmppService.myJid?.trim().toLowerCase();
-    if (xmppJid != null && sender == xmppJid) return true;
-    final emailJid = emailService?.selfSenderJid?.trim().toLowerCase();
-    if (emailJid != null && sender == emailJid) return true;
-    return false;
+    final resolvedChat = chat;
+    if (resolvedChat == null) return false;
+    return resolvedChat.attachmentAutoDownload.isAllowed;
   }
 
   Future<void> _approveAttachment({
@@ -338,7 +337,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     required String senderJid,
     required String stanzaId,
     required Chat? chat,
-    required bool isGroupChat,
     required bool isEmailChat,
   }) async {
     if (!mounted) return;
@@ -346,26 +344,18 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     final senderEmail = chat?.emailAddress;
     final displaySender =
         senderEmail?.trim().isNotEmpty == true ? senderEmail! : senderJid;
-    final senderBare = _bareJid(senderJid) ?? senderJid;
     final xmppService = context.read<XmppService>();
-    final rosterCubit = context.read<RosterCubit?>();
     final chatsCubit = context.read<ChatsCubit?>();
-    final isSelf = xmppService.myJid?.trim().toLowerCase() ==
-        senderBare.trim().toLowerCase();
-    final canAddToRoster = !isSelf &&
-        !isEmailChat &&
-        !isGroupChat &&
-        senderBare.isValidJid &&
-        senderBare.trim().isNotEmpty;
-    final canTrustChat =
-        !isSelf && chat != null && (isEmailChat || isGroupChat);
-    final showAutoTrustToggle = canAddToRoster || canTrustChat;
-    final autoTrustLabel = canAddToRoster
-        ? l10n.attachmentGalleryRosterTrustLabel
-        : l10n.attachmentGalleryChatTrustLabel;
-    final autoTrustHint = canAddToRoster
-        ? l10n.attachmentGalleryRosterTrustHint
-        : l10n.attachmentGalleryChatTrustHint;
+    final emailService = RepositoryProvider.of<EmailService?>(context);
+    final isSelf = _isSelfMessage(
+      message,
+      xmppService: xmppService,
+      emailService: emailService,
+    );
+    final canTrustChat = !isSelf && chat != null;
+    final showAutoTrustToggle = canTrustChat;
+    final autoTrustLabel = l10n.attachmentGalleryChatTrustLabel;
+    final autoTrustHint = l10n.attachmentGalleryChatTrustHint;
     final decision = await showShadDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
@@ -384,24 +374,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     if (!mounted) return;
     if (decision == null || !decision.approved) return;
 
-    final emailService = RepositoryProvider.of<EmailService?>(context);
-    final showToast = ShadToaster.maybeOf(context)?.show;
-    if (decision.alwaysAllow && canAddToRoster) {
-      if (rosterCubit != null) {
-        await rosterCubit.addContact(jid: senderBare);
-      } else {
-        try {
-          await xmppService.addToRoster(jid: senderBare);
-        } on Exception {
-          showToast?.call(
-            FeedbackToast.error(
-              title: l10n.attachmentGalleryRosterErrorTitle,
-              message: l10n.attachmentGalleryRosterErrorMessage,
-            ),
-          );
-        }
-      }
-    }
     if (decision.alwaysAllow && canTrustChat) {
       final resolvedChat = chat;
       if (chatsCubit != null) {
@@ -441,9 +413,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
   Widget build(BuildContext context) {
     final chatsCubit = context.watch<ChatsCubit>();
     final chats = chatsCubit.state.items ?? const <Chat>[];
-    final knownContacts = context.watch<RosterCubit>().contacts;
-    final xmppService = context.read<XmppService>();
-    final emailService = RepositoryProvider.of<EmailService?>(context);
     final autoDownloadSettings =
         context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
     final l10n = context.l10n;
@@ -488,6 +457,12 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
           showChatLabel: showChatLabel,
         );
         final hasFilters = _hasActiveFilters;
+        final hasVisualMedia = filteredItems.any(
+          (item) => item.metadata.mediaKind != AttachmentMediaKind.file,
+        );
+        final layout = hasVisualMedia
+            ? AttachmentGalleryLayout.grid
+            : AttachmentGalleryLayout.list;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -533,92 +508,67 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                         textAlign: TextAlign.center,
                       ),
                     )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final gridMetrics =
-                            _resolveGridMetrics(constraints.maxWidth);
-                        return GridView.builder(
+                  : layout == AttachmentGalleryLayout.list
+                      ? ListView.separated(
                           padding: const EdgeInsets.fromLTRB(
                             _attachmentGalleryHorizontalPadding,
                             0,
                             _attachmentGalleryHorizontalPadding,
                             _attachmentGalleryBottomPadding,
                           ),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: gridMetrics.crossAxisCount,
-                            mainAxisSpacing: _attachmentGalleryGridSpacing,
-                            crossAxisSpacing: _attachmentGalleryGridSpacing,
-                            childAspectRatio: gridMetrics.childAspectRatio,
-                          ),
                           itemCount: filteredItems.length,
-                          itemBuilder: (context, index) {
-                            final item = filteredItems[index];
-                            final message = item.message;
-                            final metadata = item.metadata;
-                            final chat =
-                                chatOverride ?? chatLookup[message.chatJid];
-                            final isGroupChat =
-                                chat?.type == ChatType.groupChat;
-                            final isEmailMessage = message.deltaMsgId != null ||
-                                message.deltaChatId != null;
-                            final isEmailChat =
-                                (chat?.defaultTransport.isEmail ?? false) ||
-                                    isEmailMessage;
-                            final isSelf = _isSelfMessage(
-                              message,
-                              xmppService: xmppService,
-                              emailService: emailService,
-                            );
-                            final allowByTrust = _shouldAllowAttachment(
-                              senderJid: message.senderJid,
-                              isSelf: isSelf,
-                              knownContacts: knownContacts,
-                              chat: chat,
-                            );
-                            final allowOnce =
-                                _isOneTimeAttachmentAllowed(message.stanzaID);
-                            final allowAttachment = allowByTrust || allowOnce;
-                            final downloadDelegate =
-                                isEmailChat && emailService != null
-                                    ? AttachmentDownloadDelegate(
-                                        () => emailService
-                                            .downloadFullMessage(message),
-                                      )
-                                    : null;
-                            final autoDownloadAllowed =
-                                allowAttachment && !isEmailChat;
-                            final autoDownloadUserInitiated =
-                                allowOnce && !isEmailChat;
-                            final metaText = _resolveMetaText(
-                              chat: chat,
-                              showChatLabel: showChatLabel,
-                            );
-                            return AttachmentGalleryTile(
-                              metadata: metadata,
-                              stanzaId: message.stanzaID,
-                              allowed: allowAttachment,
-                              autoDownloadSettings: autoDownloadSettings,
-                              autoDownloadAllowed: autoDownloadAllowed,
-                              autoDownloadUserInitiated:
-                                  autoDownloadUserInitiated,
-                              downloadDelegate: downloadDelegate,
-                              onAllowPressed: allowAttachment
-                                  ? null
-                                  : () => _approveAttachment(
-                                        message: message,
-                                        senderJid: message.senderJid,
-                                        stanzaId: message.stanzaID,
-                                        chat: chat,
-                                        isGroupChat: isGroupChat,
-                                        isEmailChat: isEmailChat,
-                                      ),
-                              metaText: metaText,
+                          separatorBuilder: (_, __) => const SizedBox(
+                            height: _attachmentGalleryItemSpacing,
+                          ),
+                          itemBuilder: (context, index) =>
+                              AttachmentGalleryEntry(
+                            item: filteredItems[index],
+                            chatOverride: chatOverride,
+                            chatLookup: chatLookup,
+                            showChatLabel: showChatLabel,
+                            autoDownloadSettings: autoDownloadSettings,
+                            layout: layout,
+                            isOneTimeAttachmentAllowed:
+                                _isOneTimeAttachmentAllowed,
+                            shouldAllowAttachment: _shouldAllowAttachment,
+                            onApproveAttachment: _approveAttachment,
+                          ),
+                        )
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final gridMetrics =
+                                _resolveGridMetrics(constraints.maxWidth);
+                            return GridView.builder(
+                              padding: const EdgeInsets.fromLTRB(
+                                _attachmentGalleryHorizontalPadding,
+                                0,
+                                _attachmentGalleryHorizontalPadding,
+                                _attachmentGalleryBottomPadding,
+                              ),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: gridMetrics.crossAxisCount,
+                                mainAxisSpacing: _attachmentGalleryGridSpacing,
+                                crossAxisSpacing: _attachmentGalleryGridSpacing,
+                                childAspectRatio: gridMetrics.childAspectRatio,
+                              ),
+                              itemCount: filteredItems.length,
+                              itemBuilder: (context, index) =>
+                                  AttachmentGalleryEntry(
+                                item: filteredItems[index],
+                                chatOverride: chatOverride,
+                                chatLookup: chatLookup,
+                                showChatLabel: showChatLabel,
+                                autoDownloadSettings: autoDownloadSettings,
+                                layout: layout,
+                                isOneTimeAttachmentAllowed:
+                                    _isOneTimeAttachmentAllowed,
+                                shouldAllowAttachment: _shouldAllowAttachment,
+                                onApproveAttachment: _approveAttachment,
+                              ),
                             );
                           },
-                        );
-                      },
-                    ),
+                        ),
             ),
           ],
         );
@@ -654,21 +604,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     }).toList();
     filtered.sort(_sortOption.compare);
     return filtered;
-  }
-
-  String? _resolveMetaText({
-    required Chat? chat,
-    required bool showChatLabel,
-  }) {
-    final parts = <String>[];
-    if (showChatLabel && chat != null) {
-      final label = chat.displayName.trim();
-      if (label.isNotEmpty) {
-        parts.add(label);
-      }
-    }
-    if (parts.isEmpty) return null;
-    return parts.join(_attachmentGalleryMetaSeparator);
   }
 }
 
@@ -849,6 +784,163 @@ class AttachmentGallerySelect<T> extends StatelessWidget {
           )
           .toList(growable: false),
       selectedOptionBuilder: (_, value) => Text(labelBuilder(value)),
+    );
+  }
+}
+
+class AttachmentGalleryEntry extends StatelessWidget {
+  const AttachmentGalleryEntry({
+    super.key,
+    required this.item,
+    required this.chatOverride,
+    required this.chatLookup,
+    required this.showChatLabel,
+    required this.autoDownloadSettings,
+    required this.layout,
+    required this.isOneTimeAttachmentAllowed,
+    required this.shouldAllowAttachment,
+    required this.onApproveAttachment,
+  });
+
+  final AttachmentGalleryItem item;
+  final Chat? chatOverride;
+  final Map<String, Chat> chatLookup;
+  final bool showChatLabel;
+  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final AttachmentGalleryLayout layout;
+  final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
+  final bool Function({
+    required bool isSelf,
+    required Chat? chat,
+  }) shouldAllowAttachment;
+  final Future<void> Function({
+    required Message message,
+    required String senderJid,
+    required String stanzaId,
+    required Chat? chat,
+    required bool isEmailChat,
+  }) onApproveAttachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final xmppService = context.read<XmppService>();
+    final emailService = RepositoryProvider.of<EmailService?>(context);
+    final message = item.message;
+    final metadata = item.metadata;
+    final chat = chatOverride ?? chatLookup[message.chatJid];
+    final isEmailMessage =
+        message.deltaMsgId != null || message.deltaChatId != null;
+    final isEmailChat =
+        (chat?.defaultTransport.isEmail ?? false) || isEmailMessage;
+    final isSelf = _isSelfMessage(
+      message,
+      xmppService: xmppService,
+      emailService: emailService,
+    );
+    final allowByTrust = shouldAllowAttachment(
+      isSelf: isSelf,
+      chat: chat,
+    );
+    final allowOnce = isOneTimeAttachmentAllowed(message.stanzaID);
+    final allowAttachment = allowByTrust || allowOnce;
+    final downloadDelegate = isEmailChat && emailService != null
+        ? AttachmentDownloadDelegate(
+            () => emailService.downloadFullMessage(message),
+          )
+        : null;
+    final autoDownloadAllowed = allowAttachment && !isEmailChat;
+    final autoDownloadUserInitiated = allowOnce && !isEmailChat;
+    final metaText = _resolveMetaText(
+      chat: chat,
+      showChatLabel: showChatLabel,
+    );
+    final allowPressed = allowAttachment
+        ? null
+        : () => onApproveAttachment(
+              message: message,
+              senderJid: message.senderJid,
+              stanzaId: message.stanzaID,
+              chat: chat,
+              isEmailChat: isEmailChat,
+            );
+    return layout == AttachmentGalleryLayout.list
+        ? AttachmentGalleryListItem(
+            metadata: metadata,
+            stanzaId: message.stanzaID,
+            allowed: allowAttachment,
+            autoDownloadSettings: autoDownloadSettings,
+            autoDownloadAllowed: autoDownloadAllowed,
+            autoDownloadUserInitiated: autoDownloadUserInitiated,
+            downloadDelegate: downloadDelegate,
+            onAllowPressed: allowPressed,
+            metaText: metaText,
+          )
+        : AttachmentGalleryTile(
+            metadata: metadata,
+            stanzaId: message.stanzaID,
+            allowed: allowAttachment,
+            autoDownloadSettings: autoDownloadSettings,
+            autoDownloadAllowed: autoDownloadAllowed,
+            autoDownloadUserInitiated: autoDownloadUserInitiated,
+            downloadDelegate: downloadDelegate,
+            onAllowPressed: allowPressed,
+            metaText: metaText,
+          );
+  }
+}
+
+class AttachmentGalleryListItem extends StatelessWidget {
+  const AttachmentGalleryListItem({
+    super.key,
+    required this.metadata,
+    required this.stanzaId,
+    required this.allowed,
+    required this.autoDownloadSettings,
+    required this.autoDownloadAllowed,
+    required this.autoDownloadUserInitiated,
+    required this.downloadDelegate,
+    required this.onAllowPressed,
+    required this.metaText,
+  });
+
+  final FileMetadataData metadata;
+  final String stanzaId;
+  final bool allowed;
+  final AttachmentAutoDownloadSettings autoDownloadSettings;
+  final bool autoDownloadAllowed;
+  final bool autoDownloadUserInitiated;
+  final AttachmentDownloadDelegate? downloadDelegate;
+  final VoidCallback? onAllowPressed;
+  final String? metaText;
+
+  @override
+  Widget build(BuildContext context) {
+    final metaLabel = metaText;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (metaLabel != null) ...[
+          Text(
+            metaLabel,
+            style: context.textTheme.muted,
+            maxLines: _attachmentGalleryMetaMaxLines,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: _attachmentGalleryMetaSpacing),
+        ],
+        ChatAttachmentPreview(
+          stanzaId: stanzaId,
+          metadataStream:
+              context.read<XmppService>().fileMetadataStream(metadata.id),
+          initialMetadata: metadata,
+          allowed: allowed,
+          autoDownloadSettings: autoDownloadSettings,
+          autoDownloadAllowed: autoDownloadAllowed,
+          autoDownloadUserInitiated: autoDownloadUserInitiated,
+          downloadDelegate: downloadDelegate,
+          onAllowPressed: onAllowPressed,
+        ),
+      ],
     );
   }
 }

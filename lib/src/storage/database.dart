@@ -1925,6 +1925,7 @@ WHERE source_id IS NULL OR trim(source_id) = ''
   }) async {
     final resolvedLastMessage = lastMessage ?? '';
     final hasLastMessage = resolvedLastMessage.trim().isNotEmpty;
+    final int serializedTimestamp = timestamp.millisecondsSinceEpoch;
     await customStatement(
       '''
 UPDATE chats
@@ -1940,10 +1941,10 @@ SET last_change_timestamp = CASE
 WHERE jid = ?
 ''',
       [
-        timestamp,
-        timestamp,
+        serializedTimestamp,
+        serializedTimestamp,
         hasLastMessage.toBinary,
-        timestamp,
+        serializedTimestamp,
         resolvedLastMessage,
         jid,
       ],
