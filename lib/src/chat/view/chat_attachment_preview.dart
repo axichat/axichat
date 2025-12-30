@@ -279,7 +279,7 @@ class AttachmentDownloadDelegate {
   Future<bool> download() => _download();
 }
 
-class ChatAttachmentPreview extends StatelessWidget {
+class ChatAttachmentPreview extends StatefulWidget {
   const ChatAttachmentPreview({
     super.key,
     required this.stanzaId,
@@ -303,22 +303,60 @@ class ChatAttachmentPreview extends StatelessWidget {
   final AttachmentDownloadDelegate? downloadDelegate;
   final VoidCallback? onAllowPressed;
 
+  @override
+  State<ChatAttachmentPreview> createState() => _ChatAttachmentPreviewState();
+}
+
+class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
+  Future<FileTypeReport>? _typeReportFuture;
+  int? _typeReportKey;
+
   bool _shouldAutoDownload(FileMetadataData metadata) {
-    if (autoDownloadUserInitiated) {
+    if (widget.autoDownloadUserInitiated) {
       return true;
     }
-    if (!autoDownloadAllowed) {
+    if (!widget.autoDownloadAllowed) {
       return false;
     }
-    return autoDownloadSettings.allowsMetadata(metadata);
+    return widget.autoDownloadSettings.allowsMetadata(metadata);
+  }
+
+  Future<FileTypeReport> _resolveTypeReportFuture({
+    required FileMetadataData metadata,
+    required File file,
+  }) {
+    final nextKey = Object.hash(
+      metadata.id,
+      file.path,
+      metadata.mimeType,
+      metadata.filename,
+      metadata.sizeBytes,
+    );
+    final cachedFuture = _typeReportFuture;
+    if (cachedFuture != null && _typeReportKey == nextKey) {
+      return cachedFuture;
+    }
+    _typeReportKey = nextKey;
+    final nextFuture = inspectFileType(
+      file: file,
+      declaredMimeType: metadata.mimeType,
+      fileName: metadata.filename,
+    );
+    _typeReportFuture = nextFuture;
+    return nextFuture;
+  }
+
+  void _clearTypeReportCache() {
+    _typeReportFuture = null;
+    _typeReportKey = null;
   }
 
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: StreamBuilder<FileMetadataData?>(
-        stream: metadataStream,
-        initialData: initialMetadata,
+        stream: widget.metadataStream,
+        initialData: widget.initialMetadata,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _AttachmentError(message: snapshot.error.toString());
@@ -326,6 +364,11 @@ class ChatAttachmentPreview extends StatelessWidget {
 
           final l10n = context.l10n;
           final colors = context.colorScheme;
+          final stanzaId = widget.stanzaId;
+          final onAllowPressed = widget.onAllowPressed;
+          final downloadDelegate = widget.downloadDelegate;
+          final autoDownloadUserInitiated = widget.autoDownloadUserInitiated;
+          final allowed = widget.allowed;
           final metadata = snapshot.data;
           if (metadata == null) {
             if (snapshot.connectionState != ConnectionState.active &&
@@ -349,13 +392,16 @@ class ChatAttachmentPreview extends StatelessWidget {
           final path = metadata.path?.trim();
           final localFile = path == null || path.isEmpty ? null : File(path);
           final hasLocalFile = localFile?.existsSync() ?? false;
+          if (!hasLocalFile) {
+            _clearTypeReportCache();
+          }
           if (hasLocalFile) {
+            final typeReportFuture = _resolveTypeReportFuture(
+              metadata: metadata,
+              file: localFile!,
+            );
             return FutureBuilder<FileTypeReport>(
-              future: inspectFileType(
-                file: localFile!,
-                declaredMimeType: metadata.mimeType,
-                fileName: metadata.filename,
-              ),
+              future: typeReportFuture,
               builder: (context, typeSnapshot) {
                 if (typeSnapshot.connectionState != ConnectionState.done) {
                   return _AttachmentSurface(

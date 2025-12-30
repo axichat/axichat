@@ -75,6 +75,8 @@ abstract class BaseCalendarBloc
     on<CalendarDayEventUpdated>(_onDayEventUpdated);
     on<CalendarDayEventDeleted>(_onDayEventDeleted);
     on<CalendarAvailabilityUpdated>(_onAvailabilityUpdated);
+    on<CalendarAvailabilityOverlayUpdated>(_onAvailabilityOverlayUpdated);
+    on<CalendarAvailabilityOverlayRemoved>(_onAvailabilityOverlayRemoved);
     on<CalendarQuickTaskAdded>(_onQuickTaskAdded);
     on<CalendarViewChanged>(_onViewChanged);
     on<CalendarDayViewSelected>(_onDayViewSelected);
@@ -1342,6 +1344,67 @@ abstract class BaseCalendarBloc
         _restoreLastUndoSnapshot(emit);
       }
       await _handleError(error, 'Failed to update availability', emit);
+    }
+  }
+
+  Future<void> _onAvailabilityOverlayUpdated(
+    CalendarAvailabilityOverlayUpdated event,
+    Emitter<CalendarState> emit,
+  ) async {
+    bool snapshotRecorded = false;
+    try {
+      final String overlayId = event.overlayId.trim();
+      if (overlayId.isEmpty) {
+        throw const CalendarValidationException(
+          'availabilityOverlay',
+          'Overlay id cannot be empty',
+        );
+      }
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      snapshotRecorded = true;
+      final CalendarModel updatedModel = state.model.upsertAvailabilityOverlay(
+        overlayId: overlayId,
+        overlay: event.overlay,
+      );
+      emitModel(updatedModel, emit, isLoading: false);
+      await onAvailabilityChanged(updatedModel);
+    } catch (error) {
+      if (snapshotRecorded) {
+        _restoreLastUndoSnapshot(emit);
+      }
+      await _handleError(error, 'Failed to update overlay', emit);
+    }
+  }
+
+  Future<void> _onAvailabilityOverlayRemoved(
+    CalendarAvailabilityOverlayRemoved event,
+    Emitter<CalendarState> emit,
+  ) async {
+    bool snapshotRecorded = false;
+    try {
+      final String overlayId = event.overlayId.trim();
+      if (overlayId.isEmpty) {
+        throw const CalendarValidationException(
+          'availabilityOverlay',
+          'Overlay id cannot be empty',
+        );
+      }
+      if (!state.model.availabilityOverlays.containsKey(overlayId)) {
+        return;
+      }
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      snapshotRecorded = true;
+      final CalendarModel updatedModel =
+          state.model.removeAvailabilityOverlay(overlayId);
+      emitModel(updatedModel, emit, isLoading: false);
+      await onAvailabilityChanged(updatedModel);
+    } catch (error) {
+      if (snapshotRecorded) {
+        _restoreLastUndoSnapshot(emit);
+      }
+      await _handleError(error, 'Failed to remove overlay', emit);
     }
   }
 
