@@ -3621,7 +3621,7 @@ class _ChatState extends State<Chat> {
                     isEmailBacked ||
                     (state.roomState?.myAffiliation.canManagePins ?? false);
                 final canTogglePins = !readOnly && canManagePins;
-                final pinnedCount = state.pinnedMessages.length;
+                final int pinnedCount = state.pinnedMessages.length;
                 if (!chatCalendarAvailable &&
                     _chatRoute == _ChatRoute.calendar) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -8226,9 +8226,10 @@ class _PinnedMessageTile extends StatelessWidget {
     String? label;
     if (isGroupChat) {
       final occupant = _resolveOccupantForMessage(message);
-      final nick = occupant?.nick.trim();
-      final hasNick = nick != null && nick.isNotEmpty;
-      label = hasNick ? nick : _nickFromSender(message.senderJid);
+      final String? occupantNick = occupant?.nick;
+      final String? trimmedNick = occupantNick?.trim();
+      final bool hasNick = trimmedNick != null && trimmedNick.isNotEmpty;
+      label = hasNick ? trimmedNick : _nickFromSender(message.senderJid);
     } else {
       final displayName = chat.displayName.trim();
       label = displayName.isNotEmpty ? displayName : null;
