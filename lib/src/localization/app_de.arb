@@ -730,6 +730,9 @@
     }
   },
   "chatAttachmentDownload": "Anhang herunterladen",
+  "chatAttachmentDownloadAndOpen": "Anhang herunterladen und öffnen",
+  "chatAttachmentDownloadAndSave": "Anhang herunterladen und speichern",
+  "chatAttachmentDownloadAndShare": "Anhang herunterladen und teilen",
   "chatAttachmentExportTitle": "Anhang speichern?",
   "chatAttachmentExportMessage": "Dies kopiert den Anhang in den gemeinsamen Speicher. Exporte sind unverschlüsselt und können von anderen Apps gelesen werden. Fortfahren?",
   "chatAttachmentExportConfirm": "Speichern",

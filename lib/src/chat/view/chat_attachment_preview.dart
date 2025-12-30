@@ -1543,14 +1543,15 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final showWarningOpen = hasLocalFile && risk.isWarning;
     final IconData openIconData = showWarningOpen
         ? Icons.warning_amber_outlined
-        : hasLocalFile
-            ? LucideIcons.externalLink
-            : LucideIcons.download;
+        : LucideIcons.externalLink;
+    final String downloadAndOpenTooltip = l10n.chatAttachmentDownloadAndOpen;
+    final String downloadAndSaveTooltip = l10n.chatAttachmentDownloadAndSave;
+    final String downloadAndShareTooltip = l10n.chatAttachmentDownloadAndShare;
     final String openTooltip = showWarningOpen
         ? l10n.chatAttachmentTypeMismatchConfirm
         : hasLocalFile
             ? l10n.chatAttachmentView
-            : l10n.chatAttachmentDownload;
+            : downloadAndOpenTooltip;
     final Color? openColor = showWarningOpen ? colors.destructive : null;
     final VoidCallback? openAction = hasLocalFile
         ? () => _openAttachment(
@@ -1632,12 +1633,12 @@ class _FileAttachmentState extends State<_FileAttachment> {
             children: [
               AxiIconButton(
                 iconData: LucideIcons.save,
-                tooltip: l10n.commonSave,
+                tooltip: downloadAndSaveTooltip,
                 onPressed: hasLocalFile || canDownload ? _saveAttachment : null,
               ),
               AxiIconButton(
                 iconData: LucideIcons.share2,
-                tooltip: l10n.chatActionShare,
+                tooltip: downloadAndShareTooltip,
                 onPressed: shareEnabled ? _shareAttachment : null,
               ),
               AxiIconButton(
@@ -1940,6 +1941,8 @@ class _EncryptedAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final openLabel = l10n.commonOpen;
+    final openTooltip = l10n.chatAttachmentDownloadAndOpen;
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
@@ -1978,21 +1981,22 @@ class _EncryptedAttachment extends StatelessWidget {
                   ),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: ShadButton(
-                      onPressed: onPressed,
-                      enabled: onPressed != null,
-                      leading: downloading
-                          ? _AttachmentSpinner(
-                              size: 16,
-                              color: colors.primaryForeground,
-                            )
-                          : null,
-                      child: Text(
-                        downloading
-                            ? l10n.chatAttachmentLoading
-                            : l10n.chatAttachmentDownload,
-                      ),
-                    ).withTapBounce(enabled: onPressed != null),
+                    child: AxiTooltip(
+                      builder: (_) => Text(openTooltip),
+                      child: ShadButton(
+                        onPressed: onPressed,
+                        enabled: onPressed != null,
+                        leading: downloading
+                            ? _AttachmentSpinner(
+                                size: 16,
+                                color: colors.primaryForeground,
+                              )
+                            : null,
+                        child: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        ),
+                      ).withTapBounce(enabled: onPressed != null),
+                    ),
                   ),
                 ],
               ),
@@ -2019,6 +2023,8 @@ class _RemoteImageAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final openLabel = l10n.commonOpen;
+    final openTooltip = l10n.chatAttachmentDownloadAndOpen;
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
@@ -2057,21 +2063,22 @@ class _RemoteImageAttachment extends StatelessWidget {
                   ),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: ShadButton(
-                      onPressed: onPressed,
-                      enabled: onPressed != null,
-                      leading: downloading
-                          ? _AttachmentSpinner(
-                              size: 16,
-                              color: colors.primaryForeground,
-                            )
-                          : null,
-                      child: Text(
-                        downloading
-                            ? l10n.chatAttachmentLoading
-                            : l10n.chatAttachmentDownload,
-                      ),
-                    ).withTapBounce(enabled: onPressed != null),
+                    child: AxiTooltip(
+                      builder: (_) => Text(openTooltip),
+                      child: ShadButton(
+                        onPressed: onPressed,
+                        enabled: onPressed != null,
+                        leading: downloading
+                            ? _AttachmentSpinner(
+                                size: 16,
+                                color: colors.primaryForeground,
+                              )
+                            : null,
+                        child: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        ),
+                      ).withTapBounce(enabled: onPressed != null),
+                    ),
                   ),
                 ],
               ),
@@ -2098,6 +2105,8 @@ class _RemoteVideoAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final openLabel = l10n.commonOpen;
+    final openTooltip = l10n.chatAttachmentDownloadAndOpen;
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
@@ -2136,21 +2145,22 @@ class _RemoteVideoAttachment extends StatelessWidget {
                   ),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: ShadButton(
-                      onPressed: onPressed,
-                      enabled: onPressed != null,
-                      leading: downloading
-                          ? _AttachmentSpinner(
-                              size: 16,
-                              color: colors.primaryForeground,
-                            )
-                          : null,
-                      child: Text(
-                        downloading
-                            ? l10n.chatAttachmentLoading
-                            : l10n.chatAttachmentDownload,
-                      ),
-                    ).withTapBounce(enabled: onPressed != null),
+                    child: AxiTooltip(
+                      builder: (_) => Text(openTooltip),
+                      child: ShadButton(
+                        onPressed: onPressed,
+                        enabled: onPressed != null,
+                        leading: downloading
+                            ? _AttachmentSpinner(
+                                size: 16,
+                                color: colors.primaryForeground,
+                              )
+                            : null,
+                        child: Text(
+                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        ),
+                      ).withTapBounce(enabled: onPressed != null),
+                    ),
                   ),
                 ],
               ),

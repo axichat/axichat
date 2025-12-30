@@ -1917,6 +1917,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatAttachmentDownload => 'Télécharger la pièce jointe';
 
   @override
+  String get chatAttachmentDownloadAndOpen => 'Télécharger et ouvrir';
+
+  @override
+  String get chatAttachmentDownloadAndSave => 'Télécharger et enregistrer';
+
+  @override
+  String get chatAttachmentDownloadAndShare => 'Télécharger et partager';
+
+  @override
   String get chatAttachmentExportTitle => 'Enregistrer la pièce jointe ?';
 
   @override

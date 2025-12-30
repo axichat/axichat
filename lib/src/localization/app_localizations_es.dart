@@ -1908,6 +1908,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatAttachmentDownload => 'Descargar adjunto';
 
   @override
+  String get chatAttachmentDownloadAndOpen => 'Descargar y abrir';
+
+  @override
+  String get chatAttachmentDownloadAndSave => 'Descargar y guardar';
+
+  @override
+  String get chatAttachmentDownloadAndShare => 'Descargar y compartir';
+
+  @override
   String get chatAttachmentExportTitle => '¿Guardar adjunto?';
 
   @override

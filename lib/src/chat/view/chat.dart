@@ -221,6 +221,7 @@ const _chatPinnedPanelVerticalPadding = 12.0;
 const _chatPinnedPanelHeaderSpacing = 12.0;
 const _chatPinnedPanelEmptyStatePadding = 12.0;
 const _chatPinnedPanelMinHeight = 0.0;
+const int _pinnedSenderMaxLines = 1;
 const _selectionAutoscrollSlop = 4.0;
 const _selectionAutoscrollReboundCurve = Curves.easeOutCubic;
 const _selectionAutoscrollReboundDuration = Duration(milliseconds: 260);
@@ -314,7 +315,11 @@ String _sortLabel(SearchSortOrder order, AppLocalizations l10n) =>
     };
 
 class _ChatSearchToggleButton extends StatelessWidget {
-  const _ChatSearchToggleButton();
+  const _ChatSearchToggleButton({
+    this.onBeforeToggle,
+  });
+
+  final VoidCallback? onBeforeToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +330,10 @@ class _ChatSearchToggleButton extends StatelessWidget {
           iconData: state.active ? LucideIcons.x : LucideIcons.search,
           tooltip:
               state.active ? l10n.chatSearchClose : l10n.chatSearchMessages,
-          onPressed: () => context.read<ChatSearchCubit>().toggleActive(),
+          onPressed: () {
+            onBeforeToggle?.call();
+            context.read<ChatSearchCubit>().toggleActive();
+          },
         );
       },
     );
@@ -1678,12 +1686,19 @@ class _ChatState extends State<Chat> {
   }
 
   void _toggleSettingsPanel() {
+    if (!mounted) return;
+    if (_chatRoute != _ChatRoute.main) {
+      _returnToMainRoute();
+    }
     final nextExpanded = !_settingsPanelExpanded;
     if (nextExpanded) {
       context.read<ChatSearchCubit?>()?.setActive(false);
     }
     setState(() {
       _settingsPanelExpanded = nextExpanded;
+      if (nextExpanded) {
+        _pinnedPanelVisible = false;
+      }
     });
   }
 
@@ -3522,14 +3537,16 @@ class _ChatState extends State<Chat> {
                 final bool chatCalendarReady =
                     storageManager.isAuthStorageReady &&
                         chatCalendarCoordinator != null;
-                final bool chatCalendarAvailable =
+                final bool chatCalendarEnabled =
                     supportsChatCalendar && chatCalendarReady;
                 final ChatCalendarBloc? chatCalendarBloc =
                     _resolveChatCalendarBloc(
                   chat: chatEntity,
-                  calendarAvailable: chatCalendarAvailable,
+                  calendarAvailable: chatCalendarEnabled,
                   coordinator: chatCalendarCoordinator,
                 );
+                final bool chatCalendarAvailable =
+                    chatCalendarEnabled && chatCalendarBloc != null;
                 final List<String> chatCalendarParticipants =
                     supportsChatCalendar
                         ? _resolveChatCalendarParticipants(
@@ -3562,15 +3579,7 @@ class _ChatState extends State<Chat> {
                     chatsState?.forwardStack ?? const <String>[];
                 bool prepareChatExit() {
                   if (_chatRoute != _ChatRoute.main) {
-                    context
-                        .read<ChatBloc>()
-                        .add(const ChatMessageFocused(null));
-                    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
-                    setState(() {
-                      _chatRoute = _ChatRoute.main;
-                      _settingsPanelExpanded = false;
-                      _pinnedPanelVisible = false;
-                    });
+                    _returnToMainRoute();
                     return false;
                   }
                   final targetJid = state.chat?.jid;
@@ -3612,6 +3621,7 @@ class _ChatState extends State<Chat> {
                     isEmailBacked ||
                     (state.roomState?.myAffiliation.canManagePins ?? false);
                 final canTogglePins = !readOnly && canManagePins;
+                final pinnedCount = state.pinnedMessages.length;
                 if (!chatCalendarAvailable &&
                     _chatRoute == _ChatRoute.calendar) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3834,29 +3844,40 @@ class _ChatState extends State<Chat> {
                             },
                           ),
                     actions: [
-                      if (jid != null && _chatRoute == _ChatRoute.main) ...[
+                      if (jid != null) ...[
                         if (isGroupChat)
                           AxiIconButton(
                             iconData: LucideIcons.users,
                             tooltip: context.l10n.chatRoomMembers,
                             onPressed: _showMembers,
                           ),
-                        const _ChatSearchToggleButton(),
+                        _ChatSearchToggleButton(
+                          onBeforeToggle: _returnToMainRouteIfNeeded,
+                        ),
                         const SizedBox(width: _chatHeaderActionSpacing),
                         AxiIconButton(
                           iconData: LucideIcons.paperclip,
                           tooltip: context.l10n.chatAttachmentTooltip,
-                          onPressed: _openChatAttachments,
+                          onPressed: () {
+                            if (_chatRoute == _ChatRoute.attachments) {
+                              _closeChatAttachments();
+                              return;
+                            }
+                            _openChatAttachments();
+                          },
                         ),
                         const SizedBox(width: _chatHeaderActionSpacing),
-                        AxiIconButton(
-                          iconData: _pinnedPanelVisible
-                              ? LucideIcons.x
-                              : LucideIcons.pin,
-                          tooltip: _pinnedPanelVisible
-                              ? context.l10n.commonClose
-                              : context.l10n.chatPinnedMessagesTooltip,
-                          onPressed: _togglePinnedMessages,
+                        AxiBadge(
+                          count: pinnedCount,
+                          child: AxiIconButton(
+                            iconData: _pinnedPanelVisible
+                                ? LucideIcons.x
+                                : LucideIcons.pin,
+                            tooltip: _pinnedPanelVisible
+                                ? context.l10n.commonClose
+                                : context.l10n.chatPinnedMessagesTooltip,
+                            onPressed: _togglePinnedMessages,
+                          ),
                         ),
                         if (supportsChatCalendar) ...[
                           const SizedBox(width: _chatHeaderActionSpacing),
@@ -3868,6 +3889,10 @@ class _ChatState extends State<Chat> {
                                 _showSnackbar(
                                   context.l10n.chatCalendarUnavailable,
                                 );
+                                return;
+                              }
+                              if (_chatRoute == _ChatRoute.calendar) {
+                                _closeChatCalendar();
                                 return;
                               }
                               _openChatCalendar();
@@ -7613,6 +7638,24 @@ class _ChatState extends State<Chat> {
     });
   }
 
+  void _returnToMainRoute() {
+    if (!mounted) return;
+    context.read<ChatBloc>().add(const ChatMessageFocused(null));
+    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
+    setState(() {
+      _chatRoute = _ChatRoute.main;
+      _settingsPanelExpanded = false;
+      _pinnedPanelVisible = false;
+    });
+  }
+
+  void _returnToMainRouteIfNeeded() {
+    if (_chatRoute == _ChatRoute.main) {
+      return;
+    }
+    _returnToMainRoute();
+  }
+
   void _openChatCalendar() {
     if (!mounted) return;
     context.read<ChatsCubit>().setChatCalendarOpen(open: true);
@@ -7640,6 +7683,9 @@ class _ChatState extends State<Chat> {
 
   void _togglePinnedMessages() {
     if (!mounted) return;
+    if (_chatRoute != _ChatRoute.main) {
+      _returnToMainRoute();
+    }
     setState(() {
       _pinnedPanelVisible = !_pinnedPanelVisible;
       _settingsPanelExpanded = false;
@@ -7932,7 +7978,6 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
     final showPanel =
         widget.visible && widget.maxHeight > _chatPinnedPanelMinHeight;
     final showLoading = showPanel && !widget.pinnedMessagesLoaded;
-    final subtitle = resolvedChat.displayName.trim();
     final Widget panelBody = showLoading
         ? Padding(
             padding: const EdgeInsets.symmetric(
@@ -8014,26 +8059,9 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
             Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.chatPinnedMessagesTitle,
-                        style: context.textTheme.large,
-                      ),
-                      if (subtitle.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            top: _chatHeaderActionSpacing,
-                          ),
-                          child: Text(
-                            subtitle,
-                            style: context.textTheme.muted.copyWith(
-                              color: colors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                    ],
+                  child: Text(
+                    l10n.chatPinnedMessagesTitle,
+                    style: context.textTheme.large,
                   ),
                 ),
                 AxiIconButton(
@@ -8144,6 +8172,77 @@ class _PinnedMessageTile extends StatelessWidget {
     }
   }
 
+  String? _nickFromSender(String senderJid) {
+    final slashIndex = senderJid.indexOf(_jidResourceSeparator);
+    if (slashIndex == -1 || slashIndex + 1 >= senderJid.length) {
+      return null;
+    }
+    final nick = senderJid.substring(slashIndex + 1).trim();
+    return nick.isEmpty ? null : nick;
+  }
+
+  Occupant? _resolveOccupantForMessage(Message message) {
+    final resolvedRoomState = roomState;
+    if (resolvedRoomState == null) {
+      return null;
+    }
+    final occupantId = message.occupantID?.trim();
+    if (occupantId != null && occupantId.isNotEmpty) {
+      final occupant = resolvedRoomState.occupants[occupantId];
+      if (occupant != null) {
+        return occupant;
+      }
+    }
+    final direct = resolvedRoomState.occupants[message.senderJid];
+    if (direct != null) {
+      return direct;
+    }
+    final nick = _nickFromSender(message.senderJid);
+    if (nick == null) {
+      return null;
+    }
+    for (final occupant in resolvedRoomState.occupants.values) {
+      if (occupant.nick == nick) {
+        return occupant;
+      }
+    }
+    return null;
+  }
+
+  String _resolveSenderLabel({
+    required BuildContext context,
+    required Message? message,
+    required bool isSelf,
+  }) {
+    final l10n = context.l10n;
+    final trimmedSelfLabel = l10n.chatSenderYou.trim();
+    if (isSelf) {
+      return trimmedSelfLabel.isNotEmpty ? trimmedSelfLabel : chat.displayName;
+    }
+    if (message == null) {
+      return chat.displayName;
+    }
+    final isGroupChat = chat.type == ChatType.groupChat;
+    String? label;
+    if (isGroupChat) {
+      final occupant = _resolveOccupantForMessage(message);
+      final nick = occupant?.nick.trim();
+      final hasNick = nick != null && nick.isNotEmpty;
+      label = hasNick ? nick : _nickFromSender(message.senderJid);
+    } else {
+      final displayName = chat.displayName.trim();
+      label = displayName.isNotEmpty ? displayName : null;
+    }
+    final senderFallback = message.senderJid.trim();
+    final fallback =
+        senderFallback.isNotEmpty ? senderFallback : chat.displayName;
+    final hasLabel = label != null && label.isNotEmpty;
+    final candidate = hasLabel ? label : fallback;
+    final sanitized = sanitizeUnicodeControls(candidate);
+    final safeLabel = sanitized.value.trim();
+    return safeLabel.isNotEmpty ? safeLabel : fallback;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -8207,33 +8306,26 @@ class _PinnedMessageTile extends StatelessWidget {
                 : null;
     final messageForPin = _resolveMessageForPin();
     final unpinButton = canTogglePins && messageForPin != null
-        ? ShadButton.ghost(
-            size: ShadButtonSize.sm,
-            onPressed: () => context.read<ChatBloc>().add(
-                  ChatMessagePinRequested(
-                    message: messageForPin,
-                    pin: false,
+        ? AxiTooltip(
+            builder: (context) => Text(l10n.chatUnpinMessage),
+            child: ShadIconButton.ghost(
+              onPressed: () => context.read<ChatBloc>().add(
+                    ChatMessagePinRequested(
+                      message: messageForPin,
+                      pin: false,
+                    ),
                   ),
-                ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  LucideIcons.pinOff,
-                  size: _messageActionIconSize,
-                  color: colors.mutedForeground,
-                ),
-                const SizedBox(width: _attachmentPreviewSpacing),
-                Text(
-                  l10n.chatUnpinMessage,
-                  style: context.textTheme.small.copyWith(
-                    color: colors.mutedForeground,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ).withTapBounce()
+              icon: Icon(
+                LucideIcons.pinOff,
+                size: _messageActionIconSize,
+                color: colors.mutedForeground,
+              ),
+              decoration: const ShadDecoration(
+                secondaryBorder: ShadBorder.none,
+                secondaryFocusedBorder: ShadBorder.none,
+              ),
+            ).withTapBounce(),
+          )
         : null;
     final accountJid = context.read<XmppService>().myJid?.toString();
     final isSelf = message == null
@@ -8242,14 +8334,33 @@ class _PinnedMessageTile extends StatelessWidget {
             message: message,
             accountJid: accountJid,
           );
+    final senderLabel = _resolveSenderLabel(
+      context: context,
+      message: message,
+      isSelf: isSelf,
+    );
+    final senderLabelStyle = context.textTheme.small.copyWith(
+      color: colors.mutedForeground,
+      fontWeight: FontWeight.w600,
+    );
     final contentChildren = <Widget>[
       Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: messageWidget ?? const SizedBox.shrink()),
+          Expanded(
+            child: Text(
+              senderLabel,
+              maxLines: _pinnedSenderMaxLines,
+              overflow: TextOverflow.ellipsis,
+              style: senderLabelStyle,
+            ),
+          ),
           if (unpinButton != null) unpinButton,
         ],
       ),
+      if (messageWidget != null) ...[
+        const SizedBox(height: _senderLabelBottomSpacing),
+        messageWidget,
+      ],
     ];
     if (hasCalendarTask) {
       final bool taskReadOnly =

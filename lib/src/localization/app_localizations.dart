@@ -3446,6 +3446,24 @@ abstract class AppLocalizations {
   /// **'Download attachment'**
   String get chatAttachmentDownload;
 
+  /// No description provided for @chatAttachmentDownloadAndOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and open'**
+  String get chatAttachmentDownloadAndOpen;
+
+  /// No description provided for @chatAttachmentDownloadAndSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and save'**
+  String get chatAttachmentDownloadAndSave;
+
+  /// No description provided for @chatAttachmentDownloadAndShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and share'**
+  String get chatAttachmentDownloadAndShare;
+
   /// No description provided for @chatAttachmentExportTitle.
   ///
   /// In en, this message translates to:

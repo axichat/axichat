@@ -730,6 +730,9 @@
     }
   },
   "chatAttachmentDownload": "下载附件",
+  "chatAttachmentDownloadAndOpen": "下载并打开",
+  "chatAttachmentDownloadAndSave": "下载并保存",
+  "chatAttachmentDownloadAndShare": "下载并分享",
   "chatAttachmentExportTitle": "保存附件？",
   "chatAttachmentExportMessage": "这会将附件复制到共享存储。导出内容未加密，可能会被其他应用读取。继续？",
   "chatAttachmentExportConfirm": "保存",

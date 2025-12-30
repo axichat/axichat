@@ -1822,6 +1822,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentDownload => '下载附件';
 
   @override
+  String get chatAttachmentDownloadAndOpen => '下载并打开';
+
+  @override
+  String get chatAttachmentDownloadAndSave => '下载并保存';
+
+  @override
+  String get chatAttachmentDownloadAndShare => '下载并分享';
+
+  @override
   String get chatAttachmentExportTitle => '保存附件？';
 
   @override
@@ -4856,6 +4865,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatAttachmentDownload => '下載附件';
+
+  @override
+  String get chatAttachmentDownloadAndOpen => '下載並開啟';
+
+  @override
+  String get chatAttachmentDownloadAndSave => '下載並儲存';
+
+  @override
+  String get chatAttachmentDownloadAndShare => '下載並分享';
 
   @override
   String get chatAttachmentExportTitle => '儲存附件？';
