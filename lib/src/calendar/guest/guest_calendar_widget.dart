@@ -376,7 +376,7 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final model = context.read<GuestCalendarBloc>().state.model;
+      final model = widget.state.model;
       if (!model.hasCalendarData) {
         FeedbackSystem.showInfo(
             context, 'No calendar data available to export.');

@@ -94,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
   CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
   GlobalKey? _chatPaneKey;
   String? _chatPaneKeyJid;
-  XmppService? _xmppService;
 
   GlobalKey? _resolveChatPaneKey(String? openJid) {
     final String? trimmed = openJid?.trim();
@@ -118,23 +117,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final XmppService? xmppService = context.read<XmppService?>();
-    if (!identical(_xmppService, xmppService)) {
-      _xmppService = xmppService;
-    }
-  }
-
-  @override
   void dispose() {
     final handler = _globalShortcutHandler;
     if (handler != null) {
       HardwareKeyboard.instance.removeHandler(handler);
     }
-    _xmppService?.clearChatCalendarSyncCallback();
     _shortcutFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void deactivate() {
+    context.read<XmppService?>()?.clearChatCalendarSyncCallback();
+    super.deactivate();
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
@@ -214,6 +209,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ));
     if (_chatCalendarCoordinator == null && chatCalendarCoordinator != null) {
       _chatCalendarCoordinator = chatCalendarCoordinator;
+    }
+    if (chatCalendarCoordinator != null) {
       xmppService.setChatCalendarSyncCallback(
         chatCalendarCoordinator.handleInbound,
       );
@@ -309,16 +306,25 @@ class _HomeScreenState extends State<HomeScreen> {
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (_, __) {
-            final chatsCubit = context.read<ChatsCubit?>();
-            final chatsState = chatsCubit?.state;
-            if (chatsState == null) return;
-            if (chatsState.openCalendar) {
-              chatsCubit?.toggleCalendar();
-            } else if (chatsState.openStack.isNotEmpty) {
-              if (chatsState.openStack.length > 1) {
-                unawaited(chatsCubit?.popChat());
+            if (context.read<ChatsCubit?>()?.state == null) return;
+            if (context.read<ChatsCubit?>()?.state.openCalendar ?? false) {
+              context.read<ChatsCubit?>()?.toggleCalendar();
+            } else if (context
+                    .read<ChatsCubit?>()
+                    ?.state
+                    .openStack
+                    .isNotEmpty ??
+                false) {
+              if (context
+                      .read<ChatsCubit?>()
+                      ?.state
+                      .openStack
+                      .skip(1)
+                      .isNotEmpty ??
+                  false) {
+                unawaited(context.read<ChatsCubit?>()?.popChat());
               } else {
-                unawaited(chatsCubit?.closeAllChats());
+                unawaited(context.read<ChatsCubit?>()?.closeAllChats());
               }
             }
           },
@@ -329,13 +335,14 @@ class _HomeScreenState extends State<HomeScreen> {
               Expanded(
                 child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
                   builder: (context, state) {
-                    final ChatsState? chatsState =
-                        context.watch<ChatsCubit?>()?.state;
-                    final String? openJid = chatsState?.openJid;
-                    final bool openCalendar =
-                        hasCalendarBloc && (chatsState?.openCalendar ?? false);
+                    final String? openJid =
+                        context.watch<ChatsCubit?>()?.state.openJid;
+                    final bool openCalendar = hasCalendarBloc &&
+                        (context.watch<ChatsCubit?>()?.state.openCalendar ??
+                            false);
                     final bool openChatCalendar =
-                        chatsState?.openChatCalendar ?? false;
+                        context.watch<ChatsCubit?>()?.state.openChatCalendar ??
+                            false;
                     final bool chatCalendarExpanded =
                         openChatCalendar && openJid != null;
                     final navRail = navPlacement == NavPlacement.rail
@@ -786,26 +793,25 @@ class _NexusState extends State<Nexus> {
   @override
   Widget build(BuildContext context) {
     final showToast = ShadToaster.maybeOf(context)?.show;
-    final HomeSearchState? searchState =
-        context.watch<HomeSearchCubit?>()?.state;
-    final ChatsState? chatsState = context.watch<ChatsCubit?>()?.state;
-    final searchActive = searchState?.active ?? false;
+    HomeSearchState? searchState() => context.watch<HomeSearchCubit?>()?.state;
+    ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
+    final searchActive = searchState()?.active ?? false;
     List<Chat> selectedChats = const <Chat>[];
-    if (chatsState?.selectedJids.isNotEmpty ?? false) {
-      selectedChats = (chatsState?.items ?? const <Chat>[])
+    if (chatsState()?.selectedJids.isNotEmpty ?? false) {
+      selectedChats = (chatsState()?.items ?? const <Chat>[])
           .where(
-            (chat) => chatsState?.selectedJids.contains(chat.jid) ?? false,
+            (chat) => chatsState()?.selectedJids.contains(chat.jid) ?? false,
           )
           .toList();
     }
     final selectionActive = selectedChats.isNotEmpty;
     final badgeCounts = <HomeTab, int>{
       HomeTab.invites: context.watch<RosterCubit?>()?.inviteCount ?? 0,
-      HomeTab.chats: (chatsState?.items ?? const <Chat>[])
+      HomeTab.chats: (chatsState()?.items ?? const <Chat>[])
           .where((chat) => !chat.archived && !chat.spam)
           .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
       HomeTab.drafts: context.watch<DraftCubit?>()?.state.items?.length ?? 0,
-      HomeTab.spam: (chatsState?.items ?? const <Chat>[])
+      HomeTab.spam: (chatsState()?.items ?? const <Chat>[])
           .where((chat) => chat.spam && !chat.archived)
           .length,
     };
@@ -839,9 +845,7 @@ class _NexusState extends State<Nexus> {
               ],
               _SearchToggleButton(
                 active: searchActive,
-                onPressed: searchState == null
-                    ? null
-                    : () => context.read<HomeSearchCubit>().toggleSearch(),
+                onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
               ),
             ],
           ),

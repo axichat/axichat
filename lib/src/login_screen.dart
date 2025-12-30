@@ -170,9 +170,10 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     _loginSuccessHandled = true;
-    final duration = context.read<SettingsCubit>().animationDuration;
     final progressDuration =
-        duration == Duration.zero ? baseAnimationDuration : duration;
+        context.read<SettingsCubit>().animationDuration == Duration.zero
+            ? baseAnimationDuration
+            : context.read<SettingsCubit>().animationDuration;
     await _operationProgressController.complete(duration: progressDuration);
     if (!mounted) {
       return;
@@ -293,7 +294,6 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
-    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final authCardShape = SquircleBorder(
       cornerRadius: _authCardCornerRadius,
       side: BorderSide(color: colors.border),
@@ -373,13 +373,17 @@ class _LoginScreenState extends State<LoginScreen>
                                     shape: authCardClipShape,
                                   ),
                                   child: AxiAnimatedSize(
-                                    duration: animationDuration,
+                                    duration: context
+                                        .watch<SettingsCubit>()
+                                        .animationDuration,
                                     curve: Curves.easeInOut,
                                     child: AnimatedCrossFade(
                                       firstCurve: Curves.easeInOut,
                                       secondCurve: Curves.easeInOut,
                                       sizeCurve: Curves.easeInOut,
-                                      duration: animationDuration,
+                                      duration: context
+                                          .watch<SettingsCubit>()
+                                          .animationDuration,
                                       crossFadeState:
                                           (!_signupFlowLocked && _login)
                                               ? CrossFadeState.showFirst
@@ -427,7 +431,9 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               const SizedBox(height: 12),
                               AnimatedSwitcher(
-                                duration: animationDuration,
+                                duration: context
+                                    .watch<SettingsCubit>()
+                                    .animationDuration,
                                 child: showProgressBar
                                     ? Center(
                                         key:

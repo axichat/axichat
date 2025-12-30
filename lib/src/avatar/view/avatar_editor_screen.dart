@@ -57,7 +57,6 @@ class _AvatarEditorBody extends StatelessWidget {
     final l10n = context.l10n;
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, state) {
-        final profile = context.watch<ProfileCubit>().state;
         final colors = context.colorScheme;
         final isWide = MediaQuery.sizeOf(context).width >= largeScreen;
         return Scaffold(
@@ -95,7 +94,7 @@ class _AvatarEditorBody extends StatelessWidget {
                     children: [
                       _AvatarSummaryCard(
                         state: state,
-                        profile: profile,
+                        profile: context.watch<ProfileCubit>().state,
                         isWide: isWide,
                       ),
                       _AvatarEditorToolsSection(state: state),
@@ -186,7 +185,6 @@ class _AvatarSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final cubit = context.read<AvatarEditorCubit>();
     final size = isWide ? 104.0 : 88.0;
     final previewBytes = state.previewBytes ?? state.sourceBytes;
     final avatarSavedMessage = l10n.avatarSavedMessage;
@@ -247,7 +245,9 @@ class _AvatarSummaryCard extends StatelessWidget {
                     onPressed:
                         state.processing || state.publishing || state.shuffling
                             ? null
-                            : () => cubit.shuffleTemplate(colors),
+                            : () => context
+                                .read<AvatarEditorCubit>()
+                                .shuffleTemplate(colors),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8.0,
@@ -275,7 +275,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                     size: ShadButtonSize.sm,
                     onPressed: state.processing || state.publishing
                         ? null
-                        : cubit.pickImage,
+                        : context.read<AvatarEditorCubit>().pickImage,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8.0,
@@ -291,7 +291,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                             state.processing ||
                             state.publishing
                         ? null
-                        : cubit.publish,
+                        : context.read<AvatarEditorCubit>().publish,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8.0,
@@ -365,7 +365,6 @@ class _CropCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    final cubit = context.read<AvatarEditorCubit>();
     final sourceBytes = state.sourceBytes;
     final imageWidth = state.imageWidth?.toDouble();
     final imageHeight = state.imageHeight?.toDouble();
@@ -430,8 +429,9 @@ class _CropCard extends StatelessWidget {
                     imageWidth: imageWidth,
                     imageHeight: imageHeight,
                     cropRect: cropRect,
-                    onCropChanged: cubit.updateCropRect,
-                    onCropReset: cubit.resetCrop,
+                    onCropChanged:
+                        context.read<AvatarEditorCubit>().updateCropRect,
+                    onCropReset: context.read<AvatarEditorCubit>().resetCrop,
                     colors: colors,
                     borderRadius: context.radius,
                     minCropSide: AvatarEditorCubit.minCropSide,
@@ -474,7 +474,6 @@ class _BackgroundPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final cubit = context.read<AvatarEditorCubit>();
     final colors = context.colorScheme;
     final template = state.template;
     final presets = [
@@ -512,8 +511,9 @@ class _BackgroundPicker extends StatelessWidget {
                   const BoxConstraints(maxWidth: _avatarEditorColorPickerWidth),
               child: ColorPicker(
                 color: state.backgroundColor,
-                onColorChanged: (color) =>
-                    cubit.setBackgroundColor(color, colors),
+                onColorChanged: (color) => context
+                    .read<AvatarEditorCubit>()
+                    .setBackgroundColor(color, colors),
                 pickersEnabled: const {
                   ColorPickerType.both: false,
                   ColorPickerType.primary: false,
@@ -566,7 +566,9 @@ class _BackgroundPicker extends StatelessWidget {
               size: ShadButtonSize.sm,
               onPressed: state.backgroundColor == Colors.transparent
                   ? null
-                  : () => cubit.setBackgroundColor(Colors.transparent, colors),
+                  : () => context
+                      .read<AvatarEditorCubit>()
+                      .setBackgroundColor(Colors.transparent, colors),
               child: Text(l10n.avatarBackgroundTransparent),
             ),
           ),
@@ -586,7 +588,9 @@ class _BackgroundPicker extends StatelessWidget {
                       : colors.border,
                   elevation: preset == state.backgroundColor ? 2 : 0,
                   isSelected: preset == state.backgroundColor,
-                  onSelect: () => cubit.setBackgroundColor(preset, colors),
+                  onSelect: () => context
+                      .read<AvatarEditorCubit>()
+                      .setBackgroundColor(preset, colors),
                 ),
             ],
           ),
@@ -631,7 +635,6 @@ class _DefaultsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final cubit = context.read<AvatarEditorCubit>();
     final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -674,8 +677,9 @@ class _DefaultsSection extends StatelessWidget {
                         title: entry.key.label(l10n),
                         templates: entry.value,
                         selectedId: state.template?.id,
-                        onSelect: (template) =>
-                            cubit.selectTemplate(template, colors),
+                        onSelect: (template) => context
+                            .read<AvatarEditorCubit>()
+                            .selectTemplate(template, colors),
                         backgroundColor: state.backgroundColor,
                       ),
                     ),

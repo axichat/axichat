@@ -2095,23 +2095,31 @@ class EmailService {
     try {
       final connectivity = await _transport.connectivity();
       if (connectivity == null) return;
+      final currentStatus = _syncState.status;
       if (connectivity >= _connectivityConnectedMin) {
         _updateSyncState(const EmailSyncState.ready());
-      } else if (connectivity >= _connectivityWorkingMin) {
+        return;
+      }
+      if (connectivity >= _connectivityWorkingMin) {
+        if (currentStatus == EmailSyncStatus.ready) {
+          return;
+        }
         _updateSyncState(
           const EmailSyncState.recovering('Syncing email…'),
         );
-      } else if (connectivity >= _connectivityConnectingMin) {
+        return;
+      }
+      if (connectivity >= _connectivityConnectingMin) {
         _updateSyncState(
           const EmailSyncState.recovering('Connecting to email servers…'),
         );
-      } else {
-        _updateSyncState(
-          const EmailSyncState.offline(
-            'Disconnected from email servers.',
-          ),
-        );
+        return;
       }
+      _updateSyncState(
+        const EmailSyncState.offline(
+          'Disconnected from email servers.',
+        ),
+      );
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to refresh email connectivity', error, stackTrace);
     }
@@ -2699,40 +2707,42 @@ class EmailService {
       _mdnsEnabledConfigKey: _mdnsEnabledValue,
     };
     final normalizedAddress = address.trim();
+    final localPart =
+        _localPartFromAddress(normalizedAddress) ?? normalizedAddress;
     final smtpHost = config.smtpHost?.trim();
     final imapHost = config.imapHost?.trim();
-    if (smtpHost != null && smtpHost.isNotEmpty) {
-      final sendPortValue = config.smtpPort > _portUnsetValue
-          ? config.smtpPort
-          : EndpointConfig.defaultSmtpPort;
-      final sendSecurityMode = _securityModeForPort(
-        port: sendPortValue,
-        implicitTlsPort: EndpointConfig.defaultSmtpPort,
-      );
-      configValues
-        ..[_sendServerConfigKey] = smtpHost
-        ..[_sendPortConfigKey] = sendPortValue.toString()
-        ..[_sendSecurityConfigKey] = sendSecurityMode
-        ..[_sendUserConfigKey] = normalizedAddress;
-    }
+    final fallbackHost = _connectionHostFor(normalizedAddress, config);
+    final resolvedSendHost =
+        (smtpHost != null && smtpHost.isNotEmpty) ? smtpHost : fallbackHost;
     final resolvedMailHost = _resolveMailHost(
-      imapHost: imapHost,
-      smtpHost: smtpHost,
+          imapHost: imapHost,
+          smtpHost: smtpHost,
+        ) ??
+        fallbackHost;
+    final sendPortValue = config.smtpPort > _portUnsetValue
+        ? config.smtpPort
+        : EndpointConfig.defaultSmtpPort;
+    final sendSecurityMode = _securityModeForPort(
+      port: sendPortValue,
+      implicitTlsPort: EndpointConfig.defaultSmtpPort,
     );
-    if (resolvedMailHost != null && resolvedMailHost.isNotEmpty) {
-      final mailPortValue = config.imapPort > _portUnsetValue
-          ? config.imapPort
-          : EndpointConfig.defaultImapPort;
-      final mailSecurityMode = _securityModeForPort(
-        port: mailPortValue,
-        implicitTlsPort: EndpointConfig.defaultImapPort,
-      );
-      configValues
-        ..[_mailServerConfigKey] = resolvedMailHost
-        ..[_mailPortConfigKey] = mailPortValue.toString()
-        ..[_mailSecurityConfigKey] = mailSecurityMode
-        ..[_mailUserConfigKey] = normalizedAddress;
-    }
+    configValues
+      ..[_sendServerConfigKey] = resolvedSendHost
+      ..[_sendPortConfigKey] = sendPortValue.toString()
+      ..[_sendSecurityConfigKey] = sendSecurityMode
+      ..[_sendUserConfigKey] = localPart;
+    final mailPortValue = config.imapPort > _portUnsetValue
+        ? config.imapPort
+        : EndpointConfig.defaultImapPort;
+    final mailSecurityMode = _securityModeForPort(
+      port: mailPortValue,
+      implicitTlsPort: EndpointConfig.defaultImapPort,
+    );
+    configValues
+      ..[_mailServerConfigKey] = resolvedMailHost
+      ..[_mailPortConfigKey] = mailPortValue.toString()
+      ..[_mailSecurityConfigKey] = mailSecurityMode
+      ..[_mailUserConfigKey] = localPart;
     return configValues;
   }
 
@@ -2772,6 +2782,37 @@ class EmailService {
       return null;
     }
     return _deriveMailHost(normalizedSmtp) ?? normalizedSmtp;
+  }
+
+  static String _connectionHostFor(String address, EndpointConfig config) {
+    final customHost = config.smtpHost?.trim();
+    if (customHost != null && customHost.isNotEmpty) {
+      return customHost;
+    }
+    final domain = _domainFromAddress(address) ?? config.domain;
+    if (domain.isEmpty) {
+      throw StateError('Unable to resolve email server host.');
+    }
+    return domain;
+  }
+
+  static String? _domainFromAddress(String address) {
+    final parts = address.split('@');
+    if (parts.length != 2) {
+      return null;
+    }
+    final domain = parts[1].trim().toLowerCase();
+    return domain.isEmpty ? null : domain;
+  }
+
+  static String? _localPartFromAddress(String address) {
+    if (address.isEmpty) {
+      return null;
+    }
+    final index = address.indexOf('@');
+    final localPart =
+        index == -1 ? address.trim() : address.substring(0, index).trim();
+    return localPart.isEmpty ? null : localPart;
   }
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)

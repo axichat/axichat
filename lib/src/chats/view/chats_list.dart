@@ -494,9 +494,9 @@ class _ChatListTileState extends State<ChatListTile> {
                 ) +
                 scaled(16.0),
           );
-    final ChatsCubit? chatsCubit = context.watch<ChatsCubit?>();
-    final ChatsState? chatsState = chatsCubit?.state;
-    final selectedJids = chatsState?.selectedJids ?? const <String>{};
+    ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
+    ChatsCubit? chatsCubit() => context.read<ChatsCubit?>();
+    final selectedJids = chatsState()?.selectedJids ?? const <String>{};
     final selectionActive = selectedJids.isNotEmpty;
     final isSelected = selectedJids.contains(item.jid);
     if (selectionActive && _showActions) {
@@ -516,7 +516,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ? Color.alphaBlend(selectionOverlay, colors.card)
         : colors.card;
     late final VoidCallback tileOnTap;
-    if (chatsState == null) {
+    if (chatsState() == null) {
       tileOnTap = () {
         unawaited(_handleTap(item));
       };
@@ -537,13 +537,13 @@ class _ChatListTileState extends State<ChatListTile> {
     final tile = AxiListTile(
       key: Key(item.jid),
       onTap: tileOnTap,
-      onLongPress: chatsCubit == null
+      onLongPress: chatsCubit() == null
           ? null
           : () {
               if (selectionActive) {
-                chatsCubit.toggleChatSelection(item.jid);
+                chatsCubit()?.toggleChatSelection(item.jid);
               } else {
-                chatsCubit.ensureChatSelected(item.jid);
+                chatsCubit()?.ensureChatSelected(item.jid);
               }
               if (_showActions) {
                 setState(() => _showActions = false);
@@ -668,7 +668,7 @@ class _ChatListTileState extends State<ChatListTile> {
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,
-        items: _chatContextMenuItems(item, chatsState),
+        items: _chatContextMenuItems(item, chatsState()),
         child: tileContent,
       );
     }

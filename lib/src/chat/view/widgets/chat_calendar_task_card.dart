@@ -98,10 +98,10 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
         !TaskEditSessionTracker.instance.begin(task.id, this)) {
       return;
     }
-    final ChatCalendarBloc bloc = context.read<ChatCalendarBloc>();
+    CalendarState calendarState() => context.read<ChatCalendarBloc>().state;
     final String baseId = baseTaskIdFrom(task.id);
-    final CalendarTask latestTask = bloc.state.model.tasks[baseId] ?? task;
-    final CalendarTask? storedTask = bloc.state.model.tasks[task.id];
+    final CalendarTask latestTask = calendarState().model.tasks[baseId] ?? task;
+    final CalendarTask? storedTask = calendarState().model.tasks[task.id];
     final String? occurrenceKey = occurrenceKeyFrom(task.id);
     final CalendarTask? occurrenceTask =
         storedTask == null && occurrenceKey != null
@@ -399,15 +399,19 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
   }
 
   void _ensureTaskImported(CalendarTask task) {
-    final ChatCalendarBloc bloc = context.read<ChatCalendarBloc>();
-    if (bloc.state.model.tasks.containsKey(task.id)) {
+    if (context
+        .read<ChatCalendarBloc>()
+        .state
+        .model
+        .tasks
+        .containsKey(task.id)) {
       return;
     }
-    bloc.add(
-      CalendarEvent.tasksImported(
-        tasks: <CalendarTask>[task],
-      ),
-    );
+    context.read<ChatCalendarBloc>().add(
+          CalendarEvent.tasksImported(
+            tasks: <CalendarTask>[task],
+          ),
+        );
   }
 }
 

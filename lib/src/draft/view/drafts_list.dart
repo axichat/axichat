@@ -101,9 +101,8 @@ class _DraftsListBody extends StatelessWidget {
         itemBuilder: (context, index) {
           final item = visibleItems[index];
           final recipients = item.jids.length;
-          final rosterCubit = context.read<RosterCubit?>();
           final Widget leadingAvatar = recipients == 1
-              ? rosterCubit == null
+              ? context.read<RosterCubit?>() == null
                   ? AxiAvatar(jid: item.jids[0])
                   : BlocBuilder<RosterCubit, RosterState>(
                       buildWhen: (_, current) => current is RosterAvailable,

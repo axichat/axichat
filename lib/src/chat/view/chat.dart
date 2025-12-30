@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/html_content.dart';
@@ -73,6 +72,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/muc/view/room_members_sheet.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -88,6 +88,7 @@ import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -106,7 +107,6 @@ extension on MessageStatus {
 enum _ChatRoute {
   main,
   details,
-  attachments,
   calendar,
 }
 
@@ -132,7 +132,6 @@ const _cutoutMaxWidthFraction = 1.0;
 const _compactBubbleWidthFraction = 0.7;
 const _regularBubbleWidthFraction = 0.7;
 const _reactionOverflowGlyphWidth = 18.0;
-const String _chatAttachmentPanelKeyPrefix = 'chat-attachments-';
 const String _chatCalendarPanelKeyPrefix = 'chat-calendar-';
 const String _chatPinnedPanelKeyPrefix = 'chat-pins-';
 const String _chatPanelKeyFallback = '';
@@ -1144,20 +1143,19 @@ class _ChatState extends State<Chat> {
   }
 
   _CalendarTaskShare? _resolveCalendarTaskShare(CalendarTask task) {
-    final chatState = context.read<ChatBloc>().state;
-    final chat = chatState.chat;
-    if (chat == null) {
+    if (context.read<ChatBloc>().state.chat == null) {
       return null;
     }
     final decision = _calendarFragmentPolicy.decisionForChat(
-      chat: chat,
-      roomState: chatState.roomState,
+      chat: context.read<ChatBloc>().state.chat!,
+      roomState: context.read<ChatBloc>().state.roomState,
     );
     final String shareText = task.toShareText().trim();
     if (shareText.isEmpty) {
       return null;
     }
-    final bool canShareIcs = decision.canWrite || chat.defaultTransport.isEmail;
+    final bool canShareIcs = decision.canWrite ||
+        context.read<ChatBloc>().state.chat!.defaultTransport.isEmail;
     if (!canShareIcs) {
       _showSnackbar(_calendarFragmentShareDeniedMessage);
       return _CalendarTaskShare(
@@ -1205,8 +1203,7 @@ class _ChatState extends State<Chat> {
     CalendarAvailabilityShare share,
     String? requesterJid,
   ) async {
-    final chat = context.read<ChatBloc>().state.chat;
-    if (chat?.defaultTransport.isEmail == true) {
+    if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
       _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
       return;
     }
@@ -1235,8 +1232,7 @@ class _ChatState extends State<Chat> {
     required bool canAddToPersonalCalendar,
     required bool canAddToChatCalendar,
   }) async {
-    final chat = context.read<ChatBloc>().state.chat;
-    if (chat?.defaultTransport.isEmail == true) {
+    if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
       _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
       return;
     }
@@ -1281,8 +1277,7 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleAvailabilityDecline(CalendarAvailabilityRequest request) {
-    final chat = context.read<ChatBloc>().state.chat;
-    if (chat?.defaultTransport.isEmail == true) {
+    if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
       _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
       return;
     }
@@ -1320,8 +1315,8 @@ class _ChatState extends State<Chat> {
   Future<void> _addAvailabilityTaskToChatCalendar(
     _AvailabilityTaskDraft draft,
   ) async {
-    final chat = context.read<ChatBloc>().state.chat;
-    if (chat == null || !chat.supportsChatCalendar) {
+    if (context.read<ChatBloc>().state.chat == null ||
+        !context.read<ChatBloc>().state.chat!.supportsChatCalendar) {
       _showSnackbar(_availabilityRequestChatCalendarUnavailableMessage);
       return;
     }
@@ -1338,8 +1333,8 @@ class _ChatState extends State<Chat> {
     );
     try {
       await coordinator.addTask(
-        chatJid: chat.jid,
-        chatType: chat.type,
+        chatJid: context.read<ChatBloc>().state.chat!.jid,
+        chatType: context.read<ChatBloc>().state.chat!.type,
         task: task,
       );
     } on Exception {
@@ -1408,8 +1403,9 @@ class _ChatState extends State<Chat> {
   }
 
   String get _scrollStorageKey {
-    final jid = context.read<ChatBloc>().jid;
-    final suffix = jid == null || jid.isEmpty ? 'unknown' : jid;
+    String? chatJid() => context.read<ChatBloc>().jid;
+    final suffix =
+        chatJid() == null || chatJid()!.isEmpty ? 'unknown' : chatJid()!;
     return '$_chatScrollStoragePrefix$suffix';
   }
 
@@ -1801,12 +1797,17 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleSpamToggle({required bool sendToSpam}) async {
-    final jid = context.read<ChatBloc>().state.chat?.jid;
-    if (context.read<ChatBloc>().state.chat == null || jid == null) return;
+    if (context.read<ChatBloc>().state.chat == null ||
+        context.read<ChatBloc>().state.chat?.jid == null) {
+      return;
+    }
     final xmppService = context.read<XmppService>();
     final l10n = context.l10n;
     try {
-      await xmppService.setSpamStatus(jid: jid, spam: sendToSpam);
+      await xmppService.setSpamStatus(
+        jid: context.read<ChatBloc>().state.chat!.jid,
+        spam: sendToSpam,
+      );
     } on Exception {
       if (mounted) {
         _showSnackbar(l10n.chatSpamUpdateFailed);
@@ -1814,10 +1815,11 @@ class _ChatState extends State<Chat> {
       return;
     }
     if (!mounted) return;
-    final contactName = context.read<ChatBloc>().state.chat!.displayName;
     final toastMessage = sendToSpam
-        ? l10n.chatSpamSent(contactName)
-        : l10n.chatSpamRestored(contactName);
+        ? l10n.chatSpamSent(context.read<ChatBloc>().state.chat!.displayName)
+        : l10n.chatSpamRestored(
+            context.read<ChatBloc>().state.chat!.displayName,
+          );
     ShadToaster.maybeOf(context)?.show(
       FeedbackToast.info(
         title: sendToSpam
@@ -1829,17 +1831,24 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleAddContact() async {
-    final chat = context.read<ChatBloc>().state.chat;
-    if (chat == null) return;
-    final address = chat.remoteJid.trim();
-    if (address.isEmpty) return;
+    if (context.read<ChatBloc>().state.chat == null) return;
+    if (context.read<ChatBloc>().state.chat!.remoteJid.trim().isEmpty) {
+      return;
+    }
     final l10n = context.l10n;
     final showToast = ShadToaster.maybeOf(context)?.show;
-    final rawDisplayName = chat.contactDisplayName?.trim();
-    final rosterTitle =
-        rawDisplayName?.isNotEmpty == true ? rawDisplayName! : chat.title;
+    final rosterTitle = context
+                .read<ChatBloc>()
+                .state
+                .chat!
+                .contactDisplayName
+                ?.trim()
+                .isNotEmpty ==
+            true
+        ? context.read<ChatBloc>().state.chat!.contactDisplayName!.trim()
+        : context.read<ChatBloc>().state.chat!.title;
     try {
-      if (chat.isEmailBacked) {
+      if (context.read<ChatBloc>().state.chat!.isEmailBacked) {
         EmailService? emailService;
         try {
           emailService = RepositoryProvider.of<EmailService>(
@@ -1851,12 +1860,12 @@ class _ChatState extends State<Chat> {
         }
         if (emailService == null) return;
         await emailService.ensureChatForAddress(
-          address: address,
+          address: context.read<ChatBloc>().state.chat!.remoteJid.trim(),
           displayName: rosterTitle,
         );
       } else {
         await context.read<XmppService>().addToRoster(
-              jid: address,
+              jid: context.read<ChatBloc>().state.chat!.remoteJid.trim(),
               title: rosterTitle.isNotEmpty ? rosterTitle : null,
             );
       }
@@ -1978,12 +1987,14 @@ class _ChatState extends State<Chat> {
   }
 
   List<BlocklistEntry> _resolveBlocklistEntries() {
-    final BlocklistCubit? blocklistCubit = context.watch<BlocklistCubit?>();
-    final BlocklistState? blocklistState = blocklistCubit?.state;
     final List<BlocklistEntry>? cachedEntries =
-        blocklistState is BlocklistAvailable
-            ? blocklistState.items
-            : blocklistCubit?[blocklistItemsCacheKey] as List<BlocklistEntry>?;
+        switch (context.watch<BlocklistCubit?>()?.state) {
+      BlocklistAvailable state => state.items ??
+          context.watch<BlocklistCubit?>()?[blocklistItemsCacheKey]
+              as List<BlocklistEntry>?,
+      _ => context.watch<BlocklistCubit?>()?[blocklistItemsCacheKey]
+          as List<BlocklistEntry>?,
+    };
     return cachedEntries ?? _emptyBlocklistEntries;
   }
 
@@ -2053,9 +2064,7 @@ class _ChatState extends State<Chat> {
     final l10n = context.l10n;
     final displaySender =
         senderEmail?.isNotEmpty == true ? senderEmail! : senderJid;
-    final chatBloc = context.read<ChatBloc>();
-    final resolvedChat = chatBloc.state.chat;
-    final canTrustChat = !isSelf && resolvedChat != null;
+    final canTrustChat = !isSelf && context.read<ChatBloc>().state.chat != null;
     final showAutoTrustToggle = canTrustChat;
     final autoTrustLabel = l10n.attachmentGalleryChatTrustLabel;
     final autoTrustHint = l10n.attachmentGalleryChatTrustHint;
@@ -2079,7 +2088,9 @@ class _ChatState extends State<Chat> {
 
     final emailService = RepositoryProvider.of<EmailService?>(context);
     if (decision.alwaysAllow && canTrustChat) {
-      chatBloc.add(const ChatAttachmentAutoDownloadToggled(true));
+      context
+          .read<ChatBloc>()
+          .add(const ChatAttachmentAutoDownloadToggled(true));
     }
     if (isEmailChat) {
       if (emailService != null) {
@@ -2447,9 +2458,8 @@ class _ChatState extends State<Chat> {
         return;
       }
       if (!mounted) return;
-      final chatBloc = context.read<ChatBloc>();
       for (final attachment in attachments) {
-        chatBloc.add(ChatAttachmentPicked(attachment));
+        context.read<ChatBloc>().add(ChatAttachmentPicked(attachment));
       }
       _focusNode.requestFocus();
     } on PlatformException catch (error) {
@@ -3357,7 +3367,9 @@ class _ChatState extends State<Chat> {
                 }
               },
               builder: (context, state) {
-                final profile = context.watch<ProfileCubit?>()?.state;
+                ProfileState? profileState() =>
+                    context.watch<ProfileCubit?>()?.state;
+                ChatsState? chatsState() => context.watch<ChatsCubit?>()?.state;
                 final readOnly = widget.readOnly;
                 final emailService = RepositoryProvider.of<EmailService?>(
                   context,
@@ -3382,9 +3394,9 @@ class _ChatState extends State<Chat> {
                     chatEntity?.defaultTransport.isEmail ?? false;
                 final isGroupChat = chatEntity?.type == ChatType.groupChat;
                 final currentUserId = isDefaultEmail
-                    ? (emailSelfJid ?? profile?.jid ?? '')
-                    : (profile?.jid ?? emailSelfJid ?? '');
-                final resolvedProfileJid = profile?.jid.trim();
+                    ? (emailSelfJid ?? profileState()?.jid ?? '')
+                    : (profileState()?.jid ?? emailSelfJid ?? '');
+                final String? resolvedProfileJid = profileState()?.jid.trim();
                 final String? selfXmppJid =
                     resolvedProfileJid?.isNotEmpty == true
                         ? resolvedProfileJid
@@ -3400,7 +3412,8 @@ class _ChatState extends State<Chat> {
                             normalizedChatJid == normalizedXmppSelfJid) ||
                         (normalizedEmailSelfJid != null &&
                             normalizedChatJid == normalizedEmailSelfJid));
-                final String? selfAvatarPath = profile?.avatarPath?.trim();
+                final String? selfAvatarPath =
+                    profileState()?.avatarPath?.trim();
                 final bool hasSelfAvatarPath =
                     selfAvatarPath?.isNotEmpty == true;
                 final myOccupantId = state.roomState?.myOccupantId;
@@ -3431,7 +3444,6 @@ class _ChatState extends State<Chat> {
                     : fanOutReports.entries.last;
                 final showAttachmentWarning =
                     warningEntry?.value.attachmentWarning ?? false;
-                final chatsState = context.watch<ChatsCubit?>()?.state;
                 final rosterItems = (context.watch<RosterCubit>().cache['items']
                         as List<RosterItem>?) ??
                     const <RosterItem>[];
@@ -3443,7 +3455,7 @@ class _ChatState extends State<Chat> {
                 }
                 final chatAvatarPathsByJid = <String, String>{};
                 for (final chat
-                    in chatsState?.items ?? const <chat_models.Chat>[]) {
+                    in chatsState()?.items ?? const <chat_models.Chat>[]) {
                   final path =
                       (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
                   if (path == null || path.isEmpty) continue;
@@ -3465,16 +3477,19 @@ class _ChatState extends State<Chat> {
                   normalizedSelfJids.add(normalizedEmailSelfJid);
                 }
                 if (normalizedSelfJids.isNotEmpty && hasSelfAvatarPath) {
-                  final resolvedSelfAvatarPath = selfAvatarPath!;
-                  for (final selfJid in normalizedSelfJids) {
-                    rosterAvatarPathsByJid.putIfAbsent(
-                      selfJid,
-                      () => resolvedSelfAvatarPath,
-                    );
-                    chatAvatarPathsByJid.putIfAbsent(
-                      selfJid,
-                      () => resolvedSelfAvatarPath,
-                    );
+                  final resolvedSelfAvatarPath = selfAvatarPath;
+                  if (resolvedSelfAvatarPath != null &&
+                      resolvedSelfAvatarPath.isNotEmpty) {
+                    for (final selfJid in normalizedSelfJids) {
+                      rosterAvatarPathsByJid.putIfAbsent(
+                        selfJid,
+                        () => resolvedSelfAvatarPath,
+                      );
+                      chatAvatarPathsByJid.putIfAbsent(
+                        selfJid,
+                        () => resolvedSelfAvatarPath,
+                      );
+                    }
                   }
                 }
                 String? avatarPathForBareJid(String jid) {
@@ -3571,12 +3586,12 @@ class _ChatState extends State<Chat> {
                 final retryReport = retryEntry?.value;
                 final retryShareId = retryEntry?.key;
                 final availableChats =
-                    (chatsState?.items ?? const <chat_models.Chat>[])
+                    (chatsState()?.items ?? const <chat_models.Chat>[])
                         .where((chat) => chat.jid != chatEntity?.jid)
                         .toList();
-                final openStack = chatsState?.openStack ?? const <String>[];
+                final openStack = chatsState()?.openStack ?? const <String>[];
                 final forwardStack =
-                    chatsState?.forwardStack ?? const <String>[];
+                    chatsState()?.forwardStack ?? const <String>[];
                 bool prepareChatExit() {
                   if (_chatRoute != _ChatRoute.main) {
                     _returnToMainRoute();
@@ -3605,7 +3620,7 @@ class _ChatState extends State<Chat> {
                 final user = ChatUser(
                   id: selfUserId,
                   firstName: (isGroupChat ? myOccupant?.nick : null) ??
-                      profile?.username ??
+                      profileState()?.username ??
                       '',
                 );
                 final spacerUser = ChatUser(
@@ -3858,13 +3873,7 @@ class _ChatState extends State<Chat> {
                         AxiIconButton(
                           iconData: LucideIcons.paperclip,
                           tooltip: context.l10n.chatAttachmentTooltip,
-                          onPressed: () {
-                            if (_chatRoute == _ChatRoute.attachments) {
-                              _closeChatAttachments();
-                              return;
-                            }
-                            _openChatAttachments();
-                          },
+                          onPressed: _openChatAttachments,
                         ),
                         const SizedBox(width: _chatHeaderActionSpacing),
                         AxiBadge(
@@ -4133,7 +4142,8 @@ class _ChatState extends State<Chat> {
                                     final e = filteredItems[index];
                                     final senderBare = _bareJid(e.senderJid);
                                     final isSelfXmpp = senderBare != null &&
-                                        senderBare == _bareJid(profile?.jid);
+                                        senderBare ==
+                                            _bareJid(profileState()?.jid);
                                     final isSelfEmail = senderBare != null &&
                                         emailSelfJid != null &&
                                         senderBare == _bareJid(emailSelfJid);
@@ -4765,7 +4775,8 @@ class _ChatState extends State<Chat> {
                                                                   as bool? ??
                                                               (message.user
                                                                       .id ==
-                                                                  profile?.jid);
+                                                                  profileState()
+                                                                      ?.jid);
                                                       final bubbleMaxWidth = self
                                                           ? outboundMessageRowMaxWidth
                                                           : inboundMessageRowMaxWidth;
@@ -7138,14 +7149,6 @@ class _ChatState extends State<Chat> {
                                 },
                               ),
                               const ChatMessageDetails(),
-                              AttachmentGalleryPanel(
-                                key: ValueKey(
-                                  '$_chatAttachmentPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
-                                ),
-                                title: context.l10n.draftAttachmentsLabel,
-                                onClose: _closeChatAttachments,
-                                chat: chatEntity,
-                              ),
                               _ChatCalendarPanel(
                                 key: ValueKey(
                                   '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
@@ -7671,14 +7674,10 @@ class _ChatState extends State<Chat> {
 
   void _openChatAttachments() {
     if (!mounted) return;
-    setState(() {
-      _chatRoute = _ChatRoute.attachments;
-      _settingsPanelExpanded = false;
-      _pinnedPanelVisible = false;
-      if (_focusNode.hasFocus) {
-        _focusNode.unfocus();
-      }
-    });
+    context.push(
+      const AttachmentGalleryRoute().location,
+      extra: context.read,
+    );
   }
 
   void _togglePinnedMessages() {
@@ -7698,13 +7697,6 @@ class _ChatState extends State<Chat> {
   void _closeChatCalendar() {
     if (!mounted) return;
     context.read<ChatsCubit>().setChatCalendarOpen(open: false);
-    setState(() {
-      _chatRoute = _ChatRoute.main;
-    });
-  }
-
-  void _closeChatAttachments() {
-    if (!mounted) return;
     setState(() {
       _chatRoute = _ChatRoute.main;
     });

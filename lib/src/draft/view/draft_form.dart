@@ -461,13 +461,13 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   List<ComposerRecipient> _initialRecipients() {
-    final chats = context.read<ChatsCubit?>()?.state.items ?? const <Chat>[];
     final recipients = <ComposerRecipient>[];
     for (final value in widget.jids) {
       final trimmed = value.trim();
       if (trimmed.isEmpty) continue;
       Chat? match;
-      for (final chat in chats) {
+      for (final chat
+          in context.read<ChatsCubit?>()?.state.items ?? const <Chat>[]) {
         if (chat.jid == trimmed) {
           match = chat;
           break;

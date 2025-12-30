@@ -46,9 +46,6 @@ class _UnregisterFormState extends State<UnregisterForm> {
     final form = Form.of(context);
     if (!form.validate()) return;
     final l10n = context.l10n;
-    final authCubit = context.read<AuthenticationCubit>();
-    final profileState = context.read<ProfileCubit>().state;
-    final endpointDomain = authCubit.endpointConfig.domain;
     final approved = await confirm(
       context,
       title: l10n.authUnregisterConfirmTitle,
@@ -57,12 +54,12 @@ class _UnregisterFormState extends State<UnregisterForm> {
       cancelLabel: l10n.commonCancel,
       destructiveConfirm: true,
     );
-    if (!mounted || approved != true) return;
-    await authCubit.unregister(
-      username: profileState.username,
-      host: endpointDomain,
-      password: _passwordTextController.value.text,
-    );
+    if (!context.mounted || approved != true) return;
+    await context.read<AuthenticationCubit>().unregister(
+          username: context.read<ProfileCubit>().state.username,
+          host: context.read<AuthenticationCubit>().endpointConfig.domain,
+          password: _passwordTextController.value.text,
+        );
     _passwordTextController.clear();
   }
 

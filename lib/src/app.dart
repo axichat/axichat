@@ -242,16 +242,19 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   late final GoRouter _router = GoRouter(
     restorationScopeId: 'app',
     redirect: (context, routerState) {
-      final authState = context.read<AuthenticationCubit>().state;
-      if (authState is! AuthenticationComplete) {
+      if (context.read<AuthenticationCubit>().state
+          is! AuthenticationComplete) {
         // Check if the current route allows guest access
         final location = routeLocations[routerState.matchedLocation];
         if (location?.authenticationRequired == false) {
           return null; // Allow access to guest routes
         }
         final loginLocation = const LoginRoute().location;
-        if (authState is AuthenticationLogInInProgress &&
-            authState.fromSignup &&
+        if (context.read<AuthenticationCubit>().state
+                is AuthenticationLogInInProgress &&
+            (context.read<AuthenticationCubit>().state
+                    as AuthenticationLogInInProgress)
+                .fromSignup &&
             routerState.matchedLocation == loginLocation) {
           return null;
         }
@@ -481,9 +484,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               brightness: brightness,
             );
             final overlayStyle = _systemUiOverlayStyleFor(Theme.of(context));
-            final actionsEnabled = context.select<AuthenticationCubit, bool>(
-              (cubit) => cubit.state is AuthenticationComplete,
-            );
             final routedContent = MultiBlocListener(
               listeners: [
                 BlocListener<AuthenticationCubit, AuthenticationState>(
@@ -574,9 +574,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             );
             content = EnvScope(
               child: _ShortcutBindings(
-                enabled: actionsEnabled,
+                enabled: context.select<AuthenticationCubit, bool>(
+                  (cubit) => cubit.state is AuthenticationComplete,
+                ),
                 child: _DesktopMenuShell(
-                  actionsEnabled: actionsEnabled,
+                  actionsEnabled: context.select<AuthenticationCubit, bool>(
+                    (cubit) => cubit.state is AuthenticationComplete,
+                  ),
                   child: content,
                 ),
               ),
@@ -592,23 +596,22 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   }
 
   Future<void> _handleShareIntent() async {
-    final ShareIntentCubit shareCubit = context.read<ShareIntentCubit>();
-    final ShareIntentState shareState = shareCubit.state;
-    if (!shareState.hasPayload) return;
-    final AuthenticationState authState =
-        context.read<AuthenticationCubit>().state;
-    if (authState is! AuthenticationComplete) return;
-    final SharePayload payload = shareState.payload!;
+    if (!context.read<ShareIntentCubit>().state.hasPayload) return;
+    if (context.read<AuthenticationCubit>().state is! AuthenticationComplete) {
+      return;
+    }
     final MessageService messageService = context.read<MessageService>();
     final List<String> attachmentMetadataIds = await _persistSharedAttachments(
       messageService: messageService,
-      attachments: payload.attachments,
+      attachments: context.read<ShareIntentCubit>().state.payload!.attachments,
     );
     if (!mounted) return;
-    final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
+    final String resolvedBody =
+        context.read<ShareIntentCubit>().state.payload?.text?.trim() ??
+            _emptyShareBody;
     final bool hasBody = resolvedBody.isNotEmpty;
     if (!hasBody && attachmentMetadataIds.isEmpty) {
-      shareCubit.consume();
+      context.read<ShareIntentCubit>().consume();
       return;
     }
     openComposeDraft(
@@ -618,7 +621,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       jids: const [''],
       attachmentMetadataIds: attachmentMetadataIds,
     );
-    shareCubit.consume();
+    context.read<ShareIntentCubit>().consume();
   }
 
   Future<List<String>> _persistSharedAttachments({
