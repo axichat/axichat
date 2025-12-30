@@ -239,12 +239,11 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _onPressed(BuildContext context) async {
-    final avatarCubit = context.read<SignupAvatarCubit>();
-    if (avatarCubit.state.processing) return;
-    if (avatarCubit.state.avatar == null) {
-      avatarCubit.materializeCurrentCarouselAvatar();
+    if (context.read<SignupAvatarCubit>().state.processing) return;
+    if (context.read<SignupAvatarCubit>().state.avatar == null) {
+      context.read<SignupAvatarCubit>().materializeCurrentCarouselAvatar();
     }
-    if (avatarCubit.state.processing) return;
+    if (context.read<SignupAvatarCubit>().state.processing) return;
     FocusManager.instance.primaryFocus?.unfocus();
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
@@ -258,7 +257,7 @@ class _SignupFormState extends State<SignupForm>
           captchaID: splitSrc[splitSrc.indexOf('captcha') + 1],
           captcha: _captchaTextController.value.text,
           rememberMe: rememberMe,
-          avatar: avatarCubit.state.avatar,
+          avatar: context.read<SignupAvatarCubit>().state.avatar,
         );
   }
 
@@ -516,561 +515,597 @@ class _SignupFormState extends State<SignupForm>
       },
       builder: (context, state) {
         final l10n = context.l10n;
-        final avatarState = context.watch<SignupAvatarCubit>().state;
-        final avatarErrorText = _avatarErrorText(avatarState, l10n);
-        if (_lastCaptchaServer != state.server) {
-          _lastCaptchaServer = state.server;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _reloadCaptcha(resetFirstLoad: true);
-          });
-        }
-        final bool onSubmitStep = _currentIndex == _formKeys.length - 1;
-        final bool signupFlowActive = state is AuthenticationSignUpInProgress &&
-            state.fromSubmission &&
-            onSubmitStep;
-        final bool latchActive = (_lastReportedLoading ?? false) &&
-            (state is AuthenticationLogInInProgress ||
-                state is AuthenticationComplete);
-        final loading = signupFlowActive || latchActive;
-        _notifyLoadingChanged(loading);
-        final cleanupBlocked =
-            state is AuthenticationSignupFailure && state.isCleanupBlocked;
-        const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
-        const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
-        const globalErrorPadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
-        const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
-        final animationDuration =
-            context.watch<SettingsCubit>().animationDuration;
-        final usernameDescriptionHeight = _measureTextHeight(
-          context,
-          text: l10n.authUsernameCaseInsensitive,
-          style: context.textTheme.small,
-        );
-        final showGlobalError =
-            !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
-        return Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: errorPadding,
-                  child: _SignupProgressMeter(
-                    progressValue: _progressValue,
-                    currentStepIndex: _currentIndex,
-                    totalSteps: _formKeys.length,
-                    currentStepLabel: _currentStepLabel,
-                    animationDuration: animationDuration,
-                  ),
-                ),
-                Padding(
-                  padding: horizontalPadding,
-                  child: Text(
-                    l10n.signupTitle,
-                    style: context.modalHeaderTextStyle,
-                  ),
-                ),
-                Padding(
-                  padding: globalErrorPadding,
-                  child: AnimatedSwitcher(
-                    duration: animationDuration,
-                    child: showGlobalError
-                        ? Semantics(
-                            liveRegion: true,
-                            container: true,
-                            label: l10n.signupErrorPrefix(_errorText!),
-                            child: Text(
-                              _errorText!,
-                              key: const ValueKey('signup-global-error-text'),
-                              style: TextStyle(
-                                color: context.colorScheme.destructive,
+        return BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
+          builder: (context, avatarState) {
+            final avatarErrorText = _avatarErrorText(avatarState, l10n);
+            if (_lastCaptchaServer != state.server) {
+              _lastCaptchaServer = state.server;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _reloadCaptcha(resetFirstLoad: true);
+              });
+            }
+            final bool onSubmitStep = _currentIndex == _formKeys.length - 1;
+            final bool signupFlowActive =
+                state is AuthenticationSignUpInProgress &&
+                    state.fromSubmission &&
+                    onSubmitStep;
+            final bool latchActive = (_lastReportedLoading ?? false) &&
+                (state is AuthenticationLogInInProgress ||
+                    state is AuthenticationComplete);
+            final loading = signupFlowActive || latchActive;
+            _notifyLoadingChanged(loading);
+            final cleanupBlocked =
+                state is AuthenticationSignupFailure && state.isCleanupBlocked;
+            const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
+            const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
+            const globalErrorPadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
+            const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
+            final animationDuration =
+                context.watch<SettingsCubit>().animationDuration;
+            final usernameDescriptionHeight = _measureTextHeight(
+              context,
+              text: l10n.authUsernameCaseInsensitive,
+              style: context.textTheme.small,
+            );
+            final showGlobalError =
+                !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: errorPadding,
+                      child: _SignupProgressMeter(
+                        progressValue: _progressValue,
+                        currentStepIndex: _currentIndex,
+                        totalSteps: _formKeys.length,
+                        currentStepLabel: _currentStepLabel,
+                        animationDuration: animationDuration,
+                      ),
+                    ),
+                    Padding(
+                      padding: horizontalPadding,
+                      child: Text(
+                        l10n.signupTitle,
+                        style: context.modalHeaderTextStyle,
+                      ),
+                    ),
+                    Padding(
+                      padding: globalErrorPadding,
+                      child: AnimatedSwitcher(
+                        duration: animationDuration,
+                        child: showGlobalError
+                            ? Semantics(
+                                liveRegion: true,
+                                container: true,
+                                label: l10n.signupErrorPrefix(_errorText!),
+                                child: Text(
+                                  _errorText!,
+                                  key: const ValueKey(
+                                      'signup-global-error-text'),
+                                  style: TextStyle(
+                                    color: context.colorScheme.destructive,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox(
+                                key: ValueKey('signup-global-error-empty'),
+                              ),
+                      ),
+                    ),
+                    Padding(
+                      padding: horizontalPadding,
+                      child: NotificationRequest(
+                        notificationService:
+                            context.read<NotificationService>(),
+                        capability: context.read<Capability>(),
+                      ),
+                    ),
+                    const SizedBox.square(dimension: 16.0),
+                    Padding(
+                      padding: horizontalPadding,
+                      child: AxiAnimatedSize(
+                        duration:
+                            context.watch<SettingsCubit>().animationDuration,
+                        curve: Curves.easeIn,
+                        child: AnimatedSwitcher(
+                          duration:
+                              context.watch<SettingsCubit>().animationDuration,
+                          switchInCurve: Curves.easeIn,
+                          switchOutCurve: Curves.easeOut,
+                          transitionBuilder:
+                              AnimatedSwitcher.defaultTransitionBuilder,
+                          child: [
+                            Form(
+                              key: _formKeys[0],
+                              child: Padding(
+                                padding: fieldSpacing,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  spacing: 10.0,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Transform.translate(
+                                          offset: Offset(
+                                            0,
+                                            -usernameDescriptionHeight,
+                                          ),
+                                          child: SignupAvatarSelector(
+                                            bytes: avatarState.displayedBytes,
+                                            username: _jidTextController.text,
+                                            processing: avatarState.processing,
+                                            onTap: _openAvatarEditor,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: AxiTextFormField(
+                                            autocorrect: false,
+                                            inputFormatters: [
+                                              FilteringTextInputFormatter.allow(
+                                                RegExp(r'[a-z0-9._-]'),
+                                              ),
+                                            ],
+                                            keyboardType: TextInputType.name,
+                                            description: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 6.0,
+                                              ),
+                                              child: Text(l10n
+                                                  .authUsernameCaseInsensitive),
+                                            ),
+                                            placeholder:
+                                                Text(l10n.authUsername),
+                                            enabled: !loading,
+                                            controller: _jidTextController,
+                                            trailing: EndpointSuffix(
+                                                server: state.server),
+                                            validator: (text) {
+                                              if (text.isEmpty) {
+                                                return l10n
+                                                    .authUsernameRequired;
+                                              }
+                                              if (!_usernamePattern
+                                                  .hasMatch(text)) {
+                                                return l10n.authUsernameRules;
+                                              }
+                                              return null;
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (avatarErrorText != null)
+                                      Text(
+                                        avatarErrorText,
+                                        style: TextStyle(
+                                          color:
+                                              context.colorScheme.destructive,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    if (_showAvatarEditor)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(top: 12.0),
+                                        child: Center(
+                                          child: ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              maxWidth: math.min(
+                                                MediaQuery.sizeOf(context)
+                                                    .width,
+                                                960,
+                                              ),
+                                            ),
+                                            child: Stack(
+                                              children: [
+                                                SignupAvatarEditorPanel(
+                                                  mode: avatarState.editorMode,
+                                                  avatarBytes: avatarState
+                                                      .displayedBytes,
+                                                  cropBytes:
+                                                      avatarState.sourceBytes,
+                                                  cropRect:
+                                                      avatarState.cropRect,
+                                                  imageWidth:
+                                                      avatarState.imageWidth,
+                                                  imageHeight:
+                                                      avatarState.imageHeight,
+                                                  onCropChanged: (rect) => context
+                                                      .read<SignupAvatarCubit>()
+                                                      .updateCropRect(rect),
+                                                  onCropReset: context
+                                                      .read<SignupAvatarCubit>()
+                                                      .resetCrop,
+                                                  onShuffle: () => context
+                                                      .read<SignupAvatarCubit>()
+                                                      .shuffleTemplate(
+                                                        context.colorScheme,
+                                                      ),
+                                                  onUpload: context
+                                                      .read<SignupAvatarCubit>()
+                                                      .pickAvatarFromFiles,
+                                                  canShuffleBackground:
+                                                      avatarState
+                                                          .canShuffleBackground,
+                                                  onShuffleBackground: avatarState
+                                                          .canShuffleBackground
+                                                      ? () => context
+                                                          .read<
+                                                              SignupAvatarCubit>()
+                                                          .shuffleBackground(
+                                                            context.colorScheme,
+                                                          )
+                                                      : null,
+                                                ),
+                                                Positioned(
+                                                  top: 6,
+                                                  right: 6,
+                                                  child: AxiIconButton(
+                                                    iconData: LucideIcons.x,
+                                                    tooltip: l10n.commonClose,
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        _showAvatarEditor =
+                                                            false;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
-                          )
-                        : const SizedBox(
-                            key: ValueKey('signup-global-error-empty'),
-                          ),
-                  ),
-                ),
-                Padding(
-                  padding: horizontalPadding,
-                  child: NotificationRequest(
-                    notificationService: context.read<NotificationService>(),
-                    capability: context.read<Capability>(),
-                  ),
-                ),
-                const SizedBox.square(dimension: 16.0),
-                Padding(
-                  padding: horizontalPadding,
-                  child: AxiAnimatedSize(
-                    duration: context.watch<SettingsCubit>().animationDuration,
-                    curve: Curves.easeIn,
-                    child: AnimatedSwitcher(
-                      duration:
-                          context.watch<SettingsCubit>().animationDuration,
-                      switchInCurve: Curves.easeIn,
-                      switchOutCurve: Curves.easeOut,
-                      transitionBuilder:
-                          AnimatedSwitcher.defaultTransitionBuilder,
-                      child: [
-                        Form(
-                          key: _formKeys[0],
-                          child: Padding(
-                            padding: fieldSpacing,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              spacing: 10.0,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Transform.translate(
-                                      offset: Offset(
-                                        0,
-                                        -usernameDescriptionHeight,
-                                      ),
-                                      child: SignupAvatarSelector(
-                                        bytes: avatarState.displayedBytes,
-                                        username: _jidTextController.text,
-                                        processing: avatarState.processing,
-                                        onTap: _openAvatarEditor,
-                                      ),
+                            Form(
+                              key: _formKeys[1],
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Padding(
+                                    padding: fieldSpacing,
+                                    child: PasswordInput(
+                                      enabled:
+                                          !loading && !_pwnedCheckInProgress,
+                                      controller: _passwordTextController,
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
+                                  ),
+                                  Padding(
+                                    padding: fieldSpacing,
+                                    child: PasswordInput(
+                                      enabled:
+                                          !loading && !_pwnedCheckInProgress,
+                                      controller: _password2TextController,
+                                      confirmValidator: (text) =>
+                                          text != _passwordTextController.text
+                                              ? l10n.authPasswordsMismatch
+                                              : null,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: fieldSpacing,
+                                    child: _SignupPasswordStrengthMeter(
+                                      entropyBits: _passwordEntropyBits,
+                                      maxEntropyBits: _maxEntropyBits,
+                                      strengthLevel: _passwordStrengthLevel,
+                                      showBreachWarning: _showBreachedError &&
+                                          _passwordBreached,
+                                      animationDuration: animationDuration,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: fieldSpacing,
+                                    child: _SignupInsecurePasswordNotice(
+                                      reason: _visibleInsecurePasswordReason,
+                                      allowInsecurePassword:
+                                          allowInsecurePassword,
+                                      loading: loading,
+                                      pwnedCheckInProgress:
+                                          _pwnedCheckInProgress,
+                                      showAllowInsecureError:
+                                          _showAllowInsecureError,
+                                      animationDuration: animationDuration,
+                                      resetTick: _allowInsecureResetTick,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          allowInsecurePassword = value;
+                                          if (value) {
+                                            _showAllowInsecureError = false;
+                                            _showBreachedError = false;
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Form(
+                              key: _formKeys[2],
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Padding(
+                                    padding: fieldSpacing +
+                                        const EdgeInsets.only(top: 20),
+                                    child: FutureBuilder<String>(
+                                      future: _captchaSrc,
+                                      builder: (context, snapshot) {
+                                        final hasValidUrl = snapshot.hasData &&
+                                            (snapshot.data?.isNotEmpty ??
+                                                false);
+                                        final encounteredError = snapshot
+                                                .hasError ||
+                                            (snapshot.hasData && !hasValidUrl);
+                                        final persistentError =
+                                            encounteredError &&
+                                                _captchaHasLoadedOnce;
+                                        final describingLoading =
+                                            (!snapshot.hasData &&
+                                                    !encounteredError) ||
+                                                (encounteredError &&
+                                                    !_captchaHasLoadedOnce);
+                                        Widget captchaSurface;
+                                        if (encounteredError) {
+                                          if (_captchaHasLoadedOnce) {
+                                            captchaSurface =
+                                                const _CaptchaErrorMessage();
+                                          } else {
+                                            _scheduleInitialCaptchaRetry();
+                                            captchaSurface =
+                                                const _CaptchaSkeleton();
+                                          }
+                                        } else if (!snapshot.hasData) {
+                                          captchaSurface =
+                                              const _CaptchaSkeleton();
+                                        } else {
+                                          final captchaUrl =
+                                              snapshot.requireData;
+                                          captchaSurface = _CaptchaImage(
+                                            url: captchaUrl,
+                                            showErrorMessageOnError:
+                                                _captchaHasLoadedOnce,
+                                            onLoaded: _markCaptchaLoaded,
+                                            onInitialError:
+                                                _scheduleInitialCaptchaRetry,
+                                          );
+                                        }
+                                        return Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Semantics(
+                                                label: persistentError
+                                                    ? l10n
+                                                        .signupCaptchaUnavailable
+                                                    : l10n
+                                                        .signupCaptchaChallenge,
+                                                hint: persistentError
+                                                    ? l10n.signupCaptchaFailed
+                                                    : describingLoading
+                                                        ? l10n
+                                                            .signupCaptchaLoading
+                                                        : l10n
+                                                            .signupCaptchaInstructions,
+                                                image: !persistentError &&
+                                                    hasValidUrl,
+                                                child: persistentError
+                                                    ? _CaptchaFrame(
+                                                        child: captchaSurface,
+                                                      )
+                                                    : ExcludeSemantics(
+                                                        child: _CaptchaFrame(
+                                                          child: captchaSurface,
+                                                        ),
+                                                      ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Semantics(
+                                                button: true,
+                                                enabled: !loading,
+                                                label: l10n.signupCaptchaReload,
+                                                hint: l10n
+                                                    .signupCaptchaReloadHint,
+                                                child: AxiIconButton(
+                                                  iconData:
+                                                      LucideIcons.refreshCw,
+                                                  tooltip:
+                                                      l10n.signupCaptchaReload,
+                                                  onPressed: loading
+                                                      ? null
+                                                      : () => _reloadCaptcha(),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: fieldSpacing,
+                                    child: SizedBox(
+                                      width: captchaSize.width,
                                       child: AxiTextFormField(
                                         autocorrect: false,
-                                        inputFormatters: [
-                                          FilteringTextInputFormatter.allow(
-                                            RegExp(r'[a-z0-9._-]'),
-                                          ),
-                                        ],
-                                        keyboardType: TextInputType.name,
-                                        description: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6.0,
-                                          ),
-                                          child: Text(
-                                              l10n.authUsernameCaseInsensitive),
-                                        ),
-                                        placeholder: Text(l10n.authUsername),
+                                        keyboardType: TextInputType.number,
+                                        placeholder:
+                                            Text(l10n.signupCaptchaPlaceholder),
                                         enabled: !loading,
-                                        controller: _jidTextController,
-                                        trailing: EndpointSuffix(
-                                            server: state.server),
+                                        controller: _captchaTextController,
                                         validator: (text) {
                                           if (text.isEmpty) {
-                                            return l10n.authUsernameRequired;
-                                          }
-                                          if (!_usernamePattern
-                                              .hasMatch(text)) {
-                                            return l10n.authUsernameRules;
+                                            return l10n.signupCaptchaValidation;
                                           }
                                           return null;
                                         },
                                       ),
                                     ),
-                                  ],
-                                ),
-                                if (avatarErrorText != null)
-                                  Text(
-                                    avatarErrorText,
-                                    style: TextStyle(
-                                      color: context.colorScheme.destructive,
-                                      fontSize: 12,
-                                    ),
                                   ),
-                                if (_showAvatarEditor)
                                   Padding(
-                                    padding: const EdgeInsets.only(top: 12.0),
-                                    child: Center(
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: math.min(
-                                            MediaQuery.sizeOf(context).width,
-                                            960,
-                                          ),
-                                        ),
-                                        child: Stack(
-                                          children: [
-                                            SignupAvatarEditorPanel(
-                                              mode: avatarState.editorMode,
-                                              avatarBytes:
-                                                  avatarState.displayedBytes,
-                                              cropBytes:
-                                                  avatarState.sourceBytes,
-                                              cropRect: avatarState.cropRect,
-                                              imageWidth:
-                                                  avatarState.imageWidth,
-                                              imageHeight:
-                                                  avatarState.imageHeight,
-                                              onCropChanged: (rect) => context
-                                                  .read<SignupAvatarCubit>()
-                                                  .updateCropRect(rect),
-                                              onCropReset: context
-                                                  .read<SignupAvatarCubit>()
-                                                  .resetCrop,
-                                              onShuffle: () => context
-                                                  .read<SignupAvatarCubit>()
-                                                  .shuffleTemplate(
-                                                    context.colorScheme,
-                                                  ),
-                                              onUpload: context
-                                                  .read<SignupAvatarCubit>()
-                                                  .pickAvatarFromFiles,
-                                              canShuffleBackground: avatarState
-                                                  .canShuffleBackground,
-                                              onShuffleBackground: avatarState
-                                                      .canShuffleBackground
-                                                  ? () => context
-                                                      .read<SignupAvatarCubit>()
-                                                      .shuffleBackground(
-                                                        context.colorScheme,
-                                                      )
-                                                  : null,
-                                            ),
-                                            Positioned(
-                                              top: 6,
-                                              right: 6,
-                                              child: AxiIconButton(
-                                                iconData: LucideIcons.x,
-                                                tooltip: l10n.commonClose,
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _showAvatarEditor = false;
-                                                  });
-                                                },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                    padding: fieldSpacing,
+                                    child: TermsCheckbox(
+                                      enabled: !loading,
                                     ),
                                   ),
-                              ],
+                                  Padding(
+                                    padding: fieldSpacing,
+                                    child: AxiCheckboxFormField(
+                                      key: _rememberMeFieldKey,
+                                      enabled: !loading,
+                                      initialValue: rememberMe,
+                                      inputLabel:
+                                          Text(l10n.authRememberMeLabel),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          rememberMe = value;
+                                        });
+                                        unawaited(
+                                          context
+                                              .read<AuthenticationCubit>()
+                                              .persistRememberMeChoice(value),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+                          ][_currentIndex],
                         ),
-                        Form(
-                          key: _formKeys[1],
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Padding(
-                                padding: fieldSpacing,
-                                child: PasswordInput(
-                                  enabled: !loading && !_pwnedCheckInProgress,
-                                  controller: _passwordTextController,
-                                ),
-                              ),
-                              Padding(
-                                padding: fieldSpacing,
-                                child: PasswordInput(
-                                  enabled: !loading && !_pwnedCheckInProgress,
-                                  controller: _password2TextController,
-                                  confirmValidator: (text) =>
-                                      text != _passwordTextController.text
-                                          ? l10n.authPasswordsMismatch
-                                          : null,
-                                ),
-                              ),
-                              Padding(
-                                padding: fieldSpacing,
-                                child: _SignupPasswordStrengthMeter(
-                                  entropyBits: _passwordEntropyBits,
-                                  maxEntropyBits: _maxEntropyBits,
-                                  strengthLevel: _passwordStrengthLevel,
-                                  showBreachWarning:
-                                      _showBreachedError && _passwordBreached,
-                                  animationDuration: animationDuration,
-                                ),
-                              ),
-                              Padding(
-                                padding: fieldSpacing,
-                                child: _SignupInsecurePasswordNotice(
-                                  reason: _visibleInsecurePasswordReason,
-                                  allowInsecurePassword: allowInsecurePassword,
-                                  loading: loading,
-                                  pwnedCheckInProgress: _pwnedCheckInProgress,
-                                  showAllowInsecureError:
-                                      _showAllowInsecureError,
-                                  animationDuration: animationDuration,
-                                  resetTick: _allowInsecureResetTick,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      allowInsecurePassword = value;
-                                      if (value) {
-                                        _showAllowInsecureError = false;
-                                        _showBreachedError = false;
-                                      }
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Form(
-                          key: _formKeys[2],
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Padding(
-                                padding: fieldSpacing +
-                                    const EdgeInsets.only(top: 20),
-                                child: FutureBuilder<String>(
-                                  future: _captchaSrc,
-                                  builder: (context, snapshot) {
-                                    final hasValidUrl = snapshot.hasData &&
-                                        (snapshot.data?.isNotEmpty ?? false);
-                                    final encounteredError =
-                                        snapshot.hasError ||
-                                            (snapshot.hasData && !hasValidUrl);
-                                    final persistentError = encounteredError &&
-                                        _captchaHasLoadedOnce;
-                                    final describingLoading =
-                                        (!snapshot.hasData &&
-                                                !encounteredError) ||
-                                            (encounteredError &&
-                                                !_captchaHasLoadedOnce);
-                                    Widget captchaSurface;
-                                    if (encounteredError) {
-                                      if (_captchaHasLoadedOnce) {
-                                        captchaSurface =
-                                            const _CaptchaErrorMessage();
-                                      } else {
-                                        _scheduleInitialCaptchaRetry();
-                                        captchaSurface =
-                                            const _CaptchaSkeleton();
-                                      }
-                                    } else if (!snapshot.hasData) {
-                                      captchaSurface = const _CaptchaSkeleton();
-                                    } else {
-                                      final captchaUrl = snapshot.requireData;
-                                      captchaSurface = _CaptchaImage(
-                                        url: captchaUrl,
-                                        showErrorMessageOnError:
-                                            _captchaHasLoadedOnce,
-                                        onLoaded: _markCaptchaLoaded,
-                                        onInitialError:
-                                            _scheduleInitialCaptchaRetry,
-                                      );
-                                    }
-                                    return Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Semantics(
-                                            label: persistentError
-                                                ? l10n.signupCaptchaUnavailable
-                                                : l10n.signupCaptchaChallenge,
-                                            hint: persistentError
-                                                ? l10n.signupCaptchaFailed
-                                                : describingLoading
-                                                    ? l10n.signupCaptchaLoading
-                                                    : l10n
-                                                        .signupCaptchaInstructions,
-                                            image:
-                                                !persistentError && hasValidUrl,
-                                            child: persistentError
-                                                ? _CaptchaFrame(
-                                                    child: captchaSurface,
-                                                  )
-                                                : ExcludeSemantics(
-                                                    child: _CaptchaFrame(
-                                                      child: captchaSurface,
-                                                    ),
-                                                  ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Semantics(
-                                            button: true,
-                                            enabled: !loading,
-                                            label: l10n.signupCaptchaReload,
-                                            hint: l10n.signupCaptchaReloadHint,
-                                            child: AxiIconButton(
-                                              iconData: LucideIcons.refreshCw,
-                                              tooltip: l10n.signupCaptchaReload,
-                                              onPressed: loading
-                                                  ? null
-                                                  : () => _reloadCaptcha(),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              Padding(
-                                padding: fieldSpacing,
-                                child: SizedBox(
-                                  width: captchaSize.width,
-                                  child: AxiTextFormField(
-                                    autocorrect: false,
-                                    keyboardType: TextInputType.number,
-                                    placeholder:
-                                        Text(l10n.signupCaptchaPlaceholder),
-                                    enabled: !loading,
-                                    controller: _captchaTextController,
-                                    validator: (text) {
-                                      if (text.isEmpty) {
-                                        return l10n.signupCaptchaValidation;
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: fieldSpacing,
-                                child: TermsCheckbox(
-                                  enabled: !loading,
-                                ),
-                              ),
-                              Padding(
-                                padding: fieldSpacing,
-                                child: AxiCheckboxFormField(
-                                  key: _rememberMeFieldKey,
-                                  enabled: !loading,
-                                  initialValue: rememberMe,
-                                  inputLabel: Text(l10n.authRememberMeLabel),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      rememberMe = value;
-                                    });
-                                    unawaited(
-                                      context
-                                          .read<AuthenticationCubit>()
-                                          .persistRememberMeChoice(value),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ][_currentIndex],
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox.square(dimension: 16.0),
-                Padding(
-                  padding: horizontalPadding,
-                  child: Builder(
-                    builder: (context) {
-                      final isPasswordStep = _currentIndex == 1;
-                      final isCheckingPwned =
-                          isPasswordStep && _pwnedCheckInProgress;
-                      final showBackButton = _currentIndex >= 1;
-                      final showNextButton =
-                          _currentIndex < _formKeys.length - 1;
-                      final showSubmitButton = !showNextButton;
+                    const SizedBox.square(dimension: 16.0),
+                    Padding(
+                      padding: horizontalPadding,
+                      child: Builder(
+                        builder: (context) {
+                          final isPasswordStep = _currentIndex == 1;
+                          final isCheckingPwned =
+                              isPasswordStep && _pwnedCheckInProgress;
+                          final showBackButton = _currentIndex >= 1;
+                          final showNextButton =
+                              _currentIndex < _formKeys.length - 1;
+                          final showSubmitButton = !showNextButton;
 
-                      final backButton = AxiAnimatedSize(
-                        duration: animationDuration,
-                        curve: Curves.easeInOut,
-                        alignment: Alignment.centerLeft,
-                        child: showBackButton
-                            ? Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ShadButton.secondary(
-                                  enabled: !loading && !isCheckingPwned,
-                                  onPressed: () {
-                                    setState(() {
-                                      _currentIndex--;
-                                    });
-                                  },
-                                  child: Text(l10n.commonBack),
-                                ).withTapBounce(
-                                  enabled: !loading && !isCheckingPwned,
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      );
+                          final backButton = AxiAnimatedSize(
+                            duration: animationDuration,
+                            curve: Curves.easeInOut,
+                            alignment: Alignment.centerLeft,
+                            child: showBackButton
+                                ? Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ShadButton.secondary(
+                                      enabled: !loading && !isCheckingPwned,
+                                      onPressed: () {
+                                        setState(() {
+                                          _currentIndex--;
+                                        });
+                                      },
+                                      child: Text(l10n.commonBack),
+                                    ).withTapBounce(
+                                      enabled: !loading && !isCheckingPwned,
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          );
 
-                      final continueButton = showNextButton
-                          ? Padding(
-                              padding: EdgeInsets.only(
-                                right: showSubmitButton ? 8 : 0,
-                              ),
-                              child: ShadButton(
-                                enabled: !loading &&
-                                    !isCheckingPwned &&
-                                    !avatarState.processing,
-                                onPressed: () async {
-                                  await _handleContinuePressed(context);
-                                },
-                                leading: AnimatedCrossFade(
-                                  crossFadeState: isCheckingPwned
-                                      ? CrossFadeState.showSecond
-                                      : CrossFadeState.showFirst,
-                                  duration: animationDuration,
-                                  firstChild: const SizedBox(),
-                                  secondChild: AxiProgressIndicator(
-                                    color:
-                                        context.colorScheme.primaryForeground,
-                                    semanticsLabel: l10n.authPasswordPending,
+                          final continueButton = showNextButton
+                              ? Padding(
+                                  padding: EdgeInsets.only(
+                                    right: showSubmitButton ? 8 : 0,
                                   ),
-                                ),
-                                trailing: const SizedBox.shrink(),
-                                child: Text(l10n.signupContinue),
-                              ).withTapBounce(
-                                enabled: !loading && !isCheckingPwned,
-                              ),
-                            )
-                          : const SizedBox.shrink();
+                                  child: ShadButton(
+                                    enabled: !loading &&
+                                        !isCheckingPwned &&
+                                        !avatarState.processing,
+                                    onPressed: () async {
+                                      await _handleContinuePressed(context);
+                                    },
+                                    leading: AnimatedCrossFade(
+                                      crossFadeState: isCheckingPwned
+                                          ? CrossFadeState.showSecond
+                                          : CrossFadeState.showFirst,
+                                      duration: animationDuration,
+                                      firstChild: const SizedBox(),
+                                      secondChild: AxiProgressIndicator(
+                                        color: context
+                                            .colorScheme.primaryForeground,
+                                        semanticsLabel:
+                                            l10n.authPasswordPending,
+                                      ),
+                                    ),
+                                    trailing: const SizedBox.shrink(),
+                                    child: Text(l10n.signupContinue),
+                                  ).withTapBounce(
+                                    enabled: !loading && !isCheckingPwned,
+                                  ),
+                                )
+                              : const SizedBox.shrink();
 
-                      final submitButton = showSubmitButton
-                          ? ShadButton(
-                              enabled: !loading &&
-                                  !cleanupBlocked &&
-                                  !avatarState.processing,
-                              onPressed: cleanupBlocked
-                                  ? null
-                                  : () => _onPressed(context),
-                              leading: AnimatedCrossFade(
-                                crossFadeState: loading
-                                    ? CrossFadeState.showSecond
-                                    : CrossFadeState.showFirst,
-                                duration: animationDuration,
-                                firstChild: const SizedBox(),
-                                secondChild: AxiProgressIndicator(
-                                  color: context.colorScheme.primaryForeground,
-                                  semanticsLabel: l10n.authSignupPending,
-                                ),
-                              ),
-                              trailing: const SizedBox.shrink(),
-                              child: Text(l10n.authSignUp),
-                            ).withTapBounce(
-                              enabled: !loading && !cleanupBlocked,
-                            )
-                          : const SizedBox.shrink();
+                          final submitButton = showSubmitButton
+                              ? ShadButton(
+                                  enabled: !loading &&
+                                      !cleanupBlocked &&
+                                      !avatarState.processing,
+                                  onPressed: cleanupBlocked
+                                      ? null
+                                      : () => _onPressed(context),
+                                  leading: AnimatedCrossFade(
+                                    crossFadeState: loading
+                                        ? CrossFadeState.showSecond
+                                        : CrossFadeState.showFirst,
+                                    duration: animationDuration,
+                                    firstChild: const SizedBox(),
+                                    secondChild: AxiProgressIndicator(
+                                      color:
+                                          context.colorScheme.primaryForeground,
+                                      semanticsLabel: l10n.authSignupPending,
+                                    ),
+                                  ),
+                                  trailing: const SizedBox.shrink(),
+                                  child: Text(l10n.authSignUp),
+                                ).withTapBounce(
+                                  enabled: !loading && !cleanupBlocked,
+                                )
+                              : const SizedBox.shrink();
 
-                      return Wrap(
-                        spacing: 0,
-                        runSpacing: 8,
-                        children: [
-                          backButton,
-                          if (showNextButton) continueButton,
-                          if (showSubmitButton) submitButton,
-                        ],
-                      );
-                    },
-                  ),
+                          return Wrap(
+                            spacing: 0,
+                            runSpacing: 8,
+                            children: [
+                              backButton,
+                              if (showNextButton) continueButton,
+                              if (showSubmitButton) submitButton,
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

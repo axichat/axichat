@@ -66,20 +66,28 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_dependenciesInitialized) return;
-    final config = context.read<AuthenticationCubit>().endpointConfig;
-    _enableXmpp = config.enableXmpp;
-    _enableSmtp = config.enableSmtp;
-    _useDns = config.useDns;
-    _useSrv = config.useSrv;
-    _requireDnssec = config.requireDnssec;
-    _domainController.text = config.domain;
-    _xmppHostController.text = config.xmppHost ?? '';
-    _imapHostController.text = config.imapHost ?? '';
-    _smtpHostController.text = config.smtpHost ?? '';
-    _xmppPortController.text = config.xmppPort.toString();
-    _imapPortController.text = config.imapPort.toString();
-    _smtpPortController.text = config.smtpPort.toString();
-    _apiPortController.text = config.apiPort.toString();
+    _enableXmpp = context.read<AuthenticationCubit>().endpointConfig.enableXmpp;
+    _enableSmtp = context.read<AuthenticationCubit>().endpointConfig.enableSmtp;
+    _useDns = context.read<AuthenticationCubit>().endpointConfig.useDns;
+    _useSrv = context.read<AuthenticationCubit>().endpointConfig.useSrv;
+    _requireDnssec =
+        context.read<AuthenticationCubit>().endpointConfig.requireDnssec;
+    _domainController.text =
+        context.read<AuthenticationCubit>().endpointConfig.domain;
+    _xmppHostController.text =
+        context.read<AuthenticationCubit>().endpointConfig.xmppHost ?? '';
+    _imapHostController.text =
+        context.read<AuthenticationCubit>().endpointConfig.imapHost ?? '';
+    _smtpHostController.text =
+        context.read<AuthenticationCubit>().endpointConfig.smtpHost ?? '';
+    _xmppPortController.text =
+        context.read<AuthenticationCubit>().endpointConfig.xmppPort.toString();
+    _imapPortController.text =
+        context.read<AuthenticationCubit>().endpointConfig.imapPort.toString();
+    _smtpPortController.text =
+        context.read<AuthenticationCubit>().endpointConfig.smtpPort.toString();
+    _apiPortController.text =
+        context.read<AuthenticationCubit>().endpointConfig.apiPort.toString();
     _dependenciesInitialized = true;
   }
 

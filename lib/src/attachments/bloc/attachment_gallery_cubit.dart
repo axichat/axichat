@@ -6,7 +6,6 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:flutter/scheduler.dart';
 
 class AttachmentGalleryState extends Equatable {
   const AttachmentGalleryState({
@@ -44,22 +43,15 @@ class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
     unawaited(_subscribe());
   }
 
-  static const List<SchedulerPhase> _deferredEmitPhases = <SchedulerPhase>[
-    SchedulerPhase.persistentCallbacks,
-    SchedulerPhase.midFrameMicrotasks,
-  ];
-
   final XmppService _xmppService;
   final String? chatJid;
   StreamSubscription<List<AttachmentGalleryItem>>? _subscription;
-  AttachmentGalleryState? _pendingState;
-  bool _emitScheduled = false;
 
   Future<void> _subscribe() async {
-    _emitState(state.copyWith(status: RequestStatus.loading));
+    emit(state.copyWith(status: RequestStatus.loading));
     final db = await _xmppService.database;
     if (db is! XmppDrift) {
-      _emitState(
+      emit(
         state.copyWith(
           status: RequestStatus.failure,
           error: null,
@@ -76,7 +68,7 @@ class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
   }
 
   void _handleItems(List<AttachmentGalleryItem> items) {
-    _emitState(
+    emit(
       state.copyWith(
         status: RequestStatus.success,
         items: items,
@@ -86,7 +78,7 @@ class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
   }
 
   void _handleError(Object error, StackTrace stackTrace) {
-    _emitState(
+    emit(
       state.copyWith(
         status: RequestStatus.failure,
         error: error.toString(),
@@ -94,30 +86,8 @@ class AttachmentGalleryCubit extends Cubit<AttachmentGalleryState> {
     );
   }
 
-  void _emitState(AttachmentGalleryState nextState) {
-    if (_shouldDeferEmit()) {
-      _pendingState = nextState;
-      if (_emitScheduled) return;
-      _emitScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _emitScheduled = false;
-        final pending = _pendingState;
-        _pendingState = null;
-        if (pending == null || isClosed) return;
-        emit(pending);
-      });
-      return;
-    }
-    emit(nextState);
-  }
-
-  bool _shouldDeferEmit() =>
-      _deferredEmitPhases.contains(SchedulerBinding.instance.schedulerPhase);
-
   @override
   Future<void> close() async {
-    _pendingState = null;
-    _emitScheduled = false;
     await _subscription?.cancel();
     return super.close();
   }
