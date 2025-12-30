@@ -2302,8 +2302,7 @@ class EmailService {
     try {
       await Future.delayed(_reconnectRestartDelay);
       final connectivity = await _transport.connectivity();
-      if (connectivity == null ||
-          connectivity >= _connectivityConnectingMin) {
+      if (connectivity == null || connectivity >= _connectivityConnectingMin) {
         return;
       }
       _log.warning(

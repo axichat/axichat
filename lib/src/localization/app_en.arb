@@ -807,6 +807,9 @@
     }
   },
   "chatAttachmentDownload": "Download attachment",
+  "chatAttachmentDownloadAndOpen": "Download and open",
+  "chatAttachmentDownloadAndSave": "Download and save",
+  "chatAttachmentDownloadAndShare": "Download and share",
   "chatAttachmentExportTitle": "Save attachment?",
   "chatAttachmentExportMessage": "This will copy the attachment to shared storage. Exports are unencrypted and may be readable by other apps. Continue?",
   "chatAttachmentExportConfirm": "Save",

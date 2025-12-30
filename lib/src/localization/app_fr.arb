@@ -730,7 +730,10 @@
     }
   },
   "chatAttachmentDownload": "Télécharger la pièce jointe",
-  "chatAttachmentExportTitle": "Enregistrer la pièce jointe ?",
+  "chatAttachmentDownloadAndOpen": "Télécharger et ouvrir",
+  "chatAttachmentDownloadAndSave": "Télécharger et enregistrer",
+  "chatAttachmentDownloadAndShare": "Télécharger et partager",
+  "chatAttachmentExportTitle": "Enregistrer la pièce jointe ?",
   "chatAttachmentExportMessage": "Cela copiera la pièce jointe vers le stockage partagé. Les exportations ne sont pas chiffrées et peuvent être lues par d'autres apps. Continuer ?",
   "chatAttachmentExportConfirm": "Enregistrer",
   "chatAttachmentExportCancel": "Annuler",

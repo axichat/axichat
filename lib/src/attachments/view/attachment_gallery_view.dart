@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/attachments/attachment_gallery_repository.dart';
@@ -788,7 +790,7 @@ class AttachmentGallerySelect<T> extends StatelessWidget {
   }
 }
 
-class AttachmentGalleryEntry extends StatelessWidget {
+class AttachmentGalleryEntry extends StatefulWidget {
   const AttachmentGalleryEntry({
     super.key,
     required this.item,
@@ -822,12 +824,37 @@ class AttachmentGalleryEntry extends StatelessWidget {
   }) onApproveAttachment;
 
   @override
+  State<AttachmentGalleryEntry> createState() => _AttachmentGalleryEntryState();
+}
+
+class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
+  late Stream<FileMetadataData?> _metadataStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _metadataStream = _resolveMetadataStream(widget.item.metadata.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant AttachmentGalleryEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextId = widget.item.metadata.id;
+    if (oldWidget.item.metadata.id != nextId) {
+      _metadataStream = _resolveMetadataStream(nextId);
+    }
+  }
+
+  Stream<FileMetadataData?> _resolveMetadataStream(String id) =>
+      context.read<XmppService>().fileMetadataStream(id);
+
+  @override
   Widget build(BuildContext context) {
     final xmppService = context.read<XmppService>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
-    final message = item.message;
-    final metadata = item.metadata;
-    final chat = chatOverride ?? chatLookup[message.chatJid];
+    final message = widget.item.message;
+    final metadata = widget.item.metadata;
+    final chat = widget.chatOverride ?? widget.chatLookup[message.chatJid];
     final isEmailMessage =
         message.deltaMsgId != null || message.deltaChatId != null;
     final isEmailChat =
@@ -837,11 +864,11 @@ class AttachmentGalleryEntry extends StatelessWidget {
       xmppService: xmppService,
       emailService: emailService,
     );
-    final allowByTrust = shouldAllowAttachment(
+    final allowByTrust = widget.shouldAllowAttachment(
       isSelf: isSelf,
       chat: chat,
     );
-    final allowOnce = isOneTimeAttachmentAllowed(message.stanzaID);
+    final allowOnce = widget.isOneTimeAttachmentAllowed(message.stanzaID);
     final allowAttachment = allowByTrust || allowOnce;
     final downloadDelegate = isEmailChat && emailService != null
         ? AttachmentDownloadDelegate(
@@ -852,23 +879,24 @@ class AttachmentGalleryEntry extends StatelessWidget {
     final autoDownloadUserInitiated = allowOnce && !isEmailChat;
     final metaText = _resolveMetaText(
       chat: chat,
-      showChatLabel: showChatLabel,
+      showChatLabel: widget.showChatLabel,
     );
     final allowPressed = allowAttachment
         ? null
-        : () => onApproveAttachment(
+        : () => widget.onApproveAttachment(
               message: message,
               senderJid: message.senderJid,
               stanzaId: message.stanzaID,
               chat: chat,
               isEmailChat: isEmailChat,
             );
-    return layout == AttachmentGalleryLayout.list
+    return widget.layout == AttachmentGalleryLayout.list
         ? AttachmentGalleryListItem(
+            metadataStream: _metadataStream,
             metadata: metadata,
             stanzaId: message.stanzaID,
             allowed: allowAttachment,
-            autoDownloadSettings: autoDownloadSettings,
+            autoDownloadSettings: widget.autoDownloadSettings,
             autoDownloadAllowed: autoDownloadAllowed,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: downloadDelegate,
@@ -876,10 +904,11 @@ class AttachmentGalleryEntry extends StatelessWidget {
             metaText: metaText,
           )
         : AttachmentGalleryTile(
+            metadataStream: _metadataStream,
             metadata: metadata,
             stanzaId: message.stanzaID,
             allowed: allowAttachment,
-            autoDownloadSettings: autoDownloadSettings,
+            autoDownloadSettings: widget.autoDownloadSettings,
             autoDownloadAllowed: autoDownloadAllowed,
             autoDownloadUserInitiated: autoDownloadUserInitiated,
             downloadDelegate: downloadDelegate,
@@ -892,6 +921,7 @@ class AttachmentGalleryEntry extends StatelessWidget {
 class AttachmentGalleryListItem extends StatelessWidget {
   const AttachmentGalleryListItem({
     super.key,
+    required this.metadataStream,
     required this.metadata,
     required this.stanzaId,
     required this.allowed,
@@ -903,6 +933,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
     required this.metaText,
   });
 
+  final Stream<FileMetadataData?> metadataStream;
   final FileMetadataData metadata;
   final String stanzaId;
   final bool allowed;
@@ -930,8 +961,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
         ],
         ChatAttachmentPreview(
           stanzaId: stanzaId,
-          metadataStream:
-              context.read<XmppService>().fileMetadataStream(metadata.id),
+          metadataStream: metadataStream,
           initialMetadata: metadata,
           allowed: allowed,
           autoDownloadSettings: autoDownloadSettings,
@@ -948,6 +978,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
 class AttachmentGalleryTile extends StatelessWidget {
   const AttachmentGalleryTile({
     super.key,
+    required this.metadataStream,
     required this.metadata,
     required this.stanzaId,
     required this.allowed,
@@ -959,6 +990,7 @@ class AttachmentGalleryTile extends StatelessWidget {
     required this.metaText,
   });
 
+  final Stream<FileMetadataData?> metadataStream;
   final FileMetadataData metadata;
   final String stanzaId;
   final bool allowed;
@@ -981,8 +1013,7 @@ class AttachmentGalleryTile extends StatelessWidget {
             alignment: Alignment.topCenter,
             child: ChatAttachmentPreview(
               stanzaId: stanzaId,
-              metadataStream:
-                  context.read<XmppService>().fileMetadataStream(metadata.id),
+              metadataStream: metadataStream,
               initialMetadata: metadata,
               allowed: allowed,
               autoDownloadSettings: autoDownloadSettings,
