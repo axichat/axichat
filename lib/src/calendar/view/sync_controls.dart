@@ -62,7 +62,7 @@ class _SyncControlsState extends State<SyncControls> {
   }
 
   Future<void> _exportAll() async {
-    final model = context.read<CalendarBloc>().state.model;
+    final model = state.model;
     if (!model.hasCalendarData) {
       FeedbackSystem.showInfo(context, 'No calendar data available to export.');
       return;
@@ -72,9 +72,7 @@ class _SyncControlsState extends State<SyncControls> {
     try {
       final file = format == CalendarExportFormat.json
           ? await _transferService.exportModel(model: model)
-          : await _transferService.exportIcs(
-              model: model,
-            );
+          : await _transferService.exportIcs(model: model);
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
         file: file,
         subject: 'Axichat calendar export',

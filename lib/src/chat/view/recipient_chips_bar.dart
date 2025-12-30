@@ -870,10 +870,12 @@ class _RecipientChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final included = recipient.included;
-    final colorfulAvatars = context.select<SettingsCubit, bool>(
-      (cubit) => cubit.state.colorfulAvatars,
+    final baseColor = _chipColor(
+      context,
+      context.select<SettingsCubit, bool>(
+        (cubit) => cubit.state.colorfulAvatars,
+      ),
     );
-    final baseColor = _chipColor(context, colorfulAvatars);
     final overlayOpacity = included ? 0.78 : 0.32;
     final background = Color.alphaBlend(
       baseColor.withValues(alpha: overlayOpacity),

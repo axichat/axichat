@@ -14,15 +14,18 @@ class BlocklistList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cachedItems = context.select<BlocklistCubit, List<BlocklistEntry>?>(
-      (cubit) => cubit[blocklistItemsCacheKey] as List<BlocklistEntry>?,
-    );
-
     return BlocBuilder<BlocklistCubit, BlocklistState>(
       builder: (context, state) {
         final items = state is BlocklistAvailable
-            ? state.items ?? cachedItems
-            : cachedItems;
+            ? state.items ??
+                context.select<BlocklistCubit, List<BlocklistEntry>?>(
+                  (cubit) =>
+                      cubit[blocklistItemsCacheKey] as List<BlocklistEntry>?,
+                )
+            : context.select<BlocklistCubit, List<BlocklistEntry>?>(
+                (cubit) =>
+                    cubit[blocklistItemsCacheKey] as List<BlocklistEntry>?,
+              );
 
         if (items == null) {
           return Center(

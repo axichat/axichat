@@ -16,7 +16,6 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -346,7 +345,6 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     final displaySender =
         senderEmail?.trim().isNotEmpty == true ? senderEmail! : senderJid;
     final xmppService = context.read<XmppService>();
-    final chatsCubit = context.read<ChatsCubit?>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
     final isSelf = _isSelfMessage(
       message,
@@ -377,11 +375,11 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
     if (decision.alwaysAllow && canTrustChat) {
       final resolvedChat = chat;
-      if (chatsCubit != null) {
-        await chatsCubit.toggleAttachmentAutoDownload(
-          jid: resolvedChat.jid,
-          enabled: true,
-        );
+      if (context.read<ChatsCubit?>() != null) {
+        await context.read<ChatsCubit>().toggleAttachmentAutoDownload(
+              jid: resolvedChat.jid,
+              enabled: true,
+            );
       } else {
         await xmppService.toggleChatAttachmentAutoDownload(
           jid: resolvedChat.jid,
@@ -412,8 +410,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
   @override
   Widget build(BuildContext context) {
-    final chatsCubit = context.watch<ChatsCubit>();
-    final chats = chatsCubit.state.items ?? const <Chat>[];
+    ChatsState chatsState() => context.watch<ChatsCubit>().state;
+    final chats = chatsState().items ?? const <Chat>[];
     final autoDownloadSettings =
         context.watch<SettingsCubit>().state.attachmentAutoDownloadSettings;
     final l10n = context.l10n;
@@ -521,21 +519,18 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                           separatorBuilder: (_, __) => const SizedBox(
                             height: _attachmentGalleryItemSpacing,
                           ),
-                          itemBuilder: (context, index) => Semantics(
-                            container: true,
-                            explicitChildNodes: true,
-                            child: AttachmentGalleryEntry(
-                              item: filteredItems[index],
-                              chatOverride: chatOverride,
-                              chatLookup: chatLookup,
-                              showChatLabel: showChatLabel,
-                              autoDownloadSettings: autoDownloadSettings,
-                              layout: layout,
-                              isOneTimeAttachmentAllowed:
-                                  _isOneTimeAttachmentAllowed,
-                              shouldAllowAttachment: _shouldAllowAttachment,
-                              onApproveAttachment: _approveAttachment,
-                            ),
+                          itemBuilder: (context, index) =>
+                              AttachmentGalleryEntry(
+                            item: filteredItems[index],
+                            chatOverride: chatOverride,
+                            chatLookup: chatLookup,
+                            showChatLabel: showChatLabel,
+                            autoDownloadSettings: autoDownloadSettings,
+                            layout: layout,
+                            isOneTimeAttachmentAllowed:
+                                _isOneTimeAttachmentAllowed,
+                            shouldAllowAttachment: _shouldAllowAttachment,
+                            onApproveAttachment: _approveAttachment,
                           ),
                         )
                       : LayoutBuilder(
@@ -557,21 +552,18 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                                 childAspectRatio: gridMetrics.childAspectRatio,
                               ),
                               itemCount: filteredItems.length,
-                              itemBuilder: (context, index) => Semantics(
-                                container: true,
-                                explicitChildNodes: true,
-                                child: AttachmentGalleryEntry(
-                                  item: filteredItems[index],
-                                  chatOverride: chatOverride,
-                                  chatLookup: chatLookup,
-                                  showChatLabel: showChatLabel,
-                                  autoDownloadSettings: autoDownloadSettings,
-                                  layout: layout,
-                                  isOneTimeAttachmentAllowed:
-                                      _isOneTimeAttachmentAllowed,
-                                  shouldAllowAttachment: _shouldAllowAttachment,
-                                  onApproveAttachment: _approveAttachment,
-                                ),
+                              itemBuilder: (context, index) =>
+                                  AttachmentGalleryEntry(
+                                item: filteredItems[index],
+                                chatOverride: chatOverride,
+                                chatLookup: chatLookup,
+                                showChatLabel: showChatLabel,
+                                autoDownloadSettings: autoDownloadSettings,
+                                layout: layout,
+                                isOneTimeAttachmentAllowed:
+                                    _isOneTimeAttachmentAllowed,
+                                shouldAllowAttachment: _shouldAllowAttachment,
+                                onApproveAttachment: _approveAttachment,
                               ),
                             );
                           },
@@ -850,13 +842,8 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
     }
   }
 
-  Stream<FileMetadataData?> _resolveMetadataStream(String id) {
-    final stream = context.read<XmppService>().fileMetadataStream(id);
-    return stream.asyncMap((value) async {
-      await SchedulerBinding.instance.endOfFrame;
-      return value;
-    });
-  }
+  Stream<FileMetadataData?> _resolveMetadataStream(String id) =>
+      context.read<XmppService>().fileMetadataStream(id);
 
   @override
   Widget build(BuildContext context) {

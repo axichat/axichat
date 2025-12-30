@@ -16,13 +16,13 @@ class BlocklistTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rosterCubit = context.read<RosterCubit?>();
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
           state is BlocklistLoading &&
           (state.jid == entry.address || state.jid == null),
       builder: (context, disabled) {
-        final Widget avatar = rosterCubit == null
+        RosterCubit? rosterCubit() => context.read<RosterCubit?>();
+        final Widget avatar = rosterCubit() == null
             ? AxiAvatar(jid: entry.address)
             : BlocBuilder<RosterCubit, RosterState>(
                 buildWhen: (_, current) => current is RosterAvailable,
