@@ -3254,6 +3254,12 @@ abstract class AppLocalizations {
   /// **'SMTP host (optional)'**
   String get authCustomServerSmtpHostPlaceholder;
 
+  /// No description provided for @authCustomServerImapHostPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'IMAP host (optional)'**
+  String get authCustomServerImapHostPlaceholder;
+
   /// No description provided for @authCustomServerApiPortPlaceholder.
   ///
   /// In en, this message translates to:

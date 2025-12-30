@@ -12,6 +12,8 @@ class EndpointConfig extends Equatable {
     this.requireDnssec = false,
     this.xmppHost,
     this.xmppPort = defaultXmppPort,
+    this.imapHost,
+    this.imapPort = defaultImapPort,
     this.smtpHost,
     this.smtpPort = defaultSmtpPort,
     this.apiPort = defaultApiPort,
@@ -20,6 +22,7 @@ class EndpointConfig extends Equatable {
 
   static const String defaultDomain = 'axi.im';
   static const int defaultXmppPort = 5222;
+  static const int defaultImapPort = 993;
   static const int defaultSmtpPort = 465;
   static const int defaultApiPort = 5443;
 
@@ -31,6 +34,8 @@ class EndpointConfig extends Equatable {
   final bool requireDnssec;
   final String? xmppHost;
   final int xmppPort;
+  final String? imapHost;
+  final int imapPort;
   final String? smtpHost;
   final int smtpPort;
   final int apiPort;
@@ -45,6 +50,8 @@ class EndpointConfig extends Equatable {
     bool? requireDnssec,
     String? xmppHost,
     int? xmppPort,
+    String? imapHost,
+    int? imapPort,
     String? smtpHost,
     int? smtpPort,
     int? apiPort,
@@ -59,6 +66,8 @@ class EndpointConfig extends Equatable {
       requireDnssec: requireDnssec ?? this.requireDnssec,
       xmppHost: xmppHost ?? this.xmppHost,
       xmppPort: xmppPort ?? this.xmppPort,
+      imapHost: imapHost ?? this.imapHost,
+      imapPort: imapPort ?? this.imapPort,
       smtpHost: smtpHost ?? this.smtpHost,
       smtpPort: smtpPort ?? this.smtpPort,
       apiPort: apiPort ?? this.apiPort,
@@ -75,6 +84,8 @@ class EndpointConfig extends Equatable {
         'requireDnssec': requireDnssec,
         'xmppHost': xmppHost,
         'xmppPort': xmppPort,
+        'imapHost': imapHost,
+        'imapPort': imapPort,
         'smtpHost': smtpHost,
         'smtpPort': smtpPort,
         'apiPort': apiPort,
@@ -97,6 +108,8 @@ class EndpointConfig extends Equatable {
       requireDnssec: json['requireDnssec'] as bool? ?? false,
       xmppHost: (json['xmppHost'] as String?)?.trim(),
       xmppPort: readPort(json['xmppPort'], defaultXmppPort),
+      imapHost: (json['imapHost'] as String?)?.trim(),
+      imapPort: readPort(json['imapPort'], defaultImapPort),
       smtpHost: (json['smtpHost'] as String?)?.trim(),
       smtpPort: readPort(json['smtpPort'], defaultSmtpPort),
       apiPort: readPort(json['apiPort'], defaultApiPort),
@@ -120,6 +133,8 @@ class EndpointConfig extends Equatable {
         requireDnssec,
         xmppHost,
         xmppPort,
+        imapHost,
+        imapPort,
         smtpHost,
         smtpPort,
         apiPort,

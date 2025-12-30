@@ -35,8 +35,10 @@ class EndpointConfigSheet extends StatefulWidget {
 class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   late TextEditingController _domainController;
   late TextEditingController _xmppHostController;
+  late TextEditingController _imapHostController;
   late TextEditingController _smtpHostController;
   late TextEditingController _xmppPortController;
+  late TextEditingController _imapPortController;
   late TextEditingController _smtpPortController;
   late TextEditingController _apiPortController;
 
@@ -52,8 +54,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     super.initState();
     _domainController = TextEditingController();
     _xmppHostController = TextEditingController();
+    _imapHostController = TextEditingController();
     _smtpHostController = TextEditingController();
     _xmppPortController = TextEditingController();
+    _imapPortController = TextEditingController();
     _smtpPortController = TextEditingController();
     _apiPortController = TextEditingController();
   }
@@ -70,8 +74,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     _requireDnssec = config.requireDnssec;
     _domainController.text = config.domain;
     _xmppHostController.text = config.xmppHost ?? '';
+    _imapHostController.text = config.imapHost ?? '';
     _smtpHostController.text = config.smtpHost ?? '';
     _xmppPortController.text = config.xmppPort.toString();
+    _imapPortController.text = config.imapPort.toString();
     _smtpPortController.text = config.smtpPort.toString();
     _apiPortController.text = config.apiPort.toString();
     _dependenciesInitialized = true;
@@ -81,8 +87,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   void dispose() {
     _domainController.dispose();
     _xmppHostController.dispose();
+    _imapHostController.dispose();
     _smtpHostController.dispose();
     _xmppPortController.dispose();
+    _imapPortController.dispose();
     _smtpPortController.dispose();
     _apiPortController.dispose();
     super.dispose();
@@ -96,9 +104,12 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         ? current.domain
         : _domainController.text.trim();
     final xmppHost = _xmppHostController.text.trim();
+    final imapHost = _imapHostController.text.trim();
     final smtpHost = _smtpHostController.text.trim();
     final xmppPort =
         _parsePort(_xmppPortController.text, EndpointConfig.defaultXmppPort);
+    final imapPort =
+        _parsePort(_imapPortController.text, EndpointConfig.defaultImapPort);
     final smtpPort =
         _parsePort(_smtpPortController.text, EndpointConfig.defaultSmtpPort);
     final apiPort =
@@ -112,8 +123,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       useSrv: _useSrv,
       requireDnssec: _requireDnssec,
       xmppHost: xmppHost.isEmpty ? null : xmppHost,
+      imapHost: imapHost.isEmpty ? null : imapHost,
       smtpHost: smtpHost.isEmpty ? null : smtpHost,
       xmppPort: xmppPort,
+      imapPort: imapPort,
       smtpPort: smtpPort,
       apiPort: apiPort,
     );
@@ -257,6 +270,42 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
                 ),
                 placeholderStyle: placeholderStyle,
                 controller: _xmppPortController,
+                style: inputStyle,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: AxiTextFormField(
+                autocorrect: false,
+                keyboardType: TextInputType.url,
+                placeholder: Text(
+                  l10n.authCustomServerImapHostPlaceholder,
+                  style: placeholderStyle,
+                ),
+                placeholderStyle: placeholderStyle,
+                controller: _imapHostController,
+                style: inputStyle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 96,
+              child: AxiTextFormField(
+                autocorrect: false,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                placeholder: Text(
+                  l10n.authCustomServerPortPlaceholder,
+                  style: placeholderStyle,
+                ),
+                placeholderStyle: placeholderStyle,
+                controller: _imapPortController,
                 style: inputStyle,
               ),
             ),

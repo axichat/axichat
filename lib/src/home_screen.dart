@@ -92,6 +92,23 @@ class _HomeScreenState extends State<HomeScreen> {
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
   CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
+  GlobalKey? _chatPaneKey;
+  String? _chatPaneKeyJid;
+  XmppService? _xmppService;
+
+  GlobalKey? _resolveChatPaneKey(String? openJid) {
+    final String? trimmed = openJid?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      _chatPaneKey = null;
+      _chatPaneKeyJid = null;
+      return null;
+    }
+    if (_chatPaneKey == null || _chatPaneKeyJid != trimmed) {
+      _chatPaneKey = GlobalKey();
+      _chatPaneKeyJid = trimmed;
+    }
+    return _chatPaneKey;
+  }
 
   @override
   void initState() {
@@ -101,12 +118,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final XmppService? xmppService = context.read<XmppService?>();
+    if (!identical(_xmppService, xmppService)) {
+      _xmppService = xmppService;
+    }
+  }
+
+  @override
   void dispose() {
     final handler = _globalShortcutHandler;
     if (handler != null) {
       HardwareKeyboard.instance.removeHandler(handler);
     }
-    context.read<XmppService?>()?.clearChatCalendarSyncCallback();
+    _xmppService?.clearChatCalendarSyncCallback();
     _shortcutFocusNode.dispose();
     super.dispose();
   }
@@ -338,54 +364,59 @@ class _HomeScreenState extends State<HomeScreen> {
                           )
                         : null;
 
-                    final Widget chatPane = openJid == null
-                        ? constrainSecondary(const chat_view.GuestChat())
-                        : constrainSecondary(
-                            MultiBlocProvider(
-                              providers: [
+                    final GlobalKey? chatPaneKey = _resolveChatPaneKey(openJid);
+                    final Widget chatPaneContent = openJid == null
+                        ? const chat_view.GuestChat()
+                        : MultiBlocProvider(
+                            providers: [
+                              BlocProvider(
+                                key: Key(
+                                  openJid,
+                                ),
+                                create: (context) => ChatBloc(
+                                  jid: openJid,
+                                  messageService: context.read<XmppService>(),
+                                  chatsService: context.read<XmppService>(),
+                                  mucService: context.read<XmppService>(),
+                                  notificationService:
+                                      context.read<NotificationService>(),
+                                  emailService: context.read<EmailService>(),
+                                  omemoService: isOmemo
+                                      ? context.read<XmppService>()
+                                          as OmemoService
+                                      : null,
+                                  settingsCubit: context.read<SettingsCubit>(),
+                                ),
+                              ),
+                              BlocProvider(
+                                create: (context) => ChatSearchCubit(
+                                  jid: openJid,
+                                  messageService: context.read<XmppService>(),
+                                  emailService: context.read<EmailService>(),
+                                ),
+                              ),
+                              /* Verification flow temporarily disabled
+                              if (isOmemo)
                                 BlocProvider(
-                                  key: Key(
-                                    openJid,
-                                  ),
-                                  create: (context) => ChatBloc(
+                                  create: (context) =>
+                                      VerificationCubit(
                                     jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    chatsService: context.read<XmppService>(),
-                                    mucService: context.read<XmppService>(),
-                                    notificationService:
-                                        context.read<NotificationService>(),
-                                    emailService: context.read<EmailService>(),
-                                    omemoService: isOmemo
-                                        ? context.read<XmppService>()
-                                            as OmemoService
-                                        : null,
-                                    settingsCubit:
-                                        context.read<SettingsCubit>(),
+                                    omemoService:
+                                        context.read<XmppService>()
+                                            as OmemoService,
                                   ),
                                 ),
-                                BlocProvider(
-                                  create: (context) => ChatSearchCubit(
-                                    jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    emailService: context.read<EmailService>(),
-                                  ),
-                                ),
-                                /* Verification flow temporarily disabled
-                                if (isOmemo)
-                                  BlocProvider(
-                                    create: (context) =>
-                                        VerificationCubit(
-                                      jid: openJid,
-                                      omemoService:
-                                          context.read<XmppService>()
-                                              as OmemoService,
-                                    ),
-                                  ),
-                                */
-                              ],
-                              child: const chat_view.Chat(),
-                            ),
+                              */
+                            ],
+                            child: const chat_view.Chat(),
                           );
+                    final Widget keyedChatPane = chatPaneKey == null
+                        ? chatPaneContent
+                        : KeyedSubtree(
+                            key: chatPaneKey,
+                            child: chatPaneContent,
+                          );
+                    final Widget chatPane = constrainSecondary(keyedChatPane);
 
                     Widget chatLayout() {
                       if (chatCalendarExpanded) {

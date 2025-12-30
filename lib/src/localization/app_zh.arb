@@ -693,6 +693,7 @@
   "authCustomServerXmppHostPlaceholder": "XMPP 主机（可选）",
   "authCustomServerPortPlaceholder": "端口",
   "authCustomServerSmtpHostPlaceholder": "SMTP 主机（可选）",
+  "authCustomServerImapHostPlaceholder": "IMAP 主机（可选）",
   "authCustomServerApiPortPlaceholder": "API 端口",
   "authCustomServerReset": "重置为 axi.im",
   "authCustomServerOpenSettings": "打开自定义服务器设置",

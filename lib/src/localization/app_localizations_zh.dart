@@ -1723,6 +1723,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authCustomServerSmtpHostPlaceholder => 'SMTP 主机（可选）';
 
   @override
+  String get authCustomServerImapHostPlaceholder => 'IMAP 主机（可选）';
+
+  @override
   String get authCustomServerApiPortPlaceholder => 'API 端口';
 
   @override
@@ -4766,6 +4769,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authCustomServerSmtpHostPlaceholder => 'SMTP 主機（可選）';
+
+  @override
+  String get authCustomServerImapHostPlaceholder => 'IMAP 主機（可選）';
 
   @override
   String get authCustomServerApiPortPlaceholder => 'API 連接埠';

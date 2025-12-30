@@ -693,6 +693,7 @@
   "authCustomServerXmppHostPlaceholder": "Host XMPP (opcional)",
   "authCustomServerPortPlaceholder": "Puerto",
   "authCustomServerSmtpHostPlaceholder": "Host SMTP (opcional)",
+  "authCustomServerImapHostPlaceholder": "Host IMAP (opcional)",
   "authCustomServerApiPortPlaceholder": "Puerto API",
   "authCustomServerReset": "Restablecer a axi.im",
   "authCustomServerOpenSettings": "Abrir ajustes de servidor personalizado",

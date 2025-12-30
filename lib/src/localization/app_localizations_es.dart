@@ -1803,6 +1803,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authCustomServerSmtpHostPlaceholder => 'Host SMTP (opcional)';
 
   @override
+  String get authCustomServerImapHostPlaceholder => 'Host IMAP (opcional)';
+
+  @override
   String get authCustomServerApiPortPlaceholder => 'Puerto API';
 
   @override
