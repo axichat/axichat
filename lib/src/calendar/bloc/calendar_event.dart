@@ -151,6 +151,15 @@ class CalendarEvent with _$CalendarEvent {
     required CalendarAvailability availability,
   }) = CalendarAvailabilityUpdated;
 
+  const factory CalendarEvent.availabilityOverlayUpdated({
+    required String overlayId,
+    required CalendarAvailabilityOverlay overlay,
+  }) = CalendarAvailabilityOverlayUpdated;
+
+  const factory CalendarEvent.availabilityOverlayRemoved({
+    required String overlayId,
+  }) = CalendarAvailabilityOverlayRemoved;
+
   const factory CalendarEvent.quickTaskAdded({
     required String text,
     String? description,
