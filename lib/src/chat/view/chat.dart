@@ -13,9 +13,11 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
@@ -48,7 +50,6 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
-import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -77,7 +78,6 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
-import 'package:axichat/src/xmpp/jid_extensions.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -157,10 +157,6 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Keeps the 28px indicator centered within the selection cutout.
 const _chatHeaderActionSpacing = 4.0;
-const double _chatHeaderIdentityIconSize = 14.0;
-const double _chatHeaderIdentityCopyIconSize = 16.0;
-const double _chatHeaderIdentitySpacing = 6.0;
-const String _chatHeaderDisplayNameBadgeLabel = 'Display name';
 const double _unknownSenderCardPadding = 12.0;
 const double _unknownSenderIconSize = 18.0;
 const double _unknownSenderTextSpacing = 8.0;
@@ -599,17 +595,19 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
 class _UnknownSenderBanner extends StatelessWidget {
   const _UnknownSenderBanner({
     required this.readOnly,
+    required this.isSelfChat,
     required this.onAddContact,
     required this.onReportSpam,
   });
 
   final bool readOnly;
+  final bool isSelfChat;
   final Future<void> Function()? onAddContact;
   final Future<void> Function()? onReportSpam;
 
   @override
   Widget build(BuildContext context) {
-    if (readOnly) {
+    if (readOnly || isSelfChat) {
       return const SizedBox.shrink();
     }
     return BlocBuilder<ChatBloc, ChatState>(
@@ -890,6 +888,7 @@ class _ChatState extends State<Chat> {
   String _lastSubjectValue = '';
   ChatCalendarBloc? _chatCalendarBloc;
   String? _chatCalendarJid;
+  ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _fileMetadataStreamEntries = <String, _FileMetadataStreamEntry>{};
   final _animatedMessageIds = <String>{};
@@ -992,9 +991,43 @@ class _ChatState extends State<Chat> {
     _chatCalendarJid = null;
   }
 
+  ChatCalendarSyncCoordinator? _resolveChatCalendarCoordinator({
+    required CalendarStorageManager storageManager,
+    required XmppService xmppService,
+  }) {
+    final coordinator = _maybeReadChatCalendarCoordinator(context);
+    if (coordinator != null) {
+      return coordinator;
+    }
+    final storage = storageManager.authStorage;
+    if (storage == null) {
+      return null;
+    }
+    final fallback = _fallbackChatCalendarCoordinator;
+    if (fallback != null) {
+      return fallback;
+    }
+    return _fallbackChatCalendarCoordinator = ChatCalendarSyncCoordinator(
+      storage: ChatCalendarStorage(storage: storage),
+      sendMessage: ({
+        required String jid,
+        required CalendarSyncOutbound outbound,
+        required ChatType chatType,
+      }) async {
+        await xmppService.sendCalendarSyncMessage(
+          jid: jid,
+          outbound: outbound,
+          chatType: chatType,
+        );
+      },
+      sendSnapshotFile: xmppService.uploadCalendarSnapshot,
+    );
+  }
+
   ChatCalendarBloc? _resolveChatCalendarBloc({
     required chat_models.Chat? chat,
     required bool calendarAvailable,
+    required ChatCalendarSyncCoordinator? coordinator,
   }) {
     final resolvedChat = chat;
     if (!calendarAvailable || resolvedChat == null) {
@@ -1007,8 +1040,8 @@ class _ChatState extends State<Chat> {
     _disposeChatCalendarBloc();
     final storageManager = context.read<CalendarStorageManager>();
     final storage = storageManager.authStorage;
-    final coordinator = _maybeReadChatCalendarCoordinator(context);
-    if (storage == null || coordinator == null) {
+    final resolvedCoordinator = coordinator;
+    if (storage == null || resolvedCoordinator == null) {
       return null;
     }
     final reminderController = context.read<CalendarReminderController>();
@@ -1018,7 +1051,7 @@ class _ChatState extends State<Chat> {
     final bloc = ChatCalendarBloc(
       chatJid: resolvedChat.jid,
       chatType: resolvedChat.type,
-      coordinator: coordinator,
+      coordinator: resolvedCoordinator,
       storage: storage,
       reminderController: reminderController,
       availabilityCoordinator: availabilityCoordinator,
@@ -1772,14 +1805,6 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  Future<void> _copyChatAddress(String address) async {
-    final trimmed = address.trim();
-    if (trimmed.isEmpty) return;
-    await Clipboard.setData(
-      ClipboardData(text: trimmed),
-    );
-  }
-
   void _handleSubjectChanged() {
     final text = _subjectController.text;
     if (_lastSubjectValue == text) {
@@ -1929,23 +1954,13 @@ class _ChatState extends State<Chat> {
   }
 
   bool _shouldAllowAttachment({
-    required String senderJid,
     required bool isSelf,
-    required Set<String> knownContacts,
     required chat_models.Chat? chat,
   }) {
     if (isSelf) return true;
-    if (chat == null) return false;
-    final isGroupChat = chat.type == ChatType.groupChat;
-    final isEmailChat = chat.defaultTransport.isEmail;
-    if (isEmailChat || isGroupChat) {
-      return chat.attachmentAutoDownload.isAllowed;
-    }
-    final bareSender = _bareJid(senderJid);
-    final normalizedSender =
-        bareSender?.trim().isNotEmpty == true ? bareSender! : senderJid;
-    if (knownContacts.contains(normalizedSender)) return true;
-    return false;
+    final resolvedChat = chat;
+    if (resolvedChat == null) return false;
+    return resolvedChat.attachmentAutoDownload.isAllowed;
   }
 
   bool _isOneTimeAttachmentAllowed(String stanzaId) {
@@ -1958,8 +1973,7 @@ class _ChatState extends State<Chat> {
     required Message message,
     required String senderJid,
     required String stanzaId,
-    required String metadataId,
-    required bool isGroupChat,
+    required bool isSelf,
     required bool isEmailChat,
     String? senderEmail,
   }) async {
@@ -1967,22 +1981,12 @@ class _ChatState extends State<Chat> {
     final l10n = context.l10n;
     final displaySender =
         senderEmail?.isNotEmpty == true ? senderEmail! : senderJid;
-    const rosterTrustLabel = 'Automatically download files from this user';
-    const rosterTrustHint = 'You can turn this off later in chat settings.';
-    const chatTrustLabel = 'Always allow attachments in this chat';
-    const chatTrustHint = 'You can turn this off later in chat settings.';
-    final senderBare = _bareJid(senderJid) ?? senderJid;
-    final isSelf = context.read<XmppService>().myJid?.toLowerCase() ==
-        senderBare.toLowerCase();
-    final canAddToRoster = !isSelf &&
-        !isEmailChat &&
-        !isGroupChat &&
-        senderBare.isValidJid &&
-        senderBare.isNotEmpty;
-    final canTrustChat = !isSelf && (isEmailChat || isGroupChat);
-    final showAutoTrustToggle = canAddToRoster || canTrustChat;
-    final autoTrustLabel = canAddToRoster ? rosterTrustLabel : chatTrustLabel;
-    final autoTrustHint = canAddToRoster ? rosterTrustHint : chatTrustHint;
+    final chatBloc = context.read<ChatBloc>();
+    final resolvedChat = chatBloc.state.chat;
+    final canTrustChat = !isSelf && resolvedChat != null;
+    final showAutoTrustToggle = canTrustChat;
+    final autoTrustLabel = l10n.attachmentGalleryChatTrustLabel;
+    final autoTrustHint = l10n.attachmentGalleryChatTrustHint;
     final decision = await showShadDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
@@ -2001,26 +2005,8 @@ class _ChatState extends State<Chat> {
     if (!mounted) return;
     if (decision == null || !decision.approved) return;
 
-    final xmpp = context.read<XmppService>();
-    final chatBloc = context.read<ChatBloc>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
-    final showToast = ShadToaster.maybeOf(context)?.show;
-    var shouldEnableAutoDownload = false;
-    if (decision.alwaysAllow && canAddToRoster) {
-      try {
-        await xmpp.addToRoster(jid: senderBare);
-        shouldEnableAutoDownload = true;
-      } on Exception {
-        const title = 'Unable to add contact';
-        const message =
-            'Downloaded this attachment once, but automatic downloads are still disabled.';
-        showToast?.call(FeedbackToast.error(title: title, message: message));
-      }
-    }
     if (decision.alwaysAllow && canTrustChat) {
-      shouldEnableAutoDownload = true;
-    }
-    if (shouldEnableAutoDownload) {
       chatBloc.add(const ChatAttachmentAutoDownloadToggled(true));
     }
     if (isEmailChat) {
@@ -3305,7 +3291,9 @@ class _ChatState extends State<Chat> {
                   context,
                   listen: false,
                 );
+                final xmppService = context.read<XmppService>();
                 final emailSelfJid = emailService?.selfSenderJid;
+                final xmppSelfJid = xmppService.myJid;
                 final chatEntity = state.chat;
                 final List<BlocklistEntry> blocklistEntries =
                     _resolveBlocklistEntries();
@@ -3324,6 +3312,25 @@ class _ChatState extends State<Chat> {
                 final currentUserId = isDefaultEmail
                     ? (emailSelfJid ?? profile?.jid ?? '')
                     : (profile?.jid ?? emailSelfJid ?? '');
+                final resolvedProfileJid = profile?.jid.trim();
+                final String? selfXmppJid =
+                    resolvedProfileJid?.isNotEmpty == true
+                        ? resolvedProfileJid
+                        : xmppSelfJid;
+                final String? normalizedXmppSelfJid =
+                    _normalizeBareJid(selfXmppJid);
+                final String? normalizedEmailSelfJid =
+                    _normalizeBareJid(emailSelfJid);
+                final String? normalizedChatJid =
+                    _normalizeBareJid(chatEntity?.remoteJid);
+                final bool isSelfChat = normalizedChatJid != null &&
+                    ((normalizedXmppSelfJid != null &&
+                            normalizedChatJid == normalizedXmppSelfJid) ||
+                        (normalizedEmailSelfJid != null &&
+                            normalizedChatJid == normalizedEmailSelfJid));
+                final String? selfAvatarPath = profile?.avatarPath?.trim();
+                final bool hasSelfAvatarPath =
+                    selfAvatarPath?.isNotEmpty == true;
                 final myOccupantId = state.roomState?.myOccupantId;
                 final myOccupant = myOccupantId == null
                     ? null
@@ -3378,6 +3385,26 @@ class _ChatState extends State<Chat> {
                     chatAvatarPathsByJid[normalizedRemoteJid] = path;
                   }
                 }
+                final normalizedSelfJids = <String>{};
+                if (normalizedXmppSelfJid != null) {
+                  normalizedSelfJids.add(normalizedXmppSelfJid);
+                }
+                if (normalizedEmailSelfJid != null) {
+                  normalizedSelfJids.add(normalizedEmailSelfJid);
+                }
+                if (normalizedSelfJids.isNotEmpty && hasSelfAvatarPath) {
+                  final resolvedSelfAvatarPath = selfAvatarPath!;
+                  for (final selfJid in normalizedSelfJids) {
+                    rosterAvatarPathsByJid.putIfAbsent(
+                      selfJid,
+                      () => resolvedSelfAvatarPath,
+                    );
+                    chatAvatarPathsByJid.putIfAbsent(
+                      selfJid,
+                      () => resolvedSelfAvatarPath,
+                    );
+                  }
+                }
                 String? avatarPathForBareJid(String jid) {
                   final normalized = jid.trim().toLowerCase();
                   if (normalized.isEmpty) return null;
@@ -3427,8 +3454,10 @@ class _ChatState extends State<Chat> {
                 }
 
                 final storageManager = context.watch<CalendarStorageManager>();
-                final chatCalendarCoordinator =
-                    _maybeReadChatCalendarCoordinator(context);
+                final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
+                  storageManager: storageManager,
+                  xmppService: xmppService,
+                );
                 final bool personalCalendarAvailable =
                     storageManager.isAuthStorageReady;
                 final bool supportsChatCalendar =
@@ -3442,6 +3471,7 @@ class _ChatState extends State<Chat> {
                     _resolveChatCalendarBloc(
                   chat: chatEntity,
                   calendarAvailable: chatCalendarAvailable,
+                  coordinator: chatCalendarCoordinator,
                 );
                 final List<String> chatCalendarParticipants =
                     supportsChatCalendar
@@ -3663,29 +3693,6 @@ class _ChatState extends State<Chat> {
                               final titleStyle = baseTitleStyle.copyWith(
                                 fontSize: context.textTheme.large.fontSize,
                               );
-                              final l10n = context.l10n;
-                              final chatAddress = chatEntity?.remoteJid ?? jid;
-                              final trimmedAddress = chatAddress.trim();
-                              final normalizedAddress = trimmedAddress.isEmpty
-                                  ? null
-                                  : trimmedAddress.toBareJidOrNull(
-                                      maxBytes: syncAddressMaxBytes,
-                                    );
-                              final isAddressMalformed =
-                                  normalizedAddress == null &&
-                                      trimmedAddress.isNotEmpty;
-                              final displayAddress = isAddressMalformed
-                                  ? trimmedAddress
-                                  : (normalizedAddress ?? trimmedAddress);
-                              final trimmedDisplayName =
-                                  (state.chat?.displayName ?? '').trim();
-                              final showDisplayNameBadge =
-                                  trimmedDisplayName.isNotEmpty &&
-                                      displayAddress.isNotEmpty &&
-                                      trimmedDisplayName != displayAddress;
-                              final addressColor = isAddressMalformed
-                                  ? context.colorScheme.destructive
-                                  : context.colorScheme.mutedForeground;
                               return Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -3722,19 +3729,6 @@ class _ChatState extends State<Chat> {
                                                   style: titleStyle,
                                                 ),
                                               ),
-                                              if (showDisplayNameBadge)
-                                                const Padding(
-                                                  padding: EdgeInsetsDirectional
-                                                      .only(
-                                                    start:
-                                                        _chatHeaderIdentitySpacing,
-                                                  ),
-                                                  child: ShadBadge.secondary(
-                                                    child: Text(
-                                                      _chatHeaderDisplayNameBadgeLabel,
-                                                    ),
-                                                  ),
-                                                ),
                                               if (canRenameContact)
                                                 Padding(
                                                   padding:
@@ -3767,71 +3761,6 @@ class _ChatState extends State<Chat> {
                                                 ),
                                             ],
                                           ),
-                                          if (displayAddress.isNotEmpty)
-                                            Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  isAddressMalformed
-                                                      ? LucideIcons
-                                                          .triangleAlert
-                                                      : LucideIcons.atSign,
-                                                  size:
-                                                      _chatHeaderIdentityIconSize,
-                                                  color: addressColor,
-                                                ),
-                                                const SizedBox(
-                                                  width:
-                                                      _chatHeaderIdentitySpacing,
-                                                ),
-                                                Flexible(
-                                                  fit: FlexFit.loose,
-                                                  child: Text(
-                                                    displayAddress,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: context
-                                                        .textTheme.small
-                                                        .copyWith(
-                                                      color: addressColor,
-                                                    ),
-                                                  ),
-                                                ),
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsetsDirectional
-                                                          .only(
-                                                    start:
-                                                        _chatHeaderIdentitySpacing,
-                                                  ),
-                                                  child: AxiTooltip(
-                                                    builder: (context) => Text(
-                                                      l10n.chatActionCopy,
-                                                    ),
-                                                    child: ShadIconButton.ghost(
-                                                      onPressed: () =>
-                                                          _copyChatAddress(
-                                                        displayAddress,
-                                                      ),
-                                                      icon: Icon(
-                                                        LucideIcons.copy,
-                                                        size:
-                                                            _chatHeaderIdentityCopyIconSize,
-                                                        color: addressColor,
-                                                      ),
-                                                      decoration:
-                                                          const ShadDecoration(
-                                                        secondaryBorder:
-                                                            ShadBorder.none,
-                                                        secondaryFocusedBorder:
-                                                            ShadBorder.none,
-                                                      ),
-                                                    ).withTapBounce(),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
                                           if (statusLabel.isNotEmpty)
                                             Text(
                                               statusLabel,
@@ -3914,6 +3843,7 @@ class _ChatState extends State<Chat> {
                       const ChatAlert(),
                       _UnknownSenderBanner(
                         readOnly: readOnly,
+                        isSelfChat: isSelfChat,
                         onAddContact: _handleAddContact,
                         onReportSpam: () => _handleSpamToggle(
                           sendToSpam: true,
@@ -5738,14 +5668,7 @@ class _ChatState extends State<Chat> {
                                                         }
                                                         final allowAttachmentByTrust =
                                                             _shouldAllowAttachment(
-                                                          senderJid:
-                                                              messageModel
-                                                                  .senderJid,
                                                           isSelf: self,
-                                                          knownContacts: context
-                                                              .watch<
-                                                                  RosterCubit>()
-                                                              .contacts,
                                                           chat: state.chat,
                                                         );
                                                         final allowAttachmentOnce =
@@ -5837,8 +5760,7 @@ class _ChatState extends State<Chat> {
                                                                                 message: messageModel,
                                                                                 senderJid: messageModel.senderJid,
                                                                                 stanzaId: messageModel.stanzaID,
-                                                                                metadataId: attachmentId,
-                                                                                isGroupChat: isGroupChat,
+                                                                                isSelf: self,
                                                                                 isEmailChat: isEmailChat,
                                                                                 senderEmail: state.chat?.emailAddress,
                                                                               ),
@@ -7863,17 +7785,14 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
   final bool Function({
-    required String senderJid,
     required bool isSelf,
-    required Set<String> knownContacts,
     required chat_models.Chat? chat,
   }) shouldAllowAttachment;
   final Future<void> Function({
     required Message message,
     required String senderJid,
     required String stanzaId,
-    required String metadataId,
-    required bool isGroupChat,
+    required bool isSelf,
     required bool isEmailChat,
     String? senderEmail,
   }) onApproveAttachment;
@@ -8001,17 +7920,14 @@ class _PinnedMessageTile extends StatelessWidget {
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
   final bool Function({
-    required String senderJid,
     required bool isSelf,
-    required Set<String> knownContacts,
     required chat_models.Chat? chat,
   }) shouldAllowAttachment;
   final Future<void> Function({
     required Message message,
     required String senderJid,
     required String stanzaId,
-    required String metadataId,
-    required bool isGroupChat,
+    required bool isSelf,
     required bool isEmailChat,
     String? senderEmail,
   }) onApproveAttachment;
@@ -8195,13 +8111,10 @@ class _PinnedMessageTile extends StatelessWidget {
     }
     if (hasAttachments) {
       contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
-      final isGroupChat = chat.type == ChatType.groupChat;
       final isEmailBacked = chat.isEmailBacked;
       final bool attachmentsBlockedForPin = attachmentsBlocked;
       final allowAttachmentByTrust = shouldAllowAttachment(
-        senderJid: message.senderJid,
         isSelf: isSelf,
-        knownContacts: context.watch<RosterCubit>().contacts,
         chat: chat,
       );
       final allowAttachmentOnce = attachmentsBlockedForPin
@@ -8245,8 +8158,7 @@ class _PinnedMessageTile extends StatelessWidget {
                           message: message,
                           senderJid: message.senderJid,
                           stanzaId: message.stanzaID,
-                          metadataId: attachmentId,
-                          isGroupChat: isGroupChat,
+                          isSelf: isSelf,
                           isEmailChat: isEmailBacked,
                           senderEmail: chat.emailAddress,
                         ),
@@ -10572,10 +10484,7 @@ class _ChatSettingsButtons extends StatelessWidget {
         ? l10n.chatSignatureHintEnabled
         : l10n.chatSignatureHintDisabled;
     final signatureWarning = l10n.chatSignatureHintWarning;
-    final showRosterAttachmentToggle =
-        chat.type == ChatType.chat && chat.defaultTransport.isXmpp;
-    final showChatAttachmentToggle =
-        chat.type == ChatType.groupChat || chat.defaultTransport.isEmail;
+    final showAttachmentToggle = chat.type != ChatType.note;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -10631,14 +10540,7 @@ class _ChatSettingsButtons extends StatelessWidget {
                 ChatNotificationPreviewSettingChanged(setting),
               ),
         ),
-        if (showRosterAttachmentToggle) ...[
-          const SizedBox(height: _chatSettingsSectionSpacing),
-          _ChatAttachmentAutoDownloadToggle(
-            jid: chat.jid,
-            displayName: chat.displayName,
-          ),
-        ],
-        if (showChatAttachmentToggle) ...[
+        if (showAttachmentToggle) ...[
           const SizedBox(height: _chatSettingsSectionSpacing),
           _ChatAttachmentTrustToggle(chat: chat),
         ],
@@ -10661,20 +10563,6 @@ class _ChatSettingsButtons extends StatelessWidget {
       ],
     );
   }
-}
-
-class _ChatAttachmentAutoDownloadToggle extends StatefulWidget {
-  const _ChatAttachmentAutoDownloadToggle({
-    required this.jid,
-    required this.displayName,
-  });
-
-  final String jid;
-  final String displayName;
-
-  @override
-  State<_ChatAttachmentAutoDownloadToggle> createState() =>
-      _ChatAttachmentAutoDownloadToggleState();
 }
 
 class _ChatNotificationPreviewControl extends StatelessWidget {
@@ -10735,111 +10623,6 @@ String _notificationPreviewSettingLabel(
     NotificationPreviewSetting.show => l10n.chatNotificationPreviewOptionShow,
     NotificationPreviewSetting.hide => l10n.chatNotificationPreviewOptionHide,
   };
-}
-
-class _ChatAttachmentAutoDownloadToggleState
-    extends State<_ChatAttachmentAutoDownloadToggle> {
-  bool? _pendingEnabled;
-  var _saving = false;
-
-  @override
-  Widget build(BuildContext context) {
-    const label = 'Automatically download attachments';
-    const hintOn =
-        'This contact is in your contacts list; attachments auto-download.';
-    const hintOff =
-        'Blocked by default. Turn on to add this contact to your contacts list.';
-    const hintSaving = 'Updating…';
-    const toastTitleEnable = 'Automatic downloads enabled';
-    const toastTitleDisable = 'Automatic downloads disabled';
-    const toastTitleError = 'Unable to update contacts';
-    const toastMessageEnable =
-        'Attachments from this contact will be downloaded automatically.';
-    const toastMessageDisable =
-        'Attachments from this contact will be blocked until you approve them.';
-    const toastMessageError = 'Please check your network and try again later.';
-
-    final trimmedJid = widget.jid.trim();
-    if (trimmedJid.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final rosterContacts = context.watch<RosterCubit>().contacts;
-    final inRoster = rosterContacts.contains(trimmedJid);
-    final effectiveEnabled = _pendingEnabled ?? inRoster;
-    if (_pendingEnabled != null && inRoster == _pendingEnabled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _pendingEnabled = null;
-        });
-      });
-    }
-
-    Future<void> update(bool enabled) async {
-      if (_saving) return;
-      final xmpp = context.read<XmppService>();
-      final showToast = ShadToaster.maybeOf(context)?.show;
-      setState(() {
-        _saving = true;
-        _pendingEnabled = enabled;
-      });
-      try {
-        if (enabled) {
-          await xmpp.addToRoster(
-            jid: trimmedJid,
-            title:
-                widget.displayName.trim().isEmpty ? null : widget.displayName,
-          );
-        } else {
-          await xmpp.removeFromRoster(jid: trimmedJid);
-        }
-        if (!mounted) return;
-        showToast?.call(
-          enabled
-              ? FeedbackToast.success(
-                  title: toastTitleEnable,
-                  message: toastMessageEnable,
-                )
-              : FeedbackToast.info(
-                  title: toastTitleDisable,
-                  message: toastMessageDisable,
-                ),
-        );
-      } on Exception {
-        if (!mounted) return;
-        showToast?.call(
-          FeedbackToast.error(
-            title: toastTitleError,
-            message: toastMessageError,
-          ),
-        );
-        setState(() {
-          _pendingEnabled = null;
-        });
-      } finally {
-        if (mounted) {
-          setState(() {
-            _saving = false;
-          });
-        }
-      }
-    }
-
-    final hint = _saving
-        ? hintSaving
-        : effectiveEnabled
-            ? hintOn
-            : hintOff;
-    return ShadSwitch(
-      value: effectiveEnabled,
-      onChanged: _saving ? null : update,
-      label: const Text(label),
-      sublabel: Text(
-        hint,
-        style: context.textTheme.muted,
-      ),
-    );
-  }
 }
 
 class _ChatAttachmentTrustToggle extends StatelessWidget {

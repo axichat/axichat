@@ -38,6 +38,9 @@ const _smtpProvisioningMaxAttempts = 3;
 const _smtpProvisioningMaxDuration = Duration(seconds: 20);
 const _smtpProvisioningInitialDelay = Duration(seconds: 2);
 const _smtpProvisioningMaxDelay = Duration(seconds: 8);
+const _emailProvisioningRetryCooldown = Duration(seconds: 30);
+const _emailProvisioningRetryLogFailedCredentials =
+    'Failed to read email credentials for retry';
 const int _loginBackoffBaseSeconds = 2;
 const int _loginBackoffMaxMinutes = 2;
 const int _loginBackoffMinSeconds = 1;
@@ -145,11 +148,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           lifeCycleState == AppLifecycleState.resumed ||
               lifeCycleState == AppLifecycleState.inactive,
         );
+        if (lifeCycleState == AppLifecycleState.resumed) {
+          unawaited(_triggerEmailReconnect());
+        }
       },
     );
     _connectivitySubscription =
         xmppService.connectivityStream.listen((connectionState) {
       if (connectionState == ConnectionState.connected) {
+        unawaited(_attemptEmailProvisioningRecovery());
         unawaited(_emailService?.handleNetworkAvailable());
         unawaited(_publishPendingAvatar());
         if (_authenticatedJid != null) {
@@ -212,6 +219,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   late final provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
+  bool _emailProvisioningRetryInFlight = false;
+  DateTime? _lastEmailProvisioningRetryAt;
+  _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
   VoidCallback? _foregroundListener;
@@ -504,12 +514,117 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!_endpointConfig.enableSmtp) return;
     final emailService = _emailService;
     if (emailService == null) return;
-    if (!emailService.isRunning) return;
     try {
+      await _attemptEmailProvisioningRecovery();
       await emailService.handleNetworkAvailable();
     } on Exception catch (error, stackTrace) {
       _log.finer('Email reconnect trigger failed', error, stackTrace);
     }
+  }
+
+  Future<void> _attemptEmailProvisioningRecovery() async {
+    if (!_endpointConfig.enableSmtp) {
+      return;
+    }
+    final emailService = _emailService;
+    if (emailService == null) {
+      return;
+    }
+    final lastError = _lastEmailProvisioningError;
+    final syncState = emailService.syncState;
+    final shouldRetry = lastError?.isRecoverable ?? false;
+    final shouldProbe = lastError == null && syncState.requiresAttention;
+    final needsBootstrap = !emailService.hasActiveSession;
+    if (!shouldRetry && !shouldProbe && !needsBootstrap) {
+      return;
+    }
+    if (_emailProvisioningRetryInFlight) {
+      return;
+    }
+    final now = DateTime.timestamp();
+    final lastAttempt = _lastEmailProvisioningRetryAt;
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _emailProvisioningRetryCooldown) {
+      return;
+    }
+    final jid = _authenticatedJid;
+    if (jid == null || jid.trim().isEmpty) {
+      return;
+    }
+    final secrets = await _readDatabaseSecrets(jid);
+    if (!secrets.hasSecrets) {
+      return;
+    }
+    EmailAccount? account;
+    try {
+      account = await emailService.currentAccount(jid);
+    } on Exception catch (error, stackTrace) {
+      _log.finer(
+          _emailProvisioningRetryLogFailedCredentials, error, stackTrace);
+      return;
+    }
+    String? normalizeCredential(String? value) {
+      final trimmed = value?.trim();
+      return trimmed == null || trimmed.isEmpty ? null : trimmed;
+    }
+
+    final storedPassword = normalizeCredential(account?.password);
+    final storedAddress = normalizeCredential(account?.address);
+    final sessionCredentials = _sessionEmailCredentials;
+    final sessionMatches = sessionCredentials?.matches(jid) ?? false;
+    final sessionPassword = sessionMatches
+        ? normalizeCredential(sessionCredentials?.password)
+        : null;
+    final sessionAddress = sessionMatches
+        ? normalizeCredential(sessionCredentials?.address)
+        : null;
+    final resolvedPassword = storedPassword ?? sessionPassword;
+    if (resolvedPassword == null) {
+      return;
+    }
+    final resolvedAddress = storedAddress ?? sessionAddress;
+    _emailProvisioningRetryInFlight = true;
+    _lastEmailProvisioningRetryAt = now;
+    try {
+      final displayName = jid.split('@').first;
+      final rememberMe = await loadRememberMeChoice();
+      await _ensureEmailProvisioned(
+        displayName: displayName,
+        databasePrefix: secrets.prefix!,
+        databasePassphrase: secrets.passphrase!,
+        jid: jid,
+        enforceProvisioning: false,
+        allowOfflineOnRecoverable: true,
+        mode: _EmailProvisioningMode.deferred,
+        emailPassword: resolvedPassword,
+        addressOverride: resolvedAddress,
+        persistCredentials: rememberMe,
+      );
+    } finally {
+      _emailProvisioningRetryInFlight = false;
+    }
+  }
+
+  void _cacheSessionEmailCredentials({
+    required String address,
+    required String? password,
+  }) {
+    final normalizedAddress = address.trim();
+    final normalizedPassword = password?.trim();
+    if (normalizedAddress.isEmpty ||
+        normalizedPassword == null ||
+        normalizedPassword.isEmpty) {
+      _sessionEmailCredentials = null;
+      return;
+    }
+    _sessionEmailCredentials = _SessionEmailCredentials(
+      address: normalizedAddress,
+      password: normalizedPassword,
+    );
+  }
+
+  void _clearSessionEmailCredentials() {
+    _sessionEmailCredentials = null;
   }
 
   void _handleForegroundServiceActiveChanged() {
@@ -869,9 +984,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           final existing = await emailService.currentAccount(resolvedJid);
           emailPassword = existing?.password;
         }
+        if (smtpEnabled) {
+          final sessionEmailAddress = emailCredentials?.email ?? resolvedJid;
+          _cacheSessionEmailCredentials(
+            address: sessionEmailAddress,
+            password: emailPassword,
+          );
+        } else {
+          _clearSessionEmailCredentials();
+        }
 
         final enforceEmailProvisioning =
             requireEmailProvisioned || _activeSignupCredentialKey != null;
+        final emailProvisioningMode = enforceEmailProvisioning
+            ? _EmailProvisioningMode.blocking
+            : _EmailProvisioningMode.deferred;
 
         final reuseExistingSession = _xmppService.databasesInitialized &&
             _xmppService.myJid == resolvedJid;
@@ -1009,6 +1136,36 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
 
         final allowOfflineEmail = !requireEmailProvisioned;
+        if (emailProvisioningMode.isDeferred) {
+          await _finalizeAuthentication(
+            jid: resolvedJid,
+            rememberMe: rememberMe,
+            password: effectivePassword,
+            passwordPreHashed: passwordPreHashed,
+            databasePrefixStorageKey: databasePrefixStorageKey,
+            databasePrefix: ensuredDatabasePrefix,
+            databasePassphraseStorageKey: databasePassphraseStorageKey,
+            databasePassphrase: ensuredDatabasePassphrase,
+          );
+          authenticationCommitted = true;
+          unawaited(
+            _provisionEmailWithRetry(
+              displayName: displayName,
+              databasePrefix: ensuredDatabasePrefix,
+              databasePassphrase: ensuredDatabasePassphrase,
+              jid: resolvedJid,
+              enforceProvisioning: enforceEmailProvisioning,
+              emailPassword: emailPassword,
+              emailCredentials: emailCredentials,
+              persistCredentials: rememberMe,
+              allowOfflineOnRecoverable: allowOfflineEmail,
+              allowRetries: !hasStoredDatabaseSecrets,
+              mode: emailProvisioningMode,
+            ),
+          );
+          return;
+        }
+
         final provisioningStatus = await _provisionEmailWithRetry(
           displayName: displayName,
           databasePrefix: ensuredDatabasePrefix,
@@ -1017,9 +1174,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           enforceProvisioning: enforceEmailProvisioning,
           emailPassword: emailPassword,
           emailCredentials: emailCredentials,
-          persistCredentials: false,
+          persistCredentials: rememberMe,
           allowOfflineOnRecoverable: allowOfflineEmail,
           allowRetries: !hasStoredDatabaseSecrets,
+          mode: emailProvisioningMode,
         );
         if (provisioningStatus.shouldAbort) {
           if (provisioningStatus.shouldWipeCredentials) {
@@ -1183,9 +1341,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       enforceProvisioning: enforceEmailProvisioning,
       emailPassword: emailPassword,
       emailCredentials: emailCredentials,
-      persistCredentials: false,
+      persistCredentials: rememberMe,
       allowOfflineOnRecoverable: true,
       allowRetries: false,
+      mode: enforceEmailProvisioning
+          ? _EmailProvisioningMode.blocking
+          : _EmailProvisioningMode.deferred,
     );
     if (provisioningStatus.shouldAbort) {
       await _xmppService.disconnect();
@@ -1216,6 +1377,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool enforceProvisioning,
     required bool allowOfflineOnRecoverable,
     required bool allowRetries,
+    required _EmailProvisioningMode mode,
     String? emailPassword,
     provisioning.EmailProvisioningCredentials? emailCredentials,
     bool persistCredentials = true,
@@ -1231,6 +1393,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         jid: jid,
         enforceProvisioning: enforceProvisioning,
         allowOfflineOnRecoverable: allowOfflineOnRecoverable,
+        mode: mode,
         emailPassword: emailPassword,
         emailCredentials: emailCredentials,
         persistCredentials: persistCredentials,
@@ -1268,8 +1431,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String jid,
     required bool enforceProvisioning,
     required bool allowOfflineOnRecoverable,
+    required _EmailProvisioningMode mode,
     String? emailPassword,
     provisioning.EmailProvisioningCredentials? emailCredentials,
+    String? addressOverride,
     bool persistCredentials = true,
   }) async {
     if (!_endpointConfig.enableSmtp) {
@@ -1288,7 +1453,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       resolvedPassword = existing?.password;
     }
     if (resolvedPassword == null && enforceProvisioning) {
-      if (!_stickyAuthActive) {
+      if (mode.isBlocking && !_stickyAuthActive) {
         _emit(const AuthenticationFailure(
             'Stored email password missing. Please log in manually.'));
       } else {
@@ -1296,6 +1461,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       return _ProvisioningStatus.blockedTransient;
     }
+    final resolvedAddressOverride = addressOverride ?? emailCredentials?.email;
     try {
       await emailService.ensureProvisioned(
         displayName: displayName,
@@ -1303,7 +1469,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePassphrase: databasePassphrase,
         jid: jid,
         passwordOverride: resolvedPassword,
-        addressOverride: emailCredentials?.email,
+        addressOverride: resolvedAddressOverride,
         persistCredentials: persistCredentials,
       );
       _lastEmailProvisioningError = null;
@@ -1335,7 +1501,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           return _ProvisioningStatus.pendingRecoverable;
         }
         _lastEmailProvisioningError = error;
-        if (!_stickyAuthActive) {
+        if (mode.isBlocking && !_stickyAuthActive) {
           _emit(AuthenticationFailure(error.message));
         } else {
           _log.warning('Email provisioning failed silently: ${error.message}');
@@ -1345,7 +1511,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           jid,
           clearCredentials: shouldWipeCredentials,
         );
-        await _xmppService.disconnect();
+        if (mode.isBlocking) {
+          await _xmppService.disconnect();
+        }
         return shouldWipeCredentials
             ? _ProvisioningStatus.blockedFatal
             : _ProvisioningStatus.blockedTransient;
@@ -1369,7 +1537,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           _lastEmailProvisioningError = null;
           return _ProvisioningStatus.pendingRecoverable;
         }
-        if (!_stickyAuthActive) {
+        if (mode.isBlocking && !_stickyAuthActive) {
           _emit(const AuthenticationFailure('Error. Please try again later.'));
         } else {
           _log.warning('Silent re-auth email provisioning deferred.');
@@ -1379,7 +1547,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           jid,
           clearCredentials: false,
         );
-        await _xmppService.disconnect();
+        if (mode.isBlocking) {
+          await _xmppService.disconnect();
+        }
         return _ProvisioningStatus.blockedTransient;
       }
       return _ProvisioningStatus.pendingRecoverable;
@@ -1803,6 +1973,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
     }
 
+    _clearSessionEmailCredentials();
     _authenticatedJid = null;
     _demoSessionReady = false;
     _emit(const AuthenticationNone());
@@ -2479,6 +2650,15 @@ enum _CredentialDisposition {
   bool get shouldWipe => this == _CredentialDisposition.wipeLoginCredentials;
 }
 
+enum _EmailProvisioningMode {
+  blocking,
+  deferred;
+
+  bool get isBlocking => this == _EmailProvisioningMode.blocking;
+
+  bool get isDeferred => this == _EmailProvisioningMode.deferred;
+}
+
 enum _ProvisioningStatus {
   ready,
   pendingRecoverable,
@@ -2520,6 +2700,19 @@ class _StoredLoginCredentials {
 
   bool matches(String candidateJid) =>
       hasUsableCredentials && jid == candidateJid;
+}
+
+class _SessionEmailCredentials {
+  const _SessionEmailCredentials({
+    required this.address,
+    required this.password,
+  });
+
+  final String address;
+  final String password;
+
+  bool matches(String jid) =>
+      address.trim().toLowerCase() == jid.trim().toLowerCase();
 }
 
 class _DatabaseSecrets {
