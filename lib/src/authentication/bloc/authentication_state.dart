@@ -77,6 +77,17 @@ final class AuthenticationComplete extends AuthenticationState {
   List<Object?> get props => [config];
 }
 
+final class AuthenticationCompleteFromSignup extends AuthenticationComplete {
+  const AuthenticationCompleteFromSignup({super.config});
+
+  @override
+  AuthenticationCompleteFromSignup copyWithConfig(EndpointConfig config) =>
+      AuthenticationCompleteFromSignup(config: config);
+
+  @override
+  List<Object?> get props => [config];
+}
+
 final class AuthenticationPasswordChangeSuccess extends AuthenticationComplete {
   const AuthenticationPasswordChangeSuccess(
     this.successText, {

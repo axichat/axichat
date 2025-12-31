@@ -330,6 +330,14 @@ class _ProfileCardSection extends StatelessWidget {
                   ),
                 ),
                 AxiMenuAction(
+                  label: l10n.profileLinkedEmailAccounts,
+                  icon: LucideIcons.mail,
+                  onPressed: () => context.push(
+                    const LinkedEmailAccountsRoute().location,
+                    extra: locate,
+                  ),
+                ),
+                AxiMenuAction(
                   label: l10n.profileChangePassword,
                   icon: LucideIcons.keyRound,
                   onPressed: () => onNavigate(_ProfileRoute.changePassword),

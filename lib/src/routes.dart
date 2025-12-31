@@ -5,6 +5,7 @@ import 'package:axichat/src/calendar/guest/guest_calendar_widget.dart';
 import 'package:axichat/src/chats/view/archived_chat_screen.dart';
 import 'package:axichat/src/chats/view/archives_screen.dart';
 import 'package:axichat/src/email/demo/email_demo_screen.dart';
+import 'package:axichat/src/email/view/linked_email_accounts_screen.dart';
 import 'package:axichat/src/home_screen.dart';
 import 'package:axichat/src/login_screen.dart';
 import 'package:axichat/src/avatar/view/avatar_editor_screen.dart';
@@ -28,6 +29,7 @@ final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const AvatarEditorRoute().location: const AvatarEditorRoute(),
   const ArchivesRoute().location: const ArchivesRoute(),
   const AttachmentGalleryRoute().location: const AttachmentGalleryRoute(),
+  const LinkedEmailAccountsRoute().location: const LinkedEmailAccountsRoute(),
   const GuestCalendarRoute().location: const GuestCalendarRoute(),
   const LoginRoute().location: const LoginRoute(),
   const EmailDemoRoute().location: const EmailDemoRoute(),
@@ -62,6 +64,9 @@ class TransitionGoRouteData extends GoRouteData {
         ),
         TypedGoRoute<AttachmentGalleryRoute>(
           path: AttachmentGalleryRoute.path,
+        ),
+        TypedGoRoute<LinkedEmailAccountsRoute>(
+          path: LinkedEmailAccountsRoute.path,
         ),
       ],
     ),
@@ -132,6 +137,20 @@ class AttachmentGalleryRoute extends TransitionGoRouteData
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       AttachmentGalleryScreen(locate: state.extra! as T Function<T>());
+}
+
+class LinkedEmailAccountsRoute extends TransitionGoRouteData
+    with AuthenticationRouteData {
+  const LinkedEmailAccountsRoute();
+
+  static const path = 'email-accounts';
+
+  @override
+  bool get authenticationRequired => true;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      LinkedEmailAccountsScreen(locate: state.extra! as T Function<T>());
 }
 
 class ArchivedChatRoute extends TransitionGoRouteData
