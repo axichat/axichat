@@ -75,7 +75,7 @@
       <ul>
         <li>Chat and email unified, providing the best of both worlds</li>
         <li>World's best calendar, for free</li>
-        <li>Encryption on device and in transit</li>
+        <li>Share mutual availability to book meetings without back-and-forth</li>
         <li>Unique, state-of-the-art UI</li>
         <li>Native performance on every platform</li>
         <li>1st party push notifications</li>
@@ -106,9 +106,8 @@
   designed to help you seize the day, and our chat-like email formatting helps you avoid spending it
   reading what you don't want to, retyping information, opening the wrong emails, and spamming
   alt+tab.
-- **Privacy matters** - “Arguing that you don't care about the right to privacy because you have
-  nothing to hide is no different than saying you don't care about free speech because you have
-  nothing to say.” ― Edward Snowden
+- **Collaboration matters** - Share availability, co-edit events, and resolve scheduling overlaps
+  together so everyone stays aligned.
 
 <hr />
 
@@ -148,11 +147,12 @@
 - ✅ Delivery and read receipts with typing indicators
 - 🔄 Stream management with automatic reconnect to stop messages dropping
 - 🧑‍🎨 Upload your own avatar or use one of our cool defaults
-- 📌 Message drafts, starred items, and pinning
+- 📌 Message drafts, starred items, and pinned messages
 - 📎 Rich attachments and inline previews
 - 🔍 Fast search across chats, mail, and calendar
-- 🗂️ Multiple accounts with secure credential storage (SQLCipher + secure storage)
-- 🔒 On-device and in-transit encryption, no trackers
+- 🗂️ Collaborative calendars with per-event permissions and owner/assignee roles
+- 🕒 Availability sharing that shows overlaps before you schedule
+- 🤝 Live calendar co-editing with comments, mentions, and RSVP updates
 - 🚀 1st-party push notifications and offline sync
 - 📅 Natural-language scheduling with drag+drop calendar editing
 - ➕ One-tap add-to-calendar from simple text messages

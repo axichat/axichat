@@ -110,6 +110,14 @@ void main() {
     when(() => transport.events)
         .thenAnswer((_) => const Stream<DeltaCoreEvent>.empty());
     when(() => transport.selfJid).thenReturn('dc-self@user.delta.chat');
+    when(() => transport.accountsSupported).thenReturn(true);
+    when(() => transport.accountsActive).thenReturn(false);
+    when(() => transport.activeAccountId).thenReturn(deltaAccountIdLegacy);
+    when(() => transport.createAccount())
+        .thenAnswer((_) async => deltaAccountIdLegacy);
+    when(() => transport.ensureAccountSession(any())).thenAnswer((_) async {});
+    when(() => transport.isConfigured(accountId: any(named: 'accountId')))
+        .thenAnswer((_) async => false);
     when(() => transport.start()).thenAnswer((_) async {});
     when(() => transport.stop()).thenAnswer((_) async {});
     when(() => transport.notifyNetworkAvailable()).thenAnswer((_) async {});
@@ -117,20 +125,35 @@ void main() {
     when(() => transport.performBackgroundFetch(any()))
         .thenAnswer((_) async => true);
     when(() => transport.registerPushToken(any())).thenAnswer((_) async {});
+    when(() => transport.getCoreConfig(any())).thenAnswer((_) async => null);
+    when(
+      () => transport.setCoreConfig(
+        key: any(named: 'key'),
+        value: any(named: 'value'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => transport.purgeStockMessages(accountId: any(named: 'accountId')))
+        .thenAnswer((_) async {});
     when(
       () => transport.sendText(
         chatId: any(named: 'chatId'),
         body: any(named: 'body'),
+        subject: any(named: 'subject'),
         shareId: any(named: 'shareId'),
         localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async => 1);
     when(
       () => transport.sendAttachment(
         chatId: any(named: 'chatId'),
         attachment: any(named: 'attachment'),
+        subject: any(named: 'subject'),
         shareId: any(named: 'shareId'),
         captionOverride: any(named: 'captionOverride'),
+        htmlCaption: any(named: 'htmlCaption'),
+        accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async => 1);
     when(
@@ -145,6 +168,7 @@ void main() {
         password: any(named: 'password'),
         displayName: any(named: 'displayName'),
         additional: any(named: 'additional'),
+        accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async {});
     when(() => credentialStore.read(key: any(named: 'key')))
@@ -365,6 +389,7 @@ void main() {
         password: any(named: 'password'),
         displayName: any(named: 'displayName'),
         additional: captureAny(named: 'additional'),
+        accountId: any(named: 'accountId'),
       ),
     ).captured.single as Map<String, String>;
     expect(
@@ -557,8 +582,11 @@ void main() {
       () => transport.sendAttachment(
         chatId: chat.deltaChatId!,
         attachment: attachment,
+        subject: any(named: 'subject'),
         shareId: any(named: 'shareId'),
         captionOverride: any(named: 'captionOverride'),
+        htmlCaption: any(named: 'htmlCaption'),
+        accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async => 77);
 
@@ -572,6 +600,11 @@ void main() {
       () => transport.sendAttachment(
         chatId: chat.deltaChatId!,
         attachment: attachment,
+        subject: any(named: 'subject'),
+        shareId: any(named: 'shareId'),
+        captionOverride: any(named: 'captionOverride'),
+        htmlCaption: any(named: 'htmlCaption'),
+        accountId: any(named: 'accountId'),
       ),
     ).called(1);
 
@@ -624,6 +657,7 @@ void main() {
         shareId: any(named: 'shareId'),
         dcMsgId: any(named: 'dcMsgId'),
         dcChatId: any(named: 'dcChatId'),
+        dcAccountId: any(named: 'dcAccountId'),
       ),
     ).thenAnswer((_) async {});
     when(
@@ -638,8 +672,11 @@ void main() {
       () => transport.sendText(
         chatId: any(named: 'chatId'),
         body: any(named: 'body'),
+        subject: any(named: 'subject'),
         shareId: any(named: 'shareId'),
         localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        accountId: any(named: 'accountId'),
       ),
     ).thenAnswer(
       (invocation) async => (invocation.namedArguments[#chatId] as int) + 100,
@@ -666,16 +703,22 @@ void main() {
       () => transport.sendText(
         chatId: chatA.deltaChatId!,
         body: any(named: 'body'),
+        subject: any(named: 'subject'),
         shareId: report.shareId,
         localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        accountId: any(named: 'accountId'),
       ),
     ).called(1);
     verify(
       () => transport.sendText(
         chatId: chatB.deltaChatId!,
         body: any(named: 'body'),
+        subject: any(named: 'subject'),
         shareId: report.shareId,
         localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        accountId: any(named: 'accountId'),
       ),
     ).called(1);
 
@@ -712,6 +755,7 @@ void main() {
         password: any(named: 'password'),
         displayName: any(named: 'displayName'),
         additional: any(named: 'additional'),
+        accountId: any(named: 'accountId'),
       ),
     ).called(1);
 
@@ -840,8 +884,11 @@ void main() {
       () => transport.sendText(
         chatId: chatBob.deltaChatId!,
         body: any(named: 'body'),
+        subject: any(named: 'subject'),
         shareId: any(named: 'shareId'),
         localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async => 202);
 
