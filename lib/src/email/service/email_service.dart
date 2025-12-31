@@ -42,6 +42,12 @@ const _contactsSyncDebounce = Duration(seconds: 2);
 const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
+const int _connectivityDowngradeGraceSeconds = 2;
+const _connectivityDowngradeGrace =
+    Duration(seconds: _connectivityDowngradeGraceSeconds);
+const _emailSyncingMessage = 'Syncing email…';
+const _emailConnectingMessage = 'Connecting to email servers…';
+const _emailDisconnectedMessage = 'Disconnected from email servers.';
 const _coreDraftMessageId = 0;
 const int _deltaEventMessageUnset = 0;
 const String _securityModeSsl = 'ssl';
@@ -259,6 +265,8 @@ class EmailService {
   final _syncStateController =
       StreamController<EmailSyncState>.broadcast(sync: true);
   EmailSyncState _syncState = const EmailSyncState.ready();
+  Timer? _connectivityDowngradeTimer;
+  int? _pendingConnectivityLevel;
   bool _channelOverflowRecoveryInProgress = false;
   final Map<String, RegisteredCredentialKey> _bootstrapKeys = {};
   Future<void>? _bootstrapFuture;
@@ -752,6 +760,7 @@ class EmailService {
     _stopImapSyncLoop();
     _cancelContactsSyncTimer();
     _contactsSyncPending = false;
+    _cancelConnectivityDowngrade();
   }
 
   Future<void> ensureEventChannelActive() async {
@@ -2095,41 +2104,86 @@ class EmailService {
     try {
       final connectivity = await _transport.connectivity();
       if (connectivity == null) return;
-      final currentStatus = _syncState.status;
       if (connectivity >= _connectivityConnectedMin) {
+        _cancelConnectivityDowngrade();
         _updateSyncState(const EmailSyncState.ready());
         return;
       }
       if (connectivity >= _connectivityWorkingMin) {
-        if (currentStatus == EmailSyncStatus.ready) {
+        _cancelConnectivityDowngrade();
+        if (_syncState.status == EmailSyncStatus.ready) {
           return;
         }
         _updateSyncState(
-          const EmailSyncState.recovering('Syncing email…'),
+          const EmailSyncState.recovering(_emailSyncingMessage),
         );
         return;
       }
-      if (connectivity >= _connectivityConnectingMin) {
-        _updateSyncState(
-          const EmailSyncState.recovering('Connecting to email servers…'),
-        );
+      if (_syncState.status == EmailSyncStatus.ready) {
+        _scheduleConnectivityDowngrade(connectivity);
         return;
       }
-      _updateSyncState(
-        const EmailSyncState.offline(
-          'Disconnected from email servers.',
-        ),
-      );
+      _applyConnectivityState(connectivity);
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to refresh email connectivity', error, stackTrace);
     }
+  }
+
+  void _scheduleConnectivityDowngrade(int connectivity) {
+    _pendingConnectivityLevel = connectivity;
+    if (_connectivityDowngradeTimer != null) {
+      return;
+    }
+    _connectivityDowngradeTimer = Timer(
+      _connectivityDowngradeGrace,
+      () {
+        _connectivityDowngradeTimer = null;
+        final pending = _pendingConnectivityLevel;
+        _pendingConnectivityLevel = null;
+        if (pending == null) {
+          return;
+        }
+        unawaited(_confirmConnectivityDowngrade(pending));
+      },
+    );
+  }
+
+  Future<void> _confirmConnectivityDowngrade(int fallbackConnectivity) async {
+    try {
+      final connectivity = await _transport.connectivity();
+      final resolved = connectivity ?? fallbackConnectivity;
+      if (resolved >= _connectivityConnectedMin) {
+        return;
+      }
+      _applyConnectivityState(resolved);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to confirm email connectivity', error, stackTrace);
+    }
+  }
+
+  void _cancelConnectivityDowngrade() {
+    _pendingConnectivityLevel = null;
+    _connectivityDowngradeTimer?.cancel();
+    _connectivityDowngradeTimer = null;
+  }
+
+  void _applyConnectivityState(int connectivity) {
+    if (connectivity >= _connectivityConnectingMin) {
+      _updateSyncState(
+        const EmailSyncState.recovering(_emailConnectingMessage),
+      );
+      return;
+    }
+    _updateSyncState(
+      const EmailSyncState.offline(_emailDisconnectedMessage),
+    );
   }
 
   void _handleBackgroundFetchDone() {
     if (_syncState.status == EmailSyncStatus.ready) {
       return;
     }
-    _updateSyncState(const EmailSyncState.ready());
+    unawaited(_refreshConnectivityState());
   }
 
   Future<void> _handleChannelOverflow() async {

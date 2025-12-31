@@ -9,7 +9,7 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinato
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/view/calendar_availability_editor_sheet.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
-import 'package:axichat/src/calendar/view/widgets/calendar_availability_preview.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_availability_grid_preview.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -36,7 +36,10 @@ const double _availabilityChatTilePaddingVertical = 8.0;
 const String _availabilityShareTitle = 'Share availability';
 const String _availabilityShareSubtitle =
     'Pick a range and choose who can view it.';
+const String _availabilityShareChatSubtitle =
+    'Pick a range to share in this chat.';
 const String _availabilityShareTargetLabel = 'Share with';
+const String _availabilityShareTargetLockedLabel = 'Sharing with';
 const String _availabilityShareRangeLabel = 'Range';
 const String _availabilityShareWindowsLabel = 'Availability windows';
 const String _availabilityShareWindowsEmptyLabel = 'No windows defined yet.';
@@ -52,6 +55,8 @@ const String _availabilityShareRedactionHint =
 const String _availabilityShareButtonLabel = 'Share';
 const String _availabilityShareMissingChatsMessage =
     'No eligible chats available.';
+const String _availabilityShareLockedChatUnavailableMessage =
+    'This chat cannot receive availability shares.';
 const String _availabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
 const String _availabilityShareInvalidRangeMessage =
@@ -89,13 +94,25 @@ Future<void> showCalendarAvailabilityShareSheet({
   required String ownerJid,
   ValueChanged<CalendarAvailability>? onAvailabilitySaved,
   Chat? initialChat,
+  bool lockToChat = false,
 }) async {
   final List<Chat> chats =
       context.read<ChatsCubit?>()?.state.items ?? const <Chat>[];
-  final List<Chat> available =
-      chats.where((chat) => chat.supportsChatCalendar).toList(growable: false);
+  final Chat? lockedChat = lockToChat ? initialChat : null;
+  final bool canLockToChat =
+      lockedChat != null && lockedChat.supportsChatCalendar;
+  final List<Chat> available = lockToChat
+      ? (canLockToChat ? <Chat>[lockedChat] : const <Chat>[])
+      : chats
+          .where((chat) => chat.supportsChatCalendar)
+          .toList(growable: false);
   if (available.isEmpty) {
-    FeedbackSystem.showInfo(context, _availabilityShareMissingChatsMessage);
+    FeedbackSystem.showInfo(
+      context,
+      lockToChat
+          ? _availabilityShareLockedChatUnavailableMessage
+          : _availabilityShareMissingChatsMessage,
+    );
     return;
   }
   final record = await showAdaptiveBottomSheet<CalendarAvailabilityShareRecord>(
@@ -109,6 +126,7 @@ Future<void> showCalendarAvailabilityShareSheet({
       availableChats: available,
       onAvailabilitySaved: onAvailabilitySaved,
       initialChat: initialChat,
+      lockToChat: lockToChat,
     ),
   );
   if (record == null || !context.mounted) {
@@ -125,6 +143,7 @@ class CalendarAvailabilityShareSheet extends StatefulWidget {
     required this.model,
     required this.ownerJid,
     required this.availableChats,
+    required this.lockToChat,
     this.onAvailabilitySaved,
     this.initialChat,
   });
@@ -134,6 +153,7 @@ class CalendarAvailabilityShareSheet extends StatefulWidget {
   final CalendarModel model;
   final String ownerJid;
   final List<Chat> availableChats;
+  final bool lockToChat;
   final ValueChanged<CalendarAvailability>? onAvailabilitySaved;
   final Chat? initialChat;
 
@@ -159,7 +179,8 @@ class _CalendarAvailabilityShareSheetState
     _rangeStart = start;
     _rangeEnd = _addMonths(start, _availabilityDefaultRangeMonths);
     _localModel = widget.model;
-    _selectedChat = widget.initialChat ??
+    final Chat? lockedChat = widget.lockToChat ? widget.initialChat : null;
+    _selectedChat = lockedChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
   }
 
@@ -176,9 +197,15 @@ class _CalendarAvailabilityShareSheetState
     final CalendarAvailabilityOverlay? previewOverlay =
         _resolvePreviewOverlay();
     final int windowCount = _availabilityWindowCount(_localModel.availability);
+    final String subtitleText = widget.lockToChat
+        ? _availabilityShareChatSubtitle
+        : _availabilityShareSubtitle;
+    final String targetLabel = widget.lockToChat
+        ? _availabilityShareTargetLockedLabel
+        : _availabilityShareTargetLabel;
     final header = AxiSheetHeader(
       title: const Text(_availabilityShareTitle),
-      subtitle: const Text(_availabilityShareSubtitle),
+      subtitle: Text(subtitleText),
       onClose: () => Navigator.of(context).maybePop(),
     );
     final body = AxiSheetScaffold.scroll(
@@ -210,10 +237,12 @@ class _CalendarAvailabilityShareSheetState
           onRedactionChanged: _handleRedactionChanged,
         ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
-        const _AvailabilitySheetSectionLabel(
-          text: _availabilityShareTargetLabel,
-        ),
-        if (widget.availableChats.isEmpty)
+        _AvailabilitySheetSectionLabel(text: targetLabel),
+        if (widget.lockToChat)
+          _AvailabilityChatTarget(
+            chat: _selectedChat,
+          )
+        else if (widget.availableChats.isEmpty)
           const _AvailabilitySheetEmptyMessage(
             message: _availabilityShareMissingChatsMessage,
           )
@@ -489,7 +518,10 @@ class _AvailabilityPreviewSection extends StatelessWidget {
             message: _availabilitySharePreviewEmptyLabel,
           )
         else
-          CalendarAvailabilityPreview(overlay: previewOverlay),
+          CalendarAvailabilityGridPreview(
+            rangeOverlay: previewOverlay,
+            overlays: <CalendarAvailabilityOverlay>[previewOverlay],
+          ),
       ],
     );
   }
@@ -527,6 +559,36 @@ class _AvailabilityChatPicker extends StatelessWidget {
           const SizedBox(height: _availabilitySheetTileGap),
         ],
       ],
+    );
+  }
+}
+
+class _AvailabilityChatTarget extends StatelessWidget {
+  const _AvailabilityChatTarget({
+    required this.chat,
+  });
+
+  final Chat? chat;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChat = chat;
+    if (resolvedChat == null) {
+      return const _AvailabilitySheetEmptyMessage(
+        message: _availabilityShareLockedChatUnavailableMessage,
+      );
+    }
+    return AxiListTile(
+      leading: AxiAvatar(
+        jid: resolvedChat.jid,
+        size: _availabilityChatAvatarSize,
+        avatarPath: resolvedChat.avatarPath,
+        shape: AxiAvatarShape.circle,
+      ),
+      title: resolvedChat.displayName,
+      subtitle: resolvedChat.type.label,
+      selected: true,
+      contentPadding: _availabilityChatTilePadding,
     );
   }
 }
