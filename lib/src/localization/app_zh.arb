@@ -641,6 +641,7 @@
   "profileStatusPlaceholder": "状态消息",
   "profileArchives": "查看存档",
   "profileEditAvatar": "编辑头像",
+  "profileLinkedEmailAccounts": "Email accounts",
   "profileChangePassword": "更改密码",
   "profileDeleteAccount": "删除账户",
   "termsAcceptLabel": "我接受条款和条件",
@@ -1109,6 +1110,37 @@
   "emailDemoStatusSending": "Sending demo message…",
   "emailDemoStatusSent": "Sent demo message (id={id})",
   "emailDemoTitle": "Email Transport Demo",
+  "linkedEmailAccountsTitle": "Email accounts",
+  "linkedEmailAccountsDescription": "Link existing inboxes and send from multiple addresses.",
+  "linkedEmailAccountsDefaultHint": "New chats send from your default address unless you switch it per chat.",
+  "linkedEmailAccountsLimitHint": "Up to {limit} extra accounts.",
+  "linkedEmailAccountsLinkAction": "Link account",
+  "linkedEmailAccountsUnsupportedHint": "This device supports one email account at a time.",
+  "linkedEmailAccountsEmptyTitle": "No linked accounts yet",
+  "linkedEmailAccountsEmptyDescription": "Add an existing inbox to sync mail and send from it.",
+  "linkedEmailAccountsLoadFailure": "Unable to load email accounts.",
+  "linkedEmailAccountsMakeDefaultAction": "Make default",
+  "linkedEmailAccountsUpdatePasswordAction": "Update password",
+  "linkedEmailAccountsDefaultBadge": "Default",
+  "linkedEmailAccountsRemoveTitle": "Remove linked account?",
+  "linkedEmailAccountsRemoveDescription": "You can re-link later. Existing messages stay.",
+  "linkedEmailAccountsUpdateTitle": "Update email password",
+  "linkedEmailAccountsAccountLabel": "Account",
+  "linkedEmailAccountsSheetTitle": "Link an email account",
+  "linkedEmailAccountsSheetSubtitle": "Use an app password if your provider requires it.",
+  "linkedEmailAccountsAddressPlaceholder": "name@domain.com",
+  "linkedEmailAccountsAddressRequired": "Enter an email address.",
+  "linkedEmailAccountsAddressInvalid": "Enter a valid email address.",
+  "linkedEmailAccountsPasswordPlaceholder": "Enter app password",
+  "linkedEmailAccountsPasswordLabel": "App password",
+  "linkedEmailAccountsSetDefaultLabel": "Set as default send address",
+  "linkedEmailAccountsSetDefaultDescription": "New chats send from this address by default.",
+  "linkedEmailAccountsLimitReached": "You can link up to {limit} extra accounts.",
+  "linkedEmailAccountsUnsupportedError": "Multiple accounts are not supported on this device.",
+  "linkedEmailAccountsLinkFailure": "Unable to link account.",
+  "linkedEmailAccountsUnlinkFailure": "Unable to remove account.",
+  "linkedEmailAccountsDefaultFailure": "Unable to update default address.",
+  "linkedEmailAccountsUpdateFailure": "Unable to update password.",
   "verificationAddLabelPlaceholder": "Add label",
   "verificationCurrentDevice": "Current device",
   "verificationDeviceIdLabel": "ID: {id}",
@@ -1206,6 +1238,16 @@
   "@emailDemoStatusSendFailed": {
     "placeholders": {
       "error": {}
+    }
+  },
+  "@linkedEmailAccountsLimitHint": {
+    "placeholders": {
+      "limit": {}
+    }
+  },
+  "@linkedEmailAccountsLimitReached": {
+    "placeholders": {
+      "limit": {}
     }
   },
   "@avatarCropSizeLabel": {

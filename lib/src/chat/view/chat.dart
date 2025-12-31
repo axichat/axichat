@@ -195,6 +195,8 @@ const String _availabilityRequestChatCalendarUnavailableMessage =
 const String _availabilityRequestTaskTitleFallback = 'Requested time';
 const Uuid _availabilityResponseIdGenerator = Uuid();
 const String _composerShareSeparator = '\n\n';
+const double _composerFromSelectSpacing = 8.0;
+const double _composerFromLabelSpacing = 6.0;
 const String _emptyText = '';
 const String _jidResourceSeparator = '/';
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
@@ -2380,6 +2382,33 @@ class _ChatState extends State<Chat> {
     await _stashComposerDraftIfDirty();
     if (!mounted) return;
     context.read<ChatBloc>().add(ChatMessageEditRequested(message));
+  }
+
+  EmailAccountId? _resolveFromAccountId({
+    required chat_models.Chat? chat,
+    required List<EmailAccountProfile> accounts,
+  }) {
+    if (accounts.isEmpty) {
+      return null;
+    }
+    final chatAddress = chat?.emailFromAddress;
+    final EmailAccountId? chatAccountId =
+        chatAddress == null ? null : EmailAccountId.fromAddress(chatAddress);
+    if (chatAccountId != null) {
+      for (final account in accounts) {
+        if (account.id == chatAccountId) {
+          return chatAccountId;
+        }
+      }
+    }
+    EmailAccountProfile? primary;
+    for (final account in accounts) {
+      if (account.isPrimary) {
+        primary = account;
+        break;
+      }
+    }
+    return (primary ?? accounts.first).id;
   }
 
   List<ChatComposerAccessory> _composerAccessories({
@@ -4585,6 +4614,23 @@ class _ChatState extends State<Chat> {
                                               _ensureRecipientBarHeightCleared();
                                               return const _ReadOnlyComposerBanner();
                                             }
+                                            final supportsEmailComposer =
+                                                state.chat?.supportsEmail ==
+                                                    true;
+                                            final List<EmailAccountProfile>
+                                                linkedEmailAccounts =
+                                                supportsEmailComposer
+                                                    ? state.linkedEmailAccounts
+                                                    : const <EmailAccountProfile>[];
+                                            final EmailAccountId?
+                                                selectedFromAccountId =
+                                                supportsEmailComposer
+                                                    ? _resolveFromAccountId(
+                                                        chat: state.chat,
+                                                        accounts:
+                                                            linkedEmailAccounts,
+                                                      )
+                                                    : null;
                                             final visibilityLabel =
                                                 _recipientVisibilityLabel(
                                               chat: state.chat,
@@ -4596,6 +4642,10 @@ class _ChatState extends State<Chat> {
                                               availableChats: availableChats,
                                               latestStatuses: latestStatuses,
                                               visibilityLabel: visibilityLabel,
+                                              linkedEmailAccounts:
+                                                  linkedEmailAccounts,
+                                              selectedFromAccountId:
+                                                  selectedFromAccountId,
                                               pendingAttachments:
                                                   pendingAttachments,
                                               composerHasText: _composerHasText,
@@ -4629,6 +4679,14 @@ class _ChatState extends State<Chat> {
                                                   context.read<ChatBloc>().add(
                                                         ChatComposerRecipientToggled(
                                                           key,
+                                                        ),
+                                                      ),
+                                              onFromAddressChanged:
+                                                  (accountId) => context
+                                                      .read<ChatBloc>()
+                                                      .add(
+                                                        ChatEmailFromAddressSelected(
+                                                          accountId,
                                                         ),
                                                       ),
                                               onAttachmentRetry: (id) =>
@@ -9636,6 +9694,8 @@ class _ChatComposerSection extends StatelessWidget {
     required this.availableChats,
     required this.latestStatuses,
     required this.visibilityLabel,
+    required this.linkedEmailAccounts,
+    required this.selectedFromAccountId,
     required this.pendingAttachments,
     required this.composerHasText,
     required this.subjectController,
@@ -9646,6 +9706,7 @@ class _ChatComposerSection extends StatelessWidget {
     required this.onRecipientAdded,
     required this.onRecipientRemoved,
     required this.onRecipientToggled,
+    required this.onFromAddressChanged,
     required this.onAttachmentRetry,
     required this.onAttachmentRemove,
     required this.onPendingAttachmentPressed,
@@ -9665,6 +9726,8 @@ class _ChatComposerSection extends StatelessWidget {
   final List<chat_models.Chat> availableChats;
   final Map<String, FanOutRecipientState> latestStatuses;
   final String? visibilityLabel;
+  final List<EmailAccountProfile> linkedEmailAccounts;
+  final EmailAccountId? selectedFromAccountId;
   final List<PendingAttachment> pendingAttachments;
   final bool composerHasText;
   final TextEditingController subjectController;
@@ -9675,6 +9738,7 @@ class _ChatComposerSection extends StatelessWidget {
   final ValueChanged<FanOutTarget> onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
   final ValueChanged<String> onRecipientToggled;
+  final ValueChanged<EmailAccountId> onFromAddressChanged;
   final ValueChanged<String> onAttachmentRetry;
   final ValueChanged<String> onAttachmentRemove;
   final ValueChanged<PendingAttachment> onPendingAttachmentPressed;
@@ -9717,11 +9781,31 @@ class _ChatComposerSection extends StatelessWidget {
     final hasSubjectText = subjectController.text.trim().isNotEmpty;
     final sendEnabled = !hasPreparingAttachments &&
         (composerHasText || hasQueuedAttachments || hasSubjectText);
+    Widget? fromSelector;
+    if (linkedEmailAccounts.length > 1) {
+      final EmailAccountId selectedId =
+          selectedFromAccountId ?? linkedEmailAccounts.first.id;
+      fromSelector = _EmailFromAddressSelect(
+        accounts: linkedEmailAccounts,
+        selectedAccountId: selectedId,
+        onChanged: onFromAddressChanged,
+      );
+    }
     final subjectHeader = _SubjectTextField(
       controller: subjectController,
       focusNode: subjectFocusNode,
       onSubmitted: onSubjectSubmitted,
     );
+    final Widget header = fromSelector == null
+        ? subjectHeader
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              fromSelector,
+              const SizedBox(height: _composerFromSelectSpacing),
+              subjectHeader,
+            ],
+          );
     final showAttachmentTray = pendingAttachments.isNotEmpty;
     final commandSurface = resolveCommandSurface(context);
     final useDesktopMenu = commandSurface == CommandSurface.menu;
@@ -9774,7 +9858,7 @@ class _ChatComposerSection extends StatelessWidget {
                       hintText: hintText,
                       semanticsLabel: context.l10n.chatComposerSemantics,
                       onSend: onSend,
-                      header: subjectHeader,
+                      header: header,
                       actions: buildComposerAccessories(
                         canSend: sendEnabled,
                       ),
@@ -9901,6 +9985,95 @@ class _ComposerTaskDropRegion extends StatelessWidget {
           child: child,
         );
       },
+    );
+  }
+}
+
+class _EmailFromAddressSelect extends StatelessWidget {
+  const _EmailFromAddressSelect({
+    required this.accounts,
+    required this.selectedAccountId,
+    required this.onChanged,
+  });
+
+  final List<EmailAccountProfile> accounts;
+  final EmailAccountId selectedAccountId;
+  final ValueChanged<EmailAccountId> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final label = l10n.accessibilityMessageFrom(_emptyText).trim();
+    final selectedAccount = _accountForId(selectedAccountId);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: context.textTheme.muted,
+        ),
+        const SizedBox(height: _composerFromLabelSpacing),
+        ShadSelect<String>(
+          initialValue: selectedAccount.id.value,
+          onChanged: (value) {
+            if (value == null || value.isEmpty) {
+              return;
+            }
+            final nextAccount = accounts.firstWhere(
+              (account) => account.id.value == value,
+              orElse: () => selectedAccount,
+            );
+            onChanged(nextAccount.id);
+          },
+          options: accounts
+              .map(
+                (account) => ShadOption<String>(
+                  value: account.id.value,
+                  child: _EmailFromAddressOption(account: account),
+                ),
+              )
+              .toList(),
+          selectedOptionBuilder: (_, value) {
+            final nextAccount = accounts.firstWhere(
+              (account) => account.id.value == value,
+              orElse: () => selectedAccount,
+            );
+            return Text(nextAccount.address);
+          },
+        ),
+      ],
+    );
+  }
+
+  EmailAccountProfile _accountForId(EmailAccountId accountId) {
+    return accounts.firstWhere(
+      (account) => account.id == accountId,
+      orElse: () => accounts.first,
+    );
+  }
+}
+
+class _EmailFromAddressOption extends StatelessWidget {
+  const _EmailFromAddressOption({
+    required this.account,
+  });
+
+  final EmailAccountProfile account;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = context.textTheme;
+    final showAddress = account.displayName != account.address;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(account.displayName),
+        if (showAddress)
+          Text(
+            account.address,
+            style: textTheme.muted,
+          ),
+      ],
     );
   }
 }

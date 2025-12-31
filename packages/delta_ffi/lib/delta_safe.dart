@@ -394,6 +394,8 @@ class DeltaContextHandle {
   final bool _ownsContext;
   static const _lastSpecialContactId = DeltaContactId.lastSpecial;
 
+  int? get accountId => _accountId;
+
   _DeltaEventLoop? _eventLoop;
 
   bool _opened = false;
@@ -1521,6 +1523,41 @@ class DeltaAccountsHandle {
     return accountId;
   }
 
+  Future<List<int>> accountIds() async {
+    final array = _bindings.dc_accounts_get_all(_accounts);
+    if (array == ffi.nullptr) {
+      return const <int>[];
+    }
+    try {
+      final count = _bindings.dc_array_get_cnt(array);
+      if (count <= 0) {
+        return const <int>[];
+      }
+      final ids = <int>[];
+      for (var i = 0; i < count; i++) {
+        ids.add(_bindings.dc_array_get_id(array, i));
+      }
+      return ids;
+    } finally {
+      _bindings.dc_array_unref(array);
+    }
+  }
+
+  Future<int> addAccount({bool closed = false}) async {
+    final accountId = closed
+        ? _bindings.dc_accounts_add_closed_account(_accounts)
+        : _bindings.dc_accounts_add_account(_accounts);
+    if (accountId == 0) {
+      throw const DeltaSafeException('Failed to allocate Delta account');
+    }
+    return accountId;
+  }
+
+  Future<bool> removeAccount(int accountId) async {
+    final result = _bindings.dc_accounts_remove_account(_accounts, accountId);
+    return result != 0;
+  }
+
   DeltaContextHandle contextFor(int accountId) {
     final ctx = _bindings.dc_accounts_get_account(_accounts, accountId);
     if (ctx == ffi.nullptr) {
@@ -1532,6 +1569,10 @@ class DeltaAccountsHandle {
       this,
       accountId,
     );
+  }
+
+  Stream<DeltaCoreEvent> events() {
+    return _ensureEventStream();
   }
 
   Stream<DeltaCoreEvent> eventsFor(int accountId) {

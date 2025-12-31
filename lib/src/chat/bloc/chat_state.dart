@@ -37,6 +37,8 @@ class ChatState with _$ChatState {
     String? emailSubject,
     @Default(0) int emailSubjectHydrationId,
     String? emailSubjectHydrationText,
+    @Default(<EmailAccountProfile>[])
+    List<EmailAccountProfile> linkedEmailAccounts,
     @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,
     @Default(ConnectionState.notConnected) ConnectionState xmppConnectionState,
     @Default(false) bool supportsHttpFileUpload,

@@ -51,7 +51,7 @@ const String _databaseJournalSuffix = '-journal';
 const int _messageAttachmentMaxCount = 50;
 const int _messageAttachmentSortOrderStart = 0;
 const int _messageAttachmentSortOrderStep = 1;
-const int _pinnedMessagesSchemaVersion = 24;
+const int _pinnedMessagesSchemaVersion = 26;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
@@ -195,6 +195,7 @@ abstract interface class XmppDatabase implements Database {
   Future<void> trimChatMessages({
     required String jid,
     required int maxMessages,
+    int? deltaAccountId,
   });
 
   Future<void> createMessageShare({
@@ -206,6 +207,7 @@ abstract interface class XmppDatabase implements Database {
     required String shareId,
     required int dcMsgId,
     required int dcChatId,
+    int dcAccountId = deltaAccountIdLegacy,
   });
 
   Future<void> assignShareOriginator({
@@ -228,7 +230,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Message>> getMessagesForShare(String shareId);
 
-  Future<String?> getShareIdForDeltaMessage(int deltaMsgId);
+  Future<String?> getShareIdForDeltaMessage(
+    int deltaMsgId, {
+    int deltaAccountId = deltaAccountIdLegacy,
+  });
 
   Future<void> removeChatMessages(String jid);
 
@@ -334,7 +339,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Chat>> getChats({required int start, required int end});
 
-  Future<List<Chat>> getDeltaChats();
+  Future<List<Chat>> getDeltaChats({int? accountId});
 
   Stream<List<String>> watchRecipientAddressSuggestions({int? limit});
 
@@ -342,13 +347,41 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Chat?> getChat(String jid);
 
-  Future<Chat?> getChatByDeltaChatId(int deltaChatId);
+  Future<Chat?> getChatByDeltaChatId(
+    int deltaChatId, {
+    int? accountId,
+  });
 
-  Stream<Chat?> watchChatByDeltaChatId(int deltaChatId);
+  Stream<Chat?> watchChatByDeltaChatId(
+    int deltaChatId, {
+    int? accountId,
+  });
+
+  Future<void> upsertEmailChatAccount({
+    required String chatJid,
+    required int deltaAccountId,
+    required int deltaChatId,
+  });
+
+  Future<int?> getDeltaChatIdForAccount({
+    required String chatJid,
+    required int deltaAccountId,
+  });
+
+  Future<void> deleteEmailChatAccount({
+    required String chatJid,
+    required int deltaAccountId,
+  });
+
+  Future<void> deleteEmailChatAccountsForAccount(int deltaAccountId);
+
+  Future<int> countEmailChatAccounts(String chatJid);
 
   Future<void> createChat(Chat chat);
 
   Future<void> updateChat(Chat chat);
+
+  Future<void> clearChatsEmailFromAddress(String address);
 
   Stream<Chat?> watchChat(String jid);
 
@@ -766,12 +799,27 @@ class MessageCopiesAccessor
   Future<void> deleteOne(int id) =>
       (delete(table)..where((tbl) => tbl.id.equals(id))).go();
 
-  Future<MessageCopyData?> selectByDeltaMsgId(int deltaMsgId) =>
-      (select(table)..where((tbl) => tbl.dcMsgId.equals(deltaMsgId)))
+  Future<MessageCopyData?> selectByDeltaMsgId(
+    int deltaMsgId, {
+    int deltaAccountId = deltaAccountIdLegacy,
+  }) =>
+      (select(table)
+            ..where(
+              (tbl) =>
+                  tbl.dcMsgId.equals(deltaMsgId) &
+                  tbl.dcAccountId.equals(deltaAccountId),
+            ))
           .getSingleOrNull();
 
-  Future<String?> selectShareIdForDeltaMsg(int deltaMsgId) async =>
-      (await selectByDeltaMsgId(deltaMsgId))?.shareId;
+  Future<String?> selectShareIdForDeltaMsg(
+    int deltaMsgId, {
+    int deltaAccountId = deltaAccountIdLegacy,
+  }) async =>
+      (await selectByDeltaMsgId(
+        deltaMsgId,
+        deltaAccountId: deltaAccountId,
+      ))
+          ?.shareId;
 
   Future<List<MessageCopyData>> selectByShare(String shareId) =>
       (select(table)..where((tbl) => tbl.shareId.equals(shareId))).get();
@@ -1157,6 +1205,7 @@ class EmailSpamlistAccessor
   Roster,
   Invites,
   Chats,
+  EmailChatAccounts,
   Contacts,
   Blocklist,
   Stickers,
@@ -1414,6 +1463,23 @@ WHERE source_id IS NULL OR trim(source_id) = ''
         if (from < 24) {
           await m.addColumn(chats, chats.notificationPreviewSetting);
         }
+        if (from < 25) {
+          await m.addColumn(messages, messages.deltaAccountId);
+          await _rebuildMessageCopiesTable(m);
+        }
+        if (from < 26) {
+          await m.addColumn(chats, chats.emailFromAddress);
+          await m.createTable(emailChatAccounts);
+          await customStatement(
+            '''
+INSERT INTO email_chat_accounts(chat_jid, delta_account_id, delta_chat_id)
+SELECT jid, ?, delta_chat_id
+FROM chats
+WHERE delta_chat_id IS NOT NULL
+''',
+            [deltaAccountIdLegacy],
+          );
+        }
         if (from < _pinnedMessagesSchemaVersion) {
           await m.createTable(pinnedMessages);
         }
@@ -1465,7 +1531,9 @@ WHERE source_id IS NULL OR trim(source_id) = ''
       '''
       SELECT COUNT(*) AS count
       FROM messages m
-      LEFT JOIN message_copies mc ON mc.dc_msg_id = m.delta_msg_id
+      LEFT JOIN message_copies mc
+        ON mc.dc_msg_id = m.delta_msg_id
+       AND mc.dc_account_id = m.delta_account_id
       LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
@@ -1507,7 +1575,9 @@ WHERE source_id IS NULL OR trim(source_id) = ''
       '''
       SELECT m.*
       FROM messages m
-      LEFT JOIN message_copies mc ON mc.dc_msg_id = m.delta_msg_id
+      LEFT JOIN message_copies mc
+        ON mc.dc_msg_id = m.delta_msg_id
+       AND mc.dc_account_id = m.delta_account_id
       LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
@@ -1581,7 +1651,9 @@ WHERE source_id IS NULL OR trim(source_id) = ''
       '''
       SELECT m.*
       FROM messages m
-      LEFT JOIN message_copies mc ON mc.dc_msg_id = m.delta_msg_id
+      LEFT JOIN message_copies mc
+        ON mc.dc_msg_id = m.delta_msg_id
+       AND mc.dc_account_id = m.delta_account_id
       LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
@@ -1638,7 +1710,9 @@ WHERE source_id IS NULL OR trim(source_id) = ''
       SELECT DISTINCT TRIM(ms.subject) AS subject
       FROM message_shares ms
       JOIN message_copies mc ON mc.share_id = ms.share_id
-      JOIN messages m ON m.delta_msg_id = mc.dc_msg_id
+      JOIN messages m
+        ON m.delta_msg_id = mc.dc_msg_id
+       AND m.delta_account_id = mc.dc_account_id
       WHERE m.chat_jid = ?
         AND ms.subject IS NOT NULL
         AND TRIM(ms.subject) <> ''
@@ -2182,6 +2256,7 @@ WHERE jid = ?
   Future<void> trimChatMessages({
     required String jid,
     required int maxMessages,
+    int? deltaAccountId,
   }) async {
     const int trimBatchSize = 900; // stays under SQLite's 999-variable limit
     Iterable<List<T>> chunked<T>(List<T> items) sync* {
@@ -2192,16 +2267,21 @@ WHERE jid = ?
     }
 
     final offset = maxMessages <= 0 ? 0 : maxMessages;
+    final bool filterByAccount = deltaAccountId != null;
+    final String accountClause =
+        filterByAccount ? ' AND delta_account_id = ?' : '';
     final pruned = await customSelect(
       '''
-      SELECT id AS message_id, stanza_i_d AS stanza_id, delta_msg_id
+      SELECT id AS message_id, stanza_i_d AS stanza_id, delta_msg_id,
+             delta_account_id
       FROM messages
-      WHERE chat_jid = ?
+      WHERE chat_jid = ?$accountClause
       ORDER BY timestamp DESC
       LIMIT -1 OFFSET ?
       ''',
       variables: [
         Variable<String>(jid),
+        if (filterByAccount) Variable<int>(deltaAccountId),
         Variable<int>(offset),
       ],
       readsFrom: {messages},
@@ -2210,15 +2290,18 @@ WHERE jid = ?
     if (pruned.isEmpty) return;
 
     final stanzaIds = <String>[];
-    final deltaMsgIds = <int>[];
+    final Map<int, List<int>> deltaMsgIdsByAccount = {};
     final messageIds = <String>[];
     for (final row in pruned) {
       final messageId = row.read<String>('message_id');
       messageIds.add(messageId);
       stanzaIds.add(row.read<String>('stanza_id'));
       final deltaMsgId = row.read<int?>('delta_msg_id');
+      final deltaAccountId = row.read<int>('delta_account_id');
       if (deltaMsgId != null) {
-        deltaMsgIds.add(deltaMsgId);
+        deltaMsgIdsByAccount
+            .putIfAbsent(deltaAccountId, () => <int>[])
+            .add(deltaMsgId);
       }
     }
 
@@ -2254,15 +2337,28 @@ WHERE jid = ?
 
     await transaction(() async {
       final shareIds = <String>{};
-      if (deltaMsgIds.isNotEmpty) {
-        for (final batch in chunked(deltaMsgIds)) {
-          final copies = await (select(messageCopies)
-                ..where((tbl) => tbl.dcMsgId.isIn(batch)))
-              .get();
-          shareIds.addAll(copies.map((copy) => copy.shareId));
+      if (deltaMsgIdsByAccount.isNotEmpty) {
+        for (final entry in deltaMsgIdsByAccount.entries) {
+          final accountId = entry.key;
+          final messageIds = entry.value;
+          for (final batch in chunked(messageIds)) {
+            final copies = await (select(messageCopies)
+                  ..where(
+                    (tbl) =>
+                        tbl.dcAccountId.equals(accountId) &
+                        tbl.dcMsgId.isIn(batch),
+                  ))
+                .get();
+            shareIds.addAll(copies.map((copy) => copy.shareId));
 
-          await (delete(messageCopies)..where((tbl) => tbl.dcMsgId.isIn(batch)))
-              .go();
+            await (delete(messageCopies)
+                  ..where(
+                    (tbl) =>
+                        tbl.dcAccountId.equals(accountId) &
+                        tbl.dcMsgId.isIn(batch),
+                  ))
+                .go();
+          }
         }
       }
 
@@ -2349,12 +2445,14 @@ WHERE jid = ?
     required String shareId,
     required int dcMsgId,
     required int dcChatId,
+    int dcAccountId = deltaAccountIdLegacy,
   }) async {
     await messageCopiesAccessor.insertOrUpdateOne(
       MessageCopiesCompanion.insert(
         shareId: shareId,
         dcMsgId: dcMsgId,
         dcChatId: dcChatId,
+        dcAccountId: Value(dcAccountId),
       ),
     );
   }
@@ -2392,22 +2490,28 @@ WHERE jid = ?
 
   @override
   Future<List<Message>> getMessagesForShare(String shareId) async {
-    final copies = await messageCopiesAccessor.selectByShare(shareId);
-    if (copies.isEmpty) return const [];
-    final messageIds = copies
-        .map((copy) => copy.dcMsgId)
-        .whereType<int>()
-        .toSet()
-        .toList(growable: false);
-    if (messageIds.isEmpty) return const [];
-    final query = select(messages)
-      ..where((tbl) => tbl.deltaMsgId.isIn(messageIds));
-    return query.get();
+    final query = select(messages).join([
+      innerJoin(
+        messageCopies,
+        messageCopies.dcMsgId.equalsExp(messages.deltaMsgId) &
+            messageCopies.dcAccountId.equalsExp(messages.deltaAccountId),
+      ),
+    ])
+      ..where(messageCopies.shareId.equals(shareId));
+    return query
+        .get()
+        .then((rows) => rows.map((row) => row.readTable(messages)).toList());
   }
 
   @override
-  Future<String?> getShareIdForDeltaMessage(int deltaMsgId) =>
-      messageCopiesAccessor.selectShareIdForDeltaMsg(deltaMsgId);
+  Future<String?> getShareIdForDeltaMessage(
+    int deltaMsgId, {
+    int deltaAccountId = deltaAccountIdLegacy,
+  }) =>
+      messageCopiesAccessor.selectShareIdForDeltaMsg(
+        deltaMsgId,
+        deltaAccountId: deltaAccountId,
+      );
 
   @override
   Future<void> removeChatMessages(String jid) =>
@@ -2987,8 +3091,57 @@ WHERE jid = ?
   }
 
   @override
-  Future<List<Chat>> getDeltaChats() {
-    return (select(chats)..where((tbl) => tbl.deltaChatId.isNotNull())).get();
+  Future<List<Chat>> getDeltaChats({int? accountId}) {
+    if (accountId == null) {
+      return _mergeDeltaChats();
+    }
+    return _mergeDeltaChatsForAccount(accountId);
+  }
+
+  Future<List<Chat>> _mergeDeltaChats() async {
+    final Map<String, Chat> resolved = <String, Chat>{};
+    final legacy = await (select(chats)
+          ..where((tbl) => tbl.deltaChatId.isNotNull()))
+        .get();
+    for (final chat in legacy) {
+      resolved[chat.jid] = chat;
+    }
+    final mapped = await (select(chats).join([
+      innerJoin(
+        emailChatAccounts,
+        emailChatAccounts.chatJid.equalsExp(chats.jid),
+      ),
+    ])).get();
+    for (final row in mapped) {
+      final chat = row.readTable(chats);
+      resolved[chat.jid] = chat;
+    }
+    return resolved.values.toList(growable: false);
+  }
+
+  Future<List<Chat>> _mergeDeltaChatsForAccount(int accountId) async {
+    final Map<String, Chat> resolved = <String, Chat>{};
+    if (accountId == deltaAccountIdLegacy) {
+      final legacy = await (select(chats)
+            ..where((tbl) => tbl.deltaChatId.isNotNull()))
+          .get();
+      for (final chat in legacy) {
+        resolved[chat.jid] = chat;
+      }
+    }
+    final mapped = await (select(chats).join([
+      innerJoin(
+        emailChatAccounts,
+        emailChatAccounts.chatJid.equalsExp(chats.jid),
+      ),
+    ])
+          ..where(emailChatAccounts.deltaAccountId.equals(accountId)))
+        .get();
+    for (final row in mapped) {
+      final chat = row.readTable(chats);
+      resolved[chat.jid] = chat;
+    }
+    return resolved.values.toList(growable: false);
   }
 
   Selectable<String> _recipientAddressSuggestionsQuery({int? limit}) {
@@ -3043,15 +3196,122 @@ $limitClause
   Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
 
   @override
-  Future<Chat?> getChatByDeltaChatId(int deltaChatId) {
+  Future<Chat?> getChatByDeltaChatId(
+    int deltaChatId, {
+    int? accountId,
+  }) async {
+    final resolvedAccountId = accountId ?? deltaAccountIdLegacy;
+    final query = select(chats).join([
+      innerJoin(
+        emailChatAccounts,
+        emailChatAccounts.chatJid.equalsExp(chats.jid),
+      ),
+    ])
+      ..where(
+        emailChatAccounts.deltaChatId.equals(deltaChatId) &
+            emailChatAccounts.deltaAccountId.equals(resolvedAccountId),
+      );
+    final row = await query.getSingleOrNull();
+    if (row != null) {
+      return row.readTable(chats);
+    }
+    if (accountId != null) {
+      return null;
+    }
     return (select(chats)..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
         .getSingleOrNull();
   }
 
   @override
-  Stream<Chat?> watchChatByDeltaChatId(int deltaChatId) {
-    return (select(chats)..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
-        .watchSingleOrNull();
+  Stream<Chat?> watchChatByDeltaChatId(
+    int deltaChatId, {
+    int? accountId,
+  }) {
+    final resolvedAccountId = accountId ?? deltaAccountIdLegacy;
+    final query = select(chats).join([
+      innerJoin(
+        emailChatAccounts,
+        emailChatAccounts.chatJid.equalsExp(chats.jid),
+      ),
+    ])
+      ..where(
+        emailChatAccounts.deltaChatId.equals(deltaChatId) &
+            emailChatAccounts.deltaAccountId.equals(resolvedAccountId),
+      );
+    final mappedStream =
+        query.watchSingleOrNull().map((row) => row?.readTable(chats));
+    if (accountId != null) {
+      return mappedStream;
+    }
+    return mappedStream.asyncMap((mapped) async {
+      if (mapped != null) {
+        return mapped;
+      }
+      return (select(chats)
+            ..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
+          .getSingleOrNull();
+    });
+  }
+
+  @override
+  Future<void> upsertEmailChatAccount({
+    required String chatJid,
+    required int deltaAccountId,
+    required int deltaChatId,
+  }) async {
+    await into(emailChatAccounts).insertOnConflictUpdate(
+      EmailChatAccountsCompanion.insert(
+        chatJid: chatJid,
+        deltaAccountId: Value(deltaAccountId),
+        deltaChatId: deltaChatId,
+      ),
+    );
+  }
+
+  @override
+  Future<int?> getDeltaChatIdForAccount({
+    required String chatJid,
+    required int deltaAccountId,
+  }) async {
+    final query = select(emailChatAccounts)
+      ..where(
+        (tbl) =>
+            tbl.chatJid.equals(chatJid) &
+            tbl.deltaAccountId.equals(deltaAccountId),
+      );
+    final row = await query.getSingleOrNull();
+    return row?.deltaChatId;
+  }
+
+  @override
+  Future<void> deleteEmailChatAccount({
+    required String chatJid,
+    required int deltaAccountId,
+  }) async {
+    await (delete(emailChatAccounts)
+          ..where(
+            (tbl) =>
+                tbl.chatJid.equals(chatJid) &
+                tbl.deltaAccountId.equals(deltaAccountId),
+          ))
+        .go();
+  }
+
+  @override
+  Future<void> deleteEmailChatAccountsForAccount(int deltaAccountId) async {
+    await (delete(emailChatAccounts)
+          ..where((tbl) => tbl.deltaAccountId.equals(deltaAccountId)))
+        .go();
+  }
+
+  @override
+  Future<int> countEmailChatAccounts(String chatJid) async {
+    final countExpression = emailChatAccounts.chatJid.count();
+    final query = selectOnly(emailChatAccounts)
+      ..addColumns([countExpression])
+      ..where(emailChatAccounts.chatJid.equals(chatJid));
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
   }
 
   @override
@@ -3073,6 +3333,20 @@ $limitClause
 
   @override
   Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
+
+  @override
+  Future<void> clearChatsEmailFromAddress(String address) async {
+    final normalizedAddress = _normalizeEmail(address);
+    if (normalizedAddress.isEmpty) {
+      return;
+    }
+    final query = update(chats)
+      ..where((tbl) => tbl.emailFromAddress.equals(normalizedAddress));
+    const clearedEmailFromAddress = ChatsCompanion(
+      emailFromAddress: Value<String?>(null),
+    );
+    await query.write(clearedEmailFromAddress);
+  }
 
   @override
   Stream<Chat?> watchChat(String jid) {
@@ -3872,6 +4146,42 @@ ON CONFLICT(address) DO UPDATE SET
       await customStatement(
         'INSERT INTO "$tableName" ($columnList) '
         'SELECT $columnList FROM "$tempTableName"',
+      );
+      await customStatement('DROP TABLE "$tempTableName"');
+    } finally {
+      await customStatement('PRAGMA foreign_keys = ON');
+    }
+  }
+
+  Future<void> _rebuildMessageCopiesTable(Migrator m) async {
+    final tableName = messageCopies.actualTableName;
+    final tempTableName = '${tableName}_old';
+    const columnNames = <String>[
+      'id',
+      'share_id',
+      'dc_msg_id',
+      'dc_chat_id',
+    ];
+    final columnList = columnNames.map((c) => '"$c"').join(', ');
+    final tableExists = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: [Variable<String>(tableName)],
+    ).get();
+    if (tableExists.isEmpty) {
+      await m.createTable(messageCopies);
+      return;
+    }
+    await customStatement('PRAGMA foreign_keys = OFF');
+    try {
+      await customStatement('DROP TABLE IF EXISTS "$tempTableName"');
+      await customStatement(
+        'ALTER TABLE "$tableName" RENAME TO "$tempTableName"',
+      );
+      await m.createTable(messageCopies);
+      await customStatement(
+        'INSERT INTO "$tableName" ($columnList, "dc_account_id") '
+        'SELECT $columnList, ? FROM "$tempTableName"',
+        [deltaAccountIdLegacy],
       );
       await customStatement('DROP TABLE "$tempTableName"');
     } finally {
