@@ -13,6 +13,8 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 import '../mocks.dart';
 
+class MockPresenceManager extends Mock implements XmppPresenceManager {}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -162,6 +164,72 @@ void main() {
         await pumpEventQueue();
 
         verify(() => mockConnection.requestBlocklist()).called(1);
+      },
+    );
+
+    test(
+      'When stream negotiations complete, sends initial presence.',
+      () async {
+        final presenceManager = MockPresenceManager();
+        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+        when(() => mockConnection.requestRoster())
+            .thenAnswer((_) async => null);
+        when(() => mockConnection.requestBlocklist())
+            .thenAnswer((_) async => null);
+        when(() => mockConnection.getManager<XmppPresenceManager>())
+            .thenReturn(presenceManager);
+        when(() => presenceManager.sendInitialPresence())
+            .thenAnswer((_) async {});
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+
+        await pumpEventQueue();
+
+        verify(() => presenceManager.sendInitialPresence()).called(1);
+      },
+    );
+
+    test(
+      'When stream negotiations resume, does not send initial presence.',
+      () async {
+        final presenceManager = MockPresenceManager();
+        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+        when(() => mockConnection.requestRoster())
+            .thenAnswer((_) async => null);
+        when(() => mockConnection.requestBlocklist())
+            .thenAnswer((_) async => null);
+        when(() => mockConnection.getManager<XmppPresenceManager>())
+            .thenReturn(presenceManager);
+        when(() => presenceManager.sendInitialPresence())
+            .thenAnswer((_) async {});
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
+
+        await pumpEventQueue();
+
+        verifyNever(() => presenceManager.sendInitialPresence());
+      },
+    );
+
+    test(
+      'When a resource is bound, stores the bound resource.',
+      () async {
+        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+        when(() => mockConnection.requestRoster())
+            .thenAnswer((_) async => null);
+        when(() => mockConnection.requestBlocklist())
+            .thenAnswer((_) async => null);
+
+        eventStreamController.add(const mox.ResourceBoundEvent('axi-res'));
+
+        await pumpEventQueue();
+
+        verify(
+          () => mockStateStore.write(
+            key: xmppService.resourceStorageKey,
+            value: 'axi-res',
+          ),
+        ).called(1);
       },
     );
 

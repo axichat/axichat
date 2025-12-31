@@ -1474,18 +1474,35 @@ class EmailService {
       blockedAddresses.add(normalized);
     }
 
+    final spamEntries = await db.getEmailSpamlist();
+    final spamAddresses = spamEntries.map((entry) => entry.address).toSet();
+    final filteredBlockedAddresses = blockedAddresses.difference(spamAddresses);
+
     final existing = await db.getEmailBlocklist();
     final existingAddresses = existing.map((entry) => entry.address).toSet();
+    final legacyAddresses = <String>{};
+    for (final entry in existing) {
+      if (_isLegacyBlocklistSource(entry.sourceId)) {
+        legacyAddresses.add(entry.address);
+      }
+    }
 
-    final toAdd = blockedAddresses.difference(existingAddresses);
-    final toRemove = existingAddresses.difference(blockedAddresses);
+    final toAdd = filteredBlockedAddresses.difference(existingAddresses);
+    final toRemove = legacyAddresses.difference(filteredBlockedAddresses);
 
     for (final address in toAdd) {
-      await db.addEmailBlock(address);
+      await db.addEmailBlock(address, sourceId: syncLegacySourceId);
     }
     for (final address in toRemove) {
       await db.removeEmailBlock(address);
     }
+  }
+
+  bool _isLegacyBlocklistSource(String? sourceId) {
+    final normalized = sourceId?.trim();
+    return normalized == null ||
+        normalized.isEmpty ||
+        normalized == syncLegacySourceId;
   }
 
   Future<void> applySpamSyncUpdate(SpamSyncUpdate update) async {
@@ -1495,10 +1512,14 @@ class EmailService {
     }
     try {
       await _ensureReady();
+      final db = await _databaseBuilder();
       if (update.isSpam) {
         await _transport.blockContact(normalized);
       } else {
-        await _transport.unblockContact(normalized);
+        final blocked = await db.isEmailAddressBlocked(normalized);
+        if (!blocked) {
+          await _transport.unblockContact(normalized);
+        }
       }
     } on Exception {
       _log.fine('Failed to apply spam sync update to DeltaChat core.');
@@ -1514,10 +1535,14 @@ class EmailService {
     }
     try {
       await _ensureReady();
+      final db = await _databaseBuilder();
       if (update.blocked) {
         await _transport.blockContact(normalized);
       } else {
-        await _transport.unblockContact(normalized);
+        final isSpam = await db.isEmailAddressSpam(normalized);
+        if (!isSpam) {
+          await _transport.unblockContact(normalized);
+        }
       }
     } on Exception {
       _log.fine(
