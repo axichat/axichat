@@ -1,5 +1,6 @@
 // ignore_for_file: depend_on_referenced_packages
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/main.dart';
@@ -56,6 +57,7 @@ main() {
   late XmppService xmppService;
   late XmppDatabase database;
   late List<RosterItem> contacts;
+  late StreamController<mox.XmppEvent> eventStreamController;
 
   setUp(() {
     mockConnection = MockXmppConnection();
@@ -84,11 +86,16 @@ main() {
     );
 
     contacts = List.generate(3, (_) => generateRandomRosterItem());
+    eventStreamController = StreamController<mox.XmppEvent>.broadcast();
 
     prepareMockConnection();
+
+    when(() => mockConnection.asBroadcastStream())
+        .thenAnswer((_) => eventStreamController.stream);
   });
 
   tearDown(() async {
+    await eventStreamController.close();
     await database.deleteAll();
     await xmppService.close();
   });
@@ -161,6 +168,80 @@ main() {
           subscription: Subscription.none,
         );
         await database.updateRosterItem(contacts[0]);
+      },
+    );
+  });
+
+  group('subscription requests', () {
+    test(
+      'Unknown contact subscription request is saved as an invite.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        final requester = generateRandomJid();
+        eventStreamController.add(
+          mox.SubscriptionRequestReceivedEvent(
+            from: mox.JID.fromString(requester),
+          ),
+        );
+
+        await pumpEventQueue();
+
+        final invites = await database.getInvites(
+          start: 0,
+          end: double.maxFinite.toInt(),
+        );
+        expect(
+          invites,
+          contains(
+            Invite(
+              jid: requester,
+              title: mox.JID.fromString(requester).local,
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'Known contact subscription request is auto-accepted and requested back.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        final requester = generateRandomJid();
+        await database.saveRosterItem(
+          RosterItem.fromJid(requester).copyWith(
+            subscription: Subscription.none,
+            presence: Presence.unavailable,
+          ),
+        );
+
+        when(() => mockConnection.acceptSubscriptionRequest(requester))
+            .thenAnswer((_) async => true);
+        when(() => mockConnection.requestSubscription(requester))
+            .thenAnswer((_) async => true);
+
+        eventStreamController.add(
+          mox.SubscriptionRequestReceivedEvent(
+            from: mox.JID.fromString(requester),
+          ),
+        );
+
+        await pumpEventQueue();
+
+        verify(() => mockConnection.acceptSubscriptionRequest(requester))
+            .called(1);
+        verify(() => mockConnection.requestSubscription(requester)).called(1);
+
+        final updated = await database.getRosterItem(requester);
+        expect(updated?.subscription, equals(Subscription.from));
+        expect(updated?.ask, equals(Ask.subscribe));
+
+        final invites = await database.getInvites(
+          start: 0,
+          end: double.maxFinite.toInt(),
+        );
+        expect(invites, isEmpty);
       },
     );
   });

@@ -24,6 +24,8 @@ const int _deltaMessageIdUnset = DeltaMessageId.none;
 const int _minimumHistoryWindow = 1;
 const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
 const String _deltaAttachmentFallbackPrefix = 'attachment-';
+const String _deltaMessageStanzaPrefix = 'dc-msg';
+const String _deltaMessageStanzaSeparator = '-';
 
 enum DeltaEventType {
   error(DeltaEventCode.error),
@@ -173,7 +175,10 @@ class DeltaEventConsumer {
 
   String get _selfJid => _selfJidProvider?.call() ?? _deltaSelfJid;
 
+  int get _deltaAccountId => _context.accountId ?? deltaAccountIdLegacy;
+
   Future<bool> bootstrapFromCore() async {
+    final int deltaAccountId = _deltaAccountId;
     final chatlist = await _context.getChatlist();
     final archivedChatlist = await _context.getChatlist(
       flags: _deltaChatlistArchivedOnlyFlag,
@@ -274,7 +279,10 @@ class DeltaEventConsumer {
       final last = await _context.getMessage(filteredMsgIds.last);
       final lastTimestamp = last?.timestamp;
       if (lastTimestamp != null) {
-        final stored = await db.getChatByDeltaChatId(chatId);
+        final stored = await db.getChatByDeltaChatId(
+          chatId,
+          accountId: deltaAccountId,
+        );
         if (stored != null && stored.lastChangeTimestamp != lastTimestamp) {
           await db
               .updateChat(stored.copyWith(lastChangeTimestamp: lastTimestamp));
@@ -286,6 +294,7 @@ class DeltaEventConsumer {
   }
 
   Future<void> refreshChatlistSnapshot() async {
+    final int deltaAccountId = _deltaAccountId;
     final chatlist = await _context.getChatlist();
     final archivedChatlist = await _context.getChatlist(
       flags: _deltaChatlistArchivedOnlyFlag,
@@ -316,15 +325,26 @@ class DeltaEventConsumer {
 
     final db = await _db();
     final knownChatIds = entriesByChatId.keys.toSet();
-    final deltaChats = await db.getDeltaChats();
+    final deltaChats = await db.getDeltaChats(accountId: deltaAccountId);
     for (final chat in deltaChats) {
       final deltaChatId = chat.deltaChatId;
       if (deltaChatId == null || deltaChatId <= _deltaChatLastSpecialId) {
         continue;
       }
       if (!knownChatIds.contains(deltaChatId)) {
-        await db.removeChatMessages(chat.jid);
-        await db.removeChat(chat.jid);
+        await db.deleteEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: deltaAccountId,
+        );
+        await db.trimChatMessages(
+          jid: chat.jid,
+          maxMessages: 0,
+          deltaAccountId: deltaAccountId,
+        );
+        final remaining = await db.countEmailChatAccounts(chat.jid);
+        if (remaining == 0) {
+          await db.removeChat(chat.jid);
+        }
       }
     }
     var processed = 0;
@@ -560,10 +580,25 @@ class DeltaEventConsumer {
       return;
     }
     final db = await _db();
-    final chat = await db.getChatByDeltaChatId(chatId);
+    final int deltaAccountId = _deltaAccountId;
+    final chat = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: deltaAccountId,
+    );
     if (chat == null) return;
-    await db.removeChatMessages(chat.jid);
-    await db.removeChat(chat.jid);
+    await db.deleteEmailChatAccount(
+      chatJid: chat.jid,
+      deltaAccountId: deltaAccountId,
+    );
+    await db.trimChatMessages(
+      jid: chat.jid,
+      maxMessages: 0,
+      deltaAccountId: deltaAccountId,
+    );
+    final remaining = await db.countEmailChatAccounts(chat.jid);
+    if (remaining == 0) {
+      await db.removeChat(chat.jid);
+    }
   }
 
   Future<void> _updateUnreadCount(int chatId) async {
@@ -572,7 +607,10 @@ class DeltaEventConsumer {
       return;
     }
     final db = await _db();
-    final chat = await db.getChatByDeltaChatId(chatId);
+    final chat = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: _deltaAccountId,
+    );
     if (chat == null) return;
     final freshCount = await _context.getFreshMessageCount(chatId);
     if (freshCount != chat.unreadCount) {
@@ -585,7 +623,10 @@ class DeltaEventConsumer {
       return;
     }
     final db = await _db();
-    final chat = await db.getChatByDeltaChatId(chatId);
+    final chat = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: _deltaAccountId,
+    );
     if (chat == null) {
       return;
     }
@@ -593,7 +634,11 @@ class DeltaEventConsumer {
     final filteredIds =
         messageIds.where((id) => !_isDeltaMessageMarkerId(id)).toList();
     if (filteredIds.isEmpty) {
-      await db.removeChatMessages(chat.jid);
+      await db.trimChatMessages(
+        jid: chat.jid,
+        maxMessages: 0,
+        deltaAccountId: _deltaAccountId,
+      );
       return;
     }
     final startIndex = _messageStorageMode.isServerOnly &&
@@ -605,7 +650,11 @@ class DeltaEventConsumer {
         .where((id) => id > _deltaMessageIdUnset)
         .toList(growable: false);
     if (visibleIds.isEmpty) {
-      await db.removeChatMessages(chat.jid);
+      await db.trimChatMessages(
+        jid: chat.jid,
+        maxMessages: 0,
+        deltaAccountId: _deltaAccountId,
+      );
       return;
     }
     final visibleIdSet = visibleIds.toSet();
@@ -666,7 +715,11 @@ class DeltaEventConsumer {
       return;
     }
     final resolvedChat = chat ?? await _ensureChat(chatId);
-    final stanzaId = _stanzaId(msg.id);
+    final int deltaAccountId = _deltaAccountId;
+    final stanzaId = _stanzaId(
+      msg.id,
+      accountId: deltaAccountId,
+    );
     final db = await _db();
     final existing = await db.getMessageByStanzaID(stanzaId);
     if (existing != null) {
@@ -711,7 +764,8 @@ class DeltaEventConsumer {
       received: deliveryStatus.received,
       acked: deliveryStatus.acked,
       displayed: deliveryStatus.displayed,
-      deltaChatId: resolvedChat.deltaChatId,
+      deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
       deltaMsgId: msg.id,
     );
     message = await _buildDeltaMessageContent(
@@ -773,33 +827,56 @@ class DeltaEventConsumer {
 
   Future<Chat> _ensureChat(int chatId) async {
     final db = await _db();
-    final existing = await db.getChatByDeltaChatId(chatId);
+    final int deltaAccountId = _deltaAccountId;
+    final existing = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: deltaAccountId,
+    );
     if (existing != null) {
+      await db.upsertEmailChatAccount(
+        chatJid: existing.jid,
+        deltaAccountId: deltaAccountId,
+        deltaChatId: chatId,
+      );
       return existing;
     }
     final remote = await _context.getChat(chatId);
     final chat = _chatFromRemote(
       chatId: chatId,
       remote: remote,
+      emailFromAddress: _selfJid,
     );
     final existingByAddress = await db.getChat(chat.jid);
     if (existingByAddress != null) {
       final merged = existingByAddress.copyWith(
-        deltaChatId: chatId,
+        deltaChatId: existingByAddress.deltaChatId ?? chatId,
         emailAddress: chat.emailAddress,
+        emailFromAddress:
+            existingByAddress.emailFromAddress ?? chat.emailFromAddress,
         contactDisplayName: chat.contactDisplayName,
         contactID: chat.contactID,
       );
       await db.updateChat(merged);
+      await db.upsertEmailChatAccount(
+        chatJid: merged.jid,
+        deltaAccountId: deltaAccountId,
+        deltaChatId: chatId,
+      );
       return merged;
     }
     await db.createChat(chat);
+    await db.upsertEmailChatAccount(
+      chatJid: chat.jid,
+      deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
+    );
     return chat;
   }
 
   Chat _chatFromRemote({
     required int chatId,
     required DeltaChat? remote,
+    String? emailFromAddress,
   }) {
     final emailAddress = _normalizedAddress(
       remote?.contactAddress,
@@ -816,17 +893,32 @@ class DeltaEventConsumer {
       contactID: emailAddress,
       contactJid: emailAddress,
       emailAddress: emailAddress,
+      emailFromAddress: emailFromAddress,
       deltaChatId: chatId,
     );
   }
 
   Future<void> _refreshChat(int chatId) async {
     final db = await _db();
+    final int deltaAccountId = _deltaAccountId;
     final remote = await _context.getChat(chatId);
     if (remote == null) return;
-    final existing = await db.getChatByDeltaChatId(chatId);
+    final existing = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: deltaAccountId,
+    );
     if (existing == null) {
-      await db.createChat(_chatFromRemote(chatId: chatId, remote: remote));
+      final chat = _chatFromRemote(
+        chatId: chatId,
+        remote: remote,
+        emailFromAddress: _selfJid,
+      );
+      await db.createChat(chat);
+      await db.upsertEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: deltaAccountId,
+        deltaChatId: chatId,
+      );
       return;
     }
     final updated = existing.copyWith(
@@ -840,11 +932,19 @@ class DeltaEventConsumer {
     if (updated != existing) {
       await db.updateChat(updated);
     }
+    await db.upsertEmailChatAccount(
+      chatJid: existing.jid,
+      deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
+    );
   }
 
   Future<void> _refreshArchivedState(int chatId) async {
     final db = await _db();
-    final chat = await db.getChatByDeltaChatId(chatId);
+    final chat = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: _deltaAccountId,
+    );
     if (chat == null) return;
     final archivedChatlist = await _context.getChatlist(
       flags: _deltaChatlistArchivedOnlyFlag,
@@ -860,7 +960,10 @@ class DeltaEventConsumer {
     required DateTime timestamp,
   }) async {
     final db = await _db();
-    final chat = await db.getChatByDeltaChatId(chatId);
+    final chat = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: _deltaAccountId,
+    );
     if (chat == null) return;
     if (!chat.lastChangeTimestamp.isBefore(timestamp)) return;
     await db.updateChat(chat.copyWith(lastChangeTimestamp: timestamp));
@@ -907,6 +1010,7 @@ class DeltaEventConsumer {
       rawHtml: rawHtml,
       chatId: chatId,
       msgId: msg.id,
+      deltaAccountId: message.deltaAccountId,
     );
     next = await _attachFileMetadata(db: db, message: next, delta: msg);
     return next;
@@ -922,6 +1026,7 @@ class DeltaEventConsumer {
       await db.trimChatMessages(
         jid: chatJid,
         maxMessages: serverOnlyChatMessageCap,
+        deltaAccountId: message.deltaAccountId,
       );
     }
   }
@@ -1032,6 +1137,7 @@ class DeltaEventConsumer {
     required String? rawHtml,
     required int chatId,
     required int msgId,
+    required int deltaAccountId,
   }) async {
     final match = ShareTokenHtmlCodec.parseToken(
       plainText: rawBody,
@@ -1051,12 +1157,16 @@ class DeltaEventConsumer {
       htmlBody: cleanedHtml,
     );
     if (share != null) {
-      final existingShareId = await db.getShareIdForDeltaMessage(msgId);
+      final existingShareId = await db.getShareIdForDeltaMessage(
+        msgId,
+        deltaAccountId: deltaAccountId,
+      );
       if (existingShareId == null) {
         await db.insertMessageCopy(
           shareId: share.shareId,
           dcMsgId: msgId,
           dcChatId: chatId,
+          dcAccountId: deltaAccountId,
         );
       }
     }
@@ -1131,7 +1241,16 @@ String _normalizedAddress(String? address, int chatId) {
   return normalizeEmailAddress(address);
 }
 
-String _stanzaId(int msgId) => 'dc-msg-$msgId';
+String _stanzaId(
+  int msgId, {
+  required int accountId,
+}) {
+  if (accountId == deltaAccountIdLegacy) {
+    return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator$msgId';
+  }
+  return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator'
+      '$accountId$_deltaMessageStanzaSeparator$msgId';
+}
 
 String _stripSubjectHeader(String body, String subject) {
   final trimmedBody = body.trimLeft();
