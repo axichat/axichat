@@ -220,7 +220,7 @@ void main() {
         when(() => mockConnection.requestBlocklist())
             .thenAnswer((_) async => null);
 
-        eventStreamController.add(const mox.ResourceBoundEvent('axi-res'));
+        eventStreamController.add(mox.ResourceBoundEvent('axi-res'));
 
         await pumpEventQueue();
 
