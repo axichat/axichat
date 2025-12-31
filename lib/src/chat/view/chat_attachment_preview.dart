@@ -1596,6 +1596,11 @@ class _FileAttachmentState extends State<_FileAttachment> {
         ),
       ),
     );
+    final sizeLabel = _formatAttachmentSize(
+      bytes: metadata.sizeBytes,
+      hasLocalFile: hasLocalFile,
+      l10n: l10n,
+    );
     final Widget attachmentDetails = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1608,7 +1613,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
           ),
         ),
         Text(
-          _formatSize(metadata.sizeBytes, l10n),
+          sizeLabel,
           style: context.textTheme.small.copyWith(
             color: colors.mutedForeground,
           ),
@@ -2685,6 +2690,19 @@ void _showToast(
           message: message,
         );
   toaster?.show(toast);
+}
+
+String _formatAttachmentSize({
+  required int? bytes,
+  required bool hasLocalFile,
+  required AppLocalizations l10n,
+}) {
+  if (bytes == null || bytes <= 0) {
+    return hasLocalFile
+        ? l10n.chatAttachmentUnknownSize
+        : l10n.chatAttachmentNotDownloadedYet;
+  }
+  return _formatSize(bytes, l10n);
 }
 
 String _formatSize(int? bytes, AppLocalizations l10n) {

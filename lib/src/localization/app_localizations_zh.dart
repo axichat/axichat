@@ -1894,6 +1894,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentUnknownSize => '大小未知';
 
   @override
+  String get chatAttachmentNotDownloadedYet => 'Not downloaded yet';
+
+  @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {
     return '$message（$fileName）';
   }
@@ -4940,6 +4943,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';
+
+  @override
+  String get chatAttachmentNotDownloadedYet => 'Not downloaded yet';
 
   @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {

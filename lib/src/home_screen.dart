@@ -88,6 +88,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
+  final GlobalKey _chatPaneKey = GlobalKey();
   bool _railCollapsed = true;
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
@@ -352,48 +353,52 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     final Widget chatPaneContent = openJid == null
                         ? const chat_view.GuestChat()
-                        : MultiBlocProvider(
-                            providers: [
-                              BlocProvider(
-                                key: Key(
-                                  openJid,
-                                ),
-                                create: (context) => ChatBloc(
-                                  jid: openJid,
-                                  messageService: context.read<XmppService>(),
-                                  chatsService: context.read<XmppService>(),
-                                  mucService: context.read<XmppService>(),
-                                  notificationService:
-                                      context.read<NotificationService>(),
-                                  emailService: context.read<EmailService>(),
-                                  omemoService: isOmemo
-                                      ? context.read<XmppService>()
-                                          as OmemoService
-                                      : null,
-                                  settingsCubit: context.read<SettingsCubit>(),
-                                ),
-                              ),
-                              BlocProvider(
-                                create: (context) => ChatSearchCubit(
-                                  jid: openJid,
-                                  messageService: context.read<XmppService>(),
-                                  emailService: context.read<EmailService>(),
-                                ),
-                              ),
-                              /* Verification flow temporarily disabled
-                              if (isOmemo)
+                        : KeyedSubtree(
+                            key: _chatPaneKey,
+                            child: MultiBlocProvider(
+                              providers: [
                                 BlocProvider(
-                                  create: (context) =>
-                                      VerificationCubit(
+                                  key: Key(
+                                    openJid,
+                                  ),
+                                  create: (context) => ChatBloc(
                                     jid: openJid,
-                                    omemoService:
-                                        context.read<XmppService>()
-                                            as OmemoService,
+                                    messageService: context.read<XmppService>(),
+                                    chatsService: context.read<XmppService>(),
+                                    mucService: context.read<XmppService>(),
+                                    notificationService:
+                                        context.read<NotificationService>(),
+                                    emailService: context.read<EmailService>(),
+                                    omemoService: isOmemo
+                                        ? context.read<XmppService>()
+                                            as OmemoService
+                                        : null,
+                                    settingsCubit:
+                                        context.read<SettingsCubit>(),
                                   ),
                                 ),
-                              */
-                            ],
-                            child: const chat_view.Chat(),
+                                BlocProvider(
+                                  create: (context) => ChatSearchCubit(
+                                    jid: openJid,
+                                    messageService: context.read<XmppService>(),
+                                    emailService: context.read<EmailService>(),
+                                  ),
+                                ),
+                                /* Verification flow temporarily disabled
+                                if (isOmemo)
+                                  BlocProvider(
+                                    create: (context) =>
+                                        VerificationCubit(
+                                      jid: openJid,
+                                      omemoService:
+                                          context.read<XmppService>()
+                                              as OmemoService,
+                                    ),
+                                  ),
+                                */
+                              ],
+                              child: const chat_view.Chat(),
+                            ),
                           );
                     final Widget chatPane = constrainSecondary(chatPaneContent);
 
