@@ -21,9 +21,11 @@ class SyncControls extends StatefulWidget {
   const SyncControls({
     super.key,
     required this.state,
+    this.compact = false,
   });
 
   final CalendarState state;
+  final bool compact;
 
   @override
   State<SyncControls> createState() => _SyncControlsState();
@@ -46,6 +48,13 @@ class _SyncControlsState extends State<SyncControls> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.compact) {
+      return _CompactSyncControls(
+        state: state,
+        onExportCalendar: _handleExportAll,
+        onImportCalendar: _handleImportCalendar,
+      );
+    }
     return _InlineSyncControls(
       state: state,
       onExportCalendar: _handleExportAll,
@@ -285,6 +294,39 @@ class _InlineSyncControls extends StatelessWidget {
             ],
           ],
         ),
+        CalendarTransferMenuButton(
+          hasCalendarData: hasCalendarData,
+          onExport: onExportCalendar,
+          onImport: onImportCalendar,
+          busy: disabled,
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactSyncControls extends StatelessWidget {
+  const _CompactSyncControls({
+    required this.state,
+    required this.onExportCalendar,
+    required this.onImportCalendar,
+  });
+
+  final CalendarState state;
+  final VoidCallback onExportCalendar;
+  final VoidCallback onImportCalendar;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = state.isSyncing;
+    final hasCalendarData = state.model.hasCalendarData;
+
+    return Wrap(
+      spacing: calendarGutterSm,
+      runSpacing: calendarInsetMd,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SyncStatusIndicator(state: state),
         CalendarTransferMenuButton(
           hasCalendarData: hasCalendarData,
           onExport: onExportCalendar,

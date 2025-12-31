@@ -13,6 +13,7 @@ analyzer:
   exclude:
     - third_party/**
     - packages/delta_ffi/lib/src/bindings.dart
+    - moxxy-master/**
   errors:
     duplicate_ignore: ignore
 

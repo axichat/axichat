@@ -28,8 +28,13 @@ class AttachmentGalleryScreen extends StatelessWidget {
         xmppService: locate<XmppService>(),
       ),
       child: Scaffold(
+        backgroundColor: context.colorScheme.background,
         appBar: AppBar(
           title: Text(l10n.draftAttachmentsLabel),
+          backgroundColor: context.colorScheme.background,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
           leadingWidth: _attachmentGalleryLeadingWidth,
           leading: Padding(
             padding:
@@ -59,7 +64,10 @@ class AttachmentGalleryScreen extends StatelessWidget {
             ),
           ),
         ),
-        body: const AttachmentGalleryView(showChatLabel: true),
+        body: ColoredBox(
+          color: context.colorScheme.background,
+          child: const AttachmentGalleryView(showChatLabel: true),
+        ),
       ),
     );
   }

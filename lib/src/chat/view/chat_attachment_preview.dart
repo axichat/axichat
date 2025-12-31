@@ -1679,7 +1679,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
               const SizedBox(width: _attachmentFileRowSpacing),
               Expanded(child: attachmentDetails),
               const SizedBox(width: _attachmentFileRowSpacing),
-              attachmentActions,
+              Flexible(
+                fit: FlexFit.loose,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: attachmentActions,
+                ),
+              ),
             ],
           );
         },
