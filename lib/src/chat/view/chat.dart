@@ -165,6 +165,15 @@ const _chatSettingsFieldSpacing = 8.0;
 const _chatSettingsSelectMinWidth = 220.0;
 const _messageActionIconSize = 16.0;
 const _pinnedListLoadingIndicatorSize = 28.0;
+const int _pinnedBadgeHiddenCount = 0;
+const int _pinnedBadgeMaxDisplayCount = 99;
+const String _pinnedBadgeOverflowLabel = '99+';
+const double _pinnedBadgeIconScale = 0.6;
+const double _pinnedBadgeFallbackIconSize =
+    AxiIconButton.kDefaultSize * _pinnedBadgeIconScale;
+const double _pinnedBadgeSizeScale = 0.55;
+const double _pinnedBadgeInsetScale = 0.08;
+const double _pinnedBadgeBorderWidth = 1.0;
 const String _calendarFragmentShareDeniedMessage =
     'Calendar cards are disabled for your role in this room.';
 const String _calendarFragmentPropertyKey = 'calendarFragment';
@@ -3651,6 +3660,8 @@ class _ChatState extends State<Chat> {
                     (state.roomState?.myAffiliation.canManagePins ?? false);
                 final canTogglePins = !readOnly && canManagePins;
                 final int pinnedCount = state.pinnedMessages.length;
+                final IconData pinnedIcon =
+                    _pinnedPanelVisible ? LucideIcons.x : LucideIcons.pin;
                 if (!chatCalendarAvailable &&
                     _chatRoute == _ChatRoute.calendar) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3894,17 +3905,16 @@ class _ChatState extends State<Chat> {
                           onPressed: _openChatAttachments,
                         ),
                         const SizedBox(width: _chatHeaderActionSpacing),
-                        AxiBadge(
-                          count: pinnedCount,
-                          child: AxiIconButton(
-                            iconData: _pinnedPanelVisible
-                                ? LucideIcons.x
-                                : LucideIcons.pin,
-                            tooltip: _pinnedPanelVisible
-                                ? context.l10n.commonClose
-                                : context.l10n.chatPinnedMessagesTooltip,
-                            onPressed: _togglePinnedMessages,
+                        AxiIconButton(
+                          iconData: pinnedIcon,
+                          icon: _PinnedBadgeIcon(
+                            iconData: pinnedIcon,
+                            count: pinnedCount,
                           ),
+                          tooltip: _pinnedPanelVisible
+                              ? context.l10n.commonClose
+                              : context.l10n.chatPinnedMessagesTooltip,
+                          onPressed: _togglePinnedMessages,
                         ),
                         if (supportsChatCalendar) ...[
                           const SizedBox(width: _chatHeaderActionSpacing),
@@ -7904,6 +7914,79 @@ class _ChatState extends State<Chat> {
       }
     }
     return null;
+  }
+}
+
+class _PinnedBadgeIcon extends StatelessWidget {
+  const _PinnedBadgeIcon({
+    required this.iconData,
+    required this.count,
+  });
+
+  final IconData iconData;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final double iconSize =
+        context.iconTheme.size ?? _pinnedBadgeFallbackIconSize;
+    final double badgeSize = iconSize * _pinnedBadgeSizeScale;
+    final double badgeInset = iconSize * _pinnedBadgeInsetScale;
+    final Icon icon = Icon(
+      iconData,
+      size: iconSize,
+      color: colors.foreground,
+    );
+    if (count <= _pinnedBadgeHiddenCount) {
+      return icon;
+    }
+
+    final String label = count > _pinnedBadgeMaxDisplayCount
+        ? _pinnedBadgeOverflowLabel
+        : count.toString();
+    final Widget badge = DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.card,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: colors.primary,
+          width: _pinnedBadgeBorderWidth,
+        ),
+      ),
+      child: SizedBox(
+        width: badgeSize,
+        height: badgeSize,
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              style: context.textTheme.small.copyWith(
+                color: colors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return SizedBox(
+      width: iconSize,
+      height: iconSize,
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Center(child: icon),
+          Positioned(
+            top: badgeInset,
+            right: badgeInset,
+            child: badge,
+          ),
+        ],
+      ),
+    );
   }
 }
 
