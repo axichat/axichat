@@ -763,6 +763,7 @@
   "chatAttachmentHighRiskTitle": "Potentially unsafe file",
   "chatAttachmentHighRiskMessage": "This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?",
   "chatAttachmentUnknownSize": "Unbekannte Größe",
+  "chatAttachmentNotDownloadedYet": "Not downloaded yet",
   "chatAttachmentErrorTooltip": "{message} ({fileName})",
   "@chatAttachmentErrorTooltip": {
     "placeholders": {

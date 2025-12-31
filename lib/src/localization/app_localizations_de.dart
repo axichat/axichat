@@ -1990,6 +1990,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatAttachmentUnknownSize => 'Unbekannte Größe';
 
   @override
+  String get chatAttachmentNotDownloadedYet => 'Not downloaded yet';
+
+  @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {
     return '$message ($fileName)';
   }

@@ -3578,6 +3578,12 @@ abstract class AppLocalizations {
   /// **'Unknown size'**
   String get chatAttachmentUnknownSize;
 
+  /// No description provided for @chatAttachmentNotDownloadedYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not downloaded yet'**
+  String get chatAttachmentNotDownloadedYet;
+
   /// No description provided for @chatAttachmentErrorTooltip.
   ///
   /// In en, this message translates to:
