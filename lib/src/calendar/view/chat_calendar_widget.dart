@@ -15,6 +15,7 @@ import 'package:axichat/src/calendar/view/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/task_sidebar.dart';
+import 'package:axichat/src/calendar/view/sync_controls.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
@@ -26,14 +27,21 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 
-const double _participantAvatarSize = 28.0;
-const double _participantAvatarOverlap = 10.0;
-const double _participantOverflowGap = 6.0;
-const double _participantAvatarBorderWidth = 1.6;
+const double _chatCalendarToolbarHeight = 64.0;
+const double _participantAvatarSize = 40.0;
+const double _participantAvatarOverlap = 12.0;
+const double _participantOverflowGap = 8.0;
+const double _participantAvatarBorderWidth = 2.0;
+const double _participantStripInset = 6.0;
+const EdgeInsets _participantStripPadding = EdgeInsets.symmetric(
+  horizontal: _participantStripInset,
+  vertical: _participantStripInset,
+);
 const int _participantMaxAvatars = 7;
 const String _participantOverflowLabel = '...';
 const double _chatCalendarShareActionSpacing = 8.0;
-const String _chatCalendarAvailabilityShareTooltip = 'Share availability';
+const String _chatCalendarAvailabilityShareTooltip = 'Send availability';
+const double _chatCalendarParticipantsSpacing = 12.0;
 const String _chatCalendarAvailabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
 
@@ -218,6 +226,7 @@ class _ChatCalendarWidgetState
             onBackPressed: widget.onBackPressed,
             participants: widget.participants,
             avatarPaths: widget.avatarPaths,
+            state: state,
             onShareAvailability: availabilityCoordinator == null
                 ? null
                 : () => _openAvailabilityShareSheet(
@@ -297,6 +306,7 @@ class _ChatCalendarWidgetState
       ),
       model: state.model,
       ownerJid: ownerJid,
+      lockToChat: true,
       onAvailabilitySaved: (availability) => calendarBloc.add(
         CalendarEvent.availabilityUpdated(availability: availability),
       ),
@@ -325,12 +335,14 @@ class _ChatCalendarAppBar extends StatelessWidget {
     required this.onBackPressed,
     required this.participants,
     required this.avatarPaths,
+    required this.state,
     this.onShareAvailability,
   });
 
   final VoidCallback onBackPressed;
   final List<String> participants;
   final Map<String, String> avatarPaths;
+  final CalendarState state;
   final VoidCallback? onShareAvailability;
 
   @override
@@ -347,7 +359,7 @@ class _ChatCalendarAppBar extends StatelessWidget {
         ),
       ),
       child: SizedBox(
-        height: kToolbarHeight,
+        height: _chatCalendarToolbarHeight,
         child: Padding(
           padding: toolbarPadding,
           child: Row(
@@ -360,32 +372,60 @@ class _ChatCalendarAppBar extends StatelessWidget {
                 borderColor: colors.border,
                 onPressed: onBackPressed,
               ),
-              if (onShareAvailability != null) ...[
-                const SizedBox(width: _chatCalendarShareActionSpacing),
-                AxiIconButton(
-                  iconData: LucideIcons.share2,
-                  tooltip: _chatCalendarAvailabilityShareTooltip,
-                  color: colors.foreground,
-                  borderColor: colors.border,
-                  onPressed: onShareAvailability,
+              const SizedBox(width: _chatCalendarParticipantsSpacing),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: participants.isEmpty
+                      ? const SizedBox.shrink()
+                      : ChatCalendarParticipantsStrip(
+                          participants: participants,
+                          avatarPaths: avatarPaths,
+                        ),
                 ),
-              ],
-              const Spacer(),
-              if (participants.isNotEmpty)
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: ChatCalendarParticipantsStrip(
-                      participants: participants,
-                      avatarPaths: avatarPaths,
-                    ),
-                  ),
-                ),
+              ),
+              _ChatCalendarActionRow(
+                state: state,
+                onShareAvailability: onShareAvailability,
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ChatCalendarActionRow extends StatelessWidget {
+  const _ChatCalendarActionRow({
+    required this.state,
+    this.onShareAvailability,
+  });
+
+  final CalendarState state;
+  final VoidCallback? onShareAvailability;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return Wrap(
+      spacing: _chatCalendarShareActionSpacing,
+      runSpacing: _chatCalendarShareActionSpacing,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (onShareAvailability != null)
+          AxiIconButton(
+            iconData: LucideIcons.send,
+            tooltip: _chatCalendarAvailabilityShareTooltip,
+            color: colors.foreground,
+            borderColor: colors.border,
+            onPressed: onShareAvailability,
+          ),
+        SyncControls(
+          state: state,
+          compact: true,
+        ),
+      ],
     );
   }
 }
@@ -412,7 +452,9 @@ class ChatCalendarParticipantsStrip extends StatelessWidget {
                 constraints.maxWidth > 0
             ? constraints.maxWidth
             : double.infinity;
-        final layout = _layoutParticipantStrip(participants, maxWidth);
+        final double availableWidth =
+            math.max(0.0, maxWidth - _participantStripPadding.horizontal);
+        final layout = _layoutParticipantStrip(participants, availableWidth);
         final visible = layout.items;
         final overflowed = layout.overflowed;
         final children = <Widget>[];
@@ -446,12 +488,18 @@ class ChatCalendarParticipantsStrip extends StatelessWidget {
         final totalWidth = overflowed
             ? baseWidth + _participantOverflowGap + _participantAvatarSize
             : math.max(baseWidth, _participantAvatarSize);
+        final paddedWidth = totalWidth + _participantStripPadding.horizontal;
+        final paddedHeight =
+            _participantAvatarSize + _participantStripPadding.vertical;
         return SizedBox(
-          width: totalWidth,
-          height: _participantAvatarSize,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: children,
+          width: paddedWidth,
+          height: paddedHeight,
+          child: Padding(
+            padding: _participantStripPadding,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: children,
+            ),
           ),
         );
       },

@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
+import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/html_content.dart';
@@ -72,7 +74,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/muc/view/room_members_sheet.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -88,7 +89,6 @@ import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -108,6 +108,7 @@ enum _ChatRoute {
   main,
   details,
   calendar,
+  attachments,
 }
 
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
@@ -3286,6 +3287,17 @@ class _ChatState extends State<Chat> {
           onTapUp: (details) => _maybeDismissSelection(details.globalPosition),
           child: MultiBlocListener(
             listeners: [
+              BlocListener<ChatsCubit, ChatsState>(
+                listenWhen: (previous, current) =>
+                    previous.openChatCalendar != current.openChatCalendar,
+                listener: (_, chatsState) {
+                  if (!mounted) return;
+                  if (!chatsState.openChatCalendar &&
+                      _chatRoute == _ChatRoute.calendar) {
+                    _returnToMainRoute();
+                  }
+                },
+              ),
               BlocListener<ChatBloc, ChatState>(
                 listenWhen: (previous, current) =>
                     previous.toastId != current.toastId &&
@@ -3631,6 +3643,8 @@ class _ChatState extends State<Chat> {
                     !readOnly &&
                     jid != null &&
                     _chatRoute == _ChatRoute.main;
+                final bool attachmentsOpen =
+                    _chatRoute == _ChatRoute.attachments;
                 final isEmailBacked = chatEntity?.isEmailBacked ?? false;
                 final canManagePins = !isGroupChat ||
                     isEmailBacked ||
@@ -3871,8 +3885,12 @@ class _ChatState extends State<Chat> {
                         ),
                         const SizedBox(width: _chatHeaderActionSpacing),
                         AxiIconButton(
-                          iconData: LucideIcons.paperclip,
-                          tooltip: context.l10n.chatAttachmentTooltip,
+                          iconData: attachmentsOpen
+                              ? LucideIcons.x
+                              : LucideIcons.paperclip,
+                          tooltip: attachmentsOpen
+                              ? context.l10n.commonClose
+                              : context.l10n.chatAttachmentTooltip,
                           onPressed: _openChatAttachments,
                         ),
                         const SizedBox(width: _chatHeaderActionSpacing),
@@ -3947,18 +3965,11 @@ class _ChatState extends State<Chat> {
                       ),
                       const _ChatSearchPanel(),
                       Expanded(
-                        child: AnimatedSwitcher(
-                          duration:
-                              context.watch<SettingsCubit>().animationDuration,
-                          reverseDuration:
-                              context.watch<SettingsCubit>().animationDuration,
-                          switchInCurve: Curves.easeIn,
-                          switchOutCurve: Curves.easeOut,
-                          child: IndexedStack(
-                            key: ValueKey(_chatRoute.index),
-                            index: _chatRoute.index,
-                            children: [
-                              LayoutBuilder(
+                        child: Stack(
+                          children: [
+                            IgnorePointer(
+                              ignoring: _chatRoute != _ChatRoute.main,
+                              child: LayoutBuilder(
                                 builder: (context, constraints) {
                                   final rawContentWidth =
                                       math.max(0.0, constraints.maxWidth);
@@ -7148,20 +7159,32 @@ class _ChatState extends State<Chat> {
                                   );
                                 },
                               ),
-                              const ChatMessageDetails(),
-                              _ChatCalendarPanel(
-                                key: ValueKey(
-                                  '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
-                                ),
-                                chat: chatEntity,
-                                calendarAvailable: chatCalendarAvailable,
-                                participants: chatCalendarParticipants,
-                                avatarPaths: chatCalendarAvatarPaths,
-                                onBackPressed: _closeChatCalendar,
-                                calendarBloc: chatCalendarBloc,
+                            ),
+                            if (_chatRoute == _ChatRoute.details)
+                              const Positioned.fill(
+                                child: ChatMessageDetails(),
                               ),
-                            ],
-                          ),
+                            if (_chatRoute == _ChatRoute.calendar)
+                              Positioned.fill(
+                                child: _ChatCalendarPanel(
+                                  key: ValueKey(
+                                    '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                                  ),
+                                  chat: chatEntity,
+                                  calendarAvailable: chatCalendarAvailable,
+                                  participants: chatCalendarParticipants,
+                                  avatarPaths: chatCalendarAvatarPaths,
+                                  onBackPressed: _closeChatCalendar,
+                                  calendarBloc: chatCalendarBloc,
+                                ),
+                              ),
+                            if (_chatRoute == _ChatRoute.attachments)
+                              Positioned.fill(
+                                child: _ChatAttachmentPanel(
+                                  chat: chatEntity,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ],
@@ -7674,10 +7697,19 @@ class _ChatState extends State<Chat> {
 
   void _openChatAttachments() {
     if (!mounted) return;
-    context.push(
-      const AttachmentGalleryRoute().location,
-      extra: context.read,
-    );
+    if (_chatRoute == _ChatRoute.attachments) {
+      _returnToMainRoute();
+      return;
+    }
+    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
+    setState(() {
+      _chatRoute = _ChatRoute.attachments;
+      _settingsPanelExpanded = false;
+      _pinnedPanelVisible = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
   }
 
   void _togglePinnedMessages() {
@@ -8475,13 +8507,47 @@ class _ChatCalendarPanel extends StatelessWidget {
     if (!calendarAvailable || resolvedChat == null || resolvedBloc == null) {
       return const SizedBox.shrink();
     }
-    return BlocProvider<ChatCalendarBloc>.value(
-      value: resolvedBloc,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<ChatCalendarBloc>.value(
+          value: resolvedBloc,
+        ),
+        BlocProvider<CalendarBloc>.value(
+          value: resolvedBloc,
+        ),
+      ],
       child: ChatCalendarWidget(
         onBackPressed: onBackPressed,
         chat: resolvedChat,
         participants: participants,
         avatarPaths: avatarPaths,
+      ),
+    );
+  }
+}
+
+class _ChatAttachmentPanel extends StatelessWidget {
+  const _ChatAttachmentPanel({
+    required this.chat,
+  });
+
+  final chat_models.Chat? chat;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChat = chat;
+    if (resolvedChat == null) {
+      return const SizedBox.shrink();
+    }
+    final xmppService = context.read<XmppService>();
+    return BlocProvider(
+      create: (_) => AttachmentGalleryCubit(
+        xmppService: xmppService,
+        chatJid: resolvedChat.jid,
+      ),
+      child: AttachmentGalleryView(
+        chatOverride: resolvedChat,
+        showChatLabel: false,
       ),
     );
   }

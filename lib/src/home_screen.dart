@@ -92,22 +92,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
   CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
-  GlobalKey? _chatPaneKey;
-  String? _chatPaneKeyJid;
-
-  GlobalKey? _resolveChatPaneKey(String? openJid) {
-    final String? trimmed = openJid?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      _chatPaneKey = null;
-      _chatPaneKeyJid = null;
-      return null;
-    }
-    if (_chatPaneKey == null || _chatPaneKeyJid != trimmed) {
-      _chatPaneKey = GlobalKey();
-      _chatPaneKeyJid = trimmed;
-    }
-    return _chatPaneKey;
-  }
 
   @override
   void initState() {
@@ -306,25 +290,22 @@ class _HomeScreenState extends State<HomeScreen> {
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (_, __) {
-            if (context.read<ChatsCubit?>()?.state == null) return;
-            if (context.read<ChatsCubit?>()?.state.openCalendar ?? false) {
-              context.read<ChatsCubit?>()?.toggleCalendar();
-            } else if (context
-                    .read<ChatsCubit?>()
-                    ?.state
-                    .openStack
-                    .isNotEmpty ??
-                false) {
-              if (context
-                      .read<ChatsCubit?>()
-                      ?.state
-                      .openStack
-                      .skip(1)
-                      .isNotEmpty ??
-                  false) {
-                unawaited(context.read<ChatsCubit?>()?.popChat());
+            final chatsCubit = context.read<ChatsCubit?>();
+            final chatsState = chatsCubit?.state;
+            if (chatsState == null) return;
+            if (chatsState.openChatCalendar) {
+              chatsCubit?.setChatCalendarOpen(open: false);
+              return;
+            }
+            if (chatsState.openCalendar) {
+              chatsCubit?.toggleCalendar();
+              return;
+            }
+            if (chatsState.openStack.isNotEmpty) {
+              if (chatsState.openStack.skip(1).isNotEmpty) {
+                unawaited(chatsCubit?.popChat());
               } else {
-                unawaited(context.read<ChatsCubit?>()?.closeAllChats());
+                unawaited(chatsCubit?.closeAllChats());
               }
             }
           },
@@ -343,8 +324,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     final bool openChatCalendar =
                         context.watch<ChatsCubit?>()?.state.openChatCalendar ??
                             false;
-                    final bool chatCalendarExpanded =
-                        openChatCalendar && openJid != null;
                     final navRail = navPlacement == NavPlacement.rail
                         ? _HomeNavigationRail(
                             tabs: tabs,
@@ -359,7 +338,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               controller.animateTo(index);
                             },
                             calendarAvailable: hasCalendarBloc,
-                            calendarActive: openCalendar,
+                            calendarActive: openCalendar || openChatCalendar,
                             onCalendarSelected: () {
                               context.read<ChatsCubit?>()?.toggleCalendar();
                             },
@@ -371,7 +350,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           )
                         : null;
 
-                    final GlobalKey? chatPaneKey = _resolveChatPaneKey(openJid);
                     final Widget chatPaneContent = openJid == null
                         ? const chat_view.GuestChat()
                         : MultiBlocProvider(
@@ -417,24 +395,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                             child: const chat_view.Chat(),
                           );
-                    final Widget keyedChatPane = chatPaneKey == null
-                        ? chatPaneContent
-                        : KeyedSubtree(
-                            key: chatPaneKey,
-                            child: chatPaneContent,
-                          );
-                    final Widget chatPane = constrainSecondary(keyedChatPane);
+                    final Widget chatPane = constrainSecondary(chatPaneContent);
 
                     Widget chatLayout() {
-                      if (chatCalendarExpanded) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (navRail != null) navRail,
-                            Expanded(child: chatPane),
-                          ],
-                        );
-                      }
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -477,13 +440,26 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         );
+                    Widget chatCalendarLayout() => Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (navRail != null) navRail,
+                            Expanded(child: chatPane),
+                          ],
+                        );
 
                     final bool demoOffline =
                         context.read<XmppService?>()?.demoOfflineMode ?? false;
 
+                    final bool showChatCalendar =
+                        openChatCalendar && openJid != null;
                     return SafeArea(
                       top: state is ConnectivityConnected || demoOffline,
-                      child: openCalendar ? calendarLayout() : chatLayout(),
+                      child: openCalendar
+                          ? calendarLayout()
+                          : showChatCalendar
+                              ? chatCalendarLayout()
+                              : chatLayout(),
                     );
                   },
                 ),
