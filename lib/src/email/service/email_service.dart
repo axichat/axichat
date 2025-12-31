@@ -47,6 +47,10 @@ const int _deltaEventMessageUnset = 0;
 const _defaultImapPort = '993';
 const String _securityModeSsl = 'ssl';
 const String _securityModeStartTls = 'starttls';
+const String _emailAddressSeparator = '@';
+const int _emailAddressSeparatorMissingIndex = -1;
+const int _emailLocalPartStartIndex = 0;
+const int _emailLocalPartMinLength = 1;
 const _emailDownloadLimitKey = 'download_limit';
 const _emailDownloadLimitDisabledValue = '0';
 const _unknownEmailPassword = '';
@@ -3317,6 +3321,19 @@ class EmailService {
 
   String _normalizeLinkedAccountAddress(String address) =>
       normalizeEmailAddress(address);
+
+  String? _localPartFromAddress(String address) {
+    final String normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final int separatorIndex = normalized.indexOf(_emailAddressSeparator);
+    if (separatorIndex == _emailAddressSeparatorMissingIndex ||
+        separatorIndex < _emailLocalPartMinLength) {
+      return null;
+    }
+    return normalized.substring(_emailLocalPartStartIndex, separatorIndex);
+  }
 
   String? _normalizeDisplayName(String? displayName) {
     if (displayName == null) {
