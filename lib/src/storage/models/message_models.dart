@@ -20,6 +20,7 @@ part 'message_models.freezed.dart';
 const uuid = Uuid();
 const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
 const int _maxCalendarTaskIcsBytes = maxMessageHtmlBytes;
+const int deltaAccountIdLegacy = 0;
 
 // ENUMS WARNING: New values must only be added to the end of the list.
 // If not, the database will break
@@ -273,6 +274,7 @@ class Message with _$Message implements Insertable<Message> {
     PseudoMessageType? pseudoMessageType,
     Map<String, dynamic>? pseudoMessageData,
     @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
+    @Default(deltaAccountIdLegacy) int deltaAccountId,
     int? deltaChatId,
     int? deltaMsgId,
   }) = _Message;
@@ -308,6 +310,7 @@ class Message with _$Message implements Insertable<Message> {
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
     @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
+    required int deltaAccountId,
     required int? deltaChatId,
     required int? deltaMsgId,
   }) = _MessageFromDb;
@@ -531,6 +534,7 @@ class Message with _$Message implements Insertable<Message> {
       'file_downloading': Variable<bool>(fileDownloading),
       'file_uploading': Variable<bool>(fileUploading),
       'file_metadata_i_d': Variable<String>(fileMetadataID),
+      'delta_account_id': Variable<int>(deltaAccountId),
     };
     if (id != null) {
       map['id'] = Variable<String>(id!);
@@ -935,6 +939,9 @@ class Messages extends Table {
 
   IntColumn get deltaMsgId => integer().nullable()();
 
+  IntColumn get deltaAccountId =>
+      integer().withDefault(const Constant(deltaAccountIdLegacy))();
+
   @override
   Set<Column<Object>>? get primaryKey => {stanzaID};
 }
@@ -1012,12 +1019,16 @@ class MessageCopies extends Table {
 
   IntColumn get dcChatId => integer()();
 
+  IntColumn get dcAccountId =>
+      integer().withDefault(const Constant(deltaAccountIdLegacy))();
+
   @override
-  List<String> get customConstraints => const ['UNIQUE(dc_msg_id)'];
+  List<String> get customConstraints =>
+      const ['UNIQUE(dc_msg_id, dc_account_id)'];
 
   List<Index> get indexes => [
         Index('idx_message_copies_share', 'share_id, dc_chat_id'),
-        Index('idx_message_copies_dc_msg', 'dc_msg_id'),
+        Index('idx_message_copies_dc_msg', 'dc_msg_id, dc_account_id'),
       ];
 }
 

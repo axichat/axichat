@@ -1579,7 +1579,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (_activeSignupCredentialKey != null && pendingAvatar != null) {
       await _xmppService.cacheSelfAvatarDraft(pendingAvatar);
     }
-    _emit(const AuthenticationComplete());
+    final bool fromSignup = _activeSignupCredentialKey != null;
+    final AuthenticationState completedState = fromSignup
+        ? const AuthenticationCompleteFromSignup()
+        : const AuthenticationComplete();
+    _emit(completedState);
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
     _updateEmailForegroundKeepalive();

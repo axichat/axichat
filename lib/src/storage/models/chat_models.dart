@@ -327,6 +327,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     mox.ChatState? chatState,
     int? deltaChatId,
     String? emailAddress,
+    String? emailFromAddress,
   }) = _Chat;
 
   const factory Chat.fromDb({
@@ -360,6 +361,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required mox.ChatState? chatState,
     required int? deltaChatId,
     required String? emailAddress,
+    required String? emailFromAddress,
   }) = _ChatFromDb;
 
   factory Chat.fromJid(String jid) => Chat(
@@ -429,6 +431,9 @@ class Chat with _$Chat implements Insertable<Chat> {
     }
     if (emailAddress != null) {
       map['email_address'] = Variable<String>(emailAddress);
+    }
+    if (emailFromAddress != null) {
+      map['email_from_address'] = Variable<String>(emailFromAddress);
     }
     if (spamUpdatedAt != null) {
       map['spam_updated_at'] = Variable<DateTime>(spamUpdatedAt!);
@@ -506,8 +511,27 @@ class Chats extends Table {
 
   TextColumn get emailAddress => text().nullable()();
 
+  TextColumn get emailFromAddress => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {jid};
+}
+
+@DataClassName('EmailChatAccountData')
+class EmailChatAccounts extends Table {
+  TextColumn get chatJid => text().references(Chats, #jid)();
+
+  IntColumn get deltaAccountId =>
+      integer().withDefault(const Constant(deltaAccountIdLegacy))();
+
+  IntColumn get deltaChatId => integer()();
+
+  @override
+  Set<Column> get primaryKey => {chatJid, deltaAccountId};
+
+  @override
+  List<String> get customConstraints =>
+      const ['UNIQUE(delta_account_id, delta_chat_id)'];
 }
 
 class Contacts extends Table {
