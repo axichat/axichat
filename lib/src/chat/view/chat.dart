@@ -3887,7 +3887,7 @@ class _ChatState extends State<Chat> {
                         AxiIconButton(
                           iconData: attachmentsOpen
                               ? LucideIcons.x
-                              : LucideIcons.paperclip,
+                              : LucideIcons.image,
                           tooltip: attachmentsOpen
                               ? context.l10n.commonClose
                               : context.l10n.chatAttachmentTooltip,
@@ -9980,7 +9980,7 @@ class _AttachmentAccessoryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ChatComposerIconButton(
-      icon: LucideIcons.paperclip,
+      icon: LucideIcons.image,
       tooltip: context.l10n.chatAttachmentTooltip,
       onPressed: enabled ? onPressed : null,
     );
