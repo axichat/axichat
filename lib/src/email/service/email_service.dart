@@ -42,6 +42,17 @@ const _contactsSyncDebounce = Duration(seconds: 2);
 const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
+const int _connectivityLogIntervalSeconds = 5;
+const _connectivityLogInterval =
+    Duration(seconds: _connectivityLogIntervalSeconds);
+const _emailConnectivityLogPrefix = 'Email connectivity';
+const _emailSyncLogPrefix = 'Email sync state';
+const _emailLogSourceLabel = 'source';
+const _emailLogValueLabel = 'value';
+const _emailLogStateLabel = 'state';
+const _emailLogConnectivityLabel = 'connectivity';
+const _emailLogHasMessageLabel = 'hasMessage';
+const _emailLogUnknownValue = 'unknown';
 const int _connectivityDowngradeGraceSeconds = 2;
 const _connectivityDowngradeGrace =
     Duration(seconds: _connectivityDowngradeGraceSeconds);
@@ -78,8 +89,6 @@ const _sendPortConfigKey = 'send_port';
 const _sendSecurityConfigKey = 'send_security';
 const _sendUserConfigKey = 'send_user';
 const _portUnsetValue = 0;
-const String _smtpHostToken = 'smtp';
-const String _imapHostToken = 'imap';
 const List<String> _connectionOverrideConfigKeys = <String>[
   _mailServerConfigKey,
   _mailPortConfigKey,
@@ -119,6 +128,28 @@ const Set<String> _imapConfigBoolFalseValues = {
 };
 const int _minimumHistoryWindow = 1;
 const bool _includePseudoMessagesInBackfill = false;
+
+enum _EmailSyncSource {
+  unknown,
+  coreError,
+  selfNotInGroup,
+  connectivityConfirm,
+  connectivityApply,
+  connectivityChangedEvent,
+  backgroundFetchDone,
+  networkAvailable,
+  reconnectRestart,
+  channelOverflow,
+  channelOverflowFailure,
+  channelOverflowComplete,
+  bootstrapStart,
+  bootstrapRetry,
+  bootstrapComplete,
+}
+
+extension _EmailSyncSourceLabels on _EmailSyncSource {
+  String get logLabel => name;
+}
 
 typedef EmailConnectionConfigBuilder = Map<String, String> Function(
   String address,
@@ -267,6 +298,9 @@ class EmailService {
   EmailSyncState _syncState = const EmailSyncState.ready();
   Timer? _connectivityDowngradeTimer;
   int? _pendingConnectivityLevel;
+  int? _lastConnectivityValue;
+  int? _lastLoggedConnectivityValue;
+  DateTime? _lastConnectivityLoggedAt;
   bool _channelOverflowRecoveryInProgress = false;
   final Map<String, RegisteredCredentialKey> _bootstrapKeys = {};
   Future<void>? _bootstrapFuture;
@@ -1374,7 +1408,13 @@ class EmailService {
     await ensureEventChannelActive();
     await _transport.notifyNetworkAvailable();
     unawaited(_bootstrapActiveAccountIfNeeded());
-    unawaited(_runReconnectCatchUp().whenComplete(_refreshConnectivityState));
+    unawaited(
+      _runReconnectCatchUp().whenComplete(
+        () => _refreshConnectivityState(
+          source: _EmailSyncSource.networkAvailable,
+        ),
+      ),
+    );
     unawaited(_scheduleReconnectRestartIfOffline());
   }
 
@@ -1839,7 +1879,9 @@ class EmailService {
         unawaited(refreshChatlistFromCore());
         break;
       case DeltaEventType.connectivityChanged:
-        unawaited(_refreshConnectivityState());
+        unawaited(_refreshConnectivityState(
+          source: _EmailSyncSource.connectivityChangedEvent,
+        ));
         unawaited(_bootstrapActiveAccountIfNeeded());
         unawaited(_runReconnectCatchUp());
         break;
@@ -2103,6 +2145,7 @@ class EmailService {
           exception.message,
           exception: exception,
         ),
+        source: _EmailSyncSource.coreError,
       );
       return;
     }
@@ -2111,6 +2154,7 @@ class EmailService {
         exception.message,
         exception: exception,
       ),
+      source: _EmailSyncSource.coreError,
     );
   }
 
@@ -2122,16 +2166,26 @@ class EmailService {
             ? details!
             : 'Email group membership changed. Try reopening the chat.',
       ),
+      source: _EmailSyncSource.selfNotInGroup,
     );
   }
 
-  Future<void> _refreshConnectivityState() async {
+  Future<void> _refreshConnectivityState({
+    _EmailSyncSource source = _EmailSyncSource.unknown,
+  }) async {
     try {
       final connectivity = await _transport.connectivity();
       if (connectivity == null) return;
+      _recordConnectivitySample(
+        connectivity: connectivity,
+        source: source,
+      );
       if (connectivity >= _connectivityConnectedMin) {
         _cancelConnectivityDowngrade();
-        _updateSyncState(const EmailSyncState.ready());
+        _updateSyncState(
+          const EmailSyncState.ready(),
+          source: source,
+        );
         return;
       }
       if (connectivity >= _connectivityWorkingMin) {
@@ -2141,6 +2195,7 @@ class EmailService {
         }
         _updateSyncState(
           const EmailSyncState.recovering(_emailSyncingMessage),
+          source: source,
         );
         return;
       }
@@ -2148,7 +2203,10 @@ class EmailService {
         _scheduleConnectivityDowngrade(connectivity);
         return;
       }
-      _applyConnectivityState(connectivity);
+      _applyConnectivityState(
+        connectivity,
+        source: _EmailSyncSource.connectivityApply,
+      );
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to refresh email connectivity', error, stackTrace);
     }
@@ -2177,10 +2235,17 @@ class EmailService {
     try {
       final connectivity = await _transport.connectivity();
       final resolved = connectivity ?? fallbackConnectivity;
+      _recordConnectivitySample(
+        connectivity: resolved,
+        source: _EmailSyncSource.connectivityConfirm,
+      );
       if (resolved >= _connectivityConnectedMin) {
         return;
       }
-      _applyConnectivityState(resolved);
+      _applyConnectivityState(
+        resolved,
+        source: _EmailSyncSource.connectivityConfirm,
+      );
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to confirm email connectivity', error, stackTrace);
     }
@@ -2192,15 +2257,72 @@ class EmailService {
     _connectivityDowngradeTimer = null;
   }
 
-  void _applyConnectivityState(int connectivity) {
+  void _applyConnectivityState(
+    int connectivity, {
+    required _EmailSyncSource source,
+  }) {
     if (connectivity >= _connectivityConnectingMin) {
       _updateSyncState(
         const EmailSyncState.recovering(_emailConnectingMessage),
+        source: source,
       );
       return;
     }
     _updateSyncState(
       const EmailSyncState.offline(_emailDisconnectedMessage),
+      source: source,
+    );
+  }
+
+  void _recordConnectivitySample({
+    required int connectivity,
+    required _EmailSyncSource source,
+  }) {
+    _lastConnectivityValue = connectivity;
+    _logConnectivitySample(
+      connectivity: connectivity,
+      source: source,
+    );
+  }
+
+  void _logConnectivitySample({
+    required int connectivity,
+    required _EmailSyncSource source,
+  }) {
+    final now = DateTime.timestamp();
+    final lastLoggedAt = _lastConnectivityLoggedAt;
+    final shouldLog = _lastLoggedConnectivityValue == null ||
+        _lastLoggedConnectivityValue != connectivity ||
+        lastLoggedAt == null ||
+        now.difference(lastLoggedAt) > _connectivityLogInterval;
+    if (!shouldLog) {
+      return;
+    }
+    _lastLoggedConnectivityValue = connectivity;
+    _lastConnectivityLoggedAt = now;
+    _log.fine(
+      '$_emailConnectivityLogPrefix: '
+      '$_emailLogSourceLabel=${source.logLabel}, '
+      '$_emailLogValueLabel=$connectivity, '
+      '$_emailLogStateLabel=${_syncState.status.name}',
+    );
+  }
+
+  void _logSyncStateTransition({
+    required EmailSyncState previous,
+    required EmailSyncState next,
+    required _EmailSyncSource source,
+  }) {
+    final connectivity = _lastConnectivityValue;
+    final connectivityLabel =
+        connectivity == null ? _emailLogUnknownValue : '$connectivity';
+    final hasMessage = next.message?.isNotEmpty == true;
+    _log.fine(
+      '$_emailSyncLogPrefix: '
+      '${previous.status.name} -> ${next.status.name}, '
+      '$_emailLogSourceLabel=${source.logLabel}, '
+      '$_emailLogConnectivityLabel=$connectivityLabel, '
+      '$_emailLogHasMessageLabel=$hasMessage',
     );
   }
 
@@ -2208,7 +2330,9 @@ class EmailService {
     if (_syncState.status == EmailSyncStatus.ready) {
       return;
     }
-    unawaited(_refreshConnectivityState());
+    unawaited(_refreshConnectivityState(
+      source: _EmailSyncSource.backgroundFetchDone,
+    ));
   }
 
   Future<void> _handleChannelOverflow() async {
@@ -2220,6 +2344,7 @@ class EmailService {
       const EmailSyncState.recovering(
         'Refreshing email sync after interruption…',
       ),
+      source: _EmailSyncSource.channelOverflow,
     );
     try {
       final success =
@@ -2238,17 +2363,29 @@ class EmailService {
         const EmailSyncState.error(
           'Email sync could not refresh. Try reopening the app.',
         ),
+        source: _EmailSyncSource.channelOverflowFailure,
       );
     } finally {
       _channelOverflowRecoveryInProgress = false;
     }
-    await _refreshConnectivityState();
+    await _refreshConnectivityState(
+      source: _EmailSyncSource.channelOverflowComplete,
+    );
   }
 
-  void _updateSyncState(EmailSyncState next) {
+  void _updateSyncState(
+    EmailSyncState next, {
+    _EmailSyncSource source = _EmailSyncSource.unknown,
+  }) {
     if (_syncState == next) return;
+    final previous = _syncState;
     _syncState = next;
     _syncStateController.add(next);
+    _logSyncStateTransition(
+      previous: previous,
+      next: next,
+      source: source,
+    );
   }
 
   void _detachTransportListener() {
@@ -2320,23 +2457,24 @@ class EmailService {
     if (_syncState.status == EmailSyncStatus.ready) {
       _updateSyncState(
         const EmailSyncState.recovering('Syncing email history…'),
+        source: _EmailSyncSource.bootstrapStart,
       );
     }
     try {
-      final didBootstrap = await _transport.bootstrapFromCore();
+      await _transport.bootstrapFromCore();
       if (operationId != _bootstrapOperationId) {
         return;
       }
-      if (didBootstrap) {
-        await _credentialStore.write(
-          key: bootstrapKey,
-          value: true.toString(),
-        );
-      }
+      await _credentialStore.write(
+        key: bootstrapKey,
+        value: true.toString(),
+      );
       if (operationId != _bootstrapOperationId) {
         return;
       }
-      await _refreshConnectivityState();
+      await _refreshConnectivityState(
+        source: _EmailSyncSource.bootstrapComplete,
+      );
     } on Exception catch (error, stackTrace) {
       if (operationId != _bootstrapOperationId) {
         return;
@@ -2346,6 +2484,7 @@ class EmailService {
           _syncState.status == EmailSyncStatus.recovering) {
         _updateSyncState(
           const EmailSyncState.recovering('Email sync will retry shortly…'),
+          source: _EmailSyncSource.bootstrapRetry,
         );
       }
     }
@@ -2611,7 +2750,9 @@ class EmailService {
       _log.warning('Email transport restart failed', error, stackTrace);
     } finally {
       _reconnectRestartInFlight = false;
-      unawaited(_refreshConnectivityState());
+      unawaited(_refreshConnectivityState(
+        source: _EmailSyncSource.reconnectRestart,
+      ));
     }
   }
 
@@ -2793,11 +2934,8 @@ class EmailService {
     final fallbackHost = _connectionHostFor(normalizedAddress, config);
     final resolvedSendHost =
         (smtpHost != null && smtpHost.isNotEmpty) ? smtpHost : fallbackHost;
-    final resolvedMailHost = _resolveMailHost(
-          imapHost: imapHost,
-          smtpHost: smtpHost,
-        ) ??
-        fallbackHost;
+    final resolvedMailHost =
+        (imapHost != null && imapHost.isNotEmpty) ? imapHost : fallbackHost;
     final sendPortValue = config.smtpPort > _portUnsetValue
         ? config.smtpPort
         : EndpointConfig.defaultSmtpPort;
@@ -2830,38 +2968,6 @@ class EmailService {
     required int implicitTlsPort,
   }) =>
       port == implicitTlsPort ? _securityModeSsl : _securityModeStartTls;
-
-  static String? _deriveMailHost(String host) {
-    final normalized = host.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    final parts = normalized.split('.');
-    var replaced = false;
-    final derived = parts.map((part) {
-      if (!replaced && part.startsWith(_smtpHostToken)) {
-        replaced = true;
-        return part.replaceFirst(_smtpHostToken, _imapHostToken);
-      }
-      return part;
-    }).toList();
-    return replaced ? derived.join('.') : null;
-  }
-
-  static String? _resolveMailHost({
-    required String? imapHost,
-    required String? smtpHost,
-  }) {
-    final normalizedImap = imapHost?.trim();
-    if (normalizedImap != null && normalizedImap.isNotEmpty) {
-      return normalizedImap;
-    }
-    final normalizedSmtp = smtpHost?.trim();
-    if (normalizedSmtp == null || normalizedSmtp.isEmpty) {
-      return null;
-    }
-    return _deriveMailHost(normalizedSmtp) ?? normalizedSmtp;
-  }
 
   static String _connectionHostFor(String address, EndpointConfig config) {
     final customHost = config.smtpHost?.trim();
