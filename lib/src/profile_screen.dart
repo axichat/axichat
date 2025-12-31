@@ -339,41 +339,38 @@ class _ProfileCardSection extends StatelessWidget {
                 ),
               ];
               final attachmentButton = AxiIconButton(
-                iconData: LucideIcons.paperclip,
+                iconData: LucideIcons.image,
                 tooltip: l10n.draftAttachmentsLabel,
                 onPressed: () => context.push(
                   const AttachmentGalleryRoute().location,
                   extra: locate,
                 ),
               );
+              final actionButtons = Wrap(
+                alignment: WrapAlignment.center,
+                spacing: _profileActionSpacing,
+                runSpacing: _profileActionSpacing,
+                children: [
+                  const LogoutButton(),
+                  attachmentButton,
+                  AxiMore(actions: actions),
+                ],
+              );
               final header = Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 spacing: _profileHeaderSpacing,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _EditableAvatarButton(
-                        avatarPath: profileState.avatarPath,
-                        jid: profileState.jid,
-                        status: profileState.status,
-                        onTap: () => context.push(
-                          const AvatarEditorRoute().location,
-                          extra: locate,
-                        ),
+                  Align(
+                    alignment: Alignment.center,
+                    child: _EditableAvatarButton(
+                      avatarPath: profileState.avatarPath,
+                      jid: profileState.jid,
+                      status: profileState.status,
+                      onTap: () => context.push(
+                        const AvatarEditorRoute().location,
+                        extra: locate,
                       ),
-                      const Spacer(),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const LogoutButton(),
-                          const SizedBox(width: _profileActionSpacing),
-                          attachmentButton,
-                          const SizedBox(width: _profileActionSpacing),
-                          AxiMore(actions: actions),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -499,6 +496,10 @@ class _ProfileCardSection extends StatelessWidget {
                           );
                         },
                       ),
+                    ),
+                    Align(
+                      alignment: Alignment.center,
+                      child: actionButtons,
                     ),
                   ],
                 ),
