@@ -4,6 +4,8 @@ const String _draftSyncSourceKeyName = 'draft_sync_source_id';
 const String _draftSyncPendingPublishesKeyName = 'draft_sync_pending_publishes';
 const String _draftSyncPendingRetractionsKeyName =
     'draft_sync_pending_retractions';
+const String _draftSyncSnapshotAtKeyName = 'draft_sync_last_snapshot_at';
+const String _draftSyncSnapshotIdsKeyName = 'draft_sync_last_snapshot_ids';
 const String _draftRecipientRoleDefault = 'to';
 const String _draftAttachmentUploadStanzaId = 'draft-attachment-upload';
 const int _draftsSnapshotStart = 0;
@@ -18,6 +20,12 @@ final _draftSyncPendingPublishesKey = XmppStateStore.registerKey(
 final _draftSyncPendingRetractionsKey = XmppStateStore.registerKey(
   _draftSyncPendingRetractionsKeyName,
 );
+final _draftSyncSnapshotAtKey = XmppStateStore.registerKey(
+  _draftSyncSnapshotAtKeyName,
+);
+final _draftSyncSnapshotIdsKey = XmppStateStore.registerKey(
+  _draftSyncSnapshotIdsKeyName,
+);
 
 enum _DraftSyncDecision {
   applyRemote,
@@ -31,6 +39,9 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
   bool _pendingDraftSyncLoaded = false;
   final Set<String> _pendingDraftPublishes = {};
   final Set<String> _pendingDraftRetractions = {};
+  bool _draftSnapshotMetaLoaded = false;
+  DateTime? _draftLastSnapshotAt;
+  final Set<String> _draftLastSnapshotIds = {};
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -98,28 +109,45 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       if (!snapshot.isSuccess) {
         return;
       }
+      await _ensureDraftSnapshotMetaLoaded();
+      final snapshotTimestamp = DateTime.timestamp().toUtc();
+      final isSnapshotComplete = snapshot.isComplete;
       final remoteItems = snapshot.items;
-      final remoteById = <String, DraftSyncPayload>{
-        for (final item in remoteItems) item.syncId: item,
-      };
+      final remoteById = <String, DraftSyncPayload>{};
+      for (final item in remoteItems) {
+        final normalized = item.syncId.trim();
+        if (normalized.isEmpty) {
+          continue;
+        }
+        remoteById[normalized] = item;
+      }
+      final remoteIds = remoteById.keys.toSet();
       final localDrafts = await _dbOpReturning<XmppDatabase, List<Draft>>(
         (db) => db.getDrafts(
           start: _draftsSnapshotStart,
           end: _draftsSnapshotEnd,
         ),
       );
-      final localById = <String, Draft>{
-        for (final draft in localDrafts)
-          if (draft.draftSyncId.trim().isNotEmpty) draft.draftSyncId: draft,
-      };
-      final localSourceId = await _ensureDraftSourceId();
-
-      for (final remote in remoteItems) {
-        if (_pendingDraftRetractions.contains(remote.syncId)) {
-          await retractDraftSync(remote.syncId);
+      final localById = <String, Draft>{};
+      for (final draft in localDrafts) {
+        final syncId = draft.draftSyncId.trim();
+        if (syncId.isEmpty) {
           continue;
         }
-        final local = localById[remote.syncId];
+        localById[syncId] = draft;
+      }
+      final localSourceId = await _ensureDraftSourceId();
+      final previousSnapshotAt = _draftLastSnapshotAt;
+      final previousSnapshotIds = Set<String>.of(_draftLastSnapshotIds);
+
+      for (final entry in remoteById.entries) {
+        final remoteSyncId = entry.key;
+        final remote = entry.value;
+        if (_pendingDraftRetractions.contains(remoteSyncId)) {
+          await retractDraftSync(remoteSyncId);
+          continue;
+        }
+        final local = localById[remoteSyncId];
         if (local == null) {
           await _saveDraftFromSync(remote);
           continue;
@@ -139,11 +167,37 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         }
       }
 
-      for (final draft in localDrafts) {
-        final syncId = draft.draftSyncId.trim();
-        if (syncId.isEmpty || !remoteById.containsKey(syncId)) {
-          await publishDraftSync(draft);
+      for (final entry in localById.entries) {
+        final syncId = entry.key;
+        final draft = entry.value;
+        if (remoteById.containsKey(syncId)) {
+          continue;
         }
+        if (_shouldApplyMissingDraftDeletion(
+          syncId: syncId,
+          localUpdatedAt: draft.draftUpdatedAt,
+          entrySourceId: draft.draftSourceId,
+          localSourceId: localSourceId,
+          lastSnapshotAt: previousSnapshotAt,
+          previousSnapshotIds: previousSnapshotIds,
+          isSnapshotComplete: isSnapshotComplete,
+        )) {
+          await _applyDraftSyncRetraction(syncId);
+          continue;
+        }
+        await publishDraftSync(draft);
+      }
+      for (final draft in localDrafts) {
+        if (draft.draftSyncId.trim().isNotEmpty) {
+          continue;
+        }
+        await publishDraftSync(draft);
+      }
+      if (isSnapshotComplete) {
+        await _persistDraftSnapshotMeta(
+          snapshotAt: snapshotTimestamp,
+          remoteIds: remoteIds,
+        );
       }
 
       await _flushPendingDraftSync();
@@ -672,6 +726,33 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     _pendingDraftSyncLoaded = true;
   }
 
+  Future<void> _ensureDraftSnapshotMetaLoaded() async {
+    if (_draftSnapshotMetaLoaded) {
+      return;
+    }
+    await _dbOp<XmppStateStore>(
+      (ss) async {
+        final rawTimestamp = ss.read(key: _draftSyncSnapshotAtKey);
+        final rawIds =
+            (ss.read(key: _draftSyncSnapshotIdsKey) as List?)?.cast<Object?>();
+        _draftLastSnapshotAt = _parseDraftSnapshotAt(rawTimestamp);
+        _draftLastSnapshotIds
+          ..clear()
+          ..addAll(_normalizeDraftSyncIds(rawIds));
+      },
+      awaitDatabase: true,
+    );
+    _draftSnapshotMetaLoaded = true;
+  }
+
+  DateTime? _parseDraftSnapshotAt(Object? raw) {
+    final value = raw?.toString().trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value);
+  }
+
   Iterable<String> _normalizeDraftSyncIds(List<Object?>? raw) sync* {
     if (raw == null || raw.isEmpty) {
       return;
@@ -683,6 +764,53 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       }
       yield normalized;
     }
+  }
+
+  Future<void> _persistDraftSnapshotMeta({
+    required DateTime snapshotAt,
+    required Set<String> remoteIds,
+  }) async {
+    _draftLastSnapshotAt = snapshotAt;
+    _draftLastSnapshotIds
+      ..clear()
+      ..addAll(remoteIds);
+    await _dbOp<XmppStateStore>(
+      (ss) async => ss.writeAll(
+        data: {
+          _draftSyncSnapshotAtKey: snapshotAt.toIso8601String(),
+          _draftSyncSnapshotIdsKey: remoteIds.toList(growable: false),
+        },
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  bool _shouldApplyMissingDraftDeletion({
+    required String syncId,
+    required DateTime localUpdatedAt,
+    required String entrySourceId,
+    required String localSourceId,
+    required DateTime? lastSnapshotAt,
+    required Set<String> previousSnapshotIds,
+    required bool isSnapshotComplete,
+  }) {
+    if (!isSnapshotComplete) {
+      return false;
+    }
+    if (!previousSnapshotIds.contains(syncId)) {
+      return false;
+    }
+    if (_pendingDraftPublishes.contains(syncId)) {
+      return false;
+    }
+    final normalizedSource = entrySourceId.trim();
+    if (normalizedSource != localSourceId) {
+      return true;
+    }
+    if (lastSnapshotAt == null) {
+      return false;
+    }
+    return !localUpdatedAt.toUtc().isAfter(lastSnapshotAt);
   }
 
   Future<void> _persistPendingDraftSync() async {
