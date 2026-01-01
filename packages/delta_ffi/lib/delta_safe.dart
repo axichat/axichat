@@ -414,6 +414,7 @@ class DeltaContextHandle {
   bool? _supportsDownload;
   bool? _supportsResend;
   bool? _supportsContactList;
+  bool? _supportsMessageGetHtml;
   bool? _supportsMessageSetHtml;
 
   Future<void> open({required String passphrase}) async {
@@ -860,6 +861,21 @@ class DeltaContextHandle {
     }
   }
 
+  String? _getMessageHtml(ffi.Pointer<dc_msg_t> msgPtr) {
+    if (_supportsMessageGetHtml == false) return null;
+    try {
+      final html = _cleanString(
+        _takeString(_bindings.dc_msg_get_html(msgPtr), bindings: _bindings),
+      );
+      _supportsMessageGetHtml = true;
+      return html;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsMessageGetHtml = false;
+      return null;
+    }
+  }
+
   void _setMessageHtml(ffi.Pointer<dc_msg_t> msgPtr, String html) {
     if (_supportsMessageSetHtml == false) return;
     try {
@@ -885,9 +901,7 @@ class DeltaContextHandle {
           state == DeltaMessageState.undefined ? null : state;
       final text =
           _takeString(_bindings.dc_msg_get_text(msgPtr), bindings: _bindings);
-      final html = _cleanString(
-        _takeString(_bindings.dc_msg_get_html(msgPtr), bindings: _bindings),
-      );
+      final html = _getMessageHtml(msgPtr);
       final subject = _cleanString(
         _takeString(_bindings.dc_msg_get_subject(msgPtr), bindings: _bindings),
       );
@@ -1139,9 +1153,7 @@ class DeltaContextHandle {
           _bindings.dc_msg_get_text(msgPtr),
           bindings: _bindings,
         );
-        final html = _cleanString(
-          _takeString(_bindings.dc_msg_get_html(msgPtr), bindings: _bindings),
-        );
+        final html = _getMessageHtml(msgPtr);
         final subject = _cleanString(
           _takeString(
             _bindings.dc_msg_get_subject(msgPtr),

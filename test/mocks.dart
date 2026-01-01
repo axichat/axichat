@@ -227,6 +227,15 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
       .thenAnswer((_) async => <OmemoTrust>[]);
   when(() => mockDatabase.getAllOmemoTrusts())
       .thenAnswer((_) async => <OmemoTrust>[]);
+  when(() => mockDatabase.replaceDeltaPlaceholderSelfJids(
+        deltaAccountId: any(named: 'deltaAccountId'),
+        resolvedAddress: any(named: 'resolvedAddress'),
+        placeholderJids: any(named: 'placeholderJids'),
+      )).thenAnswer((_) async {});
+  when(() => mockDatabase.removeDeltaPlaceholderDuplicates(
+        deltaAccountId: any(named: 'deltaAccountId'),
+        placeholderJids: any(named: 'placeholderJids'),
+      )).thenAnswer((_) async {});
 
   when(() => mockConnection.connect(
         shouldReconnect: false,
