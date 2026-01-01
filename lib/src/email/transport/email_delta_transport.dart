@@ -635,6 +635,26 @@ class EmailDeltaTransport implements ChatTransport {
     return context.getConfig(key);
   }
 
+  Future<String?> getOauth2Url({
+    required String address,
+    required String redirectUri,
+    int? accountId,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return null;
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return null;
+    }
+    return context.getOauth2Url(
+      address: address,
+      redirectUri: redirectUri,
+    );
+  }
+
   Future<void> setCoreConfig({
     required String key,
     required String value,

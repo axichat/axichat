@@ -5180,6 +5180,78 @@ abstract class AppLocalizations {
   /// **'Enter a valid email address.'**
   String get linkedEmailAccountsAddressInvalid;
 
+  /// No description provided for @linkedEmailAccountsOauthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Use OAuth'**
+  String get linkedEmailAccountsOauthLabel;
+
+  /// No description provided for @linkedEmailAccountsOauthDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended for Gmail, Outlook, and Yahoo.'**
+  String get linkedEmailAccountsOauthDescription;
+
+  /// No description provided for @linkedEmailAccountsOauthOpenAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open provider sign-in'**
+  String get linkedEmailAccountsOauthOpenAction;
+
+  /// No description provided for @linkedEmailAccountsOauthCodePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste authorization code'**
+  String get linkedEmailAccountsOauthCodePlaceholder;
+
+  /// No description provided for @linkedEmailAccountsOauthCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Authorization code'**
+  String get linkedEmailAccountsOauthCodeLabel;
+
+  /// No description provided for @linkedEmailAccountsOauthCodeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the authorization code.'**
+  String get linkedEmailAccountsOauthCodeRequired;
+
+  /// No description provided for @linkedEmailAccountsOauthUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth is not available for this provider yet.'**
+  String get linkedEmailAccountsOauthUnavailable;
+
+  /// No description provided for @linkedEmailAccountsOauthLaunchFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open the provider sign-in page.'**
+  String get linkedEmailAccountsOauthLaunchFailure;
+
+  /// No description provided for @linkedEmailAccountsOauthTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth sign-in timed out. Please try again.'**
+  String get linkedEmailAccountsOauthTimedOut;
+
+  /// No description provided for @linkedEmailAccountsOauthCallbackFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth sign-in did not finish. Please try again.'**
+  String get linkedEmailAccountsOauthCallbackFailure;
+
+  /// No description provided for @linkedEmailAccountsOauthBrowserTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat sign-in'**
+  String get linkedEmailAccountsOauthBrowserTitle;
+
+  /// No description provided for @linkedEmailAccountsOauthBrowserBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can close this window and return to Axichat.'**
+  String get linkedEmailAccountsOauthBrowserBody;
+
   /// No description provided for @linkedEmailAccountsPasswordPlaceholder.
   ///
   /// In en, this message translates to:
