@@ -11,10 +11,12 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_blocking_service.dart';
+import 'package:axichat/src/email/service/email_oauth.dart';
 import 'package:axichat/src/email/service/email_spam_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
@@ -80,6 +82,16 @@ const String _linkedEmailAccountPasswordKeyPrefix =
     'linked_email_account_password_v1';
 const String _linkedEmailAccountDisplayNameKeyPrefix =
     'linked_email_account_display_name_v1';
+const String _linkedEmailAccountAuthMethodKeyPrefix =
+    'linked_email_account_auth_method_v1';
+const String _linkedEmailAccountOauthProviderKeyPrefix =
+    'linked_email_account_oauth_provider_v1';
+const String _linkedEmailAccountOauthAccessTokenKeyPrefix =
+    'linked_email_account_oauth_access_token_v1';
+const String _linkedEmailAccountOauthRefreshTokenKeyPrefix =
+    'linked_email_account_oauth_refresh_token_v1';
+const String _linkedEmailAccountOauthExpiryKeyPrefix =
+    'linked_email_account_oauth_access_token_expiry_v1';
 const String _linkedEmailAccountDeltaIdKeyPrefix =
     'linked_email_account_delta_id_v1';
 const String _linkedEmailAccountProvisionedKeyPrefix =
@@ -94,6 +106,18 @@ const String _linkedEmailAccountMissingPasswordError =
 const String _linkedEmailAccountNotLinkedError = 'Email account is not linked.';
 const String _linkedEmailAccountsUnsupportedError =
     'Multiple email accounts are not supported on this device.';
+const String _linkedEmailAccountAuthMethodPasswordValue = 'password';
+const String _linkedEmailAccountAuthMethodOauthValue = 'oauth';
+const Set<String> _oauthPreferredDomains = {
+  'gmail.com',
+  'googlemail.com',
+  'outlook.com',
+  'hotmail.com',
+  'live.com',
+  'yahoo.com',
+  'ymail.com',
+  'rocketmail.com',
+};
 const String _linkedEmailAccountRemovalFailureLogMessage =
     'Failed to remove linked email account';
 const int _linkedEmailAccountsPrimaryCount = 1;
@@ -119,10 +143,13 @@ const _mailServerConfigKey = 'mail_server';
 const _mailPortConfigKey = 'mail_port';
 const _mailSecurityConfigKey = 'mail_security';
 const _mailUserConfigKey = 'mail_user';
+const _serverFlagsConfigKey = 'server_flags';
+const _serverFlagsOauthValue = '2';
 const _sendServerConfigKey = 'send_server';
 const _sendPortConfigKey = 'send_port';
 const _sendSecurityConfigKey = 'send_security';
 const _sendUserConfigKey = 'send_user';
+const String _sendPasswordConfigKey = 'send_pw';
 const _portUnsetValue = 0;
 const List<String> _connectionOverrideConfigKeys = <String>[
   _mailServerConfigKey,
@@ -149,6 +176,18 @@ const _imapCapabilityRefreshInterval = Duration(minutes: 10);
 const _reconnectRestartDelay = Duration(seconds: 2);
 const _imapConnectionLimitSingle = 1;
 const _imapConnectionLimitMulti = 2;
+const int _oauthTokenExpirySkewSeconds = 300;
+const Duration _oauthTokenExpirySkew =
+    Duration(seconds: _oauthTokenExpirySkewSeconds);
+const int _oauthTokenExpiryFallbackSeconds = 3600;
+const int _oauthEpochMillisMissing = -1;
+const String _oauthTokenContentType = 'application/x-www-form-urlencoded';
+const String _oauthGrantTypeAuthorizationCode = 'authorization_code';
+const String _oauthGrantTypeRefreshToken = 'refresh_token';
+const String _oauthTokenAccessKey = 'access_token';
+const String _oauthTokenRefreshKey = 'refresh_token';
+const String _oauthTokenExpiresInKey = 'expires_in';
+const String _oauthTokenExchangeFailureLog = 'OAuth token exchange failed';
 const Set<String> _imapConfigBoolTrueValues = {
   '1',
   'true',
@@ -184,6 +223,31 @@ enum _EmailSyncSource {
 
 extension _EmailSyncSourceLabels on _EmailSyncSource {
   String get logLabel => name;
+}
+
+enum EmailAuthMethod {
+  password,
+  oauth,
+}
+
+extension EmailAuthMethodStorage on EmailAuthMethod {
+  static EmailAuthMethod fromStored(String? value) {
+    final normalized = value?.trim().toLowerCase() ?? '';
+    return switch (normalized) {
+      _linkedEmailAccountAuthMethodOauthValue => EmailAuthMethod.oauth,
+      _linkedEmailAccountAuthMethodPasswordValue => EmailAuthMethod.password,
+      _ => EmailAuthMethod.password,
+    };
+  }
+
+  String get storageValue => switch (this) {
+        EmailAuthMethod.password => _linkedEmailAccountAuthMethodPasswordValue,
+        EmailAuthMethod.oauth => _linkedEmailAccountAuthMethodOauthValue,
+      };
+
+  bool get isPassword => this == EmailAuthMethod.password;
+
+  bool get isOauth => this == EmailAuthMethod.oauth;
 }
 
 typedef EmailConnectionConfigBuilder = Map<String, String> Function(
@@ -225,6 +289,7 @@ final class EmailAccountProfile {
     required this.id,
     required this.address,
     required this.displayName,
+    required this.authMethod,
     required this.isPrimary,
     this.deltaAccountId,
   });
@@ -232,6 +297,7 @@ final class EmailAccountProfile {
   final EmailAccountId id;
   final String address;
   final String displayName;
+  final EmailAuthMethod authMethod;
   final bool isPrimary;
   final int? deltaAccountId;
 
@@ -239,6 +305,7 @@ final class EmailAccountProfile {
     EmailAccountId? id,
     String? address,
     String? displayName,
+    EmailAuthMethod? authMethod,
     bool? isPrimary,
     int? deltaAccountId,
   }) {
@@ -246,6 +313,7 @@ final class EmailAccountProfile {
       id: id ?? this.id,
       address: address ?? this.address,
       displayName: displayName ?? this.displayName,
+      authMethod: authMethod ?? this.authMethod,
       isPrimary: isPrimary ?? this.isPrimary,
       deltaAccountId: deltaAccountId ?? this.deltaAccountId,
     );
@@ -409,7 +477,14 @@ class EmailService {
   final Map<String, RegisteredCredentialKey> _linkedAccountPrimaryKeys = {};
   final Map<String, RegisteredCredentialKey> _linkedAccountAddressKeys = {};
   final Map<String, RegisteredCredentialKey> _linkedAccountPasswordKeys = {};
+  final Map<String, RegisteredCredentialKey> _linkedAccountAuthMethodKeys = {};
   final Map<String, RegisteredCredentialKey> _linkedAccountDisplayNameKeys = {};
+  final Map<String, RegisteredCredentialKey> _linkedAccountOauthProviderKeys =
+      {};
+  final Map<String, RegisteredCredentialKey> _linkedAccountOauthAccessKeys = {};
+  final Map<String, RegisteredCredentialKey> _linkedAccountOauthRefreshKeys =
+      {};
+  final Map<String, RegisteredCredentialKey> _linkedAccountOauthExpiryKeys = {};
   final Map<String, RegisteredCredentialKey> _linkedAccountDeltaIdKeys = {};
   final Map<String, RegisteredCredentialKey> _linkedAccountProvisionedKeys = {};
   final Set<String> _ephemeralProvisionedScopes = {};
@@ -463,6 +538,31 @@ class EmailService {
 
   Map<String, String> _buildConnectionConfig(String address) =>
       _connectionConfigBuilder(address, _endpointConfig);
+
+  Map<String, String> _buildConnectionConfigForAuth({
+    required String address,
+    required EmailAuthMethod authMethod,
+  }) {
+    if (authMethod.isPassword) {
+      return _buildConnectionConfig(address);
+    }
+    final Map<String, String> overrides =
+        Map<String, String>.of(_buildConnectionConfig(address))
+          ..[_serverFlagsConfigKey] = _serverFlagsOauthValue;
+    final EmailOauthProvider? provider = emailOauthProviderForAddress(address);
+    if (provider == null || !provider.isConfigured) {
+      return overrides;
+    }
+    return overrides
+      ..[_mailServerConfigKey] = provider.imapHost
+      ..[_mailPortConfigKey] = provider.imapPort.toString()
+      ..[_mailSecurityConfigKey] = provider.imapSecurity
+      ..[_mailUserConfigKey] = address
+      ..[_sendServerConfigKey] = provider.smtpHost
+      ..[_sendPortConfigKey] = provider.smtpPort.toString()
+      ..[_sendSecurityConfigKey] = provider.smtpSecurity
+      ..[_sendUserConfigKey] = address;
+  }
 
   bool _hasConnectionOverrides(Map<String, String> connectionOverrides) =>
       _connectionOverrideConfigKeys.any(connectionOverrides.containsKey);
@@ -615,6 +715,244 @@ class EmailService {
   Stream<DeltaChatException> get authFailureStream =>
       _authFailureController.stream;
 
+  EmailAuthMethod preferredAuthMethodForAddress(String address) {
+    final String normalized = _normalizeLinkedAccountAddress(address);
+    if (normalized.isEmpty) {
+      return EmailAuthMethod.password;
+    }
+    final EmailOauthProvider? provider =
+        emailOauthProviderForAddress(normalized);
+    if (provider != null && provider.isConfigured) {
+      return EmailAuthMethod.oauth;
+    }
+    final String? domain = _domainFromAddress(normalized);
+    if (domain == null || domain.isEmpty) {
+      return EmailAuthMethod.password;
+    }
+    if (_oauthPreferredDomains.contains(domain)) {
+      return EmailAuthMethod.oauth;
+    }
+    return EmailAuthMethod.password;
+  }
+
+  EmailOauthAuthorization? oauthAuthorizationForAddress({
+    required String address,
+    required String redirectUri,
+  }) {
+    final String normalizedAddress = _normalizeLinkedAccountAddress(address);
+    if (normalizedAddress.isEmpty) {
+      return null;
+    }
+    final String normalizedRedirect = redirectUri.trim();
+    if (normalizedRedirect.isEmpty) {
+      return null;
+    }
+    return buildEmailOauthAuthorization(
+      address: normalizedAddress,
+      redirectUri: normalizedRedirect,
+    );
+  }
+
+  Future<String?> oauthUrlForAddress({
+    required String address,
+    required String redirectUri,
+  }) async {
+    await _ensureReady();
+    final String normalizedAddress = _normalizeLinkedAccountAddress(address);
+    if (normalizedAddress.isEmpty) {
+      throw StateError(_linkedEmailAccountMissingAddressError);
+    }
+    final String normalizedRedirect = redirectUri.trim();
+    if (normalizedRedirect.isEmpty) {
+      return null;
+    }
+    final EmailOauthAuthorization? authorization = buildEmailOauthAuthorization(
+      address: normalizedAddress,
+      redirectUri: normalizedRedirect,
+    );
+    if (authorization != null) {
+      return authorization.authorizationUrl;
+    }
+    return _transport.getOauth2Url(
+      address: normalizedAddress,
+      redirectUri: normalizedRedirect,
+    );
+  }
+
+  Future<EmailOauthTokens?> _exchangeOauthCode({
+    required EmailOauthProvider provider,
+    required String authorizationCode,
+    required EmailOauthAuthorization? authorization,
+  }) async {
+    if (authorization == null || authorization.provider != provider) {
+      return null;
+    }
+    final Map<String, String> body = <String, String>{
+      'grant_type': _oauthGrantTypeAuthorizationCode,
+      'code': authorizationCode,
+      'redirect_uri': authorization.redirectUri,
+      'client_id': provider.clientId,
+      'code_verifier': authorization.codeVerifier,
+    };
+    final String clientSecret = provider.clientSecret;
+    if (clientSecret.isNotEmpty) {
+      body['client_secret'] = clientSecret;
+    }
+    final Map<String, dynamic> payload = await _requestOauthToken(
+      provider: provider,
+      body: body,
+    );
+    return _parseOauthTokens(
+      payload: payload,
+      fallbackRefreshToken: '',
+    );
+  }
+
+  Future<EmailOauthTokens> _refreshOauthToken({
+    required EmailOauthProvider provider,
+    required String refreshToken,
+  }) async {
+    final Map<String, String> body = <String, String>{
+      'grant_type': _oauthGrantTypeRefreshToken,
+      'refresh_token': refreshToken,
+      'client_id': provider.clientId,
+    };
+    final String clientSecret = provider.clientSecret;
+    if (clientSecret.isNotEmpty) {
+      body['client_secret'] = clientSecret;
+    }
+    final Map<String, dynamic> payload = await _requestOauthToken(
+      provider: provider,
+      body: body,
+    );
+    return _parseOauthTokens(
+      payload: payload,
+      fallbackRefreshToken: refreshToken,
+    );
+  }
+
+  Future<String?> _ensureOauthAccessToken({
+    required String scope,
+    required EmailAccountId accountId,
+    required EmailOauthProvider provider,
+  }) async {
+    final String? currentToken = await _readLinkedAccountOauthAccessToken(
+      scope: scope,
+      accountId: accountId,
+    );
+    final DateTime? expiresAt = await _readLinkedAccountOauthExpiry(
+      scope: scope,
+      accountId: accountId,
+    );
+    final DateTime now = DateTime.now().toUtc();
+    if (currentToken != null &&
+        currentToken.isNotEmpty &&
+        expiresAt != null &&
+        expiresAt.isAfter(now.add(_oauthTokenExpirySkew))) {
+      return currentToken;
+    }
+    final String? refreshToken = await _readLinkedAccountOauthRefreshToken(
+      scope: scope,
+      accountId: accountId,
+    );
+    if (refreshToken == null || refreshToken.isEmpty) {
+      return currentToken;
+    }
+    final EmailOauthTokens refreshed = await _refreshOauthToken(
+      provider: provider,
+      refreshToken: refreshToken,
+    );
+    await _writeLinkedAccountOauthTokens(
+      scope: scope,
+      accountId: accountId,
+      provider: provider,
+      tokens: refreshed,
+    );
+    await _credentialStore.write(
+      key: _linkedAccountPasswordKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+      value: refreshed.accessToken,
+    );
+    return refreshed.accessToken;
+  }
+
+  Future<Map<String, dynamic>> _requestOauthToken({
+    required EmailOauthProvider provider,
+    required Map<String, String> body,
+  }) async {
+    final Uri endpoint = Uri.parse(provider.tokenEndpoint);
+    http.Response response;
+    try {
+      response = await http.post(
+        endpoint,
+        headers: const <String, String>{
+          'Content-Type': _oauthTokenContentType,
+        },
+        body: body,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(_oauthTokenExchangeFailureLog, error, stackTrace);
+      rethrow;
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _log.warning(
+        _oauthTokenExchangeFailureLog,
+        'Status: ${response.statusCode}',
+      );
+      throw const EmailProvisioningException(
+        'Unable to authenticate with the email provider.',
+        shouldWipeCredentials: true,
+      );
+    }
+    final Object? decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const EmailProvisioningException(
+        'Unable to authenticate with the email provider.',
+        shouldWipeCredentials: true,
+      );
+    }
+    return decoded;
+  }
+
+  EmailOauthTokens _parseOauthTokens({
+    required Map<String, dynamic> payload,
+    required String fallbackRefreshToken,
+  }) {
+    final String? accessToken = payload[_oauthTokenAccessKey] as String?;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw const EmailProvisioningException(
+        'Unable to authenticate with the email provider.',
+        shouldWipeCredentials: true,
+      );
+    }
+    final String refreshToken =
+        (payload[_oauthTokenRefreshKey] as String?) ?? fallbackRefreshToken;
+    final int expiresIn =
+        _parseOauthExpiresIn(payload[_oauthTokenExpiresInKey]);
+    final DateTime expiresAt =
+        DateTime.now().toUtc().add(Duration(seconds: expiresIn));
+    return EmailOauthTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      expiresAt: expiresAt,
+    );
+  }
+
+  int _parseOauthExpiresIn(Object? raw) {
+    if (raw is int) {
+      return raw;
+    }
+    if (raw is String) {
+      final int? parsed = int.tryParse(raw);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return _oauthTokenExpiryFallbackSeconds;
+  }
+
   Future<EmailAccount?> currentAccount(String jid) async {
     final scope = _scopeForJid(jid);
     final address = await _credentialStore.read(
@@ -736,7 +1074,35 @@ class EmailService {
     final String normalizedAddress = _normalizeLinkedAccountAddress(
       address ?? accountId.value,
     );
-    if (normalizedAddress.isEmpty || password == null || password.isEmpty) {
+    if (normalizedAddress.isEmpty) {
+      return null;
+    }
+    final EmailAuthMethod authMethod = await _readLinkedAccountAuthMethod(
+      scope: scope,
+      accountId: accountId,
+    );
+    if (authMethod.isOauth) {
+      final EmailOauthProvider? provider =
+          await _readLinkedAccountOauthProvider(
+        scope: scope,
+        accountId: accountId,
+      );
+      final EmailOauthProvider? resolvedProvider = provider ??
+          emailOauthProviderForAddress(
+            normalizedAddress,
+          );
+      if (resolvedProvider != null && resolvedProvider.isConfigured) {
+        final String? refreshed = await _ensureOauthAccessToken(
+          scope: scope,
+          accountId: accountId,
+          provider: resolvedProvider,
+        );
+        if (refreshed != null && refreshed.isNotEmpty) {
+          password = refreshed;
+        }
+      }
+    }
+    if (password == null || password.isEmpty) {
       return null;
     }
     return EmailAccount(
@@ -751,6 +1117,8 @@ class EmailService {
     required String password,
     String? displayName,
     bool setPrimary = false,
+    EmailAuthMethod authMethod = EmailAuthMethod.password,
+    EmailOauthAuthorization? oauthAuthorization,
   }) async {
     final String scope = _scopeForJid(jid);
     final String normalizedAddress = _normalizeLinkedAccountAddress(address);
@@ -761,7 +1129,19 @@ class EmailService {
     if (trimmedPassword.isEmpty) {
       throw StateError(_linkedEmailAccountMissingPasswordError);
     }
-    final String normalizedPassword = password;
+    final EmailOauthProvider? oauthProvider = authMethod.isOauth
+        ? emailOauthProviderForAddress(normalizedAddress)
+        : null;
+    final bool oauthConfigured =
+        oauthProvider != null && oauthProvider.isConfigured;
+    final EmailOauthTokens? oauthTokens = oauthConfigured
+        ? await _exchangeOauthCode(
+            provider: oauthProvider,
+            authorization: oauthAuthorization,
+            authorizationCode: trimmedPassword,
+          )
+        : null;
+    final String normalizedPassword = oauthTokens?.accessToken ?? password;
     final EmailAccountId? accountId = EmailAccountId.fromAddress(
       normalizedAddress,
     );
@@ -805,6 +1185,31 @@ class EmailService {
       ),
       value: normalizedPassword,
     );
+    if (oauthTokens != null && oauthProvider != null) {
+      await _writeLinkedAccountOauthTokens(
+        scope: scope,
+        accountId: accountId,
+        provider: oauthProvider,
+        tokens: oauthTokens,
+      );
+    } else if (authMethod.isOauth) {
+      await _clearLinkedAccountOauthTokens(
+        scope: scope,
+        accountId: accountId,
+      );
+    } else {
+      await _clearLinkedAccountOauthTokens(
+        scope: scope,
+        accountId: accountId,
+      );
+    }
+    await _credentialStore.write(
+      key: _linkedAccountAuthMethodKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+      value: authMethod.storageValue,
+    );
     final bool displayNameProvided = displayName != null;
     final String? normalizedDisplayName = _normalizeDisplayName(displayName);
     final RegisteredCredentialKey displayNameKey =
@@ -844,6 +1249,7 @@ class EmailService {
       id: accountId,
       address: normalizedAddress,
       displayName: resolvedDisplayName,
+      authMethod: authMethod,
       isPrimary: shouldSetPrimary,
       deltaAccountId: deltaAccountId,
     );
@@ -873,6 +1279,7 @@ class EmailService {
     required String jid,
     required EmailAccountId accountId,
     required String password,
+    EmailOauthAuthorization? oauthAuthorization,
   }) async {
     await _ensureReady();
     final String scope = _scopeForJid(jid);
@@ -884,13 +1291,48 @@ class EmailService {
       scope: scope,
       accountId: accountId,
     );
+    final EmailAuthMethod authMethod = await _readLinkedAccountAuthMethod(
+      scope: scope,
+      accountId: accountId,
+    );
+    final EmailOauthProvider? oauthProvider = authMethod.isOauth
+        ? emailOauthProviderForAddress(accountId.value)
+        : null;
+    final bool oauthConfigured =
+        oauthProvider != null && oauthProvider.isConfigured;
+    final EmailOauthTokens? oauthTokens = oauthConfigured
+        ? await _exchangeOauthCode(
+            provider: oauthProvider,
+            authorization: oauthAuthorization,
+            authorizationCode: trimmedPassword,
+          )
+        : null;
+    final String storedPassword = oauthTokens?.accessToken ?? password;
     await _credentialStore.write(
       key: _linkedAccountPasswordKeyFor(
         scope: scope,
         accountId: accountId,
       ),
-      value: password,
+      value: storedPassword,
     );
+    if (oauthTokens != null && oauthProvider != null) {
+      await _writeLinkedAccountOauthTokens(
+        scope: scope,
+        accountId: accountId,
+        provider: oauthProvider,
+        tokens: oauthTokens,
+      );
+    } else if (authMethod.isOauth) {
+      await _clearLinkedAccountOauthTokens(
+        scope: scope,
+        accountId: accountId,
+      );
+    } else {
+      await _clearLinkedAccountOauthTokens(
+        scope: scope,
+        accountId: accountId,
+      );
+    }
     final String normalizedAddress = _normalizeLinkedAccountAddress(
       accountId.value,
     );
@@ -1018,6 +1460,10 @@ class EmailService {
         scope: scope,
         accountId: accountId,
       ),
+    );
+    await _clearLinkedAccountOauthTokens(
+      scope: scope,
+      accountId: accountId,
     );
     await _credentialStore.delete(
       key: _linkedAccountDisplayNameKeyFor(
@@ -3939,6 +4385,106 @@ class EmailService {
     );
   }
 
+  RegisteredCredentialKey _linkedAccountAuthMethodKeyFor({
+    required String scope,
+    required EmailAccountId accountId,
+  }) {
+    final String cacheKey = _linkedAccountCacheKey(
+      scope: scope,
+      accountId: accountId,
+    );
+    return _linkedAccountAuthMethodKeys.putIfAbsent(
+      cacheKey,
+      () => CredentialStore.registerKey(
+        _linkedAccountKeyValue(
+          prefix: _linkedEmailAccountAuthMethodKeyPrefix,
+          scope: scope,
+          accountId: accountId,
+        ),
+      ),
+    );
+  }
+
+  RegisteredCredentialKey _linkedAccountOauthProviderKeyFor({
+    required String scope,
+    required EmailAccountId accountId,
+  }) {
+    final String cacheKey = _linkedAccountCacheKey(
+      scope: scope,
+      accountId: accountId,
+    );
+    return _linkedAccountOauthProviderKeys.putIfAbsent(
+      cacheKey,
+      () => CredentialStore.registerKey(
+        _linkedAccountKeyValue(
+          prefix: _linkedEmailAccountOauthProviderKeyPrefix,
+          scope: scope,
+          accountId: accountId,
+        ),
+      ),
+    );
+  }
+
+  RegisteredCredentialKey _linkedAccountOauthAccessTokenKeyFor({
+    required String scope,
+    required EmailAccountId accountId,
+  }) {
+    final String cacheKey = _linkedAccountCacheKey(
+      scope: scope,
+      accountId: accountId,
+    );
+    return _linkedAccountOauthAccessKeys.putIfAbsent(
+      cacheKey,
+      () => CredentialStore.registerKey(
+        _linkedAccountKeyValue(
+          prefix: _linkedEmailAccountOauthAccessTokenKeyPrefix,
+          scope: scope,
+          accountId: accountId,
+        ),
+      ),
+    );
+  }
+
+  RegisteredCredentialKey _linkedAccountOauthRefreshTokenKeyFor({
+    required String scope,
+    required EmailAccountId accountId,
+  }) {
+    final String cacheKey = _linkedAccountCacheKey(
+      scope: scope,
+      accountId: accountId,
+    );
+    return _linkedAccountOauthRefreshKeys.putIfAbsent(
+      cacheKey,
+      () => CredentialStore.registerKey(
+        _linkedAccountKeyValue(
+          prefix: _linkedEmailAccountOauthRefreshTokenKeyPrefix,
+          scope: scope,
+          accountId: accountId,
+        ),
+      ),
+    );
+  }
+
+  RegisteredCredentialKey _linkedAccountOauthExpiryKeyFor({
+    required String scope,
+    required EmailAccountId accountId,
+  }) {
+    final String cacheKey = _linkedAccountCacheKey(
+      scope: scope,
+      accountId: accountId,
+    );
+    return _linkedAccountOauthExpiryKeys.putIfAbsent(
+      cacheKey,
+      () => CredentialStore.registerKey(
+        _linkedAccountKeyValue(
+          prefix: _linkedEmailAccountOauthExpiryKeyPrefix,
+          scope: scope,
+          accountId: accountId,
+        ),
+      ),
+    );
+  }
+
   RegisteredCredentialKey _linkedAccountDisplayNameKeyFor({
     required String scope,
     required EmailAccountId accountId,
@@ -4033,6 +4579,7 @@ class EmailService {
       id: accountId,
       address: address,
       displayName: resolvedDisplayName,
+      authMethod: EmailAuthMethod.password,
       isPrimary: true,
       deltaAccountId: null,
     );
@@ -4169,6 +4716,148 @@ class EmailService {
     return int.tryParse(stored);
   }
 
+  Future<EmailAuthMethod> _readLinkedAccountAuthMethod({
+    required String scope,
+    required EmailAccountId accountId,
+  }) async {
+    final RegisteredCredentialKey key = _linkedAccountAuthMethodKeyFor(
+      scope: scope,
+      accountId: accountId,
+    );
+    final String? stored = await _credentialStore.read(key: key);
+    return EmailAuthMethodStorage.fromStored(stored);
+  }
+
+  Future<EmailOauthProvider?> _readLinkedAccountOauthProvider({
+    required String scope,
+    required EmailAccountId accountId,
+  }) async {
+    final RegisteredCredentialKey key = _linkedAccountOauthProviderKeyFor(
+      scope: scope,
+      accountId: accountId,
+    );
+    final String? stored = await _credentialStore.read(key: key);
+    return stored == null ? null : emailOauthProviderFromStorage(stored);
+  }
+
+  Future<String?> _readLinkedAccountOauthAccessToken({
+    required String scope,
+    required EmailAccountId accountId,
+  }) async {
+    return _credentialStore.read(
+      key: _linkedAccountOauthAccessTokenKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+    );
+  }
+
+  Future<String?> _readLinkedAccountOauthRefreshToken({
+    required String scope,
+    required EmailAccountId accountId,
+  }) async {
+    return _credentialStore.read(
+      key: _linkedAccountOauthRefreshTokenKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+    );
+  }
+
+  Future<DateTime?> _readLinkedAccountOauthExpiry({
+    required String scope,
+    required EmailAccountId accountId,
+  }) async {
+    final String? stored = await _credentialStore.read(
+      key: _linkedAccountOauthExpiryKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+    );
+    final int? millis = _parseEpochMillis(stored);
+    if (millis == null) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+  }
+
+  Future<void> _writeLinkedAccountOauthTokens({
+    required String scope,
+    required EmailAccountId accountId,
+    required EmailOauthProvider provider,
+    required EmailOauthTokens tokens,
+  }) async {
+    await _credentialStore.write(
+      key: _linkedAccountOauthProviderKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+      value: provider.storageValue,
+    );
+    await _credentialStore.write(
+      key: _linkedAccountOauthAccessTokenKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+      value: tokens.accessToken,
+    );
+    await _credentialStore.write(
+      key: _linkedAccountOauthRefreshTokenKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+      value: tokens.refreshToken,
+    );
+    await _credentialStore.write(
+      key: _linkedAccountOauthExpiryKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+      value: tokens.expiresAt.millisecondsSinceEpoch.toString(),
+    );
+  }
+
+  Future<void> _clearLinkedAccountOauthTokens({
+    required String scope,
+    required EmailAccountId accountId,
+  }) async {
+    await _credentialStore.delete(
+      key: _linkedAccountOauthProviderKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+    );
+    await _credentialStore.delete(
+      key: _linkedAccountOauthAccessTokenKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+    );
+    await _credentialStore.delete(
+      key: _linkedAccountOauthRefreshTokenKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+    );
+    await _credentialStore.delete(
+      key: _linkedAccountOauthExpiryKeyFor(
+        scope: scope,
+        accountId: accountId,
+      ),
+    );
+  }
+
+  int? _parseEpochMillis(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    final int? parsed = int.tryParse(value);
+    if (parsed == null || parsed <= _oauthEpochMillisMissing) {
+      return null;
+    }
+    return parsed;
+  }
+
   Future<EmailAccountProfile?> _readLinkedAccountProfile({
     required String scope,
     required EmailAccountId accountId,
@@ -4196,6 +4885,10 @@ class EmailService {
       resolvedAddress,
       displayName: storedDisplayName,
     );
+    final EmailAuthMethod authMethod = await _readLinkedAccountAuthMethod(
+      scope: scope,
+      accountId: accountId,
+    );
     final int? deltaAccountId = await _readLinkedAccountDeltaId(
       scope: scope,
       accountId: accountId,
@@ -4205,6 +4898,7 @@ class EmailService {
       id: accountId,
       address: resolvedAddress,
       displayName: resolvedDisplayName,
+      authMethod: authMethod,
       isPrimary: isPrimary,
       deltaAccountId: deltaAccountId,
     );
@@ -4253,6 +4947,20 @@ class EmailService {
           value: legacyPassword,
         );
       }
+    }
+    final RegisteredCredentialKey authMethodKey =
+        _linkedAccountAuthMethodKeyFor(
+      scope: scope,
+      accountId: accountId,
+    );
+    final String? existingAuthMethod = await _credentialStore.read(
+      key: authMethodKey,
+    );
+    if (existingAuthMethod == null || existingAuthMethod.isEmpty) {
+      await _credentialStore.write(
+        key: authMethodKey,
+        value: EmailAuthMethod.password.storageValue,
+      );
     }
     final String? legacyProvisioned = await _credentialStore.read(
       key: _provisionedKeyForScope(scope),
@@ -4305,6 +5013,12 @@ class EmailService {
       );
       await _credentialStore.delete(
         key: _linkedAccountPasswordKeyFor(
+          scope: scope,
+          accountId: accountId,
+        ),
+      );
+      await _credentialStore.delete(
+        key: _linkedAccountAuthMethodKeyFor(
           scope: scope,
           accountId: accountId,
         ),
@@ -4499,16 +5213,28 @@ class EmailService {
       scope: scope,
       accountId: account.id,
     );
+    final EmailAuthMethod authMethod = await _readLinkedAccountAuthMethod(
+      scope: scope,
+      accountId: account.id,
+    );
     final String displayName = profile?.displayName ??
         _displayNameForAddress(
           account.address,
         );
+    final Map<String, String> connectionOverrides =
+        _buildConnectionConfigForAuth(
+      address: account.address,
+      authMethod: authMethod,
+    );
+    final Map<String, String> configureOverrides =
+        Map<String, String>.of(connectionOverrides)
+          ..[_sendPasswordConfigKey] = credentials.password;
     try {
       await _transport.configureAccount(
         address: account.address,
         password: credentials.password,
         displayName: displayName,
-        additional: _buildConnectionConfig(account.address),
+        additional: configureOverrides,
         accountId: account.deltaAccountId,
       );
       await _transport.purgeStockMessages(accountId: account.deltaAccountId);
@@ -4724,6 +5450,13 @@ class EmailService {
           accountId: accountId,
         ),
         value: _activeAccount!.password,
+      );
+      await _credentialStore.write(
+        key: _linkedAccountAuthMethodKeyFor(
+          scope: scope,
+          accountId: accountId,
+        ),
+        value: EmailAuthMethod.password.storageValue,
       );
       await _credentialStore.write(
         key: _linkedAccountProvisionedKeyFor(

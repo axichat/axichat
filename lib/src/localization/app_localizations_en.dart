@@ -2850,6 +2850,50 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter a valid email address.';
 
   @override
+  String get linkedEmailAccountsOauthLabel => 'Use OAuth';
+
+  @override
+  String get linkedEmailAccountsOauthDescription =>
+      'Recommended for Gmail, Outlook, and Yahoo.';
+
+  @override
+  String get linkedEmailAccountsOauthOpenAction => 'Open provider sign-in';
+
+  @override
+  String get linkedEmailAccountsOauthCodePlaceholder =>
+      'Paste authorization code';
+
+  @override
+  String get linkedEmailAccountsOauthCodeLabel => 'Authorization code';
+
+  @override
+  String get linkedEmailAccountsOauthCodeRequired =>
+      'Enter the authorization code.';
+
+  @override
+  String get linkedEmailAccountsOauthUnavailable =>
+      'OAuth is not available for this provider yet.';
+
+  @override
+  String get linkedEmailAccountsOauthLaunchFailure =>
+      'Unable to open the provider sign-in page.';
+
+  @override
+  String get linkedEmailAccountsOauthTimedOut =>
+      'OAuth sign-in timed out. Please try again.';
+
+  @override
+  String get linkedEmailAccountsOauthCallbackFailure =>
+      'OAuth sign-in did not finish. Please try again.';
+
+  @override
+  String get linkedEmailAccountsOauthBrowserTitle => 'Axichat sign-in';
+
+  @override
+  String get linkedEmailAccountsOauthBrowserBody =>
+      'You can close this window and return to Axichat.';
+
+  @override
   String get linkedEmailAccountsPasswordPlaceholder => 'Enter app password';
 
   @override

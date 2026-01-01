@@ -2775,6 +2775,43 @@ class AppLocalizationsZh extends AppLocalizations {
       'Enter a valid email address.';
 
   @override
+  String get linkedEmailAccountsOauthLabel => '使用 OAuth';
+
+  @override
+  String get linkedEmailAccountsOauthDescription =>
+      '推荐用于 Gmail、Outlook 和 Yahoo。';
+
+  @override
+  String get linkedEmailAccountsOauthOpenAction => '打开提供商登录';
+
+  @override
+  String get linkedEmailAccountsOauthCodePlaceholder => '粘贴授权码';
+
+  @override
+  String get linkedEmailAccountsOauthCodeLabel => '授权码';
+
+  @override
+  String get linkedEmailAccountsOauthCodeRequired => '请输入授权码。';
+
+  @override
+  String get linkedEmailAccountsOauthUnavailable => '该提供商暂不支持 OAuth。';
+
+  @override
+  String get linkedEmailAccountsOauthLaunchFailure => '无法打开提供商登录页面。';
+
+  @override
+  String get linkedEmailAccountsOauthTimedOut => 'OAuth 登录已超时。请重试。';
+
+  @override
+  String get linkedEmailAccountsOauthCallbackFailure => 'OAuth 登录未完成。请重试。';
+
+  @override
+  String get linkedEmailAccountsOauthBrowserTitle => 'Axichat 登录';
+
+  @override
+  String get linkedEmailAccountsOauthBrowserBody => '你可以关闭此窗口并返回 Axichat。';
+
+  @override
   String get linkedEmailAccountsPasswordPlaceholder => 'Enter app password';
 
   @override
@@ -5935,6 +5972,43 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String get linkedEmailAccountsAddressInvalid =>
       'Enter a valid email address.';
+
+  @override
+  String get linkedEmailAccountsOauthLabel => '使用 OAuth';
+
+  @override
+  String get linkedEmailAccountsOauthDescription =>
+      '建議用於 Gmail、Outlook 及 Yahoo。';
+
+  @override
+  String get linkedEmailAccountsOauthOpenAction => '開啟供應商登入';
+
+  @override
+  String get linkedEmailAccountsOauthCodePlaceholder => '貼上授權碼';
+
+  @override
+  String get linkedEmailAccountsOauthCodeLabel => '授權碼';
+
+  @override
+  String get linkedEmailAccountsOauthCodeRequired => '請輸入授權碼。';
+
+  @override
+  String get linkedEmailAccountsOauthUnavailable => '此供應商暫不支援 OAuth。';
+
+  @override
+  String get linkedEmailAccountsOauthLaunchFailure => '無法開啟供應商登入頁面。';
+
+  @override
+  String get linkedEmailAccountsOauthTimedOut => 'OAuth 登入已逾時。請再試一次。';
+
+  @override
+  String get linkedEmailAccountsOauthCallbackFailure => 'OAuth 登入未完成。請再試一次。';
+
+  @override
+  String get linkedEmailAccountsOauthBrowserTitle => 'Axichat 登入';
+
+  @override
+  String get linkedEmailAccountsOauthBrowserBody => '你可以關閉此視窗並返回 Axichat。';
 
   @override
   String get linkedEmailAccountsPasswordPlaceholder => 'Enter app password';
