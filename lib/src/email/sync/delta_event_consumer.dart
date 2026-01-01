@@ -7,6 +7,7 @@ import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
+import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -15,8 +16,6 @@ import 'package:axichat/src/xmpp/xmpp_service.dart'
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 
-const _deltaDomain = 'delta.chat';
-const _deltaSelfJid = 'dc-self@$_deltaDomain';
 const int _deltaChatLastSpecialId = DeltaChatId.lastSpecial;
 const int _deltaChatIdUnset = DeltaChatId.none;
 const _bootstrapYieldEveryMessages = 40;
@@ -156,26 +155,30 @@ class DeltaEventConsumer {
     required DeltaContextHandle context,
     MessageStorageMode messageStorageMode = MessageStorageMode.local,
     String? Function()? selfJidProvider,
+    int? accountId,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
         _messageStorageMode = messageStorageMode,
         _selfJidProvider = selfJidProvider,
+        _accountId = accountId,
         _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
   MessageStorageMode _messageStorageMode;
   final String? Function()? _selfJidProvider;
+  final int? _accountId;
   final Logger _log;
 
   void updateMessageStorageMode(MessageStorageMode mode) {
     _messageStorageMode = mode;
   }
 
-  String get _selfJid => _selfJidProvider?.call() ?? _deltaSelfJid;
+  String get _selfJid => _selfJidProvider?.call() ?? deltaSelfJid;
 
-  int get _deltaAccountId => _context.accountId ?? deltaAccountIdLegacy;
+  int get _deltaAccountId =>
+      _accountId ?? _context.accountId ?? deltaAccountIdLegacy;
 
   Future<bool> bootstrapFromCore() async {
     final int deltaAccountId = _deltaAccountId;
@@ -354,29 +357,69 @@ class DeltaEventConsumer {
         continue;
       }
       final chat = await _ensureChat(chatId);
-      var updated = chat;
       final isArchived = archivedChatIds.contains(chatId);
+      var updated = chat;
+      var hydratedLastMessage = false;
+      DateTime? lastTimestamp;
+      String? lastPreview;
+      if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
+        final last = await _context.getMessage(entry.msgId);
+        lastTimestamp = last?.timestamp;
+        lastPreview = last?.text?.trim();
+        if (last != null) {
+          final stanzaId = _stanzaId(
+            entry.msgId,
+            accountId: deltaAccountId,
+          );
+          final existing = await db.getMessageByStanzaID(stanzaId);
+          if (existing == null) {
+            await _ingestDeltaMessage(
+              chatId: chatId,
+              msg: last,
+              chat: updated,
+              skipSystemChatCheck: true,
+            );
+            hydratedLastMessage = true;
+          }
+        }
+      }
       if (updated.archived != isArchived) {
         updated = updated.copyWith(archived: isArchived);
       }
-      if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
-        final last = await _context.getMessage(entry.msgId);
-        final timestamp = last?.timestamp;
-        final preview = last?.text?.trim();
+      if (!hydratedLastMessage && lastTimestamp != null) {
         final newerTimestamp =
-            timestamp != null && timestamp.isAfter(updated.lastChangeTimestamp);
+            lastTimestamp.isAfter(updated.lastChangeTimestamp);
         if (newerTimestamp) {
-          updated = updated.copyWith(lastChangeTimestamp: timestamp);
+          updated = updated.copyWith(lastChangeTimestamp: lastTimestamp);
         }
-        if (newerTimestamp && preview != null && preview.isNotEmpty) {
-          updated = updated.copyWith(lastMessage: preview);
+        if (newerTimestamp && lastPreview != null && lastPreview.isNotEmpty) {
+          updated = updated.copyWith(lastMessage: lastPreview);
         }
       }
       final freshCount = await _context.getFreshMessageCountSafe(chatId);
       if (freshCount.supported && freshCount.count != updated.unreadCount) {
         updated = updated.copyWith(unreadCount: freshCount.count);
       }
-      if (updated != chat) {
+      if (hydratedLastMessage) {
+        final refreshed = await db.getChat(updated.jid);
+        if (refreshed == null) {
+          if (updated != chat) {
+            await db.updateChat(updated);
+          }
+        } else {
+          var merged = refreshed;
+          if (merged.archived != updated.archived ||
+              merged.unreadCount != updated.unreadCount) {
+            merged = merged.copyWith(
+              archived: updated.archived,
+              unreadCount: updated.unreadCount,
+            );
+          }
+          if (merged != refreshed) {
+            await db.updateChat(merged);
+          }
+        }
+      } else if (updated != chat) {
         await db.updateChat(updated);
       }
       processed += 1;

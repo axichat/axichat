@@ -10,6 +10,8 @@ class AxiAdaptiveLayout extends StatelessWidget {
     required this.primaryChild,
     required this.secondaryChild,
     this.invertPriority = false,
+    this.showPrimary = true,
+    this.showSecondary = true,
     this.panePadding = EdgeInsets.zero,
     this.centerPrimary = true,
     this.centerSecondary = true,
@@ -25,6 +27,8 @@ class AxiAdaptiveLayout extends StatelessWidget {
   final Widget primaryChild;
   final Widget secondaryChild;
   final bool invertPriority;
+  final bool showPrimary;
+  final bool showSecondary;
   final EdgeInsets panePadding;
   final EdgeInsets primaryPadding;
   final EdgeInsets secondaryPadding;
@@ -46,7 +50,14 @@ class AxiAdaptiveLayout extends StatelessWidget {
         final bool allowSplitView =
             !isCompactDevice && constraints.maxWidth >= smallScreen;
 
+        if (!showPrimary && !showSecondary) {
+          return const SizedBox.shrink();
+        }
+
         if (!allowSplitView) {
+          final compactChild = showPrimary && showSecondary
+              ? (invertPriority ? secondaryChild : primaryChild)
+              : (showPrimary ? primaryChild : secondaryChild);
           return ConstrainedBox(
             constraints: constraints,
             child: Center(
@@ -69,7 +80,7 @@ class AxiAdaptiveLayout extends StatelessWidget {
                     child: child,
                   );
                 },
-                child: invertPriority ? secondaryChild : primaryChild,
+                child: compactChild,
               ),
             ),
           );
@@ -84,30 +95,52 @@ class AxiAdaptiveLayout extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                flex: primaryFlex,
-                child: Padding(
-                  padding: primaryPadding,
-                  child: Align(
+              if (showPrimary)
+                Expanded(
+                  flex: primaryFlex,
+                  child: AxiAdaptivePane(
                     alignment: primaryAlign,
+                    padding: primaryPadding,
                     child: primaryChild,
                   ),
                 ),
-              ),
-              Expanded(
-                flex: secondaryFlex,
-                child: Padding(
-                  padding: secondaryPadding,
-                  child: Align(
+              if (showSecondary)
+                Expanded(
+                  flex: secondaryFlex,
+                  child: AxiAdaptivePane(
                     alignment: secondaryAlign,
+                    padding: secondaryPadding,
                     child: secondaryChild,
                   ),
                 ),
-              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class AxiAdaptivePane extends StatelessWidget {
+  const AxiAdaptivePane({
+    super.key,
+    required this.alignment,
+    required this.padding,
+    required this.child,
+  });
+
+  final Alignment alignment;
+  final EdgeInsets padding;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Align(
+        alignment: alignment,
+        child: child,
+      ),
     );
   }
 }

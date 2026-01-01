@@ -92,7 +92,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
-  final GlobalKey _chatPaneKey = GlobalKey();
   bool _railCollapsed = true;
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
@@ -357,56 +356,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     final Widget chatPaneContent = openJid == null
                         ? const chat_view.GuestChat()
-                        : KeyedSubtree(
-                            key: _chatPaneKey,
-                            child: MultiBlocProvider(
-                              providers: [
+                        : MultiBlocProvider(
+                            providers: [
+                              BlocProvider(
+                                key: Key(
+                                  openJid,
+                                ),
+                                create: (context) => ChatBloc(
+                                  jid: openJid,
+                                  messageService: context.read<XmppService>(),
+                                  chatsService: context.read<XmppService>(),
+                                  mucService: context.read<XmppService>(),
+                                  notificationService:
+                                      context.read<NotificationService>(),
+                                  emailService: context.read<EmailService>(),
+                                  omemoService: isOmemo
+                                      ? context.read<XmppService>()
+                                          as OmemoService
+                                      : null,
+                                  settingsCubit: context.read<SettingsCubit>(),
+                                ),
+                              ),
+                              BlocProvider(
+                                create: (context) => ChatSearchCubit(
+                                  jid: openJid,
+                                  messageService: context.read<XmppService>(),
+                                  emailService: context.read<EmailService>(),
+                                ),
+                              ),
+                              /* Verification flow temporarily disabled
+                              if (isOmemo)
                                 BlocProvider(
-                                  key: Key(
-                                    openJid,
-                                  ),
-                                  create: (context) => ChatBloc(
+                                  create: (context) => VerificationCubit(
                                     jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    chatsService: context.read<XmppService>(),
-                                    mucService: context.read<XmppService>(),
-                                    notificationService:
-                                        context.read<NotificationService>(),
-                                    emailService: context.read<EmailService>(),
-                                    omemoService: isOmemo
-                                        ? context.read<XmppService>()
-                                            as OmemoService
-                                        : null,
-                                    settingsCubit:
-                                        context.read<SettingsCubit>(),
+                                    omemoService:
+                                        context.read<XmppService>()
+                                            as OmemoService,
                                   ),
                                 ),
-                                BlocProvider(
-                                  create: (context) => ChatSearchCubit(
-                                    jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    emailService: context.read<EmailService>(),
-                                  ),
-                                ),
-                                /* Verification flow temporarily disabled
-                                if (isOmemo)
-                                  BlocProvider(
-                                    create: (context) =>
-                                        VerificationCubit(
-                                      jid: openJid,
-                                      omemoService:
-                                          context.read<XmppService>()
-                                              as OmemoService,
-                                    ),
-                                  ),
-                                */
-                              ],
-                              child: const chat_view.Chat(),
-                            ),
+                              */
+                            ],
+                            child: const chat_view.Chat(),
                           );
                     final Widget chatPane = constrainSecondary(chatPaneContent);
 
-                    Widget chatLayout() {
+                    Widget chatLayout({required bool showChatCalendar}) {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -414,6 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: AxiAdaptiveLayout(
                               invertPriority: openJid != null,
+                              showPrimary: !showChatCalendar,
                               centerSecondary: false,
                               centerPrimary: false,
                               primaryAlignment: Alignment.topLeft,
@@ -449,13 +444,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         );
-                    Widget chatCalendarLayout() => Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (navRail != null) navRail,
-                            Expanded(child: chatPane),
-                          ],
-                        );
 
                     final bool demoOffline =
                         context.read<XmppService?>()?.demoOfflineMode ?? false;
@@ -466,9 +454,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       top: state is ConnectivityConnected || demoOffline,
                       child: openCalendar
                           ? calendarLayout()
-                          : showChatCalendar
-                              ? chatCalendarLayout()
-                              : chatLayout(),
+                          : chatLayout(showChatCalendar: showChatCalendar),
                     );
                   },
                 ),
