@@ -1,16 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart'
-    show serverOnlyChatMessageCap;
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
@@ -18,7 +15,6 @@ import 'package:path/path.dart' as p;
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'chat_transport.dart';
 
-const _selfDomain = 'user.delta.chat';
 const _deltaConfigClearedValue = '';
 const _deltaConfigKeyAddress = 'addr';
 const _deltaConfigKeyMailPassword = 'mail_pw';
@@ -41,8 +37,6 @@ const String _deltaSecurityModeAutoNumeric = '0';
 const String _deltaSecurityModeSslNumeric = '1';
 const String _deltaSecurityModeStartTlsNumeric = '2';
 const String _deltaSecurityModePlainNumeric = '3';
-const String _deltaMessageStanzaPrefix = 'dc-msg';
-const String _deltaMessageStanzaSeparator = '-';
 const int _imapImplicitTlsPort = 993;
 const int _smtpImplicitTlsPort = 465;
 const String _mailTransportLabel = 'mail';
@@ -688,7 +682,7 @@ class EmailDeltaTransport implements ChatTransport {
   String _selfJidForAddress(String? address) {
     final trimmed = address?.trim();
     if (trimmed == null || trimmed.isEmpty) {
-      return 'dc-anon@$_selfDomain';
+      return deltaAnonUserJid;
     }
     return trimmed;
   }
@@ -737,6 +731,7 @@ class EmailDeltaTransport implements ChatTransport {
       context: context,
       messageStorageMode: _messageStorageMode,
       selfJidProvider: () => _selfJidForAccount(accountId),
+      accountId: accountId,
       logger: _log,
     );
     final session = _DeltaAccountSession(
@@ -1086,17 +1081,7 @@ class EmailDeltaTransport implements ChatTransport {
       subject: sanitizedSubject,
       html: htmlBody,
     );
-    final deltaMessage = await context.getMessage(msgId);
-    await _recordOutgoing(
-      chatId: chatId,
-      msgId: msgId,
-      accountId: session.accountId,
-      body: body,
-      shareId: shareId,
-      localBodyOverride: localBodyOverride,
-      htmlBody: htmlBody,
-      timestamp: deltaMessage?.timestamp,
-    );
+    await session.consumer.hydrateMessage(msgId);
     return msgId;
   }
 
@@ -1131,28 +1116,7 @@ class EmailDeltaTransport implements ChatTransport {
       subject: sanitizedSubject,
       html: htmlCaption,
     );
-    final deltaMessage = await context.getMessage(msgId);
-    var metadata = _metadataForAttachment(attachment, msgId);
-    if (deltaMessage != null) {
-      metadata = metadata.copyWith(
-        path: deltaMessage.filePath ?? metadata.path,
-        mimeType: deltaMessage.fileMime ?? metadata.mimeType,
-        sizeBytes: deltaMessage.fileSize ?? metadata.sizeBytes,
-        width: deltaMessage.width ?? metadata.width,
-        height: deltaMessage.height ?? metadata.height,
-      );
-    }
-    await _recordOutgoing(
-      chatId: chatId,
-      msgId: msgId,
-      accountId: session.accountId,
-      body: attachment.caption,
-      metadata: metadata,
-      shareId: shareId,
-      localBodyOverride: captionOverride,
-      htmlBody: htmlCaption,
-      timestamp: deltaMessage?.timestamp,
-    );
+    await session.consumer.hydrateMessage(msgId);
     return msgId;
   }
 
@@ -1178,70 +1142,6 @@ class EmailDeltaTransport implements ChatTransport {
       context: context,
     );
     return chatId;
-  }
-
-  Future<void> _recordOutgoing({
-    required int chatId,
-    required int msgId,
-    required int accountId,
-    String? body,
-    FileMetadataData? metadata,
-    String? shareId,
-    String? localBodyOverride,
-    String? htmlBody,
-    DateTime? timestamp,
-  }) async {
-    final db = await _databaseBuilder();
-    final chat = await _ensureChat(
-      chatId,
-      accountId: accountId,
-    );
-    final int deltaAccountId = accountId;
-    if (metadata != null) {
-      await db.saveFileMetadata(metadata);
-    }
-    final displayBody = localBodyOverride ?? body;
-    final resolvedBody = (displayBody?.trim().isNotEmpty == true)
-        ? displayBody!.trim()
-        : (metadata == null ? null : _attachmentLabel(metadata));
-    final resolvedTimestamp = timestamp ?? DateTime.timestamp();
-    final message = Message(
-      stanzaID: _stanzaId(
-        msgId,
-        accountId: deltaAccountId,
-      ),
-      senderJid: _selfJidForAccount(deltaAccountId) ?? _selfJidForAddress(null),
-      chatJid: chat.jid,
-      timestamp: resolvedTimestamp,
-      body: resolvedBody,
-      htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
-      encryptionProtocol: EncryptionProtocol.none,
-      acked: false,
-      received: false,
-      deltaChatId: chatId,
-      deltaMsgId: msgId,
-      deltaAccountId: deltaAccountId,
-      fileMetadataID: metadata?.id,
-    );
-    await db.saveMessage(message);
-    if (_messageStorageMode.isServerOnly) {
-      await db.trimChatMessages(
-        jid: chat.jid,
-        maxMessages: serverOnlyChatMessageCap,
-        deltaAccountId: deltaAccountId,
-      );
-    }
-    await db.updateChat(
-      chat.copyWith(lastChangeTimestamp: resolvedTimestamp),
-    );
-    if (shareId != null) {
-      await db.insertMessageCopy(
-        shareId: shareId,
-        dcMsgId: msgId,
-        dcChatId: chatId,
-        dcAccountId: deltaAccountId,
-      );
-    }
   }
 
   Future<Chat> _ensureChat(
@@ -1375,47 +1275,6 @@ class EmailDeltaTransport implements ChatTransport {
       default:
         return ChatType.chat;
     }
-  }
-
-  FileMetadataData _metadataForAttachment(
-    EmailAttachment attachment,
-    int msgId,
-  ) {
-    final sanitizedFileName = sanitizeEmailAttachmentFilename(
-      attachment.fileName,
-      fallbackPath: attachment.path,
-    );
-    final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
-    return FileMetadataData(
-      id: deltaFileMetadataId(msgId),
-      filename: sanitizedFileName,
-      path: attachment.path,
-      mimeType: sanitizedMimeType,
-      sizeBytes: attachment.sizeBytes,
-      width: attachment.width,
-      height: attachment.height,
-    );
-  }
-
-  String _attachmentLabel(FileMetadataData metadata) {
-    final sizeBytes = metadata.sizeBytes;
-    final label = metadata.filename.trim();
-    if (sizeBytes == null) return '📎 $label';
-    final sizeLabel = _formatBytes(sizeBytes);
-    return '📎 $label ($sizeLabel)';
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return 'Unknown size';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex++;
-    }
-    final precision = value >= 10 || unitIndex == 0 ? 0 : 1;
-    return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
   }
 
   int _viewTypeFor(EmailAttachment attachment) {
@@ -1840,15 +1699,4 @@ String _normalizedAddress(String? raw, int chatId) {
     return fallbackEmailAddressForChat(chatId);
   }
   return normalizeEmailAddress(raw);
-}
-
-String _stanzaId(
-  int msgId, {
-  required int accountId,
-}) {
-  if (accountId == deltaAccountIdLegacy) {
-    return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator$msgId';
-  }
-  return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator'
-      '$accountId$_deltaMessageStanzaSeparator$msgId';
 }
