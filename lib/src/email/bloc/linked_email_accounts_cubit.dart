@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/email/service/email_oauth.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -71,6 +72,8 @@ class LinkedEmailAccountsCubit extends Cubit<LinkedEmailAccountsState> {
     required String address,
     required String password,
     bool setPrimary = false,
+    EmailAuthMethod authMethod = EmailAuthMethod.password,
+    EmailOauthAuthorization? oauthAuthorization,
   }) async {
     if (!state.supportsMultipleAccounts && state.accounts.isNotEmpty) {
       emit(
@@ -115,6 +118,8 @@ class LinkedEmailAccountsCubit extends Cubit<LinkedEmailAccountsState> {
         address: address,
         password: password,
         setPrimary: setPrimary,
+        authMethod: authMethod,
+        oauthAuthorization: oauthAuthorization,
       );
       try {
         await _emailService.provisionLinkedAccount(
@@ -329,6 +334,7 @@ class LinkedEmailAccountsCubit extends Cubit<LinkedEmailAccountsState> {
   Future<void> updatePassword({
     required EmailAccountId accountId,
     required String password,
+    EmailOauthAuthorization? oauthAuthorization,
   }) async {
     if (state.actionStatus.isLoading) {
       return;
@@ -346,6 +352,7 @@ class LinkedEmailAccountsCubit extends Cubit<LinkedEmailAccountsState> {
         jid: _jid,
         accountId: accountId,
         password: password,
+        oauthAuthorization: oauthAuthorization,
       );
       final List<EmailAccountProfile> accounts =
           await _emailService.linkedAccounts(_jid);
