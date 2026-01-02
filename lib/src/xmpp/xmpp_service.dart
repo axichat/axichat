@@ -464,6 +464,7 @@ class XmppService extends XmppBase
   var _hasInitializedDatabases = false;
   final _databaseReloadController = StreamController<void>.broadcast();
   final _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
+  StoredAvatar? _cachedSelfAvatar;
   @override
   String? _databasePrefix;
   @override
@@ -536,6 +537,7 @@ class XmppService extends XmppBase
 
   @override
   Stream<StoredAvatar?> get selfAvatarStream => _selfAvatarController.stream;
+  StoredAvatar? get cachedSelfAvatar => _cachedSelfAvatar;
 
   @override
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
@@ -556,6 +558,7 @@ class XmppService extends XmppBase
 
   @override
   void _notifySelfAvatarUpdated(StoredAvatar? avatar) {
+    _cachedSelfAvatar = avatar;
     if (_selfAvatarController.isClosed) return;
     _selfAvatarController.add(avatar);
   }
@@ -788,8 +791,13 @@ class XmppService extends XmppBase
       final hash = await _dbOpReturning<XmppStateStore, String?>(
         (ss) => ss.read(key: selfAvatarHashKey) as String?,
       );
-      if (path == null && hash == null) return null;
-      return StoredAvatar(path: path, hash: hash);
+      if (path == null && hash == null) {
+        _cachedSelfAvatar = null;
+        return null;
+      }
+      final stored = StoredAvatar(path: path, hash: hash);
+      _cachedSelfAvatar = stored;
+      return stored;
     } on XmppAbortedException {
       return null;
     }
@@ -2228,6 +2236,7 @@ class XmppService extends XmppBase
     _avatarEncryptionSalt = null;
     _databasePrefix = null;
     _databasePassphrase = null;
+    _cachedSelfAvatar = null;
 
     await super._reset();
 

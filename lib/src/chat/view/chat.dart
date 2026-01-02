@@ -4,7 +4,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/attachments/view/attachment_gallery_screen.dart';
+import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
+import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/html_content.dart';
@@ -107,7 +108,26 @@ extension on MessageStatus {
 enum _ChatRoute {
   main,
   details,
+  search,
+  settings,
+  gallery,
   calendar,
+}
+
+extension on _ChatRoute {
+  bool get isMain => this == _ChatRoute.main;
+
+  bool get isDetails => this == _ChatRoute.details;
+
+  bool get isSearch => this == _ChatRoute.search;
+
+  bool get isSettings => this == _ChatRoute.settings;
+
+  bool get isGallery => this == _ChatRoute.gallery;
+
+  bool get isCalendar => this == _ChatRoute.calendar;
+
+  bool get allowsChatInteraction => isMain || isSearch;
 }
 
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
@@ -162,6 +182,10 @@ const double _unknownSenderActionSpacing = 8.0;
 const _chatSettingsSectionSpacing = 12.0;
 const _chatSettingsFieldSpacing = 8.0;
 const _chatSettingsSelectMinWidth = 220.0;
+const double _chatOverlayHeaderSpacing = 12.0;
+const double _chatOverlayDividerHeight = 1.0;
+const double _chatOverlayDividerThickness = 1.0;
+const Curve _chatOverlayFadeCurve = Curves.easeInOutCubic;
 const _messageActionIconSize = 16.0;
 const _pinnedListLoadingIndicatorSize = 28.0;
 const int _pinnedBadgeHiddenCount = 0;
@@ -341,7 +365,9 @@ class _ChatSearchToggleButton extends StatelessWidget {
           tooltip:
               state.active ? l10n.chatSearchClose : l10n.chatSearchMessages,
           onPressed: () {
-            onBeforeToggle?.call();
+            if (!state.active) {
+              onBeforeToggle?.call();
+            }
             context.read<ChatSearchCubit>().toggleActive();
           },
         );
@@ -963,7 +989,6 @@ class _ChatState extends State<Chat> {
   String? _lastScrollStorageKey;
 
   var _chatRoute = _ChatRoute.main;
-  var _settingsPanelExpanded = false;
   bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
   final _multiSelectedMessageIds = <String>{};
@@ -1694,19 +1719,17 @@ class _ChatState extends State<Chat> {
 
   void _toggleSettingsPanel() {
     if (!mounted) return;
-    final bool isChatCalendarOpen =
-        context.read<ChatsCubit>().state.openChatCalendar;
-    if (_chatRoute != _ChatRoute.main || isChatCalendarOpen) {
+    if (_chatRoute.isSettings) {
       _returnToMainRoute();
+      return;
     }
-    final nextExpanded = !_settingsPanelExpanded;
-    if (nextExpanded) {
-      context.read<ChatSearchCubit?>()?.setActive(false);
-    }
+    context.read<ChatSearchCubit?>()?.setActive(false);
+    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
     setState(() {
-      _settingsPanelExpanded = nextExpanded;
-      if (nextExpanded) {
-        _pinnedPanelVisible = false;
+      _chatRoute = _ChatRoute.settings;
+      _pinnedPanelVisible = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
       }
     });
   }
@@ -3312,32 +3335,35 @@ class _ChatState extends State<Chat> {
         final searchFiltering =
             searchState.active && (trimmedQuery.isNotEmpty || hasSubjectFilter);
         final searchResults = searchState.results;
-        if (searchState.active && _settingsPanelExpanded) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || !_settingsPanelExpanded) return;
-            setState(() {
-              _settingsPanelExpanded = false;
-            });
-          });
-        }
         final showToast = ShadToaster.maybeOf(context)?.show;
         return GestureDetector(
           behavior: HitTestBehavior.translucent,
           onTapUp: (details) => _maybeDismissSelection(details.globalPosition),
           child: MultiBlocListener(
             listeners: [
+              BlocListener<ChatSearchCubit, ChatSearchState>(
+                listenWhen: (previous, current) =>
+                    previous.active != current.active,
+                listener: (_, searchState) {
+                  if (searchState.active) {
+                    _openChatSearch();
+                  } else {
+                    _closeChatSearch();
+                  }
+                },
+              ),
               BlocListener<ChatsCubit, ChatsState>(
                 listenWhen: (previous, current) =>
                     previous.openChatCalendar != current.openChatCalendar,
                 listener: (_, chatsState) {
                   if (!mounted) return;
                   if (chatsState.openChatCalendar) {
-                    if (_chatRoute != _ChatRoute.calendar) {
+                    if (!_chatRoute.isCalendar) {
                       _showChatCalendarRoute();
                     }
                     return;
                   }
-                  if (_chatRoute == _ChatRoute.calendar) {
+                  if (_chatRoute.isCalendar) {
                     _returnToMainRoute();
                   }
                 },
@@ -3651,7 +3677,7 @@ class _ChatState extends State<Chat> {
                 final bool openChatCalendar =
                     chatsState()?.openChatCalendar ?? false;
                 bool prepareChatExit() {
-                  if (_chatRoute != _ChatRoute.main || openChatCalendar) {
+                  if (!_chatRoute.isMain || openChatCalendar) {
                     _returnToMainRoute();
                     return false;
                   }
@@ -3663,11 +3689,6 @@ class _ChatState extends State<Chat> {
                           jids: [targetJid],
                           body: _textController.text,
                         );
-                  }
-                  if (_settingsPanelExpanded) {
-                    setState(() {
-                      _settingsPanelExpanded = false;
-                    });
                   }
                   return true;
                 }
@@ -3685,11 +3706,9 @@ class _ChatState extends State<Chat> {
                   id: _selectionSpacerMessageId,
                   firstName: '',
                 );
-                final showSettingsPanel = _settingsPanelExpanded &&
-                    !readOnly &&
-                    jid != null &&
-                    _chatRoute == _ChatRoute.main &&
-                    !openChatCalendar;
+                final bool canShowSettings = !readOnly && jid != null;
+                final bool isSettingsRoute =
+                    canShowSettings && _chatRoute.isSettings;
                 final isEmailBacked = chatEntity?.isEmailBacked ?? false;
                 final canManagePins = !isGroupChat ||
                     isEmailBacked ||
@@ -3699,10 +3718,15 @@ class _ChatState extends State<Chat> {
                 final IconData pinnedIcon =
                     _pinnedPanelVisible ? LucideIcons.x : LucideIcons.pin;
                 final bool showingChatCalendar =
-                    openChatCalendar || _chatRoute == _ChatRoute.calendar;
+                    openChatCalendar || _chatRoute.isCalendar;
+                final Duration overlayDuration =
+                    context.watch<SettingsCubit>().animationDuration;
+                final bool showChatAppBar =
+                    _chatRoute.isMain || _chatRoute.isSearch;
                 final scaffold = Scaffold(
                   backgroundColor: context.colorScheme.background,
-                  appBar: AppBar(
+                  appBar: showChatAppBar
+                      ? AppBar(
                     scrolledUnderElevation: 0,
                     forceMaterialTransparency: true,
                     shape: Border(
@@ -3953,13 +3977,13 @@ class _ChatState extends State<Chat> {
                             },
                           ),
                         ],
-                        if (!readOnly) ...[
+                        if (canShowSettings) ...[
                           const SizedBox(width: _chatHeaderActionSpacing),
                           AxiIconButton(
-                            iconData: showSettingsPanel
+                            iconData: isSettingsRoute
                                 ? LucideIcons.x
                                 : LucideIcons.settings,
-                            tooltip: showSettingsPanel
+                            tooltip: isSettingsRoute
                                 ? context.l10n.chatCloseSettings
                                 : context.l10n.chatSettings,
                             onPressed: _toggleSettingsPanel,
@@ -3968,46 +3992,26 @@ class _ChatState extends State<Chat> {
                       ] else
                         const SizedBox.shrink(),
                     ],
-                  ),
-                  body: showingChatCalendar
-                      ? _ChatCalendarPanel(
-                          key: ValueKey(
-                            '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                      )
+                      : null,
+                  body: Stack(
+                    children: [
+                      Column(
+                        children: [
+                          const ChatAlert(),
+                          _UnknownSenderBanner(
+                            readOnly: readOnly,
+                            isSelfChat: isSelfChat,
+                            onAddContact: _handleAddContact,
+                            onReportSpam: () => _handleSpamToggle(
+                              sendToSpam: true,
+                            ),
                           ),
-                          chat: chatEntity,
-                          calendarAvailable: chatCalendarAvailable,
-                          participants: chatCalendarParticipants,
-                          avatarPaths: chatCalendarAvatarPaths,
-                          onBackPressed: _closeChatCalendar,
-                          calendarBloc: chatCalendarBloc,
-                        )
-                      : Column(
-                          children: [
-                            _ChatSettingsPanel(
-                              visible: showSettingsPanel,
-                              child: _ChatSettingsButtons(
-                                state: state,
-                                onViewFilterChanged: _setViewFilter,
-                                onToggleNotifications: _toggleNotifications,
-                                onSpamToggle: (sendToSpam) =>
-                                    _handleSpamToggle(sendToSpam: sendToSpam),
-                              ),
-                            ),
-                            const ChatAlert(),
-                            _UnknownSenderBanner(
-                              readOnly: readOnly,
-                              isSelfChat: isSelfChat,
-                              onAddContact: _handleAddContact,
-                              onReportSpam: () => _handleSpamToggle(
-                                sendToSpam: true,
-                              ),
-                            ),
-                            const _ChatSearchPanel(),
-                            Expanded(
+                          Expanded(
                               child: Stack(
                                 children: [
                                   IgnorePointer(
-                                    ignoring: _chatRoute != _ChatRoute.main,
+                                    ignoring: !_chatRoute.allowsChatInteraction,
                                     child: LayoutBuilder(
                                       builder: (context, constraints) {
                                         final rawContentWidth =
@@ -7456,15 +7460,53 @@ class _ChatState extends State<Chat> {
                                       },
                                     ),
                                   ),
-                                  if (_chatRoute == _ChatRoute.details)
-                                    const Positioned.fill(
-                                      child: ChatMessageDetails(),
-                                    ),
                                 ],
                               ),
                             ),
                           ],
                         ),
+                      ),
+                      Positioned.fill(
+                        child: AxiFadeIndexedStack(
+                          index: _chatRoute.index,
+                          duration: overlayDuration,
+                          curve: _chatOverlayFadeCurve,
+                          children: [
+                            const SizedBox.shrink(),
+                            _ChatDetailsOverlay(
+                              onBackPressed: _returnToMainRoute,
+                            ),
+                            const _ChatSearchOverlay(
+                              panel: _ChatSearchPanel(),
+                            ),
+                            _ChatSettingsOverlay(
+                              state: state,
+                              onBackPressed: _returnToMainRoute,
+                              onViewFilterChanged: _setViewFilter,
+                              onToggleNotifications: _toggleNotifications,
+                              onSpamToggle: (sendToSpam) =>
+                                  _handleSpamToggle(sendToSpam: sendToSpam),
+                            ),
+                            _ChatGalleryOverlay(
+                              chat: chatEntity,
+                              onBackPressed: _returnToMainRoute,
+                            ),
+                            _ChatCalendarOverlay(
+                              key: ValueKey(
+                                '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                              ),
+                              chat: chatEntity,
+                              calendarAvailable: chatCalendarAvailable,
+                              participants: chatCalendarParticipants,
+                              avatarPaths: chatCalendarAvatarPaths,
+                              onBackPressed: _closeChatCalendar,
+                              calendarBloc: chatCalendarBloc,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 );
                 final Widget content = chatCalendarBloc == null
                     ? scaffold
@@ -7930,10 +7972,10 @@ class _ChatState extends State<Chat> {
     final detailId = message.customProperties?['id'];
     if (detailId == null) return;
     context.read<ChatsCubit>().setChatCalendarOpen(open: false);
+    context.read<ChatSearchCubit?>()?.setActive(false);
     context.read<ChatBloc>().add(ChatMessageFocused(detailId));
     setState(() {
       _chatRoute = _ChatRoute.details;
-      _settingsPanelExpanded = false;
       _pinnedPanelVisible = false;
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
@@ -7945,25 +7987,45 @@ class _ChatState extends State<Chat> {
     if (!mounted) return;
     context.read<ChatBloc>().add(const ChatMessageFocused(null));
     context.read<ChatsCubit>().setChatCalendarOpen(open: false);
+    context.read<ChatSearchCubit?>()?.setActive(false);
     setState(() {
       _chatRoute = _ChatRoute.main;
-      _settingsPanelExpanded = false;
       _pinnedPanelVisible = false;
     });
   }
 
   void _returnToMainRouteIfNeeded() {
-    if (_chatRoute == _ChatRoute.main) {
+    if (_chatRoute.isMain) {
       return;
     }
     _returnToMainRoute();
   }
 
+  void _openChatSearch() {
+    if (!mounted || _chatRoute.isSearch) return;
+    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
+    context.read<ChatBloc>().add(const ChatMessageFocused(null));
+    setState(() {
+      _chatRoute = _ChatRoute.search;
+      _pinnedPanelVisible = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
+  }
+
+  void _closeChatSearch() {
+    if (!mounted || !_chatRoute.isSearch) return;
+    setState(() {
+      _chatRoute = _ChatRoute.main;
+    });
+  }
+
   void _showChatCalendarRoute() {
     if (!mounted) return;
+    context.read<ChatSearchCubit?>()?.setActive(false);
     setState(() {
       _chatRoute = _ChatRoute.calendar;
-      _settingsPanelExpanded = false;
       _pinnedPanelVisible = false;
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
@@ -7981,40 +8043,31 @@ class _ChatState extends State<Chat> {
     if (!mounted) return;
     final chat = context.read<ChatBloc>().state.chat;
     if (chat == null) return;
-    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
-    if (_chatRoute != _ChatRoute.main) {
+    if (_chatRoute.isGallery) {
       _returnToMainRoute();
-    } else if (_settingsPanelExpanded || _pinnedPanelVisible) {
-      setState(() {
-        _settingsPanelExpanded = false;
-        _pinnedPanelVisible = false;
-      });
+      return;
     }
-    if (_focusNode.hasFocus) {
-      _focusNode.unfocus();
-    }
-    unawaited(
-      Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => AttachmentGalleryScreen(
-            locate: <T>() => context.read<T>(),
-            chat: chat,
-          ),
-        ),
-      ),
-    );
+    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
+    context.read<ChatSearchCubit?>()?.setActive(false);
+    context.read<ChatBloc>().add(const ChatMessageFocused(null));
+    setState(() {
+      _chatRoute = _ChatRoute.gallery;
+      _pinnedPanelVisible = false;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
   }
 
   void _togglePinnedMessages() {
     if (!mounted) return;
     final bool isChatCalendarOpen =
         context.read<ChatsCubit>().state.openChatCalendar;
-    if (_chatRoute != _ChatRoute.main || isChatCalendarOpen) {
+    if (!_chatRoute.isMain || isChatCalendarOpen) {
       _returnToMainRoute();
     }
     setState(() {
       _pinnedPanelVisible = !_pinnedPanelVisible;
-      _settingsPanelExpanded = false;
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
       }
@@ -8023,10 +8076,7 @@ class _ChatState extends State<Chat> {
 
   void _closeChatCalendar() {
     if (!mounted) return;
-    context.read<ChatsCubit>().setChatCalendarOpen(open: false);
-    setState(() {
-      _chatRoute = _ChatRoute.main;
-    });
+    _returnToMainRoute();
   }
 
   void _closePinnedMessages() {
@@ -8889,6 +8939,236 @@ class _ChatCalendarPanel extends StatelessWidget {
         chat: resolvedChat,
         participants: participants,
         avatarPaths: avatarPaths,
+      ),
+    );
+  }
+}
+
+class _ChatOverlayHeader extends StatelessWidget {
+  const _ChatOverlayHeader({
+    required this.title,
+    required this.onBackPressed,
+  });
+
+  final String title;
+  final VoidCallback onBackPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final baseTitleStyle =
+        Theme.of(context).appBarTheme.titleTextStyle ?? context.textTheme.h3;
+    final titleStyle = baseTitleStyle.copyWith(
+      fontSize: context.textTheme.large.fontSize,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListItemPadding(
+          child: Row(
+            children: [
+              SizedBox(
+                width: AxiIconButton.kDefaultSize,
+                height: AxiIconButton.kDefaultSize,
+                child: AxiIconButton(
+                  iconData: LucideIcons.arrowLeft,
+                  tooltip: context.l10n.commonBack,
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  onPressed: onBackPressed,
+                ),
+              ),
+              const SizedBox(width: _chatOverlayHeaderSpacing),
+              Expanded(
+                child: Text(
+                  title,
+                  style: titleStyle,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Divider(
+          height: _chatOverlayDividerHeight,
+          thickness: _chatOverlayDividerThickness,
+          color: colors.border,
+        ),
+      ],
+    );
+  }
+}
+
+class _ChatDetailsOverlay extends StatelessWidget {
+  const _ChatDetailsOverlay({
+    required this.onBackPressed,
+  });
+
+  final VoidCallback onBackPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: context.colorScheme.background,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _ChatOverlayHeader(
+              title: context.l10n.chatActionDetails,
+              onBackPressed: onBackPressed,
+            ),
+            const Expanded(
+              child: ChatMessageDetails(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatSearchOverlay extends StatelessWidget {
+  const _ChatSearchOverlay({
+    required this.panel,
+  });
+
+  final Widget panel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        panel,
+        const Expanded(
+          child: IgnorePointer(
+            child: SizedBox.expand(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChatSettingsOverlay extends StatelessWidget {
+  const _ChatSettingsOverlay({
+    required this.state,
+    required this.onBackPressed,
+    required this.onViewFilterChanged,
+    required this.onToggleNotifications,
+    required this.onSpamToggle,
+  });
+
+  final ChatState state;
+  final VoidCallback onBackPressed;
+  final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
+  final ValueChanged<bool> onToggleNotifications;
+  final ValueChanged<bool> onSpamToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: context.colorScheme.background,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _ChatOverlayHeader(
+              title: context.l10n.chatSettings,
+              onBackPressed: onBackPressed,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: _ChatSettingsPanel(
+                  visible: true,
+                  child: _ChatSettingsButtons(
+                    state: state,
+                    onViewFilterChanged: onViewFilterChanged,
+                    onToggleNotifications: onToggleNotifications,
+                    onSpamToggle: onSpamToggle,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatGalleryOverlay extends StatelessWidget {
+  const _ChatGalleryOverlay({
+    required this.chat,
+    required this.onBackPressed,
+  });
+
+  final chat_models.Chat? chat;
+  final VoidCallback onBackPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChat = chat;
+    if (resolvedChat == null) {
+      return const SizedBox.shrink();
+    }
+    return BlocProvider(
+      create: (context) => AttachmentGalleryCubit(
+        xmppService: context.read<XmppService>(),
+        chatJid: resolvedChat.jid,
+      ),
+      child: ColoredBox(
+        color: context.colorScheme.background,
+        child: SafeArea(
+          child: Column(
+            children: [
+              _ChatOverlayHeader(
+                title: context.l10n.draftAttachmentsLabel,
+                onBackPressed: onBackPressed,
+              ),
+              Expanded(
+                child: AttachmentGalleryView(
+                  chatOverride: resolvedChat,
+                  showChatLabel: false,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatCalendarOverlay extends StatelessWidget {
+  const _ChatCalendarOverlay({
+    super.key,
+    required this.chat,
+    required this.calendarAvailable,
+    required this.participants,
+    required this.avatarPaths,
+    required this.onBackPressed,
+    required this.calendarBloc,
+  });
+
+  final chat_models.Chat? chat;
+  final bool calendarAvailable;
+  final List<String> participants;
+  final Map<String, String> avatarPaths;
+  final VoidCallback onBackPressed;
+  final ChatCalendarBloc? calendarBloc;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: context.colorScheme.background,
+      child: SafeArea(
+        child: _ChatCalendarPanel(
+          chat: chat,
+          calendarAvailable: calendarAvailable,
+          participants: participants,
+          avatarPaths: avatarPaths,
+          onBackPressed: onBackPressed,
+          calendarBloc: calendarBloc,
+        ),
       ),
     );
   }
