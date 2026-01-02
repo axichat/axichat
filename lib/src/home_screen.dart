@@ -82,6 +82,9 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
 
 const double _secondaryPaneGutter = 0.0;
 const String _linkedEmailAccountsLocation = '/profile/email-accounts';
+const int _homeChatPageIndex = 0;
+const int _homeCalendarPageIndex = 1;
+const Curve _homeCalendarFadeCurve = Curves.easeInOutCubic;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -450,11 +453,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     final bool showChatCalendar =
                         openChatCalendar && openJid != null;
+                    final Duration animationDuration =
+                        context.watch<SettingsCubit>().animationDuration;
+                    final Duration calendarTransitionDuration =
+                        animationDuration == Duration.zero
+                            ? Duration.zero
+                            : calendarViewTransitionDuration;
                     return SafeArea(
                       top: state is ConnectivityConnected || demoOffline,
-                      child: openCalendar
-                          ? calendarLayout()
-                          : chatLayout(showChatCalendar: showChatCalendar),
+                      child: AxiFadeIndexedStack(
+                        index: openCalendar
+                            ? _homeCalendarPageIndex
+                            : _homeChatPageIndex,
+                        duration: calendarTransitionDuration,
+                        curve: _homeCalendarFadeCurve,
+                        children: [
+                          chatLayout(showChatCalendar: showChatCalendar),
+                          calendarLayout(),
+                        ],
+                      ),
                     );
                   },
                 ),
