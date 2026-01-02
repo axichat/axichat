@@ -45,7 +45,7 @@ class AxiFadeIndexedStack extends StatelessWidget {
   }
 }
 
-class _AxiFadeIndexedStackChild extends StatelessWidget {
+class _AxiFadeIndexedStackChild extends StatefulWidget {
   const _AxiFadeIndexedStackChild({
     required this.visible,
     required this.duration,
@@ -59,20 +59,58 @@ class _AxiFadeIndexedStackChild extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_AxiFadeIndexedStackChild> createState() =>
+      _AxiFadeIndexedStackChildState();
+}
+
+class _AxiFadeIndexedStackChildState extends State<_AxiFadeIndexedStackChild> {
+  late bool _shouldTick;
+
+  @override
+  void initState() {
+    super.initState();
+    _shouldTick = widget.visible;
+  }
+
+  @override
+  void didUpdateWidget(covariant _AxiFadeIndexedStackChild oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.visible) {
+      _shouldTick = true;
+      return;
+    }
+    if (widget.duration == Duration.zero) {
+      _shouldTick = false;
+      return;
+    }
+    _shouldTick = true;
+  }
+
+  void _handleFadeEnd() {
+    if (!mounted || widget.visible || !_shouldTick) {
+      return;
+    }
+    setState(() {
+      _shouldTick = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final double resolvedOpacity =
-        visible ? _fadeVisibleOpacity : _fadeHiddenOpacity;
+        widget.visible ? _fadeVisibleOpacity : _fadeHiddenOpacity;
     return TickerMode(
-      enabled: visible,
+      enabled: _shouldTick,
       child: IgnorePointer(
-        ignoring: !visible,
+        ignoring: !widget.visible,
         child: AnimatedOpacity(
           opacity: resolvedOpacity,
-          duration: duration,
-          curve: curve,
+          duration: widget.duration,
+          curve: widget.curve,
+          onEnd: _handleFadeEnd,
           child: ExcludeSemantics(
-            excluding: !visible,
-            child: child,
+            excluding: !widget.visible,
+            child: widget.child,
           ),
         ),
       ),
