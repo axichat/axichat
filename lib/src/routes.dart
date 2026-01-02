@@ -52,7 +52,7 @@ class TransitionGoRouteData extends GoRouteData {
       reverseTransitionDuration: animationDuration,
       child: build(context, state),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
+        final CurvedAnimation curved = CurvedAnimation(
           parent: animation,
           curve: _routeFadeCurve,
           reverseCurve: _routeFadeCurve,

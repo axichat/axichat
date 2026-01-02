@@ -20,7 +20,7 @@ class CalendarBloc extends BaseCalendarBloc {
   CalendarBloc({
     required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
     required super.storage,
-    super.storageId = 'state',
+    super.storageId,
     super.reminderController,
     CalendarAvailabilityShareCoordinator? availabilityCoordinator,
     VoidCallback? onDispose,

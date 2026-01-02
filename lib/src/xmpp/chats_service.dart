@@ -20,14 +20,21 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const _typingParticipantMaxCount = 7;
   static const int _conversationIndexSnapshotStart = 0;
   static const int _conversationIndexSnapshotEnd = 0;
+  static const int _chatPreloadStart = 0;
+  static const int _defaultChatPreloadLimit = basePageItemLimit;
+  static const int _chatPreloadDisabledLimit = 0;
   static const _recipientAddressSuggestionLimit = 50000;
   static const Duration _mutedForeverDuration = Duration(days: 3650);
   static const List<ConvItem> _emptyConversationIndexSnapshot = <ConvItem>[];
+  static const List<Chat> _emptyChatList = <Chat>[];
   final Map<String, Set<String>> _typingParticipants = {};
   final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
   final Map<String, StreamController<List<String>>> _typingParticipantStreams =
       {};
   bool _conversationIndexLoginSyncInFlight = false;
+  List<Chat>? _cachedChatList;
+
+  List<Chat>? get cachedChatList => _cachedChatList;
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -236,15 +243,54 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Stream<List<Chat>> chatsStream({
-    int start = 0,
-    int end = basePageItemLimit,
+    int start = _chatPreloadStart,
+    int end = _defaultChatPreloadLimit,
   }) =>
       createPaginatedStream<Chat, XmppDatabase>(
         watchFunction: (db) async =>
             db.watchChats(start: start, end: end).map(sortChats),
         getFunction: (db) async =>
             sortChats(await db.getChats(start: start, end: end)),
+      ).map((items) {
+        _cacheSortedChatList(chats: items, limit: end);
+        return items;
+      });
+
+  Future<List<Chat>?> preloadChatList({
+    int limit = _defaultChatPreloadLimit,
+  }) async {
+    if (limit <= _chatPreloadDisabledLimit) return null;
+    List<Chat> chats;
+    try {
+      chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
+        (db) => db.getChats(start: _chatPreloadStart, end: limit),
       );
+    } on XmppAbortedException {
+      return null;
+    }
+    final sorted = sortChats(chats);
+    return _cacheSortedChatList(chats: sorted, limit: limit);
+  }
+
+  void clearCachedChatList() {
+    _cachedChatList = null;
+  }
+
+  List<Chat> _cacheSortedChatList({
+    required List<Chat> chats,
+    required int limit,
+  }) {
+    if (chats.isEmpty) {
+      _cachedChatList = _emptyChatList;
+      return _emptyChatList;
+    }
+    final limited = chats.length > limit
+        ? chats.take(limit).toList(growable: false)
+        : chats;
+    final frozen = List<Chat>.unmodifiable(limited);
+    _cachedChatList = frozen;
+    return frozen;
+  }
 
   Stream<List<String>> recipientAddressSuggestionsStream() =>
       createSingleItemStream<List<String>, XmppDatabase>(

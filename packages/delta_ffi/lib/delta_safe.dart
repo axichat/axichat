@@ -8,6 +8,15 @@ import 'delta.dart';
 import 'src/bindings.dart';
 
 const int _zeroValue = 0;
+const String _deltaSendIsolateLabel = 'delta-send';
+const String _deltaSendResponsePortLabel = 'delta-send-response';
+const String _deltaSendUnexpectedResponseError =
+    'Delta send isolate returned an unexpected response.';
+const String _deltaSendTextOperation = 'send text message';
+const String _deltaSendAttachmentOperation = 'send attachment';
+const String _deltaSendFileOperation = 'send file message';
+const String _deltaSendQuotedOperation = 'send quoted message';
+const String _deltaMessageAllocationError = 'Failed to allocate Delta message';
 
 class DeltaSafe {
   DeltaSafe({DeltaChatBindings? bindings})
@@ -586,31 +595,19 @@ class DeltaContextHandle {
     String? subject,
     String? html,
   }) async {
-    _ensureState(_opened, 'send text message');
-    final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
-    if (deltaMessage == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to allocate Delta message');
-    }
-    try {
-      _withCString(message, (msgPtr) {
-        _bindings.dc_msg_set_text(deltaMessage, msgPtr);
-      });
-      final normalizedHtml = html?.trim();
-      if (normalizedHtml != null && normalizedHtml.isNotEmpty) {
-        _setMessageHtml(deltaMessage, normalizedHtml);
-      }
-      final normalizedSubject = subject?.trim();
-      if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
-        _withCString(normalizedSubject, (subjectPtr) {
-          _bindings.dc_msg_set_subject(deltaMessage, subjectPtr);
-        });
-      }
-      final msgId = _bindings.dc_send_msg(_context, chatId, deltaMessage);
-      _ensurePositive(msgId, 'send text message', _lastError);
-      return msgId;
-    } finally {
-      _bindings.dc_msg_unref(deltaMessage);
-    }
+    _ensureState(_opened, _deltaSendTextOperation);
+    final result = await _sendMessageOnWorker(
+      _DeltaSendRequest.text(
+        contextAddress: _context.address,
+        chatId: chatId,
+        message: message,
+        subject: subject,
+        html: html,
+        supportsHtml: _supportsMessageSetHtml != false,
+      ),
+    );
+    _applySendSupport(result);
+    return result.msgId;
   }
 
   Future<int> sendFileMessage({
@@ -623,39 +620,23 @@ class DeltaContextHandle {
     String? subject,
     String? html,
   }) async {
-    _ensureState(_opened, 'send attachment');
-    final message = _bindings.dc_msg_new(_context, viewType);
-    if (message == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to allocate Delta message');
-    }
-    try {
-      if (text != null && text.isNotEmpty) {
-        _withCString(text, (textPtr) {
-          _bindings.dc_msg_set_text(message, textPtr);
-        });
-      }
-      final normalizedHtml = html?.trim();
-      if (normalizedHtml != null && normalizedHtml.isNotEmpty) {
-        _setMessageHtml(message, normalizedHtml);
-      }
-      final normalizedSubject = subject?.trim();
-      if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
-        _withCString(normalizedSubject, (subjectPtr) {
-          _bindings.dc_msg_set_subject(message, subjectPtr);
-        });
-      }
-      _setFileForMessage(
-        message,
+    _ensureState(_opened, _deltaSendAttachmentOperation);
+    final result = await _sendMessageOnWorker(
+      _DeltaSendRequest.file(
+        contextAddress: _context.address,
+        chatId: chatId,
+        viewType: viewType,
         filePath: filePath,
         fileName: fileName,
         mimeType: mimeType,
-      );
-      final msgId = _bindings.dc_send_msg(_context, chatId, message);
-      _ensurePositive(msgId, 'send file message', _lastError);
-      return msgId;
-    } finally {
-      _bindings.dc_msg_unref(message);
-    }
+        message: text,
+        subject: subject,
+        html: html,
+        supportsHtml: _supportsMessageSetHtml != false,
+      ),
+    );
+    _applySendSupport(result);
+    return result.msgId;
   }
 
   Future<DeltaChat?> getChat(int chatId) async {
@@ -1366,44 +1347,62 @@ class DeltaContextHandle {
         html: html,
       );
     }
-    _ensureState(_opened, 'send quoted message');
-    final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
-    if (deltaMessage == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to allocate Delta message');
-    }
+    _ensureState(_opened, _deltaSendQuotedOperation);
+    final result = await _sendMessageOnWorker(
+      _DeltaSendRequest.quoted(
+        contextAddress: _context.address,
+        chatId: chatId,
+        message: message,
+        subject: subject,
+        html: html,
+        quotedMessageId: quotedMessageId,
+        supportsHtml: _supportsMessageSetHtml != false,
+        supportsQuote: _supportsQuote != false,
+      ),
+    );
+    _applySendSupport(result);
+    return result.msgId;
+  }
+
+  Future<_DeltaSendResult> _sendMessageOnWorker(
+    _DeltaSendRequest request,
+  ) async {
+    final responsePort = ReceivePort(_deltaSendResponsePortLabel);
+    Isolate? isolate;
     try {
-      _withCString(message, (msgPtr) {
-        _bindings.dc_msg_set_text(deltaMessage, msgPtr);
-      });
-      final normalizedHtml = html?.trim();
-      if (normalizedHtml != null && normalizedHtml.isNotEmpty) {
-        _setMessageHtml(deltaMessage, normalizedHtml);
-      }
-      final normalizedSubject = subject?.trim();
-      if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
-        _withCString(normalizedSubject, (subjectPtr) {
-          _bindings.dc_msg_set_subject(deltaMessage, subjectPtr);
-        });
-      }
-
-      final quotedMsg = _bindings.dc_get_msg(_context, quotedMessageId);
-      if (quotedMsg != ffi.nullptr) {
-        try {
-          _bindings.dc_msg_set_quote(deltaMessage, quotedMsg);
-          _supportsQuote = true;
-        } on Object catch (error) {
-          if (error is! ArgumentError && error is! UnsupportedError) rethrow;
-          _supportsQuote = false;
-        } finally {
-          _bindings.dc_msg_unref(quotedMsg);
+      isolate = await Isolate.spawn<_DeltaSendIsolateRequest>(
+        _deltaSendIsolate,
+        _DeltaSendIsolateRequest(
+          request: request,
+          responsePort: responsePort.sendPort,
+        ),
+        debugName: _deltaSendIsolateLabel,
+      );
+      final response = await responsePort.first;
+      if (response is _DeltaSendFailure) {
+        if (response.isDeltaSafe) {
+          throw DeltaSafeException(response.message);
         }
+        throw Exception(response.message);
       }
-
-      final msgId = _bindings.dc_send_msg(_context, chatId, deltaMessage);
-      _ensurePositive(msgId, 'send quoted message', _lastError);
-      return msgId;
+      if (response is _DeltaSendResult) {
+        return response;
+      }
+      throw const DeltaSafeException(_deltaSendUnexpectedResponseError);
     } finally {
-      _bindings.dc_msg_unref(deltaMessage);
+      responsePort.close();
+      isolate?.kill(priority: Isolate.immediate);
+    }
+  }
+
+  void _applySendSupport(_DeltaSendResult result) {
+    final supportsHtml = result.supportsHtml;
+    if (supportsHtml != null) {
+      _supportsMessageSetHtml = supportsHtml;
+    }
+    final supportsQuote = result.supportsQuote;
+    if (supportsQuote != null) {
+      _supportsQuote = supportsQuote;
     }
   }
 
@@ -1989,6 +1988,315 @@ void _eventLoop(_EventLoopConfig config) {
   controlReceive.close();
   bindings.dc_event_emitter_unref(emitter);
 }
+
+enum _DeltaSendKind { text, file, textWithQuote }
+
+extension _DeltaSendKindOperation on _DeltaSendKind {
+  String get operationLabel => switch (this) {
+        _DeltaSendKind.text => _deltaSendTextOperation,
+        _DeltaSendKind.file => _deltaSendFileOperation,
+        _DeltaSendKind.textWithQuote => _deltaSendQuotedOperation,
+      };
+}
+
+class _DeltaSendRequest {
+  const _DeltaSendRequest._({
+    required this.contextAddress,
+    required this.chatId,
+    required this.kind,
+    required this.viewType,
+    this.message,
+    this.subject,
+    this.html,
+    this.filePath,
+    this.fileName,
+    this.mimeType,
+    this.quotedMessageId,
+    required this.supportsHtml,
+    required this.supportsQuote,
+  });
+
+  const _DeltaSendRequest.text({
+    required int contextAddress,
+    required int chatId,
+    required String message,
+    String? subject,
+    String? html,
+    required bool supportsHtml,
+  }) : this._(
+          contextAddress: contextAddress,
+          chatId: chatId,
+          kind: _DeltaSendKind.text,
+          viewType: DeltaMessageType.text,
+          message: message,
+          subject: subject,
+          html: html,
+          supportsHtml: supportsHtml,
+          supportsQuote: false,
+        );
+
+  const _DeltaSendRequest.file({
+    required int contextAddress,
+    required int chatId,
+    required int viewType,
+    required String filePath,
+    String? fileName,
+    String? mimeType,
+    String? message,
+    String? subject,
+    String? html,
+    required bool supportsHtml,
+  }) : this._(
+          contextAddress: contextAddress,
+          chatId: chatId,
+          kind: _DeltaSendKind.file,
+          viewType: viewType,
+          filePath: filePath,
+          fileName: fileName,
+          mimeType: mimeType,
+          message: message,
+          subject: subject,
+          html: html,
+          supportsHtml: supportsHtml,
+          supportsQuote: false,
+        );
+
+  const _DeltaSendRequest.quoted({
+    required int contextAddress,
+    required int chatId,
+    required String message,
+    required int quotedMessageId,
+    String? subject,
+    String? html,
+    required bool supportsHtml,
+    required bool supportsQuote,
+  }) : this._(
+          contextAddress: contextAddress,
+          chatId: chatId,
+          kind: _DeltaSendKind.textWithQuote,
+          viewType: DeltaMessageType.text,
+          message: message,
+          subject: subject,
+          html: html,
+          quotedMessageId: quotedMessageId,
+          supportsHtml: supportsHtml,
+          supportsQuote: supportsQuote,
+        );
+
+  final int contextAddress;
+  final int chatId;
+  final _DeltaSendKind kind;
+  final int viewType;
+  final String? message;
+  final String? subject;
+  final String? html;
+  final String? filePath;
+  final String? fileName;
+  final String? mimeType;
+  final int? quotedMessageId;
+  final bool supportsHtml;
+  final bool supportsQuote;
+}
+
+class _DeltaSendIsolateRequest {
+  const _DeltaSendIsolateRequest({
+    required this.request,
+    required this.responsePort,
+  });
+
+  final _DeltaSendRequest request;
+  final SendPort responsePort;
+}
+
+class _DeltaSendResult {
+  const _DeltaSendResult({
+    required this.msgId,
+    this.supportsHtml,
+    this.supportsQuote,
+  });
+
+  final int msgId;
+  final bool? supportsHtml;
+  final bool? supportsQuote;
+}
+
+class _DeltaSendFailure {
+  const _DeltaSendFailure({
+    required this.message,
+    required this.isDeltaSafe,
+  });
+
+  final String message;
+  final bool isDeltaSafe;
+}
+
+@pragma('vm:entry-point')
+void _deltaSendIsolate(_DeltaSendIsolateRequest config) {
+  try {
+    final bindings = DeltaChatBindings(loadDeltaLibrary());
+    final context =
+        ffi.Pointer<dc_context_t>.fromAddress(config.request.contextAddress);
+    final result = _performSendRequest(
+      bindings: bindings,
+      context: context,
+      request: config.request,
+    );
+    config.responsePort.send(result);
+  } on DeltaSafeException catch (error) {
+    config.responsePort.send(
+      _DeltaSendFailure(message: error.message, isDeltaSafe: true),
+    );
+  } catch (error) {
+    config.responsePort.send(
+      _DeltaSendFailure(message: error.toString(), isDeltaSafe: false),
+    );
+  }
+}
+
+_DeltaSendResult _performSendRequest({
+  required DeltaChatBindings bindings,
+  required ffi.Pointer<dc_context_t> context,
+  required _DeltaSendRequest request,
+}) {
+  final deltaMessage = bindings.dc_msg_new(context, request.viewType);
+  if (deltaMessage == ffi.nullptr) {
+    throw const DeltaSafeException(_deltaMessageAllocationError);
+  }
+  bool? supportsHtml;
+  bool? supportsQuote;
+  try {
+    final text = request.message;
+    if (text != null && text.isNotEmpty) {
+      _withCString(text, (textPtr) {
+        bindings.dc_msg_set_text(deltaMessage, textPtr);
+      });
+    }
+    final normalizedHtml = request.html?.trim();
+    if (normalizedHtml != null && normalizedHtml.isNotEmpty) {
+      supportsHtml = _applyMessageHtml(
+        bindings: bindings,
+        message: deltaMessage,
+        html: normalizedHtml,
+        supportsHtml: request.supportsHtml,
+      );
+    }
+    final normalizedSubject = request.subject?.trim();
+    if (normalizedSubject != null && normalizedSubject.isNotEmpty) {
+      _withCString(normalizedSubject, (subjectPtr) {
+        bindings.dc_msg_set_subject(deltaMessage, subjectPtr);
+      });
+    }
+    final filePath = request.filePath;
+    if (filePath != null && filePath.isNotEmpty) {
+      _setFileForMessageWithBindings(
+        bindings,
+        deltaMessage,
+        filePath: filePath,
+        fileName: request.fileName,
+        mimeType: request.mimeType,
+      );
+    }
+    if (request.kind == _DeltaSendKind.textWithQuote) {
+      supportsQuote = _applyMessageQuote(
+        bindings: bindings,
+        context: context,
+        message: deltaMessage,
+        quotedMessageId: request.quotedMessageId,
+        supportsQuote: request.supportsQuote,
+      );
+    }
+    final msgId = bindings.dc_send_msg(context, request.chatId, deltaMessage);
+    _ensurePositive(
+      msgId,
+      request.kind.operationLabel,
+      () => _lastErrorForContext(bindings, context),
+    );
+    return _DeltaSendResult(
+      msgId: msgId,
+      supportsHtml: supportsHtml,
+      supportsQuote: supportsQuote,
+    );
+  } finally {
+    bindings.dc_msg_unref(deltaMessage);
+  }
+}
+
+bool? _applyMessageHtml({
+  required DeltaChatBindings bindings,
+  required ffi.Pointer<dc_msg_t> message,
+  required String html,
+  required bool supportsHtml,
+}) {
+  if (!supportsHtml) return null;
+  try {
+    _withCString(html, (htmlPtr) {
+      bindings.dc_msg_set_html(message, htmlPtr);
+    });
+    return true;
+  } on Object catch (error) {
+    if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+    return false;
+  }
+}
+
+bool? _applyMessageQuote({
+  required DeltaChatBindings bindings,
+  required ffi.Pointer<dc_context_t> context,
+  required ffi.Pointer<dc_msg_t> message,
+  required int? quotedMessageId,
+  required bool supportsQuote,
+}) {
+  if (!supportsQuote || quotedMessageId == null) return null;
+  final quotedMsg = bindings.dc_get_msg(context, quotedMessageId);
+  if (quotedMsg == ffi.nullptr) {
+    return null;
+  }
+  try {
+    bindings.dc_msg_set_quote(message, quotedMsg);
+    return true;
+  } on Object catch (error) {
+    if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+    return false;
+  } finally {
+    bindings.dc_msg_unref(quotedMsg);
+  }
+}
+
+void _setFileForMessageWithBindings(
+  DeltaChatBindings bindings,
+  ffi.Pointer<dc_msg_t> message, {
+  required String filePath,
+  String? fileName,
+  String? mimeType,
+}) {
+  final namePointer =
+      fileName == null || fileName.isEmpty ? ffi.nullptr : _toCString(fileName);
+  final mimePointer =
+      mimeType == null || mimeType.isEmpty ? ffi.nullptr : _toCString(mimeType);
+  try {
+    _withCString(filePath, (filePtr) {
+      bindings.dc_msg_set_file_and_deduplicate(
+        message,
+        filePtr,
+        namePointer,
+        mimePointer,
+      );
+    });
+  } finally {
+    if (namePointer != ffi.nullptr) {
+      malloc.free(namePointer);
+    }
+    if (mimePointer != ffi.nullptr) {
+      malloc.free(mimePointer);
+    }
+  }
+}
+
+String? _lastErrorForContext(
+  DeltaChatBindings bindings,
+  ffi.Pointer<dc_context_t> context,
+) =>
+    _takeString(bindings.dc_get_last_error(context), bindings: bindings);
 
 ffi.Pointer<ffi.Char> _toCString(String value) =>
     value.toNativeUtf8().cast<ffi.Char>();

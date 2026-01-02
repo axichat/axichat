@@ -22,13 +22,13 @@ class ChatsCubit extends Cubit<ChatsState> {
         _homeRefreshSyncService = homeRefreshSyncService,
         _emailService = emailService,
         super(
-          const ChatsState(
+          ChatsState(
             openJid: null,
-            openStack: <String>[],
-            forwardStack: <String>[],
+            openStack: const <String>[],
+            forwardStack: const <String>[],
             openCalendar: false,
             openChatCalendar: false,
-            items: null,
+            items: xmppService.cachedChatList,
             creationStatus: RequestStatus.none,
           ),
         ) {
