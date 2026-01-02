@@ -327,6 +327,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _mamComplete = false;
   bool _mamLoading = false;
   bool _mamCatchingUp = false;
+  bool _mamCatchUpCompleted = false;
   bool _emailHistoryLoading = false;
   bool _pinHydrationInFlight = false;
   Completer<void>? _mamLoadingCompleter;
@@ -496,6 +497,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     _mamCatchingUp = true;
     _beginMamLoad();
+    var completed = true;
     try {
       String? afterId;
       while (true) {
@@ -519,6 +521,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         afterId = nextAfter;
       }
     } on Exception catch (error, stackTrace) {
+      completed = false;
       _log.safeFine(
         'Failed to catch up via MAM for ${chat.jid}',
         error,
@@ -527,6 +530,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     _finishMamLoad();
     _mamCatchingUp = false;
+    if (completed) {
+      _mamCatchUpCompleted = true;
+    }
   }
 
   Future<void> _initializeViewFilter() async {
@@ -551,6 +557,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _mamComplete = false;
     _mamLoading = false;
     _mamCatchingUp = false;
+    _mamCatchUpCompleted = false;
     _mamLoadingCompleter?.complete();
     _mamLoadingCompleter = null;
   }
@@ -565,8 +572,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     final hasLocalMessages = localCount > _emptyMessageCount;
     if (lastSeen != null && hasLocalMessages) {
-      await _catchUpFromMam();
-      return;
+      if (!_mamCatchUpCompleted) {
+        await _catchUpFromMam();
+      }
+      final refreshedCount = await _archivedMessageCount(chat);
+      if (refreshedCount >= _currentMessageLimit) {
+        return;
+      }
     }
     _beginMamLoad();
     try {
