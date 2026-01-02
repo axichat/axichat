@@ -117,8 +117,6 @@ enum _ChatRoute {
 extension on _ChatRoute {
   bool get isMain => this == _ChatRoute.main;
 
-  bool get isDetails => this == _ChatRoute.details;
-
   bool get isSearch => this == _ChatRoute.search;
 
   bool get isSettings => this == _ChatRoute.settings;
@@ -996,6 +994,7 @@ class _ChatState extends State<Chat> {
   final _messageKeys = <String, GlobalKey>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
+  final _chatMainKey = GlobalKey();
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _reactionManagerKey;
   final _selectionActionButtonKeys = <GlobalKey>[];
@@ -3727,287 +3726,312 @@ class _ChatState extends State<Chat> {
                   backgroundColor: context.colorScheme.background,
                   appBar: showChatAppBar
                       ? AppBar(
-                    scrolledUnderElevation: 0,
-                    forceMaterialTransparency: true,
-                    shape: Border(
-                        bottom: BorderSide(color: context.colorScheme.border)),
-                    actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    leadingWidth: readOnly
-                        ? 0
-                        : ((AxiIconButton.kDefaultSize + 8) *
-                                ((openStack.length > 1 ? 1 : 0) +
-                                    (forwardStack.isNotEmpty ? 1 : 0) +
-                                    1)) +
-                            12,
-                    leading: readOnly
-                        ? null
-                        : Padding(
-                            padding: const EdgeInsets.only(left: 12),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    width: AxiIconButton.kDefaultSize,
-                                    height: AxiIconButton.kDefaultSize,
-                                    child: AxiIconButton(
-                                      iconData: LucideIcons.x,
-                                      tooltip: context.l10n.commonClose,
-                                      color: context.colorScheme.foreground,
-                                      borderColor: context.colorScheme.border,
-                                      onPressed: () {
-                                        if (!prepareChatExit()) return;
-                                        unawaited(
-                                          context
-                                              .read<ChatsCubit>()
-                                              .closeAllChats(),
-                                        );
-                                      },
+                          scrolledUnderElevation: 0,
+                          forceMaterialTransparency: true,
+                          shape: Border(
+                              bottom: BorderSide(
+                                  color: context.colorScheme.border)),
+                          actionsPadding:
+                              const EdgeInsets.symmetric(horizontal: 8.0),
+                          leadingWidth: readOnly
+                              ? 0
+                              : ((AxiIconButton.kDefaultSize + 8) *
+                                      ((openStack.length > 1 ? 1 : 0) +
+                                          (forwardStack.isNotEmpty ? 1 : 0) +
+                                          1)) +
+                                  12,
+                          leading: readOnly
+                              ? null
+                              : Padding(
+                                  padding: const EdgeInsets.only(left: 12),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: AxiIconButton.kDefaultSize,
+                                          height: AxiIconButton.kDefaultSize,
+                                          child: AxiIconButton(
+                                            iconData: LucideIcons.x,
+                                            tooltip: context.l10n.commonClose,
+                                            color:
+                                                context.colorScheme.foreground,
+                                            borderColor:
+                                                context.colorScheme.border,
+                                            onPressed: () {
+                                              if (!prepareChatExit()) return;
+                                              unawaited(
+                                                context
+                                                    .read<ChatsCubit>()
+                                                    .closeAllChats(),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        if ((openStack.length > 1 ||
+                                                forwardStack.isNotEmpty) &&
+                                            !readOnly)
+                                          const SizedBox(width: 8),
+                                        if (openStack.length > 1)
+                                          SizedBox(
+                                            width: AxiIconButton.kDefaultSize,
+                                            height: AxiIconButton.kDefaultSize,
+                                            child: AxiIconButton(
+                                              iconData: LucideIcons.arrowLeft,
+                                              tooltip: context.l10n.chatBack,
+                                              color: context
+                                                  .colorScheme.foreground,
+                                              borderColor:
+                                                  context.colorScheme.border,
+                                              onPressed: () {
+                                                if (!prepareChatExit()) return;
+                                                unawaited(
+                                                  context
+                                                      .read<ChatsCubit>()
+                                                      .popChat(),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        if (openStack.length > 1 &&
+                                            forwardStack.isNotEmpty)
+                                          const SizedBox(width: 8),
+                                        if (forwardStack.isNotEmpty)
+                                          SizedBox(
+                                            width: AxiIconButton.kDefaultSize,
+                                            height: AxiIconButton.kDefaultSize,
+                                            child: AxiIconButton(
+                                              iconData: LucideIcons.arrowRight,
+                                              tooltip: context
+                                                  .l10n.chatMessageOpenChat,
+                                              color: context
+                                                  .colorScheme.foreground,
+                                              borderColor:
+                                                  context.colorScheme.border,
+                                              onPressed: () {
+                                                if (!prepareChatExit()) return;
+                                                unawaited(
+                                                  context
+                                                      .read<ChatsCubit>()
+                                                      .restoreChat(),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                  if ((openStack.length > 1 ||
-                                          forwardStack.isNotEmpty) &&
-                                      !readOnly)
-                                    const SizedBox(width: 8),
-                                  if (openStack.length > 1)
-                                    SizedBox(
-                                      width: AxiIconButton.kDefaultSize,
-                                      height: AxiIconButton.kDefaultSize,
-                                      child: AxiIconButton(
-                                        iconData: LucideIcons.arrowLeft,
-                                        tooltip: context.l10n.chatBack,
-                                        color: context.colorScheme.foreground,
-                                        borderColor: context.colorScheme.border,
-                                        onPressed: () {
-                                          if (!prepareChatExit()) return;
-                                          unawaited(
-                                            context
-                                                .read<ChatsCubit>()
-                                                .popChat(),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  if (openStack.length > 1 &&
-                                      forwardStack.isNotEmpty)
-                                    const SizedBox(width: 8),
-                                  if (forwardStack.isNotEmpty)
-                                    SizedBox(
-                                      width: AxiIconButton.kDefaultSize,
-                                      height: AxiIconButton.kDefaultSize,
-                                      child: AxiIconButton(
-                                        iconData: LucideIcons.arrowRight,
-                                        tooltip:
-                                            context.l10n.chatMessageOpenChat,
-                                        color: context.colorScheme.foreground,
-                                        borderColor: context.colorScheme.border,
-                                        onPressed: () {
-                                          if (!prepareChatExit()) return;
-                                          unawaited(
-                                            context
-                                                .read<ChatsCubit>()
-                                                .restoreChat(),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                ],
+                                ),
+                          title: jid == null
+                              ? const SizedBox.shrink()
+                              : BlocBuilder<RosterCubit, RosterState>(
+                                  buildWhen: (_, current) =>
+                                      current is RosterAvailable,
+                                  builder: (context, rosterState) {
+                                    final cached = rosterState
+                                            is RosterAvailable
+                                        ? rosterState.items
+                                        : context.read<RosterCubit>()['items']
+                                            as List<RosterItem>?;
+                                    final rosterItems =
+                                        cached ?? const <RosterItem>[];
+                                    final item = rosterItems
+                                        .where((entry) => entry.jid == jid)
+                                        .singleOrNull;
+                                    final canRenameContact = !readOnly &&
+                                        chatEntity != null &&
+                                        chatEntity.type == ChatType.chat;
+                                    final statusLabel =
+                                        item?.status?.trim() ?? '';
+                                    final presence = item?.presence;
+                                    final subscription = item?.subscription;
+                                    const double minTitleWidth = 220;
+                                    const double maxTitleWidth = 420;
+                                    final double titleMaxWidth =
+                                        MediaQuery.sizeOf(
+                                              context,
+                                            ).width *
+                                            0.45;
+                                    final double clampedTitleWidth =
+                                        titleMaxWidth.clamp(
+                                            minTitleWidth, maxTitleWidth);
+                                    final baseTitleStyle = Theme.of(context)
+                                            .appBarTheme
+                                            .titleTextStyle ??
+                                        context.textTheme.h4;
+                                    final titleStyle = baseTitleStyle.copyWith(
+                                      fontSize:
+                                          context.textTheme.large.fontSize,
+                                    );
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        TransportAwareAvatar(
+                                          chat: chatEntity!,
+                                          size: 40,
+                                          badgeOffset: const Offset(-6, -4),
+                                          presence: presence,
+                                          status: statusLabel,
+                                          subscription: subscription,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          fit: FlexFit.loose,
+                                          child: ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              maxWidth: clampedTitleWidth,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Flexible(
+                                                      fit: FlexFit.loose,
+                                                      child: Text(
+                                                        state.chat
+                                                                ?.displayName ??
+                                                            '',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: titleStyle,
+                                                      ),
+                                                    ),
+                                                    if (canRenameContact)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsetsDirectional
+                                                                .only(start: 6),
+                                                        child: AxiTooltip(
+                                                          builder: (context) =>
+                                                              Text(
+                                                            context.l10n
+                                                                .chatContactRenameTooltip,
+                                                          ),
+                                                          child: ShadIconButton
+                                                              .ghost(
+                                                            onPressed:
+                                                                _promptContactRename,
+                                                            icon: Icon(
+                                                              LucideIcons
+                                                                  .pencilLine,
+                                                              size: 18,
+                                                              color: context
+                                                                  .colorScheme
+                                                                  .mutedForeground,
+                                                            ),
+                                                            decoration:
+                                                                const ShadDecoration(
+                                                              secondaryBorder:
+                                                                  ShadBorder
+                                                                      .none,
+                                                              secondaryFocusedBorder:
+                                                                  ShadBorder
+                                                                      .none,
+                                                            ),
+                                                          ).withTapBounce(),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                                if (statusLabel.isNotEmpty)
+                                                  Text(
+                                                    statusLabel,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style:
+                                                        context.textTheme.muted,
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                          actions: [
+                            if (jid != null) ...[
+                              if (isGroupChat)
+                                AxiIconButton(
+                                  iconData: LucideIcons.users,
+                                  tooltip: context.l10n.chatRoomMembers,
+                                  onPressed: _showMembers,
+                                ),
+                              _ChatSearchToggleButton(
+                                onBeforeToggle: _returnToMainRouteIfNeeded,
+                              ),
+                              const SizedBox(width: _chatHeaderActionSpacing),
+                              AxiIconButton(
+                                iconData: LucideIcons.image,
+                                tooltip: context.l10n.chatAttachmentTooltip,
+                                onPressed: _openChatAttachments,
+                              ),
+                              const SizedBox(width: _chatHeaderActionSpacing),
+                              AxiIconButton(
+                                iconData: pinnedIcon,
+                                icon: _PinnedBadgeIcon(
+                                  iconData: pinnedIcon,
+                                  count: pinnedCount,
+                                ),
+                                tooltip: _pinnedPanelVisible
+                                    ? context.l10n.commonClose
+                                    : context.l10n.chatPinnedMessagesTooltip,
+                                onPressed: _togglePinnedMessages,
+                              ),
+                              if (chatCalendarAvailable) ...[
+                                const SizedBox(width: _chatHeaderActionSpacing),
+                                AxiIconButton(
+                                  iconData: LucideIcons.calendarClock,
+                                  tooltip: context.l10n.homeRailCalendar,
+                                  onPressed: () {
+                                    if (showingChatCalendar) {
+                                      _closeChatCalendar();
+                                      return;
+                                    }
+                                    _openChatCalendar();
+                                  },
+                                ),
+                              ],
+                              if (canShowSettings) ...[
+                                const SizedBox(width: _chatHeaderActionSpacing),
+                                AxiIconButton(
+                                  iconData: isSettingsRoute
+                                      ? LucideIcons.x
+                                      : LucideIcons.settings,
+                                  tooltip: isSettingsRoute
+                                      ? context.l10n.chatCloseSettings
+                                      : context.l10n.chatSettings,
+                                  onPressed: _toggleSettingsPanel,
+                                ),
+                              ],
+                            ] else
+                              const SizedBox.shrink(),
+                          ],
+                        )
+                      : null,
+                  body: Builder(
+                    builder: (context) {
+                      final Widget chatMainBody = KeyedSubtree(
+                        key: _chatMainKey,
+                        child: Column(
+                          children: [
+                            const ChatAlert(),
+                            _UnknownSenderBanner(
+                              readOnly: readOnly,
+                              isSelfChat: isSelfChat,
+                              onAddContact: _handleAddContact,
+                              onReportSpam: () => _handleSpamToggle(
+                                sendToSpam: true,
                               ),
                             ),
-                          ),
-                    title: jid == null
-                        ? const SizedBox.shrink()
-                        : BlocBuilder<RosterCubit, RosterState>(
-                            buildWhen: (_, current) =>
-                                current is RosterAvailable,
-                            builder: (context, rosterState) {
-                              final cached = rosterState is RosterAvailable
-                                  ? rosterState.items
-                                  : context.read<RosterCubit>()['items']
-                                      as List<RosterItem>?;
-                              final rosterItems =
-                                  cached ?? const <RosterItem>[];
-                              final item = rosterItems
-                                  .where((entry) => entry.jid == jid)
-                                  .singleOrNull;
-                              final canRenameContact = !readOnly &&
-                                  chatEntity != null &&
-                                  chatEntity.type == ChatType.chat;
-                              final statusLabel = item?.status?.trim() ?? '';
-                              final presence = item?.presence;
-                              final subscription = item?.subscription;
-                              const double minTitleWidth = 220;
-                              const double maxTitleWidth = 420;
-                              final double titleMaxWidth = MediaQuery.sizeOf(
-                                    context,
-                                  ).width *
-                                  0.45;
-                              final double clampedTitleWidth = titleMaxWidth
-                                  .clamp(minTitleWidth, maxTitleWidth);
-                              final baseTitleStyle = Theme.of(context)
-                                      .appBarTheme
-                                      .titleTextStyle ??
-                                  context.textTheme.h4;
-                              final titleStyle = baseTitleStyle.copyWith(
-                                fontSize: context.textTheme.large.fontSize,
-                              );
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  TransportAwareAvatar(
-                                    chat: chatEntity!,
-                                    size: 40,
-                                    badgeOffset: const Offset(-6, -4),
-                                    presence: presence,
-                                    status: statusLabel,
-                                    subscription: subscription,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    fit: FlexFit.loose,
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth: clampedTitleWidth,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Flexible(
-                                                fit: FlexFit.loose,
-                                                child: Text(
-                                                  state.chat?.displayName ?? '',
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: titleStyle,
-                                                ),
-                                              ),
-                                              if (canRenameContact)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsetsDirectional
-                                                          .only(start: 6),
-                                                  child: AxiTooltip(
-                                                    builder: (context) => Text(
-                                                      context.l10n
-                                                          .chatContactRenameTooltip,
-                                                    ),
-                                                    child: ShadIconButton.ghost(
-                                                      onPressed:
-                                                          _promptContactRename,
-                                                      icon: Icon(
-                                                        LucideIcons.pencilLine,
-                                                        size: 18,
-                                                        color: context
-                                                            .colorScheme
-                                                            .mutedForeground,
-                                                      ),
-                                                      decoration:
-                                                          const ShadDecoration(
-                                                        secondaryBorder:
-                                                            ShadBorder.none,
-                                                        secondaryFocusedBorder:
-                                                            ShadBorder.none,
-                                                      ),
-                                                    ).withTapBounce(),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                          if (statusLabel.isNotEmpty)
-                                            Text(
-                                              statusLabel,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: context.textTheme.muted,
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                    actions: [
-                      if (jid != null) ...[
-                        if (isGroupChat)
-                          AxiIconButton(
-                            iconData: LucideIcons.users,
-                            tooltip: context.l10n.chatRoomMembers,
-                            onPressed: _showMembers,
-                          ),
-                        _ChatSearchToggleButton(
-                          onBeforeToggle: _returnToMainRouteIfNeeded,
-                        ),
-                        const SizedBox(width: _chatHeaderActionSpacing),
-                        AxiIconButton(
-                          iconData: LucideIcons.image,
-                          tooltip: context.l10n.chatAttachmentTooltip,
-                          onPressed: _openChatAttachments,
-                        ),
-                        const SizedBox(width: _chatHeaderActionSpacing),
-                        AxiIconButton(
-                          iconData: pinnedIcon,
-                          icon: _PinnedBadgeIcon(
-                            iconData: pinnedIcon,
-                            count: pinnedCount,
-                          ),
-                          tooltip: _pinnedPanelVisible
-                              ? context.l10n.commonClose
-                              : context.l10n.chatPinnedMessagesTooltip,
-                          onPressed: _togglePinnedMessages,
-                        ),
-                        if (chatCalendarAvailable) ...[
-                          const SizedBox(width: _chatHeaderActionSpacing),
-                          AxiIconButton(
-                            iconData: LucideIcons.calendarClock,
-                            tooltip: context.l10n.homeRailCalendar,
-                            onPressed: () {
-                              if (showingChatCalendar) {
-                                _closeChatCalendar();
-                                return;
-                              }
-                              _openChatCalendar();
-                            },
-                          ),
-                        ],
-                        if (canShowSettings) ...[
-                          const SizedBox(width: _chatHeaderActionSpacing),
-                          AxiIconButton(
-                            iconData: isSettingsRoute
-                                ? LucideIcons.x
-                                : LucideIcons.settings,
-                            tooltip: isSettingsRoute
-                                ? context.l10n.chatCloseSettings
-                                : context.l10n.chatSettings,
-                            onPressed: _toggleSettingsPanel,
-                          ),
-                        ],
-                      ] else
-                        const SizedBox.shrink(),
-                    ],
-                      )
-                      : null,
-                  body: Stack(
-                    children: [
-                      Column(
-                        children: [
-                          const ChatAlert(),
-                          _UnknownSenderBanner(
-                            readOnly: readOnly,
-                            isSelfChat: isSelfChat,
-                            onAddContact: _handleAddContact,
-                            onReportSpam: () => _handleSpamToggle(
-                              sendToSpam: true,
-                            ),
-                          ),
-                          Expanded(
+                            Expanded(
                               child: Stack(
                                 children: [
                                   IgnorePointer(
@@ -5652,17 +5676,26 @@ class _ChatState extends State<Chat> {
                                                                           .toPlainText(
                                                                           normalizedHtmlBody,
                                                                         ).trim();
-                                                              final bool shouldPreferPlainTextHtml = isEmailChat &&
-                                                                  self &&
+                                                              final bool
+                                                                  isPlainTextHtml =
                                                                   normalizedHtmlBody !=
-                                                                      null &&
-                                                                  normalizedHtmlText
-                                                                          ?.isNotEmpty ==
-                                                                      true &&
-                                                                  trimmedRenderedText
-                                                                      .isNotEmpty &&
-                                                                  normalizedHtmlText ==
-                                                                      trimmedRenderedText;
+                                                                          null &&
+                                                                      HtmlContentCodec
+                                                                          .isPlainTextHtml(
+                                                                        normalizedHtmlBody,
+                                                                      );
+                                                              final bool shouldPreferPlainTextHtml = isPlainTextHtml ||
+                                                                  (isEmailChat &&
+                                                                      self &&
+                                                                      normalizedHtmlBody !=
+                                                                          null &&
+                                                                      normalizedHtmlText
+                                                                              ?.isNotEmpty ==
+                                                                          true &&
+                                                                      trimmedRenderedText
+                                                                          .isNotEmpty &&
+                                                                      normalizedHtmlText ==
+                                                                          trimmedRenderedText);
                                                               final String?
                                                                   taskShareText =
                                                                   calendarTaskIcs
@@ -7465,47 +7498,56 @@ class _ChatState extends State<Chat> {
                             ),
                           ],
                         ),
-                      ),
-                      Positioned.fill(
-                        child: AxiFadeIndexedStack(
-                          index: _chatRoute.index,
-                          duration: overlayDuration,
-                          curve: _chatOverlayFadeCurve,
-                          children: [
-                            const SizedBox.shrink(),
-                            _ChatDetailsOverlay(
-                              onBackPressed: _returnToMainRoute,
+                      );
+                      final Widget chatMainPage = _chatRoute.isSearch
+                          ? const SizedBox.shrink()
+                          : chatMainBody;
+                      final Widget chatSearchPage = _chatRoute.isSearch
+                          ? Stack(
+                              children: [
+                                chatMainBody,
+                                const _ChatSearchOverlay(
+                                  panel: _ChatSearchPanel(),
+                                ),
+                              ],
+                            )
+                          : const SizedBox.shrink();
+                      return AxiFadeIndexedStack(
+                        index: _chatRoute.index,
+                        duration: overlayDuration,
+                        curve: _chatOverlayFadeCurve,
+                        children: [
+                          chatMainPage,
+                          _ChatDetailsOverlay(
+                            onBackPressed: _returnToMainRoute,
+                          ),
+                          chatSearchPage,
+                          _ChatSettingsOverlay(
+                            state: state,
+                            onBackPressed: _returnToMainRoute,
+                            onViewFilterChanged: _setViewFilter,
+                            onToggleNotifications: _toggleNotifications,
+                            onSpamToggle: (sendToSpam) =>
+                                _handleSpamToggle(sendToSpam: sendToSpam),
+                          ),
+                          _ChatGalleryOverlay(
+                            chat: chatEntity,
+                            onBackPressed: _returnToMainRoute,
+                          ),
+                          _ChatCalendarOverlay(
+                            key: ValueKey(
+                              '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
                             ),
-                            const _ChatSearchOverlay(
-                              panel: _ChatSearchPanel(),
-                            ),
-                            _ChatSettingsOverlay(
-                              state: state,
-                              onBackPressed: _returnToMainRoute,
-                              onViewFilterChanged: _setViewFilter,
-                              onToggleNotifications: _toggleNotifications,
-                              onSpamToggle: (sendToSpam) =>
-                                  _handleSpamToggle(sendToSpam: sendToSpam),
-                            ),
-                            _ChatGalleryOverlay(
-                              chat: chatEntity,
-                              onBackPressed: _returnToMainRoute,
-                            ),
-                            _ChatCalendarOverlay(
-                              key: ValueKey(
-                                '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
-                              ),
-                              chat: chatEntity,
-                              calendarAvailable: chatCalendarAvailable,
-                              participants: chatCalendarParticipants,
-                              avatarPaths: chatCalendarAvatarPaths,
-                              onBackPressed: _closeChatCalendar,
-                              calendarBloc: chatCalendarBloc,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                            chat: chatEntity,
+                            calendarAvailable: chatCalendarAvailable,
+                            participants: chatCalendarParticipants,
+                            avatarPaths: chatCalendarAvatarPaths,
+                            onBackPressed: _closeChatCalendar,
+                            calendarBloc: chatCalendarBloc,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 );
                 final Widget content = chatCalendarBloc == null
@@ -8902,7 +8944,6 @@ class _PinnedMessageTile extends StatelessWidget {
 
 class _ChatCalendarPanel extends StatelessWidget {
   const _ChatCalendarPanel({
-    super.key,
     required this.chat,
     required this.calendarAvailable,
     required this.participants,
@@ -9158,16 +9199,21 @@ class _ChatCalendarOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final resolvedChat = chat;
+    final resolvedBloc = calendarBloc;
+    if (!calendarAvailable || resolvedChat == null || resolvedBloc == null) {
+      return const SizedBox.shrink();
+    }
     return ColoredBox(
       color: context.colorScheme.background,
       child: SafeArea(
         child: _ChatCalendarPanel(
-          chat: chat,
+          chat: resolvedChat,
           calendarAvailable: calendarAvailable,
           participants: participants,
           avatarPaths: avatarPaths,
           onBackPressed: onBackPressed,
-          calendarBloc: calendarBloc,
+          calendarBloc: resolvedBloc,
         ),
       ),
     );

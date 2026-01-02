@@ -1,4 +1,5 @@
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/storage/models.dart';
 
 const int _pendingOutgoingMaxAgeMinutes = 2;
 const Duration _pendingOutgoingMaxAge =
@@ -6,6 +7,71 @@ const Duration _pendingOutgoingMaxAge =
 const String _pendingOutgoingLineFeed = '\n';
 const String _pendingOutgoingCarriageReturnLineFeed = '\r\n';
 const String _pendingOutgoingEmpty = '';
+
+class PendingOutgoingEmailSignature {
+  const PendingOutgoingEmailSignature({
+    required this.textSignature,
+    required this.htmlSignature,
+    required this.fileSignature,
+  });
+
+  factory PendingOutgoingEmailSignature.fromOutgoing({
+    String? text,
+    String? html,
+    String? fileName,
+    String? filePath,
+  }) {
+    final String? normalizedText = _normalizeText(text);
+    final String? normalizedHtml = _normalizeHtml(html);
+    final String? normalizedFile = _normalizeFileSignature(
+      fileName: fileName,
+      filePath: filePath,
+    );
+    return PendingOutgoingEmailSignature(
+      textSignature: normalizedText,
+      htmlSignature: normalizedHtml,
+      fileSignature: normalizedFile,
+    );
+  }
+
+  factory PendingOutgoingEmailSignature.fromMessage({
+    required Message message,
+    FileMetadataData? metadata,
+  }) {
+    return PendingOutgoingEmailSignature.fromOutgoing(
+      text: message.body,
+      html: message.htmlBody,
+      fileName: metadata?.filename,
+      filePath: metadata?.path,
+    );
+  }
+
+  final String? textSignature;
+  final String? htmlSignature;
+  final String? fileSignature;
+
+  bool get isEmpty =>
+      textSignature == null && htmlSignature == null && fileSignature == null;
+
+  bool matches(PendingOutgoingEmailSignature match) {
+    if (fileSignature != null || match.fileSignature != null) {
+      return fileSignature != null &&
+          match.fileSignature != null &&
+          fileSignature == match.fileSignature;
+    }
+    if (textSignature != null &&
+        match.textSignature != null &&
+        textSignature == match.textSignature) {
+      return true;
+    }
+    if (htmlSignature != null &&
+        match.htmlSignature != null &&
+        htmlSignature == match.htmlSignature) {
+      return true;
+    }
+    return false;
+  }
+}
 
 class PendingOutgoingEmailStore {
   PendingOutgoingEmailStore({
@@ -25,15 +91,14 @@ class PendingOutgoingEmailStore {
     String? fileName,
     String? filePath,
   }) {
-    final normalizedText = _normalizeText(text);
-    final normalizedHtml = _normalizeHtml(html);
-    final normalizedFile = _normalizeFileSignature(
+    final PendingOutgoingEmailSignature signature =
+        PendingOutgoingEmailSignature.fromOutgoing(
+      text: text,
+      html: html,
       fileName: fileName,
       filePath: filePath,
     );
-    if (normalizedText == null &&
-        normalizedHtml == null &&
-        normalizedFile == null) {
+    if (signature.isEmpty) {
       return;
     }
     final entry = _PendingOutgoingEmailEntry(
@@ -41,9 +106,7 @@ class PendingOutgoingEmailStore {
       accountId: accountId,
       chatId: chatId,
       createdAt: _clock(),
-      textSignature: normalizedText,
-      htmlSignature: normalizedHtml,
-      fileSignature: normalizedFile,
+      signature: signature,
     );
     _entriesByStanzaId[stanzaId] = entry;
     final entries = _entriesByAccount.putIfAbsent(
@@ -82,16 +145,19 @@ class PendingOutgoingEmailStore {
     if (entries == null || entries.isEmpty) {
       return null;
     }
-    final match = _PendingOutgoingEmailMatch(
-      chatId: chatId,
-      textSignature: _normalizeText(text),
-      htmlSignature: _normalizeHtml(html),
-      fileSignature: _normalizeFileSignature(
-        fileName: fileName,
-        filePath: filePath,
-      ),
+    final PendingOutgoingEmailSignature match =
+        PendingOutgoingEmailSignature.fromOutgoing(
+      text: text,
+      html: html,
+      fileName: fileName,
+      filePath: filePath,
     );
-    final candidates = entries.where((entry) => entry.matches(match)).toList();
+    if (match.isEmpty) {
+      return null;
+    }
+    final candidates = entries
+        .where((entry) => entry.chatId == chatId && entry.matches(match))
+        .toList();
     if (candidates.isEmpty) {
       return null;
     }
@@ -130,54 +196,16 @@ class _PendingOutgoingEmailEntry {
     required this.accountId,
     required this.chatId,
     required this.createdAt,
-    required this.textSignature,
-    required this.htmlSignature,
-    required this.fileSignature,
+    required this.signature,
   });
 
   final String stanzaId;
   final int accountId;
   final int chatId;
   final DateTime createdAt;
-  final String? textSignature;
-  final String? htmlSignature;
-  final String? fileSignature;
+  final PendingOutgoingEmailSignature signature;
 
-  bool matches(_PendingOutgoingEmailMatch match) {
-    if (chatId != match.chatId) {
-      return false;
-    }
-    if (fileSignature != null || match.fileSignature != null) {
-      return fileSignature != null &&
-          match.fileSignature != null &&
-          fileSignature == match.fileSignature;
-    }
-    if (textSignature != null &&
-        match.textSignature != null &&
-        textSignature == match.textSignature) {
-      return true;
-    }
-    if (htmlSignature != null &&
-        match.htmlSignature != null &&
-        htmlSignature == match.htmlSignature) {
-      return true;
-    }
-    return false;
-  }
-}
-
-class _PendingOutgoingEmailMatch {
-  const _PendingOutgoingEmailMatch({
-    required this.chatId,
-    required this.textSignature,
-    required this.htmlSignature,
-    required this.fileSignature,
-  });
-
-  final int chatId;
-  final String? textSignature;
-  final String? htmlSignature;
-  final String? fileSignature;
+  bool matches(PendingOutgoingEmailSignature match) => signature.matches(match);
 }
 
 String? _normalizeText(String? value) {

@@ -9,6 +9,9 @@ import 'package:axichat/src/authentication/view/login_form.dart';
 import 'package:axichat/src/authentication/view/signup_form.dart';
 import 'package:axichat/src/authentication/view/widgets/operation_progress_bar.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
+import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
+import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
@@ -16,12 +19,14 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart' as models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:logging/logging.dart';
 
@@ -177,9 +182,9 @@ class _LoginScreenState extends State<LoginScreen>
         context.read<SettingsCubit>().animationDuration == Duration.zero
             ? baseAnimationDuration
             : context.read<SettingsCubit>().animationDuration;
-    final preloadAvatar = _preloadSelfAvatarCache();
+    final preloadHome = _preloadHomeScreenCache();
     await _operationProgressController.complete(duration: progressDuration);
-    await preloadAvatar;
+    await preloadHome;
     if (!mounted) {
       return;
     }
@@ -321,6 +326,88 @@ class _LoginScreenState extends State<LoginScreen>
     } on Exception {
       return;
     }
+  }
+
+  Future<void> _preloadHomeScreenCache() async {
+    final preloads = <Future<void>>[
+      _preloadSelfAvatarCache(),
+      _preloadChatListCache(),
+      _preloadCalendarShortcutCache(),
+    ];
+    await Future.wait(preloads);
+  }
+
+  Future<void> _preloadChatListCache() async {
+    if (!mounted) return;
+    XmppService xmppService;
+    try {
+      xmppService = context.read<XmppService>();
+    } on Exception {
+      return;
+    }
+    List<models.Chat>? chats;
+    try {
+      chats = await xmppService.preloadChatList();
+    } on Exception {
+      return;
+    }
+    if (!mounted || chats == null || chats.isEmpty) return;
+    await _precacheChatAvatars(xmppService: xmppService, chats: chats);
+  }
+
+  Future<void> _preloadCalendarShortcutCache() async {
+    if (!mounted) return;
+    final storage = HydratedBloc.storage;
+    if (storage is CalendarStorageRegistry &&
+        !storage.hasPrefix(authStoragePrefix)) {
+      return;
+    }
+    try {
+      final raw = storage.read(_calendarShortcutStorageKey());
+      if (raw is! Map) return;
+      final snapshot = Map<String, dynamic>.from(raw);
+      CalendarStateStorageCodec.decode(snapshot);
+    } on Exception {
+      return;
+    }
+  }
+
+  String _calendarShortcutStorageKey() => authStoragePrefix;
+
+  Future<void> _precacheChatAvatars({
+    required XmppService xmppService,
+    required List<models.Chat> chats,
+  }) async {
+    if (!mounted) return;
+    final avatarPaths = <String>{};
+    for (final chat in chats) {
+      final resolvedPath = _resolveChatAvatarPath(chat);
+      if (resolvedPath != null) {
+        avatarPaths.add(resolvedPath);
+      }
+    }
+    if (avatarPaths.isEmpty || !mounted) return;
+    for (final path in avatarPaths) {
+      final bytes = await xmppService.loadAvatarBytes(path);
+      if (!mounted || bytes == null || bytes.isEmpty) continue;
+      try {
+        await precacheImage(MemoryImage(bytes), context);
+      } on Exception {
+        continue;
+      }
+    }
+  }
+
+  String? _resolveChatAvatarPath(models.Chat chat) {
+    final primaryPath = chat.avatarPath?.trim();
+    if (primaryPath != null && primaryPath.isNotEmpty) {
+      return primaryPath;
+    }
+    final fallbackPath = chat.contactAvatarPath?.trim();
+    if (fallbackPath != null && fallbackPath.isNotEmpty) {
+      return fallbackPath;
+    }
+    return null;
   }
 
   @override

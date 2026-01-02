@@ -24,13 +24,16 @@ class AxiFadeIndexedStack extends StatelessWidget {
     if (children.isEmpty) {
       return const SizedBox.shrink();
     }
-    final int resolvedIndex =
-        index < 0 ? 0 : index >= children.length ? children.length - 1 : index;
+    final int resolvedIndex = index < 0
+        ? 0
+        : index >= children.length
+            ? children.length - 1
+            : index;
     return Stack(
       fit: StackFit.expand,
       alignment: alignment,
       children: [
-        for (var i = 0; i < children.length; i++)
+        for (int i = 0; i < children.length; i++)
           _AxiFadeIndexedStackChild(
             visible: i == resolvedIndex,
             duration: duration,

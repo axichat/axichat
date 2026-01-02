@@ -81,6 +81,11 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
+  Future<List<Message>> getPendingOutgoingDeltaMessages({
+    required int deltaAccountId,
+    required int deltaChatId,
+  });
+
   Future<List<Message>> searchChatMessages({
     required String jid,
     String? query,
@@ -1638,6 +1643,27 @@ WHERE delta_chat_id IS NOT NULL
         (tbl) => OrderingTerm(
               expression: tbl.timestamp,
               mode: OrderingMode.asc,
+            ),
+      ]);
+    return query.get();
+  }
+
+  @override
+  Future<List<Message>> getPendingOutgoingDeltaMessages({
+    required int deltaAccountId,
+    required int deltaChatId,
+  }) async {
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.deltaMsgId.isNull() &
+            tbl.deltaChatId.equals(deltaChatId) &
+            tbl.deltaAccountId.equals(deltaAccountId),
+      )
+      ..orderBy([
+        (tbl) => OrderingTerm(
+              expression: tbl.timestamp,
+              mode: OrderingMode.desc,
             ),
       ]);
     return query.get();
