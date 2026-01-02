@@ -6,8 +6,11 @@ import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
+import 'package:axichat/src/email/util/email_message_ids.dart';
+import 'package:axichat/src/email/util/email_message_merge.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -23,8 +26,23 @@ const int _deltaMessageIdUnset = DeltaMessageId.none;
 const int _minimumHistoryWindow = 1;
 const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
 const String _deltaAttachmentFallbackPrefix = 'attachment-';
-const String _deltaMessageStanzaPrefix = 'dc-msg';
-const String _deltaMessageStanzaSeparator = '-';
+const String _deltaAttachmentLabelPrefix = '📎 ';
+const String _unknownAttachmentSizeLabel = 'Unknown size';
+const int _attachmentSizeUnitBase = 1024;
+const double _attachmentSizePrecisionThreshold = 10;
+const List<String> _attachmentSizeUnits = <String>[
+  'B',
+  'KB',
+  'MB',
+  'GB',
+  'TB',
+];
+const int _originIdHydrationDelayMs = 500;
+const int _originIdHydrationMaxAttempts = 12;
+const int _originIdHydrationAttemptStart = 0;
+const int _originIdHydrationAttemptStep = 1;
+const Duration _originIdHydrationDelay =
+    Duration(milliseconds: _originIdHydrationDelayMs);
 
 enum DeltaEventType {
   error(DeltaEventCode.error),
@@ -769,6 +787,39 @@ class DeltaEventConsumer {
       await _updateExistingMessage(existing: existing, msg: msg);
       return;
     }
+    final existingByDeltaId = await db.getMessageByDeltaId(
+      msg.id,
+      deltaAccountId: deltaAccountId,
+    );
+    if (existingByDeltaId != null) {
+      await _updateExistingMessage(existing: existingByDeltaId, msg: msg);
+      return;
+    }
+    final existingByChat = await db.getMessageByDeltaId(
+      msg.id,
+      chatJid: resolvedChat.jid,
+    );
+    if (existingByChat != null) {
+      await _updateExistingMessage(existing: existingByChat, msg: msg);
+      return;
+    }
+    final originId = await _resolveOriginId(msg.id);
+    if (originId != null) {
+      final existingByOrigin = await db.getMessageByOriginID(originId);
+      if (_matchesOriginMessage(
+        existingByOrigin,
+        deltaAccountId: deltaAccountId,
+        chatJid: resolvedChat.jid,
+        chatId: chatId,
+      )) {
+        await _updateExistingMessage(
+          existing: existingByOrigin!,
+          msg: msg,
+          originId: originId,
+        );
+        return;
+      }
+    }
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
     final senderJid = isOutgoing ? _selfJid : resolvedChat.jid;
@@ -801,6 +852,7 @@ class DeltaEventConsumer {
       senderJid: senderJid,
       chatJid: resolvedChat.jid,
       timestamp: timestamp,
+      originID: originId,
       error: resolvedError,
       warning: warning,
       encryptionProtocol: EncryptionProtocol.none,
@@ -822,6 +874,12 @@ class DeltaEventConsumer {
       message: message,
       chatJid: resolvedChat.jid,
     );
+    if (originId == null) {
+      _scheduleOriginIdHydration(
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
+    }
     if (!isOutgoing &&
         msg.hasFile &&
         resolvedChat.attachmentAutoDownload.isAllowed) {
@@ -833,9 +891,13 @@ class DeltaEventConsumer {
   Future<void> _updateExistingMessage({
     required Message existing,
     required DeltaMessage msg,
+    String? originId,
   }) async {
     final db = await _db();
     var next = existing;
+    if (originId != null && originId != existing.originID) {
+      next = next.copyWith(originID: originId);
+    }
     if (msg.hasKnownState) {
       final deliveryStatus = msg.deliveryStatus;
       if (deliveryStatus.acked != existing.acked ||
@@ -866,6 +928,95 @@ class DeltaEventConsumer {
     if (next != existing) {
       await db.updateMessage(next);
     }
+  }
+
+  void _scheduleOriginIdHydration({
+    required int msgId,
+    required int accountId,
+  }) {
+    unawaited(
+      _hydrateOriginId(
+        msgId: msgId,
+        accountId: accountId,
+      ),
+    );
+  }
+
+  Future<void> _hydrateOriginId({
+    required int msgId,
+    required int accountId,
+  }) async {
+    final stanzaId = _stanzaId(
+      msgId,
+      accountId: accountId,
+    );
+    const maxAttempts = _originIdHydrationMaxAttempts;
+    const attemptStep = _originIdHydrationAttemptStep;
+    const lastAttemptIndex = maxAttempts - attemptStep;
+    for (int attempt = _originIdHydrationAttemptStart;
+        attempt < maxAttempts;
+        attempt += attemptStep) {
+      final originId = await _resolveOriginId(msgId);
+      if (originId != null) {
+        final db = await _db();
+        final existing = await db.getMessageByStanzaID(stanzaId);
+        if (existing == null) {
+          return;
+        }
+        final existingOrigin = existing.originID?.trim();
+        if (existingOrigin != null && existingOrigin.isNotEmpty) {
+          return;
+        }
+        final duplicate = await db.getMessageByOriginID(originId);
+        if (duplicate != null &&
+            canMergeOriginMessages(
+              existing: existing,
+              duplicate: duplicate,
+            )) {
+          final primary = resolveOriginMergePrimary(
+            existing: existing,
+            duplicate: duplicate,
+            selfJid: _selfJid,
+          );
+          final primaryIsExisting = primary.stanzaID == existing.stanzaID;
+          final secondary = primaryIsExisting ? duplicate : existing;
+          final merged = mergeOriginMessages(
+            primary: primary,
+            duplicate: secondary,
+            originId: originId,
+          );
+          await db.updateMessage(merged);
+          await db.deleteMessage(secondary.stanzaID);
+          return;
+        }
+        await db.updateMessage(existing.copyWith(originID: originId));
+        return;
+      }
+      if (attempt < lastAttemptIndex) {
+        await Future<void>.delayed(_originIdHydrationDelay);
+      }
+    }
+  }
+
+  Future<String?> _resolveOriginId(int msgId) async {
+    final headers = await _context.getMessageMimeHeaders(msgId);
+    return parseEmailMessageId(headers);
+  }
+
+  bool _matchesOriginMessage(
+    Message? existing, {
+    required int deltaAccountId,
+    required String chatJid,
+    required int chatId,
+  }) {
+    if (existing == null) return false;
+    if (existing.deltaAccountId != deltaAccountId) return false;
+    if (existing.chatJid != chatJid) return false;
+    final existingChatId = existing.deltaChatId;
+    if (existingChatId != null && existingChatId != chatId) {
+      return false;
+    }
+    return true;
   }
 
   Future<Chat> _ensureChat(int chatId) async {
@@ -1095,7 +1246,8 @@ class DeltaEventConsumer {
     );
     final normalizedBody = next.body?.trim() ?? '';
     if (normalizedBody.isEmpty) {
-      next = next.copyWith(body: _attachmentLabel(merged ?? resolvedMetadata));
+      next =
+          next.copyWith(body: deltaAttachmentLabel(merged ?? resolvedMetadata));
     }
     return next;
   }
@@ -1150,27 +1302,6 @@ class DeltaEventConsumer {
       fallbackPath: fallbackPath,
       fallbackName: fallbackName,
     );
-  }
-
-  String _attachmentLabel(FileMetadataData metadata) {
-    final sizeBytes = metadata.sizeBytes;
-    final label = metadata.filename.trim();
-    if (sizeBytes == null) return '📎 $label';
-    final sizeLabel = _formatBytes(sizeBytes);
-    return '📎 $label ($sizeLabel)';
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return 'Unknown size';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex++;
-    }
-    final precision = value >= 10 || unitIndex == 0 ? 0 : 1;
-    return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
   }
 
   Future<Message> _applyShareMetadata({
@@ -1288,11 +1419,7 @@ String _stanzaId(
   int msgId, {
   required int accountId,
 }) {
-  if (accountId == deltaAccountIdLegacy) {
-    return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator$msgId';
-  }
-  return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator'
-      '$accountId$_deltaMessageStanzaSeparator$msgId';
+  return deltaMessageStanzaId(msgId, accountId: accountId);
 }
 
 String _stripSubjectHeader(String body, String subject) {
@@ -1303,6 +1430,28 @@ String _stripSubjectHeader(String body, String subject) {
   var remainder = trimmedBody.substring(subject.length);
   remainder = remainder.replaceFirst(RegExp(r'^\s+'), '');
   return remainder;
+}
+
+String deltaAttachmentLabel(FileMetadataData metadata) {
+  final sizeBytes = metadata.sizeBytes;
+  final label = metadata.filename.trim();
+  if (sizeBytes == null) return '$_deltaAttachmentLabelPrefix$label';
+  final sizeLabel = _formatAttachmentBytes(sizeBytes);
+  return '$_deltaAttachmentLabelPrefix$label ($sizeLabel)';
+}
+
+String _formatAttachmentBytes(int bytes) {
+  if (bytes <= 0) return _unknownAttachmentSizeLabel;
+  var value = bytes.toDouble();
+  var unitIndex = 0;
+  while (value >= _attachmentSizeUnitBase &&
+      unitIndex < _attachmentSizeUnits.length - 1) {
+    value /= _attachmentSizeUnitBase;
+    unitIndex++;
+  }
+  final precision =
+      value >= _attachmentSizePrecisionThreshold || unitIndex == 0 ? 0 : 1;
+  return '${value.toStringAsFixed(precision)} ${_attachmentSizeUnits[unitIndex]}';
 }
 
 bool _matchesDeltaWelcomeText(String? text) {

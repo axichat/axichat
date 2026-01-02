@@ -10,28 +10,43 @@ const _rememberMeChoiceKeyName = 'remember_me_choice';
 const _jidKeyName = 'jid';
 const _passwordKeyName = 'password';
 const _passwordPreHashedKeyName = 'password_prehashed_v1';
+const bool _defaultRememberMeChoice = true;
 
 Future<bool> resolveHasStoredLoginCredentials(
   CredentialStore credentialStore,
 ) async {
-  final rememberMeChoiceKey = CredentialStore.registerKey(
+  final RegisteredCredentialKey rememberMeChoiceKey =
+      CredentialStore.registerKey(
     _rememberMeChoiceKeyName,
   );
-  final rememberMeRaw = await credentialStore.read(key: rememberMeChoiceKey);
-  final rememberMe = _parseBoolOrNull(rememberMeRaw) ?? true;
+  final Future<String?> rememberMeFuture =
+      credentialStore.read(key: rememberMeChoiceKey);
+  final String? rememberMeRaw = await rememberMeFuture;
+  final bool rememberMe =
+      _parseBoolOrNull(rememberMeRaw) ?? _defaultRememberMeChoice;
   if (!rememberMe) return false;
 
-  final jidKey = CredentialStore.registerKey(_jidKeyName);
-  final passwordKey = CredentialStore.registerKey(_passwordKeyName);
-  final passwordPreHashedKey = CredentialStore.registerKey(
+  final RegisteredCredentialKey jidKey =
+      CredentialStore.registerKey(_jidKeyName);
+  final RegisteredCredentialKey passwordKey =
+      CredentialStore.registerKey(_passwordKeyName);
+  final RegisteredCredentialKey passwordPreHashedKey =
+      CredentialStore.registerKey(
     _passwordPreHashedKeyName,
   );
 
-  final storedJid = await credentialStore.read(key: jidKey);
-  final storedPassword = await credentialStore.read(key: passwordKey);
-  final storedPasswordPreHashed = _parseBoolOrNull(
-    await credentialStore.read(key: passwordPreHashedKey),
-  );
+  final Future<String?> storedJidFuture = credentialStore.read(key: jidKey);
+  final Future<String?> storedPasswordFuture =
+      credentialStore.read(key: passwordKey);
+  final Future<String?> storedPasswordPreHashedFuture =
+      credentialStore.read(key: passwordPreHashedKey);
+
+  final String? storedJid = await storedJidFuture;
+  final String? storedPassword = await storedPasswordFuture;
+  final String? storedPasswordPreHashedRaw =
+      await storedPasswordPreHashedFuture;
+  final bool? storedPasswordPreHashed =
+      _parseBoolOrNull(storedPasswordPreHashedRaw);
 
   return storedJid != null &&
       storedPassword != null &&

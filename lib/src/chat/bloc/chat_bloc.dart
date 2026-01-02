@@ -268,6 +268,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   static const messageBatchSize = 50;
+  static const int _emptyMessageCount = 0;
   static final RegExp _axiDomainPattern =
       RegExp(r'@(?:[\\w-]+\\.)*axi\\.im$', caseSensitive: false);
   static const CalendarFragmentPolicy _calendarFragmentPolicy =
@@ -559,6 +560,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
     final localCount = await _archivedMessageCount(chat);
     if (localCount >= _currentMessageLimit) return;
+    final lastSeen = await _messageService.loadLastSeenTimestamp(
+      chat.remoteJid,
+    );
+    final hasLocalMessages = localCount > _emptyMessageCount;
+    if (lastSeen != null && hasLocalMessages) {
+      await _catchUpFromMam();
+      return;
+    }
     _beginMamLoad();
     try {
       final result = await _messageService.fetchLatestFromArchive(
