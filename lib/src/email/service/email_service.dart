@@ -2706,12 +2706,15 @@ class EmailService {
     required int accountId,
     int? chatId,
   }) async {
-    final message = await db.getMessageByStanzaID(
-      _stanzaId(
-        msgId,
-        accountId: accountId,
-      ),
+    final stanzaId = _stanzaId(
+      msgId,
+      accountId: accountId,
     );
+    final message = await db.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: accountId,
+        ) ??
+        await db.getMessageByStanzaID(stanzaId);
     if (message == null) {
       return null;
     }
@@ -4969,7 +4972,11 @@ class EmailService {
         deltaId,
         accountId: deltaAccountId,
       );
-      final message = await db.getMessageByStanzaID(stanzaId);
+      final message = await db.getMessageByDeltaId(
+            deltaId,
+            deltaAccountId: deltaAccountId,
+          ) ??
+          await db.getMessageByStanzaID(stanzaId);
       if (message != null) {
         messagesByDeltaId[deltaId] = message;
       } else {
@@ -4986,7 +4993,11 @@ class EmailService {
           deltaId,
           accountId: deltaAccountId,
         );
-        final message = await db.getMessageByStanzaID(stanzaId);
+        final message = await db.getMessageByDeltaId(
+              deltaId,
+              deltaAccountId: deltaAccountId,
+            ) ??
+            await db.getMessageByStanzaID(stanzaId);
         if (message != null) {
           messagesByDeltaId[deltaId] = message;
         }

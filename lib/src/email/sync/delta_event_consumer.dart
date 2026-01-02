@@ -4,6 +4,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
+import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
@@ -37,8 +38,8 @@ const List<String> _attachmentSizeUnits = <String>[
   'GB',
   'TB',
 ];
-const int _originIdHydrationDelayMs = 500;
-const int _originIdHydrationMaxAttempts = 12;
+const int _originIdHydrationDelayMs = 1000;
+const int _originIdHydrationMaxAttempts = 60;
 const int _originIdHydrationAttemptStart = 0;
 const int _originIdHydrationAttemptStep = 1;
 const Duration _originIdHydrationDelay =
@@ -173,12 +174,14 @@ class DeltaEventConsumer {
     required DeltaContextHandle context,
     MessageStorageMode messageStorageMode = MessageStorageMode.local,
     String? Function()? selfJidProvider,
+    PendingOutgoingEmailStore? pendingOutgoingStore,
     int? accountId,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
         _messageStorageMode = messageStorageMode,
         _selfJidProvider = selfJidProvider,
+        _pendingOutgoingStore = pendingOutgoingStore,
         _accountId = accountId,
         _log = logger ?? Logger('DeltaEventConsumer');
 
@@ -186,6 +189,7 @@ class DeltaEventConsumer {
   final DeltaContextHandle _context;
   MessageStorageMode _messageStorageMode;
   final String? Function()? _selfJidProvider;
+  final PendingOutgoingEmailStore? _pendingOutgoingStore;
   final int? _accountId;
   final Logger _log;
 
@@ -785,6 +789,11 @@ class DeltaEventConsumer {
     final existing = await db.getMessageByStanzaID(stanzaId);
     if (existing != null) {
       await _updateExistingMessage(existing: existing, msg: msg);
+      _scheduleOriginIdHydrationIfNeeded(
+        existing: existing,
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
       return;
     }
     final existingByDeltaId = await db.getMessageByDeltaId(
@@ -793,6 +802,11 @@ class DeltaEventConsumer {
     );
     if (existingByDeltaId != null) {
       await _updateExistingMessage(existing: existingByDeltaId, msg: msg);
+      _scheduleOriginIdHydrationIfNeeded(
+        existing: existingByDeltaId,
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
       return;
     }
     final existingByChat = await db.getMessageByDeltaId(
@@ -801,25 +815,44 @@ class DeltaEventConsumer {
     );
     if (existingByChat != null) {
       await _updateExistingMessage(existing: existingByChat, msg: msg);
+      _scheduleOriginIdHydrationIfNeeded(
+        existing: existingByChat,
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
       return;
     }
-    final originId = await _resolveOriginId(msg.id);
-    if (originId != null) {
-      final existingByOrigin = await db.getMessageByOriginID(originId);
-      if (_matchesOriginMessage(
-        existingByOrigin,
-        deltaAccountId: deltaAccountId,
-        chatJid: resolvedChat.jid,
-        chatId: chatId,
-      )) {
-        await _updateExistingMessage(
-          existing: existingByOrigin!,
-          msg: msg,
-          originId: originId,
+    final pendingStanzaId = msg.isOutgoing
+        ? _pendingOutgoingStore?.claimMatch(
+            accountId: deltaAccountId,
+            chatId: chatId,
+            text: msg.text,
+            html: msg.html,
+            fileName: msg.fileName,
+            filePath: msg.filePath,
+          )
+        : null;
+    if (pendingStanzaId != null) {
+      final pendingMessage = await db.getMessageByStanzaID(pendingStanzaId);
+      if (pendingMessage != null) {
+        final updatedPending = pendingMessage.copyWith(
+          deltaMsgId: msg.id,
+          deltaChatId: chatId,
+          deltaAccountId: deltaAccountId,
+        );
+        if (updatedPending != pendingMessage) {
+          await db.updateMessage(updatedPending);
+        }
+        await _updateExistingMessage(existing: updatedPending, msg: msg);
+        _scheduleOriginIdHydrationIfNeeded(
+          existing: updatedPending,
+          msgId: msg.id,
+          accountId: deltaAccountId,
         );
         return;
       }
     }
+    const String? originId = null;
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
     final senderJid = isOutgoing ? _selfJid : resolvedChat.jid;
@@ -874,12 +907,10 @@ class DeltaEventConsumer {
       message: message,
       chatJid: resolvedChat.jid,
     );
-    if (originId == null) {
-      _scheduleOriginIdHydration(
-        msgId: msg.id,
-        accountId: deltaAccountId,
-      );
-    }
+    _scheduleOriginIdHydration(
+      msgId: msg.id,
+      accountId: deltaAccountId,
+    );
     if (!isOutgoing &&
         msg.hasFile &&
         resolvedChat.attachmentAutoDownload.isAllowed) {
@@ -942,6 +973,21 @@ class DeltaEventConsumer {
     );
   }
 
+  void _scheduleOriginIdHydrationIfNeeded({
+    required Message existing,
+    required int msgId,
+    required int accountId,
+  }) {
+    final String? existingOrigin = existing.originID?.trim();
+    if (existingOrigin != null && existingOrigin.isNotEmpty) {
+      return;
+    }
+    _scheduleOriginIdHydration(
+      msgId: msgId,
+      accountId: accountId,
+    );
+  }
+
   Future<void> _hydrateOriginId({
     required int msgId,
     required int accountId,
@@ -1001,22 +1047,6 @@ class DeltaEventConsumer {
   Future<String?> _resolveOriginId(int msgId) async {
     final headers = await _context.getMessageMimeHeaders(msgId);
     return parseEmailMessageId(headers);
-  }
-
-  bool _matchesOriginMessage(
-    Message? existing, {
-    required int deltaAccountId,
-    required String chatJid,
-    required int chatId,
-  }) {
-    if (existing == null) return false;
-    if (existing.deltaAccountId != deltaAccountId) return false;
-    if (existing.chatJid != chatJid) return false;
-    final existingChatId = existing.deltaChatId;
-    if (existingChatId != null && existingChatId != chatId) {
-      return false;
-    }
-    return true;
   }
 
   Future<Chat> _ensureChat(int chatId) async {
