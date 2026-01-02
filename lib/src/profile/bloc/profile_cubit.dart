@@ -21,6 +21,8 @@ class ProfileCubit extends Cubit<ProfileState> {
             jid: xmppService.myJid ?? '',
             resource: xmppService.resource ?? '',
             username: xmppService.username ?? '',
+            avatarPath: xmppService.cachedSelfAvatar?.path,
+            avatarHash: xmppService.cachedSelfAvatar?.hash,
             presence: presenceService?.presence,
             status: presenceService?.status,
           ),

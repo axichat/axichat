@@ -495,6 +495,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_mamLoading && _mamLoadingCompleter != null) {
       await _mamLoadingCompleter!.future;
     }
+    _mamCatchUpCompleted = false;
     _mamCatchingUp = true;
     _beginMamLoad();
     var completed = true;
