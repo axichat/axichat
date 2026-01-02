@@ -1,5 +1,4 @@
 const int calendarTaskTitleMaxLength = 300;
-
 const Duration calendarDefaultTaskDuration = Duration(hours: 1);
 const Duration calendarMinimumTaskDuration = Duration(minutes: 15);
 

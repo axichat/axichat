@@ -11,7 +11,6 @@ class GuestCalendarBloc extends BaseCalendarBloc {
     super.reminderController,
   }) : super(
           storagePrefix: guestStoragePrefix,
-          storageId: 'state',
         );
 
   @override

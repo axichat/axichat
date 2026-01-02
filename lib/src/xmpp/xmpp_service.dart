@@ -2237,6 +2237,7 @@ class XmppService extends XmppBase
     _databasePrefix = null;
     _databasePassphrase = null;
     _cachedSelfAvatar = null;
+    _cachedChatList = null;
 
     await super._reset();
 

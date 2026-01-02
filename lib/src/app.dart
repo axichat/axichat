@@ -504,6 +504,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         !effectiveRoute.authenticationRequired;
                     final animationDuration =
                         context.read<SettingsCubit>().animationDuration;
+                    final authCompletionDuration =
+                        animationDuration == Duration.zero
+                            ? baseAnimationDuration
+                            : animationDuration;
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
@@ -526,11 +530,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         _pendingAuthNavigation = null;
                       }
 
-                      if (animationDuration == Duration.zero) {
+                      if (authCompletionDuration == Duration.zero) {
                         navigateHome();
                       } else {
                         _pendingAuthNavigation =
-                            Timer(animationDuration, navigateHome);
+                            Timer(authCompletionDuration, navigateHome);
                       }
                     }
                     unawaited(_handleShareIntent());

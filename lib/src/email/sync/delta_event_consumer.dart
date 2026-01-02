@@ -852,6 +852,31 @@ class DeltaEventConsumer {
         return;
       }
     }
+    final Message? persistedPending = msg.isOutgoing
+        ? await _matchPersistedOutgoingMessage(
+            db: db,
+            msg: msg,
+            chatId: chatId,
+            deltaAccountId: deltaAccountId,
+          )
+        : null;
+    if (persistedPending != null) {
+      final Message updatedPending = persistedPending.copyWith(
+        deltaMsgId: msg.id,
+        deltaChatId: chatId,
+        deltaAccountId: deltaAccountId,
+      );
+      if (updatedPending != persistedPending) {
+        await db.updateMessage(updatedPending);
+      }
+      await _updateExistingMessage(existing: updatedPending, msg: msg);
+      _scheduleOriginIdHydrationIfNeeded(
+        existing: updatedPending,
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
+      return;
+    }
     const String? originId = null;
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
@@ -917,6 +942,72 @@ class DeltaEventConsumer {
       unawaited(_context.downloadFullMessage(msg.id));
     }
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
+  }
+
+  Future<Message?> _matchPersistedOutgoingMessage({
+    required XmppDatabase db,
+    required DeltaMessage msg,
+    required int chatId,
+    required int deltaAccountId,
+  }) async {
+    final PendingOutgoingEmailSignature incomingSignature =
+        PendingOutgoingEmailSignature.fromOutgoing(
+      text: msg.text,
+      html: msg.html,
+      fileName: msg.fileName,
+      filePath: msg.filePath,
+    );
+    if (incomingSignature.isEmpty) {
+      return null;
+    }
+    final List<Message> candidates = await db.getPendingOutgoingDeltaMessages(
+      deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
+    );
+    if (candidates.isEmpty) {
+      return null;
+    }
+    final Map<String, FileMetadataData?> metadataById =
+        <String, FileMetadataData?>{};
+    for (final Message candidate in candidates) {
+      if (!_isSelfPendingSender(candidate)) {
+        continue;
+      }
+      final String? metadataId = candidate.fileMetadataID?.trim();
+      FileMetadataData? metadata;
+      if (metadataId != null && metadataId.isNotEmpty) {
+        if (metadataById.containsKey(metadataId)) {
+          metadata = metadataById[metadataId];
+        } else {
+          metadata = await db.getFileMetadata(metadataId);
+          metadataById[metadataId] = metadata;
+        }
+      }
+      final PendingOutgoingEmailSignature candidateSignature =
+          PendingOutgoingEmailSignature.fromMessage(
+        message: candidate,
+        metadata: metadata,
+      );
+      if (candidateSignature.matches(incomingSignature)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  bool _isSelfPendingSender(Message message) {
+    final String normalizedSender = message.senderJid.trim().toLowerCase();
+    if (normalizedSender.isEmpty) {
+      return false;
+    }
+    if (normalizedSender.isDeltaPlaceholderJid) {
+      return true;
+    }
+    final String normalizedSelf = _selfJid.trim().toLowerCase();
+    if (normalizedSelf.isEmpty) {
+      return false;
+    }
+    return normalizedSender == normalizedSelf;
   }
 
   Future<void> _updateExistingMessage({
