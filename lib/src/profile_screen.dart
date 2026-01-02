@@ -36,6 +36,7 @@ const double _profileActionSpacing = 8.0;
 const double _profileHeaderSpacing = 12.0;
 const double _profileCardSectionSpacing = 10.0;
 const double _profileStatusFieldPadding = 8.0;
+const Curve _profileFadeCurve = Curves.easeInOutCubic;
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key, required this.locate});
@@ -165,8 +166,12 @@ class _ProfileBodyState extends State<_ProfileBody> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isWideLayout = constraints.maxWidth >= largeScreen;
-                return IndexedStack(
+                final Duration animationDuration =
+                    context.watch<SettingsCubit>().animationDuration;
+                return AxiFadeIndexedStack(
                   index: _profileRoute.index,
+                  duration: animationDuration,
+                  curve: _profileFadeCurve,
                   children: [
                     _ProfileMainView(
                       isWideLayout: isWideLayout,
