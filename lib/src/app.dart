@@ -519,6 +519,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         previousAuthState is! AuthenticationComplete &&
                         onGuestRoute) {
                       _pendingAuthNavigation?.cancel();
+                      _pendingAuthNavigation = null;
+                      if (onLoginRoute) {
+                        return;
+                      }
                       void navigateHome() {
                         final latestAuthState = _lastAuthState;
                         if (latestAuthState is! AuthenticationComplete) return;
