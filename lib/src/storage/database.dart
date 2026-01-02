@@ -97,6 +97,12 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByOriginID(String originID);
 
+  Future<Message?> getMessageByDeltaId(
+    int deltaMsgId, {
+    int? deltaAccountId,
+    String? chatJid,
+  });
+
   Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
 
   Stream<List<Reaction>> watchReactionsForChat(String jid);
@@ -1759,6 +1765,23 @@ WHERE delta_chat_id IS NOT NULL
   @override
   Future<Message?> getMessageByOriginID(String originID) =>
       messagesAccessor.selectOneByOriginID(originID);
+
+  @override
+  Future<Message?> getMessageByDeltaId(
+    int deltaMsgId, {
+    int? deltaAccountId,
+    String? chatJid,
+  }) {
+    final query = select(messages)
+      ..where((tbl) => tbl.deltaMsgId.equals(deltaMsgId));
+    if (deltaAccountId != null) {
+      query.where((tbl) => tbl.deltaAccountId.equals(deltaAccountId));
+    }
+    if (chatJid != null) {
+      query.where((tbl) => tbl.chatJid.equals(chatJid));
+    }
+    return query.getSingleOrNull();
+  }
 
   @override
   Future<List<Message>> getMessagesByStanzaIds(
