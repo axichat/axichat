@@ -22,6 +22,7 @@ import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
@@ -5103,10 +5104,6 @@ class EmailService {
         accountId: context.account.deltaAccountId,
       ),
     );
-    await _transport.hydrateMessages(
-      [msgId],
-      accountId: context.account.deltaAccountId,
-    );
     return msgId;
   }
 
@@ -5267,18 +5264,11 @@ class EmailService {
   }
 }
 
-const String _deltaMessageStanzaPrefix = 'dc-msg';
-const String _deltaMessageStanzaSeparator = '-';
-
 String _stanzaId(
   int msgId, {
   required int accountId,
 }) {
-  if (accountId == deltaAccountIdLegacy) {
-    return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator$msgId';
-  }
-  return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator'
-      '$accountId$_deltaMessageStanzaSeparator$msgId';
+  return deltaMessageStanzaId(msgId, accountId: accountId);
 }
 
 class _PendingNotification {
