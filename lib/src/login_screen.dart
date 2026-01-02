@@ -16,6 +16,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -41,6 +42,8 @@ const double _secondaryPaneGutter = 0.0;
 const double _unsplitHorizontalMargin = 16.0;
 const double _authCardCornerRadius = 20.0;
 const Duration _authOperationTimeout = Duration(seconds: 45);
+const Duration _authProgressSegmentDuration = Duration(seconds: 4);
+const double _authProgressSegmentTarget = 0.75;
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
@@ -174,7 +177,9 @@ class _LoginScreenState extends State<LoginScreen>
         context.read<SettingsCubit>().animationDuration == Duration.zero
             ? baseAnimationDuration
             : context.read<SettingsCubit>().animationDuration;
+    final preloadAvatar = _preloadSelfAvatarCache();
     await _operationProgressController.complete(duration: progressDuration);
+    await preloadAvatar;
     if (!mounted) {
       return;
     }
@@ -232,7 +237,12 @@ class _LoginScreenState extends State<LoginScreen>
       }
       _startAuthTimeout(_AuthFlow.signup);
       if (loginFromSignup) {
-        unawaited(_operationProgressController.reach(0.75));
+        unawaited(
+          _operationProgressController.reach(
+            _authProgressSegmentTarget,
+            duration: _authProgressSegmentDuration,
+          ),
+        );
       }
       return;
     }
@@ -249,10 +259,12 @@ class _LoginScreenState extends State<LoginScreen>
         _operationProgressController.start();
       }
       _startAuthTimeout(_AuthFlow.login);
-      unawaited(_operationProgressController.reach(
-        0.75,
-        duration: const Duration(milliseconds: 500),
-      ));
+      unawaited(
+        _operationProgressController.reach(
+          _authProgressSegmentTarget,
+          duration: _authProgressSegmentDuration,
+        ),
+      );
       return;
     }
 
@@ -288,6 +300,27 @@ class _LoginScreenState extends State<LoginScreen>
   void _clearAuthTimeout() {
     _authTimeoutTimer?.cancel();
     _authTimeoutTimer = null;
+  }
+
+  Future<void> _preloadSelfAvatarCache() async {
+    XmppService xmppService;
+    try {
+      xmppService = context.read<XmppService>();
+    } on Exception {
+      return;
+    }
+    final storedAvatar =
+        xmppService.cachedSelfAvatar ?? await xmppService.getOwnAvatar();
+    if (storedAvatar == null || storedAvatar.isEmpty) return;
+    final path = storedAvatar.path?.trim();
+    if (path == null || path.isEmpty) return;
+    final bytes = await xmppService.loadAvatarBytes(path);
+    if (bytes == null || bytes.isEmpty || !mounted) return;
+    try {
+      await precacheImage(MemoryImage(bytes), context);
+    } on Exception {
+      return;
+    }
   }
 
   @override
