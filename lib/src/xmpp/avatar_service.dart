@@ -59,6 +59,7 @@ mixin AvatarService on XmppBase {
   static const int _maxAvatarBytes = 512 * 1024;
   static const int _maxAvatarBase64Length = ((_maxAvatarBytes + 2) ~/ 3) * 4;
   static const int _avatarBytesCacheLimit = 64;
+  static const int _safeAvatarBytesCacheLimit = _avatarBytesCacheLimit;
   static const int _conversationAvatarChatStart = 0;
   static const int _conversationAvatarChatEnd = 0;
   static const Duration _conversationAvatarRefreshCooldown =
@@ -86,6 +87,8 @@ mixin AvatarService on XmppBase {
   ];
   static const List<int> _jpegMagicBytes = <int>[0xFF, 0xD8, 0xFF];
   final LinkedHashMap<String, Uint8List> _avatarBytesCache = LinkedHashMap();
+  final LinkedHashMap<String, Uint8List> _safeAvatarBytesCache =
+      LinkedHashMap();
   Timer? _selfAvatarRefreshTimer;
   bool _selfAvatarRepairAttempted = false;
 
@@ -96,6 +99,19 @@ mixin AvatarService on XmppBase {
     if (bytes == null) return null;
     _avatarBytesCache[normalizedPath] = bytes;
     return bytes;
+  }
+
+  Uint8List? cachedSafeAvatarBytes(String path) {
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) return null;
+    final bytes = _safeAvatarBytesCache.remove(normalizedPath);
+    if (bytes == null) return null;
+    _safeAvatarBytesCache[normalizedPath] = bytes;
+    return bytes;
+  }
+
+  void cacheSafeAvatarBytes(String path, Uint8List bytes) {
+    _cacheSafeAvatarBytes(path, bytes);
   }
 
   void _cacheAvatarBytes(String path, Uint8List bytes) {
@@ -109,8 +125,24 @@ mixin AvatarService on XmppBase {
     }
   }
 
+  void _cacheSafeAvatarBytes(String path, Uint8List bytes) {
+    if (bytes.isEmpty) return;
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) return;
+    _safeAvatarBytesCache.remove(normalizedPath);
+    _safeAvatarBytesCache[normalizedPath] = bytes;
+    while (_safeAvatarBytesCache.length > _safeAvatarBytesCacheLimit) {
+      _safeAvatarBytesCache.remove(_safeAvatarBytesCache.keys.first);
+    }
+  }
+
   void _evictCachedAvatarBytes(String path) {
     _avatarBytesCache.remove(path.trim());
+    _evictCachedSafeAvatarBytes(path);
+  }
+
+  void _evictCachedSafeAvatarBytes(String path) {
+    _safeAvatarBytesCache.remove(path.trim());
   }
 
   @override
@@ -230,6 +262,7 @@ mixin AvatarService on XmppBase {
     _avatarRefreshInProgress.clear();
     _configuredAvatarNodes.clear();
     _avatarBytesCache.clear();
+    _safeAvatarBytesCache.clear();
     _avatarDirectory = null;
     _selfAvatarRepairAttempted = false;
     _selfAvatarRefreshTimer?.cancel();

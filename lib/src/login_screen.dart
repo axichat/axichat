@@ -8,6 +8,7 @@ import 'package:axichat/src/authentication/view/debug_delete_credentials.dart';
 import 'package:axichat/src/authentication/view/login_form.dart';
 import 'package:axichat/src/authentication/view/signup_form.dart';
 import 'package:axichat/src/authentication/view/widgets/operation_progress_bar.dart';
+import 'package:axichat/src/avatar/avatar_decode_safety.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
@@ -49,6 +50,7 @@ const double _authCardCornerRadius = 20.0;
 const Duration _authOperationTimeout = Duration(seconds: 45);
 const Duration _authProgressSegmentDuration = Duration(seconds: 4);
 const double _authProgressSegmentTarget = 0.75;
+const String _homeRouteLocation = '/';
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
@@ -194,6 +196,7 @@ class _LoginScreenState extends State<LoginScreen>
         _signupFlowLocked = false;
       }
     });
+    context.go(_homeRouteLocation);
   }
 
   void _handleAuthState(AuthenticationState state) {
@@ -321,8 +324,11 @@ class _LoginScreenState extends State<LoginScreen>
     if (path == null || path.isEmpty) return;
     final bytes = await xmppService.loadAvatarBytes(path);
     if (bytes == null || bytes.isEmpty || !mounted) return;
+    final safeBytes = await sanitizeAvatarBytes(bytes);
+    if (safeBytes == null || safeBytes.isEmpty || !mounted) return;
+    xmppService.cacheSafeAvatarBytes(path, safeBytes);
     try {
-      await precacheImage(MemoryImage(bytes), context);
+      await precacheImage(MemoryImage(safeBytes), context);
     } on Exception {
       return;
     }
@@ -390,8 +396,13 @@ class _LoginScreenState extends State<LoginScreen>
     for (final path in avatarPaths) {
       final bytes = await xmppService.loadAvatarBytes(path);
       if (!mounted || bytes == null || bytes.isEmpty) continue;
+      final safeBytes = await sanitizeAvatarBytes(bytes);
+      if (!mounted || safeBytes == null || safeBytes.isEmpty) {
+        continue;
+      }
+      xmppService.cacheSafeAvatarBytes(path, safeBytes);
       try {
-        await precacheImage(MemoryImage(bytes), context);
+        await precacheImage(MemoryImage(safeBytes), context);
       } on Exception {
         continue;
       }
