@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 
 import 'package:axichat/src/storage/models.dart';
@@ -21,6 +24,8 @@ class ProfileCubit extends Cubit<ProfileState> {
             jid: xmppService.myJid ?? '',
             resource: xmppService.resource ?? '',
             username: xmppService.username ?? '',
+            avatarPath: xmppService.cachedSelfAvatar?.path,
+            avatarHash: xmppService.cachedSelfAvatar?.hash,
             presence: presenceService?.presence,
             status: presenceService?.status,
           ),

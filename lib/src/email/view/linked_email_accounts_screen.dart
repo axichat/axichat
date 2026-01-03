@@ -1,5 +1,5 @@
-import 'dart:async';
-import 'dart:io';
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/email_validation.dart';
@@ -8,7 +8,6 @@ import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/bloc/linked_email_accounts_cubit.dart';
-import 'package:axichat/src/email/service/email_oauth.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -18,7 +17,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 const double _pageMaxWidth = 720.0;
 const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(16, 16, 16, 24);
@@ -42,11 +40,6 @@ const double _supportNoteRadius = 12.0;
 const double _supportNoteBorderWidth = 1.0;
 const double _supportNoteBackgroundAlpha = 0.08;
 const double _errorIconSize = 20.0;
-const String _oauthRedirectUriFallback = 'urn:ietf:wg:oauth:2.0:oob';
-const String _oauthLoopbackHost = '127.0.0.1';
-const String _oauthCallbackPath = '/oauth/callback';
-const String _oauthCallbackContentType = 'text/html; charset=utf-8';
-const Duration _oauthCallbackTimeout = Duration(minutes: 3);
 
 class LinkedEmailAccountsScreen extends StatelessWidget {
   const LinkedEmailAccountsScreen({super.key, required this.locate});
@@ -135,11 +128,9 @@ class _LinkedEmailAccountsBody extends StatelessWidget {
                 AxiIconButton.kDefaultSize + _appBarLeadingWidthPadding,
             leading: Padding(
               padding: const EdgeInsets.only(left: _appBarLeadingPadding),
-              child: AxiIconButton(
+              child: AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: l10n.commonBack,
-                color: colors.foreground,
-                borderColor: colors.border,
                 onPressed: context.pop,
               ),
             ),
@@ -529,22 +520,14 @@ class _LinkedEmailAccountSheetState extends State<_LinkedEmailAccountSheet> {
   late final TextEditingController _addressController;
   late final TextEditingController _passwordController;
   late final FocusNode _passwordFocusNode;
-  late EmailService _emailService;
-  bool _emailServiceReady = false;
-  EmailAuthMethod _authMethod = EmailAuthMethod.password;
-  EmailOauthAuthorization? _oauthAuthorization;
-  bool _oauthInFlight = false;
-  bool _authMethodLocked = false;
   bool _setPrimary = false;
   String? _errorText;
 
   @override
   void initState() {
     super.initState();
-    _addressController = TextEditingController()
-      ..addListener(_onAddressChanged);
-    _passwordController = TextEditingController()
-      ..addListener(_onPasswordChanged);
+    _addressController = TextEditingController()..addListener(_clearError);
+    _passwordController = TextEditingController()..addListener(_clearError);
     _passwordFocusNode = FocusNode();
   }
 
@@ -556,255 +539,11 @@ class _LinkedEmailAccountSheetState extends State<_LinkedEmailAccountSheet> {
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_emailServiceReady) {
-      return;
-    }
-    _emailService = context.read<EmailService>();
-    _emailServiceReady = true;
-    _syncAuthMethodFromAddress();
-  }
-
   void _clearError() {
     if (_errorText == null) {
       return;
     }
     setState(() => _errorText = null);
-  }
-
-  void _clearOauthAuthorization() {
-    if (_oauthAuthorization == null) {
-      return;
-    }
-    setState(() => _oauthAuthorization = null);
-  }
-
-  void _onAddressChanged() {
-    _clearError();
-    _clearOauthAuthorization();
-    _syncAuthMethodFromAddress();
-    setState(() {});
-  }
-
-  void _onPasswordChanged() {
-    _clearError();
-  }
-
-  void _syncAuthMethodFromAddress() {
-    if (_authMethodLocked || !_emailServiceReady) {
-      return;
-    }
-    final EmailAuthMethod preferred =
-        _emailService.preferredAuthMethodForAddress(
-      _addressController.text,
-    );
-    if (preferred == _authMethod) {
-      return;
-    }
-    setState(() => _authMethod = preferred);
-  }
-
-  void _setAuthMethod(EmailAuthMethod method) {
-    if (_authMethod == method && _authMethodLocked) {
-      return;
-    }
-    setState(() {
-      _authMethod = method;
-      _authMethodLocked = true;
-      _oauthAuthorization = null;
-    });
-  }
-
-  Future<void> _openOauthPage(BuildContext context) async {
-    final l10n = context.l10n;
-    final String address = _addressController.text.trim();
-    if (address.isEmpty) {
-      setState(() => _errorText = l10n.linkedEmailAccountsAddressRequired);
-      return;
-    }
-    if (!address.isValidEmailAddress) {
-      setState(() => _errorText = l10n.linkedEmailAccountsAddressInvalid);
-      return;
-    }
-    if (_oauthInFlight) {
-      return;
-    }
-    _clearError();
-    setState(() => _oauthInFlight = true);
-    HttpServer? server;
-    try {
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      if (!mounted) {
-        return;
-      }
-      final String redirectUri = _buildLoopbackRedirectUri(server.port);
-      final EmailOauthAuthorization? authorization =
-          _emailService.oauthAuthorizationForAddress(
-        address: address,
-        redirectUri: redirectUri,
-      );
-      if (authorization == null) {
-        await server.close(force: true);
-        server = null;
-        final bool opened = await _openFallbackOauthUrl(
-          l10n,
-          address: address,
-        );
-        if (!mounted) {
-          return;
-        }
-        if (!opened) {
-          setState(
-            () => _errorText = l10n.linkedEmailAccountsOauthUnavailable,
-          );
-        }
-        return;
-      }
-      final Uri? uri = Uri.tryParse(authorization.authorizationUrl);
-      if (uri == null) {
-        setState(
-          () => _errorText = l10n.linkedEmailAccountsOauthUnavailable,
-        );
-        return;
-      }
-      final bool launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!mounted) {
-        return;
-      }
-      if (!launched) {
-        setState(
-          () => _errorText = l10n.linkedEmailAccountsOauthLaunchFailure,
-        );
-        return;
-      }
-      final String html = _oauthCallbackHtml(l10n);
-      final _OauthCallbackResult? result = await _awaitOauthCallback(
-        server,
-        authorization,
-        html,
-      );
-      if (!mounted) {
-        return;
-      }
-      if (result == null) {
-        setState(
-          () => _errorText = l10n.linkedEmailAccountsOauthTimedOut,
-        );
-        return;
-      }
-      if (result.code.isEmpty) {
-        setState(
-          () => _errorText = l10n.linkedEmailAccountsOauthCallbackFailure,
-        );
-        return;
-      }
-      setState(() => _oauthAuthorization = authorization);
-      _passwordController.text = result.code;
-      _passwordFocusNode.requestFocus();
-    } on Exception {
-      setState(
-        () => _errorText = l10n.linkedEmailAccountsOauthLaunchFailure,
-      );
-    } finally {
-      if (server != null) {
-        await server.close(force: true);
-      }
-      if (mounted) {
-        setState(() => _oauthInFlight = false);
-      }
-    }
-  }
-
-  Future<_OauthCallbackResult?> _awaitOauthCallback(
-    HttpServer server,
-    EmailOauthAuthorization authorization,
-    String html,
-  ) async {
-    try {
-      final HttpRequest request =
-          await server.first.timeout(_oauthCallbackTimeout);
-      final Uri uri = request.uri;
-      if (uri.path != _oauthCallbackPath) {
-        request.response.statusCode = HttpStatus.notFound;
-        await request.response.close();
-        return null;
-      }
-      request.response
-        ..statusCode = HttpStatus.ok
-        ..headers.set(HttpHeaders.contentTypeHeader, _oauthCallbackContentType)
-        ..write(html);
-      await request.response.close();
-      final String? state = uri.queryParameters['state'];
-      if (state == null || state != authorization.state) {
-        return const _OauthCallbackResult.empty();
-      }
-      final String? error = uri.queryParameters['error'];
-      if (error != null && error.isNotEmpty) {
-        return const _OauthCallbackResult.empty();
-      }
-      final String? code = uri.queryParameters['code'];
-      if (code == null || code.isEmpty) {
-        return const _OauthCallbackResult.empty();
-      }
-      return _OauthCallbackResult(code: code);
-    } on TimeoutException {
-      return null;
-    }
-  }
-
-  String _buildLoopbackRedirectUri(int port) =>
-      'http://$_oauthLoopbackHost:$port$_oauthCallbackPath';
-
-  String _oauthCallbackHtml(AppLocalizations l10n) {
-    final String title = l10n.linkedEmailAccountsOauthBrowserTitle;
-    final String body = l10n.linkedEmailAccountsOauthBrowserBody;
-    return '''
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>$title</title>
-  </head>
-  <body>
-    <p>$body</p>
-  </body>
-</html>
-''';
-  }
-
-  Future<bool> _openFallbackOauthUrl(
-    AppLocalizations l10n, {
-    required String address,
-  }) async {
-    final String? url = await _emailService.oauthUrlForAddress(
-      address: address,
-      redirectUri: _oauthRedirectUriFallback,
-    );
-    if (url == null || url.trim().isEmpty) {
-      return false;
-    }
-    final Uri? uri = Uri.tryParse(url);
-    if (uri == null) {
-      return false;
-    }
-    final bool launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!mounted) {
-      return launched;
-    }
-    if (!launched) {
-      setState(
-        () => _errorText = l10n.linkedEmailAccountsOauthLaunchFailure,
-      );
-    }
-    return launched;
   }
 
   void _submit(BuildContext context) {
@@ -817,8 +556,6 @@ class _LinkedEmailAccountSheetState extends State<_LinkedEmailAccountSheet> {
           address: _addressController.text.trim(),
           password: _passwordController.text,
           setPrimary: _setPrimary,
-          authMethod: _authMethod,
-          oauthAuthorization: _oauthAuthorization,
         );
   }
 
@@ -828,19 +565,6 @@ class _LinkedEmailAccountSheetState extends State<_LinkedEmailAccountSheet> {
     final TextStyle placeholderStyle = context.textTheme.muted.copyWith(
       color: context.colorScheme.mutedForeground,
     );
-    final bool usingOauth = _authMethod.isOauth;
-    final String passwordPlaceholder = usingOauth
-        ? l10n.linkedEmailAccountsOauthCodePlaceholder
-        : l10n.linkedEmailAccountsPasswordPlaceholder;
-    final String passwordLabel = usingOauth
-        ? l10n.linkedEmailAccountsOauthCodeLabel
-        : l10n.linkedEmailAccountsPasswordLabel;
-    final String passwordRequired = usingOauth
-        ? l10n.linkedEmailAccountsOauthCodeRequired
-        : l10n.authPasswordRequired;
-    final String addressValue = _addressController.text.trim();
-    final bool canOpenOauth = usingOauth && addressValue.isValidEmailAddress;
-    final bool canOpenOauthButton = canOpenOauth && !_oauthInFlight;
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(
       horizontal: widget.compact ? _sheetCompactPadding : _sheetWidePadding,
     );
@@ -909,34 +633,15 @@ class _LinkedEmailAccountSheetState extends State<_LinkedEmailAccountSheet> {
                   },
                 ),
                 const SizedBox(height: _sheetFieldSpacing),
-                ShadSwitch(
-                  label: Text(l10n.linkedEmailAccountsOauthLabel),
-                  sublabel: Text(l10n.linkedEmailAccountsOauthDescription),
-                  value: usingOauth,
-                  onChanged: (value) => _setAuthMethod(
-                    value ? EmailAuthMethod.oauth : EmailAuthMethod.password,
-                  ),
-                ),
-                if (usingOauth) ...[
-                  const SizedBox(height: _sheetFieldSpacing),
-                  ShadButton(
-                    enabled: canOpenOauthButton,
-                    onPressed: canOpenOauthButton
-                        ? () => _openOauthPage(context)
-                        : null,
-                    child: Text(l10n.linkedEmailAccountsOauthOpenAction),
-                  ).withTapBounce(enabled: canOpenOauthButton),
-                ],
-                const SizedBox(height: _sheetFieldSpacing),
                 PasswordInput(
                   controller: _passwordController,
-                  placeholder: passwordPlaceholder,
-                  semanticsLabel: passwordLabel,
+                  placeholder: l10n.linkedEmailAccountsPasswordPlaceholder,
+                  semanticsLabel: l10n.linkedEmailAccountsPasswordLabel,
                   enabled: true,
                   validator: (String? text) {
                     final String trimmed = text?.trim() ?? '';
                     if (trimmed.isEmpty) {
-                      return passwordRequired;
+                      return l10n.authPasswordRequired;
                     }
                     return null;
                   },
@@ -991,14 +696,6 @@ class _LinkedEmailAccountSheetState extends State<_LinkedEmailAccountSheet> {
   }
 }
 
-class _OauthCallbackResult {
-  const _OauthCallbackResult({required this.code});
-
-  const _OauthCallbackResult.empty() : code = '';
-
-  final String code;
-}
-
 class _LinkedEmailAccountPasswordSheet extends StatefulWidget {
   const _LinkedEmailAccountPasswordSheet({
     required this.compact,
@@ -1037,10 +734,6 @@ class _LinkedEmailAccountPasswordSheetState
     extends State<_LinkedEmailAccountPasswordSheet> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late final TextEditingController _passwordController;
-  late EmailService _emailService;
-  EmailOauthAuthorization? _oauthAuthorization;
-  bool _emailServiceReady = false;
-  bool _oauthInFlight = false;
   String? _errorText;
 
   @override
@@ -1055,218 +748,11 @@ class _LinkedEmailAccountPasswordSheetState
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_emailServiceReady) {
-      return;
-    }
-    _emailService = context.read<EmailService>();
-    _emailServiceReady = true;
-  }
-
   void _clearError() {
     if (_errorText == null) {
       return;
     }
     setState(() => _errorText = null);
-  }
-
-  void _clearOauthAuthorization() {
-    if (_oauthAuthorization == null) {
-      return;
-    }
-    setState(() => _oauthAuthorization = null);
-  }
-
-  Future<void> _openOauthPage(BuildContext context) async {
-    final l10n = context.l10n;
-    final String address = widget.account.address.trim();
-    if (address.isEmpty) {
-      setState(() => _errorText = l10n.linkedEmailAccountsAddressRequired);
-      return;
-    }
-    if (!address.isValidEmailAddress) {
-      setState(() => _errorText = l10n.linkedEmailAccountsAddressInvalid);
-      return;
-    }
-    if (_oauthInFlight) {
-      return;
-    }
-    _clearError();
-    _clearOauthAuthorization();
-    setState(() => _oauthInFlight = true);
-    HttpServer? server;
-    try {
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      if (!mounted) {
-        return;
-      }
-      final String redirectUri = _buildLoopbackRedirectUri(server.port);
-      final EmailOauthAuthorization? authorization =
-          _emailService.oauthAuthorizationForAddress(
-        address: address,
-        redirectUri: redirectUri,
-      );
-      if (authorization == null) {
-        await server.close(force: true);
-        server = null;
-        final bool opened = await _openFallbackOauthUrl(
-          l10n,
-          address: address,
-        );
-        if (!mounted) {
-          return;
-        }
-        if (!opened) {
-          setState(
-            () => _errorText = l10n.linkedEmailAccountsOauthUnavailable,
-          );
-        }
-        return;
-      }
-      final Uri? uri = Uri.tryParse(authorization.authorizationUrl);
-      if (uri == null) {
-        setState(
-          () => _errorText = l10n.linkedEmailAccountsOauthUnavailable,
-        );
-        return;
-      }
-      final bool launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!mounted) {
-        return;
-      }
-      if (!launched) {
-        setState(
-          () => _errorText = l10n.linkedEmailAccountsOauthLaunchFailure,
-        );
-        return;
-      }
-      final String html = _oauthCallbackHtml(l10n);
-      final _OauthCallbackResult? result = await _awaitOauthCallback(
-        server,
-        authorization,
-        html,
-      );
-      if (!mounted) {
-        return;
-      }
-      if (result == null) {
-        setState(
-          () => _errorText = l10n.linkedEmailAccountsOauthTimedOut,
-        );
-        return;
-      }
-      if (result.code.isEmpty) {
-        setState(
-          () => _errorText = l10n.linkedEmailAccountsOauthCallbackFailure,
-        );
-        return;
-      }
-      setState(() => _oauthAuthorization = authorization);
-      _passwordController.text = result.code;
-    } on Exception {
-      setState(
-        () => _errorText = l10n.linkedEmailAccountsOauthLaunchFailure,
-      );
-    } finally {
-      if (server != null) {
-        await server.close(force: true);
-      }
-      if (mounted) {
-        setState(() => _oauthInFlight = false);
-      }
-    }
-  }
-
-  Future<_OauthCallbackResult?> _awaitOauthCallback(
-    HttpServer server,
-    EmailOauthAuthorization authorization,
-    String html,
-  ) async {
-    try {
-      final HttpRequest request =
-          await server.first.timeout(_oauthCallbackTimeout);
-      final Uri uri = request.uri;
-      if (uri.path != _oauthCallbackPath) {
-        request.response.statusCode = HttpStatus.notFound;
-        await request.response.close();
-        return null;
-      }
-      request.response
-        ..statusCode = HttpStatus.ok
-        ..headers.set(HttpHeaders.contentTypeHeader, _oauthCallbackContentType)
-        ..write(html);
-      await request.response.close();
-      final String? state = uri.queryParameters['state'];
-      if (state == null || state != authorization.state) {
-        return const _OauthCallbackResult.empty();
-      }
-      final String? error = uri.queryParameters['error'];
-      if (error != null && error.isNotEmpty) {
-        return const _OauthCallbackResult.empty();
-      }
-      final String? code = uri.queryParameters['code'];
-      if (code == null || code.isEmpty) {
-        return const _OauthCallbackResult.empty();
-      }
-      return _OauthCallbackResult(code: code);
-    } on TimeoutException {
-      return null;
-    }
-  }
-
-  String _buildLoopbackRedirectUri(int port) =>
-      'http://$_oauthLoopbackHost:$port$_oauthCallbackPath';
-
-  String _oauthCallbackHtml(AppLocalizations l10n) {
-    final String title = l10n.linkedEmailAccountsOauthBrowserTitle;
-    final String body = l10n.linkedEmailAccountsOauthBrowserBody;
-    return '''
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>$title</title>
-  </head>
-  <body>
-    <p>$body</p>
-  </body>
-</html>
-''';
-  }
-
-  Future<bool> _openFallbackOauthUrl(
-    AppLocalizations l10n, {
-    required String address,
-  }) async {
-    final String? url = await _emailService.oauthUrlForAddress(
-      address: address,
-      redirectUri: _oauthRedirectUriFallback,
-    );
-    if (url == null || url.trim().isEmpty) {
-      return false;
-    }
-    final Uri? uri = Uri.tryParse(url);
-    if (uri == null) {
-      return false;
-    }
-    final bool launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!mounted) {
-      return launched;
-    }
-    if (!launched) {
-      setState(
-        () => _errorText = l10n.linkedEmailAccountsOauthLaunchFailure,
-      );
-    }
-    return launched;
   }
 
   void _submit(BuildContext context) {
@@ -1278,7 +764,6 @@ class _LinkedEmailAccountPasswordSheetState
     context.read<LinkedEmailAccountsCubit>().updatePassword(
           accountId: widget.account.id,
           password: _passwordController.text,
-          oauthAuthorization: _oauthAuthorization,
         );
   }
 
@@ -1288,19 +773,6 @@ class _LinkedEmailAccountPasswordSheetState
     final TextStyle labelStyle = context.textTheme.muted.copyWith(
       color: context.colorScheme.mutedForeground,
     );
-    final bool usingOauth = widget.account.authMethod.isOauth;
-    final String passwordPlaceholder = usingOauth
-        ? l10n.linkedEmailAccountsOauthCodePlaceholder
-        : l10n.linkedEmailAccountsPasswordPlaceholder;
-    final String passwordLabel = usingOauth
-        ? l10n.linkedEmailAccountsOauthCodeLabel
-        : l10n.linkedEmailAccountsPasswordLabel;
-    final String passwordRequired = usingOauth
-        ? l10n.linkedEmailAccountsOauthCodeRequired
-        : l10n.authPasswordRequired;
-    final bool canOpenOauth =
-        usingOauth && widget.account.address.isValidEmailAddress;
-    final bool canOpenOauthButton = canOpenOauth && !_oauthInFlight;
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(
       horizontal: widget.compact ? _sheetCompactPadding : _sheetWidePadding,
     );
@@ -1355,25 +827,15 @@ class _LinkedEmailAccountPasswordSheetState
                 const SizedBox(height: _sheetLabelSpacing),
                 Text(widget.account.address),
                 const SizedBox(height: _sheetFieldSpacing),
-                if (usingOauth) ...[
-                  ShadButton(
-                    size: ShadButtonSize.sm,
-                    onPressed: canOpenOauthButton
-                        ? () => _openOauthPage(context)
-                        : null,
-                    child: Text(l10n.linkedEmailAccountsOauthOpenAction),
-                  ).withTapBounce(enabled: canOpenOauthButton),
-                  const SizedBox(height: _sheetFieldSpacing),
-                ],
                 PasswordInput(
                   controller: _passwordController,
-                  placeholder: passwordPlaceholder,
-                  semanticsLabel: passwordLabel,
+                  placeholder: l10n.linkedEmailAccountsPasswordPlaceholder,
+                  semanticsLabel: l10n.linkedEmailAccountsPasswordLabel,
                   enabled: true,
                   validator: (String? text) {
                     final String trimmed = text?.trim() ?? '';
                     if (trimmed.isEmpty) {
-                      return passwordRequired;
+                      return l10n.authPasswordRequired;
                     }
                     return null;
                   },

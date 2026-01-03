@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:developer' as developer;
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
@@ -11,7 +14,6 @@ class GuestCalendarBloc extends BaseCalendarBloc {
     super.reminderController,
   }) : super(
           storagePrefix: guestStoragePrefix,
-          storageId: 'state',
         );
 
   @override

@@ -1,5 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 // ignore_for_file: avoid_print
 
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
@@ -29,48 +33,71 @@ bool withForeground = false;
 final ValueNotifier<bool> foregroundServiceActive = ValueNotifier(false);
 
 Future<void> main() async {
-  final binding = WidgetsFlutterBinding.ensureInitialized();
+  final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
   firstFrameGate.defer(binding);
   _installKeyboardGuard();
 
   const capability = Capability();
   const policy = Policy();
-  final credentialStore = CredentialStore(
+  final CredentialStore credentialStore = CredentialStore(
     capability: capability,
     policy: policy,
   );
-  final storedCredentialsFuture =
+  final Future<bool> storedCredentialsFuture =
       resolveHasStoredLoginCredentials(credentialStore);
 
   _configureLogging();
   _registerThirdPartyLicenses();
 
-  final storageDirectory = await getApplicationDocumentsDirectory();
-  final baseStorage = await HydratedStorage.build(
-    storageDirectory: storageDirectory,
+  final NotificationService notificationService = NotificationService();
+  final Future<void> notificationInitFuture = notificationService.init();
+  final Future<bool> notificationPermissionsFuture =
+      notificationService.hasAllNotificationPermissions();
+
+  final Future<Directory> storageDirectoryFuture =
+      getApplicationDocumentsDirectory();
+  const bool isWeb = kIsWeb;
+
+  final Future<HydratedStorage> baseStorageFuture = storageDirectoryFuture.then(
+    (Directory storageDirectory) => HydratedStorage.build(
+      storageDirectory: storageDirectory,
+    ),
   );
-  final storageRegistry = CalendarStorageRegistry(fallback: baseStorage);
-  final storageManager = CalendarStorageManager(registry: storageRegistry);
+  final Future<void> hiveInitFuture = storageDirectoryFuture.then(
+    (Directory storageDirectory) async {
+      final String storagePath = storageDirectory.path;
+      if (isWeb) {
+        await Hive.initFlutter();
+        return;
+      }
+      Hive.init(storagePath);
+    },
+  );
+  final HydratedStorage baseStorage = await baseStorageFuture;
+  final CalendarStorageRegistry storageRegistry =
+      CalendarStorageRegistry(fallback: baseStorage);
+  final CalendarStorageManager storageManager =
+      CalendarStorageManager(registry: storageRegistry);
   HydratedBloc.storage = storageRegistry;
 
-  await Hive.initFlutter();
+  await hiveInitFuture;
   registerCalendarHiveAdapters();
   await storageManager.ensureGuestStorage();
 
-  final notificationService = NotificationService();
-  await notificationService.init();
+  await notificationInitFuture;
 
-  withForeground = capability.canForegroundService &&
-      await notificationService.hasAllNotificationPermissions();
+  final bool hasNotificationPermissions = await notificationPermissionsFuture;
+  withForeground =
+      capability.canForegroundService && hasNotificationPermissions;
   foregroundServiceActive.value = withForeground;
   if (withForeground) {
     initForegroundService();
   }
 
-  final hasStoredLoginCredentials = await storedCredentialsFuture;
-  final authBootstrap =
+  final bool hasStoredLoginCredentials = await storedCredentialsFuture;
+  final AuthBootstrap authBootstrap =
       AuthBootstrap(hasStoredLoginCredentials: hasStoredLoginCredentials);
-  final app = withForeground
+  final Widget app = withForeground
       ? WithForegroundTask(
           child: Material(
             child: Axichat(

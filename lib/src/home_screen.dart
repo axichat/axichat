@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 // ignore_for_file: unnecessary_type_check
 import 'dart:async';
 import 'dart:math' as math;
@@ -82,6 +85,11 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
 
 const double _secondaryPaneGutter = 0.0;
 const String _linkedEmailAccountsLocation = '/profile/email-accounts';
+const int _homeChatPageIndex = 0;
+const int _homeCalendarPageIndex = 1;
+const Curve _homeCalendarFadeCurve = Curves.easeInOutCubic;
+const double _homeHeaderActionSpacing = 4.0;
+const String _homeSyncTooltip = 'Sync';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -92,7 +100,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
-  final GlobalKey _chatPaneKey = GlobalKey();
   bool _railCollapsed = true;
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
@@ -357,56 +364,56 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     final Widget chatPaneContent = openJid == null
                         ? const chat_view.GuestChat()
-                        : KeyedSubtree(
-                            key: _chatPaneKey,
-                            child: MultiBlocProvider(
-                              providers: [
+                        : MultiBlocProvider(
+                            providers: [
+                              BlocProvider(
+                                key: Key(
+                                  openJid,
+                                ),
+                                create: (context) => ChatBloc(
+                                  jid: openJid,
+                                  messageService: context.read<XmppService>(),
+                                  chatsService: context.read<XmppService>(),
+                                  mucService: context.read<XmppService>(),
+                                  notificationService:
+                                      context.read<NotificationService>(),
+                                  emailService: context.read<EmailService>(),
+                                  omemoService: isOmemo
+                                      ? context.read<XmppService>()
+                                          as OmemoService
+                                      : null,
+                                  settingsCubit: context.read<SettingsCubit>(),
+                                ),
+                              ),
+                              BlocProvider(
+                                create: (context) => ChatSearchCubit(
+                                  jid: openJid,
+                                  messageService: context.read<XmppService>(),
+                                  emailService: context.read<EmailService>(),
+                                ),
+                              ),
+                              /* Verification flow temporarily disabled
+                              if (isOmemo)
                                 BlocProvider(
-                                  key: Key(
-                                    openJid,
-                                  ),
-                                  create: (context) => ChatBloc(
+                                  create: (context) => VerificationCubit(
                                     jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    chatsService: context.read<XmppService>(),
-                                    mucService: context.read<XmppService>(),
-                                    notificationService:
-                                        context.read<NotificationService>(),
-                                    emailService: context.read<EmailService>(),
-                                    omemoService: isOmemo
-                                        ? context.read<XmppService>()
-                                            as OmemoService
-                                        : null,
-                                    settingsCubit:
-                                        context.read<SettingsCubit>(),
+                                    omemoService:
+                                        context.read<XmppService>()
+                                            as OmemoService,
                                   ),
                                 ),
-                                BlocProvider(
-                                  create: (context) => ChatSearchCubit(
-                                    jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    emailService: context.read<EmailService>(),
-                                  ),
-                                ),
-                                /* Verification flow temporarily disabled
-                                if (isOmemo)
-                                  BlocProvider(
-                                    create: (context) =>
-                                        VerificationCubit(
-                                      jid: openJid,
-                                      omemoService:
-                                          context.read<XmppService>()
-                                              as OmemoService,
-                                    ),
-                                  ),
-                                */
-                              ],
-                              child: const chat_view.Chat(),
-                            ),
+                              */
+                            ],
+                            child: const chat_view.Chat(),
                           );
                     final Widget chatPane = constrainSecondary(chatPaneContent);
 
-                    Widget chatLayout() {
+                    Widget chatLayout({required bool showChatCalendar}) {
+                      final EdgeInsets secondaryPanePadding = showChatCalendar
+                          ? EdgeInsets.zero
+                          : const EdgeInsets.only(
+                              left: _secondaryPaneGutter,
+                            );
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -414,13 +421,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: AxiAdaptiveLayout(
                               invertPriority: openJid != null,
+                              showPrimary: !showChatCalendar,
                               centerSecondary: false,
                               centerPrimary: false,
+                              animatePaneChanges: true,
                               primaryAlignment: Alignment.topLeft,
                               secondaryAlignment: Alignment.topLeft,
-                              secondaryPadding: const EdgeInsets.only(
-                                left: _secondaryPaneGutter,
-                              ),
+                              secondaryPadding: secondaryPanePadding,
                               primaryChild: Nexus(
                                 tabs: tabs,
                                 navPlacement: navPlacement,
@@ -449,26 +456,31 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         );
-                    Widget chatCalendarLayout() => Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (navRail != null) navRail,
-                            Expanded(child: chatPane),
-                          ],
-                        );
 
                     final bool demoOffline =
                         context.read<XmppService?>()?.demoOfflineMode ?? false;
 
                     final bool showChatCalendar =
                         openChatCalendar && openJid != null;
+                    final Duration animationDuration =
+                        context.watch<SettingsCubit>().animationDuration;
+                    final Duration calendarTransitionDuration =
+                        animationDuration == Duration.zero
+                            ? Duration.zero
+                            : calendarViewTransitionDuration;
                     return SafeArea(
                       top: state is ConnectivityConnected || demoOffline,
-                      child: openCalendar
-                          ? calendarLayout()
-                          : showChatCalendar
-                              ? chatCalendarLayout()
-                              : chatLayout(),
+                      child: AxiFadeIndexedStack(
+                        index: openCalendar
+                            ? _homeCalendarPageIndex
+                            : _homeChatPageIndex,
+                        duration: calendarTransitionDuration,
+                        curve: _homeCalendarFadeCurve,
+                        children: [
+                          chatLayout(showChatCalendar: showChatCalendar),
+                          calendarLayout(),
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -901,29 +913,47 @@ class _NexusState extends State<Nexus> {
     final env = EnvScope.of(context);
     final showDesktopRefresh =
         env.isDesktopPlatform && context.read<ChatsCubit?>() != null;
+    final List<AppBarActionItem> headerActions = <AppBarActionItem>[
+      if (showFindActionInHeader &&
+          context.watch<AccessibilityActionBloc?>() != null)
+        AppBarActionItem(
+          label: context.l10n.accessibilityActionsLabel,
+          iconData: LucideIcons.lifeBuoy,
+          inline: _FindActionIconButton(
+            showShortcutHint: showShortcutHints,
+          ),
+          onPressed: () => context
+              .read<AccessibilityActionBloc?>()
+              ?.add(const AccessibilityMenuOpened()),
+        ),
+      if (showDesktopRefresh)
+        AppBarActionItem(
+          label: _homeSyncTooltip,
+          iconData: LucideIcons.refreshCw,
+          inline: const _DesktopHomeRefreshButton(),
+          onPressed: () =>
+              unawaited(context.read<ChatsCubit>().refreshHomeSync()),
+        ),
+      AppBarActionItem(
+        label: searchActive
+            ? context.l10n.chatSearchClose
+            : context.l10n.commonSearch,
+        iconData: LucideIcons.search,
+        inline: _SearchToggleButton(
+          active: searchActive,
+          onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
+        ),
+        onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
+      ),
+    ];
     final header = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         AxiAppBar(
           showTitle: widget.navPlacement != NavPlacement.rail,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showFindActionInHeader) ...[
-                _FindActionIconButton(
-                  showShortcutHint: showShortcutHints,
-                ),
-                const SizedBox(width: 4),
-              ],
-              if (showDesktopRefresh) ...[
-                const _DesktopHomeRefreshButton(),
-                const SizedBox(width: 4),
-              ],
-              _SearchToggleButton(
-                active: searchActive,
-                onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
-              ),
-            ],
+          trailing: AppBarActions(
+            actions: headerActions,
+            spacing: _homeHeaderActionSpacing,
           ),
         ),
         _HomeSearchPanel(tabs: widget.tabs),
@@ -1194,8 +1224,8 @@ class _SearchToggleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return AxiIconButton(
-      iconData: active ? LucideIcons.x : LucideIcons.search,
+    return AxiIconButton.ghost(
+      iconData: LucideIcons.search,
       tooltip: active ? l10n.chatSearchClose : l10n.commonSearch,
       onPressed: onPressed,
     );
@@ -1243,7 +1273,6 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
 
   @override
   Widget build(BuildContext context) {
-    const tooltip = 'Sync';
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
           previous.refreshStatus != current.refreshStatus,
@@ -1252,9 +1281,9 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
         selector: (state) => state.refreshStatus,
         builder: (context, status) {
           final spinning = status.isLoading;
-          return AxiIconButton(
+          return AxiIconButton.ghost(
             iconData: LucideIcons.refreshCw,
-            tooltip: tooltip,
+            tooltip: _homeSyncTooltip,
             onPressed: spinning
                 ? null
                 : () => unawaited(context.read<ChatsCubit>().refreshHomeSync()),

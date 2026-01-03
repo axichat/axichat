@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -20,7 +23,7 @@ class CalendarBloc extends BaseCalendarBloc {
   CalendarBloc({
     required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
     required super.storage,
-    super.storageId = 'state',
+    super.storageId,
     super.reminderController,
     CalendarAvailabilityShareCoordinator? availabilityCoordinator,
     VoidCallback? onDispose,

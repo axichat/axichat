@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -174,11 +177,9 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                   child: SizedBox(
                     width: AxiIconButton.kDefaultSize,
                     height: AxiIconButton.kDefaultSize,
-                    child: AxiIconButton(
+                    child: AxiIconButton.ghost(
                       iconData: LucideIcons.arrowLeft,
                       tooltip: context.l10n.commonBack,
-                      color: context.colorScheme.foreground,
-                      borderColor: context.colorScheme.border,
                       onPressed: () => Navigator.maybePop(context),
                     ),
                   ),
