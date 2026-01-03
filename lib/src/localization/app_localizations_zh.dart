@@ -2157,6 +2157,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mucMembersTitle => '成员';
 
   @override
+  String get mucEditAvatar => 'Edit room avatar';
+
+  @override
+  String get mucAvatarMenuDescription => 'Room members will see this avatar.';
+
+  @override
   String get mucInviteUser => '邀请用户';
 
   @override
@@ -2350,7 +2356,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatsCreateChatRoomTitle => '创建聊天室';
 
   @override
+  String get chatsCreateChatRoomAction => 'Create room';
+
+  @override
   String get chatsRoomNamePlaceholder => '名称';
+
+  @override
+  String get chatsRoomNameRequiredError => 'Room name cannot be empty.';
+
+  @override
+  String chatsRoomNameInvalidCharacterError(Object character) {
+    return 'Room names cannot contain $character.';
+  }
 
   @override
   String get chatsArchiveTitle => '存档';
@@ -3424,7 +3441,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatMoveToInbox => '移至收件箱';
 
   @override
-  String get chatReportSpam => '回報垃圾郵件';
+  String get chatReportSpam => '標記為垃圾郵件';
 
   @override
   String get chatSignatureToggleLabel => '為電郵加入分享權杖頁腳';
@@ -5216,6 +5233,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get mucMembersTitle => '成員';
 
   @override
+  String get mucEditAvatar => 'Edit room avatar';
+
+  @override
+  String get mucAvatarMenuDescription => 'Room members will see this avatar.';
+
+  @override
   String get mucInviteUser => '邀請用戶';
 
   @override
@@ -5409,7 +5432,18 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatsCreateChatRoomTitle => '建立聊天室';
 
   @override
+  String get chatsCreateChatRoomAction => 'Create room';
+
+  @override
   String get chatsRoomNamePlaceholder => '名稱';
+
+  @override
+  String get chatsRoomNameRequiredError => 'Room name cannot be empty.';
+
+  @override
+  String chatsRoomNameInvalidCharacterError(Object character) {
+    return 'Room names cannot contain $character.';
+  }
 
   @override
   String get chatsArchiveTitle => '封存';

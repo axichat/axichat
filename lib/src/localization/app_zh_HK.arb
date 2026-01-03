@@ -877,6 +877,8 @@
   "mucEnterNicknamePlaceholder": "輸入暱稱",
   "mucUpdateNickname": "更新",
   "mucMembersTitle": "成員",
+  "mucEditAvatar": "Edit room avatar",
+  "mucAvatarMenuDescription": "Room members will see this avatar.",
   "mucInviteUser": "邀請用戶",
   "mucSectionOwners": "擁有者",
   "mucSectionAdmins": "管理員",
@@ -957,7 +959,15 @@
   "chatsCreateGroupChatTooltip": "建立群組聊天",
   "chatsRoomLabel": "聊天室",
   "chatsCreateChatRoomTitle": "建立聊天室",
+  "chatsCreateChatRoomAction": "Create room",
   "chatsRoomNamePlaceholder": "名稱",
+  "chatsRoomNameRequiredError": "Room name cannot be empty.",
+  "chatsRoomNameInvalidCharacterError": "Room names cannot contain {character}.",
+  "@chatsRoomNameInvalidCharacterError": {
+    "placeholders": {
+      "character": {}
+    }
+  },
   "chatsArchiveTitle": "封存",
   "chatsArchiveEmpty": "暫無已封存的聊天",
   "calendarTileNow": "現在：{title}",

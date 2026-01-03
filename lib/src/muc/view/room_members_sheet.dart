@@ -356,7 +356,7 @@ class _RoomAvatarSection extends StatelessWidget {
         ? ShadButton.outline(
             size: ShadButtonSize.sm,
             onPressed: onEdit,
-            child: Text(l10n.profileEditAvatar),
+            child: Text(l10n.mucEditAvatar),
           ).withTapBounce()
         : null;
     return Row(
@@ -873,7 +873,7 @@ class _RoomAvatarEditorSheetState extends State<_RoomAvatarEditorSheet> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  l10n.profileEditAvatar,
+                                  l10n.mucEditAvatar,
                                   style: titleStyle,
                                 ),
                               ),
@@ -918,6 +918,7 @@ class _RoomAvatarEditorSheetState extends State<_RoomAvatarEditorSheet> {
                                               context.colorScheme,
                                             )
                                         : null,
+                                descriptionText: l10n.mucAvatarMenuDescription,
                               ),
                               if (errorText != null) ...[
                                 const SizedBox(height: _errorSpacing),
