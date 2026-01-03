@@ -31,6 +31,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     this.imageHeight,
     this.onCropChanged,
     this.onCropReset,
+    this.descriptionText,
   });
 
   final SignupAvatarEditorMode mode;
@@ -45,6 +46,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
   final double? imageHeight;
   final ValueChanged<Rect>? onCropChanged;
   final VoidCallback? onCropReset;
+  final String? descriptionText;
 
   @override
   State<SignupAvatarEditorPanel> createState() =>
@@ -249,7 +251,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                 ),
         ),
         Text(
-          l10n.signupAvatarMenuDescription,
+          widget.descriptionText ?? l10n.signupAvatarMenuDescription,
           style: context.textTheme.small.copyWith(
             color: colors.mutedForeground,
           ),

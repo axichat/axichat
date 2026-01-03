@@ -877,6 +877,8 @@
   "mucEnterNicknamePlaceholder": "Saisir un pseudo",
   "mucUpdateNickname": "Mettre à jour",
   "mucMembersTitle": "Membres",
+  "mucEditAvatar": "Edit room avatar",
+  "mucAvatarMenuDescription": "Room members will see this avatar.",
   "mucInviteUser": "Inviter un utilisateur",
   "mucSectionOwners": "Propriétaires",
   "mucSectionAdmins": "Admins",
@@ -957,7 +959,15 @@
   "chatsCreateGroupChatTooltip": "Créer un chat de groupe",
   "chatsRoomLabel": "Salle",
   "chatsCreateChatRoomTitle": "Créer une salle de chat",
+  "chatsCreateChatRoomAction": "Create room",
   "chatsRoomNamePlaceholder": "Nom",
+  "chatsRoomNameRequiredError": "Room name cannot be empty.",
+  "chatsRoomNameInvalidCharacterError": "Room names cannot contain {character}.",
+  "@chatsRoomNameInvalidCharacterError": {
+    "placeholders": {
+      "character": {}
+    }
+  },
   "chatsArchiveTitle": "Archive",
   "chatsArchiveEmpty": "Aucun chat archivé pour l’instant",
   "calendarTileNow": "Maintenant : {title}",

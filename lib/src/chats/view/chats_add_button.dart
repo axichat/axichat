@@ -25,10 +25,13 @@ class ChatsAddButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final locate = context.read;
     final l10n = context.l10n;
-    const createLabel = 'Create';
-    const emptyTitleValidationMessage = 'Room name cannot be empty.';
-    const invalidCharacterValidationMessage =
-        'Room names cannot contain a + character.';
+    const restrictedRoomNameCharacter = '+';
+    final createLabel = l10n.chatsCreateChatRoomAction;
+    final emptyTitleValidationMessage = l10n.chatsRoomNameRequiredError;
+    final invalidCharacterValidationMessage =
+        l10n.chatsRoomNameInvalidCharacterError(
+      restrictedRoomNameCharacter,
+    );
     return AxiDialogFab(
       tooltip: l10n.chatsCreateGroupChatTooltip,
       iconData: LucideIcons.userPlus,
@@ -60,6 +63,7 @@ class ChatsAddButton extends StatelessWidget {
                   const avatarEditorTopPadding = 12.0;
                   const avatarEditorMaxWidth = 960.0;
                   const avatarEditorCloseInset = 6.0;
+                  const dialogMaxHeightRatio = 0.8;
                   final avatarErrorText = signupAvatarErrorText(
                     avatarState: avatarState,
                     l10n: l10n,
@@ -80,128 +84,51 @@ class ChatsAddButton extends StatelessWidget {
                           MediaQuery.sizeOf(context).width,
                           avatarEditorMaxWidth,
                         );
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Padding(
-                              padding: fieldPadding,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  AbsorbPointer(
-                                    absorbing: loading,
-                                    child: SignupAvatarSelector(
-                                      bytes: avatarState.displayedBytes,
-                                      username: title,
-                                      processing: avatarState.processing,
-                                      onTap: () {
-                                        setState(() {
-                                          showAvatarEditor = true;
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: avatarRowSpacing),
-                                  Expanded(
-                                    child: AxiTextFormField(
-                                      placeholder:
-                                          Text(l10n.chatsRoomNamePlaceholder),
-                                      enabled: !loading,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          title = value;
-                                          validationError = null;
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
+                        final dialogMaxHeight =
+                            MediaQuery.sizeOf(context).height *
+                                dialogMaxHeightRatio;
+                        final keyboardInset =
+                            MediaQuery.viewInsetsOf(context).bottom;
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: keyboardInset),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: dialogMaxHeight,
                             ),
-                            if (avatarErrorText != null)
-                              Padding(
-                                padding: errorPadding,
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    avatarErrorText,
-                                    style: context.textTheme.small.copyWith(
-                                      color: context.colorScheme.destructive,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            if (validationError != null)
-                              Padding(
-                                padding: errorPadding,
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    validationError!,
-                                    style: context.textTheme.small.copyWith(
-                                      color: context.colorScheme.destructive,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            if (showAvatarEditor)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  top: avatarEditorTopPadding,
-                                ),
-                                child: Center(
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: previewWidth,
-                                    ),
-                                    child: Stack(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Padding(
+                                    padding: fieldPadding,
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
                                       children: [
                                         AbsorbPointer(
                                           absorbing: loading,
-                                          child: SignupAvatarEditorPanel(
-                                            mode: avatarState.editorMode,
-                                            avatarBytes:
-                                                avatarState.displayedBytes,
-                                            cropBytes: avatarState.sourceBytes,
-                                            cropRect: avatarState.cropRect,
-                                            imageWidth: avatarState.imageWidth,
-                                            imageHeight:
-                                                avatarState.imageHeight,
-                                            onCropChanged: (rect) => context
-                                                .read<SignupAvatarCubit>()
-                                                .updateCropRect(rect),
-                                            onCropReset: context
-                                                .read<SignupAvatarCubit>()
-                                                .resetCrop,
-                                            onShuffle: () => context
-                                                .read<SignupAvatarCubit>()
-                                                .shuffleTemplate(
-                                                  context.colorScheme,
-                                                ),
-                                            onUpload: context
-                                                .read<SignupAvatarCubit>()
-                                                .pickAvatarFromFiles,
-                                            canShuffleBackground: avatarState
-                                                .canShuffleBackground,
-                                            onShuffleBackground: avatarState
-                                                    .canShuffleBackground
-                                                ? () => context
-                                                    .read<SignupAvatarCubit>()
-                                                    .shuffleBackground(
-                                                      context.colorScheme,
-                                                    )
-                                                : null,
+                                          child: SignupAvatarSelector(
+                                            bytes: avatarState.displayedBytes,
+                                            username: title,
+                                            processing: avatarState.processing,
+                                            onTap: () {
+                                              setState(() {
+                                                showAvatarEditor = true;
+                                              });
+                                            },
                                           ),
                                         ),
-                                        Positioned(
-                                          top: avatarEditorCloseInset,
-                                          right: avatarEditorCloseInset,
-                                          child: AxiIconButton(
-                                            iconData: LucideIcons.x,
-                                            tooltip: l10n.commonClose,
-                                            onPressed: () {
+                                        const SizedBox(width: avatarRowSpacing),
+                                        Expanded(
+                                          child: AxiTextFormField(
+                                            placeholder: Text(
+                                              l10n.chatsRoomNamePlaceholder,
+                                            ),
+                                            enabled: !loading,
+                                            onChanged: (value) {
                                               setState(() {
-                                                showAvatarEditor = false;
+                                                title = value;
+                                                validationError = null;
                                               });
                                             },
                                           ),
@@ -209,9 +136,116 @@ class ChatsAddButton extends StatelessWidget {
                                       ],
                                     ),
                                   ),
-                                ),
+                                  if (avatarErrorText != null)
+                                    Padding(
+                                      padding: errorPadding,
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          avatarErrorText,
+                                          style:
+                                              context.textTheme.small.copyWith(
+                                            color:
+                                                context.colorScheme.destructive,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (validationError != null)
+                                    Padding(
+                                      padding: errorPadding,
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          validationError!,
+                                          style:
+                                              context.textTheme.small.copyWith(
+                                            color:
+                                                context.colorScheme.destructive,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (showAvatarEditor)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: avatarEditorTopPadding,
+                                      ),
+                                      child: Center(
+                                        child: ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            maxWidth: previewWidth,
+                                          ),
+                                          child: Stack(
+                                            children: [
+                                              AbsorbPointer(
+                                                absorbing: loading,
+                                                child: SignupAvatarEditorPanel(
+                                                  mode: avatarState.editorMode,
+                                                  avatarBytes: avatarState
+                                                      .displayedBytes,
+                                                  cropBytes:
+                                                      avatarState.sourceBytes,
+                                                  cropRect:
+                                                      avatarState.cropRect,
+                                                  imageWidth:
+                                                      avatarState.imageWidth,
+                                                  imageHeight:
+                                                      avatarState.imageHeight,
+                                                  onCropChanged: (rect) => context
+                                                      .read<SignupAvatarCubit>()
+                                                      .updateCropRect(
+                                                        rect,
+                                                      ),
+                                                  onCropReset: context
+                                                      .read<SignupAvatarCubit>()
+                                                      .resetCrop,
+                                                  onShuffle: () => context
+                                                      .read<SignupAvatarCubit>()
+                                                      .shuffleTemplate(
+                                                        context.colorScheme,
+                                                      ),
+                                                  onUpload: context
+                                                      .read<SignupAvatarCubit>()
+                                                      .pickAvatarFromFiles,
+                                                  canShuffleBackground:
+                                                      avatarState
+                                                          .canShuffleBackground,
+                                                  onShuffleBackground: avatarState
+                                                          .canShuffleBackground
+                                                      ? () => context
+                                                          .read<
+                                                              SignupAvatarCubit>()
+                                                          .shuffleBackground(
+                                                            context.colorScheme,
+                                                          )
+                                                      : null,
+                                                  descriptionText: l10n
+                                                      .mucAvatarMenuDescription,
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: avatarEditorCloseInset,
+                                                right: avatarEditorCloseInset,
+                                                child: AxiIconButton(
+                                                  iconData: LucideIcons.x,
+                                                  tooltip: l10n.commonClose,
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      showAvatarEditor = false;
+                                                    });
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
-                          ],
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -230,7 +264,7 @@ class ChatsAddButton extends StatelessWidget {
                                   emptyTitleValidationMessage);
                               return;
                             }
-                            if (trimmed.contains('+')) {
+                            if (trimmed.contains(restrictedRoomNameCharacter)) {
                               setState(() => validationError =
                                   invalidCharacterValidationMessage);
                               return;
