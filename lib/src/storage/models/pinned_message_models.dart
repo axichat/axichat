@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:drift/drift.dart';
 
 const String _pinnedMessagesChatIndexName = 'idx_pinned_messages_chat';

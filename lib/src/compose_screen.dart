@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/compose_draft_content.dart';
@@ -62,11 +65,9 @@ class ComposeScreen extends StatelessWidget {
                       child: SizedBox(
                         width: AxiIconButton.kDefaultSize,
                         height: AxiIconButton.kDefaultSize,
-                        child: AxiIconButton(
+                        child: AxiIconButton.ghost(
                           iconData: LucideIcons.arrowLeft,
                           tooltip: l10n.commonBack,
-                          color: colors.foreground,
-                          borderColor: colors.border,
                           onPressed: () => Navigator.pop(context),
                         ),
                       ),

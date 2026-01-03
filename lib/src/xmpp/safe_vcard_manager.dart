@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 /// Guarded version of moxxmpp's [VCardManager] that ignores malformed

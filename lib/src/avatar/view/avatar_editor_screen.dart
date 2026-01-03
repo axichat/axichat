@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
@@ -73,11 +76,9 @@ class _AvatarEditorBody extends StatelessWidget {
             ),
             leading: Padding(
               padding: const EdgeInsets.only(left: 12.0),
-              child: AxiIconButton(
+              child: AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: l10n.commonBack,
-                color: colors.foreground,
-                borderColor: colors.border,
                 onPressed: context.pop,
               ),
             ),

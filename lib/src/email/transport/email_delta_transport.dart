@@ -1,11 +1,18 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/util/delta_jids.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
+import 'package:axichat/src/email/util/email_message_merge.dart';
+import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -18,7 +25,6 @@ import 'package:path/path.dart' as p;
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'chat_transport.dart';
 
-const _selfDomain = 'user.delta.chat';
 const _deltaConfigClearedValue = '';
 const _deltaConfigKeyAddress = 'addr';
 const _deltaConfigKeyMailPassword = 'mail_pw';
@@ -41,8 +47,6 @@ const String _deltaSecurityModeAutoNumeric = '0';
 const String _deltaSecurityModeSslNumeric = '1';
 const String _deltaSecurityModeStartTlsNumeric = '2';
 const String _deltaSecurityModePlainNumeric = '3';
-const String _deltaMessageStanzaPrefix = 'dc-msg';
-const String _deltaMessageStanzaSeparator = '-';
 const int _imapImplicitTlsPort = 993;
 const int _smtpImplicitTlsPort = 465;
 const String _mailTransportLabel = 'mail';
@@ -52,7 +56,17 @@ const String _emailSecurityModePlainError =
 const String _emailSecurityModeUnknownPrefix =
     'Unsupported email security mode for ';
 const String _emailSecurityModeUnknownSuffix = ' connections.';
+const String _emailAccountNotReadyError =
+    'Email account not hydrated; wait for email sync.';
+const String _missingOutgoingDeltaIdError =
+    'Outgoing email message missing delta ID.';
 const int _deltaMessageIdUnset = DeltaMessageId.none;
+const int _originIdHydrationDelayMs = 1000;
+const int _originIdHydrationMaxAttempts = 60;
+const int _originIdHydrationAttemptStart = 0;
+const int _originIdHydrationAttemptStep = 1;
+const Duration _originIdHydrationDelay =
+    Duration(milliseconds: _originIdHydrationDelayMs);
 
 enum _DeltaSecurityModeResolution {
   auto,
@@ -148,6 +162,43 @@ class EmailDeltaTransport implements ChatTransport {
     if (resolvedAccountId == null) return;
     _accountAddresses[resolvedAccountId] = address;
     _primaryAccountId ??= resolvedAccountId;
+  }
+
+  void _scheduleAccountAddressHydration({
+    required DeltaContextHandle context,
+    required int accountId,
+  }) {
+    unawaited(
+      _hydrateAccountAddressFromCore(
+        context: context,
+        accountId: accountId,
+      ),
+    );
+  }
+
+  Future<void> _hydrateAccountAddressFromCore({
+    required DeltaContextHandle context,
+    required int accountId,
+  }) async {
+    final String? rawAddress = await context.getConfig(_deltaConfigKeyAddress);
+    final String normalizedAddress = rawAddress?.trim() ?? '';
+    if (normalizedAddress.isEmpty || normalizedAddress.isDeltaPlaceholderJid) {
+      return;
+    }
+    hydrateAccountAddress(
+      address: normalizedAddress,
+      accountId: accountId,
+    );
+    final db = await _databaseBuilder();
+    await db.replaceDeltaPlaceholderSelfJids(
+      deltaAccountId: accountId,
+      resolvedAddress: normalizedAddress,
+      placeholderJids: deltaPlaceholderJids,
+    );
+    await db.removeDeltaPlaceholderDuplicates(
+      deltaAccountId: accountId,
+      placeholderJids: deltaPlaceholderJids,
+    );
   }
 
   void updateMessageStorageMode(MessageStorageMode mode) {
@@ -708,7 +759,7 @@ class EmailDeltaTransport implements ChatTransport {
   String _selfJidForAddress(String? address) {
     final trimmed = address?.trim();
     if (trimmed == null || trimmed.isEmpty) {
-      return 'dc-anon@$_selfDomain';
+      return deltaAnonUserJid;
     }
     return trimmed;
   }
@@ -757,6 +808,7 @@ class EmailDeltaTransport implements ChatTransport {
       context: context,
       messageStorageMode: _messageStorageMode,
       selfJidProvider: () => _selfJidForAccount(accountId),
+      accountId: accountId,
       logger: _log,
     );
     final session = _DeltaAccountSession(
@@ -765,6 +817,10 @@ class EmailDeltaTransport implements ChatTransport {
       consumer: consumer,
     );
     _accountSessions[accountId] = session;
+    _scheduleAccountAddressHydration(
+      context: context,
+      accountId: accountId,
+    );
     if (_ioRunning) {
       _attachEventSubscription(session);
     }
@@ -1099,23 +1155,35 @@ class EmailDeltaTransport implements ChatTransport {
       throw StateError('Transport not initialized');
     }
     final context = session.context;
+    final resolvedAccountId = session.accountId;
+    final Chat chat = await _requireReadyOutgoingChat(
+      chatId: chatId,
+      accountId: resolvedAccountId,
+      context: context,
+    );
     final sanitizedSubject = sanitizeEmailHeaderValue(subject);
-    final msgId = await context.sendText(
+    final int msgId = await context.sendText(
       chatId: chatId,
       message: body,
       subject: sanitizedSubject,
       html: htmlBody,
     );
-    final deltaMessage = await context.getMessage(msgId);
+    final sentAt = DateTime.timestamp();
     await _recordOutgoing(
       chatId: chatId,
+      accountId: resolvedAccountId,
       msgId: msgId,
-      accountId: session.accountId,
+      chat: chat,
       body: body,
       shareId: shareId,
       localBodyOverride: localBodyOverride,
       htmlBody: htmlBody,
-      timestamp: deltaMessage?.timestamp,
+      timestamp: sentAt,
+    );
+    _scheduleOriginIdHydration(
+      context: context,
+      msgId: msgId,
+      accountId: resolvedAccountId,
     );
     return msgId;
   }
@@ -1135,13 +1203,19 @@ class EmailDeltaTransport implements ChatTransport {
       throw StateError('Transport not initialized');
     }
     final context = session.context;
+    final resolvedAccountId = session.accountId;
+    final Chat chat = await _requireReadyOutgoingChat(
+      chatId: chatId,
+      accountId: resolvedAccountId,
+      context: context,
+    );
     final sanitizedSubject = sanitizeEmailHeaderValue(subject);
     final sanitizedFileName = sanitizeEmailAttachmentFilename(
       attachment.fileName,
       fallbackPath: attachment.path,
     );
     final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
-    final msgId = await context.sendFileMessage(
+    final int msgId = await context.sendFileMessage(
       chatId: chatId,
       viewType: _viewTypeFor(attachment),
       filePath: attachment.path,
@@ -1151,27 +1225,29 @@ class EmailDeltaTransport implements ChatTransport {
       subject: sanitizedSubject,
       html: htmlCaption,
     );
-    final deltaMessage = await context.getMessage(msgId);
-    var metadata = _metadataForAttachment(attachment, msgId);
-    if (deltaMessage != null) {
-      metadata = metadata.copyWith(
-        path: deltaMessage.filePath ?? metadata.path,
-        mimeType: deltaMessage.fileMime ?? metadata.mimeType,
-        sizeBytes: deltaMessage.fileSize ?? metadata.sizeBytes,
-        width: deltaMessage.width ?? metadata.width,
-        height: deltaMessage.height ?? metadata.height,
-      );
-    }
+    final sentAt = DateTime.timestamp();
+    final metadata = _metadataForAttachment(attachment, msgId);
     await _recordOutgoing(
       chatId: chatId,
+      accountId: resolvedAccountId,
       msgId: msgId,
-      accountId: session.accountId,
+      chat: chat,
       body: attachment.caption,
       metadata: metadata,
       shareId: shareId,
       localBodyOverride: captionOverride,
       htmlBody: htmlCaption,
-      timestamp: deltaMessage?.timestamp,
+      timestamp: sentAt,
+    );
+    _scheduleOriginIdHydration(
+      context: context,
+      msgId: msgId,
+      accountId: resolvedAccountId,
+    );
+    _scheduleAttachmentMetadataHydration(
+      context: context,
+      msgId: msgId,
+      metadata: metadata,
     );
     return msgId;
   }
@@ -1187,10 +1263,15 @@ class EmailDeltaTransport implements ChatTransport {
       throw StateError('Transport not initialized');
     }
     final context = session.context;
-    final contactId = await context.createContact(
-      address: address,
-      displayName: displayName ?? address,
-    );
+    final trimmedAddress = address.trim();
+    final trimmedDisplayName = displayName?.trim();
+    final contactId = await context.lookupContactIdByAddress(trimmedAddress) ??
+        await context.createContact(
+          address: trimmedAddress,
+          displayName: trimmedDisplayName?.isNotEmpty == true
+              ? trimmedDisplayName!
+              : trimmedAddress,
+        );
     final chatId = await context.createChatByContactId(contactId);
     await _ensureChat(
       chatId,
@@ -1200,10 +1281,45 @@ class EmailDeltaTransport implements ChatTransport {
     return chatId;
   }
 
+  Future<Chat> _requireReadyOutgoingChat({
+    required int chatId,
+    required int accountId,
+    required DeltaContextHandle context,
+  }) async {
+    final Chat chat = await _ensureChat(
+      chatId,
+      accountId: accountId,
+      context: context,
+    );
+    String senderJid = _resolveOutgoingSenderJid(
+      chat: chat,
+      accountId: accountId,
+    );
+    String normalizedSender = senderJid.trim();
+    if (normalizedSender.isEmpty || normalizedSender.isDeltaPlaceholderJid) {
+      await _hydrateAccountAddressFromCore(
+        context: context,
+        accountId: accountId,
+      );
+      senderJid = _resolveOutgoingSenderJid(
+        chat: chat,
+        accountId: accountId,
+      );
+      normalizedSender = senderJid.trim();
+    }
+    if (normalizedSender.isEmpty || normalizedSender.isDeltaPlaceholderJid) {
+      throw StateError(_emailAccountNotReadyError);
+    }
+    return chat;
+  }
+
   Future<void> _recordOutgoing({
     required int chatId,
-    required int msgId,
     required int accountId,
+    int? msgId,
+    String? stanzaId,
+    Chat? chat,
+    String? originId,
     String? body,
     FileMetadataData? metadata,
     String? shareId,
@@ -1211,57 +1327,88 @@ class EmailDeltaTransport implements ChatTransport {
     String? htmlBody,
     DateTime? timestamp,
   }) async {
-    final db = await _databaseBuilder();
-    final chat = await _ensureChat(
-      chatId,
-      accountId: accountId,
-    );
+    final XmppDatabase db = await _databaseBuilder();
+    final Chat resolvedChat = chat ??
+        await _ensureChat(
+          chatId,
+          accountId: accountId,
+        );
     final int deltaAccountId = accountId;
+    final int? resolvedMsgId = msgId;
+    final String resolvedStanzaId = stanzaId ??
+        (resolvedMsgId == null
+            ? throw StateError(_missingOutgoingDeltaIdError)
+            : deltaMessageStanzaId(
+                resolvedMsgId,
+                accountId: deltaAccountId,
+              ));
     if (metadata != null) {
       await db.saveFileMetadata(metadata);
     }
     final displayBody = localBodyOverride ?? body;
-    final resolvedBody = (displayBody?.trim().isNotEmpty == true)
-        ? displayBody!.trim()
-        : (metadata == null ? null : _attachmentLabel(metadata));
+    final trimmedBody = displayBody?.trim();
+    final hasBody = trimmedBody?.isNotEmpty == true;
+    final resolvedBody = hasBody
+        ? trimmedBody
+        : (metadata == null ? null : deltaAttachmentLabel(metadata));
     final resolvedTimestamp = timestamp ?? DateTime.timestamp();
     final message = Message(
-      stanzaID: _stanzaId(
-        msgId,
+      stanzaID: resolvedStanzaId,
+      senderJid: _resolveOutgoingSenderJid(
+        chat: resolvedChat,
         accountId: deltaAccountId,
       ),
-      senderJid: _selfJidForAccount(deltaAccountId) ?? _selfJidForAddress(null),
-      chatJid: chat.jid,
+      chatJid: resolvedChat.jid,
       timestamp: resolvedTimestamp,
+      originID: originId,
       body: resolvedBody,
       htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
       received: false,
       deltaChatId: chatId,
-      deltaMsgId: msgId,
+      deltaMsgId: resolvedMsgId,
       deltaAccountId: deltaAccountId,
       fileMetadataID: metadata?.id,
     );
     await db.saveMessage(message);
     if (_messageStorageMode.isServerOnly) {
       await db.trimChatMessages(
-        jid: chat.jid,
+        jid: resolvedChat.jid,
         maxMessages: serverOnlyChatMessageCap,
         deltaAccountId: deltaAccountId,
       );
     }
     await db.updateChat(
-      chat.copyWith(lastChangeTimestamp: resolvedTimestamp),
+      resolvedChat.copyWith(lastChangeTimestamp: resolvedTimestamp),
     );
-    if (shareId != null) {
+    if (shareId != null && resolvedMsgId != null) {
       await db.insertMessageCopy(
         shareId: shareId,
-        dcMsgId: msgId,
+        dcMsgId: resolvedMsgId,
         dcChatId: chatId,
         dcAccountId: deltaAccountId,
       );
     }
+  }
+
+  String _resolveOutgoingSenderJid({
+    required Chat chat,
+    required int accountId,
+  }) {
+    final chatSender = chat.emailFromAddress?.trim();
+    if (chatSender != null &&
+        chatSender.isNotEmpty &&
+        !chatSender.isDeltaPlaceholderJid) {
+      return chatSender;
+    }
+    final accountSender = _selfJidForAccount(accountId);
+    if (accountSender != null &&
+        accountSender.isNotEmpty &&
+        !accountSender.isDeltaPlaceholderJid) {
+      return accountSender;
+    }
+    return _selfJidForAddress(null);
   }
 
   Future<Chat> _ensureChat(
@@ -1321,6 +1468,148 @@ class EmailDeltaTransport implements ChatTransport {
       deltaChatId: chatId,
     );
     return chat;
+  }
+
+  FileMetadataData _metadataForAttachment(
+    EmailAttachment attachment,
+    int msgId,
+  ) {
+    final sanitizedFileName = sanitizeEmailAttachmentFilename(
+      attachment.fileName,
+      fallbackPath: attachment.path,
+    );
+    final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
+    return FileMetadataData(
+      id: deltaFileMetadataId(msgId),
+      filename: sanitizedFileName,
+      path: attachment.path,
+      mimeType: sanitizedMimeType,
+      sizeBytes: attachment.sizeBytes,
+      width: attachment.width,
+      height: attachment.height,
+    );
+  }
+
+  void _scheduleOriginIdHydration({
+    required DeltaContextHandle context,
+    required int msgId,
+    required int accountId,
+  }) {
+    unawaited(
+      _hydrateOriginId(
+        context: context,
+        msgId: msgId,
+        accountId: accountId,
+      ),
+    );
+  }
+
+  void _scheduleAttachmentMetadataHydration({
+    required DeltaContextHandle context,
+    required int msgId,
+    required FileMetadataData metadata,
+  }) {
+    unawaited(
+      _hydrateAttachmentMetadata(
+        context: context,
+        msgId: msgId,
+        metadata: metadata,
+      ),
+    );
+  }
+
+  Future<void> _hydrateAttachmentMetadata({
+    required DeltaContextHandle context,
+    required int msgId,
+    required FileMetadataData metadata,
+  }) async {
+    final deltaMessage = await context.getMessage(msgId);
+    if (deltaMessage == null) {
+      return;
+    }
+    final updatedMetadata = metadata.copyWith(
+      path: deltaMessage.filePath ?? metadata.path,
+      mimeType: deltaMessage.fileMime ?? metadata.mimeType,
+      sizeBytes: deltaMessage.fileSize ?? metadata.sizeBytes,
+      width: deltaMessage.width ?? metadata.width,
+      height: deltaMessage.height ?? metadata.height,
+    );
+    if (updatedMetadata == metadata) {
+      return;
+    }
+    final db = await _databaseBuilder();
+    await db.saveFileMetadata(updatedMetadata);
+  }
+
+  Future<void> _hydrateOriginId({
+    required DeltaContextHandle context,
+    required int msgId,
+    required int accountId,
+  }) async {
+    final stanzaId = deltaMessageStanzaId(
+      msgId,
+      accountId: accountId,
+    );
+    const maxAttempts = _originIdHydrationMaxAttempts;
+    const attemptStep = _originIdHydrationAttemptStep;
+    const lastAttemptIndex = maxAttempts - attemptStep;
+    final String? selfJid = _selfJidForAccount(accountId);
+    for (int attempt = _originIdHydrationAttemptStart;
+        attempt < maxAttempts;
+        attempt += attemptStep) {
+      final originId = await _resolveMessageOriginId(context, msgId);
+      if (originId != null) {
+        final db = await _databaseBuilder();
+        final existing = await db.getMessageByDeltaId(
+              msgId,
+              deltaAccountId: accountId,
+            ) ??
+            await db.getMessageByStanzaID(stanzaId);
+        if (existing == null) {
+          return;
+        }
+        final existingOrigin = existing.originID?.trim();
+        if (existingOrigin != null && existingOrigin.isNotEmpty) {
+          return;
+        }
+        final duplicate = await db.getMessageByOriginID(originId);
+        if (canMergeOriginMessages(
+          existing: existing,
+          duplicate: duplicate,
+        )) {
+          final Message duplicateMessage = duplicate!;
+          final primary = resolveOriginMergePrimary(
+            existing: existing,
+            duplicate: duplicateMessage,
+            selfJid: selfJid,
+          );
+          final primaryIsExisting = primary.stanzaID == existing.stanzaID;
+          final Message secondary =
+              primaryIsExisting ? duplicateMessage : existing;
+          final merged = mergeOriginMessages(
+            primary: primary,
+            duplicate: secondary,
+            originId: originId,
+          );
+          await db.updateMessage(merged);
+          await db.deleteMessage(secondary.stanzaID);
+          return;
+        }
+        await db.updateMessage(existing.copyWith(originID: originId));
+        return;
+      }
+      if (attempt < lastAttemptIndex) {
+        await Future<void>.delayed(_originIdHydrationDelay);
+      }
+    }
+  }
+
+  Future<String?> _resolveMessageOriginId(
+    DeltaContextHandle context,
+    int msgId,
+  ) async {
+    final headers = await context.getMessageMimeHeaders(msgId);
+    return parseEmailMessageId(headers);
   }
 
   Chat _chatFromRemote({
@@ -1395,47 +1684,6 @@ class EmailDeltaTransport implements ChatTransport {
       default:
         return ChatType.chat;
     }
-  }
-
-  FileMetadataData _metadataForAttachment(
-    EmailAttachment attachment,
-    int msgId,
-  ) {
-    final sanitizedFileName = sanitizeEmailAttachmentFilename(
-      attachment.fileName,
-      fallbackPath: attachment.path,
-    );
-    final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
-    return FileMetadataData(
-      id: deltaFileMetadataId(msgId),
-      filename: sanitizedFileName,
-      path: attachment.path,
-      mimeType: sanitizedMimeType,
-      sizeBytes: attachment.sizeBytes,
-      width: attachment.width,
-      height: attachment.height,
-    );
-  }
-
-  String _attachmentLabel(FileMetadataData metadata) {
-    final sizeBytes = metadata.sizeBytes;
-    final label = metadata.filename.trim();
-    if (sizeBytes == null) return '📎 $label';
-    final sizeLabel = _formatBytes(sizeBytes);
-    return '📎 $label ($sizeLabel)';
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return 'Unknown size';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex++;
-    }
-    final precision = value >= 10 || unitIndex == 0 ? 0 : 1;
-    return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
   }
 
   int _viewTypeFor(EmailAttachment attachment) {
@@ -1726,18 +1974,40 @@ class EmailDeltaTransport implements ChatTransport {
     int? accountId,
   }) async {
     final session = await _ensureSession(accountId: accountId);
-    final context = session?.context;
-    if (context == null) {
+    if (session == null) {
       throw StateError('Transport not initialized');
     }
+    final context = session.context;
+    final resolvedAccountId = session.accountId;
+    final Chat chat = await _requireReadyOutgoingChat(
+      chatId: chatId,
+      accountId: resolvedAccountId,
+      context: context,
+    );
     final sanitizedSubject = sanitizeEmailHeaderValue(subject);
-    return context.sendTextWithQuote(
+    final int msgId = await context.sendTextWithQuote(
       chatId: chatId,
       message: body,
       quotedMessageId: quotedMessageId,
       subject: sanitizedSubject,
       html: htmlBody,
     );
+    final sentAt = DateTime.timestamp();
+    await _recordOutgoing(
+      chatId: chatId,
+      accountId: resolvedAccountId,
+      msgId: msgId,
+      chat: chat,
+      body: body,
+      htmlBody: htmlBody,
+      timestamp: sentAt,
+    );
+    _scheduleOriginIdHydration(
+      context: context,
+      msgId: msgId,
+      accountId: resolvedAccountId,
+    );
+    return msgId;
   }
 
   /// Gets the quoted message info for a message.
@@ -1860,15 +2130,4 @@ String _normalizedAddress(String? raw, int chatId) {
     return fallbackEmailAddressForChat(chatId);
   }
   return normalizeEmailAddress(raw);
-}
-
-String _stanzaId(
-  int msgId, {
-  required int accountId,
-}) {
-  if (accountId == deltaAccountIdLegacy) {
-    return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator$msgId';
-  }
-  return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator'
-      '$accountId$_deltaMessageStanzaSeparator$msgId';
 }

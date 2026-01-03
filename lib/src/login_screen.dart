@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
@@ -8,7 +11,11 @@ import 'package:axichat/src/authentication/view/debug_delete_credentials.dart';
 import 'package:axichat/src/authentication/view/login_form.dart';
 import 'package:axichat/src/authentication/view/signup_form.dart';
 import 'package:axichat/src/authentication/view/widgets/operation_progress_bar.dart';
+import 'package:axichat/src/avatar/avatar_decode_safety.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
+import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
+import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
@@ -16,11 +23,14 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart' as models;
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:logging/logging.dart';
 
@@ -41,6 +51,8 @@ const double _secondaryPaneGutter = 0.0;
 const double _unsplitHorizontalMargin = 16.0;
 const double _authCardCornerRadius = 20.0;
 const Duration _authOperationTimeout = Duration(seconds: 45);
+const Duration _authProgressSegmentDuration = Duration(seconds: 4);
+const double _authProgressSegmentTarget = 0.8;
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
@@ -170,11 +182,20 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     _loginSuccessHandled = true;
+    if (!mounted) return;
     final progressDuration =
-        context.read<SettingsCubit>().animationDuration == Duration.zero
-            ? baseAnimationDuration
-            : context.read<SettingsCubit>().animationDuration;
+        context.read<SettingsCubit>().authCompletionDuration;
+    if (!_progressStickyVisible && !_operationProgressController.isActive) {
+      setState(() {
+        _progressStickyVisible = true;
+        if (_operationLabel.isEmpty) {
+          _operationLabel = context.l10n.authLoggingIn;
+        }
+      });
+    }
+    final preloadHome = _preloadHomeScreenCache();
     await _operationProgressController.complete(duration: progressDuration);
+    await preloadHome;
     if (!mounted) {
       return;
     }
@@ -232,7 +253,12 @@ class _LoginScreenState extends State<LoginScreen>
       }
       _startAuthTimeout(_AuthFlow.signup);
       if (loginFromSignup) {
-        unawaited(_operationProgressController.reach(0.75));
+        unawaited(
+          _operationProgressController.reach(
+            _authProgressSegmentTarget,
+            duration: _authProgressSegmentDuration,
+          ),
+        );
       }
       return;
     }
@@ -249,10 +275,12 @@ class _LoginScreenState extends State<LoginScreen>
         _operationProgressController.start();
       }
       _startAuthTimeout(_AuthFlow.login);
-      unawaited(_operationProgressController.reach(
-        0.75,
-        duration: const Duration(milliseconds: 500),
-      ));
+      unawaited(
+        _operationProgressController.reach(
+          _authProgressSegmentTarget,
+          duration: _authProgressSegmentDuration,
+        ),
+      );
       return;
     }
 
@@ -262,11 +290,7 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     if (state is AuthenticationComplete) {
-      if (_operationProgressController.isActive || _activeFlow != null) {
-        unawaited(_completeLoginAnimation());
-      } else {
-        _operationProgressController.reset();
-      }
+      unawaited(_completeLoginAnimation());
     }
   }
 
@@ -288,6 +312,157 @@ class _LoginScreenState extends State<LoginScreen>
   void _clearAuthTimeout() {
     _authTimeoutTimer?.cancel();
     _authTimeoutTimer = null;
+  }
+
+  Future<void> _preloadSelfAvatarCache() async {
+    XmppService xmppService;
+    try {
+      xmppService = context.read<XmppService>();
+    } on Exception {
+      return;
+    }
+    final storedAvatar =
+        xmppService.cachedSelfAvatar ?? await xmppService.getOwnAvatar();
+    if (storedAvatar == null || storedAvatar.isEmpty) return;
+    final path = storedAvatar.path?.trim();
+    if (path == null || path.isEmpty) return;
+    final bytes = await xmppService.loadAvatarBytes(path);
+    if (bytes == null || bytes.isEmpty || !mounted) return;
+    final safeBytes = await sanitizeAvatarBytes(bytes);
+    if (safeBytes == null || safeBytes.isEmpty || !mounted) return;
+    xmppService.cacheSafeAvatarBytes(path, safeBytes);
+    try {
+      await precacheImage(MemoryImage(safeBytes), context);
+    } on Exception {
+      return;
+    }
+  }
+
+  Future<void> _preloadHomeScreenCache() async {
+    final preloads = <Future<void>>[
+      _preloadSelfAvatarCache(),
+      _preloadChatListCache(),
+      _preloadCalendarShortcutCache(),
+    ];
+    await Future.wait(preloads);
+  }
+
+  Future<void> _preloadChatListCache() async {
+    if (!mounted) return;
+    XmppService xmppService;
+    try {
+      xmppService = context.read<XmppService>();
+    } on Exception {
+      return;
+    }
+    List<models.Chat>? chats;
+    try {
+      chats = await xmppService.preloadChatList();
+    } on Exception {
+      return;
+    }
+    if (!mounted || chats == null || chats.isEmpty) return;
+    final preloads = <Future<void>>[
+      _precacheChatAvatars(xmppService: xmppService, chats: chats),
+      _preloadOpenChatCache(xmppService: xmppService, chats: chats),
+    ];
+    await Future.wait(preloads);
+  }
+
+  models.Chat? _resolveOpenChat(List<models.Chat> chats) {
+    for (final chat in chats) {
+      if (chat.open) {
+        return chat;
+      }
+    }
+    return null;
+  }
+
+  Future<models.Chat?> _resolveStoredOpenChat({
+    required XmppService xmppService,
+  }) async {
+    try {
+      return await xmppService.loadOpenChat();
+    } on Exception {
+      return null;
+    }
+  }
+
+  Future<void> _preloadOpenChatCache({
+    required XmppService xmppService,
+    required List<models.Chat> chats,
+  }) async {
+    if (!mounted) return;
+    models.Chat? openChat = _resolveOpenChat(chats);
+    openChat ??= await _resolveStoredOpenChat(xmppService: xmppService);
+    if (!mounted) return;
+    final String? openJid = openChat?.jid.trim();
+    if (openJid == null || openJid.isEmpty) return;
+    try {
+      await xmppService.preloadChatWindow(jid: openJid);
+    } on Exception {
+      return;
+    }
+  }
+
+  Future<void> _preloadCalendarShortcutCache() async {
+    if (!mounted) return;
+    final storage = HydratedBloc.storage;
+    if (storage is CalendarStorageRegistry &&
+        !storage.hasPrefix(authStoragePrefix)) {
+      return;
+    }
+    try {
+      final raw = storage.read(_calendarShortcutStorageKey());
+      if (raw is! Map) return;
+      final snapshot = Map<String, dynamic>.from(raw);
+      CalendarStateStorageCodec.decode(snapshot);
+    } on Exception {
+      return;
+    }
+  }
+
+  String _calendarShortcutStorageKey() => authStoragePrefix;
+
+  Future<void> _precacheChatAvatars({
+    required XmppService xmppService,
+    required List<models.Chat> chats,
+  }) async {
+    if (!mounted) return;
+    final avatarPaths = <String>{};
+    for (final chat in chats) {
+      final resolvedPath = _resolveChatAvatarPath(chat);
+      if (resolvedPath != null) {
+        avatarPaths.add(resolvedPath);
+      }
+    }
+    if (avatarPaths.isEmpty || !mounted) return;
+    for (final path in avatarPaths) {
+      final bytes = await xmppService.loadAvatarBytes(path);
+      if (!mounted || bytes == null || bytes.isEmpty) continue;
+      final safeBytes = await sanitizeAvatarBytes(bytes);
+      if (!mounted || safeBytes == null || safeBytes.isEmpty) {
+        continue;
+      }
+      xmppService.cacheSafeAvatarBytes(path, safeBytes);
+      try {
+        await precacheImage(MemoryImage(safeBytes), context);
+      } on Exception {
+        continue;
+      }
+    }
+  }
+
+  String? _resolveChatAvatarPath(models.Chat chat) {
+    final primaryPath = chat.avatarPath?.trim();
+    if (primaryPath != null && primaryPath.isNotEmpty) {
+      return primaryPath;
+    }
+    final fallbackPath = chat.contactAvatarPath?.trim();
+    if (fallbackPath != null && fallbackPath.isNotEmpty) {
+      return fallbackPath;
+    }
+    return null;
   }
 
   @override

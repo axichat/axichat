@@ -1,8 +1,13 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:animations/animations.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+const Curve _paneResizeCurve = Curves.easeInOutCubic;
 
 class AxiAdaptiveLayout extends StatelessWidget {
   const AxiAdaptiveLayout({
@@ -10,6 +15,9 @@ class AxiAdaptiveLayout extends StatelessWidget {
     required this.primaryChild,
     required this.secondaryChild,
     this.invertPriority = false,
+    this.showPrimary = true,
+    this.showSecondary = true,
+    this.animatePaneChanges = false,
     this.panePadding = EdgeInsets.zero,
     this.centerPrimary = true,
     this.centerSecondary = true,
@@ -25,6 +33,9 @@ class AxiAdaptiveLayout extends StatelessWidget {
   final Widget primaryChild;
   final Widget secondaryChild;
   final bool invertPriority;
+  final bool showPrimary;
+  final bool showSecondary;
+  final bool animatePaneChanges;
   final EdgeInsets panePadding;
   final EdgeInsets primaryPadding;
   final EdgeInsets secondaryPadding;
@@ -46,7 +57,14 @@ class AxiAdaptiveLayout extends StatelessWidget {
         final bool allowSplitView =
             !isCompactDevice && constraints.maxWidth >= smallScreen;
 
+        if (!showPrimary && !showSecondary) {
+          return const SizedBox.shrink();
+        }
+
         if (!allowSplitView) {
+          final compactChild = showPrimary && showSecondary
+              ? (invertPriority ? secondaryChild : primaryChild)
+              : (showPrimary ? primaryChild : secondaryChild);
           return ConstrainedBox(
             constraints: constraints,
             child: Center(
@@ -69,7 +87,7 @@ class AxiAdaptiveLayout extends StatelessWidget {
                     child: child,
                   );
                 },
-                child: invertPriority ? secondaryChild : primaryChild,
+                child: compactChild,
               ),
             ),
           );
@@ -79,27 +97,72 @@ class AxiAdaptiveLayout extends StatelessWidget {
             (centerPrimary ? Alignment.center : Alignment.topLeft);
         final secondaryAlign = secondaryAlignment ??
             (centerSecondary ? Alignment.center : Alignment.topLeft);
+        final animationDuration =
+            context.watch<SettingsCubit>().animationDuration;
+        if (!animatePaneChanges) {
+          return ConstrainedBox(
+            constraints: constraints,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showPrimary)
+                  Expanded(
+                    flex: primaryFlex,
+                    child: AxiAdaptivePane(
+                      alignment: primaryAlign,
+                      padding: primaryPadding,
+                      child: primaryChild,
+                    ),
+                  ),
+                if (showSecondary)
+                  Expanded(
+                    flex: secondaryFlex,
+                    child: AxiAdaptivePane(
+                      alignment: secondaryAlign,
+                      padding: secondaryPadding,
+                      child: secondaryChild,
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }
+        final int resolvedPrimaryFlex = showPrimary ? primaryFlex : 0;
+        final int resolvedSecondaryFlex = showSecondary ? secondaryFlex : 0;
+        final int totalFlex = resolvedPrimaryFlex + resolvedSecondaryFlex;
+        final double availableWidth = constraints.maxWidth;
+        double widthForFlex(int flexValue) {
+          if (totalFlex == 0) return 0.0;
+          return availableWidth * (flexValue / totalFlex);
+        }
+
+        final double primaryWidth = widthForFlex(resolvedPrimaryFlex);
+        final double secondaryWidth = widthForFlex(resolvedSecondaryFlex);
         return ConstrainedBox(
           constraints: constraints,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                flex: primaryFlex,
-                child: Padding(
-                  padding: primaryPadding,
-                  child: Align(
+              AnimatedContainer(
+                duration: animationDuration,
+                curve: _paneResizeCurve,
+                width: primaryWidth,
+                child: ClipRect(
+                  child: AxiAdaptivePane(
                     alignment: primaryAlign,
+                    padding: primaryPadding,
                     child: primaryChild,
                   ),
                 ),
               ),
-              Expanded(
-                flex: secondaryFlex,
-                child: Padding(
-                  padding: secondaryPadding,
-                  child: Align(
+              AnimatedContainer(
+                duration: animationDuration,
+                curve: _paneResizeCurve,
+                width: secondaryWidth,
+                child: ClipRect(
+                  child: AxiAdaptivePane(
                     alignment: secondaryAlign,
+                    padding: secondaryPadding,
                     child: secondaryChild,
                   ),
                 ),
@@ -108,6 +171,30 @@ class AxiAdaptiveLayout extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class AxiAdaptivePane extends StatelessWidget {
+  const AxiAdaptivePane({
+    super.key,
+    required this.alignment,
+    required this.padding,
+    required this.child,
+  });
+
+  final Alignment alignment;
+  final EdgeInsets padding;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Align(
+        alignment: alignment,
+        child: child,
+      ),
     );
   }
 }

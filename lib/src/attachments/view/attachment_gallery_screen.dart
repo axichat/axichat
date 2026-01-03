@@ -1,8 +1,12 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -16,16 +20,26 @@ const double _attachmentGalleryLeadingWidth =
     AxiIconButton.kDefaultSize + (_attachmentGalleryLeadingInset * 2);
 
 class AttachmentGalleryScreen extends StatelessWidget {
-  const AttachmentGalleryScreen({super.key, required this.locate});
+  const AttachmentGalleryScreen({
+    super.key,
+    required this.locate,
+    this.chat,
+  });
 
   final T Function<T>() locate;
+  final Chat? chat;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final Chat? resolvedChat = chat;
+    final String? chatJid = resolvedChat?.jid;
+    final bool showChatLabel = resolvedChat == null;
+    final XmppService xmppService = locate<XmppService>();
     return BlocProvider(
       create: (context) => AttachmentGalleryCubit(
-        xmppService: locate<XmppService>(),
+        xmppService: xmppService,
+        chatJid: chatJid,
       ),
       child: Scaffold(
         backgroundColor: context.colorScheme.background,
@@ -44,11 +58,9 @@ class AttachmentGalleryScreen extends StatelessWidget {
               child: SizedBox(
                 width: AxiIconButton.kDefaultSize,
                 height: AxiIconButton.kDefaultSize,
-                child: AxiIconButton(
+                child: AxiIconButton.ghost(
                   iconData: LucideIcons.arrowLeft,
                   tooltip: l10n.commonBack,
-                  color: context.colorScheme.foreground,
-                  borderColor: context.colorScheme.border,
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),
@@ -66,7 +78,10 @@ class AttachmentGalleryScreen extends StatelessWidget {
         ),
         body: ColoredBox(
           color: context.colorScheme.background,
-          child: const AttachmentGalleryView(showChatLabel: true),
+          child: AttachmentGalleryView(
+            chatOverride: resolvedChat,
+            showChatLabel: showChatLabel,
+          ),
         ),
       ),
     );

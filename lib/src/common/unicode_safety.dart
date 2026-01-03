@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 const int _bidiLeftToRightEmbedding = 0x202a;
 const int _bidiRightToLeftEmbedding = 0x202b;
 const int _bidiPopDirectionalFormatting = 0x202c;

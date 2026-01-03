@@ -1,12 +1,20 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
+import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
+import 'package:axichat/src/email/util/email_message_ids.dart';
+import 'package:axichat/src/email/util/email_message_merge.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
+import 'package:axichat/src/email/util/delta_jids.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -15,8 +23,6 @@ import 'package:axichat/src/xmpp/xmpp_service.dart'
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
 
-const _deltaDomain = 'delta.chat';
-const _deltaSelfJid = 'dc-self@$_deltaDomain';
 const int _deltaChatLastSpecialId = DeltaChatId.lastSpecial;
 const int _deltaChatIdUnset = DeltaChatId.none;
 const _bootstrapYieldEveryMessages = 40;
@@ -24,8 +30,25 @@ const int _deltaMessageIdUnset = DeltaMessageId.none;
 const int _minimumHistoryWindow = 1;
 const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
 const String _deltaAttachmentFallbackPrefix = 'attachment-';
-const String _deltaMessageStanzaPrefix = 'dc-msg';
-const String _deltaMessageStanzaSeparator = '-';
+const String _deltaAttachmentLabelPrefix = '📎 ';
+const String _unknownAttachmentSizeLabel = 'Unknown size';
+const int _attachmentSizeUnitBase = 1024;
+const double _attachmentSizePrecisionThreshold = 10;
+const List<String> _attachmentSizeUnits = <String>[
+  'B',
+  'KB',
+  'MB',
+  'GB',
+  'TB',
+];
+const int _originIdHydrationDelayMs = 1000;
+const int _originIdHydrationMaxAttempts = 60;
+const int _originIdHydrationAttemptStart = 0;
+const int _originIdHydrationAttemptStep = 1;
+const Duration _originIdHydrationDelay =
+    Duration(milliseconds: _originIdHydrationDelayMs);
+const int _outgoingSignatureCandidateLimit = 100;
+const Duration _outgoingSignatureMatchWindow = Duration(minutes: 10);
 
 enum DeltaEventType {
   error(DeltaEventCode.error),
@@ -156,26 +179,30 @@ class DeltaEventConsumer {
     required DeltaContextHandle context,
     MessageStorageMode messageStorageMode = MessageStorageMode.local,
     String? Function()? selfJidProvider,
+    int? accountId,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
         _messageStorageMode = messageStorageMode,
         _selfJidProvider = selfJidProvider,
+        _accountId = accountId,
         _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
   MessageStorageMode _messageStorageMode;
   final String? Function()? _selfJidProvider;
+  final int? _accountId;
   final Logger _log;
 
   void updateMessageStorageMode(MessageStorageMode mode) {
     _messageStorageMode = mode;
   }
 
-  String get _selfJid => _selfJidProvider?.call() ?? _deltaSelfJid;
+  String get _selfJid => _selfJidProvider?.call() ?? deltaSelfJid;
 
-  int get _deltaAccountId => _context.accountId ?? deltaAccountIdLegacy;
+  int get _deltaAccountId =>
+      _accountId ?? _context.accountId ?? deltaAccountIdLegacy;
 
   Future<bool> bootstrapFromCore() async {
     final int deltaAccountId = _deltaAccountId;
@@ -354,29 +381,69 @@ class DeltaEventConsumer {
         continue;
       }
       final chat = await _ensureChat(chatId);
-      var updated = chat;
       final isArchived = archivedChatIds.contains(chatId);
+      var updated = chat;
+      var hydratedLastMessage = false;
+      DateTime? lastTimestamp;
+      String? lastPreview;
+      if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
+        final last = await _context.getMessage(entry.msgId);
+        lastTimestamp = last?.timestamp;
+        lastPreview = last?.text?.trim();
+        if (last != null) {
+          final stanzaId = _stanzaId(
+            entry.msgId,
+            accountId: deltaAccountId,
+          );
+          final existing = await db.getMessageByStanzaID(stanzaId);
+          if (existing == null) {
+            await _ingestDeltaMessage(
+              chatId: chatId,
+              msg: last,
+              chat: updated,
+              skipSystemChatCheck: true,
+            );
+            hydratedLastMessage = true;
+          }
+        }
+      }
       if (updated.archived != isArchived) {
         updated = updated.copyWith(archived: isArchived);
       }
-      if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
-        final last = await _context.getMessage(entry.msgId);
-        final timestamp = last?.timestamp;
-        final preview = last?.text?.trim();
+      if (!hydratedLastMessage && lastTimestamp != null) {
         final newerTimestamp =
-            timestamp != null && timestamp.isAfter(updated.lastChangeTimestamp);
+            lastTimestamp.isAfter(updated.lastChangeTimestamp);
         if (newerTimestamp) {
-          updated = updated.copyWith(lastChangeTimestamp: timestamp);
+          updated = updated.copyWith(lastChangeTimestamp: lastTimestamp);
         }
-        if (newerTimestamp && preview != null && preview.isNotEmpty) {
-          updated = updated.copyWith(lastMessage: preview);
+        if (newerTimestamp && lastPreview != null && lastPreview.isNotEmpty) {
+          updated = updated.copyWith(lastMessage: lastPreview);
         }
       }
       final freshCount = await _context.getFreshMessageCountSafe(chatId);
       if (freshCount.supported && freshCount.count != updated.unreadCount) {
         updated = updated.copyWith(unreadCount: freshCount.count);
       }
-      if (updated != chat) {
+      if (hydratedLastMessage) {
+        final refreshed = await db.getChat(updated.jid);
+        if (refreshed == null) {
+          if (updated != chat) {
+            await db.updateChat(updated);
+          }
+        } else {
+          var merged = refreshed;
+          if (merged.archived != updated.archived ||
+              merged.unreadCount != updated.unreadCount) {
+            merged = merged.copyWith(
+              archived: updated.archived,
+              unreadCount: updated.unreadCount,
+            );
+          }
+          if (merged != refreshed) {
+            await db.updateChat(merged);
+          }
+        }
+      } else if (updated != chat) {
         await db.updateChat(updated);
       }
       processed += 1;
@@ -724,8 +791,66 @@ class DeltaEventConsumer {
     final existing = await db.getMessageByStanzaID(stanzaId);
     if (existing != null) {
       await _updateExistingMessage(existing: existing, msg: msg);
+      _scheduleOriginIdHydrationIfNeeded(
+        existing: existing,
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
       return;
     }
+    final existingByDeltaId = await db.getMessageByDeltaId(
+      msg.id,
+      deltaAccountId: deltaAccountId,
+    );
+    if (existingByDeltaId != null) {
+      await _updateExistingMessage(existing: existingByDeltaId, msg: msg);
+      _scheduleOriginIdHydrationIfNeeded(
+        existing: existingByDeltaId,
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
+      return;
+    }
+    final existingByChat = await db.getMessageByDeltaId(
+      msg.id,
+      chatJid: resolvedChat.jid,
+    );
+    if (existingByChat != null) {
+      await _updateExistingMessage(existing: existingByChat, msg: msg);
+      _scheduleOriginIdHydrationIfNeeded(
+        existing: existingByChat,
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
+      return;
+    }
+    final Message? persistedPending = msg.isOutgoing
+        ? await _matchPersistedOutgoingMessage(
+            db: db,
+            msg: msg,
+            chatId: chatId,
+            deltaAccountId: deltaAccountId,
+            chatJid: resolvedChat.jid,
+          )
+        : null;
+    if (persistedPending != null) {
+      final Message updatedPending = persistedPending.copyWith(
+        deltaMsgId: msg.id,
+        deltaChatId: chatId,
+        deltaAccountId: deltaAccountId,
+      );
+      if (updatedPending != persistedPending) {
+        await db.updateMessage(updatedPending);
+      }
+      await _updateExistingMessage(existing: updatedPending, msg: msg);
+      _scheduleOriginIdHydrationIfNeeded(
+        existing: updatedPending,
+        msgId: msg.id,
+        accountId: deltaAccountId,
+      );
+      return;
+    }
+    const String? originId = null;
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
     final senderJid = isOutgoing ? _selfJid : resolvedChat.jid;
@@ -758,6 +883,7 @@ class DeltaEventConsumer {
       senderJid: senderJid,
       chatJid: resolvedChat.jid,
       timestamp: timestamp,
+      originID: originId,
       error: resolvedError,
       warning: warning,
       encryptionProtocol: EncryptionProtocol.none,
@@ -779,6 +905,10 @@ class DeltaEventConsumer {
       message: message,
       chatJid: resolvedChat.jid,
     );
+    _scheduleOriginIdHydration(
+      msgId: msg.id,
+      accountId: deltaAccountId,
+    );
     if (!isOutgoing &&
         msg.hasFile &&
         resolvedChat.attachmentAutoDownload.isAllowed) {
@@ -787,12 +917,132 @@ class DeltaEventConsumer {
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }
 
+  Future<Message?> _matchPersistedOutgoingMessage({
+    required XmppDatabase db,
+    required DeltaMessage msg,
+    required int chatId,
+    required int deltaAccountId,
+    required String chatJid,
+  }) async {
+    final PendingOutgoingEmailSignature incomingSignature =
+        PendingOutgoingEmailSignature.fromOutgoing(
+      text: msg.text,
+      html: msg.html,
+      fileName: msg.fileName,
+      filePath: msg.filePath,
+    );
+    if (incomingSignature.isEmpty) {
+      return null;
+    }
+    final List<Message> candidates = await db.getPendingOutgoingDeltaMessages(
+      deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
+    );
+    final List<Message> recentMessages = await db.getChatMessages(
+      chatJid,
+      start: 0,
+      end: _outgoingSignatureCandidateLimit,
+      filter: MessageTimelineFilter.directOnly,
+    );
+    final DateTime? incomingTimestamp = msg.timestamp;
+    final List<Message> recentCandidates = recentMessages.where((candidate) {
+      if (candidate.deltaAccountId != deltaAccountId) {
+        return false;
+      }
+      if (candidate.deltaChatId != chatId) {
+        return false;
+      }
+      if (!_isSelfPendingSender(candidate)) {
+        return false;
+      }
+      final String? originId = candidate.originID?.trim();
+      if (originId != null && originId.isNotEmpty) {
+        return false;
+      }
+      if (incomingTimestamp == null) {
+        return true;
+      }
+      final DateTime? candidateTimestamp = candidate.timestamp;
+      if (candidateTimestamp == null) {
+        return true;
+      }
+      final Duration delta =
+          candidateTimestamp.difference(incomingTimestamp).abs();
+      return delta <= _outgoingSignatureMatchWindow;
+    }).toList(growable: false);
+    candidates.addAll(recentCandidates);
+    if (candidates.isEmpty) {
+      return null;
+    }
+    final int? incomingTimestampMicros = msg.timestamp?.microsecondsSinceEpoch;
+    Message? closestMatch;
+    int? closestDelta;
+    final Map<String, FileMetadataData?> metadataById =
+        <String, FileMetadataData?>{};
+    for (final Message candidate in candidates) {
+      if (!_isSelfPendingSender(candidate)) {
+        continue;
+      }
+      final String? metadataId = candidate.fileMetadataID?.trim();
+      FileMetadataData? metadata;
+      if (metadataId != null && metadataId.isNotEmpty) {
+        if (metadataById.containsKey(metadataId)) {
+          metadata = metadataById[metadataId];
+        } else {
+          metadata = await db.getFileMetadata(metadataId);
+          metadataById[metadataId] = metadata;
+        }
+      }
+      final PendingOutgoingEmailSignature candidateSignature =
+          PendingOutgoingEmailSignature.fromMessage(
+        message: candidate,
+        metadata: metadata,
+      );
+      if (!candidateSignature.matches(incomingSignature)) {
+        continue;
+      }
+      if (incomingTimestampMicros == null) {
+        return candidate;
+      }
+      final int? candidateTimestamp =
+          candidate.timestamp?.microsecondsSinceEpoch;
+      if (candidateTimestamp == null) {
+        return candidate;
+      }
+      final int delta = (candidateTimestamp - incomingTimestampMicros).abs();
+      if (closestDelta == null || delta < closestDelta) {
+        closestDelta = delta;
+        closestMatch = candidate;
+      }
+    }
+    return closestMatch;
+  }
+
+  bool _isSelfPendingSender(Message message) {
+    final String normalizedSender = message.senderJid.trim().toLowerCase();
+    if (normalizedSender.isEmpty) {
+      return false;
+    }
+    if (normalizedSender.isDeltaPlaceholderJid) {
+      return true;
+    }
+    final String normalizedSelf = _selfJid.trim().toLowerCase();
+    if (normalizedSelf.isEmpty) {
+      return false;
+    }
+    return normalizedSender == normalizedSelf;
+  }
+
   Future<void> _updateExistingMessage({
     required Message existing,
     required DeltaMessage msg,
+    String? originId,
   }) async {
     final db = await _db();
     var next = existing;
+    if (originId != null && originId != existing.originID) {
+      next = next.copyWith(originID: originId);
+    }
     if (msg.hasKnownState) {
       final deliveryStatus = msg.deliveryStatus;
       if (deliveryStatus.acked != existing.acked ||
@@ -823,6 +1073,98 @@ class DeltaEventConsumer {
     if (next != existing) {
       await db.updateMessage(next);
     }
+  }
+
+  void _scheduleOriginIdHydration({
+    required int msgId,
+    required int accountId,
+  }) {
+    unawaited(
+      _hydrateOriginId(
+        msgId: msgId,
+        accountId: accountId,
+      ),
+    );
+  }
+
+  void _scheduleOriginIdHydrationIfNeeded({
+    required Message existing,
+    required int msgId,
+    required int accountId,
+  }) {
+    final String? existingOrigin = existing.originID?.trim();
+    if (existingOrigin != null && existingOrigin.isNotEmpty) {
+      return;
+    }
+    _scheduleOriginIdHydration(
+      msgId: msgId,
+      accountId: accountId,
+    );
+  }
+
+  Future<void> _hydrateOriginId({
+    required int msgId,
+    required int accountId,
+  }) async {
+    final stanzaId = _stanzaId(
+      msgId,
+      accountId: accountId,
+    );
+    const maxAttempts = _originIdHydrationMaxAttempts;
+    const attemptStep = _originIdHydrationAttemptStep;
+    const lastAttemptIndex = maxAttempts - attemptStep;
+    for (int attempt = _originIdHydrationAttemptStart;
+        attempt < maxAttempts;
+        attempt += attemptStep) {
+      final originId = await _resolveOriginId(msgId);
+      if (originId != null) {
+        final db = await _db();
+        final existing = await db.getMessageByDeltaId(
+              msgId,
+              deltaAccountId: accountId,
+            ) ??
+            await db.getMessageByStanzaID(stanzaId);
+        if (existing == null) {
+          return;
+        }
+        final existingOrigin = existing.originID?.trim();
+        if (existingOrigin != null && existingOrigin.isNotEmpty) {
+          return;
+        }
+        final duplicate = await db.getMessageByOriginID(originId);
+        if (duplicate != null &&
+            canMergeOriginMessages(
+              existing: existing,
+              duplicate: duplicate,
+            )) {
+          final primary = resolveOriginMergePrimary(
+            existing: existing,
+            duplicate: duplicate,
+            selfJid: _selfJid,
+          );
+          final primaryIsExisting = primary.stanzaID == existing.stanzaID;
+          final secondary = primaryIsExisting ? duplicate : existing;
+          final merged = mergeOriginMessages(
+            primary: primary,
+            duplicate: secondary,
+            originId: originId,
+          );
+          await db.updateMessage(merged);
+          await db.deleteMessage(secondary.stanzaID);
+          return;
+        }
+        await db.updateMessage(existing.copyWith(originID: originId));
+        return;
+      }
+      if (attempt < lastAttemptIndex) {
+        await Future<void>.delayed(_originIdHydrationDelay);
+      }
+    }
+  }
+
+  Future<String?> _resolveOriginId(int msgId) async {
+    final headers = await _context.getMessageMimeHeaders(msgId);
+    return parseEmailMessageId(headers);
   }
 
   Future<Chat> _ensureChat(int chatId) async {
@@ -1052,7 +1394,8 @@ class DeltaEventConsumer {
     );
     final normalizedBody = next.body?.trim() ?? '';
     if (normalizedBody.isEmpty) {
-      next = next.copyWith(body: _attachmentLabel(merged ?? resolvedMetadata));
+      next =
+          next.copyWith(body: deltaAttachmentLabel(merged ?? resolvedMetadata));
     }
     return next;
   }
@@ -1107,27 +1450,6 @@ class DeltaEventConsumer {
       fallbackPath: fallbackPath,
       fallbackName: fallbackName,
     );
-  }
-
-  String _attachmentLabel(FileMetadataData metadata) {
-    final sizeBytes = metadata.sizeBytes;
-    final label = metadata.filename.trim();
-    if (sizeBytes == null) return '📎 $label';
-    final sizeLabel = _formatBytes(sizeBytes);
-    return '📎 $label ($sizeLabel)';
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return 'Unknown size';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex++;
-    }
-    final precision = value >= 10 || unitIndex == 0 ? 0 : 1;
-    return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
   }
 
   Future<Message> _applyShareMetadata({
@@ -1245,11 +1567,7 @@ String _stanzaId(
   int msgId, {
   required int accountId,
 }) {
-  if (accountId == deltaAccountIdLegacy) {
-    return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator$msgId';
-  }
-  return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator'
-      '$accountId$_deltaMessageStanzaSeparator$msgId';
+  return deltaMessageStanzaId(msgId, accountId: accountId);
 }
 
 String _stripSubjectHeader(String body, String subject) {
@@ -1260,6 +1578,28 @@ String _stripSubjectHeader(String body, String subject) {
   var remainder = trimmedBody.substring(subject.length);
   remainder = remainder.replaceFirst(RegExp(r'^\s+'), '');
   return remainder;
+}
+
+String deltaAttachmentLabel(FileMetadataData metadata) {
+  final sizeBytes = metadata.sizeBytes;
+  final label = metadata.filename.trim();
+  if (sizeBytes == null) return '$_deltaAttachmentLabelPrefix$label';
+  final sizeLabel = _formatAttachmentBytes(sizeBytes);
+  return '$_deltaAttachmentLabelPrefix$label ($sizeLabel)';
+}
+
+String _formatAttachmentBytes(int bytes) {
+  if (bytes <= 0) return _unknownAttachmentSizeLabel;
+  var value = bytes.toDouble();
+  var unitIndex = 0;
+  while (value >= _attachmentSizeUnitBase &&
+      unitIndex < _attachmentSizeUnits.length - 1) {
+    value /= _attachmentSizeUnitBase;
+    unitIndex++;
+  }
+  final precision =
+      value >= _attachmentSizePrecisionThreshold || unitIndex == 0 ? 0 : 1;
+  return '${value.toStringAsFixed(precision)} ${_attachmentSizeUnits[unitIndex]}';
 }
 
 bool _matchesDeltaWelcomeText(String? text) {
