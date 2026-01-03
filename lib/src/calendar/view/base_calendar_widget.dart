@@ -298,11 +298,9 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: Row(
               children: [
                 if (canPop)
-                  AxiIconButton(
+                  AxiIconButton.ghost(
                     iconData: LucideIcons.arrowLeft,
                     tooltip: l10n.commonBack,
-                    color: colors.foreground,
-                    borderColor: colors.border,
                     onPressed: onBack,
                   ),
                 const SizedBox(width: calendarGutterSm),

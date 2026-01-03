@@ -76,11 +76,9 @@ class _AvatarEditorBody extends StatelessWidget {
             ),
             leading: Padding(
               padding: const EdgeInsets.only(left: 12.0),
-              child: AxiIconButton(
+              child: AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: l10n.commonBack,
-                color: colors.foreground,
-                borderColor: colors.border,
                 onPressed: context.pop,
               ),
             ),

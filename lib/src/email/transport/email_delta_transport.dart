@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
-import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
@@ -68,10 +67,6 @@ const int _originIdHydrationAttemptStart = 0;
 const int _originIdHydrationAttemptStep = 1;
 const Duration _originIdHydrationDelay =
     Duration(milliseconds: _originIdHydrationDelayMs);
-const String _pendingOutgoingStanzaPrefix = 'local-dc-msg';
-const String _pendingOutgoingStanzaSeparator = '-';
-const String _pendingOutgoingMetadataPrefix = 'local-dc-file';
-const Duration _pendingSendYield = Duration.zero;
 
 enum _DeltaSecurityModeResolution {
   auto,
@@ -1147,41 +1142,23 @@ class EmailDeltaTransport implements ChatTransport {
       context: context,
     );
     final sanitizedSubject = sanitizeEmailHeaderValue(subject);
-    final pendingStanzaId = _pendingOutgoingStanzaId();
-    final pendingTimestamp = DateTime.timestamp();
+    final int msgId = await context.sendText(
+      chatId: chatId,
+      message: body,
+      subject: sanitizedSubject,
+      html: htmlBody,
+    );
+    final sentAt = DateTime.timestamp();
     await _recordOutgoing(
       chatId: chatId,
       accountId: resolvedAccountId,
-      stanzaId: pendingStanzaId,
+      msgId: msgId,
       chat: chat,
       body: body,
       shareId: shareId,
       localBodyOverride: localBodyOverride,
       htmlBody: htmlBody,
-      timestamp: pendingTimestamp,
-    );
-    await Future<void>.delayed(_pendingSendYield);
-    final int msgId;
-    try {
-      msgId = await context.sendText(
-        chatId: chatId,
-        message: body,
-        subject: sanitizedSubject,
-        html: htmlBody,
-      );
-    } on DeltaSafeException catch (error) {
-      await _markOutgoingFailure(
-        stanzaId: pendingStanzaId,
-        error: error,
-      );
-      rethrow;
-    }
-    await _finalizeOutgoing(
-      stanzaId: pendingStanzaId,
-      msgId: msgId,
-      chatId: chatId,
-      accountId: resolvedAccountId,
-      shareId: shareId,
+      timestamp: sentAt,
     );
     _scheduleOriginIdHydration(
       context: context,
@@ -1212,62 +1189,35 @@ class EmailDeltaTransport implements ChatTransport {
       accountId: resolvedAccountId,
       context: context,
     );
-    final pendingStanzaId = _pendingOutgoingStanzaId();
-    final pendingTimestamp = DateTime.timestamp();
     final sanitizedSubject = sanitizeEmailHeaderValue(subject);
     final sanitizedFileName = sanitizeEmailAttachmentFilename(
       attachment.fileName,
       fallbackPath: attachment.path,
     );
     final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
-    final pendingMetadataId = _pendingOutgoingMetadataId();
-    final pendingMetadata = _pendingMetadataForAttachment(
-      attachment: attachment,
-      metadataId: pendingMetadataId,
-      filename: sanitizedFileName,
+    final int msgId = await context.sendFileMessage(
+      chatId: chatId,
+      viewType: _viewTypeFor(attachment),
+      filePath: attachment.path,
+      fileName: sanitizedFileName,
       mimeType: sanitizedMimeType,
+      text: attachment.caption,
+      subject: sanitizedSubject,
+      html: htmlCaption,
     );
+    final sentAt = DateTime.timestamp();
+    final metadata = _metadataForAttachment(attachment, msgId);
     await _recordOutgoing(
       chatId: chatId,
       accountId: resolvedAccountId,
-      stanzaId: pendingStanzaId,
+      msgId: msgId,
       chat: chat,
       body: attachment.caption,
-      metadata: pendingMetadata,
+      metadata: metadata,
       shareId: shareId,
       localBodyOverride: captionOverride,
       htmlBody: htmlCaption,
-      timestamp: pendingTimestamp,
-    );
-    await Future<void>.delayed(_pendingSendYield);
-    final int msgId;
-    try {
-      msgId = await context.sendFileMessage(
-        chatId: chatId,
-        viewType: _viewTypeFor(attachment),
-        filePath: attachment.path,
-        fileName: sanitizedFileName,
-        mimeType: sanitizedMimeType,
-        text: attachment.caption,
-        subject: sanitizedSubject,
-        html: htmlCaption,
-      );
-    } on DeltaSafeException catch (error) {
-      await _markOutgoingFailure(
-        stanzaId: pendingStanzaId,
-        error: error,
-      );
-      rethrow;
-    }
-    final metadata = _metadataForAttachment(attachment, msgId);
-    await _finalizeOutgoing(
-      stanzaId: pendingStanzaId,
-      msgId: msgId,
-      chatId: chatId,
-      accountId: resolvedAccountId,
-      shareId: shareId,
-      metadata: metadata,
-      pendingMetadataId: pendingMetadataId,
+      timestamp: sentAt,
     );
     _scheduleOriginIdHydration(
       context: context,
@@ -1309,33 +1259,6 @@ class EmailDeltaTransport implements ChatTransport {
       context: context,
     );
     return chatId;
-  }
-
-  String _pendingOutgoingStanzaId() {
-    return '$_pendingOutgoingStanzaPrefix'
-        '$_pendingOutgoingStanzaSeparator${uuid.v4()}';
-  }
-
-  String _pendingOutgoingMetadataId() {
-    return '$_pendingOutgoingMetadataPrefix'
-        '$_pendingOutgoingStanzaSeparator${uuid.v4()}';
-  }
-
-  FileMetadataData _pendingMetadataForAttachment({
-    required EmailAttachment attachment,
-    required String metadataId,
-    required String filename,
-    required String? mimeType,
-  }) {
-    return FileMetadataData(
-      id: metadataId,
-      filename: filename,
-      path: attachment.path,
-      mimeType: mimeType,
-      sizeBytes: attachment.sizeBytes,
-      width: attachment.width,
-      height: attachment.height,
-    );
   }
 
   Future<Chat> _requireReadyOutgoingChat({
@@ -1447,74 +1370,6 @@ class EmailDeltaTransport implements ChatTransport {
         dcAccountId: deltaAccountId,
       );
     }
-  }
-
-  Future<void> _finalizeOutgoing({
-    required String stanzaId,
-    required int msgId,
-    required int chatId,
-    required int accountId,
-    String? shareId,
-    FileMetadataData? metadata,
-    String? pendingMetadataId,
-  }) async {
-    final db = await _databaseBuilder();
-    final existing = await db.getMessageByStanzaID(stanzaId);
-    if (existing == null) {
-      return;
-    }
-    final updated = existing.copyWith(
-      deltaMsgId: msgId,
-      deltaChatId: chatId,
-      deltaAccountId: accountId,
-    );
-    if (updated != existing) {
-      await db.updateMessage(updated);
-    }
-    if (shareId != null) {
-      await db.insertMessageCopy(
-        shareId: shareId,
-        dcMsgId: msgId,
-        dcChatId: chatId,
-        dcAccountId: accountId,
-      );
-    }
-    if (metadata != null) {
-      final normalizedBody = existing.body?.trim() ?? '';
-      final resolvedBody = normalizedBody.isNotEmpty
-          ? existing.body
-          : deltaAttachmentLabel(metadata);
-      await db.updateMessageAttachment(
-        stanzaID: stanzaId,
-        metadata: metadata,
-        body: resolvedBody,
-      );
-      final messageId = existing.id?.trim();
-      if (messageId != null && messageId.isNotEmpty) {
-        await db.replaceMessageAttachments(
-          messageId: messageId,
-          fileMetadataIds: <String>[metadata.id],
-        );
-      }
-    }
-    final resolvedPendingMetadataId = pendingMetadataId?.trim();
-    if (resolvedPendingMetadataId != null &&
-        resolvedPendingMetadataId.isNotEmpty &&
-        resolvedPendingMetadataId != metadata?.id) {
-      await db.deleteFileMetadata(resolvedPendingMetadataId);
-    }
-  }
-
-  Future<void> _markOutgoingFailure({
-    required String stanzaId,
-    required DeltaSafeException error,
-  }) async {
-    final db = await _databaseBuilder();
-    final resolvedError = DeltaErrorMapper.resolve(error.message);
-    await db.saveMessageError(
-      stanzaID: stanzaId,
-      error: resolvedError,
-    );
   }
 
   String _resolveOutgoingSenderJid({
@@ -2110,39 +1965,22 @@ class EmailDeltaTransport implements ChatTransport {
       context: context,
     );
     final sanitizedSubject = sanitizeEmailHeaderValue(subject);
-    final pendingStanzaId = _pendingOutgoingStanzaId();
-    final pendingTimestamp = DateTime.timestamp();
+    final int msgId = await context.sendTextWithQuote(
+      chatId: chatId,
+      message: body,
+      quotedMessageId: quotedMessageId,
+      subject: sanitizedSubject,
+      html: htmlBody,
+    );
+    final sentAt = DateTime.timestamp();
     await _recordOutgoing(
       chatId: chatId,
       accountId: resolvedAccountId,
-      stanzaId: pendingStanzaId,
+      msgId: msgId,
       chat: chat,
       body: body,
       htmlBody: htmlBody,
-      timestamp: pendingTimestamp,
-    );
-    await Future<void>.delayed(_pendingSendYield);
-    final int msgId;
-    try {
-      msgId = await context.sendTextWithQuote(
-        chatId: chatId,
-        message: body,
-        quotedMessageId: quotedMessageId,
-        subject: sanitizedSubject,
-        html: htmlBody,
-      );
-    } on DeltaSafeException catch (error) {
-      await _markOutgoingFailure(
-        stanzaId: pendingStanzaId,
-        error: error,
-      );
-      rethrow;
-    }
-    await _finalizeOutgoing(
-      stanzaId: pendingStanzaId,
-      msgId: msgId,
-      chatId: chatId,
-      accountId: resolvedAccountId,
+      timestamp: sentAt,
     );
     _scheduleOriginIdHydration(
       context: context,

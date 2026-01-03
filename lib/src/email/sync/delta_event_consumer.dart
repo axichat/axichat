@@ -47,6 +47,8 @@ const int _originIdHydrationAttemptStart = 0;
 const int _originIdHydrationAttemptStep = 1;
 const Duration _originIdHydrationDelay =
     Duration(milliseconds: _originIdHydrationDelayMs);
+const int _outgoingSignatureCandidateLimit = 100;
+const Duration _outgoingSignatureMatchWindow = Duration(minutes: 10);
 
 enum DeltaEventType {
   error(DeltaEventCode.error),
@@ -828,6 +830,7 @@ class DeltaEventConsumer {
             msg: msg,
             chatId: chatId,
             deltaAccountId: deltaAccountId,
+            chatJid: resolvedChat.jid,
           )
         : null;
     if (persistedPending != null) {
@@ -919,6 +922,7 @@ class DeltaEventConsumer {
     required DeltaMessage msg,
     required int chatId,
     required int deltaAccountId,
+    required String chatJid,
   }) async {
     final PendingOutgoingEmailSignature incomingSignature =
         PendingOutgoingEmailSignature.fromOutgoing(
@@ -934,10 +938,43 @@ class DeltaEventConsumer {
       deltaAccountId: deltaAccountId,
       deltaChatId: chatId,
     );
+    final List<Message> recentMessages = await db.getChatMessages(
+      chatJid,
+      start: 0,
+      end: _outgoingSignatureCandidateLimit,
+      filter: MessageTimelineFilter.directOnly,
+    );
+    final DateTime? incomingTimestamp = msg.timestamp;
+    final List<Message> recentCandidates = recentMessages.where((candidate) {
+      if (candidate.deltaAccountId != deltaAccountId) {
+        return false;
+      }
+      if (candidate.deltaChatId != chatId) {
+        return false;
+      }
+      if (!_isSelfPendingSender(candidate)) {
+        return false;
+      }
+      final String? originId = candidate.originID?.trim();
+      if (originId != null && originId.isNotEmpty) {
+        return false;
+      }
+      if (incomingTimestamp == null) {
+        return true;
+      }
+      final DateTime? candidateTimestamp = candidate.timestamp;
+      if (candidateTimestamp == null) {
+        return true;
+      }
+      final Duration delta =
+          candidateTimestamp.difference(incomingTimestamp).abs();
+      return delta <= _outgoingSignatureMatchWindow;
+    }).toList(growable: false);
+    candidates.addAll(recentCandidates);
     if (candidates.isEmpty) {
       return null;
     }
-    final int? incomingTimestamp = msg.timestamp?.microsecondsSinceEpoch;
+    final int? incomingTimestampMicros = msg.timestamp?.microsecondsSinceEpoch;
     Message? closestMatch;
     int? closestDelta;
     final Map<String, FileMetadataData?> metadataById =
@@ -964,7 +1001,7 @@ class DeltaEventConsumer {
       if (!candidateSignature.matches(incomingSignature)) {
         continue;
       }
-      if (incomingTimestamp == null) {
+      if (incomingTimestampMicros == null) {
         return candidate;
       }
       final int? candidateTimestamp =
@@ -972,7 +1009,7 @@ class DeltaEventConsumer {
       if (candidateTimestamp == null) {
         return candidate;
       }
-      final int delta = (candidateTimestamp - incomingTimestamp).abs();
+      final int delta = (candidateTimestamp - incomingTimestampMicros).abs();
       if (closestDelta == null || delta < closestDelta) {
         closestDelta = delta;
         closestMatch = candidate;
