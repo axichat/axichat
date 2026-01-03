@@ -543,10 +543,7 @@ class DeltaEventConsumer {
         lastTimestamp = last?.timestamp;
         lastPreview = last?.text?.trim();
         if (last != null) {
-          final stanzaId = _stanzaId(
-            entry.msgId,
-            accountId: deltaAccountId,
-          );
+          final stanzaId = _stanzaId(entry.msgId);
           final existing = await db.getMessageByStanzaID(stanzaId);
           if (existing == null) {
             await _ingestDeltaMessage(
@@ -935,10 +932,7 @@ class DeltaEventConsumer {
     }
     final resolvedChat = chat ?? await _ensureChat(chatId);
     final int deltaAccountId = _deltaAccountId;
-    final stanzaId = _stanzaId(
-      msg.id,
-      accountId: deltaAccountId,
-    );
+    final stanzaId = _stanzaId(msg.id);
     final db = await _db();
     final existing = await db.getMessageByStanzaID(stanzaId);
     if (existing != null) {
@@ -1270,10 +1264,7 @@ class DeltaEventConsumer {
     required int msgId,
     required int accountId,
   }) async {
-    final stanzaId = _stanzaId(
-      msgId,
-      accountId: accountId,
-    );
+    final stanzaId = _stanzaId(msgId);
     const maxAttempts = _originIdHydrationMaxAttempts;
     const attemptStep = _originIdHydrationAttemptStep;
     const lastAttemptIndex = maxAttempts - attemptStep;
@@ -1727,12 +1718,7 @@ String _normalizedAddress(String? address, int chatId) {
   return normalizeEmailAddress(address);
 }
 
-String _stanzaId(
-  int msgId, {
-  required int accountId,
-}) {
-  return deltaMessageStanzaId(msgId, accountId: accountId);
-}
+String _stanzaId(int msgId) => deltaMessageStanzaId(msgId);
 
 String _stripSubjectHeader(String body, String subject) {
   final trimmedBody = body.trimLeft();

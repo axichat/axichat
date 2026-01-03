@@ -346,9 +346,6 @@ class _ChatCalendarWidgetState
       model: state.model,
       ownerJid: ownerJid,
       lockToChat: true,
-      onAvailabilitySaved: (availability) => calendarBloc.add(
-        CalendarEvent.availabilityUpdated(availability: availability),
-      ),
       initialChat: widget.chat,
     );
   }

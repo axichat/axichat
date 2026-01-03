@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
@@ -76,36 +75,10 @@ const int _emailLocalPartMinLength = 1;
 const _emailDownloadLimitKey = 'download_limit';
 const _emailDownloadLimitDisabledValue = '0';
 const _unknownEmailPassword = '';
-const String _linkedEmailAccountsKeyPrefix = 'linked_email_accounts_v1';
-const String _linkedEmailPrimaryAccountKeyPrefix =
-    'linked_email_primary_account_v1';
-const String _linkedEmailAccountAddressKeyPrefix =
-    'linked_email_account_address_v1';
-const String _linkedEmailAccountPasswordKeyPrefix =
-    'linked_email_account_password_v1';
-const String _linkedEmailAccountDisplayNameKeyPrefix =
-    'linked_email_account_display_name_v1';
-const String _linkedEmailAccountDeltaIdKeyPrefix =
-    'linked_email_account_delta_id_v1';
-const String _linkedEmailAccountProvisionedKeyPrefix =
-    'linked_email_account_provisioned_v1';
-const String _linkedEmailAccountKeySeparator = '|';
-const String _linkedEmailAccountsEmptyJson = '[]';
-const String _linkedEmailAccountBoolTrue = 'true';
-const String _linkedEmailAccountMissingAddressError =
+const String _emailAccountMissingAddressError =
     'Failed to resolve email address.';
-const String _linkedEmailAccountMissingPasswordError =
+const String _emailAccountMissingPasswordError =
     'Failed to resolve email password.';
-const String _linkedEmailAccountNotLinkedError = 'Email account is not linked.';
-const String _linkedEmailAccountsUnsupportedError =
-    'Multiple email accounts are not supported on this device.';
-const String _linkedEmailAccountRemovalFailureLogMessage =
-    'Failed to remove linked email account';
-const int _linkedEmailAccountsPrimaryCount = 1;
-const int _linkedEmailAccountsLimit = 5;
-const int _linkedEmailAccountSortPrimary = 0;
-const int _linkedEmailAccountSortSecondary = 1;
-const int _linkedEmailAccountSortEqual = 0;
 const _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
 const _connectionOverrideKeyPrefix = 'email_connection_overrides_v1';
 const _credentialTrueValue = 'true';
@@ -128,6 +101,7 @@ const _sendServerConfigKey = 'send_server';
 const _sendPortConfigKey = 'send_port';
 const _sendSecurityConfigKey = 'send_security';
 const _sendUserConfigKey = 'send_user';
+const String _sendPasswordConfigKey = 'send_pw';
 const _portUnsetValue = 0;
 const List<String> _connectionOverrideConfigKeys = <String>[
   _mailServerConfigKey,
@@ -196,67 +170,6 @@ typedef EmailConnectionConfigBuilder = Map<String, String> Function(
   EndpointConfig config,
 );
 
-final class EmailAccountId {
-  const EmailAccountId._(this.value);
-
-  final String value;
-
-  static EmailAccountId? fromAddress(String address) {
-    final normalized = normalizeEmailAddress(address);
-    if (normalized.isEmpty) {
-      return null;
-    }
-    return EmailAccountId._(normalized);
-  }
-
-  static EmailAccountId? fromStored(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    return EmailAccountId._(trimmed);
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is EmailAccountId && other.value == value;
-
-  @override
-  int get hashCode => value.hashCode;
-}
-
-final class EmailAccountProfile {
-  const EmailAccountProfile({
-    required this.id,
-    required this.address,
-    required this.displayName,
-    required this.isPrimary,
-    this.deltaAccountId,
-  });
-
-  final EmailAccountId id;
-  final String address;
-  final String displayName;
-  final bool isPrimary;
-  final int? deltaAccountId;
-
-  EmailAccountProfile copyWith({
-    EmailAccountId? id,
-    String? address,
-    String? displayName,
-    bool? isPrimary,
-    int? deltaAccountId,
-  }) {
-    return EmailAccountProfile(
-      id: id ?? this.id,
-      address: address ?? this.address,
-      displayName: displayName ?? this.displayName,
-      isPrimary: isPrimary ?? this.isPrimary,
-      deltaAccountId: deltaAccountId ?? this.deltaAccountId,
-    );
-  }
-}
-
 class EmailAccount {
   const EmailAccount({
     required this.address,
@@ -269,12 +182,10 @@ class EmailAccount {
 
 final class _ResolvedEmailAccount {
   const _ResolvedEmailAccount({
-    required this.id,
     required this.address,
     required this.deltaAccountId,
   });
 
-  final EmailAccountId id;
   final String address;
   final int deltaAccountId;
 }
@@ -336,12 +247,6 @@ class FanOutValidationException implements Exception {
 
   @override
   String toString() => 'FanOutValidationException: $message';
-}
-
-class EmailAccountLimitException implements Exception {
-  const EmailAccountLimitException({required this.limit});
-
-  final int limit;
 }
 
 class EmailService {
@@ -410,13 +315,6 @@ class EmailService {
   bool _running = false;
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
-  final Map<String, RegisteredCredentialKey> _linkedAccountListKeys = {};
-  final Map<String, RegisteredCredentialKey> _linkedAccountPrimaryKeys = {};
-  final Map<String, RegisteredCredentialKey> _linkedAccountAddressKeys = {};
-  final Map<String, RegisteredCredentialKey> _linkedAccountPasswordKeys = {};
-  final Map<String, RegisteredCredentialKey> _linkedAccountDisplayNameKeys = {};
-  final Map<String, RegisteredCredentialKey> _linkedAccountDeltaIdKeys = {};
-  final Map<String, RegisteredCredentialKey> _linkedAccountProvisionedKeys = {};
   final Set<String> _ephemeralProvisionedScopes = {};
   final Set<String> _ephemeralConnectionOverrideScopes = {};
   final _authFailureController =
@@ -596,13 +494,6 @@ class EmailService {
 
   EmailAccount? get activeAccount => _activeAccount;
 
-  bool get supportsMultipleLinkedAccounts => _transport.accountsSupported;
-
-  int get linkedAccountLimit => _linkedEmailAccountsLimit;
-
-  int get linkedAccountTotalLimit =>
-      _linkedEmailAccountsPrimaryCount + _linkedEmailAccountsLimit;
-
   bool get isSmtpOnly =>
       _endpointConfig.enableSmtp && !_endpointConfig.enableXmpp;
 
@@ -640,453 +531,22 @@ class EmailService {
     );
   }
 
-  Future<List<EmailAccountProfile>> linkedAccounts(String jid) async {
-    final String scope = _scopeForJid(jid);
-    final List<EmailAccountId> accountIds = await _readLinkedAccountIds(
-      scope,
-      includeLegacy: true,
+  Future<EmailAccount?> _accountForScope(String scope) async {
+    final String? address = await _credentialStore.read(
+      key: _addressKeyForScope(scope),
     );
-    if (accountIds.isEmpty) {
-      final EmailAccountProfile? legacy = await _legacyAccountProfileForScope(
-        scope,
-      );
-      if (legacy == null) {
-        return const <EmailAccountProfile>[];
-      }
-      return <EmailAccountProfile>[legacy];
-    }
-    final EmailAccountId? primaryId = await _readPrimaryAccountId(
-      scope,
-      fallbackIds: accountIds,
+    final String? password = await _credentialStore.read(
+      key: _passwordKeyForScope(scope),
     );
-    final List<EmailAccountProfile> profiles = <EmailAccountProfile>[];
-    for (final EmailAccountId accountId in accountIds) {
-      final EmailAccountProfile? profile = await _readLinkedAccountProfile(
-        scope: scope,
-        accountId: accountId,
-        primaryId: primaryId,
-      );
-      if (profile != null) {
-        profiles.add(profile);
-      }
-    }
-    final List<EmailAccountProfile> sorted = List<EmailAccountProfile>.of(
-      profiles,
-    )..sort(_compareLinkedAccountProfiles);
-    return List<EmailAccountProfile>.unmodifiable(sorted);
-  }
-
-  Future<List<EmailAccountProfile>> linkedAccountsForActiveScope() async {
-    final String? scope = _activeCredentialScope;
-    if (scope == null) {
-      return const <EmailAccountProfile>[];
-    }
-    return linkedAccounts(scope);
-  }
-
-  Future<EmailAccountProfile?> primaryLinkedAccount(String jid) async {
-    final List<EmailAccountProfile> accounts = await linkedAccounts(jid);
-    if (accounts.isEmpty) {
-      return null;
-    }
-    for (final EmailAccountProfile account in accounts) {
-      if (account.isPrimary) {
-        return account;
-      }
-    }
-    return accounts.first;
-  }
-
-  Future<EmailAccountProfile?> linkedAccountProfile({
-    required String jid,
-    required EmailAccountId accountId,
-  }) async {
-    final String scope = _scopeForJid(jid);
-    final EmailAccountId? primaryId = await _readPrimaryAccountId(scope);
-    return _readLinkedAccountProfile(
-      scope: scope,
-      accountId: accountId,
-      primaryId: primaryId,
-    );
-  }
-
-  Future<EmailAccount?> linkedAccountCredentials({
-    required String jid,
-    required EmailAccountId accountId,
-  }) async {
-    final String scope = _scopeForJid(jid);
-    String? address = await _credentialStore.read(
-      key: _linkedAccountAddressKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-    );
-    String? password = await _credentialStore.read(
-      key: _linkedAccountPasswordKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-    );
-    if (password == null || password.isEmpty) {
-      final EmailAccountId? legacyId = await _legacyAccountIdForScope(scope);
-      if (legacyId != null && legacyId == accountId) {
-        address ??= await _credentialStore.read(
-          key: _addressKeyForScope(scope),
-        );
-        password ??= await _credentialStore.read(
-          key: _passwordKeyForScope(scope),
-        );
-      }
-    }
-    final String normalizedAddress = _normalizeLinkedAccountAddress(
-      address ?? accountId.value,
-    );
-    if (normalizedAddress.isEmpty || password == null || password.isEmpty) {
+    if (address == null ||
+        address.isEmpty ||
+        password == null ||
+        password.isEmpty) {
       return null;
     }
     return EmailAccount(
-      address: normalizedAddress,
-      password: password,
-    );
-  }
-
-  Future<EmailAccountProfile> linkAccount({
-    required String jid,
-    required String address,
-    required String password,
-    String? displayName,
-    bool setPrimary = false,
-  }) async {
-    final String scope = _scopeForJid(jid);
-    final String normalizedAddress = _normalizeLinkedAccountAddress(address);
-    if (normalizedAddress.isEmpty) {
-      throw StateError(_linkedEmailAccountMissingAddressError);
-    }
-    final String trimmedPassword = password.trim();
-    if (trimmedPassword.isEmpty) {
-      throw StateError(_linkedEmailAccountMissingPasswordError);
-    }
-    final String normalizedPassword = password;
-    final EmailAccountId? accountId = EmailAccountId.fromAddress(
-      normalizedAddress,
-    );
-    if (accountId == null) {
-      throw StateError(_linkedEmailAccountMissingAddressError);
-    }
-
-    await _hydrateLegacyAccountIfNeeded(scope);
-    final List<EmailAccountId> currentIds = await _readLinkedAccountIds(
-      scope,
-      includeLegacy: true,
-    );
-    final bool alreadyLinked = currentIds.contains(accountId);
-    if (!_transport.accountsSupported &&
-        !alreadyLinked &&
-        currentIds.isNotEmpty) {
-      throw StateError(_linkedEmailAccountsUnsupportedError);
-    }
-    const int maxAccounts =
-        _linkedEmailAccountsPrimaryCount + _linkedEmailAccountsLimit;
-    if (!alreadyLinked && currentIds.length >= maxAccounts) {
-      throw const EmailAccountLimitException(limit: _linkedEmailAccountsLimit);
-    }
-
-    final List<EmailAccountId> nextIds = List<EmailAccountId>.of(currentIds)
-      ..removeWhere((EmailAccountId entry) => entry == accountId)
-      ..add(accountId);
-    await _writeLinkedAccountIds(scope, nextIds);
-
-    await _credentialStore.write(
-      key: _linkedAccountAddressKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-      value: normalizedAddress,
-    );
-    await _credentialStore.write(
-      key: _linkedAccountPasswordKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-      value: normalizedPassword,
-    );
-    final bool displayNameProvided = displayName != null;
-    final String? normalizedDisplayName = _normalizeDisplayName(displayName);
-    final RegisteredCredentialKey displayNameKey =
-        _linkedAccountDisplayNameKeyFor(
-      scope: scope,
-      accountId: accountId,
-    );
-    if (displayNameProvided) {
-      if (normalizedDisplayName == null) {
-        await _credentialStore.delete(key: displayNameKey);
-      } else {
-        await _credentialStore.write(
-          key: displayNameKey,
-          value: normalizedDisplayName,
-        );
-      }
-    }
-    final bool shouldSetPrimary = setPrimary || currentIds.isEmpty;
-    if (shouldSetPrimary) {
-      await _credentialStore.write(
-        key: _linkedAccountPrimaryKeyForScope(scope),
-        value: accountId.value,
-      );
-    }
-    final String? storedDisplayName = displayNameProvided
-        ? normalizedDisplayName
-        : await _credentialStore.read(key: displayNameKey);
-    final String resolvedDisplayName = _displayNameForAddress(
-      normalizedAddress,
-      displayName: storedDisplayName,
-    );
-    final int? deltaAccountId = await _readLinkedAccountDeltaId(
-      scope: scope,
-      accountId: accountId,
-    );
-    return EmailAccountProfile(
-      id: accountId,
-      address: normalizedAddress,
-      displayName: resolvedDisplayName,
-      isPrimary: shouldSetPrimary,
-      deltaAccountId: deltaAccountId,
-    );
-  }
-
-  Future<void> provisionLinkedAccount({
-    required String jid,
-    required EmailAccountId accountId,
-  }) async {
-    await _ensureReady();
-    final String scope = _scopeForJid(jid);
-    final String normalizedAddress = _normalizeLinkedAccountAddress(
-      accountId.value,
-    );
-    if (normalizedAddress.isEmpty) {
-      throw StateError(_linkedEmailAccountMissingAddressError);
-    }
-    final _ResolvedEmailAccount account = await _resolveAccountForAddress(
-      scope: scope,
-      fromAddress: normalizedAddress,
-    );
-    await _ensureAccountConfigured(scope: scope, account: account);
-    unawaited(syncInboxAndSent());
-  }
-
-  Future<void> updateLinkedAccountPassword({
-    required String jid,
-    required EmailAccountId accountId,
-    required String password,
-  }) async {
-    await _ensureReady();
-    final String scope = _scopeForJid(jid);
-    final String trimmedPassword = password.trim();
-    if (trimmedPassword.isEmpty) {
-      throw StateError(_linkedEmailAccountMissingPasswordError);
-    }
-    await _ensureLinkedAccountExists(
-      scope: scope,
-      accountId: accountId,
-    );
-    await _credentialStore.write(
-      key: _linkedAccountPasswordKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-      value: password,
-    );
-    final String normalizedAddress = _normalizeLinkedAccountAddress(
-      accountId.value,
-    );
-    if (normalizedAddress.isEmpty) {
-      throw StateError(_linkedEmailAccountMissingAddressError);
-    }
-    final _ResolvedEmailAccount account = await _resolveAccountForAddress(
-      scope: scope,
-      fromAddress: normalizedAddress,
-    );
-    await _ensureAccountConfigured(
-      scope: scope,
-      account: account,
-      forceProvisioning: true,
-    );
-    unawaited(syncInboxAndSent());
-  }
-
-  Future<void> setPrimaryLinkedAccount({
-    required String jid,
-    required EmailAccountId accountId,
-  }) async {
-    final String scope = _scopeForJid(jid);
-    await _ensureLinkedAccountExists(
-      scope: scope,
-      accountId: accountId,
-    );
-    await _credentialStore.write(
-      key: _linkedAccountPrimaryKeyForScope(scope),
-      value: accountId.value,
-    );
-    final bool transportReady =
-        _databasePrefix != null && _databasePassphrase != null;
-    final int? deltaAccountId = transportReady
-        ? await _ensureLinkedAccountDeltaId(
-            scope: scope,
-            accountId: accountId,
-          )
-        : await _readLinkedAccountDeltaId(
-            scope: scope,
-            accountId: accountId,
-          );
-    if (deltaAccountId == null) return;
-    _transport.setPrimaryAccountId(deltaAccountId);
-    final EmailAccountProfile? profile = await _linkedAccountProfileForScope(
-      scope: scope,
-      accountId: accountId,
-    );
-    final String address =
-        profile?.address ?? _normalizeLinkedAccountAddress(accountId.value);
-    if (address.isEmpty) {
-      return;
-    }
-    await _hydrateAccountAddress(
       address: address,
-      deltaAccountId: deltaAccountId,
-    );
-  }
-
-  Future<void> setChatFromAddress({
-    required Chat chat,
-    EmailAccountId? accountId,
-  }) async {
-    await _ensureReady();
-    final String scope = _requireActiveScope();
-    String? resolvedAddress;
-    if (accountId != null) {
-      final String normalizedAddress = _normalizeLinkedAccountAddress(
-        accountId.value,
-      );
-      if (normalizedAddress.isEmpty) {
-        throw StateError(_linkedEmailAccountMissingAddressError);
-      }
-      await _ensureLinkedAccountExists(
-        scope: scope,
-        accountId: accountId,
-      );
-      final int deltaAccountId = await _ensureLinkedAccountDeltaId(
-        scope: scope,
-        accountId: accountId,
-      );
-      await _hydrateAccountAddress(
-        address: normalizedAddress,
-        deltaAccountId: deltaAccountId,
-      );
-      resolvedAddress = normalizedAddress;
-    }
-    await _updateChatEmailFromAddress(chat, resolvedAddress);
-  }
-
-  Future<void> unlinkAccount({
-    required String jid,
-    required EmailAccountId accountId,
-  }) async {
-    final String scope = _scopeForJid(jid);
-    final List<EmailAccountId> accountIds = await _readLinkedAccountIds(
-      scope,
-      includeLegacy: true,
-    );
-    if (accountIds.isEmpty) {
-      return;
-    }
-    final int? linkedDeltaAccountId = await _readLinkedAccountDeltaId(
-      scope: scope,
-      accountId: accountId,
-    );
-    final List<EmailAccountId> nextIds = List<EmailAccountId>.of(accountIds)
-      ..removeWhere((EmailAccountId entry) => entry == accountId);
-    await _writeLinkedAccountIds(scope, nextIds);
-    final RegisteredCredentialKey addressKey = _linkedAccountAddressKeyFor(
-      scope: scope,
-      accountId: accountId,
-    );
-    final String? storedAddress = await _credentialStore.read(
-      key: addressKey,
-    );
-    final String normalizedAddress = _normalizeLinkedAccountAddress(
-      storedAddress ?? accountId.value,
-    );
-    await _credentialStore.delete(
-      key: addressKey,
-    );
-    await _credentialStore.delete(
-      key: _linkedAccountPasswordKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-    );
-    await _credentialStore.delete(
-      key: _linkedAccountDisplayNameKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-    );
-    await _credentialStore.delete(
-      key: _linkedAccountDeltaIdKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-    );
-    await _credentialStore.delete(
-      key: _linkedAccountProvisionedKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-    );
-    final bool hasNormalizedAddress = normalizedAddress.isNotEmpty;
-    final bool hasLinkedDeltaId = linkedDeltaAccountId != null;
-    if (hasNormalizedAddress || hasLinkedDeltaId) {
-      final XmppDatabase db = await _databaseBuilder();
-      if (hasNormalizedAddress) {
-        await db.clearChatsEmailFromAddress(normalizedAddress);
-      }
-      if (hasLinkedDeltaId) {
-        await db.deleteEmailChatAccountsForAccount(linkedDeltaAccountId);
-      }
-    }
-    final bool transportReady =
-        _databasePrefix != null && _databasePassphrase != null;
-    if (transportReady &&
-        _transport.accountsSupported &&
-        linkedDeltaAccountId != null &&
-        linkedDeltaAccountId != deltaAccountIdLegacy) {
-      try {
-        await _transport.removeAccount(linkedDeltaAccountId);
-      } on Exception catch (error, stackTrace) {
-        _log.warning(
-          _linkedEmailAccountRemovalFailureLogMessage,
-          error,
-          stackTrace,
-        );
-      }
-    }
-    final EmailAccountId? primaryId = await _readPrimaryAccountId(scope);
-    if (primaryId == null || primaryId != accountId) {
-      return;
-    }
-    if (nextIds.isEmpty) {
-      await _credentialStore.delete(
-        key: _linkedAccountPrimaryKeyForScope(scope),
-      );
-      _transport.setPrimaryAccountId(null);
-      return;
-    }
-    await _credentialStore.write(
-      key: _linkedAccountPrimaryKeyForScope(scope),
-      value: nextIds.first.value,
-    );
-    await setPrimaryLinkedAccount(
-      jid: jid,
-      accountId: nextIds.first,
+      password: password,
     );
   }
 
@@ -1164,30 +624,12 @@ class EmailService {
       }
     }
 
-    final EmailAccountId? emailAccountId = EmailAccountId.fromAddress(
-      resolvedAddress,
-    );
-    if (emailAccountId == null) {
-      throw StateError(_linkedEmailAccountMissingAddressError);
-    }
-    final int deltaAccountId = await _ensureLinkedAccountDeltaId(
-      scope: scope,
-      accountId: emailAccountId,
-    );
+    final int deltaAccountId = _transport.activeAccountId;
     await _transport.ensureAccountSession(deltaAccountId);
     _transport.setPrimaryAccountId(deltaAccountId);
-    final RegisteredCredentialKey linkedProvisionedKey =
-        _linkedAccountProvisionedKeyFor(
-      scope: scope,
-      accountId: emailAccountId,
-    );
     var alreadyProvisioned =
-        (await _credentialStore.read(key: linkedProvisionedKey)) ==
-            _linkedEmailAccountBoolTrue;
-    if (!alreadyProvisioned) {
-      alreadyProvisioned = (await _credentialStore.read(key: provisionedKey)) ==
-          _credentialTrueValue;
-    }
+        (await _credentialStore.read(key: provisionedKey)) ==
+            _credentialTrueValue;
     if (!shouldPersistCredentials &&
         _ephemeralProvisionedScopes.contains(scope)) {
       alreadyProvisioned = true;
@@ -1201,10 +643,6 @@ class EmailService {
       if (shouldPersistCredentials) {
         await _credentialStore.write(
           key: provisionedKey,
-          value: _credentialFalseValue,
-        );
-        await _credentialStore.write(
-          key: linkedProvisionedKey,
           value: _credentialFalseValue,
         );
       }
@@ -1235,10 +673,6 @@ class EmailService {
             key: provisionedKey,
             value: _credentialFalseValue,
           );
-          await _credentialStore.write(
-            key: linkedProvisionedKey,
-            value: _credentialFalseValue,
-          );
         }
       }
     }
@@ -1260,10 +694,6 @@ class EmailService {
         await _credentialStore.write(
           key: provisionedKey,
           value: _credentialTrueValue,
-        );
-        await _credentialStore.write(
-          key: linkedProvisionedKey,
-          value: _linkedEmailAccountBoolTrue,
         );
       }
       alreadyProvisioned = true;
@@ -1304,10 +734,6 @@ class EmailService {
             key: provisionedKey,
             value: _credentialTrueValue,
           );
-          await _credentialStore.write(
-            key: linkedProvisionedKey,
-            value: _linkedEmailAccountBoolTrue,
-          );
         } else {
           _ephemeralProvisionedScopes.add(scope);
         }
@@ -1315,10 +741,6 @@ class EmailService {
         if (shouldPersistCredentials) {
           await _credentialStore.write(
             key: provisionedKey,
-            value: _credentialFalseValue,
-          );
-          await _credentialStore.write(
-            key: linkedProvisionedKey,
             value: _credentialFalseValue,
           );
         } else {
@@ -1380,20 +802,8 @@ class EmailService {
     );
     _activeAccount = account;
     _ephemeralProvisionedScopes.add(scope);
-    await _credentialStore.write(
-      key: _linkedAccountDeltaIdKeyFor(
-        scope: scope,
-        accountId: emailAccountId,
-      ),
-      value: deltaAccountId.toString(),
-    );
     unawaited(
       _bootstrapFromCoreIfNeeded(scope: scope, databasePrefix: databasePrefix),
-    );
-    unawaited(
-      _ensureLinkedAccountsProvisioned(
-        scope: scope,
-      ),
     );
     return account;
   }
@@ -1411,27 +821,14 @@ class EmailService {
     if (address == null || address.isEmpty) {
       throw StateError('No email address found.');
     }
-    final EmailAccountId? accountId = EmailAccountId.fromAddress(address);
-    if (accountId == null) {
-      throw StateError(_linkedEmailAccountMissingAddressError);
-    }
-    final int deltaAccountId = await _ensureLinkedAccountDeltaId(
-      scope: scope,
-      accountId: accountId,
-    );
+    final int deltaAccountId = _transport.activeAccountId;
+    await _transport.ensureAccountSession(deltaAccountId);
     _transport.setPrimaryAccountId(deltaAccountId);
     await _credentialStore.write(
       key: _passwordKeyForScope(scope),
       value: password,
     );
     final connectionOverrides = _buildConnectionConfig(address);
-    await _credentialStore.write(
-      key: _linkedAccountPasswordKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-      value: password,
-    );
     await _transport.configureAccount(
       address: address,
       password: password,
@@ -1442,13 +839,6 @@ class EmailService {
     await _credentialStore.write(
       key: _provisionedKeyForScope(scope),
       value: _credentialTrueValue,
-    );
-    await _credentialStore.write(
-      key: _linkedAccountProvisionedKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-      value: _linkedEmailAccountBoolTrue,
     );
     _resetImapCapabilities();
     unawaited(_refreshImapCapabilities(force: true));
@@ -3801,23 +3191,6 @@ class EmailService {
       return (a.favorited ? 0 : 1) - (b.favorited ? 0 : 1);
     });
 
-  int _compareLinkedAccountProfiles(
-    EmailAccountProfile first,
-    EmailAccountProfile second,
-  ) {
-    final int firstRank = first.isPrimary
-        ? _linkedEmailAccountSortPrimary
-        : _linkedEmailAccountSortSecondary;
-    final int secondRank = second.isPrimary
-        ? _linkedEmailAccountSortPrimary
-        : _linkedEmailAccountSortSecondary;
-    final int primarySort = firstRank.compareTo(secondRank);
-    if (primarySort != _linkedEmailAccountSortEqual) {
-      return primarySort;
-    }
-    return first.address.compareTo(second.address);
-  }
-
   String _normalizeLinkedAccountAddress(String address) =>
       normalizeEmailAddress(address);
 
@@ -3889,455 +3262,6 @@ class EmailService {
     );
   }
 
-  RegisteredCredentialKey _linkedAccountListKeyForScope(String scope) {
-    return _linkedAccountListKeys.putIfAbsent(
-      scope,
-      () => CredentialStore.registerKey(
-        '${_linkedEmailAccountsKeyPrefix}_$scope',
-      ),
-    );
-  }
-
-  RegisteredCredentialKey _linkedAccountPrimaryKeyForScope(String scope) {
-    return _linkedAccountPrimaryKeys.putIfAbsent(
-      scope,
-      () => CredentialStore.registerKey(
-        '${_linkedEmailPrimaryAccountKeyPrefix}_$scope',
-      ),
-    );
-  }
-
-  RegisteredCredentialKey _linkedAccountAddressKeyFor({
-    required String scope,
-    required EmailAccountId accountId,
-  }) {
-    final String cacheKey = _linkedAccountCacheKey(
-      scope: scope,
-      accountId: accountId,
-    );
-    return _linkedAccountAddressKeys.putIfAbsent(
-      cacheKey,
-      () => CredentialStore.registerKey(
-        _linkedAccountKeyValue(
-          prefix: _linkedEmailAccountAddressKeyPrefix,
-          scope: scope,
-          accountId: accountId,
-        ),
-      ),
-    );
-  }
-
-  RegisteredCredentialKey _linkedAccountPasswordKeyFor({
-    required String scope,
-    required EmailAccountId accountId,
-  }) {
-    final String cacheKey = _linkedAccountCacheKey(
-      scope: scope,
-      accountId: accountId,
-    );
-    return _linkedAccountPasswordKeys.putIfAbsent(
-      cacheKey,
-      () => CredentialStore.registerKey(
-        _linkedAccountKeyValue(
-          prefix: _linkedEmailAccountPasswordKeyPrefix,
-          scope: scope,
-          accountId: accountId,
-        ),
-      ),
-    );
-  }
-
-  RegisteredCredentialKey _linkedAccountDisplayNameKeyFor({
-    required String scope,
-    required EmailAccountId accountId,
-  }) {
-    final String cacheKey = _linkedAccountCacheKey(
-      scope: scope,
-      accountId: accountId,
-    );
-    return _linkedAccountDisplayNameKeys.putIfAbsent(
-      cacheKey,
-      () => CredentialStore.registerKey(
-        _linkedAccountKeyValue(
-          prefix: _linkedEmailAccountDisplayNameKeyPrefix,
-          scope: scope,
-          accountId: accountId,
-        ),
-      ),
-    );
-  }
-
-  RegisteredCredentialKey _linkedAccountDeltaIdKeyFor({
-    required String scope,
-    required EmailAccountId accountId,
-  }) {
-    final String cacheKey = _linkedAccountCacheKey(
-      scope: scope,
-      accountId: accountId,
-    );
-    return _linkedAccountDeltaIdKeys.putIfAbsent(
-      cacheKey,
-      () => CredentialStore.registerKey(
-        _linkedAccountKeyValue(
-          prefix: _linkedEmailAccountDeltaIdKeyPrefix,
-          scope: scope,
-          accountId: accountId,
-        ),
-      ),
-    );
-  }
-
-  RegisteredCredentialKey _linkedAccountProvisionedKeyFor({
-    required String scope,
-    required EmailAccountId accountId,
-  }) {
-    final String cacheKey = _linkedAccountCacheKey(
-      scope: scope,
-      accountId: accountId,
-    );
-    return _linkedAccountProvisionedKeys.putIfAbsent(
-      cacheKey,
-      () => CredentialStore.registerKey(
-        _linkedAccountKeyValue(
-          prefix: _linkedEmailAccountProvisionedKeyPrefix,
-          scope: scope,
-          accountId: accountId,
-        ),
-      ),
-    );
-  }
-
-  String _linkedAccountCacheKey({
-    required String scope,
-    required EmailAccountId accountId,
-  }) {
-    return '$scope$_linkedEmailAccountKeySeparator${accountId.value}';
-  }
-
-  String _linkedAccountKeyValue({
-    required String prefix,
-    required String scope,
-    required EmailAccountId accountId,
-  }) {
-    return '$prefix$_linkedEmailAccountKeySeparator$scope'
-        '$_linkedEmailAccountKeySeparator${accountId.value}';
-  }
-
-  Future<EmailAccountProfile?> _legacyAccountProfileForScope(
-    String scope,
-  ) async {
-    final String? address = await _credentialStore.read(
-      key: _addressKeyForScope(scope),
-    );
-    if (address == null || address.isEmpty) {
-      return null;
-    }
-    final EmailAccountId? accountId = EmailAccountId.fromAddress(address);
-    if (accountId == null) {
-      return null;
-    }
-    final String resolvedDisplayName = _displayNameForAddress(address);
-    return EmailAccountProfile(
-      id: accountId,
-      address: address,
-      displayName: resolvedDisplayName,
-      isPrimary: true,
-      deltaAccountId: null,
-    );
-  }
-
-  Future<EmailAccountId?> _legacyAccountIdForScope(String scope) async {
-    final String? address = await _credentialStore.read(
-      key: _addressKeyForScope(scope),
-    );
-    if (address == null || address.isEmpty) {
-      return null;
-    }
-    return EmailAccountId.fromAddress(address);
-  }
-
-  Future<List<EmailAccountId>> _readLinkedAccountIds(
-    String scope, {
-    bool includeLegacy = false,
-  }) async {
-    final RegisteredCredentialKey listKey =
-        _linkedAccountListKeyForScope(scope);
-    final String? stored = await _credentialStore.read(key: listKey);
-    final String payload = (stored == null || stored.trim().isEmpty)
-        ? _linkedEmailAccountsEmptyJson
-        : stored;
-    final List<EmailAccountId> decoded = _decodeLinkedAccountIds(payload);
-    final List<EmailAccountId> resolved = List<EmailAccountId>.of(decoded);
-    if (includeLegacy) {
-      final EmailAccountId? legacyId = await _legacyAccountIdForScope(scope);
-      if (legacyId != null && !resolved.contains(legacyId)) {
-        resolved.add(legacyId);
-      }
-    }
-    return List<EmailAccountId>.unmodifiable(resolved);
-  }
-
-  Future<void> _ensureLinkedAccountExists({
-    required String scope,
-    required EmailAccountId accountId,
-  }) async {
-    final List<EmailAccountId> accountIds = await _readLinkedAccountIds(
-      scope,
-      includeLegacy: true,
-    );
-    if (accountIds.contains(accountId)) {
-      return;
-    }
-    final activeAccount = _activeAccount;
-    if (activeAccount != null && _activeCredentialScope == scope) {
-      final String normalizedActive = _normalizeLinkedAccountAddress(
-        activeAccount.address,
-      );
-      if (normalizedActive == accountId.value) {
-        return;
-      }
-    }
-    throw StateError(_linkedEmailAccountNotLinkedError);
-  }
-
-  Future<void> _writeLinkedAccountIds(
-    String scope,
-    List<EmailAccountId> accountIds,
-  ) async {
-    final RegisteredCredentialKey listKey =
-        _linkedAccountListKeyForScope(scope);
-    final String payload = accountIds.isEmpty
-        ? _linkedEmailAccountsEmptyJson
-        : _encodeLinkedAccountIds(accountIds);
-    await _credentialStore.write(key: listKey, value: payload);
-  }
-
-  List<EmailAccountId> _decodeLinkedAccountIds(String payload) {
-    if (payload.trim().isEmpty) {
-      return const <EmailAccountId>[];
-    }
-    try {
-      final dynamic decoded = jsonDecode(payload);
-      if (decoded is! List<dynamic>) {
-        return const <EmailAccountId>[];
-      }
-      final List<EmailAccountId> result = <EmailAccountId>[];
-      for (final dynamic entry in decoded) {
-        if (entry is! String) {
-          continue;
-        }
-        final EmailAccountId? accountId = EmailAccountId.fromStored(entry);
-        if (accountId != null) {
-          result.add(accountId);
-        }
-      }
-      return result;
-    } on FormatException {
-      return const <EmailAccountId>[];
-    }
-  }
-
-  String _encodeLinkedAccountIds(List<EmailAccountId> accountIds) {
-    final List<String> encoded = accountIds
-        .map((EmailAccountId accountId) => accountId.value)
-        .toList(growable: false);
-    return jsonEncode(encoded);
-  }
-
-  Future<EmailAccountId?> _readPrimaryAccountId(
-    String scope, {
-    List<EmailAccountId>? fallbackIds,
-  }) async {
-    final RegisteredCredentialKey key = _linkedAccountPrimaryKeyForScope(scope);
-    final String? stored = await _credentialStore.read(key: key);
-    final EmailAccountId? primaryId =
-        stored == null ? null : EmailAccountId.fromStored(stored);
-    if (primaryId != null) {
-      return primaryId;
-    }
-    final List<EmailAccountId> fallback = fallbackIds ?? <EmailAccountId>[];
-    if (fallback.isEmpty) {
-      return null;
-    }
-    return fallback.first;
-  }
-
-  Future<int?> _readLinkedAccountDeltaId({
-    required String scope,
-    required EmailAccountId accountId,
-  }) async {
-    final RegisteredCredentialKey key = _linkedAccountDeltaIdKeyFor(
-      scope: scope,
-      accountId: accountId,
-    );
-    final String? stored = await _credentialStore.read(key: key);
-    if (stored == null || stored.trim().isEmpty) {
-      return null;
-    }
-    return int.tryParse(stored);
-  }
-
-  Future<EmailAccountProfile?> _readLinkedAccountProfile({
-    required String scope,
-    required EmailAccountId accountId,
-    required EmailAccountId? primaryId,
-  }) async {
-    final String? storedAddress = await _credentialStore.read(
-      key: _linkedAccountAddressKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-    );
-    final String resolvedAddress = _normalizeLinkedAccountAddress(
-      storedAddress ?? accountId.value,
-    );
-    if (resolvedAddress.isEmpty) {
-      return null;
-    }
-    final String? storedDisplayName = await _credentialStore.read(
-      key: _linkedAccountDisplayNameKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-    );
-    final String resolvedDisplayName = _displayNameForAddress(
-      resolvedAddress,
-      displayName: storedDisplayName,
-    );
-    final int? deltaAccountId = await _readLinkedAccountDeltaId(
-      scope: scope,
-      accountId: accountId,
-    );
-    final bool isPrimary = primaryId != null && primaryId == accountId;
-    return EmailAccountProfile(
-      id: accountId,
-      address: resolvedAddress,
-      displayName: resolvedDisplayName,
-      isPrimary: isPrimary,
-      deltaAccountId: deltaAccountId,
-    );
-  }
-
-  Future<void> _hydrateLegacyAccountIfNeeded(String scope) async {
-    final String? legacyAddress = await _credentialStore.read(
-      key: _addressKeyForScope(scope),
-    );
-    if (legacyAddress == null || legacyAddress.isEmpty) {
-      return;
-    }
-    final EmailAccountId? accountId = EmailAccountId.fromAddress(
-      legacyAddress,
-    );
-    if (accountId == null) {
-      return;
-    }
-    final RegisteredCredentialKey addressKey = _linkedAccountAddressKeyFor(
-      scope: scope,
-      accountId: accountId,
-    );
-    final String? existingAddress = await _credentialStore.read(
-      key: addressKey,
-    );
-    if (existingAddress == null || existingAddress.isEmpty) {
-      await _credentialStore.write(
-        key: addressKey,
-        value: legacyAddress,
-      );
-    }
-    final String? legacyPassword = await _credentialStore.read(
-      key: _passwordKeyForScope(scope),
-    );
-    if (legacyPassword != null && legacyPassword.isNotEmpty) {
-      final RegisteredCredentialKey passwordKey = _linkedAccountPasswordKeyFor(
-        scope: scope,
-        accountId: accountId,
-      );
-      final String? existingPassword = await _credentialStore.read(
-        key: passwordKey,
-      );
-      if (existingPassword == null || existingPassword.isEmpty) {
-        await _credentialStore.write(
-          key: passwordKey,
-          value: legacyPassword,
-        );
-      }
-    }
-    final String? legacyProvisioned = await _credentialStore.read(
-      key: _provisionedKeyForScope(scope),
-    );
-    if (legacyProvisioned != null && legacyProvisioned.isNotEmpty) {
-      final RegisteredCredentialKey provisionedKey =
-          _linkedAccountProvisionedKeyFor(
-        scope: scope,
-        accountId: accountId,
-      );
-      final String? existingProvisioned = await _credentialStore.read(
-        key: provisionedKey,
-      );
-      if (existingProvisioned == null || existingProvisioned.isEmpty) {
-        await _credentialStore.write(
-          key: provisionedKey,
-          value: legacyProvisioned,
-        );
-      }
-    }
-    final RegisteredCredentialKey primaryKey = _linkedAccountPrimaryKeyForScope(
-      scope,
-    );
-    final String? existingPrimary = await _credentialStore.read(
-      key: primaryKey,
-    );
-    if (existingPrimary == null || existingPrimary.isEmpty) {
-      await _credentialStore.write(
-        key: primaryKey,
-        value: accountId.value,
-      );
-    }
-  }
-
-  Future<void> _clearLinkedAccountKeys(String scope) async {
-    final List<EmailAccountId> accountIds = await _readLinkedAccountIds(
-      scope,
-      includeLegacy: true,
-    );
-    await _credentialStore.delete(key: _linkedAccountListKeyForScope(scope));
-    await _credentialStore.delete(
-      key: _linkedAccountPrimaryKeyForScope(scope),
-    );
-    for (final EmailAccountId accountId in accountIds) {
-      await _credentialStore.delete(
-        key: _linkedAccountAddressKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-      );
-      await _credentialStore.delete(
-        key: _linkedAccountPasswordKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-      );
-      await _credentialStore.delete(
-        key: _linkedAccountDisplayNameKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-      );
-      await _credentialStore.delete(
-        key: _linkedAccountDeltaIdKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-      );
-      await _credentialStore.delete(
-        key: _linkedAccountProvisionedKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-      );
-    }
-  }
-
   RegisteredCredentialKey _bootstrapKeyFor({
     required String scope,
     required String databasePrefix,
@@ -4362,69 +3286,6 @@ class EmailService {
       return scope;
     }
     throw StateError('Call ensureProvisioned before using EmailService.');
-  }
-
-  Future<int> _ensureLinkedAccountDeltaId({
-    required String scope,
-    required EmailAccountId accountId,
-  }) async {
-    final int? stored = await _readLinkedAccountDeltaId(
-      scope: scope,
-      accountId: accountId,
-    );
-    if (stored != null) {
-      return stored;
-    }
-    if (!_transport.accountsSupported) {
-      final EmailAccountId? legacyId = await _legacyAccountIdForScope(scope);
-      if (legacyId != null && legacyId != accountId) {
-        throw StateError(_linkedEmailAccountsUnsupportedError);
-      }
-      await _credentialStore.write(
-        key: _linkedAccountDeltaIdKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-        value: deltaAccountIdLegacy.toString(),
-      );
-      return deltaAccountIdLegacy;
-    }
-    final int deltaAccountId = await _transport.createAccount();
-    await _credentialStore.write(
-      key: _linkedAccountDeltaIdKeyFor(
-        scope: scope,
-        accountId: accountId,
-      ),
-      value: deltaAccountId.toString(),
-    );
-    return deltaAccountId;
-  }
-
-  Future<EmailAccountProfile?> _primaryLinkedAccountForScope(
-    String scope,
-  ) async {
-    final accounts = await linkedAccounts(scope);
-    if (accounts.isEmpty) {
-      return null;
-    }
-    for (final account in accounts) {
-      if (account.isPrimary) {
-        return account;
-      }
-    }
-    return accounts.first;
-  }
-
-  Future<EmailAccountProfile?> _linkedAccountProfileForScope({
-    required String scope,
-    required EmailAccountId accountId,
-  }) async {
-    final EmailAccountId? primaryId = await _readPrimaryAccountId(scope);
-    return _readLinkedAccountProfile(
-      scope: scope,
-      accountId: accountId,
-      primaryId: primaryId,
-    );
   }
 
   Future<void> _updateChatEmailFromAddress(Chat chat, String? address) async {
@@ -4463,37 +3324,29 @@ class EmailService {
     required String scope,
     String? fromAddress,
   }) async {
-    var resolved = fromAddress?.trim() ?? '';
+    var resolved = _normalizeLinkedAccountAddress(fromAddress ?? '');
     if (resolved.isEmpty) {
-      final primary = await _primaryLinkedAccountForScope(scope);
-      resolved = primary?.address ?? '';
+      resolved = _normalizeLinkedAccountAddress(
+        _activeAccount?.address ?? '',
+      );
     }
     if (resolved.isEmpty) {
-      resolved = _activeAccount?.address ?? '';
+      final String? storedAddress = await _credentialStore.read(
+        key: _addressKeyForScope(scope),
+      );
+      resolved = _normalizeLinkedAccountAddress(storedAddress ?? '');
     }
-    final normalized = _normalizeLinkedAccountAddress(resolved);
-    if (normalized.isEmpty) {
-      throw StateError(_linkedEmailAccountMissingAddressError);
+    if (resolved.isEmpty) {
+      throw StateError(_emailAccountMissingAddressError);
     }
-    final EmailAccountId? accountId = EmailAccountId.fromAddress(normalized);
-    if (accountId == null) {
-      throw StateError(_linkedEmailAccountMissingAddressError);
-    }
-    await _ensureLinkedAccountExists(
-      scope: scope,
-      accountId: accountId,
-    );
-    final int deltaAccountId = await _ensureLinkedAccountDeltaId(
-      scope: scope,
-      accountId: accountId,
-    );
+    final int deltaAccountId = _transport.activeAccountId;
+    await _transport.ensureAccountSession(deltaAccountId);
     await _hydrateAccountAddress(
-      address: normalized,
+      address: resolved,
       deltaAccountId: deltaAccountId,
     );
     return _ResolvedEmailAccount(
-      id: accountId,
-      address: normalized,
+      address: resolved,
       deltaAccountId: deltaAccountId,
     );
   }
@@ -4520,37 +3373,25 @@ class EmailService {
     if (configured && !forceProvisioning) {
       return;
     }
-    final EmailAccount? credentials = await linkedAccountCredentials(
-      jid: scope,
-      accountId: account.id,
-    );
+    final EmailAccount? credentials = await _accountForScope(scope);
     if (credentials == null || credentials.password.isEmpty) {
-      throw StateError(_linkedEmailAccountMissingPasswordError);
+      throw StateError(_emailAccountMissingPasswordError);
     }
-    final EmailAccountProfile? profile = await _linkedAccountProfileForScope(
-      scope: scope,
-      accountId: account.id,
-    );
-    final String displayName = profile?.displayName ??
-        _displayNameForAddress(
-          account.address,
-        );
+    final String displayName = _displayNameForAddress(account.address);
+    final Map<String, String> connectionOverrides =
+        _buildConnectionConfig(account.address);
+    final Map<String, String> configureOverrides =
+        Map<String, String>.of(connectionOverrides)
+          ..[_sendPasswordConfigKey] = credentials.password;
     try {
       await _transport.configureAccount(
         address: account.address,
         password: credentials.password,
         displayName: displayName,
-        additional: _buildConnectionConfig(account.address),
+        additional: configureOverrides,
         accountId: account.deltaAccountId,
       );
       await _transport.purgeStockMessages(accountId: account.deltaAccountId);
-      await _credentialStore.write(
-        key: _linkedAccountProvisionedKeyFor(
-          scope: scope,
-          accountId: account.id,
-        ),
-        value: _linkedEmailAccountBoolTrue,
-      );
     } on DeltaSafeException catch (error, stackTrace) {
       final mapped = DeltaChatExceptionMapper.fromDeltaSafe(
         error,
@@ -4558,7 +3399,7 @@ class EmailService {
       );
       final errorType = error.runtimeType;
       _log.warning(
-        'Failed to configure linked email account ($errorType)',
+        'Failed to configure email account ($errorType)',
         null,
         stackTrace,
       );
@@ -4642,54 +3483,11 @@ class EmailService {
     );
   }
 
-  Future<void> _ensureLinkedAccountsProvisioned({
-    required String scope,
-  }) async {
-    if (!_transport.accountsSupported) {
-      return;
-    }
-    final accounts = await linkedAccounts(scope);
-    if (accounts.length <= _linkedEmailAccountsPrimaryCount) {
-      return;
-    }
-    for (final account in accounts) {
-      if (account.isPrimary) {
-        continue;
-      }
-      try {
-        final EmailAccountId accountId = account.id;
-        final int deltaAccountId = await _ensureLinkedAccountDeltaId(
-          scope: scope,
-          accountId: accountId,
-        );
-        await _hydrateAccountAddress(
-          address: account.address,
-          deltaAccountId: deltaAccountId,
-        );
-        await _ensureAccountConfigured(
-          scope: scope,
-          account: _ResolvedEmailAccount(
-            id: accountId,
-            address: account.address,
-            deltaAccountId: deltaAccountId,
-          ),
-        );
-      } on Exception catch (error, stackTrace) {
-        _log.warning(
-          'Linked email provisioning failed',
-          error,
-          stackTrace,
-        );
-      }
-    }
-  }
-
   Future<void> _clearCredentials(String scope) async {
     await _credentialStore.delete(key: _addressKeyForScope(scope));
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
     await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     await _credentialStore.delete(key: _connectionOverrideKeyForScope(scope));
-    await _clearLinkedAccountKeys(scope);
     if (_activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;
@@ -4731,59 +3529,6 @@ class EmailService {
       key: provisionedKey,
       value: _credentialTrueValue,
     );
-    final EmailAccountId? accountId = EmailAccountId.fromAddress(
-      _activeAccount!.address,
-    );
-    if (accountId != null) {
-      final List<EmailAccountId> currentIds = await _readLinkedAccountIds(
-        scope,
-        includeLegacy: true,
-      );
-      final List<EmailAccountId> nextIds = List<EmailAccountId>.of(currentIds)
-        ..removeWhere((EmailAccountId entry) => entry == accountId)
-        ..add(accountId);
-      await _writeLinkedAccountIds(scope, nextIds);
-      await _credentialStore.write(
-        key: _linkedAccountAddressKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-        value: _activeAccount!.address,
-      );
-      await _credentialStore.write(
-        key: _linkedAccountPasswordKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-        value: _activeAccount!.password,
-      );
-      await _credentialStore.write(
-        key: _linkedAccountProvisionedKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-        value: _linkedEmailAccountBoolTrue,
-      );
-      final int activeDeltaAccountId = _transport.activeAccountId;
-      await _credentialStore.write(
-        key: _linkedAccountDeltaIdKeyFor(
-          scope: scope,
-          accountId: accountId,
-        ),
-        value: activeDeltaAccountId.toString(),
-      );
-      final RegisteredCredentialKey primaryKey =
-          _linkedAccountPrimaryKeyForScope(scope);
-      final String? primaryValue = await _credentialStore.read(
-        key: primaryKey,
-      );
-      if (primaryValue == null || primaryValue.trim().isEmpty) {
-        await _credentialStore.write(
-          key: primaryKey,
-          value: accountId.value,
-        );
-      }
-    }
     _ephemeralProvisionedScopes.add(scope);
     await _markConnectionOverridesApplied(
       scope: scope,
@@ -4801,7 +3546,6 @@ class EmailService {
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
     await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     await _credentialStore.delete(key: _connectionOverrideKeyForScope(scope));
-    await _clearLinkedAccountKeys(scope);
     if (!preserveActiveSession && _activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;
@@ -5282,7 +4026,7 @@ String _stanzaId(
   int msgId, {
   required int accountId,
 }) {
-  return deltaMessageStanzaId(msgId, accountId: accountId);
+  return deltaMessageStanzaId(msgId);
 }
 
 class _PendingNotification {

@@ -335,10 +335,10 @@ class _ProfileCardSection extends StatelessWidget {
                   ),
                 ),
                 AxiMenuAction(
-                  label: l10n.profileLinkedEmailAccounts,
-                  icon: LucideIcons.mail,
+                  label: l10n.draftAttachmentsLabel,
+                  icon: LucideIcons.paperclip,
                   onPressed: () => context.push(
-                    const LinkedEmailAccountsRoute().location,
+                    const AttachmentGalleryRoute().location,
                     extra: locate,
                   ),
                 ),

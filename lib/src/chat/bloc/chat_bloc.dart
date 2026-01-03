@@ -63,8 +63,6 @@ const _sendSignatureSubjectTag = '::subject:';
 const _sendSignatureAttachmentTag = '::attachments:';
 const _sendSignatureQuoteTag = '::quote:';
 const _sendSignatureListSeparator = ',';
-const _emailFromSwitchFailureMessage =
-    'Unable to switch sender. Please try again.';
 const _sendSignatureAttachmentFieldSeparator = '|';
 const _emptySignatureValue = '';
 const int _deltaMessageIdUnset = 0;
@@ -178,8 +176,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_RoomStateUpdated>(_onRoomStateUpdated);
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
-    on<ChatLinkedAccountsRequested>(_onLinkedAccountsRequested);
-    on<ChatEmailFromAddressSelected>(_onChatEmailFromAddressSelected);
     on<ChatMessageFocused>(_onChatMessageFocused);
     on<ChatEmailHeadersRequested>(_onChatEmailHeadersRequested);
     on<ChatTypingStarted>(_onChatTypingStarted);
@@ -812,9 +808,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       typing: event.chat.defaultTransport.isEmail ? false : state.typing,
       viewFilter: nextViewFilter,
     ));
-    if (resetContext && event.chat.supportsEmail) {
-      add(const ChatLinkedAccountsRequested());
-    }
     if (resetContext) {
       _subscribeToMessages(
         limit: _currentMessageLimit,
@@ -1713,46 +1706,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (event.state == ConnectionState.connected &&
         chat?.type == ChatType.groupChat) {
       unawaited(_ensureMucMembership(chat!));
-    }
-  }
-
-  Future<void> _onLinkedAccountsRequested(
-    ChatLinkedAccountsRequested event,
-    Emitter<ChatState> emit,
-  ) async {
-    final emailService = _emailService;
-    if (emailService == null) {
-      return;
-    }
-    try {
-      final accounts = await emailService.linkedAccountsForActiveScope();
-      emit(state.copyWith(linkedEmailAccounts: accounts));
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to load linked email accounts', error, stackTrace);
-    }
-  }
-
-  Future<void> _onChatEmailFromAddressSelected(
-    ChatEmailFromAddressSelected event,
-    Emitter<ChatState> emit,
-  ) async {
-    final emailService = _emailService;
-    final chat = state.chat;
-    if (emailService == null || chat == null) {
-      return;
-    }
-    try {
-      await emailService.setChatFromAddress(
-        chat: chat,
-        accountId: event.accountId,
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Failed to update email sender',
-        error,
-        stackTrace,
-      );
-      emit(state.copyWith(composerError: _emailFromSwitchFailureMessage));
     }
   }
 
