@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -502,12 +505,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     final onGuestRoute = onLoginRoute ||
                         effectiveRoute == null ||
                         !effectiveRoute.authenticationRequired;
-                    final animationDuration =
-                        context.read<SettingsCubit>().animationDuration;
                     final authCompletionDuration =
-                        animationDuration == Duration.zero
-                            ? baseAnimationDuration
-                            : animationDuration;
+                        context.read<SettingsCubit>().authCompletionDuration;
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
@@ -520,9 +519,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         onGuestRoute) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
-                      if (onLoginRoute) {
-                        return;
-                      }
                       void navigateHome() {
                         final latestAuthState = _lastAuthState;
                         if (latestAuthState is! AuthenticationComplete) return;

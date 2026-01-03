@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:axichat/src/calendar/models/calendar_model.dart';

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 const int _maxMessageTextBytes = 128 * 1024;
 const int _maxMessageHtmlBytes = 256 * 1024;
 const int _maxXmppStanzaBytes = 1024 * 1024;

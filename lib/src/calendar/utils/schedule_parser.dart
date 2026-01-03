@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 // schedule_parser.dart
 import 'package:chrono_dart/chrono_dart.dart'
     show Chrono, ParsingOption, ParsingReference, Component, ParsedResult;

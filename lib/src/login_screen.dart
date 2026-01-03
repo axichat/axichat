@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
@@ -49,8 +52,7 @@ const double _unsplitHorizontalMargin = 16.0;
 const double _authCardCornerRadius = 20.0;
 const Duration _authOperationTimeout = Duration(seconds: 45);
 const Duration _authProgressSegmentDuration = Duration(seconds: 4);
-const double _authProgressSegmentTarget = 0.75;
-const String _homeRouteLocation = '/';
+const double _authProgressSegmentTarget = 0.8;
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
@@ -180,10 +182,17 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     _loginSuccessHandled = true;
+    if (!mounted) return;
     final progressDuration =
-        context.read<SettingsCubit>().animationDuration == Duration.zero
-            ? baseAnimationDuration
-            : context.read<SettingsCubit>().animationDuration;
+        context.read<SettingsCubit>().authCompletionDuration;
+    if (!_progressStickyVisible && !_operationProgressController.isActive) {
+      setState(() {
+        _progressStickyVisible = true;
+        if (_operationLabel.isEmpty) {
+          _operationLabel = context.l10n.authLoggingIn;
+        }
+      });
+    }
     final preloadHome = _preloadHomeScreenCache();
     await _operationProgressController.complete(duration: progressDuration);
     await preloadHome;
@@ -196,7 +205,6 @@ class _LoginScreenState extends State<LoginScreen>
         _signupFlowLocked = false;
       }
     });
-    context.go(_homeRouteLocation);
   }
 
   void _handleAuthState(AuthenticationState state) {
@@ -282,11 +290,7 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     if (state is AuthenticationComplete) {
-      if (_operationProgressController.isActive || _activeFlow != null) {
-        unawaited(_completeLoginAnimation());
-      } else {
-        _operationProgressController.reset();
-      }
+      unawaited(_completeLoginAnimation());
     }
   }
 
@@ -358,7 +362,47 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     if (!mounted || chats == null || chats.isEmpty) return;
-    await _precacheChatAvatars(xmppService: xmppService, chats: chats);
+    final preloads = <Future<void>>[
+      _precacheChatAvatars(xmppService: xmppService, chats: chats),
+      _preloadOpenChatCache(xmppService: xmppService, chats: chats),
+    ];
+    await Future.wait(preloads);
+  }
+
+  models.Chat? _resolveOpenChat(List<models.Chat> chats) {
+    for (final chat in chats) {
+      if (chat.open) {
+        return chat;
+      }
+    }
+    return null;
+  }
+
+  Future<models.Chat?> _resolveStoredOpenChat({
+    required XmppService xmppService,
+  }) async {
+    try {
+      return await xmppService.loadOpenChat();
+    } on Exception {
+      return null;
+    }
+  }
+
+  Future<void> _preloadOpenChatCache({
+    required XmppService xmppService,
+    required List<models.Chat> chats,
+  }) async {
+    if (!mounted) return;
+    models.Chat? openChat = _resolveOpenChat(chats);
+    openChat ??= await _resolveStoredOpenChat(xmppService: xmppService);
+    if (!mounted) return;
+    final String? openJid = openChat?.jid.trim();
+    if (openJid == null || openJid.isEmpty) return;
+    try {
+      await xmppService.preloadChatWindow(jid: openJid);
+    } on Exception {
+      return;
+    }
   }
 
   Future<void> _preloadCalendarShortcutCache() async {

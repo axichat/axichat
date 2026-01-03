@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 const String deltaDomain = 'delta.chat';
 const String deltaUserDomain = 'user.delta.chat';
 const String deltaSelfLocalPart = 'dc-self';
@@ -20,4 +23,21 @@ extension DeltaJidExtensions on String {
 
   bool get isDeltaPlaceholderJid =>
       deltaPlaceholderJids.contains(normalizedDeltaJid);
+}
+
+extension DeltaJidNullableExtensions on String? {
+  String? resolveDeltaPlaceholderJid([String? fallback]) {
+    final trimmed = this?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    if (!trimmed.isDeltaPlaceholderJid) {
+      return trimmed;
+    }
+    final fallbackTrimmed = fallback?.trim();
+    if (fallbackTrimmed == null || fallbackTrimmed.isEmpty) {
+      return null;
+    }
+    return fallbackTrimmed.isDeltaPlaceholderJid ? null : fallbackTrimmed;
+  }
 }

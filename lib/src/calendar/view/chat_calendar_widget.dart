@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -44,6 +47,8 @@ const String _chatCalendarAvailabilityShareTooltip = 'Send availability';
 const double _chatCalendarParticipantsSpacing = 12.0;
 const String _chatCalendarAvailabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
+const String _chatCalendarHeaderAssertMessage =
+    'ChatCalendarWidget requires onBackPressed when showHeader and showBackButton are true.';
 
 CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
@@ -77,16 +82,20 @@ String? _resolveAvailabilityOwnerJid({
 class ChatCalendarWidget extends StatefulWidget {
   const ChatCalendarWidget({
     super.key,
-    required this.onBackPressed,
     required this.chat,
     required this.participants,
     required this.avatarPaths,
+    this.onBackPressed,
+    this.showHeader = true,
+    this.showBackButton = true,
   });
 
-  final VoidCallback onBackPressed;
+  final VoidCallback? onBackPressed;
   final Chat chat;
   final List<String> participants;
   final Map<String, String> avatarPaths;
+  final bool showHeader;
+  final bool showBackButton;
 
   @override
   State<ChatCalendarWidget> createState() => _ChatCalendarWidgetState();
@@ -95,6 +104,7 @@ class ChatCalendarWidget extends StatefulWidget {
 class _ChatCalendarWidgetState
     extends CalendarExperienceState<ChatCalendarWidget, ChatCalendarBloc> {
   bool _mobileInitialScrollSynced = false;
+  bool _desktopInitialViewSynced = false;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
 
@@ -123,9 +133,14 @@ class _ChatCalendarWidgetState
     if (usesDesktopLayout && _mobileInitialScrollSynced) {
       _mobileInitialScrollSynced = false;
     }
-    if (!usesDesktopLayout) {
-      _maybeSyncMobileInitialScroll();
+    if (usesDesktopLayout) {
+      _maybeSyncDesktopInitialView(state);
+      return;
     }
+    if (_desktopInitialViewSynced) {
+      _desktopInitialViewSynced = false;
+    }
+    _maybeSyncMobileInitialScroll();
   }
 
   void _maybeSyncMobileInitialScroll() {
@@ -139,6 +154,22 @@ class _ChatCalendarWidgetState
         CalendarEvent.dateSelected(
           date: DateTime.now(),
         ),
+      );
+    });
+  }
+
+  void _maybeSyncDesktopInitialView(CalendarState state) {
+    if (_desktopInitialViewSynced) {
+      return;
+    }
+    _desktopInitialViewSynced = true;
+    if (state.viewMode != CalendarView.day) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      calendarBloc.add(
+        const CalendarEvent.viewChanged(view: CalendarView.week),
       );
     });
   }
@@ -217,23 +248,31 @@ class _ChatCalendarWidgetState
     final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
       context,
     );
+    assert(
+      !widget.showHeader ||
+          !widget.showBackButton ||
+          widget.onBackPressed != null,
+      _chatCalendarHeaderAssertMessage,
+    );
     return CalendarHoverTitleScope(
       controller: _hoverTitleController,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ChatCalendarAppBar(
-            onBackPressed: widget.onBackPressed,
-            participants: widget.participants,
-            avatarPaths: widget.avatarPaths,
-            state: state,
-            onShareAvailability: availabilityCoordinator == null
-                ? null
-                : () => _openAvailabilityShareSheet(
-                      state,
-                      availabilityCoordinator,
-                    ),
-          ),
+          if (widget.showHeader)
+            _ChatCalendarAppBar(
+              onBackPressed: widget.onBackPressed,
+              showBackButton: widget.showBackButton,
+              participants: widget.participants,
+              avatarPaths: widget.avatarPaths,
+              state: state,
+              onShareAvailability: availabilityCoordinator == null
+                  ? null
+                  : () => _openAvailabilityShareSheet(
+                        state,
+                        availabilityCoordinator,
+                      ),
+            ),
           Expanded(child: tintedLayout),
         ],
       ),
@@ -332,18 +371,20 @@ class _ChatCalendarWidgetState
 
 class _ChatCalendarAppBar extends StatelessWidget {
   const _ChatCalendarAppBar({
-    required this.onBackPressed,
     required this.participants,
     required this.avatarPaths,
     required this.state,
     this.onShareAvailability,
+    this.onBackPressed,
+    this.showBackButton = true,
   });
 
-  final VoidCallback onBackPressed;
   final List<String> participants;
   final Map<String, String> avatarPaths;
   final CalendarState state;
   final VoidCallback? onShareAvailability;
+  final VoidCallback? onBackPressed;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -365,14 +406,16 @@ class _ChatCalendarAppBar extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              AxiIconButton(
-                iconData: LucideIcons.arrowLeft,
-                tooltip: context.l10n.chatBack,
-                color: colors.foreground,
-                borderColor: colors.border,
-                onPressed: onBackPressed,
-              ),
-              const SizedBox(width: _chatCalendarParticipantsSpacing),
+              if (showBackButton)
+                AxiIconButton(
+                  iconData: LucideIcons.arrowLeft,
+                  tooltip: context.l10n.chatBack,
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  onPressed: onBackPressed,
+                ),
+              if (showBackButton)
+                const SizedBox(width: _chatCalendarParticipantsSpacing),
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,

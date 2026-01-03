@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -7,6 +10,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -72,9 +76,15 @@ class ChatMessageDetails extends StatelessWidget {
               emailService = null;
             }
             final emailSelfJid = emailService?.selfSenderJid;
+            final String? resolvedEmailSelfJid =
+                emailSelfJid.resolveDeltaPlaceholderJid();
             final bareSender = _bareJid(message.senderJid);
-            final isFromSelf = bareSender == _bareJid(profileJid) ||
-                (emailSelfJid != null && bareSender == _bareJid(emailSelfJid));
+            final bool isPlaceholderSender =
+                bareSender?.isDeltaPlaceholderJid ?? false;
+            final isFromSelf = isPlaceholderSender ||
+                bareSender == _bareJid(profileJid) ||
+                (resolvedEmailSelfJid != null &&
+                    bareSender == _bareJid(resolvedEmailSelfJid));
             final shareContext = state.shareContexts[message.stanzaID];
             final shareParticipants = _shareParticipants(
               shareContext?.participants ?? const <Chat>[],
@@ -104,7 +114,11 @@ class ChatMessageDetails extends StatelessWidget {
             final showReactions = (transport == null || transport.isXmpp) &&
                 message.reactionsPreview.isNotEmpty;
             final copyLabel = l10n.chatActionCopy;
-            final senderAddress = message.senderJid.trim();
+            final String? resolvedSenderAddress =
+                message.senderJid.resolveDeltaPlaceholderJid(
+              resolvedEmailSelfJid,
+            );
+            final senderAddress = resolvedSenderAddress?.trim() ?? '';
             final String? rawHeaders = deltaMessageId == null
                 ? null
                 : state.emailRawHeadersByDeltaId[deltaMessageId];

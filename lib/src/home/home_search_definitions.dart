@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/home/home_search_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 
