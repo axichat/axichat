@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -22,6 +25,9 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   Duration get animationDuration =>
       state.lowMotion ? Duration.zero : baseAnimationDuration;
+
+  Duration get authCompletionDuration =>
+      state.lowMotion ? baseAnimationDuration : authCompletionAnimationDuration;
 
   void updateLanguage(AppLanguage language) {
     emit(state.copyWith(language: language));

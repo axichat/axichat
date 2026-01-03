@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -24,6 +27,23 @@ class AxiIconButton extends StatelessWidget {
     this.cornerRadius,
     this.borderWidth,
   });
+
+  const AxiIconButton.ghost({
+    super.key,
+    required this.iconData,
+    this.icon,
+    this.onPressed,
+    this.onLongPress,
+    this.tooltip,
+    this.semanticLabel,
+    this.color,
+    this.iconSize,
+    this.buttonSize,
+    this.tapTargetSize,
+    this.cornerRadius,
+  })  : backgroundColor = Colors.transparent,
+        borderColor = Colors.transparent,
+        borderWidth = 0;
 
   final IconData iconData;
   final Widget? icon;

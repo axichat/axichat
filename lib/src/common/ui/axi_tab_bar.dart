@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:flutter/material.dart';
 
 /// Shared tab bar used across Axichat surfaces so styling stays consistent.

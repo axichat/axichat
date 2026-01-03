@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 const int _notificationPreviewMaxLength = 160;
 const int _notificationTokenMinLength = 20;
 const int _notificationHexTokenMinLength = 32;

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 class ChatTransportPreference {
@@ -23,6 +26,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const int _chatPreloadStart = 0;
   static const int _defaultChatPreloadLimit = basePageItemLimit;
   static const int _chatPreloadDisabledLimit = 0;
+  static const int _openChatPreloadMessageStart = 0;
+  static const int _openChatPreloadMessageLimit = 50;
+  static const int _openChatPreloadMessageDisabledLimit = 0;
   static const _recipientAddressSuggestionLimit = 50000;
   static const Duration _mutedForeverDuration = Duration(days: 3650);
   static const List<ConvItem> _emptyConversationIndexSnapshot = <ConvItem>[];
@@ -562,6 +568,35 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }) async {
     return _dbOpReturning<XmppDatabase, List<Message>>(
       (db) => db.getAllMessagesForChat(jid, filter: filter),
+    );
+  }
+
+  Future<Chat?> loadOpenChat() async {
+    return _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getOpenChat(),
+    );
+  }
+
+  Future<void> preloadChatWindow({
+    required String jid,
+    int messageLimit = _openChatPreloadMessageLimit,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    final normalizedJid = jid.trim();
+    if (normalizedJid.isEmpty ||
+        messageLimit <= _openChatPreloadMessageDisabledLimit) {
+      return;
+    }
+    await _dbOpReturning<XmppDatabase, List<Message>>(
+      (db) => db.getChatMessages(
+        normalizedJid,
+        start: _openChatPreloadMessageStart,
+        end: messageLimit,
+        filter: filter,
+      ),
+    );
+    await _dbOpReturning<XmppDatabase, List<Reaction>>(
+      (db) => db.getReactionsForChat(normalizedJid),
     );
   }
 

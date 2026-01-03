@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 // ignore_for_file: unnecessary_type_check
 import 'dart:async';
 import 'dart:math' as math;
@@ -404,6 +407,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     final Widget chatPane = constrainSecondary(chatPaneContent);
 
                     Widget chatLayout({required bool showChatCalendar}) {
+                      final EdgeInsets secondaryPanePadding = showChatCalendar
+                          ? EdgeInsets.zero
+                          : const EdgeInsets.only(
+                              left: _secondaryPaneGutter,
+                            );
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -414,11 +422,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               showPrimary: !showChatCalendar,
                               centerSecondary: false,
                               centerPrimary: false,
+                              animatePaneChanges: true,
                               primaryAlignment: Alignment.topLeft,
                               secondaryAlignment: Alignment.topLeft,
-                              secondaryPadding: const EdgeInsets.only(
-                                left: _secondaryPaneGutter,
-                              ),
+                              secondaryPadding: secondaryPanePadding,
                               primaryChild: Nexus(
                                 tabs: tabs,
                                 navPlacement: navPlacement,

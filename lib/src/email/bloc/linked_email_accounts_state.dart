@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 part of 'linked_email_accounts_cubit.dart';
 
 enum LinkedEmailAccountsAction {

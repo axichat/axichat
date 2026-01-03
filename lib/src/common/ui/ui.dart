@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -7,6 +10,7 @@ export 'axi_animated_size.dart';
 export 'axi_app_bar.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
+export 'app_bar_actions.dart';
 export 'axi_checkbox_form_field.dart';
 export 'axi_confirm.dart';
 export 'axi_context_menu_region.dart';
@@ -84,8 +88,10 @@ const smallScreen = 820.0;
 const mediumScreen = 900.0;
 const largeScreen = 1200.0;
 const compactDeviceBreakpoint = 600.0;
+const appBarActionOverflowBreakpoint = compactDeviceBreakpoint;
 
 const baseAnimationDuration = Duration(milliseconds: 300);
+const authCompletionAnimationDuration = Duration(milliseconds: 1000);
 
 /// Duration for cross-fading calendar view transitions.
 const calendarViewTransitionDuration = Duration(milliseconds: 400);

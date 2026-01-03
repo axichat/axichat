@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 

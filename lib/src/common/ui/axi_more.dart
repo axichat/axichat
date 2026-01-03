@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
@@ -9,11 +12,13 @@ class AxiMore extends StatefulWidget {
     required this.actions,
     this.tooltip = 'More options',
     this.enabled = true,
+    this.ghost = false,
   });
 
   final List<AxiMenuAction> actions;
   final String tooltip;
   final bool enabled;
+  final bool ghost;
 
   @override
   State<AxiMore> createState() => _AxiMoreState();
@@ -118,12 +123,22 @@ class _AxiMoreState extends State<AxiMore> {
           ),
         )
         .toList(growable: false);
+    final void Function()? sheetAction =
+        widget.enabled ? () => _showSheetActions(actions) : null;
+    final void Function()? popoverAction =
+        widget.enabled ? popoverController.toggle : null;
     if (commandSurface == CommandSurface.sheet) {
-      return AxiIconButton(
-        iconData: LucideIcons.ellipsisVertical,
-        tooltip: widget.tooltip,
-        onPressed: widget.enabled ? () => _showSheetActions(actions) : null,
-      );
+      return widget.ghost
+          ? AxiIconButton.ghost(
+              iconData: LucideIcons.ellipsisVertical,
+              tooltip: widget.tooltip,
+              onPressed: sheetAction,
+            )
+          : AxiIconButton(
+              iconData: LucideIcons.ellipsisVertical,
+              tooltip: widget.tooltip,
+              onPressed: sheetAction,
+            );
     }
     return ShadPopover(
       controller: popoverController,
@@ -132,11 +147,17 @@ class _AxiMoreState extends State<AxiMore> {
       popover: (context) {
         return AxiMenu(actions: actions);
       },
-      child: AxiIconButton(
-        iconData: LucideIcons.ellipsisVertical,
-        tooltip: widget.tooltip,
-        onPressed: widget.enabled ? popoverController.toggle : null,
-      ),
+      child: widget.ghost
+          ? AxiIconButton.ghost(
+              iconData: LucideIcons.ellipsisVertical,
+              tooltip: widget.tooltip,
+              onPressed: popoverAction,
+            )
+          : AxiIconButton(
+              iconData: LucideIcons.ellipsisVertical,
+              tooltip: widget.tooltip,
+              onPressed: popoverAction,
+            ),
     );
   }
 }
