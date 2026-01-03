@@ -5,12 +5,17 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 const double _defaultAppBarActionSpacing = 8.0;
+const double _inlineActionWidthMultiplier = 2.4;
+const double _inlineActionEstimatedWidth =
+    AxiIconButton.kTapTargetSize * _inlineActionWidthMultiplier;
 
 class AppBarActionItem {
   const AppBarActionItem({
     required this.label,
     required this.iconData,
     this.icon,
+    this.inline,
+    this.estimatedWidth,
     this.onPressed,
     this.enabled = true,
     this.destructive = false,
@@ -20,6 +25,8 @@ class AppBarActionItem {
   final String label;
   final IconData iconData;
   final Widget? icon;
+  final Widget? inline;
+  final double? estimatedWidth;
   final VoidCallback? onPressed;
   final bool enabled;
   final bool destructive;
@@ -58,43 +65,65 @@ class AppBarActions extends StatelessWidget {
     if (actions.isEmpty) {
       return const SizedBox.shrink();
     }
-    final double width = MediaQuery.sizeOf(context).width;
-    final bool shouldCollapse =
-        forceCollapsed ?? width < overflowBreakpoint;
-    if (shouldCollapse) {
-      final menuActions = actions
-          .map((action) => action.toMenuAction())
-          .toList(growable: false);
-      final bool hasEnabledAction =
-          actions.any((action) => action.enabled && action.onPressed != null);
-      if (moreTooltip == null) {
-        return AxiMore(
-          actions: menuActions,
-          enabled: hasEnabledAction,
-          ghost: true,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double screenWidth = MediaQuery.sizeOf(context).width;
+        final double availableWidth =
+            constraints.hasBoundedWidth ? constraints.maxWidth : screenWidth;
+        final int spacingCount = actions.length > 1 ? actions.length - 1 : 0;
+        final double spacingWidth = spacing * spacingCount;
+        final double estimatedActionsWidth = actions.fold<double>(
+          spacingWidth,
+          (total, action) {
+            final double actionWidth = action.estimatedWidth ??
+                (action.inline != null
+                    ? _inlineActionEstimatedWidth
+                    : AxiIconButton.kTapTargetSize);
+            return total + actionWidth;
+          },
         );
-      }
-      return AxiMore(
-        actions: menuActions,
-        tooltip: moreTooltip!,
-        enabled: hasEnabledAction,
-        ghost: true,
-      );
-    }
+        final bool autoCollapse = screenWidth < overflowBreakpoint ||
+            availableWidth < estimatedActionsWidth;
+        final bool shouldCollapse = forceCollapsed ?? autoCollapse;
+        if (shouldCollapse) {
+          final List<AxiMenuAction> menuActions = actions
+              .map((action) => action.toMenuAction())
+              .toList(growable: false);
+          final bool hasEnabledAction = actions
+              .any((action) => action.enabled && action.onPressed != null);
+          if (moreTooltip == null) {
+            return AxiMore(
+              actions: menuActions,
+              enabled: hasEnabledAction,
+              ghost: true,
+            );
+          }
+          return AxiMore(
+            actions: menuActions,
+            tooltip: moreTooltip!,
+            enabled: hasEnabledAction,
+            ghost: true,
+          );
+        }
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var index = 0; index < actions.length; index++) ...[
-          AxiIconButton.ghost(
-            iconData: actions[index].iconData,
-            icon: actions[index].icon,
-            tooltip: actions[index].tooltip ?? actions[index].label,
-            onPressed: actions[index].enabled ? actions[index].onPressed : null,
-          ),
-          if (index < actions.length - 1) SizedBox(width: spacing),
-        ],
-      ],
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var index = 0; index < actions.length; index++) ...[
+              actions[index].inline ??
+                  AxiIconButton.ghost(
+                    iconData: actions[index].iconData,
+                    icon: actions[index].icon,
+                    tooltip: actions[index].tooltip ?? actions[index].label,
+                    onPressed: actions[index].enabled
+                        ? actions[index].onPressed
+                        : null,
+                  ),
+              if (index < actions.length - 1) SizedBox(width: spacing),
+            ],
+          ],
+        );
+      },
     );
   }
 }

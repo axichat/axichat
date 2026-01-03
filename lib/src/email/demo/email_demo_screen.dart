@@ -177,11 +177,9 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                   child: SizedBox(
                     width: AxiIconButton.kDefaultSize,
                     height: AxiIconButton.kDefaultSize,
-                    child: AxiIconButton(
+                    child: AxiIconButton.ghost(
                       iconData: LucideIcons.arrowLeft,
                       tooltip: context.l10n.commonBack,
-                      color: context.colorScheme.foreground,
-                      borderColor: context.colorScheme.border,
                       onPressed: () => Navigator.maybePop(context),
                     ),
                   ),

@@ -431,11 +431,9 @@ class _UnifiedTaskMobileLayout extends StatelessWidget {
                   child: SizedBox(
                     width: AxiIconButton.kDefaultSize,
                     height: AxiIconButton.kDefaultSize,
-                    child: AxiIconButton(
+                    child: AxiIconButton.ghost(
                       iconData: LucideIcons.arrowLeft,
                       tooltip: l10n.commonBack,
-                      color: context.colorScheme.foreground,
-                      borderColor: context.colorScheme.border,
                       onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ),

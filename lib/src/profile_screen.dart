@@ -144,11 +144,9 @@ class _ProfileBodyState extends State<_ProfileBody> {
                 child: SizedBox(
                   width: AxiIconButton.kDefaultSize,
                   height: AxiIconButton.kDefaultSize,
-                  child: AxiIconButton(
+                  child: AxiIconButton.ghost(
                     iconData: LucideIcons.arrowLeft,
                     tooltip: l10n.commonBack,
-                    color: context.colorScheme.foreground,
-                    borderColor: context.colorScheme.border,
                     onPressed: () => _profileRoute == _ProfileRoute.main
                         ? context.pop()
                         : _setRoute(_ProfileRoute.main),
