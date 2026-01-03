@@ -54,6 +54,8 @@ class CalendarAvailabilityShareCoordinator {
     required ChatType chatType,
     required CalendarDateTime rangeStart,
     required CalendarDateTime rangeEnd,
+    CalendarAvailabilityOverlay? overrideOverlay,
+    bool lockOverlay = false,
     bool? isRedacted,
   }) async {
     if (chatType == ChatType.note) {
@@ -69,14 +71,20 @@ class CalendarAvailabilityShareCoordinator {
       rangeEnd: rangeEnd,
       isRedacted: isRedacted ?? _availabilityOverlayDefaultRedacted,
     );
-    final CalendarAvailabilityOverlay overlay =
-        deriveAvailabilityOverlay(model: model, base: base);
+    final CalendarAvailabilityOverlay overlay = overrideOverlay == null
+        ? deriveAvailabilityOverlay(model: model, base: base)
+        : overrideOverlay.copyWith(
+            owner: ownerJid,
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd,
+          );
     final record = CalendarAvailabilityShareRecord(
       id: id,
       source: source,
       chatJid: chatJid,
       chatType: chatType,
       overlay: overlay,
+      lockOverlay: lockOverlay || overrideOverlay != null,
       updatedAt: _now(),
     );
     final records = _ensureCache()..[id] = record;
@@ -121,7 +129,7 @@ class CalendarAvailabilityShareCoordinator {
     }
     var didChange = false;
     for (final record in matches) {
-      if (record.chatType == ChatType.note) {
+      if (record.chatType == ChatType.note || record.lockOverlay) {
         continue;
       }
       final CalendarAvailabilityOverlay overlay =

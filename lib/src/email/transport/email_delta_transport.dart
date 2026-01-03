@@ -686,6 +686,26 @@ class EmailDeltaTransport implements ChatTransport {
     return context.getConfig(key);
   }
 
+  Future<String?> getOauth2Url({
+    required String address,
+    required String redirectUri,
+    int? accountId,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return null;
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return null;
+    }
+    return context.getOauth2Url(
+      address: address,
+      redirectUri: redirectUri,
+    );
+  }
+
   Future<void> setCoreConfig({
     required String key,
     required String value,
@@ -1318,10 +1338,7 @@ class EmailDeltaTransport implements ChatTransport {
     final String resolvedStanzaId = stanzaId ??
         (resolvedMsgId == null
             ? throw StateError(_missingOutgoingDeltaIdError)
-            : deltaMessageStanzaId(
-                resolvedMsgId,
-                accountId: deltaAccountId,
-              ));
+            : deltaMessageStanzaId(resolvedMsgId));
     if (metadata != null) {
       await db.saveFileMetadata(metadata);
     }
@@ -1526,10 +1543,7 @@ class EmailDeltaTransport implements ChatTransport {
     required int msgId,
     required int accountId,
   }) async {
-    final stanzaId = deltaMessageStanzaId(
-      msgId,
-      accountId: accountId,
-    );
+    final stanzaId = deltaMessageStanzaId(msgId);
     const maxAttempts = _originIdHydrationMaxAttempts;
     const attemptStep = _originIdHydrationAttemptStep;
     const lastAttemptIndex = maxAttempts - attemptStep;
