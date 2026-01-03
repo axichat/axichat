@@ -965,6 +965,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
               roomState.myRole.isModerator,
           onInvite: onInvite,
           onAction: onAction,
+          roomAvatarPath: state.chat?.avatarPath,
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
           currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
@@ -2086,10 +2087,12 @@ class _ChatState extends State<Chat> {
   String? _resolveChatBlockAddress({required chat_models.Chat chat}) {
     if (chat.defaultTransport.isEmail) {
       final String? address = chat.emailAddress?.trim();
-      if (address == null || address.isEmpty) {
+      final String candidate =
+          address?.isNotEmpty == true ? address! : chat.remoteJid.trim();
+      if (candidate.isEmpty) {
         return null;
       }
-      return address;
+      return candidate;
     }
     final String jid = chat.jid.trim();
     return jid.isEmpty ? null : jid;
@@ -11668,13 +11671,15 @@ class _ChatSettingsButtons extends StatelessWidget {
     final bool hasBlockAddress =
         resolvedBlockAddress != null && resolvedBlockAddress.isNotEmpty;
     final bool hasBlockEntry = blocklistEntry != null;
+    final bool blocklistAvailable = blocklistState != null;
     final bool blockActionInFlight = switch (blocklistState) {
       BlocklistLoading state => state.jid == null ||
           state.jid == resolvedBlockAddress ||
           state.jid == resolvedBlockEntryAddress,
       _ => false,
     };
-    final bool blockSwitchEnabled = !blockActionInFlight &&
+    final bool blockSwitchEnabled = blocklistAvailable &&
+        !blockActionInFlight &&
         (isChatBlocked ? hasBlockEntry : hasBlockAddress);
     final List<Widget> tiles = [
       if (showAttachmentToggle)
