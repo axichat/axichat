@@ -756,7 +756,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatReportSpam.
   ///
   /// In en, this message translates to:
-  /// **'Report spam'**
+  /// **'Mark as spam'**
   String get chatReportSpam;
 
   /// No description provided for @chatSignatureToggleLabel.
@@ -4076,6 +4076,18 @@ abstract class AppLocalizations {
   /// **'Members'**
   String get mucMembersTitle;
 
+  /// No description provided for @mucEditAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit room avatar'**
+  String get mucEditAvatar;
+
+  /// No description provided for @mucAvatarMenuDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Room members will see this avatar.'**
+  String get mucAvatarMenuDescription;
+
   /// No description provided for @mucInviteUser.
   ///
   /// In en, this message translates to:
@@ -4406,11 +4418,29 @@ abstract class AppLocalizations {
   /// **'Create chat room'**
   String get chatsCreateChatRoomTitle;
 
+  /// No description provided for @chatsCreateChatRoomAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create room'**
+  String get chatsCreateChatRoomAction;
+
   /// No description provided for @chatsRoomNamePlaceholder.
   ///
   /// In en, this message translates to:
   /// **'Name'**
   String get chatsRoomNamePlaceholder;
+
+  /// No description provided for @chatsRoomNameRequiredError.
+  ///
+  /// In en, this message translates to:
+  /// **'Room name cannot be empty.'**
+  String get chatsRoomNameRequiredError;
+
+  /// No description provided for @chatsRoomNameInvalidCharacterError.
+  ///
+  /// In en, this message translates to:
+  /// **'Room names cannot contain {character}.'**
+  String chatsRoomNameInvalidCharacterError(Object character);
 
   /// No description provided for @chatsArchiveTitle.
   ///
