@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -49,6 +51,7 @@ const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
 const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
+const double _taskPopoverMinWidth = 320.0;
 const String _occurrenceScopeTitle = 'Apply changes to';
 const String _occurrenceScopeInstanceLabel = 'This instance';
 const String _occurrenceScopeFutureLabel = 'This and future';
@@ -276,6 +279,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     final bool allowsAnyEdits = editMode.allowsAnyEdits;
     final bool allowsChecklistEdits = editMode.allowsChecklistEdits;
     final bool allowsFullEdits = editMode.allowsFullEdits;
+    final Widget popoverHeader = _EditTaskHeader(onClose: widget.onClose);
     final BorderRadius radius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(8);
@@ -308,6 +312,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       rawProperties: rawProperties,
     );
     final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
+    final env = EnvScope.maybeOf(context);
+    final bool isDesktop = env?.isDesktopPlatform ?? false;
     Widget buildBody({
       required double keyboardInset,
       required double safeBottom,
@@ -591,29 +597,42 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         final mediaQuery = MediaQuery.of(context);
         final double keyboardInset = mediaQuery.viewInsets.bottom;
         final double safeBottom = mediaQuery.viewPadding.bottom;
-        final Widget surfaced = Material(
-          color: Colors.transparent,
-          child: ClipRRect(
-            borderRadius: radius,
-            child: Container(
-              width: isSheet ? double.infinity : calendarTaskPopoverWidth,
-              constraints: BoxConstraints(
-                maxHeight: resolvedMaxHeight,
-                minWidth: 320,
-              ),
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: radius,
-                border: isSheet ? null : Border.all(color: calendarBorderColor),
-                boxShadow: boxShadow,
-              ),
-              child: buildBody(
-                keyboardInset: keyboardInset,
-                safeBottom: safeBottom,
-              ),
-            ),
-          ),
+        final BoxBorder? popoverBorder =
+            isSheet ? null : Border.all(color: calendarBorderColor);
+        final Widget surfaceBody = buildBody(
+          keyboardInset: keyboardInset,
+          safeBottom: safeBottom,
         );
+        final Widget surfaced = _TaskPopoverSurface(
+          width: isSheet ? double.infinity : calendarTaskPopoverWidth,
+          constraints: BoxConstraints(
+            maxHeight: resolvedMaxHeight,
+            minWidth: _taskPopoverMinWidth,
+          ),
+          radius: radius,
+          background: background,
+          border: popoverBorder,
+          boxShadow: boxShadow ?? const <BoxShadow>[],
+          child: surfaceBody,
+        );
+
+        if (!isSheet && isDesktop) {
+          final Widget transformed = _TaskPopoverContainerTransform(
+            header: popoverHeader,
+            body: surfaceBody,
+            width: calendarTaskPopoverWidth,
+            maxHeight: resolvedMaxHeight,
+            radius: radius,
+            background: background,
+            border: popoverBorder,
+            boxShadow: boxShadow ?? const <BoxShadow>[],
+          );
+          return SafeArea(
+            top: true,
+            bottom: true,
+            child: transformed,
+          );
+        }
 
         if (!isSheet) {
           return SafeArea(
@@ -795,6 +814,192 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       widget.onTaskUpdated(updatedTask);
     }
     widget.onClose();
+  }
+}
+
+class _TaskPopoverSurface extends StatelessWidget {
+  const _TaskPopoverSurface({
+    required this.child,
+    required this.width,
+    required this.radius,
+    required this.background,
+    required this.border,
+    required this.boxShadow,
+    this.constraints,
+  });
+
+  final Widget child;
+  final double width;
+  final BorderRadius radius;
+  final Color background;
+  final BoxBorder? border;
+  final List<BoxShadow> boxShadow;
+  final BoxConstraints? constraints;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Container(
+          width: width,
+          constraints: constraints,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: radius,
+            border: border,
+            boxShadow: boxShadow,
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskPopoverContainerTransform extends StatefulWidget {
+  const _TaskPopoverContainerTransform({
+    required this.header,
+    required this.body,
+    required this.width,
+    required this.maxHeight,
+    required this.radius,
+    required this.background,
+    required this.border,
+    required this.boxShadow,
+  });
+
+  final Widget header;
+  final Widget body;
+  final double width;
+  final double maxHeight;
+  final BorderRadius radius;
+  final Color background;
+  final BoxBorder? border;
+  final List<BoxShadow> boxShadow;
+
+  @override
+  State<_TaskPopoverContainerTransform> createState() =>
+      _TaskPopoverContainerTransformState();
+}
+
+class _TaskPopoverContainerTransformState
+    extends State<_TaskPopoverContainerTransform> {
+  final GlobalKey<OpenContainerState> _containerKey =
+      GlobalKey<OpenContainerState>();
+  bool _opened = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openContainer());
+  }
+
+  void _openContainer() {
+    if (_opened) {
+      return;
+    }
+    _opened = true;
+    _containerKey.currentState?.openContainer();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.width,
+      height: widget.maxHeight,
+      child: Navigator(
+        onGenerateRoute: (_) => PageRouteBuilder<void>(
+          pageBuilder: (context, _, __) => _TaskPopoverTransformBody(
+            containerKey: _containerKey,
+            header: widget.header,
+            body: widget.body,
+            width: widget.width,
+            maxHeight: widget.maxHeight,
+            radius: widget.radius,
+            background: widget.background,
+            border: widget.border,
+            boxShadow: widget.boxShadow,
+          ),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskPopoverTransformBody extends StatelessWidget {
+  const _TaskPopoverTransformBody({
+    required this.containerKey,
+    required this.header,
+    required this.body,
+    required this.width,
+    required this.maxHeight,
+    required this.radius,
+    required this.background,
+    required this.border,
+    required this.boxShadow,
+  });
+
+  final GlobalKey<OpenContainerState> containerKey;
+  final Widget header;
+  final Widget body;
+  final double width;
+  final double maxHeight;
+  final BorderRadius radius;
+  final Color background;
+  final BoxBorder? border;
+  final List<BoxShadow> boxShadow;
+
+  @override
+  Widget build(BuildContext context) {
+    final BoxConstraints openConstraints = BoxConstraints(
+      maxHeight: maxHeight,
+      minWidth: _taskPopoverMinWidth,
+    );
+    const BoxConstraints closedConstraints = BoxConstraints(
+      minWidth: _taskPopoverMinWidth,
+    );
+    return OpenContainer(
+      key: containerKey,
+      tappable: false,
+      closedColor: Colors.transparent,
+      openColor: Colors.transparent,
+      closedElevation: 0,
+      openElevation: 0,
+      transitionDuration: baseAnimationDuration,
+      transitionType: ContainerTransitionType.fadeThrough,
+      closedBuilder: (context, action) {
+        return Align(
+          alignment: Alignment.bottomLeft,
+          child: _TaskPopoverSurface(
+            width: width,
+            constraints: closedConstraints,
+            radius: radius,
+            background: background,
+            border: border,
+            boxShadow: boxShadow,
+            child: header,
+          ),
+        );
+      },
+      openBuilder: (context, action) {
+        return Align(
+          alignment: Alignment.bottomLeft,
+          child: _TaskPopoverSurface(
+            width: width,
+            constraints: openConstraints,
+            radius: radius,
+            background: background,
+            border: border,
+            boxShadow: boxShadow,
+            child: body,
+          ),
+        );
+      },
+    );
   }
 }
 

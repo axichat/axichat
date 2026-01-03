@@ -3,6 +3,7 @@
 
 import 'dart:math' as math;
 
+import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
@@ -195,6 +196,7 @@ class _CalendarAvailabilityShareSheetState
   bool _isSending = false;
   bool _hasCustomDraft = false;
   _AvailabilityShareStep _step = _AvailabilityShareStep.range;
+  bool _stepReversing = false;
   int _recipientPageSize = _availabilityRecipientPageSize;
   final Set<String> _selectedRecipientJids = <String>{};
 
@@ -243,11 +245,8 @@ class _CalendarAvailabilityShareSheetState
       subtitle: Text(subtitleText),
       onClose: () => Navigator.of(context).maybePop(),
     );
-    return AxiSheetScaffold.scroll(
-      header: header,
-      children: [
-        if (_step.isRange)
-          _AvailabilityRangeStep(
+    final Widget stepChild = _step.isRange
+        ? _AvailabilityRangeStep(
             rangeStart: _rangeStart,
             rangeEnd: _rangeEnd,
             preview: _previewWidget(),
@@ -258,25 +257,42 @@ class _CalendarAvailabilityShareSheetState
             onSharePressed: _handleSharePressed,
             onPresetSelected: _handlePresetSelected,
           )
-        else if (_step.isEditor)
-          _AvailabilityEditorStep(
-            hint: _availabilityShareEditHint,
-            editor: _editorWidget(),
-            onBack: _handleBackToRange,
-            onDone: _handleDoneEditing,
-          )
-        else
-          _AvailabilityRecipientsStep(
-            queryController: _searchController,
-            recipients: _visibleRecipients(),
-            selectedJids: _selectedRecipientJids,
-            isBusy: _isSending,
-            canLoadMore: _canLoadMoreRecipients(),
-            onLoadMore: _handleLoadMoreRecipients,
-            onToggleRecipient: _handleRecipientToggled,
-            onBack: _handleBackToRange,
-            onSend: _handleSendPressed,
+        : _step.isEditor
+            ? _AvailabilityEditorStep(
+                hint: _availabilityShareEditHint,
+                editor: _editorWidget(),
+                onBack: _handleBackToRange,
+                onDone: _handleDoneEditing,
+              )
+            : _AvailabilityRecipientsStep(
+                queryController: _searchController,
+                recipients: _visibleRecipients(),
+                selectedJids: _selectedRecipientJids,
+                isBusy: _isSending,
+                canLoadMore: _canLoadMoreRecipients(),
+                onLoadMore: _handleLoadMoreRecipients,
+                onToggleRecipient: _handleRecipientToggled,
+                onBack: _handleBackToRange,
+                onSend: _handleSendPressed,
+              );
+    return AxiSheetScaffold.scroll(
+      header: header,
+      children: [
+        PageTransitionSwitcher(
+          duration: baseAnimationDuration,
+          reverse: _stepReversing,
+          transitionBuilder: (child, primaryAnimation, secondaryAnimation) =>
+              SharedAxisTransition(
+            animation: primaryAnimation,
+            secondaryAnimation: secondaryAnimation,
+            transitionType: SharedAxisTransitionType.horizontal,
+            child: child,
           ),
+          child: KeyedSubtree(
+            key: ValueKey<_AvailabilityShareStep>(_step),
+            child: stepChild,
+          ),
+        ),
       ],
     );
   }
@@ -295,6 +311,26 @@ class _CalendarAvailabilityShareSheetState
       intervals: _draftIntervals,
       tzid: _resolveTimeZone(_localModel),
     );
+  }
+
+  int _stepIndex(_AvailabilityShareStep step) {
+    return switch (step) {
+      _AvailabilityShareStep.range => 0,
+      _AvailabilityShareStep.editor => 1,
+      _AvailabilityShareStep.recipients => 2,
+    };
+  }
+
+  void _updateStep(_AvailabilityShareStep next) {
+    if (_step == next) {
+      return;
+    }
+    final int currentIndex = _stepIndex(_step);
+    final int nextIndex = _stepIndex(next);
+    setState(() {
+      _stepReversing = nextIndex < currentIndex;
+      _step = next;
+    });
   }
 
   Widget _editorWidget() {
@@ -342,9 +378,7 @@ class _CalendarAvailabilityShareSheetState
   }
 
   void _handleEditPressed() {
-    setState(() {
-      _step = _AvailabilityShareStep.editor;
-    });
+    _updateStep(_AvailabilityShareStep.editor);
   }
 
   void _handleSharePressed() {
@@ -352,22 +386,18 @@ class _CalendarAvailabilityShareSheetState
       _handleSendPressed();
       return;
     }
-    setState(() {
-      _step = _AvailabilityShareStep.recipients;
-    });
+    _updateStep(_AvailabilityShareStep.recipients);
   }
 
   void _handleBackToRange() {
-    setState(() {
-      _step = _AvailabilityShareStep.range;
-    });
+    _updateStep(_AvailabilityShareStep.range);
   }
 
   void _handleDoneEditing() {
     setState(() {
-      _step = _AvailabilityShareStep.range;
       _hasCustomDraft = true;
     });
+    _updateStep(_AvailabilityShareStep.range);
   }
 
   void _handleDraftIntervalsChanged(List<CalendarFreeBusyInterval> intervals) {
@@ -383,8 +413,8 @@ class _CalendarAvailabilityShareSheetState
       _rangeEnd = preset.overlay.rangeEnd.value;
       _draftIntervals = preset.overlay.intervals;
       _hasCustomDraft = true;
-      _step = _AvailabilityShareStep.range;
     });
+    _updateStep(_AvailabilityShareStep.range);
   }
 
   void _handleRecipientToggled(Chat chat) {
