@@ -170,10 +170,7 @@ extension MessageEvent on mox.MessageEvent {
 bool _isOversizedMessage(mox.MessageEvent event, Logger log) {
   final body = event.extensions.get<mox.MessageBodyData>()?.body;
   if (body != null && !isMessageTextWithinLimit(body)) {
-    final trimmedBody = body.trimLeft();
-    final looksLikeCalendarSync =
-        trimmedBody.startsWith(_calendarSyncEnvelopeJsonPrefix) &&
-            body.contains(_calendarSyncEnvelopeKeyLiteral);
+    final looksLikeCalendarSync = CalendarSyncMessage.looksLikeEnvelope(body);
     final maxBytes = looksLikeCalendarSync
         ? CalendarSyncMessage.maxEnvelopeLength
         : maxMessageTextBytes;
@@ -510,8 +507,6 @@ const int _calendarSnapshotDownloadMaxBytes =
     CalendarSnapshotCodec.maxCompressedBytes;
 const Duration _calendarSyncInboundWindow = Duration(seconds: 60);
 const int _calendarSyncInboundMaxMessages = 120;
-const String _calendarSyncEnvelopeKeyLiteral = '"calendar_sync"';
-const String _calendarSyncEnvelopeJsonPrefix = '{';
 const String _calendarSnapshotDefaultName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _calendarSnapshotNoJidMessage =
@@ -651,6 +646,7 @@ mixin MessageService
     final trimmed = body?.trim();
     if (trimmed == null || trimmed.isEmpty) return false;
     return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed) ||
+        CalendarSyncMessage.looksLikeEnvelope(trimmed) ||
         _MessageStatusSyncEnvelope.isEnvelope(trimmed);
   }
 
@@ -3863,7 +3859,7 @@ mixin MessageService
     final body = message.body;
     if (body != null &&
         body.isNotEmpty &&
-        (CalendarSyncMessage.isCalendarSyncEnvelope(body) ||
+        (CalendarSyncMessage.looksLikeEnvelope(body) ||
             _MessageStatusSyncEnvelope.isEnvelope(body))) {
       return;
     }
@@ -4131,10 +4127,9 @@ mixin MessageService
     final bool isSelfCalendar =
         selfJid != null && chatJid.toLowerCase() == selfJid.toLowerCase();
 
-    final trimmedMessageText = messageText.trimLeft();
-    final looksLikeCalendarSync =
-        trimmedMessageText.startsWith(_calendarSyncEnvelopeJsonPrefix) &&
-            messageText.contains(_calendarSyncEnvelopeKeyLiteral);
+    final looksLikeCalendarSync = CalendarSyncMessage.looksLikeEnvelope(
+      messageText,
+    );
     final syncMessage = looksLikeCalendarSync
         ? CalendarSyncMessage.tryParseEnvelope(messageText)
         : null;
