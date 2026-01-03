@@ -359,20 +359,16 @@ class _CalendarAppBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              AxiIconButton(
+              AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: context.l10n.calendarBackToChats,
-                color: colors.foreground,
-                borderColor: colors.border,
                 onPressed: onBackPressed,
               ),
               const Spacer(),
               if (onShareAvailability != null) ...[
-                AxiIconButton(
+                AxiIconButton.ghost(
                   iconData: LucideIcons.share2,
                   tooltip: _calendarAvailabilityShareTooltip,
-                  color: colors.foreground,
-                  borderColor: colors.border,
                   onPressed: onShareAvailability,
                 ),
                 const SizedBox(width: _calendarShareActionSpacing),

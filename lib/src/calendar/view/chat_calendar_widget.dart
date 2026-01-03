@@ -407,11 +407,9 @@ class _ChatCalendarAppBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (showBackButton)
-                AxiIconButton(
+                AxiIconButton.ghost(
                   iconData: LucideIcons.arrowLeft,
                   tooltip: context.l10n.chatBack,
-                  color: colors.foreground,
-                  borderColor: colors.border,
                   onPressed: onBackPressed,
                 ),
               if (showBackButton)
@@ -450,18 +448,15 @@ class _ChatCalendarActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     return Wrap(
       spacing: _chatCalendarShareActionSpacing,
       runSpacing: _chatCalendarShareActionSpacing,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         if (onShareAvailability != null)
-          AxiIconButton(
+          AxiIconButton.ghost(
             iconData: LucideIcons.send,
             tooltip: _chatCalendarAvailabilityShareTooltip,
-            color: colors.foreground,
-            borderColor: colors.border,
             onPressed: onShareAvailability,
           ),
         SyncControls(

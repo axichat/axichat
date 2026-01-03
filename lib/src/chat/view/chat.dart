@@ -361,25 +361,6 @@ String _sortLabel(SearchSortOrder order, AppLocalizations l10n) =>
       SearchSortOrder.oldestFirst => l10n.chatSearchSortOldestFirst,
     };
 
-class _ChatSearchToggleButton extends StatelessWidget {
-  const _ChatSearchToggleButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<ChatSearchCubit, ChatSearchState>(
-      builder: (context, state) {
-        final l10n = context.l10n;
-        return AxiIconButton.ghost(
-          iconData: LucideIcons.search,
-          tooltip:
-              state.active ? l10n.chatSearchClose : l10n.chatSearchMessages,
-          onPressed: () => context.read<ChatSearchCubit>().toggleActive(),
-        );
-      },
-    );
-  }
-}
-
 class _ChatSearchPanel extends StatefulWidget {
   const _ChatSearchPanel();
 
@@ -3709,101 +3690,79 @@ class _ChatState extends State<Chat> {
                     (state.roomState?.myAffiliation.canManagePins ?? false);
                 final canTogglePins = !readOnly && canManagePins;
                 final int pinnedCount = state.pinnedMessages.length;
-                final IconData pinnedIcon =
-                    _pinnedPanelVisible ? LucideIcons.x : LucideIcons.pin;
+                const IconData pinnedIcon = LucideIcons.pin;
                 final bool showingChatCalendar =
                     openChatCalendar || _chatRoute.isCalendar;
-                final Duration overlayDuration =
-                    context.watch<SettingsCubit>().animationDuration;
+                final bool collapseAppBarActions =
+                    MediaQuery.sizeOf(context).width <
+                        appBarActionOverflowBreakpoint;
+                final List<AppBarActionItem> leadingActions =
+                    <AppBarActionItem>[
+                  if (!readOnly)
+                    AppBarActionItem(
+                      label: context.l10n.commonClose,
+                      iconData: LucideIcons.x,
+                      onPressed: () {
+                        if (!prepareChatExit()) return;
+                        unawaited(
+                          context.read<ChatsCubit>().closeAllChats(),
+                        );
+                      },
+                    ),
+                  if (!readOnly && openStack.length > 1)
+                    AppBarActionItem(
+                      label: context.l10n.chatBack,
+                      iconData: LucideIcons.arrowLeft,
+                      onPressed: () {
+                        if (!prepareChatExit()) return;
+                        unawaited(
+                          context.read<ChatsCubit>().popChat(),
+                        );
+                      },
+                    ),
+                  if (!readOnly && forwardStack.isNotEmpty)
+                    AppBarActionItem(
+                      label: context.l10n.chatMessageOpenChat,
+                      iconData: LucideIcons.arrowRight,
+                      onPressed: () {
+                        if (!prepareChatExit()) return;
+                        unawaited(
+                          context.read<ChatsCubit>().restoreChat(),
+                        );
+                      },
+                    ),
+                ];
+                final int leadingActionCount = leadingActions.length;
+                final double leadingWidth = collapseAppBarActions ||
+                        leadingActionCount == 0
+                    ? _chatAppBarCollapsedLeadingWidth
+                    : _chatAppBarLeadingInset +
+                        (AxiIconButton.kTapTargetSize * leadingActionCount) +
+                        (_chatAppBarLeadingSpacing *
+                            math.max(0, leadingActionCount - 1));
                 final scaffold = Scaffold(
                   backgroundColor: context.colorScheme.background,
                   appBar: AppBar(
                     scrolledUnderElevation: 0,
                     forceMaterialTransparency: true,
+                    automaticallyImplyLeading: false,
                     shape: Border(
                         bottom: BorderSide(color: context.colorScheme.border)),
                     actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    leadingWidth: readOnly
-                        ? 0
-                        : ((AxiIconButton.kDefaultSize + 8) *
-                                ((openStack.length > 1 ? 1 : 0) +
-                                    (forwardStack.isNotEmpty ? 1 : 0) +
-                                    1)) +
-                            12,
-                    leading: readOnly
+                    leadingWidth: leadingWidth,
+                    leading: readOnly ||
+                            collapseAppBarActions ||
+                            leadingActionCount == 0
                         ? null
                         : Padding(
-                            padding: const EdgeInsets.only(left: 12),
+                            padding: const EdgeInsets.only(
+                              left: _chatAppBarLeadingInset,
+                            ),
                             child: Align(
                               alignment: Alignment.centerLeft,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    width: AxiIconButton.kDefaultSize,
-                                    height: AxiIconButton.kDefaultSize,
-                                    child: AxiIconButton(
-                                      iconData: LucideIcons.x,
-                                      tooltip: context.l10n.commonClose,
-                                      color: context.colorScheme.foreground,
-                                      borderColor: context.colorScheme.border,
-                                      onPressed: () {
-                                        if (!prepareChatExit()) return;
-                                        unawaited(
-                                          context
-                                              .read<ChatsCubit>()
-                                              .closeAllChats(),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  if ((openStack.length > 1 ||
-                                          forwardStack.isNotEmpty) &&
-                                      !readOnly)
-                                    const SizedBox(width: 8),
-                                  if (openStack.length > 1)
-                                    SizedBox(
-                                      width: AxiIconButton.kDefaultSize,
-                                      height: AxiIconButton.kDefaultSize,
-                                      child: AxiIconButton(
-                                        iconData: LucideIcons.arrowLeft,
-                                        tooltip: context.l10n.chatBack,
-                                        color: context.colorScheme.foreground,
-                                        borderColor: context.colorScheme.border,
-                                        onPressed: () {
-                                          if (!prepareChatExit()) return;
-                                          unawaited(
-                                            context
-                                                .read<ChatsCubit>()
-                                                .popChat(),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  if (openStack.length > 1 &&
-                                      forwardStack.isNotEmpty)
-                                    const SizedBox(width: 8),
-                                  if (forwardStack.isNotEmpty)
-                                    SizedBox(
-                                      width: AxiIconButton.kDefaultSize,
-                                      height: AxiIconButton.kDefaultSize,
-                                      child: AxiIconButton(
-                                        iconData: LucideIcons.arrowRight,
-                                        tooltip:
-                                            context.l10n.chatMessageOpenChat,
-                                        color: context.colorScheme.foreground,
-                                        borderColor: context.colorScheme.border,
-                                        onPressed: () {
-                                          if (!prepareChatExit()) return;
-                                          unawaited(
-                                            context
-                                                .read<ChatsCubit>()
-                                                .restoreChat(),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                ],
+                              child: AppBarActions(
+                                actions: leadingActions,
+                                spacing: _chatAppBarLeadingSpacing,
                               ),
                             ),
                           ),
@@ -3926,59 +3885,83 @@ class _ChatState extends State<Chat> {
                             },
                           ),
                     actions: [
-                      if (jid != null) ...[
-                        if (isGroupChat)
-                          AxiIconButton(
-                            iconData: LucideIcons.users,
-                            tooltip: context.l10n.chatRoomMembers,
-                            onPressed: _showMembers,
-                          ),
-                        const _ChatSearchToggleButton(),
-                        const SizedBox(width: _chatHeaderActionSpacing),
-                        AxiIconButton(
-                          iconData: LucideIcons.image,
-                          tooltip: context.l10n.chatAttachmentTooltip,
-                          onPressed: _openChatAttachments,
-                        ),
-                        const SizedBox(width: _chatHeaderActionSpacing),
-                        AxiIconButton(
-                          iconData: pinnedIcon,
-                          icon: _PinnedBadgeIcon(
-                            iconData: pinnedIcon,
-                            count: pinnedCount,
-                          ),
-                          tooltip: _pinnedPanelVisible
-                              ? context.l10n.commonClose
-                              : context.l10n.chatPinnedMessagesTooltip,
-                          onPressed: _togglePinnedMessages,
-                        ),
-                        if (chatCalendarAvailable) ...[
-                          const SizedBox(width: _chatHeaderActionSpacing),
-                          AxiIconButton(
-                            iconData: LucideIcons.calendarClock,
-                            tooltip: context.l10n.homeRailCalendar,
-                            onPressed: () {
-                              if (showingChatCalendar) {
-                                _closeChatCalendar();
-                                return;
-                              }
-                              _openChatCalendar();
-                            },
-                          ),
-                        ],
-                        if (canShowSettings) ...[
-                          const SizedBox(width: _chatHeaderActionSpacing),
-                          AxiIconButton(
-                            iconData: isSettingsRoute
-                                ? LucideIcons.x
-                                : LucideIcons.settings,
-                            tooltip: isSettingsRoute
-                                ? context.l10n.chatCloseSettings
-                                : context.l10n.chatSettings,
-                            onPressed: _toggleSettingsPanel,
-                          ),
-                        ],
-                      ] else
+                      if (jid != null)
+                        BlocSelector<ChatSearchCubit, ChatSearchState, bool>(
+                          selector: (state) => state.active,
+                          builder: (context, searchActive) {
+                            final l10n = context.l10n;
+                            final List<AppBarActionItem> chatActions =
+                                <AppBarActionItem>[
+                              if (isGroupChat)
+                                AppBarActionItem(
+                                  label: l10n.chatRoomMembers,
+                                  iconData: LucideIcons.users,
+                                  onPressed: _showMembers,
+                                ),
+                              AppBarActionItem(
+                                label: searchActive
+                                    ? l10n.chatSearchClose
+                                    : l10n.chatSearchMessages,
+                                iconData: LucideIcons.search,
+                                onPressed: () => context
+                                    .read<ChatSearchCubit>()
+                                    .toggleActive(),
+                              ),
+                              AppBarActionItem(
+                                label: l10n.chatAttachmentTooltip,
+                                iconData: LucideIcons.image,
+                                onPressed: _openChatAttachments,
+                              ),
+                              AppBarActionItem(
+                                label: _pinnedPanelVisible
+                                    ? l10n.commonClose
+                                    : l10n.chatPinnedMessagesTooltip,
+                                iconData: pinnedIcon,
+                                icon: _PinnedBadgeIcon(
+                                  iconData: pinnedIcon,
+                                  count: pinnedCount,
+                                ),
+                                onPressed: _togglePinnedMessages,
+                              ),
+                              if (chatCalendarAvailable)
+                                AppBarActionItem(
+                                  label: showingChatCalendar
+                                      ? l10n.commonClose
+                                      : l10n.homeRailCalendar,
+                                  iconData: LucideIcons.calendarClock,
+                                  onPressed: () {
+                                    if (showingChatCalendar) {
+                                      _closeChatCalendar();
+                                      return;
+                                    }
+                                    _openChatCalendar();
+                                  },
+                                ),
+                              if (canShowSettings)
+                                AppBarActionItem(
+                                  label: isSettingsRoute
+                                      ? l10n.chatCloseSettings
+                                      : l10n.chatSettings,
+                                  iconData: LucideIcons.settings,
+                                  onPressed: _toggleSettingsPanel,
+                                ),
+                            ];
+                            final List<AppBarActionItem> combinedActions =
+                                collapseAppBarActions
+                                    ? <AppBarActionItem>[
+                                        ...leadingActions,
+                                        ...chatActions,
+                                      ]
+                                    : chatActions;
+                            return AppBarActions(
+                              actions: combinedActions,
+                              spacing: _chatHeaderActionSpacing,
+                              forceCollapsed:
+                                  collapseAppBarActions ? true : null,
+                            );
+                          },
+                        )
+                      else
                         const SizedBox.shrink(),
                     ],
                   ),
@@ -7266,7 +7249,8 @@ class _ChatState extends State<Chat> {
                       );
                       final Widget overlayStack = AxiFadeIndexedStack(
                         index: _chatRoute.index,
-                        duration: overlayDuration,
+                        duration:
+                            context.watch<SettingsCubit>().animationDuration,
                         curve: _chatOverlayFadeCurve,
                         children: [
                           const SizedBox.expand(),

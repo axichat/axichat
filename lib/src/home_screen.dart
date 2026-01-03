@@ -88,6 +88,8 @@ const String _linkedEmailAccountsLocation = '/profile/email-accounts';
 const int _homeChatPageIndex = 0;
 const int _homeCalendarPageIndex = 1;
 const Curve _homeCalendarFadeCurve = Curves.easeInOutCubic;
+const double _homeHeaderActionSpacing = 4.0;
+const String _homeSyncTooltip = 'Sync';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -911,29 +913,47 @@ class _NexusState extends State<Nexus> {
     final env = EnvScope.of(context);
     final showDesktopRefresh =
         env.isDesktopPlatform && context.read<ChatsCubit?>() != null;
+    final List<AppBarActionItem> headerActions = <AppBarActionItem>[
+      if (showFindActionInHeader &&
+          context.watch<AccessibilityActionBloc?>() != null)
+        AppBarActionItem(
+          label: context.l10n.accessibilityActionsLabel,
+          iconData: LucideIcons.lifeBuoy,
+          inline: _FindActionIconButton(
+            showShortcutHint: showShortcutHints,
+          ),
+          onPressed: () => context
+              .read<AccessibilityActionBloc?>()
+              ?.add(const AccessibilityMenuOpened()),
+        ),
+      if (showDesktopRefresh)
+        AppBarActionItem(
+          label: _homeSyncTooltip,
+          iconData: LucideIcons.refreshCw,
+          inline: const _DesktopHomeRefreshButton(),
+          onPressed: () =>
+              unawaited(context.read<ChatsCubit>().refreshHomeSync()),
+        ),
+      AppBarActionItem(
+        label: searchActive
+            ? context.l10n.chatSearchClose
+            : context.l10n.commonSearch,
+        iconData: LucideIcons.search,
+        inline: _SearchToggleButton(
+          active: searchActive,
+          onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
+        ),
+        onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
+      ),
+    ];
     final header = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         AxiAppBar(
           showTitle: widget.navPlacement != NavPlacement.rail,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showFindActionInHeader) ...[
-                _FindActionIconButton(
-                  showShortcutHint: showShortcutHints,
-                ),
-                const SizedBox(width: 4),
-              ],
-              if (showDesktopRefresh) ...[
-                const _DesktopHomeRefreshButton(),
-                const SizedBox(width: 4),
-              ],
-              _SearchToggleButton(
-                active: searchActive,
-                onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
-              ),
-            ],
+          trailing: AppBarActions(
+            actions: headerActions,
+            spacing: _homeHeaderActionSpacing,
           ),
         ),
         _HomeSearchPanel(tabs: widget.tabs),
@@ -1204,8 +1224,8 @@ class _SearchToggleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return AxiIconButton(
-      iconData: active ? LucideIcons.x : LucideIcons.search,
+    return AxiIconButton.ghost(
+      iconData: LucideIcons.search,
       tooltip: active ? l10n.chatSearchClose : l10n.commonSearch,
       onPressed: onPressed,
     );
@@ -1253,7 +1273,6 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
 
   @override
   Widget build(BuildContext context) {
-    const tooltip = 'Sync';
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
           previous.refreshStatus != current.refreshStatus,
@@ -1262,9 +1281,9 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
         selector: (state) => state.refreshStatus,
         builder: (context, status) {
           final spinning = status.isLoading;
-          return AxiIconButton(
+          return AxiIconButton.ghost(
             iconData: LucideIcons.refreshCw,
-            tooltip: tooltip,
+            tooltip: _homeSyncTooltip,
             onPressed: spinning
                 ? null
                 : () => unawaited(context.read<ChatsCubit>().refreshHomeSync()),

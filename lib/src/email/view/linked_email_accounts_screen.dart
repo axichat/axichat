@@ -128,11 +128,9 @@ class _LinkedEmailAccountsBody extends StatelessWidget {
                 AxiIconButton.kDefaultSize + _appBarLeadingWidthPadding,
             leading: Padding(
               padding: const EdgeInsets.only(left: _appBarLeadingPadding),
-              child: AxiIconButton(
+              child: AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: l10n.commonBack,
-                color: colors.foreground,
-                borderColor: colors.border,
                 onPressed: context.pop,
               ),
             ),
