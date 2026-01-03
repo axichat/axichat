@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:delta_ffi/delta_safe.dart' show DeltaCoreEvent;
 

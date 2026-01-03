@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
@@ -48,8 +51,13 @@ class OperationProgressController {
     Duration duration = const Duration(milliseconds: 600),
   }) async {
     if (!_active) {
-      reset();
-      return;
+      final seededValue = _controller.value < _maxDuringOperation
+          ? _maxDuringOperation
+          : _controller.value;
+      _controller
+        ..stop()
+        ..value = seededValue;
+      _active = true;
     }
     await _controller.animateTo(
       1.0,

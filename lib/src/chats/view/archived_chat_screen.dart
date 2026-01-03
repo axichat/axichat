@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
@@ -100,11 +103,9 @@ class _ArchivedChatBody extends StatelessWidget {
             child: SizedBox(
               width: AxiIconButton.kDefaultSize,
               height: AxiIconButton.kDefaultSize,
-              child: AxiIconButton(
+              child: AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: l10n.commonBack,
-                color: colors.foreground,
-                borderColor: colors.border,
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
             ),

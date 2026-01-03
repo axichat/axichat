@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
@@ -268,6 +271,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   static const messageBatchSize = 50;
+  static const int _emptyMessageCount = 0;
   static final RegExp _axiDomainPattern =
       RegExp(r'@(?:[\\w-]+\\.)*axi\\.im$', caseSensitive: false);
   static const CalendarFragmentPolicy _calendarFragmentPolicy =
@@ -326,6 +330,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _mamComplete = false;
   bool _mamLoading = false;
   bool _mamCatchingUp = false;
+  bool _mamCatchUpCompleted = false;
   bool _emailHistoryLoading = false;
   bool _pinHydrationInFlight = false;
   Completer<void>? _mamLoadingCompleter;
@@ -493,8 +498,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_mamLoading && _mamLoadingCompleter != null) {
       await _mamLoadingCompleter!.future;
     }
+    _mamCatchUpCompleted = false;
     _mamCatchingUp = true;
     _beginMamLoad();
+    var completed = true;
     try {
       String? afterId;
       while (true) {
@@ -518,6 +525,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         afterId = nextAfter;
       }
     } on Exception catch (error, stackTrace) {
+      completed = false;
       _log.safeFine(
         'Failed to catch up via MAM for ${chat.jid}',
         error,
@@ -526,6 +534,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     _finishMamLoad();
     _mamCatchingUp = false;
+    if (completed) {
+      _mamCatchUpCompleted = true;
+    }
   }
 
   Future<void> _initializeViewFilter() async {
@@ -550,6 +561,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _mamComplete = false;
     _mamLoading = false;
     _mamCatchingUp = false;
+    _mamCatchUpCompleted = false;
     _mamLoadingCompleter?.complete();
     _mamLoadingCompleter = null;
   }
@@ -559,6 +571,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
     final localCount = await _archivedMessageCount(chat);
     if (localCount >= _currentMessageLimit) return;
+    final lastSeen = await _messageService.loadLastSeenTimestamp(
+      chat.remoteJid,
+    );
+    final hasLocalMessages = localCount > _emptyMessageCount;
+    if (lastSeen != null && hasLocalMessages) {
+      if (!_mamCatchUpCompleted) {
+        await _catchUpFromMam();
+      }
+      final refreshedCount = await _archivedMessageCount(chat);
+      if (refreshedCount >= _currentMessageLimit) {
+        return;
+      }
+    }
     _beginMamLoad();
     try {
       final result = await _messageService.fetchLatestFromArchive(

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 const String syncLegacySourceId = 'legacy';
 const int syncAddressMaxBytes = 512;
 const int syncSourceIdMaxBytes = 64;

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 import 'dart:io';
 
@@ -270,11 +273,15 @@ class _InlineSyncControls extends StatelessWidget {
       runSpacing: calendarInsetMd,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        CalendarTransferMenuButton(
+          hasCalendarData: hasCalendarData,
+          onExport: onExportCalendar,
+          onImport: onImportCalendar,
+          busy: disabled,
+        ),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SyncStatusIndicator(state: state),
-            const SizedBox(width: 6),
             Text(
               statusText,
               style: TextStyle(
@@ -292,13 +299,9 @@ class _InlineSyncControls extends StatelessWidget {
                     ?.copyWith(color: Theme.of(context).hintColor),
               ),
             ],
+            const SizedBox(width: 6),
+            SyncStatusIndicator(state: state),
           ],
-        ),
-        CalendarTransferMenuButton(
-          hasCalendarData: hasCalendarData,
-          onExport: onExportCalendar,
-          onImport: onImportCalendar,
-          busy: disabled,
         ),
       ],
     );
@@ -326,13 +329,13 @@ class _CompactSyncControls extends StatelessWidget {
       runSpacing: calendarInsetMd,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        SyncStatusIndicator(state: state),
         CalendarTransferMenuButton(
           hasCalendarData: hasCalendarData,
           onExport: onExportCalendar,
           onImport: onImportCalendar,
           busy: disabled,
         ),
+        SyncStatusIndicator(state: state),
       ],
     );
   }

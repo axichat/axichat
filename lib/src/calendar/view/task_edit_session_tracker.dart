@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 /// Tracks which tasks currently have an edit surface open to avoid opening
 /// multiple popovers/sheets for the same task when it appears in different
 /// places (grid + critical path, etc.).

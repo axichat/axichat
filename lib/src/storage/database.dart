@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 // ignore_for_file: avoid_renaming_method_parameters
 
 import 'dart:io';
@@ -81,6 +84,11 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
+  Future<List<Message>> getPendingOutgoingDeltaMessages({
+    required int deltaAccountId,
+    required int deltaChatId,
+  });
+
   Future<List<Message>> searchChatMessages({
     required String jid,
     String? query,
@@ -96,6 +104,12 @@ abstract interface class XmppDatabase implements Database {
   Future<Message?> getMessageByStanzaID(String stanzaID);
 
   Future<Message?> getMessageByOriginID(String originID);
+
+  Future<Message?> getMessageByDeltaId(
+    int deltaMsgId, {
+    int? deltaAccountId,
+    String? chatJid,
+  });
 
   Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
 
@@ -189,6 +203,17 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markMessageDisplayed(String stanzaID);
 
   Future<void> deleteMessage(String stanzaID);
+
+  Future<void> replaceDeltaPlaceholderSelfJids({
+    required int deltaAccountId,
+    required String resolvedAddress,
+    required List<String> placeholderJids,
+  });
+
+  Future<void> removeDeltaPlaceholderDuplicates({
+    required int deltaAccountId,
+    required List<String> placeholderJids,
+  });
 
   Future<void> clearMessageHistory();
 
@@ -346,6 +371,8 @@ abstract interface class XmppDatabase implements Database {
   Future<List<String>> getRecipientAddressSuggestions({int? limit});
 
   Future<Chat?> getChat(String jid);
+
+  Future<Chat?> getOpenChat();
 
   Future<Chat?> getChatByDeltaChatId(
     int deltaChatId, {
@@ -1589,7 +1616,7 @@ WHERE delta_chat_id IS NOT NULL
             (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
           END
         )
-      ORDER BY m.timestamp DESC, m.stanza_i_d DESC
+      ORDER BY m.timestamp DESC, m.delta_msg_id DESC, m.stanza_i_d DESC
       LIMIT ?
       OFFSET ?
       ''',
@@ -1621,6 +1648,27 @@ WHERE delta_chat_id IS NOT NULL
         (tbl) => OrderingTerm(
               expression: tbl.timestamp,
               mode: OrderingMode.asc,
+            ),
+      ]);
+    return query.get();
+  }
+
+  @override
+  Future<List<Message>> getPendingOutgoingDeltaMessages({
+    required int deltaAccountId,
+    required int deltaChatId,
+  }) async {
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.deltaMsgId.isNull() &
+            tbl.deltaChatId.equals(deltaChatId) &
+            tbl.deltaAccountId.equals(deltaAccountId),
+      )
+      ..orderBy([
+        (tbl) => OrderingTerm(
+              expression: tbl.timestamp,
+              mode: OrderingMode.desc,
             ),
       ]);
     return query.get();
@@ -1748,6 +1796,23 @@ WHERE delta_chat_id IS NOT NULL
   @override
   Future<Message?> getMessageByOriginID(String originID) =>
       messagesAccessor.selectOneByOriginID(originID);
+
+  @override
+  Future<Message?> getMessageByDeltaId(
+    int deltaMsgId, {
+    int? deltaAccountId,
+    String? chatJid,
+  }) {
+    final query = select(messages)
+      ..where((tbl) => tbl.deltaMsgId.equals(deltaMsgId));
+    if (deltaAccountId != null) {
+      query.where((tbl) => tbl.deltaAccountId.equals(deltaAccountId));
+    }
+    if (chatJid != null) {
+      query.where((tbl) => tbl.chatJid.equals(chatJid));
+    }
+    return query.getSingleOrNull();
+  }
 
   @override
   Future<List<Message>> getMessagesByStanzaIds(
@@ -2218,6 +2283,134 @@ WHERE jid = ?
   }
 
   @override
+  Future<void> replaceDeltaPlaceholderSelfJids({
+    required int deltaAccountId,
+    required String resolvedAddress,
+    required List<String> placeholderJids,
+  }) async {
+    const String sqlPlaceholderToken = '?';
+    const String sqlPlaceholderSeparator = ', ';
+    final normalizedAddress = resolvedAddress.trim().toLowerCase();
+    if (normalizedAddress.isEmpty) {
+      return;
+    }
+    final normalizedPlaceholders = placeholderJids
+        .map((jid) => jid.trim().toLowerCase())
+        .where((jid) => jid.isNotEmpty)
+        .toList(growable: false);
+    if (normalizedPlaceholders.isEmpty) {
+      return;
+    }
+    final placeholderClause = List<String>.filled(
+      normalizedPlaceholders.length,
+      sqlPlaceholderToken,
+      growable: false,
+    ).join(sqlPlaceholderSeparator);
+    final updateMessagesSql = '''
+UPDATE messages
+SET sender_jid = ?
+WHERE delta_account_id = ?
+  AND sender_jid IN ($placeholderClause)
+''';
+    await customStatement(
+      updateMessagesSql,
+      [
+        normalizedAddress,
+        deltaAccountId,
+        ...normalizedPlaceholders,
+      ],
+    );
+    final updateChatsSql = '''
+UPDATE chats
+SET email_from_address = ?
+WHERE email_from_address IN ($placeholderClause)
+  AND jid IN (
+    SELECT chat_jid
+    FROM email_chat_accounts
+    WHERE delta_account_id = ?
+  )
+''';
+    await customStatement(
+      updateChatsSql,
+      [
+        normalizedAddress,
+        ...normalizedPlaceholders,
+        deltaAccountId,
+      ],
+    );
+  }
+
+  @override
+  Future<void> removeDeltaPlaceholderDuplicates({
+    required int deltaAccountId,
+    required List<String> placeholderJids,
+  }) async {
+    const String deltaKeySeparator = '|';
+    final normalizedPlaceholders = placeholderJids
+        .map((jid) => jid.trim().toLowerCase())
+        .where((jid) => jid.isNotEmpty)
+        .toList(growable: false);
+    if (normalizedPlaceholders.isEmpty) {
+      return;
+    }
+    final placeholderMessages = await (select(messages)
+          ..where(
+            (tbl) =>
+                tbl.deltaAccountId.equals(deltaAccountId) &
+                tbl.deltaMsgId.isNotNull() &
+                tbl.senderJid.isIn(normalizedPlaceholders),
+          ))
+        .get();
+    if (placeholderMessages.isEmpty) {
+      return;
+    }
+    final deltaIds = placeholderMessages
+        .map((message) => message.deltaMsgId)
+        .whereType<int>()
+        .toSet();
+    if (deltaIds.isEmpty) {
+      return;
+    }
+    final relatedMessages = await (select(messages)
+          ..where(
+            (tbl) =>
+                tbl.deltaAccountId.equals(deltaAccountId) &
+                tbl.deltaMsgId.isIn(deltaIds),
+          ))
+        .get();
+    final messagesByKey = <String, List<Message>>{};
+    for (final message in relatedMessages) {
+      final deltaMsgId = message.deltaMsgId;
+      if (deltaMsgId == null) {
+        continue;
+      }
+      final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
+      final entries = messagesByKey[key] ?? <Message>[];
+      entries.add(message);
+      messagesByKey[key] = entries;
+    }
+    final messagesToDelete = <String>{};
+    for (final message in placeholderMessages) {
+      final deltaMsgId = message.deltaMsgId;
+      if (deltaMsgId == null) {
+        continue;
+      }
+      final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
+      final candidates = messagesByKey[key] ?? const <Message>[];
+      final hasNonPlaceholder = candidates.any((candidate) {
+        final sender = candidate.senderJid.trim().toLowerCase();
+        return !normalizedPlaceholders.contains(sender);
+      });
+      if (hasNonPlaceholder) {
+        messagesToDelete.add(message.stanzaID);
+      }
+    }
+    for (final stanzaId in messagesToDelete) {
+      await deleteMessage(stanzaId);
+    }
+  }
+
+  @override
   Future<void> clearMessageHistory() async {
     _log.info('Clearing message history...');
     final metadataToDelete = await select(fileMetadata).get();
@@ -2259,6 +2452,7 @@ WHERE jid = ?
     int? deltaAccountId,
   }) async {
     const int trimBatchSize = 900; // stays under SQLite's 999-variable limit
+    const int trimRefreshSummaryLimit = 0;
     Iterable<List<T>> chunked<T>(List<T> items) sync* {
       for (var index = 0; index < items.length; index += trimBatchSize) {
         final end = index + trimBatchSize;
@@ -2266,7 +2460,10 @@ WHERE jid = ?
       }
     }
 
-    final offset = maxMessages <= 0 ? 0 : maxMessages;
+    final offset = maxMessages <= trimRefreshSummaryLimit
+        ? trimRefreshSummaryLimit
+        : maxMessages;
+    final bool refreshSummary = maxMessages <= trimRefreshSummaryLimit;
     final bool filterByAccount = deltaAccountId != null;
     final String accountClause =
         filterByAccount ? ' AND delta_account_id = ?' : '';
@@ -2287,7 +2484,12 @@ WHERE jid = ?
       readsFrom: {messages},
     ).get();
 
-    if (pruned.isEmpty) return;
+    if (pruned.isEmpty) {
+      if (refreshSummary) {
+        await _refreshChatSummaryAfterTrim(jid: jid);
+      }
+      return;
+    }
 
     final stanzaIds = <String>[];
     final Map<int, List<int>> deltaMsgIdsByAccount = {};
@@ -2418,6 +2620,51 @@ WHERE jid = ?
 
     for (final metadataId in metadataIds) {
       await _deleteFileMetadataIfOrphaned(metadataId);
+    }
+    if (refreshSummary) {
+      await _refreshChatSummaryAfterTrim(jid: jid);
+    }
+  }
+
+  Future<void> _refreshChatSummaryAfterTrim({required String jid}) async {
+    const int summaryStartOffset = 0;
+    const int summaryPageSize = 1;
+    const int emptyUnreadCount = 0;
+    const int emptyTimestampMillis = 0;
+    const summaryFilter = MessageTimelineFilter.allWithContact;
+    final chat = await getChat(jid);
+    if (chat == null) return;
+    final messages = await getChatMessages(
+      jid,
+      start: summaryStartOffset,
+      end: summaryPageSize,
+      filter: summaryFilter,
+    );
+    final lastMessage = messages.isEmpty ? null : messages.first;
+    final String? trimmedBody = lastMessage?.body?.trim();
+    final bool hasAttachment = lastMessage?.fileMetadataID?.isNotEmpty == true;
+    final String? lastMessagePreview = lastMessage == null
+        ? null
+        : await _messagePreview(
+            trimmedBody: trimmedBody,
+            fileMetadataId: lastMessage.fileMetadataID,
+            hasAttachment: hasAttachment,
+            pseudoMessageType: lastMessage.pseudoMessageType,
+            pseudoMessageData: lastMessage.pseudoMessageData,
+          );
+    final DateTime emptyTimestamp =
+        DateTime.fromMillisecondsSinceEpoch(emptyTimestampMillis);
+    final DateTime nextTimestamp = lastMessage?.timestamp ??
+        (lastMessage == null ? emptyTimestamp : chat.lastChangeTimestamp);
+    final int nextUnreadCount =
+        lastMessage == null ? emptyUnreadCount : chat.unreadCount;
+    final updated = chat.copyWith(
+      lastMessage: lastMessagePreview,
+      lastChangeTimestamp: nextTimestamp,
+      unreadCount: nextUnreadCount,
+    );
+    if (updated != chat) {
+      await chatsAccessor.updateOne(updated);
     }
   }
 
@@ -2812,6 +3059,16 @@ WHERE jid = ?
     final isReferenced = await _isFileMetadataReferenced(trimmedId);
     if (isReferenced) return;
     await fileMetadataAccessor.deleteOne(trimmedId);
+    final path = metadata.path?.trim();
+    if (path == null || path.isEmpty) {
+      return;
+    }
+    final hasSiblingMetadata = await (select(fileMetadata)
+          ..where((tbl) => tbl.path.equals(path)))
+        .get();
+    if (hasSiblingMetadata.isNotEmpty) {
+      return;
+    }
     await _deleteManagedAttachmentFile(metadata);
   }
 
@@ -3194,6 +3451,9 @@ $limitClause
 
   @override
   Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
+
+  @override
+  Future<Chat?> getOpenChat() => chatsAccessor.selectOpen();
 
   @override
   Future<Chat?> getChatByDeltaChatId(

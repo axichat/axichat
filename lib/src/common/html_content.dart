@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:xml/xml.dart' as xml;
@@ -80,6 +83,14 @@ class HtmlContentCodec {
     'hr',
     'img',
   };
+  static const Set<String> _plainTextHtmlTags = <String>{
+    'body',
+    'br',
+    'div',
+    'html',
+    'p',
+    'span',
+  };
   static const Set<String> _sanitizedLinkSchemes = <String>{
     'http',
     'https',
@@ -126,6 +137,22 @@ class HtmlContentCodec {
   static String? normalizeHtml(String? html) {
     final trimmed = html?.trim();
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  static bool isPlainTextHtml(String html) {
+    final trimmed = html.trim();
+    if (trimmed.isEmpty) return true;
+    try {
+      final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
+      final budget = _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      );
+      return _isPlainTextNodes(fragment.nodes, budget, 0);
+    } on Exception {
+      return false;
+    }
   }
 
   static String fromPlainText(String text) {
@@ -225,6 +252,42 @@ class HtmlContentCodec {
         _appendPlainText(buffer, node.nodes, budget, depth + 1);
       }
     }
+  }
+
+  static bool _isPlainTextNodes(
+    List<dom.Node> nodes,
+    _HtmlNodeBudget budget,
+    int depth,
+  ) {
+    for (final node in nodes) {
+      if (!budget.allow(depth)) {
+        return false;
+      }
+      if (node is dom.Text) {
+        continue;
+      }
+      if (node is dom.Comment) {
+        continue;
+      }
+      if (node is dom.Element) {
+        final tag = (node.localName ?? '').toLowerCase();
+        if (!_plainTextHtmlTags.contains(tag)) {
+          return false;
+        }
+        if (node.attributes.isNotEmpty) {
+          return false;
+        }
+        if (!_isPlainTextNodes(node.nodes, budget, depth + 1)) {
+          return false;
+        }
+        continue;
+      }
+      if (node.nodes.isNotEmpty &&
+          !_isPlainTextNodes(node.nodes, budget, depth + 1)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static void _appendXml(

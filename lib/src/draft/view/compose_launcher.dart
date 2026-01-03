@@ -1,8 +1,13 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -46,9 +51,12 @@ void openComposeDraft(
     attachmentMetadataIds: attachmentMetadataIds,
   );
   T locate<T>() => context.read<T>();
+  final Duration animationDuration =
+      context.read<SettingsCubit>().animationDuration;
   unawaited(
     resolvedNavigator.push<void>(
-      MaterialPageRoute(
+      AxiFadePageRoute<void>(
+        duration: animationDuration,
         builder: (_) => ComposeScreen(
           seed: seed,
           locate: locate,

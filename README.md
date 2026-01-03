@@ -201,3 +201,11 @@
     - **Windows** – Extract the archive and run `Axichat.exe`.
     - **Linux** – Extract into a directory and launch `./axichat` (see `linux/axichat.desktop` for
       desktop entry guidance).
+
+<hr />
+
+## License
+
+Axichat is licensed under the GNU Affero General Public License v3.0 or later
+(AGPL-3.0-or-later). See `LICENSE.txt`. Corresponding source is available at
+https://gitlab.com/axichat/axichat.

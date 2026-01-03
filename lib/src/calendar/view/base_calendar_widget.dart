@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
@@ -295,11 +298,9 @@ class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: Row(
               children: [
                 if (canPop)
-                  AxiIconButton(
+                  AxiIconButton.ghost(
                     iconData: LucideIcons.arrowLeft,
                     tooltip: l10n.commonBack,
-                    color: colors.foreground,
-                    borderColor: colors.border,
                     onPressed: onBack,
                   ),
                 const SizedBox(width: calendarGutterSm),

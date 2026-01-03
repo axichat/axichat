@@ -1,5 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -427,11 +431,9 @@ class _UnifiedTaskMobileLayout extends StatelessWidget {
                   child: SizedBox(
                     width: AxiIconButton.kDefaultSize,
                     height: AxiIconButton.kDefaultSize,
-                    child: AxiIconButton(
+                    child: AxiIconButton.ghost(
                       iconData: LucideIcons.arrowLeft,
                       tooltip: l10n.commonBack,
-                      color: context.colorScheme.foreground,
-                      borderColor: context.colorScheme.border,
                       onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ),
@@ -1001,8 +1003,11 @@ void showUnifiedTaskInput<T extends BaseCalendarBloc>(
       );
 
   if (ResponsiveHelper.isCompact(context)) {
+    final Duration animationDuration =
+        context.read<SettingsCubit>().animationDuration;
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      AxiFadePageRoute<void>(
+        duration: animationDuration,
         builder: (context) => buildTaskInput(),
       ),
     );

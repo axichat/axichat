@@ -8,6 +8,11 @@ import 'delta.dart';
 import 'src/bindings.dart';
 
 const int _zeroValue = 0;
+const String _deltaSendTextOperation = 'send text message';
+const String _deltaSendAttachmentOperation = 'send attachment';
+const String _deltaSendFileOperation = 'send file message';
+const String _deltaSendQuotedOperation = 'send quoted message';
+const String _deltaMessageAllocationError = 'Failed to allocate Delta message';
 
 class DeltaSafe {
   DeltaSafe({DeltaChatBindings? bindings})
@@ -463,6 +468,7 @@ class DeltaContextHandle {
   bool? _supportsDownload;
   bool? _supportsResend;
   bool? _supportsContactList;
+  bool? _supportsMessageGetHtml;
   bool? _supportsMessageSetHtml;
 
   Future<void> open({required String passphrase}) async {
@@ -647,10 +653,10 @@ class DeltaContextHandle {
     String? subject,
     String? html,
   }) async {
-    _ensureState(_opened, 'send text message');
+    _ensureState(_opened, _deltaSendTextOperation);
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
     if (deltaMessage == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to allocate Delta message');
+      throw const DeltaSafeException(_deltaMessageAllocationError);
     }
     try {
       _withCString(message, (msgPtr) {
@@ -667,7 +673,7 @@ class DeltaContextHandle {
         });
       }
       final msgId = _bindings.dc_send_msg(_context, chatId, deltaMessage);
-      _ensurePositive(msgId, 'send text message', _lastError);
+      _ensurePositive(msgId, _deltaSendTextOperation, _lastError);
       return msgId;
     } finally {
       _bindings.dc_msg_unref(deltaMessage);
@@ -684,10 +690,10 @@ class DeltaContextHandle {
     String? subject,
     String? html,
   }) async {
-    _ensureState(_opened, 'send attachment');
+    _ensureState(_opened, _deltaSendAttachmentOperation);
     final message = _bindings.dc_msg_new(_context, viewType);
     if (message == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to allocate Delta message');
+      throw const DeltaSafeException(_deltaMessageAllocationError);
     }
     try {
       if (text != null && text.isNotEmpty) {
@@ -712,7 +718,7 @@ class DeltaContextHandle {
         mimeType: mimeType,
       );
       final msgId = _bindings.dc_send_msg(_context, chatId, message);
-      _ensurePositive(msgId, 'send file message', _lastError);
+      _ensurePositive(msgId, _deltaSendFileOperation, _lastError);
       return msgId;
     } finally {
       _bindings.dc_msg_unref(message);
@@ -922,6 +928,21 @@ class DeltaContextHandle {
     }
   }
 
+  String? _getMessageHtml(ffi.Pointer<dc_msg_t> msgPtr) {
+    if (_supportsMessageGetHtml == false) return null;
+    try {
+      final html = _cleanString(
+        _takeString(_bindings.dc_msg_get_html(msgPtr), bindings: _bindings),
+      );
+      _supportsMessageGetHtml = true;
+      return html;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsMessageGetHtml = false;
+      return null;
+    }
+  }
+
   void _setMessageHtml(ffi.Pointer<dc_msg_t> msgPtr, String html) {
     if (_supportsMessageSetHtml == false) return;
     try {
@@ -947,9 +968,7 @@ class DeltaContextHandle {
           state == DeltaMessageState.undefined ? null : state;
       final text =
           _takeString(_bindings.dc_msg_get_text(msgPtr), bindings: _bindings);
-      final html = _cleanString(
-        _takeString(_bindings.dc_msg_get_html(msgPtr), bindings: _bindings),
-      );
+      final html = _getMessageHtml(msgPtr);
       final subject = _cleanString(
         _takeString(_bindings.dc_msg_get_subject(msgPtr), bindings: _bindings),
       );
@@ -1201,9 +1220,7 @@ class DeltaContextHandle {
           _bindings.dc_msg_get_text(msgPtr),
           bindings: _bindings,
         );
-        final html = _cleanString(
-          _takeString(_bindings.dc_msg_get_html(msgPtr), bindings: _bindings),
-        );
+        final html = _getMessageHtml(msgPtr);
         final subject = _cleanString(
           _takeString(
             _bindings.dc_msg_get_subject(msgPtr),
@@ -1416,10 +1433,10 @@ class DeltaContextHandle {
         html: html,
       );
     }
-    _ensureState(_opened, 'send quoted message');
+    _ensureState(_opened, _deltaSendQuotedOperation);
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
     if (deltaMessage == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to allocate Delta message');
+      throw const DeltaSafeException(_deltaMessageAllocationError);
     }
     try {
       _withCString(message, (msgPtr) {
@@ -1450,7 +1467,7 @@ class DeltaContextHandle {
       }
 
       final msgId = _bindings.dc_send_msg(_context, chatId, deltaMessage);
-      _ensurePositive(msgId, 'send quoted message', _lastError);
+      _ensurePositive(msgId, _deltaSendQuotedOperation, _lastError);
       return msgId;
     } finally {
       _bindings.dc_msg_unref(deltaMessage);

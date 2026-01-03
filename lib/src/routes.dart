@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:collection';
 
 import 'package:axichat/src/attachments/view/attachment_gallery_screen.dart';
@@ -18,6 +21,8 @@ import 'package:go_router/go_router.dart';
 part 'routes.g.dart';
 
 typedef ServiceLocator = T Function<T>();
+
+const Curve _routeFadeCurve = Curves.easeInOutCubic;
 
 mixin AuthenticationRouteData on GoRouteData {
   bool get authenticationRequired;
@@ -40,10 +45,27 @@ class TransitionGoRouteData extends GoRouteData {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    if (context.watch<SettingsCubit>().state.lowMotion) {
+    final settingsCubit = context.watch<SettingsCubit>();
+    if (settingsCubit.state.lowMotion) {
       return NoTransitionPage(child: build(context, state));
     }
-    return MaterialPage(child: build(context, state));
+    final animationDuration = settingsCubit.animationDuration;
+    return CustomTransitionPage(
+      transitionDuration: animationDuration,
+      reverseTransitionDuration: animationDuration,
+      child: build(context, state),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final CurvedAnimation curved = CurvedAnimation(
+          parent: animation,
+          curve: _routeFadeCurve,
+          reverseCurve: _routeFadeCurve,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: child,
+        );
+      },
+    );
   }
 }
 
@@ -198,7 +220,7 @@ class EmailDemoRoute extends TransitionGoRouteData
 }
 
 @TypedGoRoute<LoginRoute>(path: '/login')
-class LoginRoute extends GoRouteData with AuthenticationRouteData {
+class LoginRoute extends TransitionGoRouteData with AuthenticationRouteData {
   const LoginRoute();
 
   @override

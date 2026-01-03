@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -23,6 +26,8 @@ import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/util/delta_jids.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
@@ -1386,9 +1391,9 @@ class EmailService {
     if (address.isEmpty) {
       return;
     }
-    _transport.hydrateAccountAddress(
+    await _hydrateAccountAddress(
       address: address,
-      accountId: deltaAccountId,
+      deltaAccountId: deltaAccountId,
     );
   }
 
@@ -1414,9 +1419,9 @@ class EmailService {
         scope: scope,
         accountId: accountId,
       );
-      _transport.hydrateAccountAddress(
+      await _hydrateAccountAddress(
         address: normalizedAddress,
-        accountId: deltaAccountId,
+        deltaAccountId: deltaAccountId,
       );
       resolvedAddress = normalizedAddress;
     }
@@ -1807,9 +1812,9 @@ class EmailService {
       );
     }
 
-    _transport.hydrateAccountAddress(
+    await _hydrateAccountAddress(
       address: normalizedAddress,
-      accountId: deltaAccountId,
+      deltaAccountId: deltaAccountId,
     );
     await start();
     unawaited(_refreshImapCapabilities(force: true));
@@ -1893,9 +1898,9 @@ class EmailService {
     );
     _resetImapCapabilities();
     unawaited(_refreshImapCapabilities(force: true));
-    _transport.hydrateAccountAddress(
+    await _hydrateAccountAddress(
       address: address,
-      accountId: deltaAccountId,
+      deltaAccountId: deltaAccountId,
     );
     _activeCredentialScope = scope;
     _activeAccount = EmailAccount(address: address, password: password);
@@ -3150,12 +3155,15 @@ class EmailService {
     required int accountId,
     int? chatId,
   }) async {
-    final message = await db.getMessageByStanzaID(
-      _stanzaId(
-        msgId,
-        accountId: accountId,
-      ),
+    final stanzaId = _stanzaId(
+      msgId,
+      accountId: accountId,
     );
+    final message = await db.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: accountId,
+        ) ??
+        await db.getMessageByStanzaID(stanzaId);
     if (message == null) {
       return null;
     }
@@ -4101,7 +4109,7 @@ class EmailService {
     if (normalized != null && normalized.isNotEmpty) {
       return normalized;
     }
-    return selfSenderJid ?? _defaultDeltaSelfJid;
+    return selfSenderJid ?? deltaSelfJid;
   }
 
   Future<Chat> _waitForChat(
@@ -5141,6 +5149,30 @@ class EmailService {
     await db.updateChat(chat.copyWith(emailFromAddress: address));
   }
 
+  Future<void> _hydrateAccountAddress({
+    required String address,
+    required int deltaAccountId,
+  }) async {
+    final normalizedAddress = _normalizeLinkedAccountAddress(address);
+    if (normalizedAddress.isEmpty || normalizedAddress.isDeltaPlaceholderJid) {
+      return;
+    }
+    _transport.hydrateAccountAddress(
+      address: normalizedAddress,
+      accountId: deltaAccountId,
+    );
+    final db = await _databaseBuilder();
+    await db.replaceDeltaPlaceholderSelfJids(
+      deltaAccountId: deltaAccountId,
+      resolvedAddress: normalizedAddress,
+      placeholderJids: deltaPlaceholderJids,
+    );
+    await db.removeDeltaPlaceholderDuplicates(
+      deltaAccountId: deltaAccountId,
+      placeholderJids: deltaPlaceholderJids,
+    );
+  }
+
   Future<_ResolvedEmailAccount> _resolveAccountForAddress({
     required String scope,
     String? fromAddress,
@@ -5169,9 +5201,9 @@ class EmailService {
       scope: scope,
       accountId: accountId,
     );
-    _transport.hydrateAccountAddress(
+    await _hydrateAccountAddress(
       address: normalized,
-      accountId: deltaAccountId,
+      deltaAccountId: deltaAccountId,
     );
     return _ResolvedEmailAccount(
       id: accountId,
@@ -5356,9 +5388,9 @@ class EmailService {
           scope: scope,
           accountId: accountId,
         );
-        _transport.hydrateAccountAddress(
+        await _hydrateAccountAddress(
           address: account.address,
-          accountId: deltaAccountId,
+          deltaAccountId: deltaAccountId,
         );
         await _ensureAccountConfigured(
           scope: scope,
@@ -5676,7 +5708,11 @@ class EmailService {
         deltaId,
         accountId: deltaAccountId,
       );
-      final message = await db.getMessageByStanzaID(stanzaId);
+      final message = await db.getMessageByDeltaId(
+            deltaId,
+            deltaAccountId: deltaAccountId,
+          ) ??
+          await db.getMessageByStanzaID(stanzaId);
       if (message != null) {
         messagesByDeltaId[deltaId] = message;
       } else {
@@ -5693,7 +5729,11 @@ class EmailService {
           deltaId,
           accountId: deltaAccountId,
         );
-        final message = await db.getMessageByStanzaID(stanzaId);
+        final message = await db.getMessageByDeltaId(
+              deltaId,
+              deltaAccountId: deltaAccountId,
+            ) ??
+            await db.getMessageByStanzaID(stanzaId);
         if (message != null) {
           messagesByDeltaId[deltaId] = message;
         }
@@ -5810,18 +5850,6 @@ class EmailService {
         htmlBody: normalizedHtml,
         accountId: context.account.deltaAccountId,
       ),
-    );
-    final deltaMessage = await _transport.getMessage(
-      msgId,
-      accountId: context.account.deltaAccountId,
-    );
-    await _recordOutgoing(
-      chatId: chatId,
-      msgId: msgId,
-      accountId: context.account.deltaAccountId,
-      body: resolvedBody,
-      htmlBody: normalizedHtml,
-      timestamp: deltaMessage?.timestamp,
     );
     return msgId;
   }
@@ -5981,62 +6009,13 @@ class EmailService {
     }
     return contacts;
   }
-
-  Future<void> _recordOutgoing({
-    required int chatId,
-    required int msgId,
-    required int accountId,
-    String? body,
-    String? htmlBody,
-    DateTime? timestamp,
-  }) async {
-    final db = await _databaseBuilder();
-    final chat = await db.getChatByDeltaChatId(
-      chatId,
-      accountId: accountId,
-    );
-    if (chat == null) return;
-
-    final resolvedTimestamp = timestamp ?? DateTime.timestamp();
-    final message = Message(
-      stanzaID: _stanzaId(
-        msgId,
-        accountId: accountId,
-      ),
-      senderJid: _selfSenderJidForAccount(accountId) ?? _defaultDeltaSelfJid,
-      chatJid: chat.jid,
-      timestamp: resolvedTimestamp,
-      body: body?.trim(),
-      htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
-      encryptionProtocol: EncryptionProtocol.none,
-      acked: false,
-      received: false,
-      deltaAccountId: accountId,
-      deltaChatId: chatId,
-      deltaMsgId: msgId,
-    );
-    await db.saveMessage(message);
-    await db.updateChat(
-      chat.copyWith(lastChangeTimestamp: resolvedTimestamp),
-    );
-  }
 }
-
-const _deltaDomain = 'delta.chat';
-const _defaultDeltaSelfJid = 'dc-self@$_deltaDomain';
-
-const String _deltaMessageStanzaPrefix = 'dc-msg';
-const String _deltaMessageStanzaSeparator = '-';
 
 String _stanzaId(
   int msgId, {
   required int accountId,
 }) {
-  if (accountId == deltaAccountIdLegacy) {
-    return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator$msgId';
-  }
-  return '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator'
-      '$accountId$_deltaMessageStanzaSeparator$msgId';
+  return deltaMessageStanzaId(msgId, accountId: accountId);
 }
 
 class _PendingNotification {

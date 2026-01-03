@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
@@ -36,6 +39,7 @@ const double _profileActionSpacing = 8.0;
 const double _profileHeaderSpacing = 12.0;
 const double _profileCardSectionSpacing = 10.0;
 const double _profileStatusFieldPadding = 8.0;
+const Curve _profileFadeCurve = Curves.easeInOutCubic;
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key, required this.locate});
@@ -140,11 +144,9 @@ class _ProfileBodyState extends State<_ProfileBody> {
                 child: SizedBox(
                   width: AxiIconButton.kDefaultSize,
                   height: AxiIconButton.kDefaultSize,
-                  child: AxiIconButton(
+                  child: AxiIconButton.ghost(
                     iconData: LucideIcons.arrowLeft,
                     tooltip: l10n.commonBack,
-                    color: context.colorScheme.foreground,
-                    borderColor: context.colorScheme.border,
                     onPressed: () => _profileRoute == _ProfileRoute.main
                         ? context.pop()
                         : _setRoute(_ProfileRoute.main),
@@ -165,8 +167,12 @@ class _ProfileBodyState extends State<_ProfileBody> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isWideLayout = constraints.maxWidth >= largeScreen;
-                return IndexedStack(
+                final Duration animationDuration =
+                    context.watch<SettingsCubit>().animationDuration;
+                return AxiFadeIndexedStack(
                   index: _profileRoute.index,
+                  duration: animationDuration,
+                  curve: _profileFadeCurve,
                   children: [
                     _ProfileMainView(
                       isWideLayout: isWideLayout,
