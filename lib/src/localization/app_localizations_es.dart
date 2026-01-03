@@ -373,7 +373,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatMoveToInbox => 'Mover a bandeja de entrada';
 
   @override
-  String get chatReportSpam => 'Reportar spam';
+  String get chatReportSpam => 'Marcar como spam';
 
   @override
   String get chatSignatureToggleLabel =>
