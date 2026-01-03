@@ -360,7 +360,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMoveToInbox => '移到收件箱';
 
   @override
-  String get chatReportSpam => '举报垃圾信息';
+  String get chatReportSpam => '标记为垃圾信息';
 
   @override
   String get chatSignatureToggleLabel => '为邮件添加分享令牌页脚';
