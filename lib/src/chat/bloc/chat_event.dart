@@ -468,6 +468,15 @@ final class ChatNicknameChangeRequested extends ChatEvent {
   List<Object?> get props => [nickname];
 }
 
+final class ChatRoomAvatarChangeRequested extends ChatEvent {
+  const ChatRoomAvatarChangeRequested(this.avatar);
+
+  final AvatarUploadPayload avatar;
+
+  @override
+  List<Object?> get props => [avatar.hash];
+}
+
 final class ChatContactRenameRequested extends ChatEvent {
   const ChatContactRenameRequested(
     this.displayName, {
