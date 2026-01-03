@@ -2252,10 +2252,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mucMembersTitle => 'Miembros';
 
   @override
-  String get mucEditAvatar => 'Edit room avatar';
+  String get mucEditAvatar => 'Editar avatar de la sala';
 
   @override
-  String get mucAvatarMenuDescription => 'Room members will see this avatar.';
+  String get mucAvatarMenuDescription =>
+      'Los miembros de la sala verán este avatar.';
 
   @override
   String get mucInviteUser => 'Invitar usuario';
@@ -2457,17 +2458,18 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatsCreateChatRoomTitle => 'Crear sala de chat';
 
   @override
-  String get chatsCreateChatRoomAction => 'Create room';
+  String get chatsCreateChatRoomAction => 'Crear sala';
 
   @override
   String get chatsRoomNamePlaceholder => 'Nombre';
 
   @override
-  String get chatsRoomNameRequiredError => 'Room name cannot be empty.';
+  String get chatsRoomNameRequiredError =>
+      'El nombre de la sala no puede estar vacío.';
 
   @override
   String chatsRoomNameInvalidCharacterError(Object character) {
-    return 'Room names cannot contain $character.';
+    return 'Los nombres de sala no pueden contener $character.';
   }
 
   @override
