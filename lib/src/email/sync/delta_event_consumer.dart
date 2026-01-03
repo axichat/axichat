@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'dart:async';
 
 import 'package:axichat/src/common/html_content.dart';
@@ -174,14 +177,12 @@ class DeltaEventConsumer {
     required DeltaContextHandle context,
     MessageStorageMode messageStorageMode = MessageStorageMode.local,
     String? Function()? selfJidProvider,
-    PendingOutgoingEmailStore? pendingOutgoingStore,
     int? accountId,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
         _messageStorageMode = messageStorageMode,
         _selfJidProvider = selfJidProvider,
-        _pendingOutgoingStore = pendingOutgoingStore,
         _accountId = accountId,
         _log = logger ?? Logger('DeltaEventConsumer');
 
@@ -189,7 +190,6 @@ class DeltaEventConsumer {
   final DeltaContextHandle _context;
   MessageStorageMode _messageStorageMode;
   final String? Function()? _selfJidProvider;
-  final PendingOutgoingEmailStore? _pendingOutgoingStore;
   final int? _accountId;
   final Logger _log;
 
@@ -822,36 +822,6 @@ class DeltaEventConsumer {
       );
       return;
     }
-    final pendingStanzaId = msg.isOutgoing
-        ? _pendingOutgoingStore?.claimMatch(
-            accountId: deltaAccountId,
-            chatId: chatId,
-            text: msg.text,
-            html: msg.html,
-            fileName: msg.fileName,
-            filePath: msg.filePath,
-          )
-        : null;
-    if (pendingStanzaId != null) {
-      final pendingMessage = await db.getMessageByStanzaID(pendingStanzaId);
-      if (pendingMessage != null) {
-        final updatedPending = pendingMessage.copyWith(
-          deltaMsgId: msg.id,
-          deltaChatId: chatId,
-          deltaAccountId: deltaAccountId,
-        );
-        if (updatedPending != pendingMessage) {
-          await db.updateMessage(updatedPending);
-        }
-        await _updateExistingMessage(existing: updatedPending, msg: msg);
-        _scheduleOriginIdHydrationIfNeeded(
-          existing: updatedPending,
-          msgId: msg.id,
-          accountId: deltaAccountId,
-        );
-        return;
-      }
-    }
     final Message? persistedPending = msg.isOutgoing
         ? await _matchPersistedOutgoingMessage(
             db: db,
@@ -967,6 +937,9 @@ class DeltaEventConsumer {
     if (candidates.isEmpty) {
       return null;
     }
+    final int? incomingTimestamp = msg.timestamp?.microsecondsSinceEpoch;
+    Message? closestMatch;
+    int? closestDelta;
     final Map<String, FileMetadataData?> metadataById =
         <String, FileMetadataData?>{};
     for (final Message candidate in candidates) {
@@ -988,11 +961,24 @@ class DeltaEventConsumer {
         message: candidate,
         metadata: metadata,
       );
-      if (candidateSignature.matches(incomingSignature)) {
+      if (!candidateSignature.matches(incomingSignature)) {
+        continue;
+      }
+      if (incomingTimestamp == null) {
         return candidate;
       }
+      final int? candidateTimestamp =
+          candidate.timestamp?.microsecondsSinceEpoch;
+      if (candidateTimestamp == null) {
+        return candidate;
+      }
+      final int delta = (candidateTimestamp - incomingTimestamp).abs();
+      if (closestDelta == null || delta < closestDelta) {
+        closestDelta = delta;
+        closestMatch = candidate;
+      }
     }
-    return null;
+    return closestMatch;
   }
 
   bool _isSelfPendingSender(Message message) {
@@ -1096,7 +1082,11 @@ class DeltaEventConsumer {
       final originId = await _resolveOriginId(msgId);
       if (originId != null) {
         final db = await _db();
-        final existing = await db.getMessageByStanzaID(stanzaId);
+        final existing = await db.getMessageByDeltaId(
+              msgId,
+              deltaAccountId: accountId,
+            ) ??
+            await db.getMessageByStanzaID(stanzaId);
         if (existing == null) {
           return;
         }

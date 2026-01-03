@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 // ignore_for_file: avoid_renaming_method_parameters
 
 import 'dart:io';
@@ -368,6 +371,8 @@ abstract interface class XmppDatabase implements Database {
   Future<List<String>> getRecipientAddressSuggestions({int? limit});
 
   Future<Chat?> getChat(String jid);
+
+  Future<Chat?> getOpenChat();
 
   Future<Chat?> getChatByDeltaChatId(
     int deltaChatId, {
@@ -1611,7 +1616,7 @@ WHERE delta_chat_id IS NOT NULL
             (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
           END
         )
-      ORDER BY m.timestamp DESC, m.stanza_i_d DESC
+      ORDER BY m.timestamp DESC, m.delta_msg_id DESC, m.stanza_i_d DESC
       LIMIT ?
       OFFSET ?
       ''',
@@ -3054,6 +3059,16 @@ WHERE email_from_address IN ($placeholderClause)
     final isReferenced = await _isFileMetadataReferenced(trimmedId);
     if (isReferenced) return;
     await fileMetadataAccessor.deleteOne(trimmedId);
+    final path = metadata.path?.trim();
+    if (path == null || path.isEmpty) {
+      return;
+    }
+    final hasSiblingMetadata = await (select(fileMetadata)
+          ..where((tbl) => tbl.path.equals(path)))
+        .get();
+    if (hasSiblingMetadata.isNotEmpty) {
+      return;
+    }
     await _deleteManagedAttachmentFile(metadata);
   }
 
@@ -3436,6 +3451,9 @@ $limitClause
 
   @override
   Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
+
+  @override
+  Future<Chat?> getOpenChat() => chatsAccessor.selectOpen();
 
   @override
   Future<Chat?> getChatByDeltaChatId(

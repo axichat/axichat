@@ -1,4 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/email/service/share_token_codec.dart';
+import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/storage/models.dart';
 
 const int _pendingOutgoingMaxAgeMinutes = 2;
@@ -218,12 +223,19 @@ String? _normalizeText(String? value) {
   if (normalized == null || normalized == _pendingOutgoingEmpty) {
     return null;
   }
-  return normalized;
+  final cleaned =
+      ShareTokenCodec.stripToken(normalized)?.cleanedBody ?? normalized;
+  final trimmed = cleaned.trim();
+  if (trimmed == _pendingOutgoingEmpty) {
+    return null;
+  }
+  return trimmed;
 }
 
 String? _normalizeHtml(String? value) {
   final normalized = HtmlContentCodec.normalizeHtml(value);
-  return _normalizeText(normalized);
+  final stripped = ShareTokenHtmlCodec.stripInjectedToken(normalized);
+  return _normalizeText(stripped);
 }
 
 String? _normalizeFileSignature({

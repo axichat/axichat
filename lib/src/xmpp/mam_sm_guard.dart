@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 /// Prevents double-counting of MAM replay stanzas in stream management.

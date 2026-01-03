@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/storage/models/message_models.dart';

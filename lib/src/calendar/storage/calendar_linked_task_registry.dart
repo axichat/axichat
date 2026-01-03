@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 const String _linkedTaskRegistryStorageKey = 'calendar_linked_tasks_v1';

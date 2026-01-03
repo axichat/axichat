@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
 export 'calendar_model.dart';
 export 'calendar_task.dart';
 export 'calendar_task_ics_message.dart';
