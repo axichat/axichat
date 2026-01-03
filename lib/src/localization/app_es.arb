@@ -877,8 +877,8 @@
   "mucEnterNicknamePlaceholder": "Introduce un apodo",
   "mucUpdateNickname": "Actualizar",
   "mucMembersTitle": "Miembros",
-  "mucEditAvatar": "Edit room avatar",
-  "mucAvatarMenuDescription": "Room members will see this avatar.",
+  "mucEditAvatar": "Editar avatar de la sala",
+  "mucAvatarMenuDescription": "Los miembros de la sala verán este avatar.",
   "mucInviteUser": "Invitar usuario",
   "mucSectionOwners": "Propietarios",
   "mucSectionAdmins": "Administradores",
@@ -959,10 +959,10 @@
   "chatsCreateGroupChatTooltip": "Crear chat grupal",
   "chatsRoomLabel": "Sala",
   "chatsCreateChatRoomTitle": "Crear sala de chat",
-  "chatsCreateChatRoomAction": "Create room",
+  "chatsCreateChatRoomAction": "Crear sala",
   "chatsRoomNamePlaceholder": "Nombre",
-  "chatsRoomNameRequiredError": "Room name cannot be empty.",
-  "chatsRoomNameInvalidCharacterError": "Room names cannot contain {character}.",
+  "chatsRoomNameRequiredError": "El nombre de la sala no puede estar vacío.",
+  "chatsRoomNameInvalidCharacterError": "Los nombres de sala no pueden contener {character}.",
   "@chatsRoomNameInvalidCharacterError": {
     "placeholders": {
       "character": {}

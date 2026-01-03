@@ -11478,6 +11478,8 @@ class _ChatSettingsButtons extends StatelessWidget {
       return const SizedBox.expand();
     }
     final AppLocalizations l10n = context.l10n;
+    final colors = context.colorScheme;
+    final destructiveColor = colors.destructive;
     final SettingsState settingsState = context.watch<SettingsCubit>().state;
     final BlocklistState? blocklistState =
         context.watch<BlocklistCubit?>()?.state;
@@ -11556,6 +11558,8 @@ class _ChatSettingsButtons extends StatelessWidget {
         padding: _chatSettingsItemPadding,
         child: _ChatSettingsSwitchRow(
           title: spamLabel,
+          titleColor: destructiveColor,
+          checkedTrackColor: destructiveColor,
           value: isSpamChat,
           onChanged: onSpamToggle,
         ),
@@ -11564,6 +11568,8 @@ class _ChatSettingsButtons extends StatelessWidget {
         padding: _chatSettingsItemPadding,
         child: _ChatSettingsSwitchRow(
           title: l10n.blocklistBlock,
+          titleColor: destructiveColor,
+          checkedTrackColor: destructiveColor,
           value: isChatBlocked,
           onChanged: blockSwitchEnabled
               ? (blocked) {
@@ -11601,24 +11607,34 @@ class _ChatSettingsRow extends StatelessWidget {
   const _ChatSettingsRow({
     required this.title,
     this.subtitle,
+    this.titleColor,
     required this.trailing,
   });
 
   final String title;
   final String? subtitle;
+  final Color? titleColor;
   final Widget trailing;
 
   @override
   Widget build(BuildContext context) {
     final String? resolvedSubtitle = subtitle;
+    final Color? resolvedTitleColor = titleColor;
+    final TextStyle mutedStyle = context.textTheme.muted;
+    final TextStyle subtitleStyle = mutedStyle;
     final List<Widget> textChildren = [
-      Text(title),
+      Text(
+        title,
+        style: resolvedTitleColor == null
+            ? null
+            : TextStyle(color: resolvedTitleColor),
+      ),
       if (resolvedSubtitle != null)
         Padding(
           padding: const EdgeInsets.only(top: _chatSettingsLabelSpacing),
           child: Text(
             resolvedSubtitle,
-            style: context.textTheme.muted,
+            style: subtitleStyle,
           ),
         ),
     ];
@@ -11642,12 +11658,16 @@ class _ChatSettingsSwitchRow extends StatelessWidget {
   const _ChatSettingsSwitchRow({
     required this.title,
     this.subtitle,
+    this.titleColor,
+    this.checkedTrackColor,
     required this.value,
     required this.onChanged,
   });
 
   final String title;
   final String? subtitle;
+  final Color? titleColor;
+  final Color? checkedTrackColor;
   final bool value;
   final ValueChanged<bool>? onChanged;
 
@@ -11656,9 +11676,11 @@ class _ChatSettingsSwitchRow extends StatelessWidget {
     return _ChatSettingsRow(
       title: title,
       subtitle: subtitle,
+      titleColor: titleColor,
       trailing: ShadSwitch(
         value: value,
         onChanged: onChanged,
+        checkedTrackColor: checkedTrackColor,
       ),
     );
   }

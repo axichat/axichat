@@ -877,8 +877,8 @@
   "mucEnterNicknamePlaceholder": "輸入暱稱",
   "mucUpdateNickname": "更新",
   "mucMembersTitle": "成員",
-  "mucEditAvatar": "Edit room avatar",
-  "mucAvatarMenuDescription": "Room members will see this avatar.",
+  "mucEditAvatar": "編輯聊天室頭像",
+  "mucAvatarMenuDescription": "聊天室成員會看到此頭像。",
   "mucInviteUser": "邀請用戶",
   "mucSectionOwners": "擁有者",
   "mucSectionAdmins": "管理員",
@@ -959,10 +959,10 @@
   "chatsCreateGroupChatTooltip": "建立群組聊天",
   "chatsRoomLabel": "聊天室",
   "chatsCreateChatRoomTitle": "建立聊天室",
-  "chatsCreateChatRoomAction": "Create room",
+  "chatsCreateChatRoomAction": "建立聊天室",
   "chatsRoomNamePlaceholder": "名稱",
-  "chatsRoomNameRequiredError": "Room name cannot be empty.",
-  "chatsRoomNameInvalidCharacterError": "Room names cannot contain {character}.",
+  "chatsRoomNameRequiredError": "聊天室名稱不能為空。",
+  "chatsRoomNameInvalidCharacterError": "聊天室名稱不能包含{character}。",
   "@chatsRoomNameInvalidCharacterError": {
     "placeholders": {
       "character": {}

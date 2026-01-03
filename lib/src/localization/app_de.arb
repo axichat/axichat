@@ -877,8 +877,8 @@
   "mucEnterNicknamePlaceholder": "Spitznamen eingeben",
   "mucUpdateNickname": "Aktualisieren",
   "mucMembersTitle": "Mitglieder",
-  "mucEditAvatar": "Edit room avatar",
-  "mucAvatarMenuDescription": "Room members will see this avatar.",
+  "mucEditAvatar": "Raum-Avatar bearbeiten",
+  "mucAvatarMenuDescription": "Raummitglieder sehen diesen Avatar.",
   "mucInviteUser": "Benutzer einladen",
   "mucSectionOwners": "Eigentümer",
   "mucSectionAdmins": "Admins",
@@ -959,10 +959,10 @@
   "chatsCreateGroupChatTooltip": "Gruppenchat erstellen",
   "chatsRoomLabel": "Raum",
   "chatsCreateChatRoomTitle": "Chatraum erstellen",
-  "chatsCreateChatRoomAction": "Create room",
+  "chatsCreateChatRoomAction": "Raum erstellen",
   "chatsRoomNamePlaceholder": "Name",
-  "chatsRoomNameRequiredError": "Room name cannot be empty.",
-  "chatsRoomNameInvalidCharacterError": "Room names cannot contain {character}.",
+  "chatsRoomNameRequiredError": "Der Raumname darf nicht leer sein.",
+  "chatsRoomNameInvalidCharacterError": "Raumnamen dürfen das Zeichen {character} nicht enthalten.",
   "@chatsRoomNameInvalidCharacterError": {
     "placeholders": {
       "character": {}
