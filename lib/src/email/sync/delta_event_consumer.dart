@@ -49,6 +49,50 @@ const Duration _originIdHydrationDelay =
     Duration(milliseconds: _originIdHydrationDelayMs);
 const int _outgoingSignatureCandidateLimit = 100;
 const Duration _outgoingSignatureMatchWindow = Duration(minutes: 10);
+const String _messageUpdateDiffLogPrefix = 'Message update diff';
+const String _messageUpdateDiffSeparator = ', ';
+const String _messageUpdateDiffUnknown = 'unknown';
+const Level _messageUpdateDiffLogLevel = Level.FINE;
+
+enum MessageDiffField {
+  stanzaId,
+  senderJid,
+  chatJid,
+  timestamp,
+  id,
+  originId,
+  occupantId,
+  body,
+  htmlBody,
+  error,
+  warning,
+  encryptionProtocol,
+  trust,
+  trusted,
+  deviceId,
+  noStore,
+  acked,
+  received,
+  displayed,
+  edited,
+  retracted,
+  isFileUploadNotification,
+  fileDownloading,
+  fileUploading,
+  fileMetadataId,
+  quoting,
+  stickerPackId,
+  pseudoMessageType,
+  pseudoMessageData,
+  reactionsPreview,
+  deltaAccountId,
+  deltaChatId,
+  deltaMsgId,
+}
+
+extension MessageDiffFieldX on MessageDiffField {
+  String get logLabel => name;
+}
 
 enum DeltaEventType {
   error(DeltaEventCode.error),
@@ -171,6 +215,114 @@ extension DeltaMessageStateChecks on DeltaMessage {
     }
     return _deltaIncomingUnseenStatus;
   }
+}
+
+extension MessageDiffX on Message {
+  List<MessageDiffField> diffFields(Message other) {
+    final fields = <MessageDiffField>[];
+    void addIf(bool condition, MessageDiffField field) {
+      if (condition) {
+        fields.add(field);
+      }
+    }
+
+    addIf(stanzaID != other.stanzaID, MessageDiffField.stanzaId);
+    addIf(senderJid != other.senderJid, MessageDiffField.senderJid);
+    addIf(chatJid != other.chatJid, MessageDiffField.chatJid);
+    addIf(timestamp != other.timestamp, MessageDiffField.timestamp);
+    addIf(id != other.id, MessageDiffField.id);
+    addIf(originID != other.originID, MessageDiffField.originId);
+    addIf(occupantID != other.occupantID, MessageDiffField.occupantId);
+    addIf(body != other.body, MessageDiffField.body);
+    addIf(htmlBody != other.htmlBody, MessageDiffField.htmlBody);
+    addIf(error != other.error, MessageDiffField.error);
+    addIf(warning != other.warning, MessageDiffField.warning);
+    addIf(
+      encryptionProtocol != other.encryptionProtocol,
+      MessageDiffField.encryptionProtocol,
+    );
+    addIf(trust != other.trust, MessageDiffField.trust);
+    addIf(trusted != other.trusted, MessageDiffField.trusted);
+    addIf(deviceID != other.deviceID, MessageDiffField.deviceId);
+    addIf(noStore != other.noStore, MessageDiffField.noStore);
+    addIf(acked != other.acked, MessageDiffField.acked);
+    addIf(received != other.received, MessageDiffField.received);
+    addIf(displayed != other.displayed, MessageDiffField.displayed);
+    addIf(edited != other.edited, MessageDiffField.edited);
+    addIf(retracted != other.retracted, MessageDiffField.retracted);
+    addIf(
+      isFileUploadNotification != other.isFileUploadNotification,
+      MessageDiffField.isFileUploadNotification,
+    );
+    addIf(
+      fileDownloading != other.fileDownloading,
+      MessageDiffField.fileDownloading,
+    );
+    addIf(
+      fileUploading != other.fileUploading,
+      MessageDiffField.fileUploading,
+    );
+    addIf(
+      fileMetadataID != other.fileMetadataID,
+      MessageDiffField.fileMetadataId,
+    );
+    addIf(quoting != other.quoting, MessageDiffField.quoting);
+    addIf(stickerPackID != other.stickerPackID, MessageDiffField.stickerPackId);
+    addIf(
+      pseudoMessageType != other.pseudoMessageType,
+      MessageDiffField.pseudoMessageType,
+    );
+    addIf(
+      !_deepEquals(pseudoMessageData, other.pseudoMessageData),
+      MessageDiffField.pseudoMessageData,
+    );
+    addIf(
+      !_deepEquals(reactionsPreview, other.reactionsPreview),
+      MessageDiffField.reactionsPreview,
+    );
+    addIf(
+      deltaAccountId != other.deltaAccountId,
+      MessageDiffField.deltaAccountId,
+    );
+    addIf(deltaChatId != other.deltaChatId, MessageDiffField.deltaChatId);
+    addIf(deltaMsgId != other.deltaMsgId, MessageDiffField.deltaMsgId);
+    return fields;
+  }
+}
+
+bool _deepEquals(Object? first, Object? second) {
+  if (identical(first, second)) {
+    return true;
+  }
+  if (first == null || second == null) {
+    return false;
+  }
+  if (first is Map<Object?, Object?> && second is Map<Object?, Object?>) {
+    if (first.length != second.length) {
+      return false;
+    }
+    for (final entry in first.entries) {
+      if (!second.containsKey(entry.key)) {
+        return false;
+      }
+      if (!_deepEquals(entry.value, second[entry.key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (first is List<Object?> && second is List<Object?>) {
+    if (first.length != second.length) {
+      return false;
+    }
+    for (var index = 0; index < first.length; index += 1) {
+      if (!_deepEquals(first[index], second[index])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return first == second;
 }
 
 class DeltaEventConsumer {
@@ -1071,6 +1223,18 @@ class DeltaEventConsumer {
       msg: msg,
     );
     if (next != existing) {
+      if (_log.isLoggable(_messageUpdateDiffLogLevel)) {
+        final updatedFields = existing.diffFields(next);
+        final updatedLabels =
+            updatedFields.map((field) => field.logLabel).toList()..sort();
+        final updateSummary = updatedLabels.isEmpty
+            ? _messageUpdateDiffUnknown
+            : updatedLabels.join(_messageUpdateDiffSeparator);
+        _log.log(
+          _messageUpdateDiffLogLevel,
+          '$_messageUpdateDiffLogPrefix: $updateSummary',
+        );
+      }
       await db.updateMessage(next);
     }
   }

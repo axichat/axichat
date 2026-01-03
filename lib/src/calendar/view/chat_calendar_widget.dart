@@ -453,16 +453,17 @@ class _ChatCalendarActionRow extends StatelessWidget {
       runSpacing: _chatCalendarShareActionSpacing,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        SyncControls(
+          state: state,
+          compact: true,
+        ),
         if (onShareAvailability != null)
           AxiIconButton.ghost(
             iconData: LucideIcons.send,
             tooltip: _chatCalendarAvailabilityShareTooltip,
             onPressed: onShareAvailability,
+            usePrimary: true,
           ),
-        SyncControls(
-          state: state,
-          compact: true,
-        ),
       ],
     );
   }
