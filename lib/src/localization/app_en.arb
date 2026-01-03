@@ -167,7 +167,7 @@
   "chatMuteNotifications": "Mute notifications",
   "chatEnableNotifications": "Enable notifications",
   "chatMoveToInbox": "Move to inbox",
-  "chatReportSpam": "Report spam",
+  "chatReportSpam": "Mark as spam",
   "chatSignatureToggleLabel": "Include share token footer for email",
   "chatSignatureHintEnabled": "Helps keep multi-recipient email threads intact.",
   "chatSignatureHintDisabled": "Disabled globally; replies may not thread.",

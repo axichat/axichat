@@ -117,7 +117,7 @@
   "chatMuteNotifications": "Benachrichtigungen stummschalten",
   "chatEnableNotifications": "Benachrichtigungen aktivieren",
   "chatMoveToInbox": "In den Posteingang verschieben",
-  "chatReportSpam": "Spam melden",
+  "chatReportSpam": "Als Spam markieren",
   "chatSignatureToggleLabel": "E-Mail-Fußzeile mit Freigabe-Token einfügen",
   "chatSignatureHintEnabled": "Hilft, E-Mail-Threads mit mehreren Empfängern beizubehalten.",
   "chatSignatureHintDisabled": "Global deaktiviert; Antworten könnten den Thread verlieren.",

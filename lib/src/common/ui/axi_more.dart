@@ -13,12 +13,14 @@ class AxiMore extends StatefulWidget {
     this.tooltip = 'More options',
     this.enabled = true,
     this.ghost = false,
+    this.usePrimary = false,
   });
 
   final List<AxiMenuAction> actions;
   final String tooltip;
   final bool enabled;
   final bool ghost;
+  final bool usePrimary;
 
   @override
   State<AxiMore> createState() => _AxiMoreState();
@@ -133,6 +135,7 @@ class _AxiMoreState extends State<AxiMore> {
               iconData: LucideIcons.ellipsisVertical,
               tooltip: widget.tooltip,
               onPressed: sheetAction,
+              usePrimary: widget.usePrimary,
             )
           : AxiIconButton(
               iconData: LucideIcons.ellipsisVertical,
@@ -152,6 +155,7 @@ class _AxiMoreState extends State<AxiMore> {
               iconData: LucideIcons.ellipsisVertical,
               tooltip: widget.tooltip,
               onPressed: popoverAction,
+              usePrimary: widget.usePrimary,
             )
           : AxiIconButton(
               iconData: LucideIcons.ellipsisVertical,
