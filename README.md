@@ -202,6 +202,11 @@
     - **Linux** – Extract into a directory and launch `./axichat` (see `linux/axichat.desktop` for
       desktop entry guidance).
 
+
+## Developer notes
+
+- OAuth email provider setup: see `docs/email_oauth_setup.md`.
+
 <hr />
 
 ## License

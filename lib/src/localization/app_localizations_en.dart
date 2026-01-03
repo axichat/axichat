@@ -344,6 +344,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatComposerMessageHint => 'Send message';
 
   @override
+  String chatComposerFromHint(Object address) {
+    return 'Sending from $address';
+  }
+
+  @override
   String get chatReadOnly => 'Read only';
 
   @override
@@ -2776,158 +2781,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emailDemoTitle => 'Email Transport Demo';
-
-  @override
-  String get linkedEmailAccountsTitle => 'Email accounts';
-
-  @override
-  String get linkedEmailAccountsDescription =>
-      'Link existing inboxes and send from multiple addresses.';
-
-  @override
-  String get linkedEmailAccountsDefaultHint =>
-      'New chats send from your default address unless you switch it per chat.';
-
-  @override
-  String linkedEmailAccountsLimitHint(Object limit) {
-    return 'Up to $limit extra accounts.';
-  }
-
-  @override
-  String get linkedEmailAccountsLinkAction => 'Link account';
-
-  @override
-  String get linkedEmailAccountsUnsupportedHint =>
-      'This device supports one email account at a time.';
-
-  @override
-  String get linkedEmailAccountsEmptyTitle => 'No linked accounts yet';
-
-  @override
-  String get linkedEmailAccountsEmptyDescription =>
-      'Add an existing inbox to sync mail and send from it.';
-
-  @override
-  String get linkedEmailAccountsLoadFailure => 'Unable to load email accounts.';
-
-  @override
-  String get linkedEmailAccountsMakeDefaultAction => 'Make default';
-
-  @override
-  String get linkedEmailAccountsUpdatePasswordAction => 'Update password';
-
-  @override
-  String get linkedEmailAccountsDefaultBadge => 'Default';
-
-  @override
-  String get linkedEmailAccountsRemoveTitle => 'Remove linked account?';
-
-  @override
-  String get linkedEmailAccountsRemoveDescription =>
-      'You can re-link later. Existing messages stay.';
-
-  @override
-  String get linkedEmailAccountsUpdateTitle => 'Update email password';
-
-  @override
-  String get linkedEmailAccountsAccountLabel => 'Account';
-
-  @override
-  String get linkedEmailAccountsSheetTitle => 'Link an email account';
-
-  @override
-  String get linkedEmailAccountsSheetSubtitle =>
-      'Use an app password if your provider requires it.';
-
-  @override
-  String get linkedEmailAccountsAddressPlaceholder => 'name@domain.com';
-
-  @override
-  String get linkedEmailAccountsAddressRequired => 'Enter an email address.';
-
-  @override
-  String get linkedEmailAccountsAddressInvalid =>
-      'Enter a valid email address.';
-
-  @override
-  String get linkedEmailAccountsOauthLabel => 'Use OAuth';
-
-  @override
-  String get linkedEmailAccountsOauthDescription =>
-      'Recommended for Gmail, Outlook, and Yahoo.';
-
-  @override
-  String get linkedEmailAccountsOauthOpenAction => 'Open provider sign-in';
-
-  @override
-  String get linkedEmailAccountsOauthCodePlaceholder =>
-      'Paste authorization code';
-
-  @override
-  String get linkedEmailAccountsOauthCodeLabel => 'Authorization code';
-
-  @override
-  String get linkedEmailAccountsOauthCodeRequired =>
-      'Enter the authorization code.';
-
-  @override
-  String get linkedEmailAccountsOauthUnavailable =>
-      'OAuth is not available for this provider yet.';
-
-  @override
-  String get linkedEmailAccountsOauthLaunchFailure =>
-      'Unable to open the provider sign-in page.';
-
-  @override
-  String get linkedEmailAccountsOauthTimedOut =>
-      'OAuth sign-in timed out. Please try again.';
-
-  @override
-  String get linkedEmailAccountsOauthCallbackFailure =>
-      'OAuth sign-in did not finish. Please try again.';
-
-  @override
-  String get linkedEmailAccountsOauthBrowserTitle => 'Axichat sign-in';
-
-  @override
-  String get linkedEmailAccountsOauthBrowserBody =>
-      'You can close this window and return to Axichat.';
-
-  @override
-  String get linkedEmailAccountsPasswordPlaceholder => 'Enter app password';
-
-  @override
-  String get linkedEmailAccountsPasswordLabel => 'App password';
-
-  @override
-  String get linkedEmailAccountsSetDefaultLabel =>
-      'Set as default send address';
-
-  @override
-  String get linkedEmailAccountsSetDefaultDescription =>
-      'New chats send from this address by default.';
-
-  @override
-  String linkedEmailAccountsLimitReached(Object limit) {
-    return 'You can link up to $limit extra accounts.';
-  }
-
-  @override
-  String get linkedEmailAccountsUnsupportedError =>
-      'Multiple accounts are not supported on this device.';
-
-  @override
-  String get linkedEmailAccountsLinkFailure => 'Unable to link account.';
-
-  @override
-  String get linkedEmailAccountsUnlinkFailure => 'Unable to remove account.';
-
-  @override
-  String get linkedEmailAccountsDefaultFailure =>
-      'Unable to update default address.';
-
-  @override
-  String get linkedEmailAccountsUpdateFailure => 'Unable to update password.';
 
   @override
   String get verificationAddLabelPlaceholder => 'Add label';

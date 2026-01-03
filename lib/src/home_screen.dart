@@ -9,7 +9,6 @@ import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
@@ -49,7 +48,6 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/demo/demo_calendar.dart';
 import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/view/linked_email_onboarding_dialog.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
 import 'package:axichat/src/home/home_search_models.dart';
@@ -67,7 +65,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -84,7 +81,6 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
     ];
 
 const double _secondaryPaneGutter = 0.0;
-const String _linkedEmailAccountsLocation = '/profile/email-accounts';
 const int _homeChatPageIndex = 0;
 const int _homeCalendarPageIndex = 1;
 const Curve _homeCalendarFadeCurve = Curves.easeInOutCubic;
@@ -496,10 +492,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: mainContent,
           )
         : mainContent;
-    final Widget gatedContent = _LinkedEmailOnboardingGate(
-      child: calendarAwareContent,
-    );
-
     final shouldResizeForKeyboard = navPlacement != NavPlacement.bottom;
 
     final scaffold = Scaffold(
@@ -624,7 +616,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
-          child: gatedContent,
+          child: calendarAwareContent,
         ),
       ),
     );
@@ -734,92 +726,6 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
-    );
-  }
-}
-
-class _LinkedEmailOnboardingGate extends StatefulWidget {
-  const _LinkedEmailOnboardingGate({
-    required this.child,
-  });
-
-  final Widget child;
-
-  @override
-  State<_LinkedEmailOnboardingGate> createState() =>
-      _LinkedEmailOnboardingGateState();
-}
-
-class _LinkedEmailOnboardingGateState
-    extends State<_LinkedEmailOnboardingGate> {
-  bool _promptHandled = false;
-  bool _promptScheduled = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _schedulePrompt();
-  }
-
-  bool _shouldPrompt(AuthenticationState state) {
-    if (state is! AuthenticationCompleteFromSignup) {
-      return false;
-    }
-    if (!state.config.enableSmtp) {
-      return false;
-    }
-    final EmailService emailService = context.read<EmailService>();
-    if (!emailService.supportsMultipleLinkedAccounts) {
-      return false;
-    }
-    return true;
-  }
-
-  void _schedulePrompt() {
-    if (_promptHandled || _promptScheduled) {
-      return;
-    }
-    final AuthenticationState authState =
-        context.read<AuthenticationCubit>().state;
-    if (!_shouldPrompt(authState)) {
-      return;
-    }
-    _promptScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _promptScheduled = false;
-      if (!mounted || _promptHandled) {
-        return;
-      }
-      final AuthenticationState latestState =
-          context.read<AuthenticationCubit>().state;
-      if (!_shouldPrompt(latestState)) {
-        return;
-      }
-      _promptHandled = true;
-      unawaited(_showPrompt());
-    });
-  }
-
-  Future<void> _showPrompt() async {
-    final bool? shouldLink = await showLinkedEmailOnboardingDialog(
-      context: context,
-    );
-    if (!mounted || shouldLink != true) {
-      return;
-    }
-    context.push(
-      _linkedEmailAccountsLocation,
-      extra: context.read,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocListener<AuthenticationCubit, AuthenticationState>(
-      listenWhen: (previous, current) =>
-          !_promptHandled && _shouldPrompt(current),
-      listener: (context, state) => _schedulePrompt(),
-      child: widget.child,
     );
   }
 }

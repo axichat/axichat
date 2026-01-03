@@ -108,6 +108,7 @@
   "chatEmptyMessages": "没有消息",
   "chatComposerEmailHint": "发送邮件消息",
   "chatComposerMessageHint": "发送消息",
+  "chatComposerFromHint": "发送自 {address}",
   "chatReadOnly": "只读",
   "chatUnarchivePrompt": "取消存档后才能发送新消息。",
   "chatEmojiPicker": "表情选择器",
@@ -1110,49 +1111,6 @@
   "emailDemoStatusSending": "Sending demo message…",
   "emailDemoStatusSent": "Sent demo message (id={id})",
   "emailDemoTitle": "Email Transport Demo",
-  "linkedEmailAccountsTitle": "Email accounts",
-  "linkedEmailAccountsDescription": "Link existing inboxes and send from multiple addresses.",
-  "linkedEmailAccountsDefaultHint": "New chats send from your default address unless you switch it per chat.",
-  "linkedEmailAccountsLimitHint": "Up to {limit} extra accounts.",
-  "linkedEmailAccountsLinkAction": "Link account",
-  "linkedEmailAccountsUnsupportedHint": "This device supports one email account at a time.",
-  "linkedEmailAccountsEmptyTitle": "No linked accounts yet",
-  "linkedEmailAccountsEmptyDescription": "Add an existing inbox to sync mail and send from it.",
-  "linkedEmailAccountsLoadFailure": "Unable to load email accounts.",
-  "linkedEmailAccountsMakeDefaultAction": "Make default",
-  "linkedEmailAccountsUpdatePasswordAction": "Update password",
-  "linkedEmailAccountsDefaultBadge": "Default",
-  "linkedEmailAccountsRemoveTitle": "Remove linked account?",
-  "linkedEmailAccountsRemoveDescription": "You can re-link later. Existing messages stay.",
-  "linkedEmailAccountsUpdateTitle": "Update email password",
-  "linkedEmailAccountsAccountLabel": "Account",
-  "linkedEmailAccountsSheetTitle": "Link an email account",
-  "linkedEmailAccountsSheetSubtitle": "Use an app password if your provider requires it.",
-  "linkedEmailAccountsAddressPlaceholder": "name@domain.com",
-  "linkedEmailAccountsAddressRequired": "Enter an email address.",
-  "linkedEmailAccountsAddressInvalid": "Enter a valid email address.",
-  "linkedEmailAccountsOauthLabel": "使用 OAuth",
-  "linkedEmailAccountsOauthDescription": "推荐用于 Gmail、Outlook 和 Yahoo。",
-  "linkedEmailAccountsOauthOpenAction": "打开提供商登录",
-  "linkedEmailAccountsOauthCodePlaceholder": "粘贴授权码",
-  "linkedEmailAccountsOauthCodeLabel": "授权码",
-  "linkedEmailAccountsOauthCodeRequired": "请输入授权码。",
-  "linkedEmailAccountsOauthUnavailable": "该提供商暂不支持 OAuth。",
-  "linkedEmailAccountsOauthLaunchFailure": "无法打开提供商登录页面。",
-  "linkedEmailAccountsOauthTimedOut": "OAuth 登录已超时。请重试。",
-  "linkedEmailAccountsOauthCallbackFailure": "OAuth 登录未完成。请重试。",
-  "linkedEmailAccountsOauthBrowserTitle": "Axichat 登录",
-  "linkedEmailAccountsOauthBrowserBody": "你可以关闭此窗口并返回 Axichat。",
-  "linkedEmailAccountsPasswordPlaceholder": "Enter app password",
-  "linkedEmailAccountsPasswordLabel": "App password",
-  "linkedEmailAccountsSetDefaultLabel": "Set as default send address",
-  "linkedEmailAccountsSetDefaultDescription": "New chats send from this address by default.",
-  "linkedEmailAccountsLimitReached": "You can link up to {limit} extra accounts.",
-  "linkedEmailAccountsUnsupportedError": "Multiple accounts are not supported on this device.",
-  "linkedEmailAccountsLinkFailure": "Unable to link account.",
-  "linkedEmailAccountsUnlinkFailure": "Unable to remove account.",
-  "linkedEmailAccountsDefaultFailure": "Unable to update default address.",
-  "linkedEmailAccountsUpdateFailure": "Unable to update password.",
   "verificationAddLabelPlaceholder": "Add label",
   "verificationCurrentDevice": "Current device",
   "verificationDeviceIdLabel": "ID: {id}",
@@ -1250,16 +1208,6 @@
   "@emailDemoStatusSendFailed": {
     "placeholders": {
       "error": {}
-    }
-  },
-  "@linkedEmailAccountsLimitHint": {
-    "placeholders": {
-      "limit": {}
-    }
-  },
-  "@linkedEmailAccountsLimitReached": {
-    "placeholders": {
-      "limit": {}
     }
   },
   "@avatarCropSizeLabel": {
