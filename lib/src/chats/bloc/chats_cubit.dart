@@ -250,6 +250,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   Future<void> createChatRoom({
     required String title,
     String? nickname,
+    AvatarUploadPayload? avatar,
   }) async {
     emit(state.copyWith(creationStatus: RequestStatus.loading));
     final mucService = _chatsService as MucService;
@@ -257,6 +258,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       final roomJid = await mucService.createRoom(
         name: title,
         nickname: nickname,
+        avatar: avatar,
       );
       await _chatsService.openChat(roomJid);
       emit(state.copyWith(creationStatus: RequestStatus.success));

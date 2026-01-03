@@ -270,6 +270,22 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     );
   }
 
+  Future<void> seedAvatarFromBytes(Uint8List bytes) async {
+    if (bytes.isEmpty) return;
+    _stopAvatarCarousel();
+    _currentCarouselAvatar = null;
+    emit(
+      state.copyWith(
+        avatar: null,
+        avatarPreviewBytes: null,
+        carouselPreviewBytes: null,
+        processing: true,
+        clearError: true,
+      ),
+    );
+    await _applyAvatarFromBytes(bytes);
+  }
+
   Future<void> shuffleTemplate(ShadColorScheme colors) async {
     _colors = colors;
     final selection = _pickAvatarSelection(colors);

@@ -2,6 +2,9 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
+import 'package:axichat/src/avatar/view/signup_avatar_error_text.dart';
+import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -24,6 +27,7 @@ class RoomMembersSheet extends StatelessWidget {
     required this.canInvite,
     required this.onInvite,
     required this.onAction,
+    this.roomAvatarPath,
     this.onChangeNickname,
     this.onLeaveRoom,
     this.currentNickname,
@@ -36,6 +40,7 @@ class RoomMembersSheet extends StatelessWidget {
   final bool canInvite;
   final ValueChanged<String> onInvite;
   final void Function(String occupantId, MucModerationAction action) onAction;
+  final String? roomAvatarPath;
   final ValueChanged<String>? onChangeNickname;
   final VoidCallback? onLeaveRoom;
   final String? currentNickname;
@@ -48,6 +53,11 @@ class RoomMembersSheet extends StatelessWidget {
     final groups = _sections(l10n);
     final theme = context.textTheme;
     final colors = context.colorScheme;
+    const avatarSectionPadding = EdgeInsets.fromLTRB(16, 0, 16, 8);
+    final avatarPath = roomAvatarPath?.trim();
+    final canEditAvatar =
+        roomState.myAffiliation.isOwner || roomState.myAffiliation.isAdmin;
+    final showAvatarSection = avatarPath?.isNotEmpty == true || canEditAvatar;
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -64,6 +74,18 @@ class RoomMembersSheet extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        if (showAvatarSection)
+          Padding(
+            padding: avatarSectionPadding,
+            child: _RoomAvatarSection(
+              roomJid: roomState.roomJid,
+              avatarPath: avatarPath,
+              canEdit: canEditAvatar,
+              onEdit: canEditAvatar
+                  ? () => _handleAvatarEdit(context, avatarPath)
+                  : null,
+            ),
+          ),
         if (onChangeNickname != null || onLeaveRoom != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -189,6 +211,44 @@ class RoomMembersSheet extends StatelessWidget {
     return result;
   }
 
+  Future<void> _handleAvatarEdit(
+    BuildContext context,
+    String? avatarPath,
+  ) async {
+    final avatar = await _promptAvatarEdit(
+      context,
+      avatarPath: avatarPath,
+    );
+    if (!context.mounted || avatar == null) return;
+    context.read<ChatBloc>().add(ChatRoomAvatarChangeRequested(avatar));
+  }
+
+  Future<AvatarUploadPayload?> _promptAvatarEdit(
+    BuildContext context, {
+    String? avatarPath,
+  }) async {
+    const avatarEditorMaxWidth = 960.0;
+    return showAdaptiveBottomSheet<AvatarUploadPayload>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: false,
+      showCloseButton: false,
+      dialogMaxWidth: avatarEditorMaxWidth,
+      builder: (sheetContext) {
+        final pop = Navigator.of(sheetContext).pop;
+        return BlocProvider(
+          create: (context) =>
+              SignupAvatarCubit()..setVisible(true, context.colorScheme),
+          child: _RoomAvatarEditorSheet(
+            avatarPath: avatarPath,
+            onCancel: () => pop(),
+            onSave: (payload) => pop(payload),
+          ),
+        );
+      },
+    );
+  }
+
   List<_MemberGroup> _sections(AppLocalizations l10n) {
     final seen = <String>{};
     final groups = <_MemberGroup>[
@@ -267,6 +327,46 @@ class _MemberGroup {
 
   final String title;
   final List<Occupant> members;
+}
+
+class _RoomAvatarSection extends StatelessWidget {
+  const _RoomAvatarSection({
+    required this.roomJid,
+    required this.avatarPath,
+    required this.canEdit,
+    this.onEdit,
+  });
+
+  final String roomJid;
+  final String? avatarPath;
+  final bool canEdit;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    const avatarSize = 56.0;
+    const avatarSpacing = 12.0;
+    final l10n = context.l10n;
+    final avatar = AxiAvatar(
+      jid: roomJid,
+      size: avatarSize,
+      avatarPath: avatarPath,
+    );
+    final editButton = canEdit
+        ? ShadButton.outline(
+            size: ShadButtonSize.sm,
+            onPressed: onEdit,
+            child: Text(l10n.profileEditAvatar),
+          ).withTapBounce()
+        : null;
+    return Row(
+      children: [
+        avatar,
+        const SizedBox(width: avatarSpacing),
+        if (editButton != null) editButton,
+      ],
+    );
+  }
 }
 
 class _MemberSection extends StatelessWidget {
@@ -673,6 +773,184 @@ String _avatarKey(Occupant occupant) {
     return realJid;
   }
   return realJid.substring(0, separatorIndex);
+}
+
+class _RoomAvatarEditorSheet extends StatefulWidget {
+  const _RoomAvatarEditorSheet({
+    required this.avatarPath,
+    required this.onCancel,
+    required this.onSave,
+  });
+
+  final String? avatarPath;
+  final VoidCallback onCancel;
+  final ValueChanged<AvatarUploadPayload> onSave;
+
+  @override
+  State<_RoomAvatarEditorSheet> createState() => _RoomAvatarEditorSheetState();
+}
+
+class _RoomAvatarEditorSheetState extends State<_RoomAvatarEditorSheet> {
+  static const _headerPadding = EdgeInsets.fromLTRB(16, 16, 16, 12);
+  static const _contentPadding = EdgeInsets.symmetric(horizontal: 16);
+  static const _actionsPadding = EdgeInsets.fromLTRB(16, 0, 16, 16);
+  static const _panelSpacing = 12.0;
+  static const _errorSpacing = 8.0;
+  static const _actionsSpacing = 8.0;
+
+  late final XmppService _xmppService;
+
+  @override
+  void initState() {
+    super.initState();
+    _xmppService = context.read<XmppService>();
+    _seedAvatarIfNeeded();
+  }
+
+  Future<void> _seedAvatarIfNeeded() async {
+    final path = widget.avatarPath?.trim();
+    if (path == null || path.isEmpty) return;
+    final cubit = context.read<SignupAvatarCubit>();
+    final bytes = await _xmppService.loadAvatarBytes(path);
+    if (!mounted || bytes == null || bytes.isEmpty) return;
+    await cubit.seedAvatarFromBytes(bytes);
+  }
+
+  void _handleSave() {
+    final cubit = context.read<SignupAvatarCubit>();
+    if (cubit.state.processing) return;
+    if (cubit.state.avatar == null) {
+      cubit.materializeCurrentCarouselAvatar();
+    }
+    final payload = cubit.state.avatar;
+    if (payload == null) return;
+    widget.onSave(payload);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = context.modalHeaderTextStyle;
+    final l10n = context.l10n;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    return BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
+      builder: (context, avatarState) {
+        final errorText = signupAvatarErrorText(
+          avatarState: avatarState,
+          l10n: l10n,
+        );
+        final saveEnabled = !avatarState.processing;
+        final Widget actions = Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            ShadButton.outline(
+              onPressed: widget.onCancel,
+              child: Text(l10n.commonCancel),
+            ).withTapBounce(),
+            const SizedBox(width: _actionsSpacing),
+            ShadButton(
+              onPressed: saveEnabled ? _handleSave : null,
+              child: Text(l10n.avatarSaveAvatar),
+            ).withTapBounce(enabled: saveEnabled),
+          ],
+        );
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: keyboardInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: _headerPadding,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  l10n.profileEditAvatar,
+                                  style: titleStyle,
+                                ),
+                              ),
+                              AxiIconButton(
+                                iconData: LucideIcons.x,
+                                tooltip: l10n.commonClose,
+                                onPressed: widget.onCancel,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: _contentPadding,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SignupAvatarEditorPanel(
+                                mode: avatarState.editorMode,
+                                avatarBytes: avatarState.displayedBytes,
+                                cropBytes: avatarState.sourceBytes,
+                                cropRect: avatarState.cropRect,
+                                imageWidth: avatarState.imageWidth,
+                                imageHeight: avatarState.imageHeight,
+                                onCropChanged: (rect) => context
+                                    .read<SignupAvatarCubit>()
+                                    .updateCropRect(rect),
+                                onCropReset:
+                                    context.read<SignupAvatarCubit>().resetCrop,
+                                onShuffle: () => context
+                                    .read<SignupAvatarCubit>()
+                                    .shuffleTemplate(context.colorScheme),
+                                onUpload: context
+                                    .read<SignupAvatarCubit>()
+                                    .pickAvatarFromFiles,
+                                canShuffleBackground:
+                                    avatarState.canShuffleBackground,
+                                onShuffleBackground:
+                                    avatarState.canShuffleBackground
+                                        ? () => context
+                                            .read<SignupAvatarCubit>()
+                                            .shuffleBackground(
+                                              context.colorScheme,
+                                            )
+                                        : null,
+                              ),
+                              if (errorText != null) ...[
+                                const SizedBox(height: _errorSpacing),
+                                Text(
+                                  errorText,
+                                  style: context.textTheme.small.copyWith(
+                                    color: context.colorScheme.destructive,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: _panelSpacing),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  bottom: true,
+                  child: Padding(
+                    padding: _actionsPadding,
+                    child: actions,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _InviteChipsSheet extends StatefulWidget {

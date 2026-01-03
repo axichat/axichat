@@ -74,6 +74,11 @@ const _pinPermissionDeniedMessage =
     'You do not have permission to pin messages in this room.';
 const _pinRoomStateLoadingMessage = 'Room members are still loading.';
 const _pinSyncFailedLogMessage = 'Failed to sync pinned messages.';
+const _roomAvatarPermissionDeniedMessage =
+    'You do not have permission to update the room avatar.';
+const _roomAvatarUpdateSuccessMessage = 'Room avatar updated.';
+const _roomAvatarUpdateFailureMessage = 'Could not update room avatar.';
+const _roomAvatarUpdateFailedLogMessage = 'Failed to update room avatar.';
 const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
@@ -224,6 +229,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatInviteJoinRequested>(_onInviteJoinRequested);
     on<ChatLeaveRoomRequested>(_onLeaveRoomRequested);
     on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
+    on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
     on<ChatEmailImagesLoaded>(_onEmailImagesLoaded);
     if (jid != null) {
@@ -1432,6 +1438,83 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         state.copyWith(
           toast: const ChatToast(
             message: 'Could not change nickname',
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onRoomAvatarChangeRequested(
+    ChatRoomAvatarChangeRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null || chat.type != ChatType.groupChat) return;
+    final roomState = state.roomState;
+    if (roomState == null) {
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: _pinRoomStateLoadingMessage,
+            variant: ChatToastVariant.warning,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      return;
+    }
+    final canEdit =
+        roomState.myAffiliation.isOwner || roomState.myAffiliation.isAdmin;
+    if (!canEdit) {
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: _roomAvatarPermissionDeniedMessage,
+            variant: ChatToastVariant.warning,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      return;
+    }
+    if (event.avatar.bytes.isEmpty) return;
+    try {
+      final updated = await _mucService.updateRoomAvatar(
+        roomJid: chat.jid,
+        avatar: event.avatar,
+      );
+      if (!updated) {
+        emit(
+          state.copyWith(
+            toast: const ChatToast(
+              message: _roomAvatarUpdateFailureMessage,
+              variant: ChatToastVariant.destructive,
+            ),
+            toastId: state.toastId + 1,
+          ),
+        );
+        return;
+      }
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: _roomAvatarUpdateSuccessMessage,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.safeWarning(
+        _roomAvatarUpdateFailedLogMessage,
+        error,
+        stackTrace,
+      );
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: _roomAvatarUpdateFailureMessage,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
