@@ -2157,10 +2157,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mucMembersTitle => '成员';
 
   @override
-  String get mucEditAvatar => 'Edit room avatar';
+  String get mucEditAvatar => '编辑房间头像';
 
   @override
-  String get mucAvatarMenuDescription => 'Room members will see this avatar.';
+  String get mucAvatarMenuDescription => '房间成员将看到此头像。';
 
   @override
   String get mucInviteUser => '邀请用户';
@@ -2356,17 +2356,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatsCreateChatRoomTitle => '创建聊天室';
 
   @override
-  String get chatsCreateChatRoomAction => 'Create room';
+  String get chatsCreateChatRoomAction => '创建房间';
 
   @override
   String get chatsRoomNamePlaceholder => '名称';
 
   @override
-  String get chatsRoomNameRequiredError => 'Room name cannot be empty.';
+  String get chatsRoomNameRequiredError => '房间名称不能为空。';
 
   @override
   String chatsRoomNameInvalidCharacterError(Object character) {
-    return 'Room names cannot contain $character.';
+    return '房间名称不能包含$character。';
   }
 
   @override
@@ -5233,10 +5233,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get mucMembersTitle => '成員';
 
   @override
-  String get mucEditAvatar => 'Edit room avatar';
+  String get mucEditAvatar => '編輯聊天室頭像';
 
   @override
-  String get mucAvatarMenuDescription => 'Room members will see this avatar.';
+  String get mucAvatarMenuDescription => '聊天室成員會看到此頭像。';
 
   @override
   String get mucInviteUser => '邀請用戶';
@@ -5432,17 +5432,17 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatsCreateChatRoomTitle => '建立聊天室';
 
   @override
-  String get chatsCreateChatRoomAction => 'Create room';
+  String get chatsCreateChatRoomAction => '建立聊天室';
 
   @override
   String get chatsRoomNamePlaceholder => '名稱';
 
   @override
-  String get chatsRoomNameRequiredError => 'Room name cannot be empty.';
+  String get chatsRoomNameRequiredError => '聊天室名稱不能為空。';
 
   @override
   String chatsRoomNameInvalidCharacterError(Object character) {
-    return 'Room names cannot contain $character.';
+    return '聊天室名稱不能包含$character。';
   }
 
   @override
