@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:animations/animations.dart';
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
@@ -466,16 +467,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             : calendarViewTransitionDuration;
                     return SafeArea(
                       top: state is ConnectivityConnected || demoOffline,
-                      child: AxiFadeIndexedStack(
-                        index: openCalendar
-                            ? _homeCalendarPageIndex
-                            : _homeChatPageIndex,
+                      child: _HomeCalendarViewTransition(
+                        openCalendar: openCalendar,
                         duration: calendarTransitionDuration,
                         curve: _homeCalendarFadeCurve,
-                        children: [
-                          chatLayout(showChatCalendar: showChatCalendar),
-                          calendarLayout(),
-                        ],
+                        chatChild: chatLayout(
+                          showChatCalendar: showChatCalendar,
+                        ),
+                        calendarChild: calendarLayout(),
                       ),
                     );
                   },
@@ -726,6 +725,183 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+class _HomeCalendarViewTransition extends StatelessWidget {
+  const _HomeCalendarViewTransition({
+    required this.openCalendar,
+    required this.duration,
+    required this.curve,
+    required this.chatChild,
+    required this.calendarChild,
+  });
+
+  final bool openCalendar;
+  final Duration duration;
+  final Curve curve;
+  final Widget chatChild;
+  final Widget calendarChild;
+
+  @override
+  Widget build(BuildContext context) {
+    final env = EnvScope.maybeOf(context);
+    final bool isDesktop = env?.isDesktopPlatform ?? false;
+    if (isDesktop) {
+      return AxiFadeIndexedStack(
+        index: openCalendar ? _homeCalendarPageIndex : _homeChatPageIndex,
+        duration: duration,
+        curve: curve,
+        children: [
+          chatChild,
+          calendarChild,
+        ],
+      );
+    }
+    return _HomeMobileCalendarViewTransition(
+      openCalendar: openCalendar,
+      duration: duration,
+      curve: curve,
+      chatChild: chatChild,
+      calendarChild: calendarChild,
+    );
+  }
+}
+
+class _HomeMobileCalendarViewTransition extends StatefulWidget {
+  const _HomeMobileCalendarViewTransition({
+    required this.openCalendar,
+    required this.duration,
+    required this.curve,
+    required this.chatChild,
+    required this.calendarChild,
+  });
+
+  final bool openCalendar;
+  final Duration duration;
+  final Curve curve;
+  final Widget chatChild;
+  final Widget calendarChild;
+
+  @override
+  State<_HomeMobileCalendarViewTransition> createState() =>
+      _HomeMobileCalendarViewTransitionState();
+}
+
+class _HomeMobileCalendarViewTransitionState
+    extends State<_HomeMobileCalendarViewTransition>
+    with SingleTickerProviderStateMixin {
+  static const double _transitionVisibleValue = 1.0;
+  static const double _transitionHiddenValue = 0.0;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+    value:
+        widget.openCalendar ? _transitionVisibleValue : _transitionHiddenValue,
+  );
+
+  late CurvedAnimation _curve = CurvedAnimation(
+    parent: _controller,
+    curve: widget.curve,
+    reverseCurve: widget.curve,
+  );
+
+  late Animation<double> _chatOpacity = Tween<double>(
+    begin: _transitionVisibleValue,
+    end: _transitionHiddenValue,
+  ).animate(_curve);
+
+  late Animation<Offset> _calendarSlide = Tween<Offset>(
+    begin: calendarViewMobileEnterOffset,
+    end: Offset.zero,
+  ).animate(_curve);
+
+  @override
+  void didUpdateWidget(covariant _HomeMobileCalendarViewTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+      _syncOpenState();
+    }
+    if (oldWidget.curve != widget.curve) {
+      _curve = CurvedAnimation(
+        parent: _controller,
+        curve: widget.curve,
+        reverseCurve: widget.curve,
+      );
+      _chatOpacity = Tween<double>(
+        begin: _transitionVisibleValue,
+        end: _transitionHiddenValue,
+      ).animate(_curve);
+      _calendarSlide = Tween<Offset>(
+        begin: calendarViewMobileEnterOffset,
+        end: Offset.zero,
+      ).animate(_curve);
+    }
+    if (oldWidget.openCalendar != widget.openCalendar) {
+      _syncOpenState();
+    }
+  }
+
+  void _syncOpenState() {
+    final double target =
+        widget.openCalendar ? _transitionVisibleValue : _transitionHiddenValue;
+    if (widget.duration == Duration.zero) {
+      _controller
+        ..stop()
+        ..value = target;
+      return;
+    }
+    _controller.animateTo(
+      target,
+      duration: widget.duration,
+      curve: Curves.linear,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        TickerMode(
+          enabled: !widget.openCalendar,
+          child: IgnorePointer(
+            ignoring: widget.openCalendar,
+            child: FadeTransition(
+              opacity: _chatOpacity,
+              child: ExcludeSemantics(
+                excluding: widget.openCalendar,
+                child: widget.chatChild,
+              ),
+            ),
+          ),
+        ),
+        TickerMode(
+          enabled: widget.openCalendar,
+          child: IgnorePointer(
+            ignoring: !widget.openCalendar,
+            child: SlideTransition(
+              position: _calendarSlide,
+              child: FadeScaleTransition(
+                animation: _controller,
+                child: ExcludeSemantics(
+                  excluding: !widget.openCalendar,
+                  child: widget.calendarChild,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1037,12 +1213,13 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
     if (collapsed) {
-      return AxiIconButton(
+      return AxiIconButton.ghost(
         iconData: LucideIcons.lifeBuoy,
         tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
         onPressed: () => context
             .read<AccessibilityActionBloc?>()
             ?.add(const AccessibilityMenuOpened()),
+        usePrimary: true,
       );
     }
     final colors = context.colorScheme;
@@ -1090,10 +1267,15 @@ class _FindActionIconButton extends StatelessWidget {
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
+    final colors = context.colorScheme;
     final Widget content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(LucideIcons.lifeBuoy, size: 18),
+        Icon(
+          LucideIcons.lifeBuoy,
+          size: 18,
+          color: colors.primary,
+        ),
         if (showShortcutHint) ...[
           const SizedBox(width: 10),
           ShortcutHint(
@@ -1134,6 +1316,7 @@ class _SearchToggleButton extends StatelessWidget {
       iconData: LucideIcons.search,
       tooltip: active ? l10n.chatSearchClose : l10n.commonSearch,
       onPressed: onPressed,
+      usePrimary: true,
     );
   }
 }
@@ -1197,10 +1380,10 @@ class _DesktopHomeRefreshButtonState extends State<_DesktopHomeRefreshButton>
               turns: _spinController,
               child: Icon(
                 LucideIcons.refreshCw,
-                size: context.iconTheme.size,
-                color: context.colorScheme.foreground,
+                color: context.colorScheme.primary,
               ),
             ),
+            usePrimary: true,
           );
         },
       ),

@@ -114,10 +114,11 @@ class AxiNavigationRail extends StatelessWidget {
     );
     final Widget? toggleButton = onToggleCollapse == null
         ? null
-        : AxiIconButton(
+        : AxiIconButton.ghost(
             iconData: LucideIcons.menu,
             tooltip: collapsed ? toggleCollapsedTooltip : toggleExpandedTooltip,
             onPressed: onToggleCollapse,
+            usePrimary: true,
           );
     return AnimatedContainer(
       duration: context.watch<SettingsCubit>().animationDuration,
@@ -233,16 +234,25 @@ class _AxiNavigationRailItemState extends State<_AxiNavigationRailItem> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final iconColor = widget.selected ? colors.primary : colors.foreground;
-    final textColor = widget.selected ? colors.primary : colors.foreground;
+    final bool isCollapsed = widget.collapsed;
+    final Color baseIconColor =
+        isCollapsed ? colors.primary : colors.foreground;
+    final Color iconColor = widget.selected ? colors.primary : baseIconColor;
+    final Color textColor =
+        widget.selected ? colors.primary : colors.foreground;
     final itemShape = SquircleBorder(
       cornerRadius: widget.radius.topLeft.x,
-      side: BorderSide(color: colors.border),
+      side: BorderSide(
+        color: isCollapsed ? Colors.transparent : colors.border,
+        width: isCollapsed ? 0 : 1,
+      ),
     );
     final hoverTint = colors.primary.withValues(alpha: 0.06);
-    final baseBackground = widget.selected
-        ? Color.alphaBlend(widget.selectionOverlay, widget.surfaceColor)
-        : widget.surfaceColor;
+    final baseBackground = isCollapsed
+        ? (widget.selected ? widget.selectionOverlay : Colors.transparent)
+        : (widget.selected
+            ? Color.alphaBlend(widget.selectionOverlay, widget.surfaceColor)
+            : widget.surfaceColor);
     final background = _hovered && widget.isDesktop
         ? Color.alphaBlend(hoverTint, baseBackground)
         : baseBackground;
