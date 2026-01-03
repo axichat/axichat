@@ -8,11 +8,11 @@ import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_preset_store.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
-import 'package:axichat/src/calendar/view/calendar_availability_editor_sheet.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
-import 'package:axichat/src/calendar/view/widgets/calendar_availability_grid_preview.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_free_busy_editor.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -21,11 +21,11 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:uuid/uuid.dart';
 
-const int _availabilityDefaultRangeMonths = 1;
-const int _availabilityMonthsInYear = 12;
-const int _availabilityMonthIndexOffset = 1;
-
+const int _availabilityDefaultRangeDays = 7;
+const int _availabilityRecipientPageSize = 20;
+const int _availabilityPresetMaxCount = 5;
 const double _availabilitySheetSectionSpacing = 16.0;
 const double _availabilitySheetSectionGap = 8.0;
 const double _availabilitySheetTileGap = 12.0;
@@ -35,27 +35,26 @@ const double _availabilitySheetProgressStrokeWidth = 2.0;
 const double _availabilitySheetLabelLetterSpacing = 0.4;
 const double _availabilityChatTilePaddingHorizontal = 16.0;
 const double _availabilityChatTilePaddingVertical = 8.0;
-
+const double _availabilityPresetChipSpacing = 8.0;
+const double _availabilityRecipientSearchHeight = 48.0;
+const double _availabilityRecipientChipSpacing = 8.0;
 const String _availabilityShareTitle = 'Share availability';
 const String _availabilityShareSubtitle =
-    'Pick a range and choose who can view it.';
+    'Pick a range, then edit for privacy or share.';
 const String _availabilityShareChatSubtitle =
     'Pick a range to share in this chat.';
-const String _availabilityShareTargetLabel = 'Share with';
-const String _availabilityShareTargetLockedLabel = 'Sharing with';
 const String _availabilityShareRangeLabel = 'Range';
-const String _availabilityShareWindowsLabel = 'Availability windows';
-const String _availabilityShareWindowsEmptyLabel = 'No windows defined yet.';
-const String _availabilityShareWindowsCountPrefix = 'Windows: ';
-const String _availabilityShareWindowSingularLabel = 'window';
-const String _availabilityShareWindowPluralLabel = 'windows';
-const String _availabilityShareEditWindowsLabel = 'Edit windows';
 const String _availabilitySharePreviewLabel = 'Preview';
 const String _availabilitySharePreviewEmptyLabel = 'Select a range to preview.';
-const String _availabilityShareRedactionLabel = 'Share free slots only';
-const String _availabilityShareRedactionHint =
-    'Busy and tentative slots stay hidden.';
-const String _availabilityShareButtonLabel = 'Share';
+const String _availabilityShareEditLabel = 'Edit for privacy';
+const String _availabilityShareShareLabel = 'Share';
+const String _availabilityShareSendLabel = 'Send';
+const String _availabilityShareRecipientsLabel = 'Recipients';
+const String _availabilityShareRecipientsHint = 'Search contacts';
+const String _availabilityShareRecipientsEmptyLabel =
+    'No contacts match your search.';
+const String _availabilityShareRecipientsRequiredMessage =
+    'Select at least one recipient.';
 const String _availabilityShareMissingChatsMessage =
     'No eligible chats available.';
 const String _availabilityShareLockedChatUnavailableMessage =
@@ -64,11 +63,19 @@ const String _availabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
 const String _availabilityShareInvalidRangeMessage =
     'Select a valid range to share.';
-const String _availabilityShareTargetRequiredMessage =
-    'Select a chat to share with.';
 const String _availabilityShareSuccessMessage = 'Availability shared.';
 const String _availabilityShareFailureMessage = 'Failed to share availability.';
+const String _availabilitySharePartialFailureMessage =
+    'Some shares failed to send.';
 const String _availabilityShareOwnerFallback = 'owner';
+const String _availabilitySharePresetLabel = 'Recent sheets';
+const String _availabilitySharePresetEmptyLabel = 'No recent sheets yet.';
+const String _availabilityShareLoadMoreLabel = 'Load more';
+const String _availabilityShareEditHeader = 'Edit free/busy';
+const String _availabilityShareEditHint =
+    'Drag to resize, split segments, or toggle free/busy.';
+const String _availabilityShareBackLabel = 'Back';
+const String _availabilityShareDoneLabel = 'Done';
 const String _availabilityChatTypeDirectLabel = 'Direct chat';
 const String _availabilityChatTypeGroupLabel = 'Group chat';
 const String _availabilityChatTypeNoteLabel = 'Notes';
@@ -77,6 +84,8 @@ const EdgeInsets _availabilityChatTilePadding = EdgeInsets.symmetric(
   horizontal: _availabilityChatTilePaddingHorizontal,
   vertical: _availabilityChatTilePaddingVertical,
 );
+
+const Uuid _availabilityPresetIdGenerator = Uuid();
 
 XmppService? _maybeReadXmppService(BuildContext context) {
   try {
@@ -95,7 +104,6 @@ Future<void> showCalendarAvailabilityShareSheet({
   required CalendarAvailabilityShareSource source,
   required CalendarModel model,
   required String ownerJid,
-  ValueChanged<CalendarAvailability>? onAvailabilitySaved,
   Chat? initialChat,
   bool lockToChat = false,
 }) async {
@@ -107,7 +115,8 @@ Future<void> showCalendarAvailabilityShareSheet({
   final List<Chat> available = lockToChat
       ? (canLockToChat ? <Chat>[lockedChat] : const <Chat>[])
       : chats
-          .where((chat) => chat.supportsChatCalendar)
+          .where(
+              (chat) => chat.supportsChatCalendar && chat.type != ChatType.note)
           .toList(growable: false);
   if (available.isEmpty) {
     FeedbackSystem.showInfo(
@@ -127,7 +136,6 @@ Future<void> showCalendarAvailabilityShareSheet({
       model: model,
       ownerJid: ownerJid,
       availableChats: available,
-      onAvailabilitySaved: onAvailabilitySaved,
       initialChat: initialChat,
       lockToChat: lockToChat,
     ),
@@ -136,6 +144,16 @@ Future<void> showCalendarAvailabilityShareSheet({
     return;
   }
   FeedbackSystem.showSuccess(context, _availabilityShareSuccessMessage);
+}
+
+enum _AvailabilityShareStep {
+  range,
+  editor,
+  recipients;
+
+  bool get isRange => this == _AvailabilityShareStep.range;
+  bool get isEditor => this == _AvailabilityShareStep.editor;
+  bool get isRecipients => this == _AvailabilityShareStep.recipients;
 }
 
 class CalendarAvailabilityShareSheet extends StatefulWidget {
@@ -147,7 +165,6 @@ class CalendarAvailabilityShareSheet extends StatefulWidget {
     required this.ownerJid,
     required this.availableChats,
     required this.lockToChat,
-    this.onAvailabilitySaved,
     this.initialChat,
   });
 
@@ -157,7 +174,6 @@ class CalendarAvailabilityShareSheet extends StatefulWidget {
   final String ownerJid;
   final List<Chat> availableChats;
   final bool lockToChat;
-  final ValueChanged<CalendarAvailability>? onAvailabilitySaved;
   final Chat? initialChat;
 
   @override
@@ -170,9 +186,17 @@ class _CalendarAvailabilityShareSheetState
   late DateTime? _rangeStart;
   late DateTime? _rangeEnd;
   late CalendarModel _localModel;
+  late CalendarAvailabilityPresetStore _presetStore;
+  late TextEditingController _searchController;
+  List<CalendarFreeBusyInterval> _draftIntervals =
+      const <CalendarFreeBusyInterval>[];
+  List<CalendarAvailabilityPreset> _presets = <CalendarAvailabilityPreset>[];
   Chat? _selectedChat;
   bool _isSending = false;
-  bool _isRedacted = true;
+  bool _hasCustomDraft = false;
+  _AvailabilityShareStep _step = _AvailabilityShareStep.range;
+  int _recipientPageSize = _availabilityRecipientPageSize;
+  final Set<String> _selectedRecipientJids = <String>{};
 
   @override
   void initState() {
@@ -180,11 +204,18 @@ class _CalendarAvailabilityShareSheetState
     final now = DateTime.now();
     final start = _normalizeRangeStart(now);
     _rangeStart = start;
-    _rangeEnd = _addMonths(start, _availabilityDefaultRangeMonths);
+    _rangeEnd = start.add(const Duration(days: _availabilityDefaultRangeDays));
     _localModel = widget.model;
+    _presetStore = CalendarAvailabilityPresetStore();
+    _presets = _loadPresets();
+    _searchController = TextEditingController()..addListener(_handleSearch);
     final Chat? lockedChat = widget.lockToChat ? widget.initialChat : null;
     _selectedChat = lockedChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
+    if (lockedChat != null) {
+      _selectedRecipientJids.add(lockedChat.jid);
+    }
+    _resetDraftIntervals();
   }
 
   @override
@@ -192,78 +223,101 @@ class _CalendarAvailabilityShareSheetState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.model != widget.model) {
       _localModel = widget.model;
+      _resetDraftIntervals();
     }
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final CalendarAvailabilityOverlay? previewOverlay =
-        _resolvePreviewOverlay();
-    final int windowCount = _availabilityWindowCount(_localModel.availability);
     final String subtitleText = widget.lockToChat
         ? _availabilityShareChatSubtitle
         : _availabilityShareSubtitle;
-    final String targetLabel = widget.lockToChat
-        ? _availabilityShareTargetLockedLabel
-        : _availabilityShareTargetLabel;
     final header = AxiSheetHeader(
       title: const Text(_availabilityShareTitle),
       subtitle: Text(subtitleText),
       onClose: () => Navigator.of(context).maybePop(),
     );
-    final body = AxiSheetScaffold.scroll(
+    return AxiSheetScaffold.scroll(
       header: header,
       children: [
-        const _AvailabilitySheetSectionLabel(
-            text: _availabilityShareRangeLabel),
-        ScheduleRangeFields(
-          start: _rangeStart,
-          end: _rangeEnd,
-          onStartChanged: _handleRangeStartChanged,
-          onEndChanged: _handleRangeEndChanged,
-        ),
-        const SizedBox(height: _availabilitySheetSectionSpacing),
-        const _AvailabilitySheetSectionLabel(
-          text: _availabilityShareWindowsLabel,
-        ),
-        _AvailabilityWindowsSection(
-          windowCount: windowCount,
-          onEditPressed: _handleEditAvailabilityPressed,
-        ),
-        const SizedBox(height: _availabilitySheetSectionSpacing),
-        const _AvailabilitySheetSectionLabel(
-          text: _availabilitySharePreviewLabel,
-        ),
-        _AvailabilityPreviewSection(
-          overlay: previewOverlay,
-          isRedacted: _isRedacted,
-          onRedactionChanged: _handleRedactionChanged,
-        ),
-        const SizedBox(height: _availabilitySheetSectionSpacing),
-        _AvailabilitySheetSectionLabel(text: targetLabel),
-        if (widget.lockToChat)
-          _AvailabilityChatTarget(
-            chat: _selectedChat,
+        if (_step.isRange)
+          _AvailabilityRangeStep(
+            rangeStart: _rangeStart,
+            rangeEnd: _rangeEnd,
+            preview: _previewWidget(),
+            presets: _presets,
+            onStartChanged: _handleRangeStartChanged,
+            onEndChanged: _handleRangeEndChanged,
+            onEditPressed: _handleEditPressed,
+            onSharePressed: _handleSharePressed,
+            onPresetSelected: _handlePresetSelected,
           )
-        else if (widget.availableChats.isEmpty)
-          const _AvailabilitySheetEmptyMessage(
-            message: _availabilityShareMissingChatsMessage,
+        else if (_step.isEditor)
+          _AvailabilityEditorStep(
+            hint: _availabilityShareEditHint,
+            editor: _editorWidget(),
+            onBack: _handleBackToRange,
+            onDone: _handleDoneEditing,
           )
         else
-          _AvailabilityChatPicker(
-            chats: widget.availableChats,
-            selected: _selectedChat,
-            onSelected: _handleChatSelected,
+          _AvailabilityRecipientsStep(
+            queryController: _searchController,
+            recipients: _visibleRecipients(),
+            selectedJids: _selectedRecipientJids,
+            isBusy: _isSending,
+            canLoadMore: _canLoadMoreRecipients(),
+            onLoadMore: _handleLoadMoreRecipients,
+            onToggleRecipient: _handleRecipientToggled,
+            onBack: _handleBackToRange,
+            onSend: _handleSendPressed,
           ),
-        const SizedBox(height: _availabilitySheetSectionSpacing),
-        _AvailabilitySheetActionRow(
-          isBusy: _isSending,
-          onPressed: _handleSharePressed,
-          label: _availabilityShareButtonLabel,
-        ),
       ],
     );
-    return body;
+  }
+
+  Widget _previewWidget() {
+    final DateTime? start = _rangeStart;
+    final DateTime? end = _rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      return const _AvailabilitySheetEmptyMessage(
+        message: _availabilitySharePreviewEmptyLabel,
+      );
+    }
+    return CalendarFreeBusyEditor.preview(
+      rangeStart: start,
+      rangeEnd: end,
+      intervals: _draftIntervals,
+      tzid: _resolveTimeZone(_localModel),
+    );
+  }
+
+  Widget _editorWidget() {
+    final DateTime? start = _rangeStart;
+    final DateTime? end = _rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      return const _AvailabilitySheetEmptyMessage(
+        message: _availabilitySharePreviewEmptyLabel,
+      );
+    }
+    return CalendarFreeBusyEditor(
+      rangeStart: start,
+      rangeEnd: end,
+      intervals: _draftIntervals,
+      tzid: _resolveTimeZone(_localModel),
+      onIntervalsChanged: _handleDraftIntervalsChanged,
+    );
+  }
+
+  void _handleSearch() {
+    setState(() {
+      _recipientPageSize = _availabilityRecipientPageSize;
+    });
   }
 
   void _handleRangeStartChanged(DateTime? value) {
@@ -271,45 +325,284 @@ class _CalendarAvailabilityShareSheetState
       _rangeStart = value;
       final end = _rangeEnd;
       if (value != null && end != null && !end.isAfter(value)) {
-        _rangeEnd = _addMonths(value, _availabilityDefaultRangeMonths);
+        _rangeEnd =
+            value.add(const Duration(days: _availabilityDefaultRangeDays));
       }
+      _hasCustomDraft = false;
+      _resetDraftIntervals();
     });
   }
 
   void _handleRangeEndChanged(DateTime? value) {
     setState(() {
       _rangeEnd = value;
+      _hasCustomDraft = false;
+      _resetDraftIntervals();
     });
   }
 
-  void _handleChatSelected(Chat chat) {
+  void _handleEditPressed() {
     setState(() {
-      _selectedChat = chat;
+      _step = _AvailabilityShareStep.editor;
     });
   }
 
-  void _handleRedactionChanged(bool value) {
-    setState(() {
-      _isRedacted = value;
-    });
-  }
-
-  Future<void> _handleEditAvailabilityPressed() async {
-    final CalendarAvailability? availability =
-        await showCalendarAvailabilityEditorSheet(
-      context: context,
-      model: _localModel,
-    );
-    if (availability == null || !mounted) {
+  void _handleSharePressed() {
+    if (widget.lockToChat) {
+      _handleSendPressed();
       return;
     }
-    widget.onAvailabilitySaved?.call(availability);
     setState(() {
-      _localModel = _localModel.upsertAvailability(availability);
+      _step = _AvailabilityShareStep.recipients;
     });
   }
 
-  String? _resolveOwnerJid(Chat chat) {
+  void _handleBackToRange() {
+    setState(() {
+      _step = _AvailabilityShareStep.range;
+    });
+  }
+
+  void _handleDoneEditing() {
+    setState(() {
+      _step = _AvailabilityShareStep.range;
+      _hasCustomDraft = true;
+    });
+  }
+
+  void _handleDraftIntervalsChanged(List<CalendarFreeBusyInterval> intervals) {
+    setState(() {
+      _draftIntervals = intervals;
+      _hasCustomDraft = true;
+    });
+  }
+
+  void _handlePresetSelected(CalendarAvailabilityPreset preset) {
+    setState(() {
+      _rangeStart = preset.overlay.rangeStart.value;
+      _rangeEnd = preset.overlay.rangeEnd.value;
+      _draftIntervals = preset.overlay.intervals;
+      _hasCustomDraft = true;
+      _step = _AvailabilityShareStep.range;
+    });
+  }
+
+  void _handleRecipientToggled(Chat chat) {
+    setState(() {
+      if (_selectedRecipientJids.contains(chat.jid)) {
+        _selectedRecipientJids.remove(chat.jid);
+      } else {
+        _selectedRecipientJids.add(chat.jid);
+      }
+    });
+  }
+
+  void _handleLoadMoreRecipients() {
+    setState(() {
+      _recipientPageSize += _availabilityRecipientPageSize;
+    });
+  }
+
+  List<Chat> _visibleRecipients() {
+    final String query = _searchController.text.trim().toLowerCase();
+    final List<Chat> base = widget.availableChats
+        .where((chat) => chat.type != ChatType.note)
+        .toList(growable: false);
+    final List<Chat> filtered = query.isEmpty
+        ? base
+        : base
+            .where((chat) =>
+                chat.displayName.toLowerCase().contains(query) ||
+                chat.jid.toLowerCase().contains(query))
+            .toList(growable: false);
+    final int capped = math.min(filtered.length, _recipientPageSize);
+    return filtered.take(capped).toList(growable: false);
+  }
+
+  bool _canLoadMoreRecipients() {
+    final String query = _searchController.text.trim().toLowerCase();
+    final int total = widget.availableChats
+        .where((chat) => chat.type != ChatType.note)
+        .where((chat) => query.isEmpty
+            ? true
+            : chat.displayName.toLowerCase().contains(query) ||
+                chat.jid.toLowerCase().contains(query))
+        .length;
+    return _recipientPageSize < total;
+  }
+
+  Future<void> _handleSendPressed() async {
+    if (_isSending) {
+      return;
+    }
+    final DateTime? start = _rangeStart;
+    final DateTime? end = _rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      FeedbackSystem.showError(context, _availabilityShareInvalidRangeMessage);
+      return;
+    }
+    final String? ownerJid = _resolveOwnerJid(_selectedChat);
+    if (ownerJid == null || ownerJid.isEmpty) {
+      FeedbackSystem.showError(context, _availabilityShareMissingJidMessage);
+      return;
+    }
+    final List<Chat> recipients = widget.lockToChat
+        ? (_selectedChat == null ? const <Chat>[] : <Chat>[_selectedChat!])
+        : widget.availableChats
+            .where((chat) => _selectedRecipientJids.contains(chat.jid))
+            .toList(growable: false);
+    if (recipients.isEmpty) {
+      FeedbackSystem.showError(
+        context,
+        _availabilityShareRecipientsRequiredMessage,
+      );
+      return;
+    }
+    setState(() {
+      _isSending = true;
+    });
+    final String? tzid = _resolveTimeZone(_localModel);
+    final CalendarAvailabilityOverlay? customOverlay =
+        _hasCustomDraft ? _buildCustomOverlay(ownerJid, tzid) : null;
+    CalendarAvailabilityShareRecord? latestRecord;
+    var failures = 0;
+    try {
+      for (final Chat chat in recipients) {
+        final String resolvedOwner = _resolveOwnerJid(chat) ?? ownerJid;
+        final CalendarAvailabilityShareRecord? record =
+            await widget.coordinator.createShare(
+          source: widget.source,
+          model: _localModel,
+          ownerJid: resolvedOwner,
+          chatJid: chat.jid,
+          chatType: chat.type,
+          rangeStart: CalendarDateTime(value: start, tzid: tzid),
+          rangeEnd: CalendarDateTime(value: end, tzid: tzid),
+          overrideOverlay: customOverlay,
+          lockOverlay: _hasCustomDraft,
+        );
+        if (record == null) {
+          failures += 1;
+          continue;
+        }
+        latestRecord = record;
+      }
+      if (!mounted) {
+        return;
+      }
+      if (latestRecord == null) {
+        FeedbackSystem.showError(context, _availabilityShareFailureMessage);
+        return;
+      }
+      if (failures > 0) {
+        FeedbackSystem.showInfo(
+          context,
+          _availabilitySharePartialFailureMessage,
+        );
+      }
+      await _savePresetIfNeeded(customOverlay ?? latestRecord.overlay);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(latestRecord);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      FeedbackSystem.showError(context, _availabilityShareFailureMessage);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
+    }
+  }
+
+  CalendarAvailabilityOverlay? _buildCustomOverlay(
+    String ownerJid,
+    String? tzid,
+  ) {
+    final DateTime? start = _rangeStart;
+    final DateTime? end = _rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      return null;
+    }
+    final String resolvedOwner =
+        ownerJid.isEmpty ? _availabilityShareOwnerFallback : ownerJid;
+    return CalendarAvailabilityOverlay(
+      owner: resolvedOwner,
+      rangeStart: CalendarDateTime(value: start, tzid: tzid),
+      rangeEnd: CalendarDateTime(value: end, tzid: tzid),
+      intervals: _draftIntervals,
+      isRedacted: false,
+    );
+  }
+
+  void _resetDraftIntervals() {
+    final DateTime? start = _rangeStart;
+    final DateTime? end = _rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      _draftIntervals = const <CalendarFreeBusyInterval>[];
+      return;
+    }
+    final String? tzid = _resolveTimeZone(_localModel);
+    final CalendarAvailabilityOverlay base = CalendarAvailabilityOverlay(
+      owner: _availabilityShareOwnerFallback,
+      rangeStart: CalendarDateTime(value: start, tzid: tzid),
+      rangeEnd: CalendarDateTime(value: end, tzid: tzid),
+      isRedacted: false,
+    );
+    final CalendarAvailabilityOverlay overlay =
+        deriveAvailabilityOverlay(model: _localModel, base: base);
+    _draftIntervals = overlay.intervals
+        .map(
+          (interval) => interval.copyWith(
+            type: interval.type.isFree
+                ? CalendarFreeBusyType.free
+                : CalendarFreeBusyType.busy,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  List<CalendarAvailabilityPreset> _loadPresets() {
+    final records = _presetStore.readAll();
+    final List<CalendarAvailabilityPreset> presets = records.values.toList();
+    presets.sort(
+      (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+    );
+    return presets.take(_availabilityPresetMaxCount).toList(growable: false);
+  }
+
+  Future<void> _savePresetIfNeeded(CalendarAvailabilityOverlay overlay) async {
+    final CalendarAvailabilityPreset preset = CalendarAvailabilityPreset(
+      id: _availabilityPresetIdGenerator.v4(),
+      overlay: overlay,
+      updatedAt: DateTime.now(),
+    );
+    final records = _presetStore.readAll()..[preset.id] = preset;
+    final List<CalendarAvailabilityPreset> sorted = records.values.toList()
+      ..sort(
+        (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+      );
+    final Map<String, CalendarAvailabilityPreset> trimmed = {
+      for (final preset in sorted.take(_availabilityPresetMaxCount))
+        preset.id: preset,
+    };
+    await _presetStore.writeAll(trimmed);
+    setState(() {
+      _presets =
+          sorted.take(_availabilityPresetMaxCount).toList(growable: false);
+    });
+  }
+
+  String? _resolveOwnerJid(Chat? chat) {
+    if (chat == null) {
+      return null;
+    }
     final String ownerJid = widget.ownerJid.trim();
     if (ownerJid.isEmpty) {
       return null;
@@ -328,90 +621,183 @@ class _CalendarAvailabilityShareSheetState
     }
     return occupantId;
   }
+}
 
-  Future<void> _handleSharePressed() async {
-    if (_isSending) {
-      return;
-    }
-    final start = _rangeStart;
-    final end = _rangeEnd;
-    if (start == null || end == null || !end.isAfter(start)) {
-      FeedbackSystem.showError(context, _availabilityShareInvalidRangeMessage);
-      return;
-    }
-    final targetChat = _selectedChat;
-    if (targetChat == null) {
-      FeedbackSystem.showError(
-          context, _availabilityShareTargetRequiredMessage);
-      return;
-    }
-    final String? ownerJid = _resolveOwnerJid(targetChat);
-    if (ownerJid == null || ownerJid.isEmpty) {
-      FeedbackSystem.showError(context, _availabilityShareMissingJidMessage);
-      return;
-    }
-    setState(() {
-      _isSending = true;
-    });
-    try {
-      final tzid = _resolveTimeZone(_localModel);
-      final CalendarDateTime rangeStart = CalendarDateTime(
-        value: start,
-        tzid: tzid,
-      );
-      final CalendarDateTime rangeEnd = CalendarDateTime(
-        value: end,
-        tzid: tzid,
-      );
-      final record = await widget.coordinator.createShare(
-        source: widget.source,
-        model: _localModel,
-        ownerJid: ownerJid,
-        chatJid: targetChat.jid,
-        chatType: targetChat.type,
-        rangeStart: rangeStart,
-        rangeEnd: rangeEnd,
-        isRedacted: _isRedacted,
-      );
-      if (!mounted) {
-        return;
-      }
-      if (record == null) {
-        FeedbackSystem.showError(context, _availabilityShareFailureMessage);
-        return;
-      }
-      Navigator.of(context).pop(record);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      FeedbackSystem.showError(context, _availabilityShareFailureMessage);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
-    }
-  }
+class _AvailabilityRangeStep extends StatelessWidget {
+  const _AvailabilityRangeStep({
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.preview,
+    required this.presets,
+    required this.onStartChanged,
+    required this.onEndChanged,
+    required this.onEditPressed,
+    required this.onSharePressed,
+    required this.onPresetSelected,
+  });
 
-  CalendarAvailabilityOverlay? _resolvePreviewOverlay() {
-    final DateTime? start = _rangeStart;
-    final DateTime? end = _rangeEnd;
-    if (start == null || end == null || !end.isAfter(start)) {
-      return null;
-    }
-    final String ownerJid = widget.ownerJid.trim();
-    final String resolvedOwner =
-        ownerJid.isEmpty ? _availabilityShareOwnerFallback : ownerJid;
-    final String? tzid = _resolveTimeZone(_localModel);
-    final CalendarAvailabilityOverlay base = CalendarAvailabilityOverlay(
-      owner: resolvedOwner,
-      rangeStart: CalendarDateTime(value: start, tzid: tzid),
-      rangeEnd: CalendarDateTime(value: end, tzid: tzid),
-      isRedacted: _isRedacted,
+  final DateTime? rangeStart;
+  final DateTime? rangeEnd;
+  final Widget preview;
+  final List<CalendarAvailabilityPreset> presets;
+  final ValueChanged<DateTime?> onStartChanged;
+  final ValueChanged<DateTime?> onEndChanged;
+  final VoidCallback onEditPressed;
+  final VoidCallback onSharePressed;
+  final ValueChanged<CalendarAvailabilityPreset> onPresetSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AvailabilitySheetSectionLabel(
+            text: _availabilityShareRangeLabel),
+        ScheduleRangeFields(
+          start: rangeStart,
+          end: rangeEnd,
+          onStartChanged: onStartChanged,
+          onEndChanged: onEndChanged,
+        ),
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        const _AvailabilitySheetSectionLabel(
+            text: _availabilitySharePreviewLabel),
+        preview,
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        _AvailabilityPresetSection(
+          presets: presets,
+          onPresetSelected: onPresetSelected,
+        ),
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        _AvailabilityDualActionRow(
+          primaryLabel: _availabilityShareEditLabel,
+          secondaryLabel: _availabilityShareShareLabel,
+          onPrimaryPressed: onEditPressed,
+          onSecondaryPressed: onSharePressed,
+        ),
+      ],
     );
-    return deriveAvailabilityOverlay(model: _localModel, base: base);
+  }
+}
+
+class _AvailabilityEditorStep extends StatelessWidget {
+  const _AvailabilityEditorStep({
+    required this.hint,
+    required this.editor,
+    required this.onBack,
+    required this.onDone,
+  });
+
+  final String hint;
+  final Widget editor;
+  final VoidCallback onBack;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AvailabilitySheetSectionLabel(
+            text: _availabilityShareEditHeader),
+        Text(
+          hint,
+          style: context.textTheme.small.copyWith(
+            color: context.colorScheme.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        editor,
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        _AvailabilityDualActionRow(
+          primaryLabel: _availabilityShareBackLabel,
+          secondaryLabel: _availabilityShareDoneLabel,
+          onPrimaryPressed: onBack,
+          onSecondaryPressed: onDone,
+        ),
+      ],
+    );
+  }
+}
+
+class _AvailabilityRecipientsStep extends StatelessWidget {
+  const _AvailabilityRecipientsStep({
+    required this.queryController,
+    required this.recipients,
+    required this.selectedJids,
+    required this.isBusy,
+    required this.canLoadMore,
+    required this.onLoadMore,
+    required this.onToggleRecipient,
+    required this.onBack,
+    required this.onSend,
+  });
+
+  final TextEditingController queryController;
+  final List<Chat> recipients;
+  final Set<String> selectedJids;
+  final bool isBusy;
+  final bool canLoadMore;
+  final VoidCallback onLoadMore;
+  final ValueChanged<Chat> onToggleRecipient;
+  final VoidCallback onBack;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> recipientTiles = recipients
+        .map(
+          (chat) => _AvailabilityRecipientTile(
+            chat: chat,
+            isSelected: selectedJids.contains(chat.jid),
+            onToggle: () => onToggleRecipient(chat),
+          ),
+        )
+        .toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AvailabilitySheetSectionLabel(
+          text: _availabilityShareRecipientsLabel,
+        ),
+        SizedBox(
+          height: _availabilityRecipientSearchHeight,
+          child: AxiTextField(
+            controller: queryController,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(LucideIcons.search),
+              hintText: _availabilityShareRecipientsHint,
+            ),
+          ),
+        ),
+        const SizedBox(height: _availabilitySheetSectionGap),
+        if (recipientTiles.isEmpty)
+          const _AvailabilitySheetEmptyMessage(
+            message: _availabilityShareRecipientsEmptyLabel,
+          )
+        else ...[
+          Column(children: recipientTiles),
+          if (canLoadMore) ...[
+            const SizedBox(height: _availabilityRecipientChipSpacing),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ShadButton.ghost(
+                size: ShadButtonSize.sm,
+                onPressed: onLoadMore,
+                child: const Text(_availabilityShareLoadMoreLabel),
+              ),
+            ),
+          ],
+        ],
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        _AvailabilityActionRow(
+          isBusy: isBusy,
+          label: _availabilityShareSendLabel,
+          onBack: onBack,
+          onPressed: onSend,
+        ),
+      ],
+    );
   }
 }
 
@@ -455,186 +841,192 @@ class _AvailabilitySheetEmptyMessage extends StatelessWidget {
   }
 }
 
-class _AvailabilityWindowsSection extends StatelessWidget {
-  const _AvailabilityWindowsSection({
-    required this.windowCount,
-    required this.onEditPressed,
+class _AvailabilityPresetSection extends StatelessWidget {
+  const _AvailabilityPresetSection({
+    required this.presets,
+    required this.onPresetSelected,
   });
 
-  final int windowCount;
-  final VoidCallback onEditPressed;
+  final List<CalendarAvailabilityPreset> presets;
+  final ValueChanged<CalendarAvailabilityPreset> onPresetSelected;
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: context.colorScheme.mutedForeground,
-    );
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Text(
-            _availabilityWindowCountLabel(windowCount),
-            style: labelStyle,
+    final List<Widget> chips = presets
+        .map(
+          (preset) => _AvailabilityPresetChip(
+            preset: preset,
+            onPressed: () => onPresetSelected(preset),
           ),
-        ),
-        ShadButton.ghost(
-          size: ShadButtonSize.sm,
-          onPressed: onEditPressed,
-          child: const Text(_availabilityShareEditWindowsLabel),
-        ),
-      ],
-    );
-  }
-}
-
-class _AvailabilityPreviewSection extends StatelessWidget {
-  const _AvailabilityPreviewSection({
-    required this.overlay,
-    required this.isRedacted,
-    required this.onRedactionChanged,
-  });
-
-  final CalendarAvailabilityOverlay? overlay;
-  final bool isRedacted;
-  final ValueChanged<bool> onRedactionChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final TextStyle hintStyle = context.textTheme.small.copyWith(
-      color: context.colorScheme.mutedForeground,
-    );
-    final CalendarAvailabilityOverlay? previewOverlay = overlay;
+        )
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ShadSwitch(
-          label: const Text(_availabilityShareRedactionLabel),
-          value: isRedacted,
-          onChanged: onRedactionChanged,
+        const _AvailabilitySheetSectionLabel(
+          text: _availabilitySharePresetLabel,
         ),
-        const SizedBox(height: _availabilitySheetSectionGap),
-        Text(_availabilityShareRedactionHint, style: hintStyle),
-        const SizedBox(height: _availabilitySheetSectionGap),
-        if (previewOverlay == null)
+        if (chips.isEmpty)
           const _AvailabilitySheetEmptyMessage(
-            message: _availabilitySharePreviewEmptyLabel,
+            message: _availabilitySharePresetEmptyLabel,
           )
         else
-          CalendarAvailabilityGridPreview(
-            rangeOverlay: previewOverlay,
-            overlays: <CalendarAvailabilityOverlay>[previewOverlay],
+          Wrap(
+            spacing: _availabilityPresetChipSpacing,
+            runSpacing: _availabilityPresetChipSpacing,
+            children: chips,
           ),
       ],
     );
   }
 }
 
-class _AvailabilityChatPicker extends StatelessWidget {
-  const _AvailabilityChatPicker({
-    required this.chats,
-    required this.selected,
-    required this.onSelected,
+class _AvailabilityPresetChip extends StatelessWidget {
+  const _AvailabilityPresetChip({
+    required this.preset,
+    required this.onPressed,
   });
 
-  final List<Chat> chats;
-  final Chat? selected;
-  final ValueChanged<Chat> onSelected;
+  final CalendarAvailabilityPreset preset;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime start = preset.overlay.rangeStart.value;
+    final DateTime end = preset.overlay.rangeEnd.value;
+    final String label =
+        '${start.month}/${start.day} - ${end.month}/${end.day}';
+    return ShadButton.ghost(
+      size: ShadButtonSize.sm,
+      onPressed: onPressed,
+      child: Text(label),
+    );
+  }
+}
+
+class _AvailabilityRecipientTile extends StatelessWidget {
+  const _AvailabilityRecipientTile({
+    required this.chat,
+    required this.isSelected,
+    required this.onToggle,
+  });
+
+  final Chat chat;
+  final bool isSelected;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        for (final chat in chats) ...[
-          AxiListTile(
-            leading: AxiAvatar(
-              jid: chat.jid,
-              size: _availabilityChatAvatarSize,
-              avatarPath: chat.avatarPath,
-              shape: AxiAvatarShape.circle,
-            ),
-            title: chat.displayName,
-            subtitle: chat.type.label,
-            selected: selected?.jid == chat.jid,
-            onTap: () => onSelected(chat),
-            contentPadding: _availabilityChatTilePadding,
+        AxiListTile(
+          leading: AxiAvatar(
+            jid: chat.jid,
+            size: _availabilityChatAvatarSize,
+            avatarPath: chat.avatarPath,
+            shape: AxiAvatarShape.circle,
           ),
-          const SizedBox(height: _availabilitySheetTileGap),
-        ],
+          title: chat.displayName,
+          subtitle: chat.type.label,
+          selected: isSelected,
+          onTap: onToggle,
+          contentPadding: _availabilityChatTilePadding,
+          actions: [
+            Checkbox(
+              value: isSelected,
+              onChanged: (_) => onToggle(),
+            ),
+          ],
+        ),
+        const SizedBox(height: _availabilitySheetTileGap),
       ],
     );
   }
 }
 
-class _AvailabilityChatTarget extends StatelessWidget {
-  const _AvailabilityChatTarget({
-    required this.chat,
+class _AvailabilityDualActionRow extends StatelessWidget {
+  const _AvailabilityDualActionRow({
+    required this.primaryLabel,
+    required this.secondaryLabel,
+    required this.onPrimaryPressed,
+    required this.onSecondaryPressed,
   });
 
-  final Chat? chat;
+  final String primaryLabel;
+  final String secondaryLabel;
+  final VoidCallback onPrimaryPressed;
+  final VoidCallback onSecondaryPressed;
 
   @override
   Widget build(BuildContext context) {
-    final resolvedChat = chat;
-    if (resolvedChat == null) {
-      return const _AvailabilitySheetEmptyMessage(
-        message: _availabilityShareLockedChatUnavailableMessage,
-      );
-    }
-    return AxiListTile(
-      leading: AxiAvatar(
-        jid: resolvedChat.jid,
-        size: _availabilityChatAvatarSize,
-        avatarPath: resolvedChat.avatarPath,
-        shape: AxiAvatarShape.circle,
-      ),
-      title: resolvedChat.displayName,
-      subtitle: resolvedChat.type.label,
-      selected: true,
-      contentPadding: _availabilityChatTilePadding,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        ShadButton.ghost(
+          size: ShadButtonSize.sm,
+          onPressed: onPrimaryPressed,
+          child: Text(primaryLabel),
+        ),
+        const SizedBox(width: _availabilityRecipientChipSpacing),
+        ShadButton(
+          size: ShadButtonSize.sm,
+          onPressed: onSecondaryPressed,
+          child: Text(secondaryLabel),
+        ),
+      ],
     );
   }
 }
 
-class _AvailabilitySheetActionRow extends StatelessWidget {
-  const _AvailabilitySheetActionRow({
+class _AvailabilityActionRow extends StatelessWidget {
+  const _AvailabilityActionRow({
     required this.isBusy,
-    required this.onPressed,
     required this.label,
+    required this.onBack,
+    required this.onPressed,
   });
 
   final bool isBusy;
-  final VoidCallback onPressed;
   final String label;
+  final VoidCallback onBack;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: ShadButton(
-        size: ShadButtonSize.sm,
-        onPressed: isBusy ? null : onPressed,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isBusy)
-              const SizedBox(
-                width: _availabilitySheetHeaderIconSize,
-                height: _availabilitySheetHeaderIconSize,
-                child: CircularProgressIndicator(
-                  strokeWidth: _availabilitySheetProgressStrokeWidth,
-                ),
-              )
-            else
-              const Icon(
-                LucideIcons.share2,
-                size: _availabilitySheetHeaderIconSize,
-              ),
-            const SizedBox(width: _availabilitySheetSectionGap),
-            Text(label),
-          ],
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        ShadButton.ghost(
+          size: ShadButtonSize.sm,
+          onPressed: onBack,
+          child: const Text(_availabilityShareBackLabel),
         ),
-      ),
+        const SizedBox(width: _availabilityRecipientChipSpacing),
+        ShadButton(
+          size: ShadButtonSize.sm,
+          onPressed: isBusy ? null : onPressed,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isBusy)
+                const SizedBox(
+                  width: _availabilitySheetHeaderIconSize,
+                  height: _availabilitySheetHeaderIconSize,
+                  child: CircularProgressIndicator(
+                    strokeWidth: _availabilitySheetProgressStrokeWidth,
+                  ),
+                )
+              else
+                const Icon(
+                  LucideIcons.send,
+                  size: _availabilitySheetHeaderIconSize,
+                ),
+              const SizedBox(width: _availabilitySheetSectionGap),
+              Text(label),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -646,49 +1038,6 @@ DateTime _normalizeRangeStart(DateTime now) {
     now.day,
     now.hour,
     now.minute,
-  );
-}
-
-int _availabilityWindowCount(
-  Map<String, CalendarAvailability> availability,
-) {
-  var count = 0;
-  for (final CalendarAvailability entry in availability.values) {
-    if (entry.windows.isEmpty) {
-      count += 1;
-    } else {
-      count += entry.windows.length;
-    }
-  }
-  return count;
-}
-
-String _availabilityWindowCountLabel(int count) {
-  if (count == 0) {
-    return _availabilityShareWindowsEmptyLabel;
-  }
-  final String unit = count == 1
-      ? _availabilityShareWindowSingularLabel
-      : _availabilityShareWindowPluralLabel;
-  return '$_availabilityShareWindowsCountPrefix$count $unit';
-}
-
-DateTime _addMonths(DateTime start, int months) {
-  final totalMonths = start.month - _availabilityMonthIndexOffset + months;
-  final year = start.year + totalMonths ~/ _availabilityMonthsInYear;
-  final month =
-      totalMonths % _availabilityMonthsInYear + _availabilityMonthIndexOffset;
-  final lastDay = DateUtils.getDaysInMonth(year, month);
-  final day = math.min(start.day, lastDay);
-  return DateTime(
-    year,
-    month,
-    day,
-    start.hour,
-    start.minute,
-    start.second,
-    start.millisecond,
-    start.microsecond,
   );
 }
 

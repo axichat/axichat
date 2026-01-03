@@ -85,6 +85,18 @@ typedef _DcGetMsgMimeHeadersDart = ffi.Pointer<ffi.Char> Function(
   int,
 );
 
+typedef _DcGetOauth2UrlNative = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Pointer<ffi.Char>,
+  ffi.Pointer<ffi.Char>,
+);
+
+typedef _DcGetOauth2UrlDart = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Pointer<ffi.Char>,
+  ffi.Pointer<ffi.Char>,
+);
+
 final class _DeltaOptionalConfig {
   _DeltaOptionalConfig() : _getConfig = _loadGetConfig();
 
@@ -149,6 +161,43 @@ final class _DeltaOptionalMimeHeaders {
 
 final _DeltaOptionalMimeHeaders _deltaOptionalMimeHeaders =
     _DeltaOptionalMimeHeaders();
+
+final class _DeltaOptionalOauth2Url {
+  _DeltaOptionalOauth2Url() : _getOauth2Url = _loadOauth2Url();
+
+  final _DcGetOauth2UrlDart? _getOauth2Url;
+
+  static _DcGetOauth2UrlDart? _loadOauth2Url() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol = library.lookup<ffi.NativeFunction<_DcGetOauth2UrlNative>>(
+        'dc_get_oauth2_url',
+      );
+      return symbol.asFunction<_DcGetOauth2UrlDart>();
+    } on Exception {
+      return null;
+    }
+  }
+
+  String? read(
+    ffi.Pointer<dc_context_t> context,
+    String address,
+    String redirectUri,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getOauth2Url;
+    if (fn == null) return null;
+    final ptr = _withCString(address, (addrPtr) {
+      return _withCString(redirectUri, (redirectPtr) {
+        return fn(context, addrPtr, redirectPtr);
+      });
+    });
+    return _takeString(ptr, bindings: bindings);
+  }
+}
+
+final _DeltaOptionalOauth2Url _deltaOptionalOauth2Url =
+    _DeltaOptionalOauth2Url();
 
 class DeltaMessageType {
   static const int undefined = DC_MSG_UNDEFINED;
@@ -470,6 +519,19 @@ class DeltaContextHandle {
   Future<String?> getConfig(String key) async {
     _ensureState(_opened, 'get config $key');
     return _deltaOptionalConfig.read(_context, key, _bindings);
+  }
+
+  Future<String?> getOauth2Url({
+    required String address,
+    required String redirectUri,
+  }) async {
+    _ensureState(_opened, 'get oauth2 url');
+    return _deltaOptionalOauth2Url.read(
+      _context,
+      address,
+      redirectUri,
+      _bindings,
+    );
   }
 
   Future<void> startIo() async {

@@ -79,22 +79,6 @@ final class _XmppConnectionStateChanged extends ChatEvent {
   List<Object?> get props => [state];
 }
 
-final class ChatLinkedAccountsRequested extends ChatEvent {
-  const ChatLinkedAccountsRequested();
-
-  @override
-  List<Object?> get props => [];
-}
-
-final class ChatEmailFromAddressSelected extends ChatEvent {
-  const ChatEmailFromAddressSelected(this.accountId);
-
-  final EmailAccountId accountId;
-
-  @override
-  List<Object?> get props => [accountId];
-}
-
 final class _HttpUploadSupportUpdated extends ChatEvent {
   const _HttpUploadSupportUpdated(this.supported);
 
