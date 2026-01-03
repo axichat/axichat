@@ -16,6 +16,11 @@ const String _availabilityShareRecordChatJidKey = 'chatJid';
 const String _availabilityShareRecordChatTypeKey = 'chatType';
 const String _availabilityShareRecordOverlayKey = 'overlay';
 const String _availabilityShareRecordUpdatedAtKey = 'updatedAt';
+const String _availabilityShareRecordLockOverlayKey = 'lockOverlay';
+
+const String _availabilityPresetIdKey = 'id';
+const String _availabilityPresetOverlayKey = 'overlay';
+const String _availabilityPresetUpdatedAtKey = 'updatedAt';
 
 enum CalendarAvailabilityShareSourceType {
   personal,
@@ -98,6 +103,7 @@ class CalendarAvailabilityShareRecord {
     required this.chatJid,
     required this.chatType,
     required this.overlay,
+    this.lockOverlay = false,
     this.updatedAt,
   });
 
@@ -106,6 +112,7 @@ class CalendarAvailabilityShareRecord {
   final String chatJid;
   final ChatType chatType;
   final CalendarAvailabilityOverlay overlay;
+  final bool lockOverlay;
   final DateTime? updatedAt;
 
   CalendarAvailabilityShareRecord copyWith({
@@ -114,6 +121,7 @@ class CalendarAvailabilityShareRecord {
     String? chatJid,
     ChatType? chatType,
     CalendarAvailabilityOverlay? overlay,
+    bool? lockOverlay,
     DateTime? updatedAt,
   }) =>
       CalendarAvailabilityShareRecord(
@@ -122,6 +130,7 @@ class CalendarAvailabilityShareRecord {
         chatJid: chatJid ?? this.chatJid,
         chatType: chatType ?? this.chatType,
         overlay: overlay ?? this.overlay,
+        lockOverlay: lockOverlay ?? this.lockOverlay,
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
@@ -131,6 +140,7 @@ class CalendarAvailabilityShareRecord {
         _availabilityShareRecordChatJidKey: chatJid,
         _availabilityShareRecordChatTypeKey: chatType.name,
         _availabilityShareRecordOverlayKey: overlay.toJson(),
+        if (lockOverlay) _availabilityShareRecordLockOverlayKey: lockOverlay,
         if (updatedAt != null)
           _availabilityShareRecordUpdatedAtKey: updatedAt!.toIso8601String(),
       };
@@ -143,6 +153,8 @@ class CalendarAvailabilityShareRecord {
     final chatJid = json[_availabilityShareRecordChatJidKey] as String?;
     final chatTypeValue = json[_availabilityShareRecordChatTypeKey] as String?;
     final overlayRaw = json[_availabilityShareRecordOverlayKey];
+    final lockOverlay =
+        json[_availabilityShareRecordLockOverlayKey] as bool? ?? false;
     if (id == null ||
         id.trim().isEmpty ||
         sourceRaw is! Map ||
@@ -170,6 +182,56 @@ class CalendarAvailabilityShareRecord {
       source: source,
       chatJid: chatJid,
       chatType: chatType,
+      overlay: overlay,
+      lockOverlay: lockOverlay,
+      updatedAt: updatedAt,
+    );
+  }
+}
+
+class CalendarAvailabilityPreset {
+  CalendarAvailabilityPreset({
+    required this.id,
+    required this.overlay,
+    this.updatedAt,
+  });
+
+  final String id;
+  final CalendarAvailabilityOverlay overlay;
+  final DateTime? updatedAt;
+
+  CalendarAvailabilityPreset copyWith({
+    String? id,
+    CalendarAvailabilityOverlay? overlay,
+    DateTime? updatedAt,
+  }) =>
+      CalendarAvailabilityPreset(
+        id: id ?? this.id,
+        overlay: overlay ?? this.overlay,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+
+  Map<String, dynamic> toJson() => {
+        _availabilityPresetIdKey: id,
+        _availabilityPresetOverlayKey: overlay.toJson(),
+        if (updatedAt != null)
+          _availabilityPresetUpdatedAtKey: updatedAt!.toIso8601String(),
+      };
+
+  static CalendarAvailabilityPreset? fromJson(Map<String, dynamic> json) {
+    final id = json[_availabilityPresetIdKey] as String?;
+    final overlayRaw = json[_availabilityPresetOverlayKey];
+    if (id == null || id.trim().isEmpty || overlayRaw is! Map) {
+      return null;
+    }
+    final overlay = CalendarAvailabilityOverlay.fromJson(
+      Map<String, dynamic>.from(overlayRaw),
+    );
+    final updatedAtValue = json[_availabilityPresetUpdatedAtKey] as String?;
+    final updatedAt =
+        updatedAtValue == null ? null : DateTime.tryParse(updatedAtValue);
+    return CalendarAvailabilityPreset(
+      id: id,
       overlay: overlay,
       updatedAt: updatedAt,
     );
