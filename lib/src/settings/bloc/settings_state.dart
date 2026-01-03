@@ -22,7 +22,7 @@ enum ShadColor {
 class SettingsState with _$SettingsState {
   const factory SettingsState({
     @Default(AppLanguage.system) AppLanguage language,
-    @Default(ThemeMode.light) ThemeMode themeMode,
+    @Default(ThemeMode.dark) ThemeMode themeMode,
     @Default(ShadColor.blue) ShadColor shadColor,
     @Default(false) bool mute,
     @Default(false) bool notificationPreviewsEnabled,

@@ -320,7 +320,7 @@ class _ProfileCardSection extends StatelessWidget {
               final actions = <AxiMenuAction>[
                 AxiMenuAction(
                   label: l10n.profileEditAvatar,
-                  icon: LucideIcons.image,
+                  icon: LucideIcons.user,
                   onPressed: () => context.push(
                     const AvatarEditorRoute().location,
                     extra: locate,
@@ -331,14 +331,6 @@ class _ProfileCardSection extends StatelessWidget {
                   icon: LucideIcons.archive,
                   onPressed: () => context.push(
                     const ArchivesRoute().location,
-                    extra: locate,
-                  ),
-                ),
-                AxiMenuAction(
-                  label: l10n.draftAttachmentsLabel,
-                  icon: LucideIcons.paperclip,
-                  onPressed: () => context.push(
-                    const AttachmentGalleryRoute().location,
                     extra: locate,
                   ),
                 ),
