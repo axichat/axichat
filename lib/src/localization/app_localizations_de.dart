@@ -378,7 +378,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatMoveToInbox => 'In den Posteingang verschieben';
 
   @override
-  String get chatReportSpam => 'Spam melden';
+  String get chatReportSpam => 'Als Spam markieren';
 
   @override
   String get chatSignatureToggleLabel =>

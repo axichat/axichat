@@ -1,5 +1,9 @@
 # Axichat Development Guide
 
+- **NEVER** Use the git command.
+- NEVER use `git` or 'git' or "git" or git.
+- DON'T run git commands.
+
 ## 🎯 PROJECT CONTEXT
 
 **Modular XMPP + SMTP messenger with NO big tech dependencies**
@@ -309,3 +313,6 @@ Examples:
 
 **After model changes:** `dart run build_runner build --delete-conflicting-outputs`
 
+- **NEVER** Use the git command.
+- NEVER use `git` or 'git' or "git" or git.
+- DON'T run git commands.

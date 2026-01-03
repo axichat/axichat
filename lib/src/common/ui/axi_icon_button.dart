@@ -6,6 +6,9 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
+const double _defaultIconScale = 0.6;
+const double _ghostIconScale = 0.85;
+
 class AxiIconButton extends StatelessWidget {
   static const double kDefaultSize = 36.0;
   static const double kTapTargetSize = 48.0;
@@ -26,6 +29,8 @@ class AxiIconButton extends StatelessWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
+    this.usePrimary = false,
+    this.ghost = false,
   });
 
   const AxiIconButton.ghost({
@@ -41,9 +46,11 @@ class AxiIconButton extends StatelessWidget {
     this.buttonSize,
     this.tapTargetSize,
     this.cornerRadius,
-  })  : backgroundColor = Colors.transparent,
-        borderColor = Colors.transparent,
-        borderWidth = 0;
+    this.usePrimary = false,
+  })  : backgroundColor = null,
+        borderColor = null,
+        borderWidth = null,
+        ghost = true;
 
   final IconData iconData;
   final Widget? icon;
@@ -59,22 +66,30 @@ class AxiIconButton extends StatelessWidget {
   final double? tapTargetSize;
   final double? cornerRadius;
   final double? borderWidth;
+  final bool usePrimary;
+  final bool ghost;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final env = EnvScope.maybeOf(context);
     final isDesktop = env?.isDesktopPlatform ?? false;
-    final Color resolvedForeground = color ?? colors.foreground;
-    final Color resolvedBorder = borderColor ?? colors.border;
-    final Color resolvedBackground = backgroundColor ?? colors.card;
+    final bool isGhost = ghost;
+    final Color resolvedForeground =
+        color ?? (usePrimary ? colors.primary : colors.foreground);
+    final Color resolvedBorder =
+        borderColor ?? (isGhost ? Colors.transparent : colors.border);
+    final Color resolvedBackground =
+        backgroundColor ?? (isGhost ? colors.secondary : colors.card);
     final bool enabled = onPressed != null || onLongPress != null;
-    final double resolvedIconSize =
-        iconSize ?? (context.iconTheme.size ?? kDefaultSize * 0.6);
+    final double fallbackIconSize =
+        context.iconTheme.size ?? kDefaultSize * _defaultIconScale;
+    final double resolvedIconSize = iconSize ??
+        (isGhost ? fallbackIconSize * _ghostIconScale : fallbackIconSize);
     final double resolvedButtonSize = buttonSize ?? kDefaultSize;
     final double resolvedTapTargetSize = tapTargetSize ?? kTapTargetSize;
     final double resolvedCornerRadius = cornerRadius ?? 18;
-    final double resolvedBorderWidth = borderWidth ?? 1.0;
+    final double resolvedBorderWidth = borderWidth ?? (isGhost ? 0 : 1.0);
     final paintShape = SquircleBorder(
       cornerRadius: resolvedCornerRadius,
       side: BorderSide(
@@ -82,12 +97,18 @@ class AxiIconButton extends StatelessWidget {
         width: resolvedBorderWidth,
       ),
     );
-    final Widget iconWidget = icon ??
+    final Widget baseIcon = icon ??
         Icon(
           iconData,
           size: resolvedIconSize,
           color: resolvedForeground,
         );
+    final Widget iconWidget = icon == null
+        ? baseIcon
+        : IconTheme.merge(
+            data: IconThemeData(size: resolvedIconSize),
+            child: baseIcon,
+          );
 
     Widget tappable = SizedBox(
       width: resolvedTapTargetSize,

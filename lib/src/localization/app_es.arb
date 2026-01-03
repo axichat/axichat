@@ -117,7 +117,7 @@
   "chatMuteNotifications": "Silenciar notificaciones",
   "chatEnableNotifications": "Activar notificaciones",
   "chatMoveToInbox": "Mover a bandeja de entrada",
-  "chatReportSpam": "Reportar spam",
+  "chatReportSpam": "Marcar como spam",
   "chatSignatureToggleLabel": "Incluir pie de firma de token para correo",
   "chatSignatureHintEnabled": "Ayuda a mantener los hilos de correo con varios destinatarios.",
   "chatSignatureHintDisabled": "Desactivado globalmente; las respuestas pueden perder el hilo.",

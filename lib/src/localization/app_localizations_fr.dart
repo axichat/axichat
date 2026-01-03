@@ -381,7 +381,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatMoveToInbox => 'Déplacer vers la boîte de réception';
 
   @override
-  String get chatReportSpam => 'Signaler comme spam';
+  String get chatReportSpam => 'Marquer comme spam';
 
   @override
   String get chatSignatureToggleLabel =>

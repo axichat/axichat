@@ -95,6 +95,7 @@ const authCompletionAnimationDuration = Duration(milliseconds: 1000);
 
 /// Duration for cross-fading calendar view transitions.
 const calendarViewTransitionDuration = Duration(milliseconds: 400);
+const calendarViewMobileEnterOffset = Offset(0.0, 0.04);
 const double calendarViewModeMinWidth = 160.0;
 const calendarClockTickInterval = Duration(minutes: 1);
 const calendarDragWidthDebounceDelay = Duration(milliseconds: 120);

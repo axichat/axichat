@@ -37,6 +37,8 @@ enum _ProfileRoute {
 
 const double _profileActionSpacing = 8.0;
 const double _profileHeaderSpacing = 12.0;
+const double _profileHeaderTextSpacing = 4.0;
+const double _profileHeaderWrapSpacing = 2.0;
 const double _profileCardSectionSpacing = 10.0;
 const double _profileStatusFieldPadding = 8.0;
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
@@ -318,7 +320,7 @@ class _ProfileCardSection extends StatelessWidget {
               final actions = <AxiMenuAction>[
                 AxiMenuAction(
                   label: l10n.profileEditAvatar,
-                  icon: LucideIcons.image,
+                  icon: LucideIcons.user,
                   onPressed: () => context.push(
                     const AvatarEditorRoute().location,
                     extra: locate,
@@ -370,103 +372,89 @@ class _ProfileCardSection extends StatelessWidget {
                   AxiMore(actions: actions),
                 ],
               );
-              final header = Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: _profileHeaderSpacing,
+              final header = Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Align(
-                    alignment: Alignment.center,
-                    child: _EditableAvatarButton(
-                      avatarPath: profileState.avatarPath,
-                      jid: profileState.jid,
-                      status: profileState.status,
-                      onTap: () => context.push(
-                        const AvatarEditorRoute().location,
-                        extra: locate,
-                      ),
+                  _EditableAvatarButton(
+                    avatarPath: profileState.avatarPath,
+                    jid: profileState.jid,
+                    status: profileState.status,
+                    onTap: () => context.push(
+                      const AvatarEditorRoute().location,
+                      extra: locate,
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Hero(
-                            tag: 'title',
-                            child: Material(
-                              color: Colors.transparent,
-                              child: Text(
-                                profileState.username,
-                                style: usernameStyle,
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                  const SizedBox(width: _profileHeaderSpacing),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Hero(
+                          tag: 'title',
+                          child: Material(
+                            color: Colors.transparent,
+                            child: Text(
+                              profileState.username,
+                              style: usernameStyle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: SelectionArea(
-                              child: Wrap(
-                                alignment: WrapAlignment.center,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 0,
-                                runSpacing: 2,
-                                children: [
-                                  AxiTooltip(
-                                    builder: (_) => ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 300.0,
-                                      ),
-                                      child: Text(
-                                        l10n.profileJidDescription,
-                                        textAlign: TextAlign.left,
-                                      ),
-                                    ),
-                                    child: Hero(
-                                      tag: 'subtitle',
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: Text(
-                                          profileState.jid,
-                                          style: subtitleStyle,
-                                          textAlign: TextAlign.center,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
+                        ),
+                        const SizedBox(height: _profileHeaderTextSpacing),
+                        SelectionArea(
+                          child: Wrap(
+                            alignment: WrapAlignment.start,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 0,
+                            runSpacing: _profileHeaderWrapSpacing,
+                            children: [
+                              AxiTooltip(
+                                builder: (_) => ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 300.0,
+                                  ),
+                                  child: Text(
+                                    l10n.profileJidDescription,
+                                    textAlign: TextAlign.left,
+                                  ),
+                                ),
+                                child: Hero(
+                                  tag: 'subtitle',
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: Text(
+                                      profileState.jid,
+                                      style: subtitleStyle,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 2,
                                     ),
                                   ),
-                                  if (profileState.resource.isNotEmpty)
-                                    AxiTooltip(
-                                      builder: (_) => ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 300.0,
-                                        ),
-                                        child: Text(
-                                          l10n.profileResourceDescription,
-                                          textAlign: TextAlign.left,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '/${profileState.resource}',
-                                        style: subtitleStyle,
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-                                ],
+                                ),
                               ),
-                            ),
+                              if (profileState.resource.isNotEmpty)
+                                AxiTooltip(
+                                  builder: (_) => ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 300.0,
+                                    ),
+                                    child: Text(
+                                      l10n.profileResourceDescription,
+                                      textAlign: TextAlign.left,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '/${profileState.resource}',
+                                    style: subtitleStyle,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               );

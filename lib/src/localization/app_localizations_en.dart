@@ -373,7 +373,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatMoveToInbox => 'Move to inbox';
 
   @override
-  String get chatReportSpam => 'Report spam';
+  String get chatReportSpam => 'Mark as spam';
 
   @override
   String get chatSignatureToggleLabel => 'Include share token footer for email';

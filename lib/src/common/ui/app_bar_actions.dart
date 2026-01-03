@@ -19,6 +19,7 @@ class AppBarActionItem {
     this.onPressed,
     this.enabled = true,
     this.destructive = false,
+    this.usePrimary = true,
     this.tooltip,
   });
 
@@ -30,6 +31,7 @@ class AppBarActionItem {
   final VoidCallback? onPressed;
   final bool enabled;
   final bool destructive;
+  final bool usePrimary;
   final String? tooltip;
 
   AxiMenuAction toMenuAction() {
@@ -52,6 +54,7 @@ class AppBarActions extends StatelessWidget {
     this.overflowBreakpoint = appBarActionOverflowBreakpoint,
     this.moreTooltip,
     this.forceCollapsed,
+    this.availableWidth,
   });
 
   final List<AppBarActionItem> actions;
@@ -59,6 +62,7 @@ class AppBarActions extends StatelessWidget {
   final double overflowBreakpoint;
   final String? moreTooltip;
   final bool? forceCollapsed;
+  final double? availableWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -68,8 +72,8 @@ class AppBarActions extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final double screenWidth = MediaQuery.sizeOf(context).width;
-        final double availableWidth =
-            constraints.hasBoundedWidth ? constraints.maxWidth : screenWidth;
+        final double resolvedAvailableWidth = availableWidth ??
+            (constraints.hasBoundedWidth ? constraints.maxWidth : screenWidth);
         final int spacingCount = actions.length > 1 ? actions.length - 1 : 0;
         final double spacingWidth = spacing * spacingCount;
         final double estimatedActionsWidth = actions.fold<double>(
@@ -82,8 +86,9 @@ class AppBarActions extends StatelessWidget {
             return total + actionWidth;
           },
         );
-        final bool autoCollapse = screenWidth < overflowBreakpoint ||
-            availableWidth < estimatedActionsWidth;
+        final bool autoCollapse =
+            (overflowBreakpoint > 0 && screenWidth < overflowBreakpoint) ||
+                resolvedAvailableWidth < estimatedActionsWidth;
         final bool shouldCollapse = forceCollapsed ?? autoCollapse;
         if (shouldCollapse) {
           final List<AxiMenuAction> menuActions = actions
@@ -96,6 +101,7 @@ class AppBarActions extends StatelessWidget {
               actions: menuActions,
               enabled: hasEnabledAction,
               ghost: true,
+              usePrimary: true,
             );
           }
           return AxiMore(
@@ -103,6 +109,7 @@ class AppBarActions extends StatelessWidget {
             tooltip: moreTooltip!,
             enabled: hasEnabledAction,
             ghost: true,
+            usePrimary: true,
           );
         }
 
@@ -118,6 +125,7 @@ class AppBarActions extends StatelessWidget {
                     onPressed: actions[index].enabled
                         ? actions[index].onPressed
                         : null,
+                    usePrimary: actions[index].usePrimary,
                   ),
               if (index < actions.length - 1) SizedBox(width: spacing),
             ],

@@ -117,7 +117,7 @@
   "chatMuteNotifications": "静音通知",
   "chatEnableNotifications": "启用通知",
   "chatMoveToInbox": "移到收件箱",
-  "chatReportSpam": "举报垃圾信息",
+  "chatReportSpam": "标记为垃圾信息",
   "chatSignatureToggleLabel": "为邮件添加分享令牌页脚",
   "chatSignatureHintEnabled": "帮助保持多收件人的邮件线程。",
   "chatSignatureHintDisabled": "已全局禁用；回复可能无法在线程中。",
