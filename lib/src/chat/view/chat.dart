@@ -12,7 +12,6 @@ import 'package:axichat/src/attachments/bloc/attachment_gallery_cubit.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
-import 'package:axichat/src/blocklist/view/block_button_inline.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -2039,15 +2038,15 @@ class _ChatState extends State<Chat> {
     return cachedEntries ?? _emptyBlocklistEntries;
   }
 
-  bool _isChatBlocked({
+  BlocklistEntry? _resolveChatBlocklistEntry({
     required chat_models.Chat chat,
     required List<BlocklistEntry> entries,
   }) {
     if (chat.type != ChatType.chat) {
-      return false;
+      return null;
     }
     if (entries.isEmpty) {
-      return false;
+      return null;
     }
     final transport = chat.defaultTransport;
     if (transport.isEmail) {
@@ -2055,26 +2054,45 @@ class _ChatState extends State<Chat> {
       final String candidate =
           address?.isNotEmpty == true ? address! : chat.remoteJid.trim();
       if (candidate.isEmpty) {
-        return false;
+        return null;
       }
       final String normalizedCandidate = candidate.toLowerCase();
-      return entries.any(
-        (entry) =>
-            entry.transport.isEmail &&
-            entry.address.trim().toLowerCase() == normalizedCandidate,
-      );
+      for (final entry in entries) {
+        if (!entry.transport.isEmail) {
+          continue;
+        }
+        if (entry.address.trim().toLowerCase() == normalizedCandidate) {
+          return entry;
+        }
+      }
+      return null;
     }
     final String? chatBareJid = _normalizeBareJid(chat.remoteJid);
     if (chatBareJid == null || chatBareJid.isEmpty) {
-      return false;
+      return null;
     }
-    return entries.any((entry) {
+    for (final entry in entries) {
       if (!entry.transport.isXmpp) {
-        return false;
+        continue;
       }
       final String? entryBareJid = _normalizeBareJid(entry.address);
-      return entryBareJid != null && entryBareJid == chatBareJid;
-    });
+      if (entryBareJid != null && entryBareJid == chatBareJid) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  String? _resolveChatBlockAddress({required chat_models.Chat chat}) {
+    if (chat.defaultTransport.isEmail) {
+      final String? address = chat.emailAddress?.trim();
+      if (address == null || address.isEmpty) {
+        return null;
+      }
+      return address;
+    }
+    final String jid = chat.jid.trim();
+    return jid.isEmpty ? null : jid;
   }
 
   bool _shouldAllowAttachment({
@@ -3475,12 +3493,16 @@ class _ChatState extends State<Chat> {
                 final chatEntity = state.chat;
                 final List<BlocklistEntry> blocklistEntries =
                     _resolveBlocklistEntries();
-                final bool isChatBlocked = chatEntity == null
-                    ? false
-                    : _isChatBlocked(
+                final BlocklistEntry? chatBlocklistEntry = chatEntity == null
+                    ? null
+                    : _resolveChatBlocklistEntry(
                         chat: chatEntity,
                         entries: blocklistEntries,
                       );
+                final bool isChatBlocked = chatBlocklistEntry != null;
+                final String? blockAddress = chatEntity == null
+                    ? null
+                    : _resolveChatBlockAddress(chat: chatEntity);
                 final bool attachmentsBlockedForChat =
                     isChatBlocked || (chatEntity?.spam ?? false);
                 final jid = chatEntity?.jid;
@@ -7533,6 +7555,9 @@ class _ChatState extends State<Chat> {
                                 onSpamToggle: (sendToSpam) => _handleSpamToggle(
                                   sendToSpam: sendToSpam,
                                 ),
+                                isChatBlocked: isChatBlocked,
+                                blocklistEntry: chatBlocklistEntry,
+                                blockAddress: blockAddress,
                               ),
                             _ChatRoute.gallery => _ChatGalleryOverlay(
                                 chat: chatEntity,
@@ -9116,12 +9141,18 @@ class _ChatSettingsOverlay extends StatelessWidget {
     required this.onViewFilterChanged,
     required this.onToggleNotifications,
     required this.onSpamToggle,
+    required this.isChatBlocked,
+    required this.blocklistEntry,
+    required this.blockAddress,
   });
 
   final ChatState state;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<bool> onToggleNotifications;
   final ValueChanged<bool> onSpamToggle;
+  final bool isChatBlocked;
+  final BlocklistEntry? blocklistEntry;
+  final String? blockAddress;
 
   @override
   Widget build(BuildContext context) {
@@ -9134,6 +9165,9 @@ class _ChatSettingsOverlay extends StatelessWidget {
           onViewFilterChanged: onViewFilterChanged,
           onToggleNotifications: onToggleNotifications,
           onSpamToggle: onSpamToggle,
+          isChatBlocked: isChatBlocked,
+          blocklistEntry: blocklistEntry,
+          blockAddress: blockAddress,
         ),
       ),
     );
@@ -11594,12 +11628,18 @@ class _ChatSettingsButtons extends StatelessWidget {
     required this.onViewFilterChanged,
     required this.onToggleNotifications,
     required this.onSpamToggle,
+    required this.isChatBlocked,
+    required this.blocklistEntry,
+    required this.blockAddress,
   });
 
   final ChatState state;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<bool> onToggleNotifications;
   final ValueChanged<bool> onSpamToggle;
+  final bool isChatBlocked;
+  final BlocklistEntry? blocklistEntry;
+  final String? blockAddress;
 
   @override
   Widget build(BuildContext context) {
@@ -11609,6 +11649,8 @@ class _ChatSettingsButtons extends StatelessWidget {
     }
     final AppLocalizations l10n = context.l10n;
     final SettingsState settingsState = context.watch<SettingsCubit>().state;
+    final BlocklistState? blocklistState =
+        context.watch<BlocklistCubit?>()?.state;
     final bool globalSignatureEnabled =
         settingsState.shareTokenSignatureEnabled;
     final bool chatSignatureEnabled = chat.shareSignatureEnabled;
@@ -11619,10 +11661,21 @@ class _ChatSettingsButtons extends StatelessWidget {
     final String signatureWarning = l10n.chatSignatureHintWarning;
     final bool showAttachmentToggle = chat.type != ChatType.note;
     final bool notificationsMuted = chat.muted;
-    final bool useEmailBlocking = chat.defaultTransport.isEmail;
     final bool isSpamChat = chat.spam;
-    final String spamLabel =
-        isSpamChat ? l10n.chatMoveToInbox : l10n.chatReportSpam;
+    final String spamLabel = l10n.chatReportSpam;
+    final String? resolvedBlockAddress = blockAddress?.trim();
+    final String? resolvedBlockEntryAddress = blocklistEntry?.address.trim();
+    final bool hasBlockAddress =
+        resolvedBlockAddress != null && resolvedBlockAddress.isNotEmpty;
+    final bool hasBlockEntry = blocklistEntry != null;
+    final bool blockActionInFlight = switch (blocklistState) {
+      BlocklistLoading state => state.jid == null ||
+          state.jid == resolvedBlockAddress ||
+          state.jid == resolvedBlockEntryAddress,
+      _ => false,
+    };
+    final bool blockSwitchEnabled = !blockActionInFlight &&
+        (isChatBlocked ? hasBlockEntry : hasBlockAddress);
     final List<Widget> tiles = [
       if (showAttachmentToggle)
         Padding(
@@ -11677,11 +11730,31 @@ class _ChatSettingsButtons extends StatelessWidget {
       ),
       Padding(
         padding: _chatSettingsItemPadding,
-        child: BlockButtonInline(
-          jid: chat.jid,
-          emailAddress: chat.emailAddress,
-          useEmailBlocking: useEmailBlocking,
-          mainAxisAlignment: MainAxisAlignment.start,
+        child: _ChatSettingsSwitchRow(
+          title: l10n.blocklistBlock,
+          value: isChatBlocked,
+          onChanged: blockSwitchEnabled
+              ? (blocked) {
+                  if (blocked == isChatBlocked) {
+                    return;
+                  }
+                  if (blocked) {
+                    final address = resolvedBlockAddress;
+                    if (address == null || address.isEmpty) {
+                      return;
+                    }
+                    context.read<BlocklistCubit?>()?.block(
+                          address: address,
+                        );
+                    return;
+                  }
+                  final entry = blocklistEntry;
+                  if (entry == null) {
+                    return;
+                  }
+                  context.read<BlocklistCubit?>()?.unblock(entry: entry);
+                }
+              : null,
         ),
       ),
     ];

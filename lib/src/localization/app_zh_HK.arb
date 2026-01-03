@@ -116,7 +116,7 @@
   "chatMuteNotifications": "靜音通知",
   "chatEnableNotifications": "啟用通知",
   "chatMoveToInbox": "移至收件箱",
-  "chatReportSpam": "回報垃圾郵件",
+  "chatReportSpam": "標記為垃圾郵件",
   "chatSignatureToggleLabel": "為電郵加入分享權杖頁腳",
   "chatSignatureHintEnabled": "有助保持多收件人的電郵串。",
   "chatSignatureHintDisabled": "已全域停用；回覆可能無法串接。",
