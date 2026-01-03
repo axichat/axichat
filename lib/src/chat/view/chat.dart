@@ -274,6 +274,7 @@ const _selectionAutoscrollReboundDuration = Duration(milliseconds: 260);
 const _selectionAttachmentBaseGap = 16.0;
 const _selectionAttachmentSelectedGap = 8.0;
 const _attachmentPreviewSpacing = 8.0;
+const double _messageExtraSpacing = 4.0;
 const double _inviteAttachmentCornerRadius = 20.0;
 const double _inviteAttachmentPaddingValue = 12.0;
 const _inviteAttachmentPadding = EdgeInsets.all(_inviteAttachmentPaddingValue);
@@ -827,6 +828,16 @@ List<BoxShadow> _selectedBubbleShadows(Color color) => [
         offset: Offset(0, 4),
       ),
     ];
+
+List<BoxShadow> _scaleShadows(List<BoxShadow> shadows, double factor) => shadows
+    .map(
+      (shadow) => shadow.copyWith(
+        color: shadow.color.withValues(
+          alpha: shadow.color.a * factor,
+        ),
+      ),
+    )
+    .toList();
 
 BorderRadius _bubbleBorderRadius({
   required bool isSelf,
@@ -5384,11 +5395,46 @@ class _ChatState extends State<Chat> {
                                                               message.customProperties?[
                                                                       'id'] ??
                                                                   '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
-                                                          final bubbleChildren =
+                                                          final bubbleTextChildren =
                                                               <Widget>[];
+                                                          final bubbleExtraChildren =
+                                                              <Widget>[];
+                                                          void addExtra(
+                                                            Widget child, {
+                                                            double spacing =
+                                                                _messageExtraSpacing,
+                                                          }) {
+                                                            if (bubbleExtraChildren
+                                                                .isNotEmpty) {
+                                                              bubbleExtraChildren
+                                                                ..add(
+                                                                  _MessageExtraGap(
+                                                                    height:
+                                                                        spacing,
+                                                                  ),
+                                                                )
+                                                                ..add(child);
+                                                              return;
+                                                            }
+                                                            if (bubbleTextChildren
+                                                                    .isNotEmpty &&
+                                                                spacing > 0) {
+                                                              bubbleExtraChildren
+                                                                  .add(
+                                                                _MessageExtraGap(
+                                                                  height:
+                                                                      spacing,
+                                                                ),
+                                                              );
+                                                            }
+                                                            bubbleExtraChildren
+                                                                .add(child);
+                                                          }
+
                                                           if (quotedModel !=
                                                               null) {
-                                                            bubbleChildren.add(
+                                                            bubbleTextChildren
+                                                                .add(
                                                               _QuotedMessagePreview(
                                                                 message:
                                                                     quotedModel,
@@ -5407,7 +5453,7 @@ class _ChatState extends State<Chat> {
                                                             );
                                                           }
                                                           if (isError) {
-                                                            bubbleChildren
+                                                            bubbleTextChildren
                                                                 .addAll([
                                                               Text(
                                                                 l10n.chatErrorLabel,
@@ -5486,7 +5532,8 @@ class _ChatState extends State<Chat> {
                                                                 inviteActionEnabled
                                                                     ? inviteActionLabel
                                                                     : inviteLabel;
-                                                            bubbleChildren.add(
+                                                            bubbleTextChildren
+                                                                .add(
                                                               DynamicInlineText(
                                                                 key: ValueKey(
                                                                   bubbleContentKey,
@@ -5504,13 +5551,7 @@ class _ChatState extends State<Chat> {
                                                                     _handleLinkTap,
                                                               ),
                                                             );
-                                                            bubbleChildren.add(
-                                                              const SizedBox(
-                                                                height:
-                                                                    _attachmentPreviewSpacing,
-                                                              ),
-                                                            );
-                                                            bubbleChildren.add(
+                                                            addExtra(
                                                               _InviteAttachmentCard(
                                                                 enabled:
                                                                     inviteActionEnabled,
@@ -5525,6 +5566,8 @@ class _ChatState extends State<Chat> {
                                                                   messageModel,
                                                                 ),
                                                               ),
+                                                              spacing:
+                                                                  _attachmentPreviewSpacing,
                                                             );
                                                           } else {
                                                             final subjectLabel =
@@ -5584,7 +5627,7 @@ class _ChatState extends State<Chat> {
                                                                     TextScaler
                                                                         .noScaling,
                                                               )..layout();
-                                                              bubbleChildren
+                                                              bubbleTextChildren
                                                                   .add(
                                                                 Text(
                                                                   subjectText,
@@ -5592,7 +5635,7 @@ class _ChatState extends State<Chat> {
                                                                       subjectStyle,
                                                                 ),
                                                               );
-                                                              bubbleChildren
+                                                              bubbleTextChildren
                                                                   .add(
                                                                 Padding(
                                                                   padding:
@@ -5855,8 +5898,7 @@ class _ChatState extends State<Chat> {
                                                             }
                                                             if (availabilityMessage !=
                                                                 null) {
-                                                              bubbleChildren
-                                                                  .add(
+                                                              addExtra(
                                                                 CalendarAvailabilityMessageCard(
                                                                   message:
                                                                       availabilityMessage,
@@ -5872,8 +5914,7 @@ class _ChatState extends State<Chat> {
                                                               );
                                                             } else if (calendarTaskIcs !=
                                                                 null) {
-                                                              bubbleChildren
-                                                                  .add(
+                                                              addExtra(
                                                                 chatCalendarBloc ==
                                                                         null
                                                                     ? CalendarFragmentCard(
@@ -5920,8 +5961,7 @@ class _ChatState extends State<Chat> {
                                                                       fragmentFooterDetails,
                                                                 ),
                                                               );
-                                                              bubbleChildren
-                                                                  .add(
+                                                              addExtra(
                                                                 fragmentCard,
                                                               );
                                                             }
@@ -5950,7 +5990,7 @@ class _ChatState extends State<Chat> {
                                                             if (hasAttachmentCaption) {
                                                               final resolvedMetadataId =
                                                                   metadataIdForCaption;
-                                                              bubbleChildren
+                                                              bubbleTextChildren
                                                                   .add(
                                                                 StreamBuilder<
                                                                     FileMetadataData?>(
@@ -6037,7 +6077,7 @@ class _ChatState extends State<Chat> {
                                                                     messageModel
                                                                         .id,
                                                                   );
-                                                              bubbleChildren
+                                                              bubbleTextChildren
                                                                   .add(
                                                                 html_widget
                                                                     .Html(
@@ -6104,7 +6144,7 @@ class _ChatState extends State<Chat> {
                                                                 ),
                                                               );
                                                               // Add details row below HTML content
-                                                              bubbleChildren
+                                                              bubbleTextChildren
                                                                   .add(
                                                                 Padding(
                                                                   padding:
@@ -6140,7 +6180,7 @@ class _ChatState extends State<Chat> {
                                                                 ),
                                                               );
                                                             } else if (shouldRenderTextContent) {
-                                                              bubbleChildren
+                                                              bubbleTextChildren
                                                                   .add(
                                                                 DynamicInlineText(
                                                                   key: ValueKey(
@@ -6172,7 +6212,7 @@ class _ChatState extends State<Chat> {
                                                             if (message.customProperties?[
                                                                     'retracted'] ??
                                                                 false) {
-                                                              bubbleChildren
+                                                              bubbleTextChildren
                                                                   .add(
                                                                 Text(
                                                                   l10n.chatMessageRetracted,
@@ -6184,7 +6224,7 @@ class _ChatState extends State<Chat> {
                                                                         .customProperties?[
                                                                     'edited'] ??
                                                                 false) {
-                                                              bubbleChildren
+                                                              bubbleTextChildren
                                                                   .add(
                                                                 Text(
                                                                   l10n.chatMessageEdited,
@@ -6196,16 +6236,6 @@ class _ChatState extends State<Chat> {
                                                           }
                                                           if (attachmentIds
                                                               .isNotEmpty) {
-                                                            if (bubbleChildren
-                                                                .isNotEmpty) {
-                                                              bubbleChildren
-                                                                  .add(
-                                                                const SizedBox(
-                                                                  height:
-                                                                      _attachmentPreviewSpacing,
-                                                                ),
-                                                              );
-                                                            }
                                                             final allowAttachmentByTrust =
                                                                 _shouldAllowAttachment(
                                                               isSelf: self,
@@ -6260,17 +6290,7 @@ class _ChatState extends State<Chat> {
                                                               final attachmentId =
                                                                   attachmentIds[
                                                                       index];
-                                                              if (index > 0) {
-                                                                bubbleChildren
-                                                                    .add(
-                                                                  const SizedBox(
-                                                                    height:
-                                                                        _attachmentPreviewSpacing,
-                                                                  ),
-                                                                );
-                                                              }
-                                                              bubbleChildren
-                                                                  .add(
+                                                              addExtra(
                                                                 ChatAttachmentPreview(
                                                                   stanzaId:
                                                                       messageModel
@@ -6304,6 +6324,8 @@ class _ChatState extends State<Chat> {
                                                                                 senderEmail: state.chat?.emailAddress,
                                                                               ),
                                                                 ),
+                                                                spacing:
+                                                                    _attachmentPreviewSpacing,
                                                               );
                                                             }
                                                           }
@@ -6418,6 +6440,22 @@ class _ChatState extends State<Chat> {
                                                               context
                                                                   .colorScheme
                                                                   .primary;
+                                                          final bool
+                                                              hasBubbleText =
+                                                              bubbleTextChildren
+                                                                  .isNotEmpty;
+                                                          final Color
+                                                              bubbleSurfaceColor =
+                                                              hasBubbleText
+                                                                  ? bubbleColor
+                                                                  : Colors
+                                                                      .transparent;
+                                                          final Color
+                                                              bubbleSurfaceBorder =
+                                                              hasBubbleText
+                                                                  ? borderColor
+                                                                  : Colors
+                                                                      .transparent;
                                                           final bubbleContent =
                                                               Padding(
                                                             padding:
@@ -6426,9 +6464,10 @@ class _ChatState extends State<Chat> {
                                                               crossAxisAlignment:
                                                                   CrossAxisAlignment
                                                                       .start,
-                                                              spacing: 4,
+                                                              spacing:
+                                                                  _messageExtraSpacing,
                                                               children:
-                                                                  bubbleChildren,
+                                                                  bubbleTextChildren,
                                                             ),
                                                           );
                                                           final nextIsTailSpacer =
@@ -6619,13 +6658,15 @@ class _ChatState extends State<Chat> {
                                                                   ChatBubbleSurface(
                                                                 isSelf: self,
                                                                 backgroundColor:
-                                                                    bubbleColor,
+                                                                    bubbleSurfaceColor,
                                                                 borderColor:
-                                                                    borderColor,
+                                                                    bubbleSurfaceBorder,
                                                                 borderRadius:
                                                                     bubbleBorderRadius,
                                                                 shadowOpacity:
-                                                                    shadowValue,
+                                                                    hasBubbleText
+                                                                        ? shadowValue
+                                                                        : 0.0,
                                                                 shadows:
                                                                     _selectedBubbleShadows(
                                                                   bubbleHighlightColor,
@@ -6710,15 +6751,7 @@ class _ChatState extends State<Chat> {
                                                                 selectionFollowsSelfEdge:
                                                                     false,
                                                               );
-                                                              return _MessageBubbleRegion(
-                                                                messageId:
-                                                                    messageModel
-                                                                        .stanzaID,
-                                                                registry:
-                                                                    _bubbleRegionRegistry,
-                                                                child:
-                                                                    bubbleSurface,
-                                                              );
+                                                              return bubbleSurface;
                                                             },
                                                           );
                                                           final baseAlignment = self
@@ -7129,6 +7162,56 @@ class _ChatState extends State<Chat> {
                                                                   attachments,
                                                             ),
                                                           );
+                                                          final extraShadows =
+                                                              _selectedBubbleShadows(
+                                                            bubbleHighlightColor,
+                                                          );
+                                                          final Widget
+                                                              extrasAligned =
+                                                              bubbleExtraChildren
+                                                                      .isEmpty
+                                                                  ? const SizedBox
+                                                                      .shrink()
+                                                                  : TweenAnimationBuilder<
+                                                                      double>(
+                                                                      tween: Tween<
+                                                                          double>(
+                                                                        begin:
+                                                                            0,
+                                                                        end: isSelected
+                                                                            ? 1.0
+                                                                            : 0.0,
+                                                                      ),
+                                                                      duration:
+                                                                          _bubbleFocusDuration,
+                                                                      curve:
+                                                                          _bubbleFocusCurve,
+                                                                      builder: (
+                                                                        context,
+                                                                        shadowValue,
+                                                                        child,
+                                                                      ) {
+                                                                        return SizedBox(
+                                                                          width:
+                                                                              messageRowMaxWidth,
+                                                                          child:
+                                                                              Align(
+                                                                            alignment:
+                                                                                messageRowAlignment,
+                                                                            child:
+                                                                                ConstrainedBox(
+                                                                              constraints: bubbleConstraints,
+                                                                              child: _MessageExtrasColumn(
+                                                                                shadowValue: shadowValue,
+                                                                                shadows: extraShadows,
+                                                                                crossAxisAlignment: self ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                                                                children: bubbleExtraChildren,
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                        );
+                                                                      },
+                                                                    );
                                                           final messageKey =
                                                               _messageKeys
                                                                   .putIfAbsent(
@@ -7275,6 +7358,9 @@ class _ChatState extends State<Chat> {
                                                                     .center,
                                                             children: [
                                                               bubbleWithSlack,
+                                                              if (bubbleExtraChildren
+                                                                  .isNotEmpty)
+                                                                extrasAligned,
                                                               attachmentsAligned,
                                                             ],
                                                           );
@@ -7302,6 +7388,17 @@ class _ChatState extends State<Chat> {
                                                                 Clip.none,
                                                             child: messageBody,
                                                           );
+                                                          final Widget
+                                                              messageRegion =
+                                                              _MessageBubbleRegion(
+                                                            messageId:
+                                                                messageModel
+                                                                    .stanzaID,
+                                                            registry:
+                                                                _bubbleRegionRegistry,
+                                                            child:
+                                                                animatedMessage,
+                                                          );
                                                           final alignedMessage =
                                                               SizedBox(
                                                             width:
@@ -7315,7 +7412,7 @@ class _ChatState extends State<Chat> {
                                                               alignment:
                                                                   messageRowAlignment,
                                                               child:
-                                                                  animatedMessage,
+                                                                  messageRegion,
                                                             ),
                                                           );
                                                           return KeyedSubtree(
@@ -10064,6 +10161,77 @@ class _InviteAttachmentCard extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+class _MessageExtraGap extends StatelessWidget {
+  const _MessageExtraGap({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(height: height);
+}
+
+class _MessageExtraShadow extends StatelessWidget {
+  const _MessageExtraShadow({
+    required this.child,
+    required this.shadows,
+  });
+
+  final Widget child;
+  final List<BoxShadow> shadows;
+
+  @override
+  Widget build(BuildContext context) {
+    if (shadows.isEmpty) {
+      return child;
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        boxShadow: shadows,
+      ),
+      child: child,
+    );
+  }
+}
+
+class _MessageExtrasColumn extends StatelessWidget {
+  const _MessageExtrasColumn({
+    required this.children,
+    required this.shadowValue,
+    required this.shadows,
+    required this.crossAxisAlignment,
+  });
+
+  final List<Widget> children;
+  final double shadowValue;
+  final List<BoxShadow> shadows;
+  final CrossAxisAlignment crossAxisAlignment;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final bool showShadow = shadowValue > 0;
+    final List<BoxShadow> resolvedShadows =
+        showShadow ? _scaleShadows(shadows, shadowValue) : const <BoxShadow>[];
+    final decoratedChildren = children
+        .map(
+          (child) => child is _MessageExtraGap || !showShadow
+              ? child
+              : _MessageExtraShadow(
+                  shadows: resolvedShadows,
+                  child: child,
+                ),
+        )
+        .toList();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: crossAxisAlignment,
+      children: decoratedChildren,
     );
   }
 }
