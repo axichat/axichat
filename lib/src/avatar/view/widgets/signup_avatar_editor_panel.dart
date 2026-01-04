@@ -5,7 +5,8 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
+import 'package:axichat/src/avatar/avatar_editor_mode.dart';
+import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/avatar_cropper.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -34,7 +35,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     this.descriptionText,
   });
 
-  final SignupAvatarEditorMode mode;
+  final AvatarEditorMode mode;
   final Uint8List? avatarBytes;
   final Future<void> Function() onShuffle;
   final Future<void> Function() onUpload;
@@ -139,7 +140,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     const avatarActionSpacing = 8.0;
-    final showCrop = widget.mode == SignupAvatarEditorMode.cropOnly;
+    final showCrop = widget.mode == AvatarEditorMode.cropOnly;
     final busy = _shuffling || _shufflingBackground;
     final cropBytes = showCrop ? widget.cropBytes ?? _lastPreviewBytes : null;
     final imageWidth = showCrop ? widget.imageWidth : null;
@@ -184,13 +185,13 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                     AvatarCropper.fallbackCropRect(
                       imageWidth: safeImageWidth,
                       imageHeight: safeImageHeight,
-                      minCropSide: SignupAvatarCubit.minCropSide,
+                      minCropSide: AvatarEditorCubit.minCropSide,
                     ),
                 onCropChanged: _scheduleCropChange,
                 onCropReset: _handleCropReset,
                 colors: colors,
                 borderRadius: context.radius,
-                minCropSide: SignupAvatarCubit.minCropSide,
+                minCropSide: AvatarEditorCubit.minCropSide,
               ),
             ),
           ),
