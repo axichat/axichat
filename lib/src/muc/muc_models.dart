@@ -210,6 +210,10 @@ class RoomState {
       );
 }
 
+extension RoomStateAvatarPermissions on RoomState {
+  bool get canEditAvatar => myAffiliation.isOwner || myAffiliation.isAdmin;
+}
+
 enum MucModerationAction {
   kick,
   ban,

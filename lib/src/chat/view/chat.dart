@@ -282,13 +282,6 @@ const ShapeBorder _attachmentSurfaceShadowShape = ContinuousRectangleBorder(
     Radius.circular(_attachmentSurfaceCornerRadius),
   ),
 );
-const ShapeBorder _attachmentSurfaceStackedShadowShape =
-    ContinuousRectangleBorder(
-  borderRadius: BorderRadius.only(
-    topLeft: Radius.circular(_attachmentSurfaceCornerRadius),
-    topRight: Radius.circular(_attachmentSurfaceCornerRadius),
-  ),
-);
 const ShapeBorder _inviteAttachmentShadowShape = ContinuousRectangleBorder(
   borderRadius: BorderRadius.all(
     Radius.circular(_inviteAttachmentCornerRadius),
@@ -890,14 +883,47 @@ BorderRadius _bubbleBorderRadius({
     }
   }
   if (flattenBottom) {
-    bottomLeading = Radius.zero;
-    bottomTrailing = Radius.zero;
+    if (isSelf) {
+      bottomTrailing = Radius.zero;
+    } else {
+      bottomLeading = Radius.zero;
+    }
   }
   return BorderRadius.only(
     topLeft: topLeading,
     topRight: topTrailing,
     bottomLeft: bottomLeading,
     bottomRight: bottomTrailing,
+  );
+}
+
+ShapeBorder _attachmentSurfaceShape({
+  required bool isSelf,
+  required bool chainedPrevious,
+  required bool chainedNext,
+}) {
+  if (!chainedPrevious && !chainedNext) {
+    return _attachmentSurfaceShadowShape;
+  }
+  const radius = Radius.circular(_attachmentSurfaceCornerRadius);
+  var topLeading = radius;
+  var topTrailing = radius;
+  var bottomLeading = radius;
+  var bottomTrailing = radius;
+  if (isSelf) {
+    if (chainedPrevious) topTrailing = Radius.zero;
+    if (chainedNext) bottomTrailing = Radius.zero;
+  } else {
+    if (chainedPrevious) topLeading = Radius.zero;
+    if (chainedNext) bottomLeading = Radius.zero;
+  }
+  return ContinuousRectangleBorder(
+    borderRadius: BorderRadius.only(
+      topLeft: topLeading,
+      topRight: topTrailing,
+      bottomLeft: bottomLeading,
+      bottomRight: bottomTrailing,
+    ),
   );
 }
 
@@ -6372,16 +6398,23 @@ class _ChatState extends State<Chat> {
                                                                   attachmentIds[
                                                                       index];
                                                               final bool
-                                                                  isLastAttachment =
-                                                                  index ==
+                                                                  hasAttachmentAbove =
+                                                                  index > 0;
+                                                              final bool
+                                                                  hasAttachmentBelow =
+                                                                  index <
                                                                       attachmentIds
                                                                               .length -
                                                                           1;
                                                               final ShapeBorder
                                                                   attachmentShape =
-                                                                  isLastAttachment
-                                                                      ? _attachmentSurfaceShadowShape
-                                                                      : _attachmentSurfaceStackedShadowShape;
+                                                                  _attachmentSurfaceShape(
+                                                                isSelf: self,
+                                                                chainedPrevious:
+                                                                    hasAttachmentAbove,
+                                                                chainedNext:
+                                                                    hasAttachmentBelow,
+                                                              );
                                                               addExtra(
                                                                 ChatAttachmentPreview(
                                                                   stanzaId:
@@ -6503,8 +6536,8 @@ class _ChatState extends State<Chat> {
                                                             );
                                                           }
                                                           final bool
-                                                              hasBubbleExtras =
-                                                              bubbleExtraChildren
+                                                              hasAttachmentExtras =
+                                                              attachmentIds
                                                                   .isNotEmpty;
                                                           final bubbleBorderRadius =
                                                               _bubbleBorderRadius(
@@ -6516,7 +6549,7 @@ class _ChatState extends State<Chat> {
                                                             isSelected:
                                                                 isSelected,
                                                             flattenBottom:
-                                                                hasBubbleExtras,
+                                                                hasAttachmentExtras,
                                                           );
                                                           final selectionAllowance =
                                                               selectionOverlay !=

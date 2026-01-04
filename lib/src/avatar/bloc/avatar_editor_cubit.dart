@@ -57,6 +57,7 @@ class AvatarEditorState extends Equatable {
     this.source = AvatarSource.template,
     this.sourceBytes,
     this.previewBytes,
+    this.carouselPreviewBytes,
     this.template,
     this.draft,
     this.shuffling = false,
@@ -71,6 +72,7 @@ class AvatarEditorState extends Equatable {
   final AvatarSource source;
   final Uint8List? sourceBytes;
   final Uint8List? previewBytes;
+  final Uint8List? carouselPreviewBytes;
   final AvatarTemplate? template;
   final AvatarUploadPayload? draft;
   final bool shuffling;
@@ -89,6 +91,7 @@ class AvatarEditorState extends Equatable {
     AvatarSource? source,
     Uint8List? sourceBytes,
     Uint8List? previewBytes,
+    Uint8List? carouselPreviewBytes,
     AvatarTemplate? template,
     AvatarUploadPayload? draft,
     bool? shuffling,
@@ -105,6 +108,7 @@ class AvatarEditorState extends Equatable {
     bool clearError = false,
     bool clearSourceBytes = false,
     bool clearPreviewBytes = false,
+    bool clearCarouselPreviewBytes = false,
     bool clearTemplate = false,
     bool clearDraft = false,
     bool clearEstimatedBytes = false,
@@ -116,6 +120,9 @@ class AvatarEditorState extends Equatable {
       sourceBytes: clearSourceBytes ? null : sourceBytes ?? this.sourceBytes,
       previewBytes:
           clearPreviewBytes ? null : previewBytes ?? this.previewBytes,
+      carouselPreviewBytes: clearCarouselPreviewBytes
+          ? null
+          : carouselPreviewBytes ?? this.carouselPreviewBytes,
       template: clearTemplate ? null : template ?? this.template,
       draft: clearDraft ? null : draft ?? this.draft,
       shuffling: shuffling ?? this.shuffling,
@@ -140,6 +147,7 @@ class AvatarEditorState extends Equatable {
         source,
         sourceBytes,
         previewBytes,
+        carouselPreviewBytes,
         template,
         draft?.hash,
         shuffling,
@@ -189,15 +197,41 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _sourceMaxDimension = 768;
   static const _sourceJpegQuality = 86;
   static const _rebuildDelay = Duration(milliseconds: 220);
+  static const _avatarCarouselInterval = Duration(seconds: 1);
+  static const _avatarCarouselInitialBuffer = 4;
+  static const _avatarCarouselSustainBuffer = 3;
+  static const _avatarCarouselHistoryLimit = 12;
+  static const _avatarCarouselMaxAttempts = 6;
+  static const _avatarCarouselCropSide = 100000.0;
 
   final XmppService _xmppService;
   final ProfileCubit? _profileCubit;
   final List<AvatarTemplate> _templates;
+  late final List<AvatarTemplate> _abstractTemplates = _templates
+      .where(
+        (template) => template.category == AvatarTemplateCategory.abstract,
+      )
+      .toList(growable: false);
+  late final List<AvatarTemplate> _nonAbstractTemplates = _templates
+      .where(
+        (template) => template.category != AvatarTemplateCategory.abstract,
+      )
+      .toList(growable: false);
   final List<String> _recentShuffleIds = <String>[];
   final List<AvatarTemplate> _abstractShuffleBag = <AvatarTemplate>[];
   final List<AvatarTemplate> _nonAbstractShuffleBag = <AvatarTemplate>[];
   static const _shuffleHistoryLimit = 12;
   final _random = Random();
+
+  final List<_CarouselAvatar> _carouselBuffer = <_CarouselAvatar>[];
+  final List<String> _recentCarouselAvatarIds = <String>[];
+  final List<AvatarTemplate> _abstractCarouselBag = <AvatarTemplate>[];
+  final List<AvatarTemplate> _nonAbstractCarouselBag = <AvatarTemplate>[];
+  Timer? _avatarCarouselTimer;
+  Future<bool>? _prefillCarouselFuture;
+  _CarouselAvatar? _currentCarouselAvatar;
+  ShadColorScheme? _carouselColors;
+  bool _carouselEnabled = false;
 
   Timer? _rebuildTimer;
   bool _draftBuildInProgress = false;
@@ -205,6 +239,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   @override
   Future<void> close() async {
+    _avatarCarouselTimer?.cancel();
     _rebuildTimer?.cancel();
     return super.close();
   }
@@ -217,8 +252,19 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     unawaited(_loadInitialAvatar());
   }
 
+  void setCarouselEnabled(bool enabled, ShadColorScheme colors) {
+    _carouselColors = colors;
+    _carouselEnabled = enabled;
+    if (!enabled) {
+      _stopAvatarCarousel();
+      return;
+    }
+    _resumeAvatarCarouselIfNeeded();
+  }
+
   Future<void> seedFromBytes(Uint8List bytes) async {
     if (bytes.isEmpty) return;
+    _stopAvatarCarousel();
     await _loadFromBytes(bytes, buildDraft: true);
   }
 
@@ -259,6 +305,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   Future<void> pickImage() async {
+    _stopAvatarCarousel();
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
@@ -293,6 +340,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     ShadColorScheme colors, {
     Color? background,
   }) async {
+    _stopAvatarCarousel();
     _emitIfOpen(
       state.copyWith(
         processing: true,
@@ -300,6 +348,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         template: template,
         clearDraft: true,
         clearPreviewBytes: true,
+        clearCarouselPreviewBytes: true,
         clearEstimatedBytes: true,
         clearLastSavedPath: true,
         clearError: true,
@@ -391,6 +440,128 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (!template.hasAlphaBackground) return;
     final background = _randomAvatarBackgroundColor(colors);
     await setBackgroundColor(background, colors);
+  }
+
+  void _stopAvatarCarousel() {
+    _avatarCarouselTimer?.cancel();
+    _avatarCarouselTimer = null;
+  }
+
+  void _resumeAvatarCarouselIfNeeded() {
+    if (_avatarCarouselTimer != null || _isCarouselBlocked()) return;
+    unawaited(_startAvatarCarousel());
+  }
+
+  bool _isCarouselBlocked() {
+    return !_carouselEnabled ||
+        state.processing ||
+        state.shuffling ||
+        state.publishing ||
+        state.draft != null ||
+        state.sourceBytes != null;
+  }
+
+  Future<void> _startAvatarCarousel() async {
+    if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
+      return;
+    }
+    final colors = _carouselColors;
+    if (colors == null) return;
+
+    if (state.carouselPreviewBytes == null && _currentCarouselAvatar == null) {
+      await _prefillCarousel(targetSize: 1);
+      if (isClosed || _isCarouselBlocked()) return;
+      _showNextCarouselAvatar();
+    }
+
+    unawaited(
+      _prefillCarousel(targetSize: _avatarCarouselInitialBuffer),
+    );
+
+    if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
+      return;
+    }
+
+    _avatarCarouselTimer = Timer.periodic(
+      _avatarCarouselInterval,
+      (_) {
+        if (_isCarouselBlocked()) return;
+        _showNextCarouselAvatar();
+        unawaited(
+          _prefillCarousel(targetSize: _avatarCarouselSustainBuffer),
+        );
+      },
+    );
+  }
+
+  bool _showNextCarouselAvatar() {
+    if (_isCarouselBlocked() || _carouselBuffer.isEmpty) {
+      return false;
+    }
+    final entry = _carouselBuffer.removeAt(0);
+    _currentCarouselAvatar = entry;
+    _emitIfOpen(
+      state.copyWith(
+        carouselPreviewBytes: entry.payload.bytes,
+        clearError: true,
+      ),
+    );
+    return true;
+  }
+
+  Future<bool> _prefillCarousel({
+    int targetSize = _avatarCarouselSustainBuffer,
+  }) async {
+    if (_prefillCarouselFuture != null) {
+      return _prefillCarouselFuture!;
+    }
+    if (_isCarouselBlocked()) {
+      return _carouselBuffer.isNotEmpty;
+    }
+    final future = _performCarouselPrefill(targetSize: targetSize);
+    _prefillCarouselFuture = future;
+    try {
+      return await future;
+    } finally {
+      _prefillCarouselFuture = null;
+    }
+  }
+
+  Future<bool> _performCarouselPrefill({
+    int targetSize = _avatarCarouselSustainBuffer,
+  }) async {
+    final colors = _carouselColors;
+    if (colors == null) return false;
+    var added = 0;
+    var attempts = 0;
+    try {
+      while (!isClosed &&
+          !_isCarouselBlocked() &&
+          _carouselBuffer.length < targetSize &&
+          attempts < _avatarCarouselMaxAttempts) {
+        final template = _pickCarouselTemplate();
+        if (template == null) break;
+        attempts++;
+        _pushRecentCarouselAvatar(template.id);
+        final background = _resolveCarouselBackground(
+          template: template,
+          colors: colors,
+        );
+        final payload = await _buildCarouselPayloadFromTemplate(
+          template: template,
+          background: background,
+          colors: colors,
+        );
+        if (isClosed || _isCarouselBlocked()) {
+          return added > 0;
+        }
+        _carouselBuffer.add(_CarouselAvatar(payload: payload));
+        added++;
+      }
+    } catch (_) {
+      return added > 0;
+    }
+    return added > 0;
   }
 
   void updateCropRect(Rect rect) {
@@ -600,6 +771,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
               draft: draft,
               previewBytes: draft.bytes,
               estimatedBytes: draft.bytes.length,
+              clearCarouselPreviewBytes: true,
               clearError: true,
             ),
           );
@@ -724,6 +896,135 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
   }
 
+  AvatarTemplate? _pickCarouselTemplate() {
+    final hasAbstract = _abstractTemplates.isNotEmpty;
+    final hasNonAbstract = _nonAbstractTemplates.isNotEmpty;
+    if (!hasAbstract && !hasNonAbstract) {
+      return null;
+    }
+    if (!hasNonAbstract) {
+      return _pickFromCarouselPool(
+        _abstractTemplates,
+        bag: _abstractCarouselBag,
+      );
+    }
+    if (!hasAbstract) {
+      return _pickFromCarouselPool(
+        _nonAbstractTemplates,
+        bag: _nonAbstractCarouselBag,
+      );
+    }
+    final useAbstract = _random.nextBool();
+    return _pickFromCarouselPool(
+      useAbstract ? _abstractTemplates : _nonAbstractTemplates,
+      bag: useAbstract ? _abstractCarouselBag : _nonAbstractCarouselBag,
+    );
+  }
+
+  AvatarTemplate? _pickFromCarouselPool(
+    List<AvatarTemplate> pool, {
+    required List<AvatarTemplate> bag,
+  }) {
+    if (pool.isEmpty) return null;
+    if (bag.isEmpty) {
+      bag.addAll(pool);
+      bag.shuffle(_random);
+    }
+    AvatarTemplate? selection;
+    final recycled = <AvatarTemplate>[];
+    while (bag.isNotEmpty) {
+      final candidate = bag.removeAt(0);
+      if (_recentCarouselAvatarIds.contains(candidate.id)) {
+        recycled.add(candidate);
+        continue;
+      }
+      selection = candidate;
+      break;
+    }
+    bag.addAll(recycled);
+    selection ??=
+        bag.isNotEmpty ? bag.removeAt(0) : pool[_random.nextInt(pool.length)];
+    return selection;
+  }
+
+  void _pushRecentCarouselAvatar(String id) {
+    _recentCarouselAvatarIds.add(id);
+    if (_recentCarouselAvatarIds.length > _avatarCarouselHistoryLimit) {
+      _recentCarouselAvatarIds.removeAt(0);
+    }
+  }
+
+  Color _resolveCarouselBackground({
+    required AvatarTemplate template,
+    required ShadColorScheme colors,
+  }) {
+    if (template.hasAlphaBackground) {
+      return _randomAvatarBackgroundColor(colors);
+    }
+    if (state.backgroundColor == Colors.transparent) {
+      return colors.accent;
+    }
+    return state.backgroundColor;
+  }
+
+  Future<AvatarUploadPayload> _buildCarouselPayloadFromTemplate({
+    required AvatarTemplate template,
+    required Color background,
+    required ShadColorScheme colors,
+  }) async {
+    final rawBytes = await template.loadRawBytes();
+    final bytes = rawBytes != null && rawBytes.isNotEmpty
+        ? rawBytes
+        : (await template.generator(background, colors)).bytes;
+    final resolvedBackground = template.hasAlphaBackground
+        ? background
+        : state.backgroundColor == Colors.transparent
+            ? colors.accent
+            : state.backgroundColor;
+    return _processTemplateBytes(
+      bytes: bytes,
+      template: template,
+      background: resolvedBackground,
+    );
+  }
+
+  Future<AvatarUploadPayload> _processTemplateBytes({
+    required Uint8List bytes,
+    required AvatarTemplate template,
+    required Color background,
+  }) async {
+    final useTemplateInset =
+        template.category != AvatarTemplateCategory.abstract;
+    final insetFraction = useTemplateInset ? avatarInsetFraction : 0.0;
+    final shouldInset = insetFraction > 0;
+    final shouldFlatten =
+        shouldInset || template.hasAlphaBackground || background.a > 0;
+    final processed = await processAvatar(
+      AvatarProcessRequest(
+        bytes: bytes,
+        cropLeft: 0,
+        cropTop: 0,
+        cropSide: _avatarCarouselCropSide,
+        targetSize: _targetSize,
+        maxBytes: _maxBytes,
+        insetFraction: insetFraction,
+        shouldInset: shouldInset,
+        backgroundColor: background.toARGB32(),
+        flattenBackground: shouldFlatten,
+        minJpegQuality: _minQuality,
+        qualityStep: _qualityStep,
+      ),
+    );
+    final hash = sha1.convert(processed.bytes).toString();
+    return AvatarUploadPayload(
+      bytes: processed.bytes,
+      mimeType: processed.mimeType,
+      width: processed.width,
+      height: processed.height,
+      hash: hash,
+    );
+  }
+
   Future<void> _loadFromBytes(
     Uint8List bytes, {
     required bool buildDraft,
@@ -732,6 +1033,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       state.copyWith(
         processing: true,
         clearError: true,
+        clearCarouselPreviewBytes: true,
       ),
     );
     try {
@@ -756,6 +1058,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
             imageHeight: imageHeight,
           ),
           previewBytes: buildDraft ? null : prepared.bytes,
+          clearCarouselPreviewBytes: true,
           clearTemplate: true,
           clearDraft: true,
           clearPreviewBytes: buildDraft,
@@ -782,4 +1085,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       );
     }
   }
+}
+
+class _CarouselAvatar {
+  const _CarouselAvatar({required this.payload});
+
+  final AvatarUploadPayload payload;
 }

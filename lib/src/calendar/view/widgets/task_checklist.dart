@@ -268,6 +268,7 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
                   value: value,
                   backgroundColor: Colors.transparent,
                   valueColor: AlwaysStoppedAnimation<Color>(widget.activeColor),
+                  borderRadius: borderRadius,
                   minHeight: 6,
                 ),
               ),
