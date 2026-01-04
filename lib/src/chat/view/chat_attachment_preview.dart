@@ -79,6 +79,11 @@ class _AttachmentFileNameText extends StatelessWidget {
 }
 
 const double _attachmentPreviewCornerRadius = 18.0;
+const OutlinedBorder _attachmentSurfaceDefaultShape = ContinuousRectangleBorder(
+  borderRadius: BorderRadius.all(
+    Radius.circular(_attachmentPreviewCornerRadius),
+  ),
+);
 const double _attachmentActionSpacing = 8.0;
 const double _attachmentOverlayIconSize = 16.0;
 const double _attachmentVideoIconSize = 20.0;
@@ -294,6 +299,8 @@ class ChatAttachmentPreview extends StatefulWidget {
     this.autoDownloadUserInitiated = false,
     this.downloadDelegate,
     this.onAllowPressed,
+    this.surfaceShape,
+    this.maxWidthFraction = _attachmentMaxWidthFraction,
   });
 
   final String stanzaId;
@@ -305,6 +312,8 @@ class ChatAttachmentPreview extends StatefulWidget {
   final bool autoDownloadUserInitiated;
   final AttachmentDownloadDelegate? downloadDelegate;
   final VoidCallback? onAllowPressed;
+  final OutlinedBorder? surfaceShape;
+  final double maxWidthFraction;
 
   @override
   State<ChatAttachmentPreview> createState() => _ChatAttachmentPreviewState();
@@ -356,76 +365,101 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
 
   @override
   Widget build(BuildContext context) {
+    final OutlinedBorder resolvedShape =
+        widget.surfaceShape ?? _attachmentSurfaceDefaultShape;
     return RepaintBoundary(
-      child: StreamBuilder<FileMetadataData?>(
-        stream: widget.metadataStream,
-        initialData: widget.initialMetadata,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return _AttachmentError(message: snapshot.error.toString());
-          }
+      child: _AttachmentSurfaceScope(
+        shape: resolvedShape,
+        maxWidthFraction: widget.maxWidthFraction,
+        child: StreamBuilder<FileMetadataData?>(
+          stream: widget.metadataStream,
+          initialData: widget.initialMetadata,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return _AttachmentError(message: snapshot.error.toString());
+            }
 
-          final l10n = context.l10n;
-          final colors = context.colorScheme;
-          final stanzaId = widget.stanzaId;
-          final onAllowPressed = widget.onAllowPressed;
-          final downloadDelegate = widget.downloadDelegate;
-          final autoDownloadUserInitiated = widget.autoDownloadUserInitiated;
-          final allowed = widget.allowed;
-          final metadata = snapshot.data;
-          if (metadata == null) {
-            if (snapshot.connectionState != ConnectionState.active &&
-                snapshot.connectionState != ConnectionState.done) {
-              return _AttachmentSurface(
-                child: Center(
-                  child: _AttachmentSpinner(
-                    size: _attachmentSpinnerSize,
-                    color: colors.primary,
+            final l10n = context.l10n;
+            final colors = context.colorScheme;
+            final stanzaId = widget.stanzaId;
+            final onAllowPressed = widget.onAllowPressed;
+            final downloadDelegate = widget.downloadDelegate;
+            final autoDownloadUserInitiated = widget.autoDownloadUserInitiated;
+            final allowed = widget.allowed;
+            final metadata = snapshot.data;
+            if (metadata == null) {
+              if (snapshot.connectionState != ConnectionState.active &&
+                  snapshot.connectionState != ConnectionState.done) {
+                return _AttachmentSurface(
+                  child: Center(
+                    child: _AttachmentSpinner(
+                      size: _attachmentSpinnerSize,
+                      color: colors.primary,
+                    ),
                   ),
-                ),
+                );
+              }
+              return _AttachmentError(
+                message: l10n.chatAttachmentUnavailable,
               );
             }
-            return _AttachmentError(
-              message: l10n.chatAttachmentUnavailable,
-            );
-          }
-          final FileTypeReport declaredReport = metadata.declaredTypeReport;
+            final FileTypeReport declaredReport = metadata.declaredTypeReport;
 
-          final shouldAutoDownload = _shouldAutoDownload(metadata);
-          final path = metadata.path?.trim();
-          final localFile = path == null || path.isEmpty ? null : File(path);
-          final hasLocalFile = localFile?.existsSync() ?? false;
-          if (!hasLocalFile) {
-            _clearTypeReportCache();
-          }
-          if (hasLocalFile) {
-            final typeReportFuture = _resolveTypeReportFuture(
-              metadata: metadata,
-              file: localFile!,
-            );
-            return FutureBuilder<FileTypeReport>(
-              future: typeReportFuture,
-              builder: (context, typeSnapshot) {
-                if (typeSnapshot.connectionState != ConnectionState.done) {
-                  return _AttachmentSurface(
-                    child: Center(
-                      child: _AttachmentSpinner(
-                        size: _attachmentSpinnerSize,
-                        color: colors.primary,
+            final shouldAutoDownload = _shouldAutoDownload(metadata);
+            final path = metadata.path?.trim();
+            final localFile = path == null || path.isEmpty ? null : File(path);
+            final hasLocalFile = localFile?.existsSync() ?? false;
+            if (!hasLocalFile) {
+              _clearTypeReportCache();
+            }
+            if (hasLocalFile) {
+              final typeReportFuture = _resolveTypeReportFuture(
+                metadata: metadata,
+                file: localFile!,
+              );
+              return FutureBuilder<FileTypeReport>(
+                future: typeReportFuture,
+                builder: (context, typeSnapshot) {
+                  if (typeSnapshot.connectionState != ConnectionState.done) {
+                    return _AttachmentSurface(
+                      child: Center(
+                        child: _AttachmentSpinner(
+                          size: _attachmentSpinnerSize,
+                          color: colors.primary,
+                        ),
                       ),
-                    ),
-                  );
-                }
-                final FileTypeReport? report = typeSnapshot.data;
-                final FileTypeReport resolvedReport = report ?? declaredReport;
-                final bool useDeclaredFallback =
-                    !resolvedReport.hasReliableDetection;
-                final bool isImage = resolvedReport.isDetectedImage ||
-                    (useDeclaredFallback && resolvedReport.isDeclaredImage);
-                final bool isVideo = resolvedReport.isDetectedVideo ||
-                    (useDeclaredFallback && resolvedReport.isDeclaredVideo);
-                if (isImage) {
-                  return _ImageAttachment(
+                    );
+                  }
+                  final FileTypeReport? report = typeSnapshot.data;
+                  final FileTypeReport resolvedReport =
+                      report ?? declaredReport;
+                  final bool useDeclaredFallback =
+                      !resolvedReport.hasReliableDetection;
+                  final bool isImage = resolvedReport.isDetectedImage ||
+                      (useDeclaredFallback && resolvedReport.isDeclaredImage);
+                  final bool isVideo = resolvedReport.isDetectedVideo ||
+                      (useDeclaredFallback && resolvedReport.isDeclaredVideo);
+                  if (isImage) {
+                    return _ImageAttachment(
+                      metadata: metadata,
+                      stanzaId: stanzaId,
+                      autoDownload: shouldAutoDownload,
+                      autoDownloadUserInitiated: autoDownloadUserInitiated,
+                      downloadDelegate: downloadDelegate,
+                      typeReport: resolvedReport,
+                    );
+                  }
+                  if (isVideo) {
+                    return _VideoAttachment(
+                      metadata: metadata,
+                      stanzaId: stanzaId,
+                      autoDownload: shouldAutoDownload,
+                      autoDownloadUserInitiated: autoDownloadUserInitiated,
+                      downloadDelegate: downloadDelegate,
+                      typeReport: resolvedReport,
+                    );
+                  }
+                  return _FileAttachment(
                     metadata: metadata,
                     stanzaId: stanzaId,
                     autoDownload: shouldAutoDownload,
@@ -433,46 +467,36 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     downloadDelegate: downloadDelegate,
                     typeReport: resolvedReport,
                   );
-                }
-                if (isVideo) {
-                  return _VideoAttachment(
-                    metadata: metadata,
-                    stanzaId: stanzaId,
-                    autoDownload: shouldAutoDownload,
-                    autoDownloadUserInitiated: autoDownloadUserInitiated,
-                    downloadDelegate: downloadDelegate,
-                    typeReport: resolvedReport,
-                  );
-                }
-                return _FileAttachment(
-                  metadata: metadata,
-                  stanzaId: stanzaId,
-                  autoDownload: shouldAutoDownload,
-                  autoDownloadUserInitiated: autoDownloadUserInitiated,
-                  downloadDelegate: downloadDelegate,
-                  typeReport: resolvedReport,
-                );
-              },
-            );
-          }
-          if (!allowed) {
-            return _BlockedAttachment(
-              metadata: metadata,
-              onAllowPressed: onAllowPressed,
-            );
-          }
-          if (metadata.isImage) {
-            return _ImageAttachment(
-              metadata: metadata,
-              stanzaId: stanzaId,
-              autoDownload: shouldAutoDownload,
-              autoDownloadUserInitiated: autoDownloadUserInitiated,
-              downloadDelegate: downloadDelegate,
-              typeReport: declaredReport,
-            );
-          }
-          if (metadata.isVideo) {
-            return _VideoAttachment(
+                },
+              );
+            }
+            if (!allowed) {
+              return _BlockedAttachment(
+                metadata: metadata,
+                onAllowPressed: onAllowPressed,
+              );
+            }
+            if (metadata.isImage) {
+              return _ImageAttachment(
+                metadata: metadata,
+                stanzaId: stanzaId,
+                autoDownload: shouldAutoDownload,
+                autoDownloadUserInitiated: autoDownloadUserInitiated,
+                downloadDelegate: downloadDelegate,
+                typeReport: declaredReport,
+              );
+            }
+            if (metadata.isVideo) {
+              return _VideoAttachment(
+                metadata: metadata,
+                stanzaId: stanzaId,
+                autoDownload: shouldAutoDownload,
+                autoDownloadUserInitiated: autoDownloadUserInitiated,
+                downloadDelegate: downloadDelegate,
+                typeReport: declaredReport,
+              );
+            }
+            return _FileAttachment(
               metadata: metadata,
               stanzaId: stanzaId,
               autoDownload: shouldAutoDownload,
@@ -480,16 +504,8 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
               downloadDelegate: downloadDelegate,
               typeReport: declaredReport,
             );
-          }
-          return _FileAttachment(
-            metadata: metadata,
-            stanzaId: stanzaId,
-            autoDownload: shouldAutoDownload,
-            autoDownloadUserInitiated: autoDownloadUserInitiated,
-            downloadDelegate: downloadDelegate,
-            typeReport: declaredReport,
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -614,7 +630,6 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
         );
       });
     }
-    final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
     if (!hasLocalFile) {
       if (_encrypted) {
         return _EncryptedAttachment(
@@ -691,19 +706,16 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
                   padding: EdgeInsets.zero,
                   backgroundColor: Colors.transparent,
                   borderSide: BorderSide.none,
-                  child: ClipRRect(
-                    borderRadius: radius,
-                    child: GestureDetector(
-                      onTap: () => _openImagePreview(
-                        context,
-                        file: previewFile,
-                        metadata: metadata,
-                        typeReport: widget.typeReport,
-                      ),
-                      child: AspectRatio(
-                        aspectRatio: _aspectRatio(metadata),
-                        child: image,
-                      ),
+                  child: GestureDetector(
+                    onTap: () => _openImagePreview(
+                      context,
+                      file: previewFile,
+                      metadata: metadata,
+                      typeReport: widget.typeReport,
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: _aspectRatio(metadata),
+                      child: image,
                     ),
                   ),
                 ),
@@ -891,7 +903,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         );
       });
     }
-    final radius = BorderRadius.circular(_attachmentPreviewCornerRadius);
     if (!hasLocalFile) {
       if (_encrypted) {
         return _EncryptedAttachment(
@@ -989,42 +1000,39 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
               padding: EdgeInsets.zero,
               backgroundColor: Colors.transparent,
               borderSide: BorderSide.none,
-              child: ClipRRect(
-                borderRadius: radius,
-                child: AspectRatio(
-                  aspectRatio: aspectRatio,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      DecoratedBox(
-                        decoration: ShapeDecoration(
-                          color: colors.card,
-                          shape: const RoundedRectangleBorder(),
+              child: AspectRatio(
+                aspectRatio: aspectRatio,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    DecoratedBox(
+                      decoration: ShapeDecoration(
+                        color: colors.card,
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                    ),
+                    if (initialized && controller != null)
+                      VideoPlayer(controller)
+                    else
+                      Center(
+                        child: _AttachmentSpinner(
+                          size: _attachmentVideoSpinnerSize,
+                          color: colors.primary,
                         ),
                       ),
-                      if (initialized && controller != null)
-                        VideoPlayer(controller)
-                      else
-                        Center(
-                          child: _AttachmentSpinner(
-                            size: _attachmentVideoSpinnerSize,
-                            color: colors.primary,
+                    if (initialized && controller != null)
+                      Center(
+                        child: ShadButton.ghost(
+                          size: ShadButtonSize.sm,
+                          onPressed: _togglePlayback,
+                          child: Icon(
+                            playing ? LucideIcons.pause : LucideIcons.play,
+                            size: _attachmentVideoIconSize,
                           ),
                         ),
-                      if (initialized && controller != null)
-                        Center(
-                          child: ShadButton.ghost(
-                            size: ShadButtonSize.sm,
-                            onPressed: _togglePlayback,
-                            child: Icon(
-                              playing ? LucideIcons.pause : LucideIcons.play,
-                              size: _attachmentVideoIconSize,
-                            ),
-                          ),
-                        ),
-                      if (initialized) actionButtons,
-                    ],
-                  ),
+                      ),
+                    if (initialized) actionButtons,
+                  ],
                 ),
               ),
             ),
@@ -1281,13 +1289,16 @@ double _resolveAttachmentWidth(
   BuildContext context, {
   required double? intrinsicWidth,
 }) {
+  final scope = _AttachmentSurfaceScope.maybeOf(context);
+  final maxWidthFraction =
+      scope?.maxWidthFraction ?? _attachmentMaxWidthFraction;
   final availableWidth = constraints.maxWidth.isFinite
       ? constraints.maxWidth
       : MediaQuery.sizeOf(context).width;
   final targetWidth = intrinsicWidth != null && intrinsicWidth > 0
       ? intrinsicWidth
       : math.min(_attachmentUnknownMaxWidth, availableWidth);
-  return math.min(targetWidth, availableWidth * _attachmentMaxWidthFraction);
+  return math.min(targetWidth, availableWidth * maxWidthFraction);
 }
 
 Future<void> _openImagePreview(
@@ -2186,6 +2197,25 @@ class _RemoteVideoAttachment extends StatelessWidget {
   }
 }
 
+class _AttachmentSurfaceScope extends InheritedWidget {
+  const _AttachmentSurfaceScope({
+    required this.shape,
+    required this.maxWidthFraction,
+    required super.child,
+  });
+
+  final OutlinedBorder shape;
+  final double maxWidthFraction;
+
+  static _AttachmentSurfaceScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_AttachmentSurfaceScope>();
+
+  @override
+  bool updateShouldNotify(_AttachmentSurfaceScope oldWidget) =>
+      shape != oldWidget.shape ||
+      maxWidthFraction != oldWidget.maxWidthFraction;
+}
+
 class _AttachmentSurface extends StatelessWidget {
   const _AttachmentSurface({
     required this.child,
@@ -2204,17 +2234,23 @@ class _AttachmentSurface extends StatelessWidget {
     final colors = context.colorScheme;
     final resolvedBackground = backgroundColor ?? colors.card;
     final resolvedBorder = borderSide ?? BorderSide(color: colors.border);
+    final scope = _AttachmentSurfaceScope.maybeOf(context);
+    final OutlinedBorder baseShape =
+        scope?.shape ?? _attachmentSurfaceDefaultShape;
+    final OutlinedBorder resolvedShape =
+        baseShape.copyWith(side: resolvedBorder);
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: resolvedBackground,
-        shape: ContinuousRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: resolvedBorder,
-        ),
+        shape: resolvedShape,
       ),
-      child: Padding(
-        padding: padding,
-        child: child,
+      child: ClipPath(
+        clipper: ShapeBorderClipper(shape: baseShape),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: padding,
+          child: child,
+        ),
       ),
     );
   }

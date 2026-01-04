@@ -4,6 +4,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -92,10 +93,7 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
                   if (footerDetails.isNotEmpty)
                     Padding(
                       padding: _availabilityFooterPadding,
-                      child: Text.rich(
-                        TextSpan(children: footerDetails),
-                        style: context.textTheme.muted,
-                      ),
+                      child: ChatInlineDetails(details: footerDetails),
                     ),
                 ],
               ),

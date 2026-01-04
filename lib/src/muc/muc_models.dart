@@ -214,6 +214,11 @@ extension RoomStateAvatarPermissions on RoomState {
   bool get canEditAvatar => myAffiliation.isOwner || myAffiliation.isAdmin;
 }
 
+extension RoomStatePresence on RoomState {
+  bool get hasSelfPresence =>
+      selfPresenceStatusCodes.contains(mucStatusSelfPresence);
+}
+
 enum MucModerationAction {
   kick,
   ban,
