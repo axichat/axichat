@@ -344,13 +344,15 @@ class DynamicInlineTextRenderObject extends RenderBox {
       _detailsWidth,
     );
 
-    final messageSize = Size(_maxLineWidth, _textPainter.height);
+    final messageSize =
+        Size(_maxLineWidth, hasBodyText ? _textPainter.height : 0.0);
 
     _finalLineWidth = textLines.isEmpty ? 0.0 : textLines.last.width;
 
     final combinedWidth =
         _detailsWidth == 0 ? _finalLineWidth : _finalLineWidth + _detailsWidth;
-    _canInlineDetails = _detailsWidth > 0 &&
+    _canInlineDetails = hasBodyText &&
+        _detailsWidth > 0 &&
         combinedWidth <
             (textLines.length <= 1 ? maxWidth : min(_maxLineWidth, maxWidth));
 
@@ -374,6 +376,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
   @override
   void paint(PaintingContext context, Offset offset) {
     final hasBodyText = _textPainter.text?.toPlainText().isNotEmpty == true;
+    final double baseTextHeight = hasBodyText ? _textPainter.height : 0.0;
     if (hasBodyText) {
       _textPainter.paint(context.canvas, offset);
     }
@@ -393,7 +396,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
           metrics?.baseline ?? painter.computeLineMetrics().first.baseline;
       final dy = _canInlineDetails && lastLine != null
           ? offset.dy + lastLine.baseline - detailBaseline
-          : offset.dy + _textPainter.height;
+          : offset.dy + baseTextHeight;
       painter.paint(context.canvas, Offset(dx, dy));
       dx += painter.width;
       final hasTrailingDetail = i < _detailPainters.length - 1;

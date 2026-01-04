@@ -276,9 +276,9 @@ const _selectionAttachmentBaseGap = 16.0;
 const _selectionAttachmentSelectedGap = 8.0;
 const _attachmentPreviewSpacing = 8.0;
 const double _messageExtraSpacing = 4.0;
-const double _attachmentSurfaceCornerRadius = 20.0;
+const double _attachmentSurfaceCornerRadius = _bubbleRadius;
 const double _calendarMessageCardCornerRadius = 18.0;
-const ShapeBorder _attachmentSurfaceShadowShape = ContinuousRectangleBorder(
+const OutlinedBorder _attachmentSurfaceShadowShape = ContinuousRectangleBorder(
   borderRadius: BorderRadius.all(
     Radius.circular(_attachmentSurfaceCornerRadius),
   ),
@@ -898,7 +898,7 @@ BorderRadius _bubbleBorderRadius({
   );
 }
 
-ShapeBorder _attachmentSurfaceShape({
+OutlinedBorder _attachmentSurfaceShape({
   required bool isSelf,
   required bool chainedPrevious,
   required bool chainedNext,
@@ -1354,6 +1354,8 @@ class _ChatState extends State<Chat> {
     required bool chatCalendarAvailable,
     required T Function<T>() locate,
     String? requesterJid,
+    String? ownerLabel,
+    String? chatLabel,
   }) async {
     final String? trimmedJid = requesterJid?.trim();
     final AvailabilityRequestHandler? onRequest =
@@ -1371,6 +1373,8 @@ class _ChatState extends State<Chat> {
       enableChatCalendar: chatCalendarAvailable,
       locate: locate,
       onRequest: onRequest,
+      ownerLabel: ownerLabel,
+      chatLabel: chatLabel,
     );
   }
 
@@ -1630,6 +1634,27 @@ class _ChatState extends State<Chat> {
     return bare.toLowerCase();
   }
 
+  String? _resolveAvailabilityOwnerLabel({
+    required String? ownerJid,
+    required String? normalizedXmppSelfJid,
+    required String? normalizedEmailSelfJid,
+    required String selfLabel,
+  }) {
+    final String? trimmedOwner = ownerJid?.trim();
+    if (trimmedOwner == null || trimmedOwner.isEmpty) {
+      return null;
+    }
+    final String? normalizedOwner = _normalizeBareJid(trimmedOwner);
+    if (normalizedOwner == null) {
+      return trimmedOwner;
+    }
+    if (normalizedOwner == normalizedXmppSelfJid ||
+        normalizedOwner == normalizedEmailSelfJid) {
+      return selfLabel;
+    }
+    return trimmedOwner;
+  }
+
   String? _normalizeOccupantId(String? jid) {
     final trimmed = jid?.trim();
     if (trimmed == null || trimmed.isEmpty) {
@@ -1853,7 +1878,7 @@ class _ChatState extends State<Chat> {
     }
     if (context.read<ChatBloc>().state.roomState == null ||
         !context.read<ChatBloc>().state.roomState!.canEditAvatar) {
-      _showMembers();
+      _showMembers(refreshMembership: false);
       return;
     }
     final avatar = await RoomAvatarEditorSheet.show(
@@ -1864,8 +1889,10 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatRoomAvatarChangeRequested(avatar));
   }
 
-  void _showMembers() {
-    context.read<ChatBloc>().add(const ChatRoomMembersOpened());
+  void _showMembers({bool refreshMembership = true}) {
+    if (refreshMembership) {
+      context.read<ChatBloc>().add(const ChatRoomMembersOpened());
+    }
     final navigator = Navigator.of(context);
     final locate = context.read;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -6148,6 +6175,24 @@ class _ChatState extends State<Chat> {
                                                                     final String?
                                                                         resolvedRequesterJid =
                                                                         availabilityShareRequesterJid;
+                                                                    final String?
+                                                                        resolvedOwnerLabel =
+                                                                        _resolveAvailabilityOwnerLabel(
+                                                                      ownerJid: resolvedShare
+                                                                          ?.overlay
+                                                                          .owner,
+                                                                      normalizedXmppSelfJid:
+                                                                          normalizedXmppSelfJid,
+                                                                      normalizedEmailSelfJid:
+                                                                          normalizedEmailSelfJid,
+                                                                      selfLabel: context
+                                                                          .l10n
+                                                                          .chatSenderYou,
+                                                                    );
+                                                                    final String?
+                                                                        resolvedChatLabel =
+                                                                        chatEntity
+                                                                            ?.displayName;
                                                                     final VoidCallback?
                                                                         resolvedOnOpen =
                                                                         resolvedShare ==
@@ -6159,6 +6204,8 @@ class _ChatState extends State<Chat> {
                                                                                   requesterJid: resolvedRequesterJid,
                                                                                   chatCalendarAvailable: chatCalendarAvailable,
                                                                                   locate: context.read,
+                                                                                  ownerLabel: resolvedOwnerLabel,
+                                                                                  chatLabel: resolvedChatLabel,
                                                                                 );
                                                                     return CalendarAvailabilityMessageCard(
                                                                       message:
@@ -6509,8 +6556,18 @@ class _ChatState extends State<Chat> {
                                                               );
                                                             }
                                                           }
+                                                          final bool
+                                                              hasBubbleText =
+                                                              bubbleTextChildren
+                                                                  .isNotEmpty;
                                                           if (attachmentIds
                                                               .isNotEmpty) {
+                                                            final bool
+                                                                hasBubbleAnchor =
+                                                                hasBubbleText ||
+                                                                    showCompactReactions ||
+                                                                    showReplyStrip ||
+                                                                    showRecipientCutout;
                                                             final allowAttachmentByTrust =
                                                                 _shouldAllowAttachment(
                                                               isSelf: self,
@@ -6567,14 +6624,15 @@ class _ChatState extends State<Chat> {
                                                                       index];
                                                               final bool
                                                                   hasAttachmentAbove =
-                                                                  index > 0;
+                                                                  index > 0 ||
+                                                                      hasBubbleAnchor;
                                                               final bool
                                                                   hasAttachmentBelow =
                                                                   index <
                                                                       attachmentIds
                                                                               .length -
                                                                           1;
-                                                              final ShapeBorder
+                                                              final OutlinedBorder
                                                                   attachmentShape =
                                                                   _attachmentSurfaceShape(
                                                                 isSelf: self,
@@ -6616,6 +6674,8 @@ class _ChatState extends State<Chat> {
                                                                                 isEmailChat: isEmailChat,
                                                                                 senderEmail: state.chat?.emailAddress,
                                                                               ),
+                                                                  surfaceShape:
+                                                                      attachmentShape,
                                                                 ),
                                                                 shape:
                                                                     attachmentShape,
@@ -6741,10 +6801,6 @@ class _ChatState extends State<Chat> {
                                                               context
                                                                   .colorScheme
                                                                   .primary;
-                                                          final bool
-                                                              hasBubbleText =
-                                                              bubbleTextChildren
-                                                                  .isNotEmpty;
                                                           final bool
                                                               hasBubbleCutout =
                                                               showCompactReactions ||
