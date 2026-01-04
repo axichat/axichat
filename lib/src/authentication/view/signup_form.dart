@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
@@ -1505,12 +1506,14 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
           children: [
             SizedBox.square(
               dimension: _size,
-              child: AnimatedSwitcher(
+              child: PageTransitionSwitcher(
                 duration: const Duration(milliseconds: 220),
-                switchInCurve: Curves.easeIn,
-                switchOutCurve: Curves.easeOut,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
+                transitionBuilder:
+                    (child, primaryAnimation, secondaryAnimation) =>
+                        SharedAxisTransition(
+                  animation: primaryAnimation,
+                  secondaryAnimation: secondaryAnimation,
+                  transitionType: SharedAxisTransitionType.scaled,
                   child: child,
                 ),
                 child: AxiAvatar(

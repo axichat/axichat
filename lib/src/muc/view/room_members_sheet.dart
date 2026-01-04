@@ -56,8 +56,7 @@ class RoomMembersSheet extends StatelessWidget {
     final colors = context.colorScheme;
     const avatarSectionPadding = EdgeInsets.fromLTRB(16, 0, 16, 8);
     final avatarPath = roomAvatarPath?.trim();
-    final canEditAvatar =
-        roomState.myAffiliation.isOwner || roomState.myAffiliation.isAdmin;
+    final canEditAvatar = roomState.canEditAvatar;
     final showAvatarSection = avatarPath?.isNotEmpty == true || canEditAvatar;
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,

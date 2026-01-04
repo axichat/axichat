@@ -48,7 +48,7 @@ class ChatsAddButton extends StatelessWidget {
               templates: buildDefaultAvatarTemplates(),
             )
               ..initialize(colors)
-              ..seedRandomTemplate(colors);
+              ..setCarouselEnabled(true, colors);
           },
           child: BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
             builder: (context, avatarState) {
@@ -62,9 +62,7 @@ class ChatsAddButton extends StatelessWidget {
                   const avatarEditorCloseInset = 6.0;
                   const dialogMaxHeightRatio = 0.8;
                   final avatarErrorText = avatarState.localizedErrorText(l10n);
-                  final canSubmit = title.isNotEmpty &&
-                      !avatarState.isBusy &&
-                      avatarState.draft != null;
+                  final canSubmit = title.isNotEmpty && !avatarState.isBusy;
                   return BlocConsumer<ChatsCubit, ChatsState>(
                     listener: (context, state) {
                       if (state.creationStatus.isSuccess) {
@@ -108,6 +106,14 @@ class ChatsAddButton extends StatelessWidget {
                                             username: title,
                                             processing: avatarState.isBusy,
                                             onTap: () {
+                                              final colors =
+                                                  context.colorScheme;
+                                              context
+                                                  .read<AvatarEditorCubit>()
+                                                  .setCarouselEnabled(
+                                                    false,
+                                                    colors,
+                                                  );
                                               setState(() {
                                                 showAvatarEditor = true;
                                               });
@@ -232,6 +238,19 @@ class ChatsAddButton extends StatelessWidget {
                                                     setState(() {
                                                       showAvatarEditor = false;
                                                     });
+                                                    final colors =
+                                                        context.colorScheme;
+                                                    context
+                                                        .read<
+                                                            AvatarEditorCubit>()
+                                                        .setCarouselEnabled(
+                                                          !context
+                                                              .read<
+                                                                  AvatarEditorCubit>()
+                                                              .state
+                                                              .hasUserSelectedAvatar,
+                                                          colors,
+                                                        );
                                                   },
                                                 ),
                                               ),

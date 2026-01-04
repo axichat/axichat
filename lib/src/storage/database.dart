@@ -113,11 +113,6 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
 
-  Future<bool> replaceMessageStanzaId({
-    required String from,
-    required String to,
-  });
-
   Stream<List<Reaction>> watchReactionsForChat(String jid);
 
   Future<List<Reaction>> getReactionsForChat(String jid);
@@ -1832,33 +1827,6 @@ WHERE delta_chat_id IS NOT NULL
     }
     return (select(messages)..where((tbl) => tbl.stanzaID.isIn(normalized)))
         .get();
-  }
-
-  @override
-  Future<bool> replaceMessageStanzaId({
-    required String from,
-    required String to,
-  }) async {
-    final trimmedFrom = from.trim();
-    final trimmedTo = to.trim();
-    if (trimmedFrom.isEmpty || trimmedTo.isEmpty || trimmedFrom == trimmedTo) {
-      return false;
-    }
-    final existing = await messagesAccessor.selectOne(trimmedFrom);
-    if (existing == null) {
-      return false;
-    }
-    await transaction(() async {
-      await (update(messages)..where((tbl) => tbl.stanzaID.equals(trimmedFrom)))
-          .write(MessagesCompanion(stanzaID: Value(trimmedTo)));
-      await (update(reactions)
-            ..where((tbl) => tbl.messageID.equals(trimmedFrom)))
-          .write(ReactionsCompanion(messageID: Value(trimmedTo)));
-      await (update(pinnedMessages)
-            ..where((tbl) => tbl.messageStanzaId.equals(trimmedFrom)))
-          .write(PinnedMessagesCompanion(messageStanzaId: Value(trimmedTo)));
-    });
-    return true;
   }
 
   @override
