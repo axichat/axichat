@@ -20,19 +20,9 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'calendar_transfer_sheet.dart';
 import 'feedback_system.dart';
 
-class SyncControls extends StatefulWidget {
-  const SyncControls({
-    super.key,
-    required this.state,
-    this.compact = false,
-  });
-
-  final CalendarState state;
-  final bool compact;
-
-  @override
-  State<SyncControls> createState() => _SyncControlsState();
-}
+const bool _defaultShowTransferMenu = true;
+const bool _defaultTransferMenuGhost = false;
+const bool _defaultTransferMenuUsePrimary = false;
 
 const String _noCalendarDataImportMessage =
     'No calendar data detected in the selected file.';
@@ -43,7 +33,61 @@ const String _calendarImportWarningMessage =
     'calendar. Continue?';
 const String _calendarImportConfirmLabel = 'Import';
 
-class _SyncControlsState extends State<SyncControls> {
+class SyncControls extends StatelessWidget {
+  const SyncControls({
+    super.key,
+    required this.state,
+    this.compact = false,
+    this.showTransferMenu = _defaultShowTransferMenu,
+    this.transferMenuGhost = _defaultTransferMenuGhost,
+    this.transferMenuUsePrimary = _defaultTransferMenuUsePrimary,
+  });
+
+  final CalendarState state;
+  final bool compact;
+  final bool showTransferMenu;
+  final bool transferMenuGhost;
+  final bool transferMenuUsePrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    final CalendarTransferMenu? transferMenu = showTransferMenu
+        ? CalendarTransferMenu(
+            state: state,
+            ghost: transferMenuGhost,
+            usePrimary: transferMenuUsePrimary,
+          )
+        : null;
+    if (compact) {
+      return _CompactSyncControls(
+        state: state,
+        transferMenu: transferMenu,
+      );
+    }
+    return _InlineSyncControls(
+      state: state,
+      transferMenu: transferMenu,
+    );
+  }
+}
+
+class CalendarTransferMenu extends StatefulWidget {
+  const CalendarTransferMenu({
+    super.key,
+    required this.state,
+    this.ghost = _defaultTransferMenuGhost,
+    this.usePrimary = _defaultTransferMenuUsePrimary,
+  });
+
+  final CalendarState state;
+  final bool ghost;
+  final bool usePrimary;
+
+  @override
+  State<CalendarTransferMenu> createState() => _CalendarTransferMenuState();
+}
+
+class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
   final CalendarTransferService _transferService =
       const CalendarTransferService();
 
@@ -51,17 +95,15 @@ class _SyncControlsState extends State<SyncControls> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.compact) {
-      return _CompactSyncControls(
-        state: state,
-        onExportCalendar: _handleExportAll,
-        onImportCalendar: _handleImportCalendar,
-      );
-    }
-    return _InlineSyncControls(
-      state: state,
-      onExportCalendar: _handleExportAll,
-      onImportCalendar: _handleImportCalendar,
+    final bool disabled = state.isSyncing;
+    final bool hasCalendarData = state.model.hasCalendarData;
+    return CalendarTransferMenuButton(
+      hasCalendarData: hasCalendarData,
+      onExport: _handleExportAll,
+      onImport: _handleImportCalendar,
+      busy: disabled,
+      ghost: widget.ghost,
+      usePrimary: widget.usePrimary,
     );
   }
 
@@ -252,58 +294,50 @@ class SyncStatusIndicator extends StatelessWidget {
 class _InlineSyncControls extends StatelessWidget {
   const _InlineSyncControls({
     required this.state,
-    required this.onExportCalendar,
-    required this.onImportCalendar,
+    this.transferMenu,
   });
 
   final CalendarState state;
-  final VoidCallback onExportCalendar;
-  final VoidCallback onImportCalendar;
+  final Widget? transferMenu;
 
   @override
   Widget build(BuildContext context) {
-    final disabled = state.isSyncing;
-    final hasCalendarData = state.model.hasCalendarData;
     final statusText = _statusTextFor(state);
     final lastSyncTime = state.lastSyncTime;
     final statusColor = _statusColorFor(context, state);
+    final List<Widget> children = [
+      if (transferMenu != null) transferMenu!,
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            statusText,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: statusColor,
+            ),
+          ),
+          if (lastSyncTime != null && !state.isSyncing) ...[
+            const SizedBox(width: 6),
+            Text(
+              TimeFormatter.formatSyncTime(lastSyncTime),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).hintColor),
+            ),
+          ],
+          const SizedBox(width: 6),
+          SyncStatusIndicator(state: state),
+        ],
+      ),
+    ];
 
     return Wrap(
       spacing: calendarGutterSm,
       runSpacing: calendarInsetMd,
       crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        CalendarTransferMenuButton(
-          hasCalendarData: hasCalendarData,
-          onExport: onExportCalendar,
-          onImport: onImportCalendar,
-          busy: disabled,
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              statusText,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: statusColor,
-              ),
-            ),
-            if (lastSyncTime != null && !state.isSyncing) ...[
-              const SizedBox(width: 6),
-              Text(
-                TimeFormatter.formatSyncTime(lastSyncTime),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Theme.of(context).hintColor),
-              ),
-            ],
-            const SizedBox(width: 6),
-            SyncStatusIndicator(state: state),
-          ],
-        ),
-      ],
+      children: children,
     );
   }
 }
@@ -311,32 +345,24 @@ class _InlineSyncControls extends StatelessWidget {
 class _CompactSyncControls extends StatelessWidget {
   const _CompactSyncControls({
     required this.state,
-    required this.onExportCalendar,
-    required this.onImportCalendar,
+    this.transferMenu,
   });
 
   final CalendarState state;
-  final VoidCallback onExportCalendar;
-  final VoidCallback onImportCalendar;
+  final Widget? transferMenu;
 
   @override
   Widget build(BuildContext context) {
-    final disabled = state.isSyncing;
-    final hasCalendarData = state.model.hasCalendarData;
+    final List<Widget> children = [
+      if (transferMenu != null) transferMenu!,
+      SyncStatusIndicator(state: state),
+    ];
 
     return Wrap(
       spacing: calendarGutterSm,
       runSpacing: calendarInsetMd,
       crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        CalendarTransferMenuButton(
-          hasCalendarData: hasCalendarData,
-          onExport: onExportCalendar,
-          onImport: onImportCalendar,
-          busy: disabled,
-        ),
-        SyncStatusIndicator(state: state),
-      ],
+      children: children,
     );
   }
 }
@@ -362,12 +388,16 @@ class CalendarTransferMenuButton extends StatelessWidget {
     required this.onExport,
     required this.onImport,
     this.busy = false,
+    this.ghost = _defaultTransferMenuGhost,
+    this.usePrimary = _defaultTransferMenuUsePrimary,
   });
 
   final bool hasCalendarData;
   final VoidCallback onExport;
   final VoidCallback onImport;
   final bool busy;
+  final bool ghost;
+  final bool usePrimary;
 
   @override
   Widget build(BuildContext context) {
@@ -388,6 +418,8 @@ class CalendarTransferMenuButton extends StatelessWidget {
           onPressed: canImport ? onImport : null,
         ),
       ],
+      ghost: ghost,
+      usePrimary: usePrimary,
     );
   }
 }

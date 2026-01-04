@@ -2221,6 +2221,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mucMembersTitle => 'Members';
 
   @override
+  String get mucEditAvatar => 'Edit room avatar';
+
+  @override
+  String get mucAvatarMenuDescription => 'Room members will see this avatar.';
+
+  @override
   String get mucInviteUser => 'Invite user';
 
   @override
@@ -2420,7 +2426,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatsCreateChatRoomTitle => 'Create chat room';
 
   @override
+  String get chatsCreateChatRoomAction => 'Create room';
+
+  @override
   String get chatsRoomNamePlaceholder => 'Name';
+
+  @override
+  String get chatsRoomNameRequiredError => 'Room name cannot be empty.';
+
+  @override
+  String chatsRoomNameInvalidCharacterError(Object character) {
+    return 'Room names cannot contain $character.';
+  }
 
   @override
   String get chatsArchiveTitle => 'Archive';
@@ -2817,6 +2834,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get avatarSavedMessage => 'Avatar saved.';
+
+  @override
+  String get avatarOpenError => 'Unable to open that file.';
+
+  @override
+  String get avatarReadError => 'Could not read that file.';
+
+  @override
+  String get avatarInvalidImageError => 'That file is not a valid image.';
+
+  @override
+  String get avatarProcessError => 'Unable to process that image.';
+
+  @override
+  String get avatarTemplateLoadError => 'Failed to load that avatar option.';
+
+  @override
+  String get avatarMissingDraftError => 'Pick or build an avatar first.';
+
+  @override
+  String get avatarXmppDisconnectedError =>
+      'Connect to XMPP before saving your avatar.';
+
+  @override
+  String get avatarPublishRejectedError =>
+      'Your server rejected avatar publishing.';
+
+  @override
+  String get avatarPublishTimeoutError =>
+      'Avatar upload timed out. Please try again.';
+
+  @override
+  String get avatarPublishGenericError =>
+      'Could not publish avatar. Check your connection and try again.';
+
+  @override
+  String get avatarPublishUnexpectedError =>
+      'Unexpected error while uploading avatar.';
 
   @override
   String get avatarCropTitle => 'Crop & focus';

@@ -2157,6 +2157,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mucMembersTitle => '成员';
 
   @override
+  String get mucEditAvatar => '编辑房间头像';
+
+  @override
+  String get mucAvatarMenuDescription => '房间成员将看到此头像。';
+
+  @override
   String get mucInviteUser => '邀请用户';
 
   @override
@@ -2350,7 +2356,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatsCreateChatRoomTitle => '创建聊天室';
 
   @override
+  String get chatsCreateChatRoomAction => '创建房间';
+
+  @override
   String get chatsRoomNamePlaceholder => '名称';
+
+  @override
+  String get chatsRoomNameRequiredError => '房间名称不能为空。';
+
+  @override
+  String chatsRoomNameInvalidCharacterError(Object character) {
+    return '房间名称不能包含$character。';
+  }
 
   @override
   String get chatsArchiveTitle => '存档';
@@ -2742,6 +2759,39 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get avatarSavedMessage => 'Avatar saved.';
+
+  @override
+  String get avatarOpenError => '无法打开该文件。';
+
+  @override
+  String get avatarReadError => '无法读取该文件。';
+
+  @override
+  String get avatarInvalidImageError => '该文件不是有效的图像。';
+
+  @override
+  String get avatarProcessError => '无法处理该图像。';
+
+  @override
+  String get avatarTemplateLoadError => '无法加载该头像选项。';
+
+  @override
+  String get avatarMissingDraftError => '请先选择或创建头像。';
+
+  @override
+  String get avatarXmppDisconnectedError => '保存头像前请先连接到 XMPP。';
+
+  @override
+  String get avatarPublishRejectedError => '服务器拒绝了头像发布。';
+
+  @override
+  String get avatarPublishTimeoutError => '头像上传超时。请重试。';
+
+  @override
+  String get avatarPublishGenericError => '无法发布头像。请检查连接并重试。';
+
+  @override
+  String get avatarPublishUnexpectedError => '上传头像时发生意外错误。';
 
   @override
   String get avatarCropTitle => 'Crop & focus';
@@ -3424,7 +3474,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatMoveToInbox => '移至收件箱';
 
   @override
-  String get chatReportSpam => '回報垃圾郵件';
+  String get chatReportSpam => '標記為垃圾郵件';
 
   @override
   String get chatSignatureToggleLabel => '為電郵加入分享權杖頁腳';
@@ -5216,6 +5266,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get mucMembersTitle => '成員';
 
   @override
+  String get mucEditAvatar => '編輯聊天室頭像';
+
+  @override
+  String get mucAvatarMenuDescription => '聊天室成員會看到此頭像。';
+
+  @override
   String get mucInviteUser => '邀請用戶';
 
   @override
@@ -5409,7 +5465,18 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatsCreateChatRoomTitle => '建立聊天室';
 
   @override
+  String get chatsCreateChatRoomAction => '建立聊天室';
+
+  @override
   String get chatsRoomNamePlaceholder => '名稱';
+
+  @override
+  String get chatsRoomNameRequiredError => '聊天室名稱不能為空。';
+
+  @override
+  String chatsRoomNameInvalidCharacterError(Object character) {
+    return '聊天室名稱不能包含$character。';
+  }
 
   @override
   String get chatsArchiveTitle => '封存';
@@ -5801,6 +5868,39 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get avatarSavedMessage => 'Avatar saved.';
+
+  @override
+  String get avatarOpenError => '無法開啟該檔案。';
+
+  @override
+  String get avatarReadError => '無法讀取該檔案。';
+
+  @override
+  String get avatarInvalidImageError => '該檔案不是有效的影像。';
+
+  @override
+  String get avatarProcessError => '無法處理該影像。';
+
+  @override
+  String get avatarTemplateLoadError => '無法載入該頭像選項。';
+
+  @override
+  String get avatarMissingDraftError => '請先選擇或建立頭像。';
+
+  @override
+  String get avatarXmppDisconnectedError => '儲存頭像前請先連線到 XMPP。';
+
+  @override
+  String get avatarPublishRejectedError => '你的伺服器拒絕了頭像發佈。';
+
+  @override
+  String get avatarPublishTimeoutError => '頭像上傳逾時。請再試一次。';
+
+  @override
+  String get avatarPublishGenericError => '無法發佈頭像。請檢查連線後再試一次。';
+
+  @override
+  String get avatarPublishUnexpectedError => '上傳頭像時發生意外錯誤。';
 
   @override
   String get avatarCropTitle => 'Crop & focus';

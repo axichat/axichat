@@ -32,6 +32,7 @@ const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
 const String _deltaAttachmentFallbackPrefix = 'attachment-';
 const String _deltaAttachmentLabelPrefix = '📎 ';
 const String _unknownAttachmentSizeLabel = 'Unknown size';
+const String _emptyJid = '';
 const int _attachmentSizeUnitBase = 1024;
 const double _attachmentSizePrecisionThreshold = 10;
 const List<String> _attachmentSizeUnits = <String>[
@@ -47,8 +48,6 @@ const int _originIdHydrationAttemptStart = 0;
 const int _originIdHydrationAttemptStep = 1;
 const Duration _originIdHydrationDelay =
     Duration(milliseconds: _originIdHydrationDelayMs);
-const int _outgoingSignatureCandidateLimit = 100;
-const Duration _outgoingSignatureMatchWindow = Duration(minutes: 10);
 const String _messageUpdateDiffLogPrefix = 'Message update diff';
 const String _messageUpdateDiffSeparator = ', ';
 const String _messageUpdateDiffUnknown = 'unknown';
@@ -331,30 +330,27 @@ class DeltaEventConsumer {
     required DeltaContextHandle context,
     MessageStorageMode messageStorageMode = MessageStorageMode.local,
     String? Function()? selfJidProvider,
-    int? accountId,
     Logger? logger,
   })  : _databaseBuilder = databaseBuilder,
         _context = context,
         _messageStorageMode = messageStorageMode,
         _selfJidProvider = selfJidProvider,
-        _accountId = accountId,
         _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
   MessageStorageMode _messageStorageMode;
   final String? Function()? _selfJidProvider;
-  final int? _accountId;
   final Logger _log;
 
   void updateMessageStorageMode(MessageStorageMode mode) {
     _messageStorageMode = mode;
   }
 
-  String get _selfJid => _selfJidProvider?.call() ?? deltaSelfJid;
+  String get _selfJid =>
+      _selfJidProvider?.call().resolveDeltaPlaceholderJid() ?? _emptyJid;
 
-  int get _deltaAccountId =>
-      _accountId ?? _context.accountId ?? deltaAccountIdLegacy;
+  int get _deltaAccountId => _context.accountId ?? deltaAccountIdLegacy;
 
   Future<bool> bootstrapFromCore() async {
     final int deltaAccountId = _deltaAccountId;
@@ -976,7 +972,6 @@ class DeltaEventConsumer {
             msg: msg,
             chatId: chatId,
             deltaAccountId: deltaAccountId,
-            chatJid: resolvedChat.jid,
           )
         : null;
     if (persistedPending != null) {
@@ -999,7 +994,8 @@ class DeltaEventConsumer {
     const String? originId = null;
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
-    final senderJid = isOutgoing ? _selfJid : resolvedChat.jid;
+    final senderJid =
+        isOutgoing ? _resolveOutgoingSenderJid(resolvedChat) : resolvedChat.jid;
     final emailAddress = resolvedChat.emailAddress?.toLowerCase();
     if (!isOutgoing &&
         emailAddress != null &&
@@ -1068,7 +1064,6 @@ class DeltaEventConsumer {
     required DeltaMessage msg,
     required int chatId,
     required int deltaAccountId,
-    required String chatJid,
   }) async {
     final PendingOutgoingEmailSignature incomingSignature =
         PendingOutgoingEmailSignature.fromOutgoing(
@@ -1084,39 +1079,6 @@ class DeltaEventConsumer {
       deltaAccountId: deltaAccountId,
       deltaChatId: chatId,
     );
-    final List<Message> recentMessages = await db.getChatMessages(
-      chatJid,
-      start: 0,
-      end: _outgoingSignatureCandidateLimit,
-      filter: MessageTimelineFilter.directOnly,
-    );
-    final DateTime? incomingTimestamp = msg.timestamp;
-    final List<Message> recentCandidates = recentMessages.where((candidate) {
-      if (candidate.deltaAccountId != deltaAccountId) {
-        return false;
-      }
-      if (candidate.deltaChatId != chatId) {
-        return false;
-      }
-      if (!_isSelfPendingSender(candidate)) {
-        return false;
-      }
-      final String? originId = candidate.originID?.trim();
-      if (originId != null && originId.isNotEmpty) {
-        return false;
-      }
-      if (incomingTimestamp == null) {
-        return true;
-      }
-      final DateTime? candidateTimestamp = candidate.timestamp;
-      if (candidateTimestamp == null) {
-        return true;
-      }
-      final Duration delta =
-          candidateTimestamp.difference(incomingTimestamp).abs();
-      return delta <= _outgoingSignatureMatchWindow;
-    }).toList(growable: false);
-    candidates.addAll(recentCandidates);
     if (candidates.isEmpty) {
       return null;
     }
@@ -1162,6 +1124,15 @@ class DeltaEventConsumer {
       }
     }
     return closestMatch;
+  }
+
+  String _resolveOutgoingSenderJid(Chat chat) {
+    final String resolvedSelf = _selfJid;
+    if (resolvedSelf.isNotEmpty) {
+      return resolvedSelf;
+    }
+    final String? fallback = chat.emailFromAddress.resolveDeltaPlaceholderJid();
+    return fallback ?? _emptyJid;
   }
 
   bool _isSelfPendingSender(Message message) {
