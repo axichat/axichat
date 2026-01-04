@@ -2,17 +2,9 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
-import 'package:axichat/src/calendar/bloc/calendar_event.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
-import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
-import 'package:axichat/src/calendar/view/widgets/calendar_availability_grid_preview.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _availabilityCardRadius = 18.0;
@@ -20,9 +12,10 @@ const double _availabilityAccentWidth = 4.0;
 const double _availabilityAccentRadius = 14.0;
 const double _availabilityContentSpacing = 6.0;
 const double _availabilitySectionSpacing = 8.0;
-const double _availabilityActionSpacing = 8.0;
-const double _availabilityHelperSpacing = 4.0;
+const double _availabilityHelperSpacing = 6.0;
 const int _availabilityRequestDescriptionMaxLines = 3;
+const double _availabilityActionSpacing = 8.0;
+const double _availabilityOpenIconSize = 16.0;
 
 const EdgeInsets _availabilityCardPadding =
     EdgeInsets.symmetric(horizontal: 12, vertical: 10);
@@ -30,26 +23,16 @@ const EdgeInsets _availabilityFooterPadding = EdgeInsets.only(top: 4);
 const EdgeInsets _availabilityActionPadding = EdgeInsets.only(top: 6);
 
 const String _availabilityShareLabel = 'Availability';
+const String _availabilityShareSubtitle = 'Tap to view free/busy.';
+const String _availabilityShareOpenLabel = 'View availability';
 const String _availabilityRequestLabel = 'Availability request';
 const String _availabilityAcceptedLabel = 'Availability accepted';
 const String _availabilityDeclinedLabel = 'Availability declined';
 const String _availabilityRangeSeparator = ' - ';
-const String _availabilityIntervalsEmptyLabel = 'No availability intervals.';
-const String _availabilityRequestButtonLabel = 'Request time';
 const String _availabilityAcceptButtonLabel = 'Accept';
 const String _availabilityDeclineButtonLabel = 'Decline';
 const String _availabilityRequestTitleFallback = 'Requested time';
-const String _availabilityOverlayAddButtonLabel = 'Show on calendar';
-const String _availabilityOverlayRemoveButtonLabel = 'Hide from calendar';
-const String _availabilityCompareToggleLabel = 'Mutual availability (preview)';
-const String _availabilityCompareHelperText =
-    'Highlights mutual free time in this preview.';
-const String _availabilityOverlayHelperText =
-    'Adds a colored overlay to your calendar view.';
-const String _availabilityShadowOwnerLabel = 'local';
-const bool _availabilityShadowRedacted = true;
-const CalendarFreeBusyType _availabilityShadowIntervalType =
-    CalendarFreeBusyType.busyTentative;
+const IconData _availabilityShareOpenIcon = LucideIcons.calendarDays;
 
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 
@@ -58,14 +41,14 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
     super.key,
     required this.message,
     this.footerDetails = _emptyInlineSpans,
-    this.onRequest,
+    this.onOpen,
     this.onAccept,
     this.onDecline,
   });
 
   final CalendarAvailabilityMessage message;
   final List<InlineSpan> footerDetails;
-  final VoidCallback? onRequest;
+  final VoidCallback? onOpen;
   final VoidCallback? onAccept;
   final VoidCallback? onDecline;
 
@@ -95,7 +78,7 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
                   message.map(
                     share: (value) => _AvailabilityShareBody(
                       share: value.share,
-                      onRequest: onRequest,
+                      onOpen: onOpen,
                     ),
                     request: (value) => _AvailabilityRequestBody(
                       request: value.request,
@@ -143,107 +126,35 @@ class _AvailabilityAccent extends StatelessWidget {
   }
 }
 
-class _AvailabilityShareBody extends StatefulWidget {
+class _AvailabilityShareBody extends StatelessWidget {
   const _AvailabilityShareBody({
     required this.share,
-    required this.onRequest,
+    required this.onOpen,
   });
 
   final CalendarAvailabilityShare share;
-  final VoidCallback? onRequest;
-
-  @override
-  State<_AvailabilityShareBody> createState() => _AvailabilityShareBodyState();
-}
-
-class _AvailabilityShareBodyState extends State<_AvailabilityShareBody> {
-  bool _showComparison = true;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final CalendarAvailabilityShare share = widget.share;
-    final CalendarAvailabilityOverlay overlay = share.overlay;
-    final CalendarBloc? calendarBloc = _maybeReadCalendarBloc(context);
-
-    final Widget content = calendarBloc == null
-        ? _AvailabilityShareContent(
-            overlay: overlay,
-            comparisonOverlay: null,
-            rangeLabel: _formatRange(
-              overlay.rangeStart.value,
-              overlay.rangeEnd.value,
-            ),
-            showComparisonToggle: false,
-            compareValue: _showComparison,
-            onCompareChanged: null,
-            overlayButtonLabel: null,
-            onOverlayPressed: null,
-            isOverlayApplied: false,
-            onRequest: widget.onRequest,
-          )
-        : BlocBuilder<CalendarBloc, CalendarState>(
-            builder: (context, state) {
-              final CalendarAvailabilityOverlay? shadowOverlay = _showComparison
-                  ? _resolveShadowOverlay(
-                      model: state.model,
-                      shareOverlay: overlay,
-                    )
-                  : null;
-              final bool isOverlayApplied =
-                  state.model.availabilityOverlays.containsKey(share.id);
-
-              return _AvailabilityShareContent(
-                overlay: overlay,
-                comparisonOverlay: shadowOverlay,
-                rangeLabel: _formatRange(
-                  overlay.rangeStart.value,
-                  overlay.rangeEnd.value,
-                ),
-                showComparisonToggle: true,
-                compareValue: _showComparison,
-                onCompareChanged: (value) => setState(() {
-                  _showComparison = value;
-                }),
-                overlayButtonLabel: isOverlayApplied
-                    ? _availabilityOverlayRemoveButtonLabel
-                    : _availabilityOverlayAddButtonLabel,
-                onOverlayPressed: () => _handleOverlayPressed(
-                  calendarBloc,
-                  shareId: share.id,
-                  overlay: overlay,
-                  isApplied: isOverlayApplied,
-                ),
-                isOverlayApplied: isOverlayApplied,
-                onRequest: widget.onRequest,
-              );
-            },
-          );
-
-    return content;
-  }
-
-  void _handleOverlayPressed(
-    CalendarBloc bloc, {
-    required String shareId,
-    required CalendarAvailabilityOverlay overlay,
-    required bool isApplied,
-  }) {
-    final String trimmedId = shareId.trim();
-    if (trimmedId.isEmpty) {
-      return;
+    final overlay = share.overlay;
+    final String rangeLabel = _formatRange(
+      overlay.rangeStart.value,
+      overlay.rangeEnd.value,
+    );
+    final Widget content = _AvailabilityShareContent(
+      rangeLabel: rangeLabel,
+      onOpen: onOpen,
+    );
+    if (onOpen == null) {
+      return content;
     }
-    if (isApplied) {
-      bloc.add(
-        CalendarEvent.availabilityOverlayRemoved(
-          overlayId: trimmedId,
-        ),
-      );
-      return;
-    }
-    bloc.add(
-      CalendarEvent.availabilityOverlayUpdated(
-        overlayId: trimmedId,
-        overlay: overlay,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(_availabilityCardRadius),
+        child: content,
       ),
     );
   }
@@ -251,35 +162,16 @@ class _AvailabilityShareBodyState extends State<_AvailabilityShareBody> {
 
 class _AvailabilityShareContent extends StatelessWidget {
   const _AvailabilityShareContent({
-    required this.overlay,
-    required this.comparisonOverlay,
     required this.rangeLabel,
-    required this.showComparisonToggle,
-    required this.compareValue,
-    required this.onCompareChanged,
-    required this.overlayButtonLabel,
-    required this.onOverlayPressed,
-    required this.isOverlayApplied,
-    required this.onRequest,
+    required this.onOpen,
   });
 
-  final CalendarAvailabilityOverlay overlay;
-  final CalendarAvailabilityOverlay? comparisonOverlay;
   final String rangeLabel;
-  final bool showComparisonToggle;
-  final bool compareValue;
-  final ValueChanged<bool>? onCompareChanged;
-  final String? overlayButtonLabel;
-  final VoidCallback? onOverlayPressed;
-  final bool isOverlayApplied;
-  final VoidCallback? onRequest;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = context.textTheme;
-    final bool showEmptyLabel = overlay.intervals.isEmpty;
-    final bool hasOverlayAction = onOverlayPressed != null;
-    final bool hasActions = onRequest != null || hasOverlayAction;
     final TextStyle helperStyle = textTheme.small.copyWith(
       color: context.colorScheme.mutedForeground,
     );
@@ -298,105 +190,41 @@ class _AvailabilityShareContent extends StatelessWidget {
             color: context.colorScheme.mutedForeground,
           ),
         ),
-        CalendarAvailabilityGridPreview(
-          rangeOverlay: overlay,
-          comparisonOverlay: comparisonOverlay,
-          onIntervalTapped: onRequest == null ? null : (_) => onRequest?.call(),
-        ),
-        if (showEmptyLabel)
-          Text(
-            _availabilityIntervalsEmptyLabel,
-            style: textTheme.small.copyWith(
-              color: context.colorScheme.mutedForeground,
-            ),
-          ),
-        if (showComparisonToggle && onCompareChanged != null) ...[
-          _AvailabilityComparisonToggle(
-            value: compareValue,
-            onChanged: onCompareChanged!,
-          ),
-          const SizedBox(height: _availabilityHelperSpacing),
-          Text(_availabilityCompareHelperText, style: helperStyle),
-        ],
-        if (hasActions)
-          Padding(
-            padding: _availabilityActionPadding,
-            child: Wrap(
-              spacing: _availabilityActionSpacing,
-              runSpacing: _availabilityActionSpacing,
-              children: [
-                if (hasOverlayAction && overlayButtonLabel != null)
-                  _AvailabilityOverlayActionButton(
-                    label: overlayButtonLabel!,
-                    isApplied: isOverlayApplied,
-                    onPressed: onOverlayPressed,
-                  ),
-                if (onRequest != null)
-                  ShadButton(
-                    size: ShadButtonSize.sm,
-                    onPressed: onRequest,
-                    child: const Text(_availabilityRequestButtonLabel),
-                  ),
-              ],
-            ),
-          ),
-        if (hasOverlayAction)
-          Padding(
-            padding: const EdgeInsets.only(top: _availabilityHelperSpacing),
-            child: Text(
-              _availabilityOverlayHelperText,
-              style: helperStyle,
-            ),
-          ),
+        Text(_availabilityShareSubtitle, style: helperStyle),
+        const SizedBox(height: _availabilityHelperSpacing),
+        _AvailabilityOpenRow(onOpen: onOpen),
       ],
     );
   }
 }
 
-class _AvailabilityComparisonToggle extends StatelessWidget {
-  const _AvailabilityComparisonToggle({
-    required this.value,
-    required this.onChanged,
-  });
+class _AvailabilityOpenRow extends StatelessWidget {
+  const _AvailabilityOpenRow({required this.onOpen});
 
-  final bool value;
-  final ValueChanged<bool> onChanged;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
-    return ShadSwitch(
-      value: value,
-      onChanged: onChanged,
-      label: const Text(_availabilityCompareToggleLabel),
+    final bool isEnabled = onOpen != null;
+    final Color foreground = isEnabled
+        ? context.colorScheme.foreground
+        : context.colorScheme.mutedForeground;
+    final TextStyle textStyle = context.textTheme.small.copyWith(
+      fontWeight: FontWeight.w600,
+      color: foreground,
     );
-  }
-}
-
-class _AvailabilityOverlayActionButton extends StatelessWidget {
-  const _AvailabilityOverlayActionButton({
-    required this.label,
-    required this.isApplied,
-    required this.onPressed,
-  });
-
-  final String label;
-  final bool isApplied;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final ShadButton button = isApplied
-        ? ShadButton.outline(
-            size: ShadButtonSize.sm,
-            onPressed: onPressed,
-            child: Text(label),
-          )
-        : ShadButton.secondary(
-            size: ShadButtonSize.sm,
-            onPressed: onPressed,
-            child: Text(label),
-          );
-    return button;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          _availabilityShareOpenIcon,
+          size: _availabilityOpenIconSize,
+          color: foreground,
+        ),
+        const SizedBox(width: _availabilityActionSpacing),
+        Text(_availabilityShareOpenLabel, style: textStyle),
+      ],
+    );
   }
 }
 
@@ -533,41 +361,4 @@ String _formatRange(DateTime start, DateTime end) {
     return startLabel;
   }
   return '$startLabel$_availabilityRangeSeparator$endLabel';
-}
-
-CalendarBloc? _maybeReadCalendarBloc(BuildContext context) {
-  try {
-    return context.read<CalendarBloc>();
-  } on FlutterError {
-    return null;
-  }
-}
-
-CalendarAvailabilityOverlay? _resolveShadowOverlay({
-  required CalendarModel model,
-  required CalendarAvailabilityOverlay shareOverlay,
-}) {
-  final CalendarAvailabilityOverlay base = CalendarAvailabilityOverlay(
-    owner: _availabilityShadowOwnerLabel,
-    rangeStart: shareOverlay.rangeStart,
-    rangeEnd: shareOverlay.rangeEnd,
-    isRedacted: _availabilityShadowRedacted,
-  );
-  final CalendarAvailabilityOverlay derived = deriveAvailabilityOverlay(
-    model: model,
-    base: base,
-  );
-  if (derived.intervals.isEmpty) {
-    return null;
-  }
-  final List<CalendarFreeBusyInterval> shadowIntervals = derived.intervals
-      .map(
-        (interval) => CalendarFreeBusyInterval(
-          start: interval.start,
-          end: interval.end,
-          type: _availabilityShadowIntervalType,
-        ),
-      )
-      .toList(growable: false);
-  return derived.copyWith(intervals: shadowIntervals);
 }
