@@ -1458,8 +1458,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    final canEdit =
-        roomState.myAffiliation.isOwner || roomState.myAffiliation.isAdmin;
+    final canEdit = roomState.canEditAvatar;
     if (!canEdit) {
       emit(
         state.copyWith(

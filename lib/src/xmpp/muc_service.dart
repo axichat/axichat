@@ -33,13 +33,19 @@ const _dataFormTypeSubmit = 'submit';
 const _fieldTag = 'field';
 const _valueTag = 'value';
 const _varAttr = 'var';
+const _errorTag = 'error';
 const _formTypeFieldVar = 'FORM_TYPE';
 const _mucRoomInfoFormType = 'http://jabber.org/protocol/muc#roominfo';
 const _mucRoomConfigFormType = 'http://jabber.org/protocol/muc#roomconfig';
 const _avatarFieldToken = 'avatar';
 const _avatarHashToken = 'hash';
+const _avatarMimeToken = 'mime';
+const _avatarTypeToken = 'type';
 const _dataUriPrefix = 'data:';
 const _dataUriBase64Delimiter = ';base64,';
+const _roomAvatarFieldMissingLog =
+    'Room configuration form missing avatar field.';
+const _roomConfigSubmitFailedLog = 'Room configuration update rejected.';
 const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
@@ -936,35 +942,73 @@ mixin MucService on XmppBase, BaseStreamService {
       ),
     );
     if (result == null) return false;
-    return result.attributes[_iqTypeAttr]?.toString() == _iqTypeResult;
+    final type = result.attributes[_iqTypeAttr]?.toString();
+    if (type == _iqTypeResult) return true;
+    _logRoomConfigurationError(result);
+    return false;
   }
 
   Future<bool> updateRoomAvatar({
     required String roomJid,
     required AvatarUploadPayload avatar,
   }) async {
-    final configForm = await fetchRoomConfigurationForm(roomJid);
-    if (configForm == null) return false;
-    final encodedAvatar = _base64EncodeAvatarPublishPayload(avatar.bytes);
     final resolvedHash = _resolveRoomAvatarHash(avatar);
-    final updatedForm = _updateRoomAvatarForm(
-      form: configForm,
-      avatarValue: encodedAvatar,
-      avatarHash: resolvedHash,
+    final encodedAvatar = _base64EncodeAvatarPublishPayload(avatar.bytes);
+    final trimmedMimeType = avatar.mimeType.trim();
+    final dataUriAvatar = _buildRoomAvatarDataUri(
+      mimeType: trimmedMimeType,
+      encodedAvatar: encodedAvatar,
     );
-    if (updatedForm == null) return false;
-    final updated = await submitRoomConfiguration(
-      roomJid: roomJid,
-      form: updatedForm,
-    );
-    if (!updated) return false;
-    if (this is AvatarService) {
-      await (this as AvatarService).storeAvatarBytesForJid(
-        jid: _roomKey(roomJid),
-        bytes: avatar.bytes,
-        hash: resolvedHash,
-      );
+    final avatarCandidates = <String>[
+      if (dataUriAvatar != null) dataUriAvatar,
+      encodedAvatar,
+    ];
+    var updated = false;
+    final configForm = await fetchRoomConfigurationForm(roomJid);
+    if (configForm != null) {
+      for (final avatarValue in avatarCandidates) {
+        final updatedForm = _updateRoomAvatarForm(
+          form: configForm,
+          avatarValue: avatarValue,
+          avatarHash: resolvedHash,
+          avatarMimeType: trimmedMimeType.isEmpty ? null : trimmedMimeType,
+        );
+        if (updatedForm == null) {
+          _mucLog.fine(_roomAvatarFieldMissingLog);
+          break;
+        }
+        updated = await submitRoomConfiguration(
+          roomJid: roomJid,
+          form: updatedForm,
+        );
+        if (updated) {
+          break;
+        }
+      }
     }
+    if (!updated) {
+      return false;
+    }
+    await _storeRoomAvatarLocally(
+      roomJid: roomJid,
+      bytes: avatar.bytes,
+      hash: resolvedHash,
+    );
+    return true;
+  }
+
+  Future<bool> _storeRoomAvatarLocally({
+    required String roomJid,
+    required Uint8List bytes,
+    required String hash,
+  }) async {
+    if (this is! AvatarService) return false;
+    if (bytes.isEmpty) return false;
+    await (this as AvatarService).storeAvatarBytesForJid(
+      jid: _roomKey(roomJid),
+      bytes: bytes,
+      hash: hash,
+    );
     return true;
   }
 
@@ -978,7 +1022,9 @@ mixin MucService on XmppBase, BaseStreamService {
     required mox.XMLNode form,
     required String avatarValue,
     required String avatarHash,
+    String? avatarMimeType,
   }) {
+    final resolvedMimeType = avatarMimeType?.trim();
     var hasAvatarField = false;
     final updatedChildren = <mox.XMLNode>[];
     for (final child in form.children) {
@@ -1002,6 +1048,16 @@ mixin MucService on XmppBase, BaseStreamService {
         );
         continue;
       }
+      if (_isAvatarMimeField(lowerVar)) {
+        if (resolvedMimeType == null || resolvedMimeType.isEmpty) {
+          updatedChildren.add(child);
+          continue;
+        }
+        updatedChildren.add(
+          _replaceFieldValues(child, [resolvedMimeType]),
+        );
+        continue;
+      }
       hasAvatarField = true;
       updatedChildren.add(
         _replaceFieldValues(child, [avatarValue]),
@@ -1021,6 +1077,32 @@ mixin MucService on XmppBase, BaseStreamService {
     return attributes.map(
       (key, value) => MapEntry(key, value.toString()),
     );
+  }
+
+  void _logRoomConfigurationError(mox.XMLNode stanza) {
+    final error = stanza.firstTag(_errorTag);
+    final condition = error?.firstTagByXmlns(mox.fullStanzaXmlns)?.tag;
+    final trimmedCondition = condition?.trim();
+    if (trimmedCondition == null || trimmedCondition.isEmpty) {
+      _mucLog.fine(_roomConfigSubmitFailedLog);
+      return;
+    }
+    _mucLog.fine('$_roomConfigSubmitFailedLog $trimmedCondition');
+  }
+
+  bool _isAvatarMimeField(String fieldName) {
+    final lowerField = fieldName.toLowerCase();
+    return lowerField.contains(_avatarMimeToken) ||
+        lowerField.contains(_avatarTypeToken);
+  }
+
+  String? _buildRoomAvatarDataUri({
+    required String mimeType,
+    required String encodedAvatar,
+  }) {
+    final trimmed = mimeType.trim();
+    if (trimmed.isEmpty) return null;
+    return '$_dataUriPrefix$trimmed$_dataUriBase64Delimiter$encodedAvatar';
   }
 
   mox.XMLNode _replaceFieldValues(mox.XMLNode field, List<String> values) {

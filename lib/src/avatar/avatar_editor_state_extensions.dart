@@ -9,7 +9,8 @@ import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 
 extension AvatarEditorStateView on AvatarEditorState {
-  Uint8List? get displayedBytes => previewBytes ?? sourceBytes;
+  Uint8List? get displayedBytes =>
+      previewBytes ?? carouselPreviewBytes ?? sourceBytes;
 
   AvatarEditorMode get editorMode {
     if (source == AvatarSource.upload && sourceBytes != null) {
@@ -31,6 +32,8 @@ extension AvatarEditorStateView on AvatarEditorState {
   }
 
   bool get isBusy => processing || shuffling || publishing;
+
+  bool get hasUserSelectedAvatar => draft != null;
 }
 
 extension AvatarEditorStateLocalization on AvatarEditorState {

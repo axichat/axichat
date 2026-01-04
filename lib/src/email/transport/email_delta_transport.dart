@@ -1452,16 +1452,7 @@ class EmailDeltaTransport implements ChatTransport {
     FileMetadataData? metadata,
   }) async {
     final XmppDatabase db = await _databaseBuilder();
-    Message? existing = await db.getMessageByStanzaID(stanzaId);
-    final String targetStanzaId = deltaMessageStanzaId(msgId);
-    if (existing != null && stanzaId != targetStanzaId) {
-      final resolvedStanzaId = await _replaceOutgoingStanzaId(
-        db: db,
-        from: stanzaId,
-        to: targetStanzaId,
-      );
-      existing = existing.copyWith(stanzaID: resolvedStanzaId);
-    }
+    final Message? existing = await db.getMessageByStanzaID(stanzaId);
     final String? previousMetadataId = existing?.fileMetadataID;
     final String? messageId = existing?.id;
     if (metadata != null) {
@@ -1524,23 +1515,6 @@ class EmailDeltaTransport implements ChatTransport {
         previousMetadataId != metadata.id) {
       await db.deleteFileMetadata(previousMetadataId);
     }
-  }
-
-  Future<String> _replaceOutgoingStanzaId({
-    required XmppDatabase db,
-    required String from,
-    required String to,
-  }) async {
-    final String trimmedFrom = from.trim();
-    final String trimmedTo = to.trim();
-    if (trimmedFrom.isEmpty || trimmedTo.isEmpty || trimmedFrom == trimmedTo) {
-      return trimmedFrom;
-    }
-    final replaced = await db.replaceMessageStanzaId(
-      from: trimmedFrom,
-      to: trimmedTo,
-    );
-    return replaced ? trimmedTo : trimmedFrom;
   }
 
   Future<void> _markOutgoingMessageFailed({

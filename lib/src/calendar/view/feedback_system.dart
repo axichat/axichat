@@ -7,6 +7,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
+const double _feedbackProgressCornerRadius = 999.0;
+
 class FeedbackMessage {
   final String? title;
   final String message;
@@ -326,6 +328,7 @@ class ProgressIndicator extends StatelessWidget {
           valueColor: AlwaysStoppedAnimation<Color>(
             Theme.of(context).colorScheme.primary,
           ),
+          borderRadius: BorderRadius.circular(_feedbackProgressCornerRadius),
         ),
       ],
     );

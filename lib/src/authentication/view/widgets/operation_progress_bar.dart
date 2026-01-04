@@ -4,6 +4,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
+const double _operationProgressCornerRadius = 999.0;
+
 class OperationProgressController {
   OperationProgressController({required TickerProvider vsync})
       : _controller = AnimationController(
@@ -108,6 +110,7 @@ class OperationProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final borderRadius = BorderRadius.circular(_operationProgressCornerRadius);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: !visible
@@ -129,7 +132,7 @@ class OperationProgressBar extends StatelessWidget {
                       label: label,
                       value: '$percent percent complete',
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: borderRadius,
                         child: SizedBox(
                           height: 6,
                           child: LinearProgressIndicator(
@@ -138,6 +141,7 @@ class OperationProgressBar extends StatelessWidget {
                                 colors.muted.withValues(alpha: 0.24),
                             valueColor:
                                 AlwaysStoppedAnimation<Color>(colors.primary),
+                            borderRadius: borderRadius,
                           ),
                         ),
                       ),
