@@ -522,7 +522,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
               Row(
                 children: [
                   Expanded(
-                    child: ShadSelect<SearchSortOrder>(
+                    child: AxiSelect<SearchSortOrder>(
                       initialValue: state.sort,
                       onChanged: (value) {
                         if (value == null) return;
@@ -542,7 +542,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ShadSelect<MessageTimelineFilter>(
+                    child: AxiSelect<MessageTimelineFilter>(
                       initialValue: state.filter,
                       onChanged: (value) {
                         if (value == null) return;
@@ -571,7 +571,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
               Row(
                 children: [
                   Expanded(
-                    child: ShadSelect<String>(
+                    child: AxiSelect<String>(
                       initialValue: state.subjectFilter ?? '',
                       onChanged: (value) {
                         context.read<ChatSearchCubit?>()?.updateSubjectFilter(
@@ -1368,6 +1368,7 @@ class _ChatState extends State<Chat> {
       context: context,
       share: share,
       enableChatCalendar: chatCalendarAvailable,
+      locate: context.read,
       onRequest: onRequest,
     );
   }
@@ -1843,10 +1844,32 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatMuted(!enable));
   }
 
+  Future<void> _handleRoomAvatarTap() async {
+    context.read<ChatBloc>().add(const ChatRoomMembersOpened());
+    if (context.read<ChatBloc>().state.chat == null ||
+        context.read<ChatBloc>().state.chat?.type != ChatType.groupChat) {
+      return;
+    }
+    if (context.read<ChatBloc>().state.roomState == null ||
+        !context.read<ChatBloc>().state.roomState!.canEditAvatar) {
+      _showMembers();
+      return;
+    }
+    final avatar = await RoomAvatarEditorSheet.show(
+      context,
+      avatarPath: context.read<ChatBloc>().state.chat?.avatarPath,
+    );
+    if (!mounted || avatar == null) return;
+    context.read<ChatBloc>().add(ChatRoomAvatarChangeRequested(avatar));
+  }
+
   void _showMembers() {
+    context.read<ChatBloc>().add(const ChatRoomMembersOpened());
     final navigator = Navigator.of(context);
     final locate = context.read;
     final screenWidth = MediaQuery.of(context).size.width;
+    final Duration animationDuration =
+        context.read<SettingsCubit>().animationDuration;
     const drawerMaxWidth = 420.0;
     const drawerWidthFraction = 0.9;
     final drawerWidth =
@@ -1857,7 +1880,7 @@ class _ChatState extends State<Chat> {
       barrierDismissible: true,
       barrierLabel: context.l10n.chatRoomMembers,
       barrierColor: Colors.black.withValues(alpha: 0.45),
-      transitionDuration: baseAnimationDuration,
+      transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
         return Align(
           alignment: Alignment.centerRight,
@@ -1894,6 +1917,9 @@ class _ChatState extends State<Chat> {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
+        if (animationDuration == Duration.zero) {
+          return child;
+        }
         final curved = CurvedAnimation(
           parent: animation,
           curve: Curves.easeOutCubic,
@@ -1904,8 +1930,8 @@ class _ChatState extends State<Chat> {
             begin: const Offset(0.08, 0),
             end: Offset.zero,
           ).animate(curved),
-          child: FadeTransition(
-            opacity: curved,
+          child: FadeScaleTransition(
+            animation: animation,
             child: child,
           ),
         );
@@ -2226,7 +2252,7 @@ class _ChatState extends State<Chat> {
     final showAutoTrustToggle = canTrustChat;
     final autoTrustLabel = l10n.attachmentGalleryChatTrustLabel;
     final autoTrustHint = l10n.attachmentGalleryChatTrustHint;
-    final decision = await showShadDialog<AttachmentApprovalDecision>(
+    final decision = await showFadeScaleDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -2713,7 +2739,7 @@ class _ChatState extends State<Chat> {
     }
     final intrinsicSize = await _resolveAttachmentSize(attachment);
     if (!mounted) return;
-    await showShadDialog<void>(
+    await showFadeScaleDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -3951,6 +3977,39 @@ class _ChatState extends State<Chat> {
                                       item?.status?.trim() ?? '';
                                   final presence = item?.presence;
                                   final subscription = item?.subscription;
+                                  final canEditRoomAvatar = isGroupChat &&
+                                      !readOnly &&
+                                      state.roomState?.canEditAvatar == true;
+                                  final avatarTooltip = isGroupChat
+                                      ? canEditRoomAvatar
+                                          ? context.l10n.mucEditAvatar
+                                          : context.l10n.chatRoomMembers
+                                      : null;
+                                  Widget avatar = TransportAwareAvatar(
+                                    chat: chatEntity!,
+                                    size: _chatAppBarAvatarSize,
+                                    badgeOffset: const Offset(-6, -4),
+                                    presence: presence,
+                                    status: statusLabel,
+                                    subscription: subscription,
+                                  );
+                                  if (avatarTooltip != null) {
+                                    avatar = AxiTooltip(
+                                      builder: (context) => Text(avatarTooltip),
+                                      child: avatar,
+                                    );
+                                  }
+                                  if (isGroupChat) {
+                                    avatar = MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: canEditRoomAvatar
+                                            ? _handleRoomAvatarTap
+                                            : _showMembers,
+                                        child: avatar,
+                                      ),
+                                    );
+                                  }
                                   final double titleMaxWidth =
                                       appBarWidth * _chatAppBarTitleWidthScale;
                                   final double clampedTitleWidth =
@@ -3968,14 +4027,7 @@ class _ChatState extends State<Chat> {
                                   return Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      TransportAwareAvatar(
-                                        chat: chatEntity!,
-                                        size: _chatAppBarAvatarSize,
-                                        badgeOffset: const Offset(-6, -4),
-                                        presence: presence,
-                                        status: statusLabel,
-                                        subscription: subscription,
-                                      ),
+                                      avatar,
                                       const SizedBox(
                                         width: _chatAppBarAvatarSpacing,
                                       ),
@@ -5145,6 +5197,14 @@ class _ChatState extends State<Chat> {
                                                                 TextBaseline
                                                                     .alphabetic,
                                                           );
+                                                          final surfaceDetailColor =
+                                                              timestampColor;
+                                                          final surfaceDetailStyle =
+                                                              detailStyle
+                                                                  .copyWith(
+                                                            color:
+                                                                surfaceDetailColor,
+                                                          );
                                                           final messageId = message
                                                                   .customProperties?[
                                                               'id'] as String?;
@@ -5166,14 +5226,16 @@ class _ChatState extends State<Chat> {
                                                           TextSpan
                                                               iconDetailSpan(
                                                             IconData icon,
-                                                            Color color,
-                                                          ) =>
+                                                            Color color, {
+                                                            required TextStyle
+                                                                baseStyle,
+                                                          }) =>
                                                                   TextSpan(
                                                                     text: String
                                                                         .fromCharCode(
                                                                       icon.codePoint,
                                                                     ),
-                                                                    style: detailStyle
+                                                                    style: baseStyle
                                                                         .copyWith(
                                                                       color:
                                                                           color,
@@ -5183,11 +5245,18 @@ class _ChatState extends State<Chat> {
                                                                           .fontPackage,
                                                                     ),
                                                                   );
+                                                          final timeLabel =
+                                                              '${message.createdAt.hour.toString().padLeft(2, '0')}:'
+                                                              '${message.createdAt.minute.toString().padLeft(2, '0')}';
                                                           final time = TextSpan(
-                                                            text:
-                                                                '${message.createdAt.hour.toString().padLeft(2, '0')}:'
-                                                                '${message.createdAt.minute.toString().padLeft(2, '0')}',
+                                                            text: timeLabel,
                                                             style: detailStyle,
+                                                          );
+                                                          final surfaceTime =
+                                                              TextSpan(
+                                                            text: timeLabel,
+                                                            style:
+                                                                surfaceDetailStyle,
                                                           );
                                                           final statusIcon =
                                                               message
@@ -5201,11 +5270,31 @@ class _ChatState extends State<Chat> {
                                                                           ? colors
                                                                               .primaryForeground
                                                                           : timestampColor,
+                                                                      baseStyle:
+                                                                          detailStyle,
+                                                                    );
+                                                          final surfaceStatus =
+                                                              statusIcon == null
+                                                                  ? null
+                                                                  : iconDetailSpan(
+                                                                      statusIcon,
+                                                                      surfaceDetailColor,
+                                                                      baseStyle:
+                                                                          surfaceDetailStyle,
                                                                     );
                                                           final transportDetail =
                                                               iconDetailSpan(
                                                             transportIconData,
                                                             timeColor,
+                                                            baseStyle:
+                                                                detailStyle,
+                                                          );
+                                                          final surfaceTransportDetail =
+                                                              iconDetailSpan(
+                                                            transportIconData,
+                                                            surfaceDetailColor,
+                                                            baseStyle:
+                                                                surfaceDetailStyle,
                                                           );
                                                           final trusted = message
                                                                   .customProperties![
@@ -5317,6 +5406,21 @@ class _ChatState extends State<Chat> {
                                                                           ? axiGreen
                                                                           : colors
                                                                               .destructive,
+                                                                      baseStyle:
+                                                                          detailStyle,
+                                                                    );
+                                                          final surfaceVerification =
+                                                              trusted == null
+                                                                  ? null
+                                                                  : iconDetailSpan(
+                                                                      trusted
+                                                                          .toShieldIcon,
+                                                                      trusted
+                                                                          ? axiGreen
+                                                                          : colors
+                                                                              .destructive,
+                                                                      baseStyle:
+                                                                          surfaceDetailStyle,
                                                                     );
                                                           final quotedModel = (message
                                                                           .customProperties?[
@@ -5869,35 +5973,35 @@ class _ChatState extends State<Chat> {
                                                                         trimmedRenderedText;
                                                             final List<
                                                                     InlineSpan>
-                                                                fragmentDetails =
+                                                                surfaceDetails =
                                                                 <InlineSpan>[
-                                                              time,
-                                                              transportDetail,
+                                                              surfaceTime,
+                                                              surfaceTransportDetail,
                                                               if (self &&
-                                                                  status !=
+                                                                  surfaceStatus !=
                                                                       null)
-                                                                status,
-                                                              if (verification !=
+                                                                surfaceStatus,
+                                                              if (surfaceVerification !=
                                                                   null)
-                                                                verification,
+                                                                surfaceVerification,
                                                             ];
                                                             final List<
                                                                     InlineSpan>
                                                                 fragmentFooterDetails =
                                                                 hideFragmentText
-                                                                    ? fragmentDetails
+                                                                    ? surfaceDetails
                                                                     : _emptyInlineSpans;
                                                             final List<
                                                                     InlineSpan>
                                                                 availabilityFooterDetails =
                                                                 hideAvailabilityText
-                                                                    ? fragmentDetails
+                                                                    ? surfaceDetails
                                                                     : _emptyInlineSpans;
                                                             final List<
                                                                     InlineSpan>
                                                                 taskFooterDetails =
                                                                 hideTaskText
-                                                                    ? fragmentDetails
+                                                                    ? surfaceDetails
                                                                     : _emptyInlineSpans;
                                                             VoidCallback?
                                                                 availabilityOnOpen;
@@ -7991,7 +8095,7 @@ class _ChatState extends State<Chat> {
 
   Future<EmailForwardingMode?> _showEmailForwardDialog() async {
     final l10n = context.l10n;
-    return showShadDialog<EmailForwardingMode>(
+    return showFadeScaleDialog<EmailForwardingMode>(
       context: context,
       builder: (dialogContext) => ShadDialog(
         title: Text(
@@ -8167,7 +8271,7 @@ class _ChatState extends State<Chat> {
   Future<String?> _pickCalendarSeed(String seededText) async {
     final trimmed = seededText.trim();
     if (trimmed.isEmpty) return null;
-    final selection = await showDialog<String>(
+    final selection = await showFadeScaleDialog<String>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) => _CalendarTextSelectionDialog(
@@ -8512,7 +8616,7 @@ class _ChatState extends State<Chat> {
             .cast<chat_models.Chat>()
             .toList(growable: false);
     if (options.isEmpty) return null;
-    return showDialog<chat_models.Chat>(
+    return showFadeScaleDialog<chat_models.Chat>(
       context: context,
       builder: (context) => Dialog(
         child: ConstrainedBox(
@@ -11023,7 +11127,7 @@ class _EmojiPickerAccessory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadPopover(
+    return AxiPopover(
       controller: controller,
       child: _ChatComposerIconButton(
         icon: LucideIcons.smile,
@@ -12082,7 +12186,7 @@ class _ChatViewFilterControl extends StatelessWidget {
       title: filter.statusLabel(l10n),
       trailing: SizedBox(
         width: _chatSettingsSelectMinWidth,
-        child: ShadSelect<MessageTimelineFilter>(
+        child: AxiSelect<MessageTimelineFilter>(
           initialValue: filter,
           onChanged: (value) {
             if (value == null) return;
@@ -12121,7 +12225,7 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
       title: l10n.settingsNotificationPreviews,
       trailing: SizedBox(
         width: _chatSettingsSelectMinWidth,
-        child: ShadSelect<NotificationPreviewSetting>(
+        child: AxiSelect<NotificationPreviewSetting>(
           initialValue: setting,
           onChanged: (value) {
             if (value == null) return;

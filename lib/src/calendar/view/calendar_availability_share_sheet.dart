@@ -458,7 +458,7 @@ class _CalendarAvailabilityShareScreenState
   Future<String?> _promptPresetName() async {
     final TextEditingController controller = TextEditingController();
     try {
-      return await showShadDialog<String>(
+      return await showFadeScaleDialog<String>(
         context: context,
         builder: (dialogContext) => AxiInputDialog(
           title: const Text(_availabilitySharePresetNameTitle),

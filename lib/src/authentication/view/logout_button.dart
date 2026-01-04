@@ -21,7 +21,7 @@ class LogoutButton extends StatelessWidget {
     final l10n = context.l10n;
     return AxiIconButton(
       iconData: LucideIcons.logOut,
-      onPressed: () => showDialog(
+      onPressed: () => showFadeScaleDialog(
         context: context,
         builder: (context) {
           var severity = LogoutSeverity.normal;

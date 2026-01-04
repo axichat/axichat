@@ -483,7 +483,7 @@ class ChatMessageDetails extends StatelessWidget {
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
-    await showShadDialog<void>(
+    await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) {
         return ShadDialog(
@@ -620,7 +620,7 @@ class _MessageHeadersSection extends StatelessWidget {
     final rawHeaders = headers;
     if (rawHeaders == null || !_canOpen) return;
     final l10n = context.l10n;
-    await showShadDialog<void>(
+    await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) {
         return _RawHeadersDialog(

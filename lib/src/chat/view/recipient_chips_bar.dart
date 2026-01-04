@@ -1531,68 +1531,70 @@ final class _RecipientAutocompleteOverlayState
                 link: _layerLink,
                 showWhenUnlinked: false,
                 offset: overlayOffset,
-                child: TapRegion(
-                  groupId: widget.tapRegionGroup,
-                  onTapOutside: (_) => _dismissOverlay(),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: limits.minWidth,
-                        maxWidth: limits.maxWidth,
-                        maxHeight: limits.maxHeight,
-                      ),
-                      child: SizedBox(
-                        width: overlayWidth,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: colors.card,
-                            borderRadius: overlayRadius,
-                            border: Border.all(
-                              color: context.colorScheme.border
-                                  .withValues(alpha: 0.9),
-                              width: 1,
+                child: InBoundsFadeScale(
+                  child: TapRegion(
+                    groupId: widget.tapRegionGroup,
+                    onTapOutside: (_) => _dismissOverlay(),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: limits.minWidth,
+                          maxWidth: limits.maxWidth,
+                          maxHeight: limits.maxHeight,
+                        ),
+                        child: SizedBox(
+                          width: overlayWidth,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colors.card,
+                              borderRadius: overlayRadius,
+                              border: Border.all(
+                                color: context.colorScheme.border
+                                    .withValues(alpha: 0.9),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.12),
+                                  blurRadius: 28,
+                                  offset: const Offset(0, 18),
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.12),
-                                blurRadius: 28,
-                                offset: const Offset(0, 18),
-                              ),
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 8,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: overlayRadius,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: ValueListenableBuilder<int?>(
-                                valueListenable:
-                                    widget.highlightedIndexListenable,
-                                builder: (context, highlightedIndex, _) {
-                                  return _AutocompleteOptionsList(
-                                    options: _options,
-                                    avatarPathsByJid: widget.avatarPathsByJid,
-                                    onSelected: (option) {
-                                      widget.onRecipientAdded(option);
-                                      widget.controller.clear();
-                                      _dismissOverlay();
-                                      widget.focusNode.requestFocus();
-                                    },
-                                    titleStyle: titleStyle,
-                                    subtitleStyle: subtitleStyle,
-                                    dividerColor: dividerColor,
-                                    trailingIconColor: trailingIconColor,
-                                    hoverColor: hoverColor,
-                                    highlightColor: highlightColor,
-                                    highlightedIndex: highlightedIndex,
-                                    maxHeight: limits.maxHeight,
-                                  );
-                                },
+                            child: ClipRRect(
+                              borderRadius: overlayRadius,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: ValueListenableBuilder<int?>(
+                                  valueListenable:
+                                      widget.highlightedIndexListenable,
+                                  builder: (context, highlightedIndex, _) {
+                                    return _AutocompleteOptionsList(
+                                      options: _options,
+                                      avatarPathsByJid: widget.avatarPathsByJid,
+                                      onSelected: (option) {
+                                        widget.onRecipientAdded(option);
+                                        widget.controller.clear();
+                                        _dismissOverlay();
+                                        widget.focusNode.requestFocus();
+                                      },
+                                      titleStyle: titleStyle,
+                                      subtitleStyle: subtitleStyle,
+                                      dividerColor: dividerColor,
+                                      trailingIconColor: trailingIconColor,
+                                      hoverColor: hoverColor,
+                                      highlightColor: highlightColor,
+                                      highlightedIndex: highlightedIndex,
+                                      maxHeight: limits.maxHeight,
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                           ),

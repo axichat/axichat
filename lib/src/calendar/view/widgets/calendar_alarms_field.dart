@@ -477,7 +477,7 @@ class _AlarmActionField extends StatelessWidget {
       children: [
         Text(_alarmActionLabel.toUpperCase(), style: labelStyle),
         const SizedBox(height: calendarInsetSm),
-        ShadSelect<CalendarAlarmAction>(
+        AxiSelect<CalendarAlarmAction>(
           enabled: enabled,
           initialValue: action,
           onChanged: (value) {
@@ -542,7 +542,7 @@ class _AlarmTriggerTypeField extends StatelessWidget {
       children: [
         Text(_alarmTriggerTypeLabel.toUpperCase(), style: labelStyle),
         const SizedBox(height: calendarInsetSm),
-        ShadSelect<CalendarAlarmTriggerType>(
+        AxiSelect<CalendarAlarmTriggerType>(
           initialValue: trigger.type,
           onChanged: (value) {
             if (value == null || value == trigger.type) {
@@ -776,7 +776,7 @@ class _AlarmSelectRow<T> extends StatelessWidget {
       children: [
         Text(label.toUpperCase(), style: labelStyle),
         const SizedBox(height: calendarInsetSm),
-        ShadSelect<T>(
+        AxiSelect<T>(
           initialValue: value,
           onChanged: (selected) {
             if (selected == null) {
@@ -975,7 +975,7 @@ class _AlarmDurationFieldState extends State<AlarmDurationField> {
         ),
         const SizedBox(width: calendarGutterSm),
         Expanded(
-          child: ShadSelect<AlarmOffsetUnit>(
+          child: AxiSelect<AlarmOffsetUnit>(
             initialValue: _unit,
             onChanged: (next) {
               if (next == null) {

@@ -10,7 +10,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<bool?> showNotificationDialog(
         BuildContext context, NotificationService notificationService) =>
-    showShadDialog<bool>(
+    showFadeScaleDialog<bool>(
       context: context,
       builder: (context) => ShadDialog(
         title: Text(

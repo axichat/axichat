@@ -35,11 +35,14 @@ class ComposeWindowOverlay extends StatelessWidget {
         return Stack(
           children: [
             for (var index = 0; index < state.windows.length; index++)
-              _ComposeWindowShell(
-                entry: state.windows[index],
-                index: index,
-                viewportSize: mediaSize,
-                viewPadding: viewPadding,
+              InBoundsFadeScale(
+                key: ValueKey(state.windows[index].id),
+                child: _ComposeWindowShell(
+                  entry: state.windows[index],
+                  index: index,
+                  viewportSize: mediaSize,
+                  viewPadding: viewPadding,
+                ),
               ),
           ],
         );

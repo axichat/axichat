@@ -1777,7 +1777,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                 Row(
                   children: [
                     Expanded(
-                      child: ShadSelect<SearchSortOrder>(
+                      child: AxiSelect<SearchSortOrder>(
                         initialValue: sortValue,
                         onChanged: (value) {
                           if (value == null) return;
@@ -1799,7 +1799,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                     if (filters.length > 1 && effectiveFilterId != null) ...[
                       const SizedBox(width: 12),
                       Expanded(
-                        child: ShadSelect<String>(
+                        child: AxiSelect<String>(
                           initialValue: effectiveFilterId,
                           onChanged: (value) {
                             context
