@@ -19,6 +19,8 @@ const int _calendarSyncSnapshotUrlMaxLength = 2048;
 const int _calendarSyncDataMaxLength = 200000;
 const int _calendarSyncTimestampMaxLength = 64;
 const int _calendarSyncSnapshotVersionMaxLength = 16;
+const String _calendarSyncEnvelopeKeyLiteral = '"calendar_sync"';
+const String _calendarSyncEnvelopeJsonPrefix = '{';
 
 /// Valid message types for calendar sync.
 abstract final class CalendarSyncType {
@@ -319,7 +321,18 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
   }
 
   static bool isCalendarSyncEnvelope(String raw) =>
-      tryParseEnvelope(raw) != null;
+      looksLikeEnvelope(raw) && tryParseEnvelope(raw) != null;
+
+  static bool looksLikeEnvelope(String raw) {
+    final trimmed = raw.trimLeft();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    if (!trimmed.startsWith(_calendarSyncEnvelopeJsonPrefix)) {
+      return false;
+    }
+    return raw.contains(_calendarSyncEnvelopeKeyLiteral);
+  }
 }
 
 String? _trimmedBoundedText(String? value, int maxLength) {

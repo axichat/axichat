@@ -72,6 +72,11 @@ const _pinPermissionDeniedMessage =
     'You do not have permission to pin messages in this room.';
 const _pinRoomStateLoadingMessage = 'Room members are still loading.';
 const _pinSyncFailedLogMessage = 'Failed to sync pinned messages.';
+const _roomAvatarPermissionDeniedMessage =
+    'You do not have permission to update the room avatar.';
+const _roomAvatarUpdateSuccessMessage = 'Room avatar updated.';
+const _roomAvatarUpdateFailureMessage = 'Could not update room avatar.';
+const _roomAvatarUpdateFailedLogMessage = 'Failed to update room avatar.';
 const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
@@ -220,6 +225,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatInviteJoinRequested>(_onInviteJoinRequested);
     on<ChatLeaveRoomRequested>(_onLeaveRoomRequested);
     on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
+    on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
     on<ChatEmailImagesLoaded>(_onEmailImagesLoaded);
     if (jid != null) {
@@ -1425,6 +1431,83 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         state.copyWith(
           toast: const ChatToast(
             message: 'Could not change nickname',
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onRoomAvatarChangeRequested(
+    ChatRoomAvatarChangeRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null || chat.type != ChatType.groupChat) return;
+    final roomState = state.roomState;
+    if (roomState == null) {
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: _pinRoomStateLoadingMessage,
+            variant: ChatToastVariant.warning,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      return;
+    }
+    final canEdit =
+        roomState.myAffiliation.isOwner || roomState.myAffiliation.isAdmin;
+    if (!canEdit) {
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: _roomAvatarPermissionDeniedMessage,
+            variant: ChatToastVariant.warning,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      return;
+    }
+    if (event.avatar.bytes.isEmpty) return;
+    try {
+      final updated = await _mucService.updateRoomAvatar(
+        roomJid: chat.jid,
+        avatar: event.avatar,
+      );
+      if (!updated) {
+        emit(
+          state.copyWith(
+            toast: const ChatToast(
+              message: _roomAvatarUpdateFailureMessage,
+              variant: ChatToastVariant.destructive,
+            ),
+            toastId: state.toastId + 1,
+          ),
+        );
+        return;
+      }
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: _roomAvatarUpdateSuccessMessage,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.safeWarning(
+        _roomAvatarUpdateFailedLogMessage,
+        error,
+        stackTrace,
+      );
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: _roomAvatarUpdateFailureMessage,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -3697,7 +3780,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (trimmed == null || trimmed.isEmpty) {
       return false;
     }
-    return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed);
+    return CalendarSyncMessage.looksLikeEnvelope(trimmed);
   }
 
   Future<Set<String>> _snapshotMetadataIdsFor(
@@ -3717,12 +3800,56 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final snapshotIds = <String>{};
     for (final metadataId in allIds) {
       final metadata = await db.getFileMetadata(metadataId);
-      final mimeType = metadata?.mimeType?.trim();
-      if (mimeType == CalendarSnapshotCodec.mimeType) {
+      if (metadata == null) {
+        continue;
+      }
+      if (_isCalendarSnapshotMetadata(metadata)) {
         snapshotIds.add(metadataId);
       }
     }
     return snapshotIds;
+  }
+
+  bool _isCalendarSnapshotMetadata(FileMetadataData metadata) {
+    final normalizedMimeType = metadata.mimeType?.trim().toLowerCase();
+    if (normalizedMimeType == CalendarSnapshotCodec.mimeType) {
+      return true;
+    }
+    final snapshotExtension = CalendarSnapshotCodec.fileExtension.toLowerCase();
+    if (_matchesSnapshotExtension(metadata.filename, snapshotExtension)) {
+      return true;
+    }
+    final sources = metadata.sourceUrls;
+    if (sources == null || sources.isEmpty) {
+      return false;
+    }
+    for (final source in sources) {
+      final sourcePath = _snapshotSourcePath(source);
+      if (_matchesSnapshotExtension(sourcePath, snapshotExtension)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _matchesSnapshotExtension(
+    String value,
+    String snapshotExtension,
+  ) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    return trimmed.toLowerCase().endsWith(snapshotExtension);
+  }
+
+  String _snapshotSourcePath(String source) {
+    final trimmed = source.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    final uri = Uri.tryParse(trimmed);
+    return (uri?.path ?? trimmed);
   }
 
   Future<

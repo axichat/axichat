@@ -64,6 +64,9 @@ const String _availabilityOverlayBarClearLabel = 'Clear overlays';
 const String _calendarAvailabilityShareTooltip = 'Share availability';
 const String _calendarAvailabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
+const bool _calendarActionShowTransferMenu = false;
+const bool _calendarActionMenuGhost = true;
+const bool _calendarActionUsePrimary = true;
 
 CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
@@ -426,29 +429,58 @@ class _CalendarAppBar extends StatelessWidget {
           padding: toolbarPadding,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               AxiIconButton.ghost(
                 iconData: LucideIcons.arrowLeft,
                 tooltip: context.l10n.calendarBackToChats,
                 onPressed: onBackPressed,
               ),
-              const SizedBox(width: _calendarShareActionSpacing),
-              SyncControls(state: state),
               const Spacer(),
-              if (onShareAvailability != null) ...[
-                AxiIconButton.ghost(
-                  iconData: LucideIcons.send,
-                  tooltip: _calendarAvailabilityShareTooltip,
-                  onPressed: onShareAvailability,
-                  usePrimary: true,
-                ),
-                const SizedBox(width: _calendarShareActionSpacing),
-              ],
+              _CalendarActionRow(
+                state: state,
+                onShareAvailability: onShareAvailability,
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CalendarActionRow extends StatelessWidget {
+  const _CalendarActionRow({
+    required this.state,
+    this.onShareAvailability,
+  });
+
+  final CalendarState state;
+  final VoidCallback? onShareAvailability;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: _calendarShareActionSpacing,
+      runSpacing: _calendarShareActionSpacing,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SyncControls(
+          state: state,
+          showTransferMenu: _calendarActionShowTransferMenu,
+        ),
+        if (onShareAvailability != null)
+          AxiIconButton.ghost(
+            iconData: LucideIcons.send,
+            tooltip: _calendarAvailabilityShareTooltip,
+            onPressed: onShareAvailability,
+            usePrimary: _calendarActionUsePrimary,
+          ),
+        CalendarTransferMenu(
+          state: state,
+          ghost: _calendarActionMenuGhost,
+          usePrimary: _calendarActionUsePrimary,
+        ),
+      ],
     );
   }
 }
