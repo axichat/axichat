@@ -2,8 +2,9 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
-import 'package:axichat/src/avatar/view/signup_avatar_error_text.dart';
+import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
+import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
@@ -237,8 +238,13 @@ class RoomMembersSheet extends StatelessWidget {
       builder: (sheetContext) {
         final pop = Navigator.of(sheetContext).pop;
         return BlocProvider(
-          create: (context) =>
-              SignupAvatarCubit()..setVisible(true, context.colorScheme),
+          create: (context) {
+            final colors = ShadTheme.of(context, listen: false).colorScheme;
+            return AvatarEditorCubit(
+              xmppService: context.read<XmppService>(),
+              templates: buildDefaultAvatarTemplates(),
+            )..initialize(colors);
+          },
           child: _RoomAvatarEditorSheet(
             avatarPath: avatarPath,
             onCancel: () => pop(),
@@ -809,20 +815,19 @@ class _RoomAvatarEditorSheetState extends State<_RoomAvatarEditorSheet> {
 
   Future<void> _seedAvatarIfNeeded() async {
     final path = widget.avatarPath?.trim();
-    if (path == null || path.isEmpty) return;
-    final cubit = context.read<SignupAvatarCubit>();
+    final colors = ShadTheme.of(context, listen: false).colorScheme;
+    if (path == null || path.isEmpty) {
+      await context.read<AvatarEditorCubit>().seedRandomTemplate(colors);
+      return;
+    }
     final bytes = await _xmppService.loadAvatarBytes(path);
     if (!mounted || bytes == null || bytes.isEmpty) return;
-    await cubit.seedAvatarFromBytes(bytes);
+    await context.read<AvatarEditorCubit>().seedFromBytes(bytes);
   }
 
   void _handleSave() {
-    final cubit = context.read<SignupAvatarCubit>();
-    if (cubit.state.processing) return;
-    if (cubit.state.avatar == null) {
-      cubit.materializeCurrentCarouselAvatar();
-    }
-    final payload = cubit.state.avatar;
+    if (context.read<AvatarEditorCubit>().state.isBusy) return;
+    final payload = context.read<AvatarEditorCubit>().state.draft;
     if (payload == null) return;
     widget.onSave(payload);
   }
@@ -832,13 +837,10 @@ class _RoomAvatarEditorSheetState extends State<_RoomAvatarEditorSheet> {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    return BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
+    return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, avatarState) {
-        final errorText = signupAvatarErrorText(
-          avatarState: avatarState,
-          l10n: l10n,
-        );
-        final saveEnabled = !avatarState.processing;
+        final errorText = avatarState.error;
+        final saveEnabled = !avatarState.isBusy && avatarState.draft != null;
         final Widget actions = Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -895,25 +897,27 @@ class _RoomAvatarEditorSheetState extends State<_RoomAvatarEditorSheet> {
                                 avatarBytes: avatarState.displayedBytes,
                                 cropBytes: avatarState.sourceBytes,
                                 cropRect: avatarState.cropRect,
-                                imageWidth: avatarState.imageWidth,
-                                imageHeight: avatarState.imageHeight,
+                                imageWidth: avatarState.imageWidth?.toDouble(),
+                                imageHeight:
+                                    avatarState.imageHeight?.toDouble(),
                                 onCropChanged: (rect) => context
-                                    .read<SignupAvatarCubit>()
+                                    .read<AvatarEditorCubit>()
                                     .updateCropRect(rect),
-                                onCropReset:
-                                    context.read<SignupAvatarCubit>().resetCrop,
+                                onCropReset: () => context
+                                    .read<AvatarEditorCubit>()
+                                    .resetCrop(),
                                 onShuffle: () => context
-                                    .read<SignupAvatarCubit>()
+                                    .read<AvatarEditorCubit>()
                                     .shuffleTemplate(context.colorScheme),
-                                onUpload: context
-                                    .read<SignupAvatarCubit>()
-                                    .pickAvatarFromFiles,
+                                onUpload: () => context
+                                    .read<AvatarEditorCubit>()
+                                    .pickImage(),
                                 canShuffleBackground:
                                     avatarState.canShuffleBackground,
                                 onShuffleBackground:
                                     avatarState.canShuffleBackground
                                         ? () => context
-                                            .read<SignupAvatarCubit>()
+                                            .read<AvatarEditorCubit>()
                                             .shuffleBackground(
                                               context.colorScheme,
                                             )

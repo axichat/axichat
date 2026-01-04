@@ -203,6 +203,32 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     unawaited(_loadInitialAvatar());
   }
 
+  Future<void> seedFromBytes(Uint8List bytes) async {
+    if (bytes.isEmpty) return;
+    await _loadFromBytes(bytes, buildDraft: true);
+  }
+
+  Future<void> seedRandomTemplate(ShadColorScheme colors) async {
+    if (state.sourceBytes != null ||
+        state.previewBytes != null ||
+        state.draft != null ||
+        state.processing) {
+      return;
+    }
+    final template = _pickTemplate();
+    if (template == null) return;
+    final background = template.hasAlphaBackground
+        ? _randomAvatarBackgroundColor(colors)
+        : state.backgroundColor == Colors.transparent
+            ? colors.accent
+            : state.backgroundColor;
+    await selectTemplate(
+      template,
+      colors,
+      background: background,
+    );
+  }
+
   Future<void> _loadInitialAvatar() async {
     final avatarPath = _profileCubit?.state.avatarPath?.trim();
     if (avatarPath == null || avatarPath.isEmpty) {
@@ -333,6 +359,18 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     } finally {
       _emitIfOpen(state.copyWith(shuffling: false));
     }
+  }
+
+  Future<void> shuffleBackground(ShadColorScheme colors) async {
+    if (state.processing || state.publishing || state.shuffling) {
+      return;
+    }
+    final template = state.template;
+    if (template == null) return;
+    if (template.category == AvatarTemplateCategory.abstract) return;
+    if (!template.hasAlphaBackground) return;
+    final background = _randomAvatarBackgroundColor(colors);
+    await setBackgroundColor(background, colors);
   }
 
   void updateCropRect(Rect rect) {
