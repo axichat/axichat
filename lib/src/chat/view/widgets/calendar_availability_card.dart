@@ -56,13 +56,14 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
       share: (_) => true,
       orElse: () => false,
     );
-    final Widget card = DecoratedBox(
+    final ShapeBorder cardShape = ContinuousRectangleBorder(
+      borderRadius: BorderRadius.circular(_availabilityCardRadius),
+      side: BorderSide(color: colors.border),
+    );
+    final Widget card = Ink(
       decoration: ShapeDecoration(
         color: colors.card,
-        shape: ContinuousRectangleBorder(
-          borderRadius: BorderRadius.circular(_availabilityCardRadius),
-          side: BorderSide(color: colors.border),
-        ),
+        shape: cardShape,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,10 +107,13 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
     if (!isShare || onOpen == null) {
       return card;
     }
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: onOpen,
-      child: card,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpen,
+        customBorder: cardShape,
+        child: card,
+      ),
     );
   }
 }

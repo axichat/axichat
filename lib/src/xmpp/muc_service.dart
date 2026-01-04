@@ -461,13 +461,16 @@ mixin MucService on XmppBase, BaseStreamService {
     String? nickname,
     int? maxHistoryStanzas,
     String? password,
+    bool allowRejoin = false,
   }) async {
     final key = _roomKey(roomJid);
-    if (_leftRooms.contains(key)) return;
+    if (_leftRooms.contains(key) && !allowRejoin) return;
     final room = _roomStates[key];
     final myOccupant =
         room?.myOccupantId == null ? null : room!.occupants[room.myOccupantId!];
-    if (myOccupant?.isPresent == true) {
+    final hasSelfPresence =
+        room?.selfPresenceStatusCodes.contains(mucStatusSelfPresence) == true;
+    if (myOccupant?.isPresent == true && hasSelfPresence) {
       return;
     }
     final preferredNick = nickname?.trim();

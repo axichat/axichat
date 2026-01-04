@@ -641,6 +641,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _mucService.ensureJoined(
         roomJid: chat.jid,
         nickname: chat.myNickname,
+        allowRejoin: true,
       );
     } on Exception catch (error, stackTrace) {
       _log.safeFine(
