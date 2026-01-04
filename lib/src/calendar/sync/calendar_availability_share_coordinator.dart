@@ -116,6 +116,27 @@ class CalendarAvailabilityShareCoordinator {
     return recordFor(shareId)?.overlay.owner;
   }
 
+  Future<bool> sendRequest({
+    required CalendarAvailabilityRequest request,
+  }) async {
+    final CalendarAvailabilityShareRecord? record = recordFor(request.shareId);
+    if (record == null) {
+      return false;
+    }
+    try {
+      final CalendarAvailabilityMessage message =
+          CalendarAvailabilityMessage.request(request: request);
+      await _sendMessage(
+        jid: record.chatJid,
+        message: message,
+        chatType: record.chatType,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _handleModelChanged({
     required CalendarAvailabilityShareSource source,
     required CalendarModel model,

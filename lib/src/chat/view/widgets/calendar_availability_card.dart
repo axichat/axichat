@@ -21,6 +21,7 @@ const double _availabilityAccentRadius = 14.0;
 const double _availabilityContentSpacing = 6.0;
 const double _availabilitySectionSpacing = 8.0;
 const double _availabilityActionSpacing = 8.0;
+const double _availabilityHelperSpacing = 4.0;
 const int _availabilityRequestDescriptionMaxLines = 3;
 
 const EdgeInsets _availabilityCardPadding =
@@ -38,9 +39,13 @@ const String _availabilityRequestButtonLabel = 'Request time';
 const String _availabilityAcceptButtonLabel = 'Accept';
 const String _availabilityDeclineButtonLabel = 'Decline';
 const String _availabilityRequestTitleFallback = 'Requested time';
-const String _availabilityOverlayAddButtonLabel = 'Overlay on calendar';
-const String _availabilityOverlayRemoveButtonLabel = 'Remove overlay';
-const String _availabilityCompareToggleLabel = 'Compare with mine';
+const String _availabilityOverlayAddButtonLabel = 'Show on calendar';
+const String _availabilityOverlayRemoveButtonLabel = 'Hide from calendar';
+const String _availabilityCompareToggleLabel = 'Mutual availability (preview)';
+const String _availabilityCompareHelperText =
+    'Highlights mutual free time in this preview.';
+const String _availabilityOverlayHelperText =
+    'Adds a colored overlay to your calendar view.';
 const String _availabilityShadowOwnerLabel = 'local';
 const bool _availabilityShadowRedacted = true;
 const CalendarFreeBusyType _availabilityShadowIntervalType =
@@ -152,7 +157,7 @@ class _AvailabilityShareBody extends StatefulWidget {
 }
 
 class _AvailabilityShareBodyState extends State<_AvailabilityShareBody> {
-  bool _showComparison = false;
+  bool _showComparison = true;
 
   @override
   Widget build(BuildContext context) {
@@ -163,7 +168,7 @@ class _AvailabilityShareBodyState extends State<_AvailabilityShareBody> {
     final Widget content = calendarBloc == null
         ? _AvailabilityShareContent(
             overlay: overlay,
-            overlays: <CalendarAvailabilityOverlay>[overlay],
+            comparisonOverlay: null,
             rangeLabel: _formatRange(
               overlay.rangeStart.value,
               overlay.rangeEnd.value,
@@ -184,17 +189,12 @@ class _AvailabilityShareBodyState extends State<_AvailabilityShareBody> {
                       shareOverlay: overlay,
                     )
                   : null;
-              final List<CalendarAvailabilityOverlay> overlays =
-                  <CalendarAvailabilityOverlay>[
-                if (shadowOverlay != null) shadowOverlay,
-                overlay
-              ];
               final bool isOverlayApplied =
                   state.model.availabilityOverlays.containsKey(share.id);
 
               return _AvailabilityShareContent(
                 overlay: overlay,
-                overlays: overlays,
+                comparisonOverlay: shadowOverlay,
                 rangeLabel: _formatRange(
                   overlay.rangeStart.value,
                   overlay.rangeEnd.value,
@@ -252,7 +252,7 @@ class _AvailabilityShareBodyState extends State<_AvailabilityShareBody> {
 class _AvailabilityShareContent extends StatelessWidget {
   const _AvailabilityShareContent({
     required this.overlay,
-    required this.overlays,
+    required this.comparisonOverlay,
     required this.rangeLabel,
     required this.showComparisonToggle,
     required this.compareValue,
@@ -264,7 +264,7 @@ class _AvailabilityShareContent extends StatelessWidget {
   });
 
   final CalendarAvailabilityOverlay overlay;
-  final List<CalendarAvailabilityOverlay> overlays;
+  final CalendarAvailabilityOverlay? comparisonOverlay;
   final String rangeLabel;
   final bool showComparisonToggle;
   final bool compareValue;
@@ -280,6 +280,9 @@ class _AvailabilityShareContent extends StatelessWidget {
     final bool showEmptyLabel = overlay.intervals.isEmpty;
     final bool hasOverlayAction = onOverlayPressed != null;
     final bool hasActions = onRequest != null || hasOverlayAction;
+    final TextStyle helperStyle = textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,7 +300,8 @@ class _AvailabilityShareContent extends StatelessWidget {
         ),
         CalendarAvailabilityGridPreview(
           rangeOverlay: overlay,
-          overlays: overlays,
+          comparisonOverlay: comparisonOverlay,
+          onIntervalTapped: onRequest == null ? null : (_) => onRequest?.call(),
         ),
         if (showEmptyLabel)
           Text(
@@ -306,11 +310,14 @@ class _AvailabilityShareContent extends StatelessWidget {
               color: context.colorScheme.mutedForeground,
             ),
           ),
-        if (showComparisonToggle && onCompareChanged != null)
+        if (showComparisonToggle && onCompareChanged != null) ...[
           _AvailabilityComparisonToggle(
             value: compareValue,
             onChanged: onCompareChanged!,
           ),
+          const SizedBox(height: _availabilityHelperSpacing),
+          Text(_availabilityCompareHelperText, style: helperStyle),
+        ],
         if (hasActions)
           Padding(
             padding: _availabilityActionPadding,
@@ -331,6 +338,14 @@ class _AvailabilityShareContent extends StatelessWidget {
                     child: const Text(_availabilityRequestButtonLabel),
                   ),
               ],
+            ),
+          ),
+        if (hasOverlayAction)
+          Padding(
+            padding: const EdgeInsets.only(top: _availabilityHelperSpacing),
+            child: Text(
+              _availabilityOverlayHelperText,
+              style: helperStyle,
             ),
           ),
       ],

@@ -20,6 +20,7 @@ const String _availabilityShareRecordLockOverlayKey = 'lockOverlay';
 
 const String _availabilityPresetIdKey = 'id';
 const String _availabilityPresetOverlayKey = 'overlay';
+const String _availabilityPresetNameKey = 'name';
 const String _availabilityPresetUpdatedAtKey = 'updatedAt';
 
 enum CalendarAvailabilityShareSourceType {
@@ -193,27 +194,32 @@ class CalendarAvailabilityPreset {
   CalendarAvailabilityPreset({
     required this.id,
     required this.overlay,
+    this.name,
     this.updatedAt,
   });
 
   final String id;
   final CalendarAvailabilityOverlay overlay;
+  final String? name;
   final DateTime? updatedAt;
 
   CalendarAvailabilityPreset copyWith({
     String? id,
     CalendarAvailabilityOverlay? overlay,
+    String? name,
     DateTime? updatedAt,
   }) =>
       CalendarAvailabilityPreset(
         id: id ?? this.id,
         overlay: overlay ?? this.overlay,
+        name: name ?? this.name,
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
   Map<String, dynamic> toJson() => {
         _availabilityPresetIdKey: id,
         _availabilityPresetOverlayKey: overlay.toJson(),
+        if (name != null) _availabilityPresetNameKey: name,
         if (updatedAt != null)
           _availabilityPresetUpdatedAtKey: updatedAt!.toIso8601String(),
       };
@@ -221,6 +227,7 @@ class CalendarAvailabilityPreset {
   static CalendarAvailabilityPreset? fromJson(Map<String, dynamic> json) {
     final id = json[_availabilityPresetIdKey] as String?;
     final overlayRaw = json[_availabilityPresetOverlayKey];
+    final name = json[_availabilityPresetNameKey] as String?;
     if (id == null || id.trim().isEmpty || overlayRaw is! Map) {
       return null;
     }
@@ -233,6 +240,7 @@ class CalendarAvailabilityPreset {
     return CalendarAvailabilityPreset(
       id: id,
       overlay: overlay,
+      name: name,
       updatedAt: updatedAt,
     );
   }

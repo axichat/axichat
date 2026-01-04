@@ -72,6 +72,8 @@ Future<CalendarAvailabilityRequest?> showCalendarAvailabilityRequestSheet({
   required BuildContext context,
   required CalendarAvailabilityShare share,
   required String requesterJid,
+  DateTime? preferredStart,
+  DateTime? preferredEnd,
 }) {
   return showAdaptiveBottomSheet<CalendarAvailabilityRequest>(
     context: context,
@@ -79,6 +81,8 @@ Future<CalendarAvailabilityRequest?> showCalendarAvailabilityRequestSheet({
     builder: (sheetContext) => CalendarAvailabilityRequestSheet(
       share: share,
       requesterJid: requesterJid,
+      preferredStart: preferredStart,
+      preferredEnd: preferredEnd,
     ),
   );
 }
@@ -105,10 +109,14 @@ class CalendarAvailabilityRequestSheet extends StatefulWidget {
     super.key,
     required this.share,
     required this.requesterJid,
+    this.preferredStart,
+    this.preferredEnd,
   });
 
   final CalendarAvailabilityShare share;
   final String requesterJid;
+  final DateTime? preferredStart;
+  final DateTime? preferredEnd;
 
   @override
   State<CalendarAvailabilityRequestSheet> createState() =>
@@ -126,7 +134,11 @@ class _CalendarAvailabilityRequestSheetState
   @override
   void initState() {
     super.initState();
-    final defaults = _defaultRequestRange(widget.share.overlay);
+    final defaults = _resolveRequestRange(
+      overlay: widget.share.overlay,
+      preferredStart: widget.preferredStart,
+      preferredEnd: widget.preferredEnd,
+    );
     _start = defaults.start;
     _end = defaults.end;
     _titleController = TextEditingController();
@@ -536,6 +548,37 @@ _RequestRangeDefaults _defaultRequestRange(
   final start = overlay.rangeStart.value;
   final end = _clampEnd(start, overlay.rangeEnd.value);
   return _RequestRangeDefaults(start: start, end: end);
+}
+
+_RequestRangeDefaults _resolveRequestRange({
+  required CalendarAvailabilityOverlay overlay,
+  DateTime? preferredStart,
+  DateTime? preferredEnd,
+}) {
+  final DateTime? start = preferredStart;
+  final DateTime? end = preferredEnd;
+  if (start != null && end != null && end.isAfter(start)) {
+    final DateTime clippedStart = start.isBefore(overlay.rangeStart.value)
+        ? overlay.rangeStart.value
+        : start;
+    final DateTime clippedEnd =
+        end.isAfter(overlay.rangeEnd.value) ? overlay.rangeEnd.value : end;
+    if (clippedEnd.isAfter(clippedStart) &&
+        _isRangeFree(overlay, clippedStart, clippedEnd)) {
+      return _RequestRangeDefaults(start: clippedStart, end: clippedEnd);
+    }
+    if (_isRangeFree(
+      overlay,
+      clippedStart,
+      _clampEnd(clippedStart, overlay.rangeEnd.value),
+    )) {
+      return _RequestRangeDefaults(
+        start: clippedStart,
+        end: _clampEnd(clippedStart, overlay.rangeEnd.value),
+      );
+    }
+  }
+  return _defaultRequestRange(overlay);
 }
 
 DateTime _clampEnd(DateTime start, DateTime maxEnd) {

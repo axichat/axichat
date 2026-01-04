@@ -12,6 +12,8 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_preset_store.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_free_busy_editor.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
@@ -34,20 +36,28 @@ const double _availabilitySheetHeaderIconSize = 18.0;
 const double _availabilityChatAvatarSize = 36.0;
 const double _availabilitySheetProgressStrokeWidth = 2.0;
 const double _availabilitySheetLabelLetterSpacing = 0.4;
+const double _availabilityEditorPanelGap = 16.0;
+const double _availabilityEditorPanelMaxWidth = 420.0;
 const double _availabilityChatTilePaddingHorizontal = 16.0;
 const double _availabilityChatTilePaddingVertical = 8.0;
 const double _availabilityPresetChipSpacing = 8.0;
 const double _availabilityRecipientSearchHeight = 48.0;
 const double _availabilityRecipientChipSpacing = 8.0;
+const double _availabilityShareEditorFallbackHeight = 360.0;
+const double _availabilityShareHeaderSpacing = 12.0;
+const double _availabilityShareHeaderGap = 4.0;
 const String _availabilityShareTitle = 'Share availability';
 const String _availabilityShareSubtitle =
-    'Pick a range, then edit for privacy or share.';
+    'Pick a range, edit free/busy, then share.';
 const String _availabilityShareChatSubtitle =
-    'Pick a range to share in this chat.';
+    'Pick a range, edit free/busy, then share in this chat.';
 const String _availabilityShareRangeLabel = 'Range';
-const String _availabilitySharePreviewLabel = 'Preview';
-const String _availabilitySharePreviewEmptyLabel = 'Select a range to preview.';
-const String _availabilityShareEditLabel = 'Edit for privacy';
+const String _availabilityShareSavePresetLabel = 'Save as preset';
+const String _availabilitySharePresetNameTitle = 'Save free/busy sheet';
+const String _availabilitySharePresetNameLabel = 'Name';
+const String _availabilitySharePresetNameHint = 'Team hours';
+const String _availabilitySharePresetNameMissingMessage =
+    'Enter a name to save this sheet.';
 const String _availabilityShareShareLabel = 'Share';
 const String _availabilityShareSendLabel = 'Send';
 const String _availabilityShareRecipientsLabel = 'Recipients';
@@ -64,6 +74,7 @@ const String _availabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
 const String _availabilityShareInvalidRangeMessage =
     'Select a valid range to share.';
+const String _availabilityShareRangeSeparator = ' - ';
 const String _availabilityShareSuccessMessage = 'Availability shared.';
 const String _availabilityShareFailureMessage = 'Failed to share availability.';
 const String _availabilitySharePartialFailureMessage =
@@ -72,11 +83,11 @@ const String _availabilityShareOwnerFallback = 'owner';
 const String _availabilitySharePresetLabel = 'Recent sheets';
 const String _availabilitySharePresetEmptyLabel = 'No recent sheets yet.';
 const String _availabilityShareLoadMoreLabel = 'Load more';
-const String _availabilityShareEditHeader = 'Edit free/busy';
 const String _availabilityShareEditHint =
-    'Drag to resize, split segments, or toggle free/busy.';
+    'Tap to split, drag to resize, or toggle free/busy.';
+const String _availabilityShareRecentPresetPrefix = 'Shared';
 const String _availabilityShareBackLabel = 'Back';
-const String _availabilityShareDoneLabel = 'Done';
+const String _availabilityShareSaveLabel = 'Save';
 const String _availabilityChatTypeDirectLabel = 'Direct chat';
 const String _availabilityChatTypeGroupLabel = 'Group chat';
 const String _availabilityChatTypeNoteLabel = 'Notes';
@@ -128,17 +139,20 @@ Future<void> showCalendarAvailabilityShareSheet({
     );
     return;
   }
-  final record = await showAdaptiveBottomSheet<CalendarAvailabilityShareRecord>(
-    context: context,
-    isScrollControlled: true,
-    builder: (sheetContext) => CalendarAvailabilityShareSheet(
-      coordinator: coordinator,
-      source: source,
-      model: model,
-      ownerJid: ownerJid,
-      availableChats: available,
-      initialChat: initialChat,
-      lockToChat: lockToChat,
+  final record =
+      await Navigator.of(context).push<CalendarAvailabilityShareRecord>(
+    AxiFadePageRoute(
+      duration: baseAnimationDuration,
+      fullscreenDialog: true,
+      builder: (routeContext) => CalendarAvailabilityShareScreen(
+        coordinator: coordinator,
+        source: source,
+        model: model,
+        ownerJid: ownerJid,
+        availableChats: available,
+        initialChat: initialChat,
+        lockToChat: lockToChat,
+      ),
     ),
   );
   if (record == null || !context.mounted) {
@@ -148,17 +162,15 @@ Future<void> showCalendarAvailabilityShareSheet({
 }
 
 enum _AvailabilityShareStep {
-  range,
   editor,
   recipients;
 
-  bool get isRange => this == _AvailabilityShareStep.range;
   bool get isEditor => this == _AvailabilityShareStep.editor;
   bool get isRecipients => this == _AvailabilityShareStep.recipients;
 }
 
-class CalendarAvailabilityShareSheet extends StatefulWidget {
-  const CalendarAvailabilityShareSheet({
+class CalendarAvailabilityShareScreen extends StatefulWidget {
+  const CalendarAvailabilityShareScreen({
     super.key,
     required this.coordinator,
     required this.source,
@@ -178,12 +190,12 @@ class CalendarAvailabilityShareSheet extends StatefulWidget {
   final Chat? initialChat;
 
   @override
-  State<CalendarAvailabilityShareSheet> createState() =>
-      _CalendarAvailabilityShareSheetState();
+  State<CalendarAvailabilityShareScreen> createState() =>
+      _CalendarAvailabilityShareScreenState();
 }
 
-class _CalendarAvailabilityShareSheetState
-    extends State<CalendarAvailabilityShareSheet> {
+class _CalendarAvailabilityShareScreenState
+    extends State<CalendarAvailabilityShareScreen> {
   late DateTime? _rangeStart;
   late DateTime? _rangeEnd;
   late CalendarModel _localModel;
@@ -195,7 +207,7 @@ class _CalendarAvailabilityShareSheetState
   Chat? _selectedChat;
   bool _isSending = false;
   bool _hasCustomDraft = false;
-  _AvailabilityShareStep _step = _AvailabilityShareStep.range;
+  _AvailabilityShareStep _step = _AvailabilityShareStep.editor;
   bool _stepReversing = false;
   int _recipientPageSize = _availabilityRecipientPageSize;
   final Set<String> _selectedRecipientJids = <String>{};
@@ -221,7 +233,7 @@ class _CalendarAvailabilityShareSheetState
   }
 
   @override
-  void didUpdateWidget(covariant CalendarAvailabilityShareSheet oldWidget) {
+  void didUpdateWidget(covariant CalendarAvailabilityShareScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.model != widget.model) {
       _localModel = widget.model;
@@ -240,84 +252,72 @@ class _CalendarAvailabilityShareSheetState
     final String subtitleText = widget.lockToChat
         ? _availabilityShareChatSubtitle
         : _availabilityShareSubtitle;
-    final header = AxiSheetHeader(
-      title: const Text(_availabilityShareTitle),
-      subtitle: Text(subtitleText),
-      onClose: () => Navigator.of(context).maybePop(),
-    );
-    final Widget stepChild = _step.isRange
-        ? _AvailabilityRangeStep(
+    final Widget stepChild = _step.isEditor
+        ? _AvailabilityEditorStep(
             rangeStart: _rangeStart,
             rangeEnd: _rangeEnd,
-            preview: _previewWidget(),
             presets: _presets,
+            editor: _editorWidget(),
             onStartChanged: _handleRangeStartChanged,
             onEndChanged: _handleRangeEndChanged,
-            onEditPressed: _handleEditPressed,
-            onSharePressed: _handleSharePressed,
             onPresetSelected: _handlePresetSelected,
+            onSavePreset: _handleSavePresetPressed,
+            onSharePressed: _handleSharePressed,
           )
-        : _step.isEditor
-            ? _AvailabilityEditorStep(
-                hint: _availabilityShareEditHint,
-                editor: _editorWidget(),
-                onBack: _handleBackToRange,
-                onDone: _handleDoneEditing,
-              )
-            : _AvailabilityRecipientsStep(
-                queryController: _searchController,
-                recipients: _visibleRecipients(),
-                selectedJids: _selectedRecipientJids,
-                isBusy: _isSending,
-                canLoadMore: _canLoadMoreRecipients(),
-                onLoadMore: _handleLoadMoreRecipients,
-                onToggleRecipient: _handleRecipientToggled,
-                onBack: _handleBackToRange,
-                onSend: _handleSendPressed,
-              );
-    return AxiSheetScaffold.scroll(
-      header: header,
-      children: [
-        PageTransitionSwitcher(
-          duration: baseAnimationDuration,
-          reverse: _stepReversing,
-          transitionBuilder: (child, primaryAnimation, secondaryAnimation) =>
-              SharedAxisTransition(
-            animation: primaryAnimation,
-            secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.horizontal,
-            child: child,
-          ),
-          child: KeyedSubtree(
-            key: ValueKey<_AvailabilityShareStep>(_step),
-            child: stepChild,
-          ),
+        : _AvailabilityRecipientsStep(
+            rangeLabel: _rangeSummaryLabel(),
+            queryController: _searchController,
+            recipients: _visibleRecipients(),
+            selectedJids: _selectedRecipientJids,
+            isBusy: _isSending,
+            canLoadMore: _canLoadMoreRecipients(),
+            onLoadMore: _handleLoadMoreRecipients,
+            onToggleRecipient: _handleRecipientToggled,
+            onBack: _handleBackToEditor,
+            onSend: _handleSendPressed,
+          );
+    return Scaffold(
+      backgroundColor: _availabilityShareBackgroundColor(context),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _AvailabilityShareHeader(
+              title: _availabilityShareTitle,
+              subtitle: subtitleText,
+              onClose: () => Navigator.of(context).maybePop(),
+            ),
+            Expanded(
+              child: Padding(
+                padding: calendarMarginLarge,
+                child: PageTransitionSwitcher(
+                  duration: baseAnimationDuration,
+                  reverse: _stepReversing,
+                  transitionBuilder:
+                      (child, primaryAnimation, secondaryAnimation) =>
+                          SharedAxisTransition(
+                    animation: primaryAnimation,
+                    secondaryAnimation: secondaryAnimation,
+                    transitionType: SharedAxisTransitionType.horizontal,
+                    child: child,
+                  ),
+                  child: KeyedSubtree(
+                    key: ValueKey<_AvailabilityShareStep>(_step),
+                    child: stepChild,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
-    );
-  }
-
-  Widget _previewWidget() {
-    final DateTime? start = _rangeStart;
-    final DateTime? end = _rangeEnd;
-    if (start == null || end == null || !end.isAfter(start)) {
-      return const _AvailabilitySheetEmptyMessage(
-        message: _availabilitySharePreviewEmptyLabel,
-      );
-    }
-    return CalendarFreeBusyEditor.preview(
-      rangeStart: start,
-      rangeEnd: end,
-      intervals: _draftIntervals,
-      tzid: _resolveTimeZone(_localModel),
+      ),
     );
   }
 
   int _stepIndex(_AvailabilityShareStep step) {
     return switch (step) {
-      _AvailabilityShareStep.range => 0,
-      _AvailabilityShareStep.editor => 1,
-      _AvailabilityShareStep.recipients => 2,
+      _AvailabilityShareStep.editor => 0,
+      _AvailabilityShareStep.recipients => 1,
     };
   }
 
@@ -333,15 +333,29 @@ class _CalendarAvailabilityShareSheetState
     });
   }
 
+  String _rangeSummaryLabel() {
+    final DateTime? start = _rangeStart;
+    final DateTime? end = _rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      return _availabilityShareInvalidRangeMessage;
+    }
+    final String startLabel = TimeFormatter.formatFriendlyDateTime(start);
+    final String endLabel = TimeFormatter.formatFriendlyDateTime(end);
+    if (startLabel == endLabel) {
+      return startLabel;
+    }
+    return '$startLabel$_availabilityShareRangeSeparator$endLabel';
+  }
+
   Widget _editorWidget() {
     final DateTime? start = _rangeStart;
     final DateTime? end = _rangeEnd;
     if (start == null || end == null || !end.isAfter(start)) {
       return const _AvailabilitySheetEmptyMessage(
-        message: _availabilitySharePreviewEmptyLabel,
+        message: _availabilityShareInvalidRangeMessage,
       );
     }
-    return CalendarFreeBusyEditor(
+    return _AvailabilityEditorGrid(
       rangeStart: start,
       rangeEnd: end,
       intervals: _draftIntervals,
@@ -377,10 +391,6 @@ class _CalendarAvailabilityShareSheetState
     });
   }
 
-  void _handleEditPressed() {
-    _updateStep(_AvailabilityShareStep.editor);
-  }
-
   void _handleSharePressed() {
     if (widget.lockToChat) {
       _handleSendPressed();
@@ -389,15 +399,8 @@ class _CalendarAvailabilityShareSheetState
     _updateStep(_AvailabilityShareStep.recipients);
   }
 
-  void _handleBackToRange() {
-    _updateStep(_AvailabilityShareStep.range);
-  }
-
-  void _handleDoneEditing() {
-    setState(() {
-      _hasCustomDraft = true;
-    });
-    _updateStep(_AvailabilityShareStep.range);
+  void _handleBackToEditor() {
+    _updateStep(_AvailabilityShareStep.editor);
   }
 
   void _handleDraftIntervalsChanged(List<CalendarFreeBusyInterval> intervals) {
@@ -414,7 +417,67 @@ class _CalendarAvailabilityShareSheetState
       _draftIntervals = preset.overlay.intervals;
       _hasCustomDraft = true;
     });
-    _updateStep(_AvailabilityShareStep.range);
+    _updateStep(_AvailabilityShareStep.editor);
+  }
+
+  Future<void> _handleSavePresetPressed() async {
+    final DateTime? start = _rangeStart;
+    final DateTime? end = _rangeEnd;
+    if (start == null || end == null || !end.isAfter(start)) {
+      FeedbackSystem.showError(context, _availabilityShareInvalidRangeMessage);
+      return;
+    }
+    final String? name = await _promptPresetName();
+    if (!mounted) {
+      return;
+    }
+    final String trimmed = name?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      if (name != null) {
+        FeedbackSystem.showError(
+          context,
+          _availabilitySharePresetNameMissingMessage,
+        );
+      }
+      return;
+    }
+    final String ownerJid = widget.ownerJid.trim().isNotEmpty
+        ? widget.ownerJid.trim()
+        : _availabilityShareOwnerFallback;
+    final String? tzid = _resolveTimeZone(_localModel);
+    final CalendarAvailabilityOverlay overlay = CalendarAvailabilityOverlay(
+      owner: ownerJid,
+      rangeStart: CalendarDateTime(value: start, tzid: tzid),
+      rangeEnd: CalendarDateTime(value: end, tzid: tzid),
+      intervals: _draftIntervals,
+      isRedacted: false,
+    );
+    await _savePreset(overlay, name: trimmed);
+  }
+
+  Future<String?> _promptPresetName() async {
+    final TextEditingController controller = TextEditingController();
+    try {
+      return await showShadDialog<String>(
+        context: context,
+        builder: (dialogContext) => AxiInputDialog(
+          title: const Text(_availabilitySharePresetNameTitle),
+          callbackText: _availabilityShareSaveLabel,
+          callback: () => Navigator.of(dialogContext).pop(
+            controller.text,
+          ),
+          content: AxiTextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: _availabilitySharePresetNameLabel,
+              hintText: _availabilitySharePresetNameHint,
+            ),
+          ),
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   void _handleRecipientToggled(Chat chat) {
@@ -494,6 +557,10 @@ class _CalendarAvailabilityShareSheetState
     final String? tzid = _resolveTimeZone(_localModel);
     final CalendarAvailabilityOverlay? customOverlay =
         _hasCustomDraft ? _buildCustomOverlay(ownerJid, tzid) : null;
+    final CalendarAvailabilityOverlay recentOverlay = _buildRecentOverlay(
+      ownerJid,
+      tzid,
+    );
     CalendarAvailabilityShareRecord? latestRecord;
     var failures = 0;
     try {
@@ -530,7 +597,7 @@ class _CalendarAvailabilityShareSheetState
           _availabilitySharePartialFailureMessage,
         );
       }
-      await _savePresetIfNeeded(customOverlay ?? latestRecord.overlay);
+      await _saveRecentPreset(recentOverlay);
       if (!mounted) {
         return;
       }
@@ -558,6 +625,23 @@ class _CalendarAvailabilityShareSheetState
     if (start == null || end == null || !end.isAfter(start)) {
       return null;
     }
+    final String resolvedOwner =
+        ownerJid.isEmpty ? _availabilityShareOwnerFallback : ownerJid;
+    return CalendarAvailabilityOverlay(
+      owner: resolvedOwner,
+      rangeStart: CalendarDateTime(value: start, tzid: tzid),
+      rangeEnd: CalendarDateTime(value: end, tzid: tzid),
+      intervals: _draftIntervals,
+      isRedacted: false,
+    );
+  }
+
+  CalendarAvailabilityOverlay _buildRecentOverlay(
+    String ownerJid,
+    String? tzid,
+  ) {
+    final DateTime start = _rangeStart ?? DateTime.now();
+    final DateTime end = _rangeEnd ?? start;
     final String resolvedOwner =
         ownerJid.isEmpty ? _availabilityShareOwnerFallback : ownerJid;
     return CalendarAvailabilityOverlay(
@@ -598,7 +682,9 @@ class _CalendarAvailabilityShareSheetState
 
   List<CalendarAvailabilityPreset> _loadPresets() {
     final records = _presetStore.readAll();
-    final List<CalendarAvailabilityPreset> presets = records.values.toList();
+    final List<CalendarAvailabilityPreset> presets = records.values
+        .where((preset) => preset.name?.trim().isNotEmpty == true)
+        .toList(growable: false);
     presets.sort(
       (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
           .compareTo(a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
@@ -606,14 +692,24 @@ class _CalendarAvailabilityShareSheetState
     return presets.take(_availabilityPresetMaxCount).toList(growable: false);
   }
 
-  Future<void> _savePresetIfNeeded(CalendarAvailabilityOverlay overlay) async {
+  Future<void> _savePreset(
+    CalendarAvailabilityOverlay overlay, {
+    required String name,
+  }) async {
+    final String trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      return;
+    }
     final CalendarAvailabilityPreset preset = CalendarAvailabilityPreset(
       id: _availabilityPresetIdGenerator.v4(),
       overlay: overlay,
+      name: trimmedName,
       updatedAt: DateTime.now(),
     );
     final records = _presetStore.readAll()..[preset.id] = preset;
-    final List<CalendarAvailabilityPreset> sorted = records.values.toList()
+    final List<CalendarAvailabilityPreset> sorted = records.values
+        .where((preset) => preset.name?.trim().isNotEmpty == true)
+        .toList(growable: false)
       ..sort(
         (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
             .compareTo(a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
@@ -627,6 +723,27 @@ class _CalendarAvailabilityShareSheetState
       _presets =
           sorted.take(_availabilityPresetMaxCount).toList(growable: false);
     });
+  }
+
+  Future<void> _saveRecentPreset(
+    CalendarAvailabilityOverlay overlay,
+  ) async {
+    final DateTime start = overlay.rangeStart.value;
+    final DateTime end = overlay.rangeEnd.value;
+    if (!end.isAfter(start)) {
+      return;
+    }
+    final String name = _autoPresetName(start, end);
+    await _savePreset(overlay, name: name);
+  }
+
+  String _autoPresetName(DateTime start, DateTime end) {
+    final String startLabel = TimeFormatter.formatShortDate(start);
+    final String endLabel = TimeFormatter.formatShortDate(end);
+    final String rangeLabel = startLabel == endLabel
+        ? startLabel
+        : '$startLabel$_availabilityShareRangeSeparator$endLabel';
+    return '$_availabilityShareRecentPresetPrefix $rangeLabel';
   }
 
   String? _resolveOwnerJid(Chat? chat) {
@@ -653,46 +770,146 @@ class _CalendarAvailabilityShareSheetState
   }
 }
 
-class _AvailabilityRangeStep extends StatelessWidget {
-  const _AvailabilityRangeStep({
+class _AvailabilityEditorStep extends StatelessWidget {
+  const _AvailabilityEditorStep({
     required this.rangeStart,
     required this.rangeEnd,
-    required this.preview,
     required this.presets,
+    required this.editor,
     required this.onStartChanged,
     required this.onEndChanged,
-    required this.onEditPressed,
-    required this.onSharePressed,
     required this.onPresetSelected,
+    required this.onSavePreset,
+    required this.onSharePressed,
   });
 
   final DateTime? rangeStart;
   final DateTime? rangeEnd;
-  final Widget preview;
   final List<CalendarAvailabilityPreset> presets;
+  final Widget editor;
   final ValueChanged<DateTime?> onStartChanged;
   final ValueChanged<DateTime?> onEndChanged;
-  final VoidCallback onEditPressed;
-  final VoidCallback onSharePressed;
   final ValueChanged<CalendarAvailabilityPreset> onPresetSelected;
+  final VoidCallback onSavePreset;
+  final VoidCallback onSharePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
+    final Widget panel = _AvailabilityEditorPanel(
+      rangeStart: rangeStart,
+      rangeEnd: rangeEnd,
+      presets: presets,
+      onStartChanged: onStartChanged,
+      onEndChanged: onEndChanged,
+      onPresetSelected: onPresetSelected,
+      onSavePreset: onSavePreset,
+      onSharePressed: onSharePressed,
+    );
+    return spec.sizeClass == CalendarSizeClass.expanded
+        ? _AvailabilityEditorWideLayout(
+            panel: panel,
+            editor: editor,
+          )
+        : _AvailabilityEditorCompactLayout(
+            panel: panel,
+            editor: editor,
+          );
+  }
+}
+
+class _AvailabilityEditorCompactLayout extends StatelessWidget {
+  const _AvailabilityEditorCompactLayout({
+    required this.panel,
+    required this.editor,
+  });
+
+  final Widget panel;
+  final Widget editor;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        panel,
+        const SizedBox(height: _availabilitySheetSectionSpacing),
+        Expanded(child: editor),
+      ],
+    );
+  }
+}
+
+class _AvailabilityEditorWideLayout extends StatelessWidget {
+  const _AvailabilityEditorWideLayout({
+    required this.panel,
+    required this.editor,
+  });
+
+  final Widget panel;
+  final Widget editor;
+
+  @override
+  Widget build(BuildContext context) {
+    final CalendarSidebarDimensions sidebar =
+        ResponsiveHelper.sidebarDimensions(context);
+    final double panelWidth = sidebar.defaultWidth
+        .clamp(0, _availabilityEditorPanelMaxWidth)
+        .toDouble();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: panelWidth,
+          child: SingleChildScrollView(child: panel),
+        ),
+        const SizedBox(width: _availabilityEditorPanelGap),
+        Expanded(child: editor),
+      ],
+    );
+  }
+}
+
+class _AvailabilityEditorPanel extends StatelessWidget {
+  const _AvailabilityEditorPanel({
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.presets,
+    required this.onStartChanged,
+    required this.onEndChanged,
+    required this.onPresetSelected,
+    required this.onSavePreset,
+    required this.onSharePressed,
+  });
+
+  final DateTime? rangeStart;
+  final DateTime? rangeEnd;
+  final List<CalendarAvailabilityPreset> presets;
+  final ValueChanged<DateTime?> onStartChanged;
+  final ValueChanged<DateTime?> onEndChanged;
+  final ValueChanged<CalendarAvailabilityPreset> onPresetSelected;
+  final VoidCallback onSavePreset;
+  final VoidCallback onSharePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle hintStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         const _AvailabilitySheetSectionLabel(
-            text: _availabilityShareRangeLabel),
+          text: _availabilityShareRangeLabel,
+        ),
         ScheduleRangeFields(
           start: rangeStart,
           end: rangeEnd,
           onStartChanged: onStartChanged,
           onEndChanged: onEndChanged,
         ),
-        const SizedBox(height: _availabilitySheetSectionSpacing),
-        const _AvailabilitySheetSectionLabel(
-            text: _availabilitySharePreviewLabel),
-        preview,
+        const SizedBox(height: _availabilitySheetSectionGap),
+        Text(_availabilityShareEditHint, style: hintStyle),
         const SizedBox(height: _availabilitySheetSectionSpacing),
         _AvailabilityPresetSection(
           presets: presets,
@@ -700,9 +917,9 @@ class _AvailabilityRangeStep extends StatelessWidget {
         ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
         _AvailabilityDualActionRow(
-          primaryLabel: _availabilityShareEditLabel,
+          primaryLabel: _availabilityShareSavePresetLabel,
           secondaryLabel: _availabilityShareShareLabel,
-          onPrimaryPressed: onEditPressed,
+          onPrimaryPressed: onSavePreset,
           onSecondaryPressed: onSharePressed,
         ),
       ],
@@ -710,48 +927,97 @@ class _AvailabilityRangeStep extends StatelessWidget {
   }
 }
 
-class _AvailabilityEditorStep extends StatelessWidget {
-  const _AvailabilityEditorStep({
-    required this.hint,
-    required this.editor,
-    required this.onBack,
-    required this.onDone,
+class _AvailabilityEditorGrid extends StatelessWidget {
+  const _AvailabilityEditorGrid({
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.intervals,
+    required this.tzid,
+    required this.onIntervalsChanged,
   });
 
-  final String hint;
-  final Widget editor;
-  final VoidCallback onBack;
-  final VoidCallback onDone;
+  final DateTime rangeStart;
+  final DateTime rangeEnd;
+  final List<CalendarFreeBusyInterval> intervals;
+  final String? tzid;
+  final ValueChanged<List<CalendarFreeBusyInterval>> onIntervalsChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _AvailabilitySheetSectionLabel(
-            text: _availabilityShareEditHeader),
-        Text(
-          hint,
-          style: context.textTheme.small.copyWith(
-            color: context.colorScheme.mutedForeground,
-          ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double height = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : _availabilityShareEditorFallbackHeight;
+        return CalendarFreeBusyEditor(
+          rangeStart: rangeStart,
+          rangeEnd: rangeEnd,
+          intervals: intervals,
+          tzid: tzid,
+          onIntervalsChanged: onIntervalsChanged,
+          viewportHeight: height,
+        );
+      },
+    );
+  }
+}
+
+class _AvailabilityShareHeader extends StatelessWidget {
+  const _AvailabilityShareHeader({
+    required this.title,
+    required this.subtitle,
+    required this.onClose,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle titleStyle = context.textTheme.h4.copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    final TextStyle subtitleStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.mutedForeground,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: context.colorScheme.border),
         ),
-        const SizedBox(height: _availabilitySheetSectionSpacing),
-        editor,
-        const SizedBox(height: _availabilitySheetSectionSpacing),
-        _AvailabilityDualActionRow(
-          primaryLabel: _availabilityShareBackLabel,
-          secondaryLabel: _availabilityShareDoneLabel,
-          onPrimaryPressed: onBack,
-          onSecondaryPressed: onDone,
+      ),
+      child: Padding(
+        padding: calendarMarginLarge,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AxiIconButton.ghost(
+              iconData: LucideIcons.arrowLeft,
+              tooltip: _availabilityShareBackLabel,
+              onPressed: onClose,
+            ),
+            const SizedBox(width: _availabilityShareHeaderSpacing),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: titleStyle),
+                  const SizedBox(height: _availabilityShareHeaderGap),
+                  Text(subtitle, style: subtitleStyle),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
 
 class _AvailabilityRecipientsStep extends StatelessWidget {
   const _AvailabilityRecipientsStep({
+    required this.rangeLabel,
     required this.queryController,
     required this.recipients,
     required this.selectedJids,
@@ -763,6 +1029,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
     required this.onSend,
   });
 
+  final String rangeLabel;
   final TextEditingController queryController;
   final List<Chat> recipients;
   final Set<String> selectedJids;
@@ -784,12 +1051,36 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
           ),
         )
         .toList(growable: false);
+    final List<Widget> listItems = <Widget>[];
+    for (final tile in recipientTiles) {
+      listItems.add(tile);
+      listItems.add(const SizedBox(height: _availabilitySheetTileGap));
+    }
+    if (canLoadMore) {
+      listItems.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ShadButton.ghost(
+            size: ShadButtonSize.sm,
+            onPressed: onLoadMore,
+            child: const Text(_availabilityShareLoadMoreLabel),
+          ),
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _AvailabilitySheetSectionLabel(
           text: _availabilityShareRecipientsLabel,
         ),
+        Text(
+          rangeLabel,
+          style: context.textTheme.small.copyWith(
+            color: context.colorScheme.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: _availabilitySheetSectionGap),
         SizedBox(
           height: _availabilityRecipientSearchHeight,
           child: AxiTextField(
@@ -801,24 +1092,19 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: _availabilitySheetSectionGap),
-        if (recipientTiles.isEmpty)
-          const _AvailabilitySheetEmptyMessage(
-            message: _availabilityShareRecipientsEmptyLabel,
-          )
-        else ...[
-          Column(children: recipientTiles),
-          if (canLoadMore) ...[
-            const SizedBox(height: _availabilityRecipientChipSpacing),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: ShadButton.ghost(
-                size: ShadButtonSize.sm,
-                onPressed: onLoadMore,
-                child: const Text(_availabilityShareLoadMoreLabel),
-              ),
-            ),
-          ],
-        ],
+        Expanded(
+          child: recipientTiles.isEmpty
+              ? const Align(
+                  alignment: Alignment.topLeft,
+                  child: _AvailabilitySheetEmptyMessage(
+                    message: _availabilityShareRecipientsEmptyLabel,
+                  ),
+                )
+              : ListView(
+                  padding: EdgeInsets.zero,
+                  children: listItems,
+                ),
+        ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
         _AvailabilityActionRow(
           isBusy: isBusy,
@@ -890,6 +1176,13 @@ class _AvailabilityPresetSection extends StatelessWidget {
           ),
         )
         .toList(growable: false);
+    final List<Widget> chipRow = <Widget>[];
+    for (final chip in chips) {
+      if (chipRow.isNotEmpty) {
+        chipRow.add(const SizedBox(width: _availabilityPresetChipSpacing));
+      }
+      chipRow.add(chip);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -901,10 +1194,9 @@ class _AvailabilityPresetSection extends StatelessWidget {
             message: _availabilitySharePresetEmptyLabel,
           )
         else
-          Wrap(
-            spacing: _availabilityPresetChipSpacing,
-            runSpacing: _availabilityPresetChipSpacing,
-            children: chips,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: chipRow),
           ),
       ],
     );
@@ -922,15 +1214,18 @@ class _AvailabilityPresetChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final DateTime start = preset.overlay.rangeStart.value;
-    final DateTime end = preset.overlay.rangeEnd.value;
-    final String label =
-        '${start.month}/${start.day} - ${end.month}/${end.day}';
+    final String label = preset.name?.trim() ?? _presetRangeLabel(preset);
     return ShadButton.ghost(
       size: ShadButtonSize.sm,
       onPressed: onPressed,
       child: Text(label),
     );
+  }
+
+  String _presetRangeLabel(CalendarAvailabilityPreset preset) {
+    final DateTime start = preset.overlay.rangeStart.value;
+    final DateTime end = preset.overlay.rangeEnd.value;
+    return '${start.month}/${start.day} - ${end.month}/${end.day}';
   }
 }
 
@@ -1077,6 +1372,13 @@ String? _resolveTimeZone(CalendarModel model) {
     return null;
   }
   return raw;
+}
+
+Color _availabilityShareBackgroundColor(BuildContext context) {
+  final scheme = context.colorScheme;
+  return ShadTheme.of(context).brightness == Brightness.dark
+      ? scheme.card
+      : calendarSidebarBackgroundColor;
 }
 
 extension _ChatTypeLabelX on ChatType {

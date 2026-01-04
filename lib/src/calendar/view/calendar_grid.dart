@@ -23,9 +23,13 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
+import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
+import 'package:axichat/src/calendar/utils/calendar_availability_intervals.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
@@ -34,6 +38,8 @@ import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_availability_request_sheet.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'edit_task_dropdown.dart';
 import 'models/task_context_action.dart';
 import 'layout/calendar_layout.dart'
@@ -64,6 +70,15 @@ export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
 const double _headerNavButtonExtent = 44.0;
 const String _taskShareIcsActionLabel = 'Share as .ics';
+const String _mutualAvailabilityTaskTitle = 'Mutual';
+const String _availabilityRequestUnavailableMessage =
+    'Availability requests are unavailable.';
+const String _availabilityRequestAccountMissingMessage =
+    'Your account is unavailable for requests.';
+const String _availabilityRequestShareMissingMessage =
+    'This availability share is unavailable.';
+const String _availabilityOverlayOwnerFallback = 'local';
+const String _mutualAvailabilityTaskIdPrefix = 'mutual';
 
 class _CalendarScrollController extends ScrollController {
   _CalendarScrollController({required this.onAttached});
@@ -74,6 +89,30 @@ class _CalendarScrollController extends ScrollController {
   void attach(ScrollPosition position) {
     super.attach(position);
     onAttached();
+  }
+}
+
+CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityCoordinator(
+  BuildContext context,
+) {
+  try {
+    return RepositoryProvider.of<CalendarAvailabilityShareCoordinator>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
+  }
+}
+
+XmppService? _maybeReadXmppService(BuildContext context) {
+  try {
+    return RepositoryProvider.of<XmppService>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
   }
 }
 
@@ -1883,6 +1922,59 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
+  CalendarTaskEntryBindings _mutualTaskBindings({
+    required double stepHeight,
+    required double hourHeight,
+  }) {
+    return CalendarTaskEntryBindings(
+      isSelectionMode: false,
+      isSelected: false,
+      isPopoverOpen: false,
+      splitPreviewAnimationDuration: _layoutTheme.splitPreviewAnimationDuration,
+      contextMenuGroupId: _contextMenuGroupId,
+      contextMenuBuilderFactory: (_) => null,
+      enableContextMenuLongPress: false,
+      resizeHandleExtent: _desktopHandleExtent,
+      interactionController: _taskInteractionController,
+      dragFeedbackHint: _taskInteractionController.feedbackHint,
+      cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
+      callbacks: _mutualTaskCallbacks(),
+      geometryProvider: _surfaceController.geometryForTask,
+      globalRectProvider: _surfaceController.globalRectForTask,
+      stepHeight: stepHeight,
+      minutesPerStep: _minutesPerStep,
+      hourHeight: hourHeight,
+      addGeometryListener: _surfaceController.addGeometryListener,
+      removeGeometryListener: _surfaceController.removeGeometryListener,
+      requiresLongPressToDrag: true,
+      longPressToDragDelay: _touchDragLongPressDelay,
+    );
+  }
+
+  CalendarTaskTileCallbacks _mutualTaskCallbacks() {
+    return CalendarTaskTileCallbacks(
+      onResizePreview: (_) {},
+      onResizeEnd: (_) {},
+      onResizePointerMove: (_) {},
+      onDragStarted: (_, __) {},
+      onDragUpdate: (_) {},
+      onDragEnded: (_) {},
+      onDragPointerDown: (_) {},
+      onEnterSelectionMode: () {},
+      onToggleSelection: () {},
+      onTap: null,
+    );
+  }
+
+  String _mutualTaskId(
+    String overlayId,
+    DateTime start,
+    DateTime end,
+  ) {
+    return '$_mutualAvailabilityTaskIdPrefix-$overlayId-'
+        '${start.millisecondsSinceEpoch}-${end.millisecondsSinceEpoch}';
+  }
+
   CalendarTaskTileCallbacks _taskCallbacks(CalendarTask task) {
     return CalendarTaskTileCallbacks(
       onResizePreview: _handleResizePreview,
@@ -3052,6 +3144,106 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         .toList(growable: false);
   }
 
+  List<MapEntry<String, CalendarAvailabilityOverlay>>
+      _resolveAvailabilityOverlayEntries() {
+    return widget.state.model.availabilityOverlays.entries
+        .toList(growable: false);
+  }
+
+  List<CalendarSurfaceTaskEntry> _mutualAvailabilityEntries({
+    required List<MapEntry<String, CalendarAvailabilityOverlay>> overlays,
+    required List<DateTime> columns,
+    required double stepHeight,
+    required double hourHeight,
+    required bool isDayView,
+  }) {
+    if (overlays.isEmpty || columns.isEmpty) {
+      return const <CalendarSurfaceTaskEntry>[];
+    }
+    final DateTime rangeStart = DateTime(
+      columns.first.year,
+      columns.first.month,
+      columns.first.day,
+      startHour,
+    );
+    final DateTime rangeEnd = DateTime(
+      columns.last.year,
+      columns.last.month,
+      columns.last.day,
+      endHour,
+    );
+    final CalendarTaskEntryBindings bindings = _mutualTaskBindings(
+      stepHeight: stepHeight,
+      hourHeight: hourHeight,
+    );
+    final DateTime now = DateTime.now();
+    final List<CalendarSurfaceTaskEntry> entries = <CalendarSurfaceTaskEntry>[];
+    for (final overlayEntry in overlays) {
+      final String overlayId = overlayEntry.key;
+      final CalendarAvailabilityOverlay overlay = overlayEntry.value;
+      final CalendarAvailabilityOverlay base = CalendarAvailabilityOverlay(
+        owner: _availabilityOverlayOwnerFallback,
+        rangeStart: overlay.rangeStart,
+        rangeEnd: overlay.rangeEnd,
+        isRedacted: false,
+      );
+      final CalendarAvailabilityOverlay localOverlay =
+          deriveAvailabilityOverlay(model: widget.state.model, base: base);
+      final List<CalendarFreeBusyInterval> mutualIntervals =
+          buildMutualAvailabilityIntervals(
+        rangeOverlay: overlay,
+        comparisonOverlay: localOverlay,
+      );
+      for (final CalendarFreeBusyInterval interval in mutualIntervals) {
+        final DateTime intervalStart = interval.start.value;
+        final DateTime intervalEnd = interval.end.value;
+        if (!intervalEnd.isAfter(rangeStart) ||
+            !intervalStart.isBefore(rangeEnd)) {
+          continue;
+        }
+        final DateTime start =
+            intervalStart.isBefore(rangeStart) ? rangeStart : intervalStart;
+        final DateTime end =
+            intervalEnd.isAfter(rangeEnd) ? rangeEnd : intervalEnd;
+        if (!end.isAfter(start)) {
+          continue;
+        }
+        final String taskId = _mutualTaskId(overlayId, start, end);
+        final CalendarTask task = CalendarTask(
+          id: taskId,
+          title: _mutualAvailabilityTaskTitle,
+          scheduledTime: start,
+          duration: end.difference(start),
+          createdAt: now,
+          modifiedAt: now,
+          endDate: end,
+        );
+        entries.add(
+          CalendarSurfaceTaskEntry(
+            key: ValueKey<String>(taskId),
+            task: task,
+            bindings: bindings,
+            child: _MutualAvailabilityTile(
+              task: task,
+              isDayView: isDayView,
+              stepHeight: stepHeight,
+              hourHeight: hourHeight,
+              minutesPerStep: _minutesPerStep,
+              interactionController: _taskInteractionController,
+              onTap: () => _handleMutualAvailabilityTap(
+                shareId: overlayId,
+                overlay: overlay,
+                start: start,
+                end: end,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    return entries;
+  }
+
   bool _isTaskVisible(CalendarTask task) {
     if (_hideCompletedScheduled && task.isCompleted) {
       return false;
@@ -3153,6 +3345,57 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _lastHandledFocusToken = request.token;
     _pendingFocusRequest = request;
     _fulfillFocusRequestIfReady();
+  }
+
+  Future<void> _handleMutualAvailabilityTap({
+    required String shareId,
+    required CalendarAvailabilityOverlay overlay,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final CalendarAvailabilityShareCoordinator? coordinator =
+        _maybeReadAvailabilityCoordinator(context);
+    if (coordinator == null) {
+      FeedbackSystem.showError(context, _availabilityRequestUnavailableMessage);
+      return;
+    }
+    final XmppService? xmppService = _maybeReadXmppService(context);
+    final String? requesterJid = xmppService?.myJid?.trim();
+    if (requesterJid == null || requesterJid.isEmpty) {
+      FeedbackSystem.showError(
+        context,
+        _availabilityRequestAccountMissingMessage,
+      );
+      return;
+    }
+    final CalendarAvailabilityShareRecord? record =
+        coordinator.recordFor(shareId);
+    if (record == null) {
+      FeedbackSystem.showError(
+        context,
+        _availabilityRequestShareMissingMessage,
+      );
+      return;
+    }
+    final CalendarAvailabilityShare share = CalendarAvailabilityShare(
+      id: record.id,
+      overlay: overlay,
+    );
+    final CalendarAvailabilityRequest? request =
+        await showCalendarAvailabilityRequestSheet(
+      context: context,
+      share: share,
+      requesterJid: requesterJid,
+      preferredStart: start,
+      preferredEnd: end,
+    );
+    if (!mounted || request == null) {
+      return;
+    }
+    final bool sent = await coordinator.sendRequest(request: request);
+    if (!sent && mounted) {
+      FeedbackSystem.showError(context, _availabilityRequestUnavailableMessage);
+    }
   }
 }
 
@@ -3609,6 +3852,59 @@ class _CalendarDateSlideTransition extends StatelessWidget {
   }
 }
 
+class _MutualAvailabilityTile extends StatelessWidget {
+  const _MutualAvailabilityTile({
+    required this.task,
+    required this.isDayView,
+    required this.stepHeight,
+    required this.hourHeight,
+    required this.minutesPerStep,
+    required this.interactionController,
+    required this.onTap,
+  });
+
+  final CalendarTask task;
+  final bool isDayView;
+  final double stepHeight;
+  final double hourHeight;
+  final int minutesPerStep;
+  final TaskInteractionController interactionController;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 0;
+        final double height =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 0;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AbsorbPointer(
+            child: ResizableTaskWidget(
+              task: task,
+              interactionController: interactionController,
+              hourHeight: hourHeight,
+              stepHeight: stepHeight,
+              minutesPerStep: minutesPerStep,
+              width: width,
+              height: height,
+              isDayView: isDayView,
+              enableInteractions: false,
+              isSelectionMode: false,
+              isSelected: false,
+              contextMenuLongPressEnabled: false,
+              accentColorOverride: calendarPrimaryColor,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _CalendarGridContent extends StatelessWidget {
   const _CalendarGridContent({
     required this.gridState,
@@ -3677,6 +3973,19 @@ class _CalendarGridContent extends StatelessWidget {
         );
       }
     }
+
+    final List<MapEntry<String, CalendarAvailabilityOverlay>>
+        availabilityOverlayEntries =
+        gridState._resolveAvailabilityOverlayEntries();
+    final List<CalendarSurfaceTaskEntry> mutualEntries =
+        gridState._mutualAvailabilityEntries(
+      overlays: availabilityOverlayEntries,
+      columns: columns,
+      stepHeight: stepHeight,
+      hourHeight: resolvedHourHeight,
+      isDayView: isDayView,
+    );
+    taskEntries.addAll(mutualEntries);
 
     gridState._cleanupTaskPopovers(visibleTaskIds);
     gridState._validateActivePopoverTarget(visibleTaskIds);
