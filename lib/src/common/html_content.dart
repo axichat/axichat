@@ -182,6 +182,17 @@ class HtmlContentCodec {
     }
   }
 
+  static String? canonicalizeHtml(String? html) {
+    final trimmed = html?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    final sanitized = sanitizeHtml(trimmed);
+    if (sanitized.isEmpty) return null;
+    final collapsed = sanitized.replaceAll(_spaceCollapse, ' ');
+    final normalized =
+        collapsed.replaceAll(_multiLineBreaks, _doubleLineBreak).trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
   static String toPlainText(String html) {
     try {
       final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
@@ -350,7 +361,9 @@ class HtmlContentCodec {
       buffer
         ..write('<')
         ..write(tag);
-      for (final entry in attributes.entries) {
+      final entries = attributes.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key));
+      for (final entry in entries) {
         buffer
           ..write(' ')
           ..write(entry.key)

@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';

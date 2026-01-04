@@ -44,13 +44,11 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
   }
 
   Future<void> _handleCopy(BuildContext context) async {
-    final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc(context);
-    final ChatCalendarBloc? chatBloc = _maybeReadChatCalendarBloc(context);
     final CalendarStorageManager storageManager =
         context.read<CalendarStorageManager>();
-    final bool canAddToPersonal =
-        storageManager.isAuthStorageReady && personalBloc != null;
-    final bool canAddToChat = chatBloc != null;
+    final bool canAddToPersonal = storageManager.isAuthStorageReady &&
+        _maybeReadPersonalCalendarBloc(context) != null;
+    final bool canAddToChat = _maybeReadChatCalendarBloc(context) != null;
 
     if (!canAddToPersonal && !canAddToChat) {
       FeedbackSystem.showInfo(context, _criticalPathCopyUnavailableMessage);
@@ -70,19 +68,20 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     }
 
     final CalendarModel importModel = _buildImportModel();
-    if (decision.addToPersonal && personalBloc != null) {
-      personalBloc.add(
-        CalendarEvent.modelImported(
-          model: importModel,
-        ),
-      );
+    if (decision.addToPersonal &&
+        _maybeReadPersonalCalendarBloc(context) != null) {
+      context.read<CalendarBloc>().add(
+            CalendarEvent.modelImported(
+              model: importModel,
+            ),
+          );
     }
-    if (decision.addToChat && chatBloc != null) {
-      chatBloc.add(
-        CalendarEvent.modelImported(
-          model: importModel,
-        ),
-      );
+    if (decision.addToChat && _maybeReadChatCalendarBloc(context) != null) {
+      context.read<ChatCalendarBloc>().add(
+            CalendarEvent.modelImported(
+              model: importModel,
+            ),
+          );
     }
 
     FeedbackSystem.showSuccess(context, _criticalPathCopySuccessMessage);

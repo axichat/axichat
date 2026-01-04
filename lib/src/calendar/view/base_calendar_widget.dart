@@ -377,7 +377,7 @@ class _CalendarViewModeSelector extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: calendarViewModeMinWidth),
           child: IntrinsicWidth(
-            child: ShadSelect<CalendarView>(
+            child: AxiSelect<CalendarView>(
               initialValue: selectedView,
               placeholder: Text(
                 l10n.calendarViewLabel,

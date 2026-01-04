@@ -25,7 +25,7 @@ Future<bool?> confirm(
           style: context.textTheme.small,
           textAlign: messageAlign,
         );
-  return showShadDialog<bool>(
+  return showFadeScaleDialog<bool>(
     context: context,
     barrierDismissible: barrierDismissible,
     builder: (dialogContext) {

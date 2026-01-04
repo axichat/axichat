@@ -92,7 +92,7 @@ class VerificationSelector extends StatelessWidget {
                     fingerprint.trust.toIcon,
                     color: fingerprint.trust.toColor,
                   ),
-                  ShadSelect<BTBVTrustState>(
+                  AxiSelect<BTBVTrustState>(
                     initialValue: fingerprint.trust,
                     onChanged: (trust) =>
                         context.read<VerificationCubit?>()?.setDeviceTrust(

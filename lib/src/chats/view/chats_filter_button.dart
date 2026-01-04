@@ -78,7 +78,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
         ).withTapBounce(),
       );
     }
-    return ShadPopover(
+    return AxiPopover(
       controller: popoverController,
       closeOnTapOutside: true,
       padding: EdgeInsets.zero,

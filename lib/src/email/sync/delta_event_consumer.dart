@@ -33,6 +33,7 @@ const String _deltaAttachmentFallbackPrefix = 'attachment-';
 const String _deltaAttachmentLabelPrefix = '📎 ';
 const String _unknownAttachmentSizeLabel = 'Unknown size';
 const String _emptyJid = '';
+const String _emptyHtml = '';
 const int _attachmentSizeUnitBase = 1024;
 const double _attachmentSizePrecisionThreshold = 10;
 const List<String> _attachmentSizeUnits = <String>[
@@ -52,6 +53,7 @@ const String _messageUpdateDiffLogPrefix = 'Message update diff';
 const String _messageUpdateDiffSeparator = ', ';
 const String _messageUpdateDiffUnknown = 'unknown';
 const Level _messageUpdateDiffLogLevel = Level.FINE;
+const int _singleFieldDiffCount = 1;
 
 enum MessageDiffField {
   stanzaId,
@@ -1187,9 +1189,16 @@ class DeltaEventConsumer {
       chatId: msg.chatId,
       msg: msg,
     );
-    if (next != existing) {
+    next = _preserveHtmlIfEquivalent(existing: existing, next: next);
+    final updatedFields = existing.diffFields(next);
+    if (_shouldSkipHtmlOnlyUpdate(
+      existing: existing,
+      updatedFields: updatedFields,
+    )) {
+      return;
+    }
+    if (updatedFields.isNotEmpty) {
       if (_log.isLoggable(_messageUpdateDiffLogLevel)) {
-        final updatedFields = existing.diffFields(next);
         final updatedLabels =
             updatedFields.map((field) => field.logLabel).toList()..sort();
         final updateSummary = updatedLabels.isEmpty
@@ -1202,6 +1211,42 @@ class DeltaEventConsumer {
       }
       await db.updateMessage(next);
     }
+  }
+
+  bool _shouldSkipHtmlOnlyUpdate({
+    required Message existing,
+    required List<MessageDiffField> updatedFields,
+  }) {
+    if (updatedFields.length != _singleFieldDiffCount) {
+      return false;
+    }
+    if (updatedFields.first != MessageDiffField.htmlBody) {
+      return false;
+    }
+    final String? existingHtml =
+        HtmlContentCodec.normalizeHtml(existing.htmlBody);
+    return existingHtml != null;
+  }
+
+  Message _preserveHtmlIfEquivalent({
+    required Message existing,
+    required Message next,
+  }) {
+    final String? existingHtml = existing.htmlBody;
+    final String? nextHtml = next.htmlBody;
+    if (existingHtml == nextHtml) {
+      return next;
+    }
+    final String existingCanonical = _canonicalHtml(existingHtml);
+    final String nextCanonical = _canonicalHtml(nextHtml);
+    if (existingCanonical == nextCanonical) {
+      return next.copyWith(htmlBody: existingHtml);
+    }
+    return next;
+  }
+
+  String _canonicalHtml(String? html) {
+    return HtmlContentCodec.canonicalizeHtml(html) ?? _emptyHtml;
   }
 
   void _scheduleOriginIdHydration({

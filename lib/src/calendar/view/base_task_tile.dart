@@ -166,7 +166,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
 
   void _showDeleteConfirmation(BuildContext context) {
     final locate = context.read;
-    showDialog(
+    showFadeScaleDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(dialogContext.l10n.calendarDeleteTask),
@@ -834,7 +834,7 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
     if (actions.isEmpty) {
       return const SizedBox.shrink();
     }
-    return ShadPopover(
+    return AxiPopover(
       controller: _controller,
       closeOnTapOutside: true,
       padding: EdgeInsets.zero,

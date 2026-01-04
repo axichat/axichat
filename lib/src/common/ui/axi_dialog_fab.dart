@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'ui.dart';
 
@@ -26,7 +25,7 @@ class AxiDialogFab extends StatelessWidget {
       tooltip: tooltip,
       iconData: iconData,
       text: label,
-      onPressed: () => showShadDialog(
+      onPressed: () => showFadeScaleDialog(
         context: context,
         builder: dialogBuilder,
       ),

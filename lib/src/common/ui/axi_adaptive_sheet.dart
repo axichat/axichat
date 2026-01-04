@@ -2,6 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/axi_tooltip.dart';
+import 'package:axichat/src/common/ui/fade_scale_dialog.dart';
 import 'package:axichat/src/common/ui/squircle_border.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -85,11 +87,12 @@ Future<T?> showAdaptiveBottomSheet<T>({
   final EdgeInsets resolvedInsets = dialogInsetPadding ??
       const EdgeInsets.symmetric(horizontal: 24, vertical: 24);
 
-  return showDialog<T>(
+  return showFadeScaleDialog<T>(
     context: context,
     barrierColor: barrierColor,
     useRootNavigator: useRootNavigator,
     barrierDismissible: isDismissible,
+    useSafeArea: false,
     builder: (dialogContext) {
       final mediaQuery = MediaQuery.of(dialogContext);
       final Size size = mediaQuery.size;
@@ -157,8 +160,8 @@ class _AxiSheetChrome extends StatelessWidget {
 
     final colors = ShadTheme.of(context).colorScheme;
     final tooltip = MaterialLocalizations.of(context).closeButtonTooltip;
-    final closeButton = Tooltip(
-      message: tooltip,
+    final closeButton = AxiTooltip(
+      builder: (_) => Text(tooltip),
       child: ShadIconButton.ghost(
         icon: Icon(
           LucideIcons.x,

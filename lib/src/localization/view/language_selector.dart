@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -30,7 +31,7 @@ class LanguageSelector extends StatelessWidget {
           widthFactor: 1,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
-            child: ShadSelect<AppLanguage>(
+            child: AxiSelect<AppLanguage>(
               initialValue: language,
               onChanged: (value) {
                 if (value == null) return;

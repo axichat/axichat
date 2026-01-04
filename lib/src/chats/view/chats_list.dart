@@ -765,7 +765,7 @@ class _ChatListTileState extends State<ChatListTile> {
     final l10n = context.l10n;
     if (context.read<ChatsCubit?>() == null) return;
     var deleteMessages = false;
-    final confirmed = await showShadDialog<bool>(
+    final confirmed = await showFadeScaleDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(

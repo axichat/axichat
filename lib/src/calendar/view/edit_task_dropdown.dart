@@ -52,6 +52,7 @@ const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
 const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
 const double _taskPopoverMinWidth = 320.0;
+const Alignment _taskPopoverTransformAlignment = Alignment.centerLeft;
 const String _occurrenceScopeTitle = 'Apply changes to';
 const String _occurrenceScopeInstanceLabel = 'This instance';
 const String _occurrenceScopeFutureLabel = 'This and future';
@@ -973,7 +974,7 @@ class _TaskPopoverTransformBody extends StatelessWidget {
       transitionType: ContainerTransitionType.fadeThrough,
       closedBuilder: (context, action) {
         return Align(
-          alignment: Alignment.bottomLeft,
+          alignment: _taskPopoverTransformAlignment,
           child: _TaskPopoverSurface(
             width: width,
             constraints: closedConstraints,
@@ -987,7 +988,7 @@ class _TaskPopoverTransformBody extends StatelessWidget {
       },
       openBuilder: (context, action) {
         return Align(
-          alignment: Alignment.bottomLeft,
+          alignment: _taskPopoverTransformAlignment,
           child: _TaskPopoverSurface(
             width: width,
             constraints: openConstraints,

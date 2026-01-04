@@ -165,13 +165,13 @@ class CalendarAvailabilityShareRecord {
       return null;
     }
     final source = CalendarAvailabilityShareSource.fromJson(
-      Map<String, dynamic>.from(sourceRaw),
+      _normalizeJsonMap(sourceRaw),
     );
     if (source == null) {
       return null;
     }
     final overlay = CalendarAvailabilityOverlay.fromJson(
-      Map<String, dynamic>.from(overlayRaw),
+      _normalizeJsonMap(overlayRaw),
     );
     final chatType = _chatTypeFromString(chatTypeValue);
     final updatedAtValue =
@@ -232,7 +232,7 @@ class CalendarAvailabilityPreset {
       return null;
     }
     final overlay = CalendarAvailabilityOverlay.fromJson(
-      Map<String, dynamic>.from(overlayRaw),
+      _normalizeJsonMap(overlayRaw),
     );
     final updatedAtValue = json[_availabilityPresetUpdatedAtKey] as String?;
     final updatedAt =
@@ -256,4 +256,26 @@ ChatType _chatTypeFromString(String? value) {
     }
   }
   return _availabilityShareDefaultChatType;
+}
+
+Map<String, dynamic> _normalizeJsonMap(Map raw) {
+  final Map<String, dynamic> normalized = <String, dynamic>{};
+  for (final entry in raw.entries) {
+    final Object? key = entry.key;
+    if (key == null) {
+      continue;
+    }
+    normalized[key.toString()] = _normalizeJsonValue(entry.value);
+  }
+  return normalized;
+}
+
+Object? _normalizeJsonValue(Object? value) {
+  if (value is Map) {
+    return _normalizeJsonMap(value);
+  }
+  if (value is List) {
+    return value.map(_normalizeJsonValue).toList();
+  }
+  return value;
 }

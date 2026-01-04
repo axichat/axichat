@@ -303,7 +303,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
     );
     if (widget.active && widget.presence != null) {
       final locate = context.read;
-      child = ShadPopover(
+      child = AxiPopover(
         controller: popoverController,
         popover: (context) {
           return BlocProvider.value(

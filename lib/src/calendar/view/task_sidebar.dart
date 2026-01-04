@@ -2015,7 +2015,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     required CalendarTask task,
     required Widget child,
   }) {
-    return ShadContextMenuRegion(
+    return AxiContextMenuRegion(
       items: _sidebarContextMenuItems(task),
       child: child,
     );
@@ -5488,7 +5488,7 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                       final scaffoldMessenger =
                           ScaffoldMessenger.maybeOf(tileContext);
 
-                      return ShadPopover(
+                      return AxiPopover(
                         controller: controller,
                         closeOnTapOutside: true,
                         anchor: anchor,

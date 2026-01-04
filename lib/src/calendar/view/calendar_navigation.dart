@@ -979,19 +979,21 @@ class _DateLabelState extends State<_DateLabel> {
                   behavior: HitTestBehavior.opaque,
                   child: Material(
                     color: Colors.transparent,
-                    child: _CalendarDropdown(
-                      month: _visibleMonth,
-                      selectedWeekStart: widget.state.weekStart,
-                      selectedDate: widget.state.selectedDate,
-                      onClose: () => _removeOverlay(),
-                      onMonthChanged: (month) {
-                        setState(() => _visibleMonth = month);
-                        _overlayEntry?.markNeedsBuild();
-                      },
-                      onDateSelected: (date) {
-                        widget.onDateSelected(date);
-                        _removeOverlay();
-                      },
+                    child: InBoundsFadeScale(
+                      child: _CalendarDropdown(
+                        month: _visibleMonth,
+                        selectedWeekStart: widget.state.weekStart,
+                        selectedDate: widget.state.selectedDate,
+                        onClose: () => _removeOverlay(),
+                        onMonthChanged: (month) {
+                          setState(() => _visibleMonth = month);
+                          _overlayEntry?.markNeedsBuild();
+                        },
+                        onDateSelected: (date) {
+                          widget.onDateSelected(date);
+                          _removeOverlay();
+                        },
+                      ),
                     ),
                   ),
                 ),

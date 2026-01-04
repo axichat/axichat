@@ -90,7 +90,7 @@ class SettingsControls extends StatelessWidget {
                 actions: [
                   SizedBox(
                     width: 180,
-                    child: ShadSelect<ThemeMode>(
+                    child: AxiSelect<ThemeMode>(
                       initialValue: state.themeMode,
                       onChanged: (themeMode) => context
                           .read<SettingsCubit>()
@@ -118,7 +118,7 @@ class SettingsControls extends StatelessWidget {
                 actions: [
                   SizedBox(
                     width: 180,
-                    child: ShadSelect<ShadColor>(
+                    child: AxiSelect<ShadColor>(
                       initialValue: state.shadColor,
                       onChanged: (colorScheme) => context
                           .read<SettingsCubit>()
@@ -343,7 +343,7 @@ class MessageStorageTile extends StatelessWidget {
                     final effectiveMode = mamSupported
                         ? state.messageStorageMode
                         : MessageStorageMode.local;
-                    return ShadSelect<MessageStorageMode>(
+                    return AxiSelect<MessageStorageMode>(
                       initialValue: effectiveMode,
                       onChanged: (mode) {
                         if (mode == null) return;

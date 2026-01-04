@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
@@ -215,43 +217,12 @@ class RoomMembersSheet extends StatelessWidget {
     BuildContext context,
     String? avatarPath,
   ) async {
-    final avatar = await _promptAvatarEdit(
+    final avatar = await RoomAvatarEditorSheet.show(
       context,
       avatarPath: avatarPath,
     );
     if (!context.mounted || avatar == null) return;
     context.read<ChatBloc>().add(ChatRoomAvatarChangeRequested(avatar));
-  }
-
-  Future<AvatarUploadPayload?> _promptAvatarEdit(
-    BuildContext context, {
-    String? avatarPath,
-  }) async {
-    const avatarEditorMaxWidth = 960.0;
-    return showAdaptiveBottomSheet<AvatarUploadPayload>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: false,
-      showCloseButton: false,
-      dialogMaxWidth: avatarEditorMaxWidth,
-      builder: (sheetContext) {
-        final pop = Navigator.of(sheetContext).pop;
-        return BlocProvider(
-          create: (context) {
-            final colors = ShadTheme.of(context, listen: false).colorScheme;
-            return AvatarEditorCubit(
-              xmppService: context.read<XmppService>(),
-              templates: buildDefaultAvatarTemplates(),
-            )..initialize(colors);
-          },
-          child: _RoomAvatarEditorSheet(
-            avatarPath: avatarPath,
-            onCancel: () => pop(),
-            onSave: (payload) => pop(payload),
-          ),
-        );
-      },
-    );
   }
 
   List<_MemberGroup> _sections(AppLocalizations l10n) {
@@ -780,11 +751,12 @@ String _avatarKey(Occupant occupant) {
   return realJid.substring(0, separatorIndex);
 }
 
-class _RoomAvatarEditorSheet extends StatefulWidget {
-  const _RoomAvatarEditorSheet({
+class RoomAvatarEditorSheet extends StatefulWidget {
+  const RoomAvatarEditorSheet({
     required this.avatarPath,
     required this.onCancel,
     required this.onSave,
+    super.key,
   });
 
   final String? avatarPath;
@@ -792,10 +764,41 @@ class _RoomAvatarEditorSheet extends StatefulWidget {
   final ValueChanged<AvatarUploadPayload> onSave;
 
   @override
-  State<_RoomAvatarEditorSheet> createState() => _RoomAvatarEditorSheetState();
+  State<RoomAvatarEditorSheet> createState() => _RoomAvatarEditorSheetState();
+
+  static Future<AvatarUploadPayload?> show(
+    BuildContext context, {
+    String? avatarPath,
+  }) {
+    const avatarEditorMaxWidth = 960.0;
+    return showAdaptiveBottomSheet<AvatarUploadPayload>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: false,
+      showCloseButton: false,
+      dialogMaxWidth: avatarEditorMaxWidth,
+      builder: (sheetContext) {
+        final pop = Navigator.of(sheetContext).pop;
+        final colors = sheetContext.colorScheme;
+        return BlocProvider(
+          create: (_) => AvatarEditorCubit(
+            xmppService: sheetContext.read<XmppService>(),
+            templates: buildDefaultAvatarTemplates(),
+          )
+            ..initialize(colors)
+            ..setCarouselEnabled(true, colors),
+          child: RoomAvatarEditorSheet(
+            avatarPath: avatarPath,
+            onCancel: () => pop(),
+            onSave: (payload) => pop(payload),
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _RoomAvatarEditorSheetState extends State<_RoomAvatarEditorSheet> {
+class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
   static const _headerPadding = EdgeInsets.fromLTRB(16, 16, 16, 12);
   static const _contentPadding = EdgeInsets.symmetric(horizontal: 16);
   static const _actionsPadding = EdgeInsets.fromLTRB(16, 0, 16, 16);
@@ -804,19 +807,25 @@ class _RoomAvatarEditorSheetState extends State<_RoomAvatarEditorSheet> {
   static const _actionsSpacing = 8.0;
 
   late final XmppService _xmppService;
+  bool _seededAvatar = false;
 
   @override
   void initState() {
     super.initState();
     _xmppService = context.read<XmppService>();
-    _seedAvatarIfNeeded();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_seededAvatar) return;
+    _seededAvatar = true;
+    unawaited(_seedAvatarIfNeeded());
   }
 
   Future<void> _seedAvatarIfNeeded() async {
     final path = widget.avatarPath?.trim();
-    final colors = ShadTheme.of(context, listen: false).colorScheme;
     if (path == null || path.isEmpty) {
-      await context.read<AvatarEditorCubit>().seedRandomTemplate(colors);
       return;
     }
     final bytes = await _xmppService.loadAvatarBytes(path);

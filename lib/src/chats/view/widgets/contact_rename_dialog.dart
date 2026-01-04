@@ -103,7 +103,7 @@ Future<String?> showContactRenameDialog({
   required BuildContext context,
   required String initialValue,
 }) {
-  return showShadDialog<String>(
+  return showFadeScaleDialog<String>(
     context: context,
     builder: (dialogContext) => ContactRenameDialog(
       initialValue: initialValue,

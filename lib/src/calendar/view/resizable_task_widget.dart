@@ -189,7 +189,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       ),
     );
 
-    return ShadContextMenuRegion(
+    return AxiContextMenuRegion(
       controller: controller,
       groupId: groupId,
       longPressEnabled: widget.contextMenuLongPressEnabled,

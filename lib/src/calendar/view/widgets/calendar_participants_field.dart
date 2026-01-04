@@ -539,7 +539,7 @@ class _ParticipantSelectField<T> extends StatelessWidget {
       children: [
         Text(label.toUpperCase(), style: labelStyle),
         const SizedBox(height: calendarInsetSm),
-        ShadSelect<T>(
+        AxiSelect<T>(
           initialValue: value,
           onChanged: onChanged,
           options: options,

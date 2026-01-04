@@ -50,15 +50,27 @@ Future<void> showCalendarAvailabilityShareViewer({
   required BuildContext context,
   required CalendarAvailabilityShare share,
   required bool enableChatCalendar,
+  required T Function<T>() locate,
   AvailabilityRequestHandler? onRequest,
 }) {
   return Navigator.of(context).push(
     AxiFadePageRoute<void>(
       duration: baseAnimationDuration,
-      builder: (routeContext) => CalendarAvailabilityShareViewerScreen(
-        share: share,
-        enableChatCalendar: enableChatCalendar,
-        onRequest: onRequest,
+      builder: (routeContext) => MultiBlocProvider(
+        providers: [
+          BlocProvider<CalendarBloc>.value(
+            value: locate<CalendarBloc>(),
+          ),
+          if (enableChatCalendar)
+            BlocProvider<ChatCalendarBloc>.value(
+              value: locate<ChatCalendarBloc>(),
+            ),
+        ],
+        child: CalendarAvailabilityShareViewerScreen(
+          share: share,
+          enableChatCalendar: enableChatCalendar,
+          onRequest: onRequest,
+        ),
       ),
     ),
   );
@@ -92,8 +104,6 @@ class CalendarAvailabilityShareViewerScreen extends StatefulWidget {
 class _CalendarAvailabilityShareViewerScreenState
     extends State<CalendarAvailabilityShareViewerScreen> {
   late _AvailabilityViewerSource _source;
-  ChatCalendarBloc? _chatCalendarBloc;
-  CalendarBloc? _personalCalendarBloc;
 
   @override
   void initState() {
@@ -102,13 +112,9 @@ class _CalendarAvailabilityShareViewerScreenState
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _personalCalendarBloc = _maybeReadPersonalCalendarBloc(context);
-    _chatCalendarBloc = _maybeReadChatCalendarBloc(context);
-    final bool canUseChat =
-        widget.enableChatCalendar && _chatCalendarBloc != null;
-    if (!canUseChat && _source.isChat) {
+  void didUpdateWidget(CalendarAvailabilityShareViewerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enableChatCalendar && _source.isChat) {
       _source = _AvailabilityViewerSource.personal;
     }
   }
@@ -121,8 +127,7 @@ class _CalendarAvailabilityShareViewerScreenState
       share.overlay.rangeStart.value,
       share.overlay.rangeEnd.value,
     );
-    final bool canUseChat =
-        widget.enableChatCalendar && _chatCalendarBloc != null;
+    final bool canUseChat = widget.enableChatCalendar;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -166,8 +171,7 @@ class _CalendarAvailabilityShareViewerScreenState
                 child: _AvailabilityViewerGrid(
                   share: share,
                   source: _source,
-                  personalCalendarBloc: _personalCalendarBloc,
-                  chatCalendarBloc: canUseChat ? _chatCalendarBloc : null,
+                  enableChatCalendar: canUseChat,
                   onRequest: widget.onRequest,
                 ),
               ),
@@ -309,33 +313,25 @@ class _AvailabilityViewerGrid extends StatelessWidget {
   const _AvailabilityViewerGrid({
     required this.share,
     required this.source,
-    required this.personalCalendarBloc,
-    required this.chatCalendarBloc,
+    required this.enableChatCalendar,
     required this.onRequest,
   });
 
   final CalendarAvailabilityShare share;
   final _AvailabilityViewerSource source;
-  final CalendarBloc? personalCalendarBloc;
-  final ChatCalendarBloc? chatCalendarBloc;
+  final bool enableChatCalendar;
   final AvailabilityRequestHandler? onRequest;
 
   @override
   Widget build(BuildContext context) {
-    if (source.isChat && chatCalendarBloc == null) {
+    if (source.isChat && !enableChatCalendar) {
       return const _AvailabilityViewerEmptyState(
         label: _availabilityViewerChatLabel,
-      );
-    }
-    if (source.isPersonal && personalCalendarBloc == null) {
-      return const _AvailabilityViewerEmptyState(
-        label: _availabilityViewerPersonalLabel,
       );
     }
 
     final Widget builder = source.isChat
         ? BlocBuilder<ChatCalendarBloc, CalendarState>(
-            bloc: chatCalendarBloc,
             builder: (context, state) {
               return _AvailabilityViewerGridContent(
                 share: share,
@@ -345,7 +341,6 @@ class _AvailabilityViewerGrid extends StatelessWidget {
             },
           )
         : BlocBuilder<CalendarBloc, CalendarState>(
-            bloc: personalCalendarBloc,
             builder: (context, state) {
               return _AvailabilityViewerGridContent(
                 share: share,
@@ -428,22 +423,6 @@ class _AvailabilityViewerEmptyState extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-CalendarBloc? _maybeReadPersonalCalendarBloc(BuildContext context) {
-  try {
-    return context.read<CalendarBloc>();
-  } on FlutterError {
-    return null;
-  }
-}
-
-ChatCalendarBloc? _maybeReadChatCalendarBloc(BuildContext context) {
-  try {
-    return context.read<ChatCalendarBloc>();
-  } on FlutterError {
-    return null;
   }
 }
 

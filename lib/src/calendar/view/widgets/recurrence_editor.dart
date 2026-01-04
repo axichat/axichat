@@ -1141,7 +1141,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
         SizedBox(width: fieldGap),
         SizedBox(
           width: intervalWidth,
-          child: ShadSelect<int>(
+          child: AxiSelect<int>(
             enabled: enabled,
             initialValue: currentInterval.clamp(1, 12),
             onChanged: (newValue) {
@@ -2340,7 +2340,7 @@ class _RecurrenceOrdinalWeekdayEditorState
         Row(
           children: [
             Expanded(
-              child: ShadSelect<int>(
+              child: AxiSelect<int>(
                 enabled: widget.enabled,
                 initialValue: _selectedOrdinal,
                 onChanged: (value) {
@@ -2382,7 +2382,7 @@ class _RecurrenceOrdinalWeekdayEditorState
             ),
             const SizedBox(width: calendarGutterSm),
             Expanded(
-              child: ShadSelect<CalendarWeekday>(
+              child: AxiSelect<CalendarWeekday>(
                 enabled: widget.enabled,
                 initialValue: _selectedWeekday,
                 onChanged: (value) {

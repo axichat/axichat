@@ -1062,7 +1062,7 @@ class _DraftFormState extends State<DraftForm> {
       return;
     }
     if (!mounted) return;
-    await showDialog<void>(
+    await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) {
         return Dialog(

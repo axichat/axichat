@@ -2,17 +2,90 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:math' as math;
+import 'dart:ui';
 
+import 'package:axichat/src/common/ui/in_bounds_fade_scale.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+
+class AxiContextMenu extends StatelessWidget {
+  const AxiContextMenu({
+    super.key,
+    required this.child,
+    required this.items,
+    this.anchor,
+    this.visible,
+    this.constraints,
+    this.onHoverArea,
+    this.padding,
+    this.groupId,
+    this.shadows,
+    this.decoration,
+    this.filter,
+    this.controller,
+    this.onTapOutside,
+    this.onTapInside,
+    this.onTapUpInside,
+    this.onTapUpOutside,
+  });
+
+  final Widget child;
+  final List<Widget> items;
+  final ShadAnchorBase? anchor;
+  final bool? visible;
+  final BoxConstraints? constraints;
+  final ValueChanged<bool>? onHoverArea;
+  final EdgeInsetsGeometry? padding;
+  final Object? groupId;
+  final List<BoxShadow>? shadows;
+  final ShadDecoration? decoration;
+  final ImageFilter? filter;
+  final ShadContextMenuController? controller;
+  final TapRegionCallback? onTapOutside;
+  final TapRegionCallback? onTapInside;
+  final TapRegionUpCallback? onTapUpInside;
+  final TapRegionUpCallback? onTapUpOutside;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return child;
+    final Widget menuBody = InBoundsFadeScale(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: items,
+      ),
+    );
+    return ShadContextMenu(
+      items: [menuBody],
+      anchor: anchor,
+      visible: visible,
+      constraints: constraints,
+      onHoverArea: onHoverArea,
+      padding: padding,
+      groupId: groupId,
+      effects: const [],
+      shadows: shadows,
+      decoration: decoration,
+      filter: filter,
+      controller: controller,
+      onTapOutside: onTapOutside,
+      onTapInside: onTapInside,
+      onTapUpInside: onTapUpInside,
+      onTapUpOutside: onTapUpOutside,
+      child: child,
+    );
+  }
+}
 
 class AxiContextMenuRegion extends StatefulWidget {
   const AxiContextMenuRegion({
     super.key,
     required this.child,
     required this.items,
+    this.groupId,
     this.visible,
     this.controller,
     this.longPressEnabled,
@@ -21,6 +94,7 @@ class AxiContextMenuRegion extends StatefulWidget {
 
   final Widget child;
   final List<Widget> items;
+  final Object? groupId;
   final bool? visible;
   final ShadContextMenuController? controller;
   final bool? longPressEnabled;
@@ -164,10 +238,11 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
 
     final isWindows = platform == TargetPlatform.windows;
 
-    return ShadContextMenu(
+    return AxiContextMenu(
       anchor: _anchor ?? const ShadAnchorAuto(offset: Offset(0, 4)),
       controller: controller,
       items: widget.items,
+      groupId: widget.groupId,
       child: ShadGestureDetector(
         onTapDown: (_) => _hide(),
         onSecondaryTapDown: (details) async {

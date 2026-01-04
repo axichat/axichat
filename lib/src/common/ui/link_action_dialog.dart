@@ -19,7 +19,7 @@ Future<LinkAction?> showLinkActionDialog(
   required String copyLabel,
   required String cancelLabel,
 }) {
-  return showShadDialog<LinkAction>(
+  return showFadeScaleDialog<LinkAction>(
     context: context,
     builder: (dialogContext) {
       final pop = Navigator.of(dialogContext).pop;
