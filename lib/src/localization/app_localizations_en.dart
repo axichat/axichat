@@ -2836,6 +2836,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get avatarSavedMessage => 'Avatar saved.';
 
   @override
+  String get avatarOpenError => 'Unable to open that file.';
+
+  @override
+  String get avatarReadError => 'Could not read that file.';
+
+  @override
+  String get avatarInvalidImageError => 'That file is not a valid image.';
+
+  @override
+  String get avatarProcessError => 'Unable to process that image.';
+
+  @override
+  String get avatarTemplateLoadError => 'Failed to load that avatar option.';
+
+  @override
+  String get avatarMissingDraftError => 'Pick or build an avatar first.';
+
+  @override
+  String get avatarXmppDisconnectedError =>
+      'Connect to XMPP before saving your avatar.';
+
+  @override
+  String get avatarPublishRejectedError =>
+      'Your server rejected avatar publishing.';
+
+  @override
+  String get avatarPublishTimeoutError =>
+      'Avatar upload timed out. Please try again.';
+
+  @override
+  String get avatarPublishGenericError =>
+      'Could not publish avatar. Check your connection and try again.';
+
+  @override
+  String get avatarPublishUnexpectedError =>
+      'Unexpected error while uploading avatar.';
+
+  @override
   String get avatarCropTitle => 'Crop & focus';
 
   @override
