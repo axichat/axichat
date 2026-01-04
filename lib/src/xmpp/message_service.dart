@@ -2129,7 +2129,10 @@ mixin MessageService
     if (_mucMamUnsupportedRooms.contains(bareRoom)) return false;
     if (hasLeftRoom(bareRoom)) return false;
     final roomState = roomStateFor(bareRoom);
-    return roomState?.myOccupantId != null;
+    if (roomState == null) return false;
+    if (roomState.myOccupantId == null) return false;
+    if (!roomState.hasSelfPresence) return false;
+    return true;
   }
 
   @override

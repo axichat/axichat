@@ -58,6 +58,10 @@ const String _freeBusyToggleToFreeLabel = 'Mark free';
 const String _freeBusyToggleToBusyLabel = 'Mark busy';
 const String _freeBusyRangeLabel = 'Range';
 const Uuid _freeBusySegmentIdGenerator = Uuid();
+const EdgeInsets _freeBusyPopoverPadding = EdgeInsets.symmetric(
+  horizontal: calendarGutterMd,
+  vertical: calendarGutterSm,
+);
 
 const List<String> _freeBusyDayNames = <String>[
   'SUNDAY',
@@ -80,6 +84,7 @@ class CalendarFreeBusyEditor extends StatefulWidget {
     this.viewportHeight = _freeBusyGridViewportHeight,
     this.isReadOnly = false,
     this.onIntervalTapped,
+    this.segmentTitleBuilder,
   });
 
   const CalendarFreeBusyEditor.preview({
@@ -89,6 +94,8 @@ class CalendarFreeBusyEditor extends StatefulWidget {
     required List<CalendarFreeBusyInterval> intervals,
     String? tzid,
     ValueChanged<CalendarFreeBusyInterval>? onIntervalTapped,
+    String Function(CalendarFreeBusyType type, DateTime start, DateTime end)?
+        segmentTitleBuilder,
   }) : this(
           key: key,
           rangeStart: rangeStart,
@@ -99,6 +106,7 @@ class CalendarFreeBusyEditor extends StatefulWidget {
           viewportHeight: _freeBusyPreviewViewportHeight,
           isReadOnly: true,
           onIntervalTapped: onIntervalTapped,
+          segmentTitleBuilder: segmentTitleBuilder,
         );
 
   final DateTime rangeStart;
@@ -109,6 +117,9 @@ class CalendarFreeBusyEditor extends StatefulWidget {
   final double viewportHeight;
   final bool isReadOnly;
   final ValueChanged<CalendarFreeBusyInterval>? onIntervalTapped;
+  final String Function(
+          CalendarFreeBusyType type, DateTime start, DateTime end)?
+      segmentTitleBuilder;
 
   static void _noopIntervalsChanged(List<CalendarFreeBusyInterval> _) {}
 
@@ -194,7 +205,10 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
         final bool needsHorizontalScroll = resolvedWidth > availableWidth;
         final double dayWidth =
             (resolvedWidth - timeColumnWidth) / columns.length;
-        final double viewportHeight = widget.viewportHeight;
+        final double maxHeight = constraints.maxHeight;
+        final double viewportHeight = maxHeight.isFinite
+            ? math.min(widget.viewportHeight, maxHeight)
+            : widget.viewportHeight;
         const double headerHeight = calendarWeekHeaderHeight;
         final double bodyHeight = math.max(0, viewportHeight - headerHeight);
         final CalendarLayoutMetrics metrics = _layoutCalculator.resolveMetrics(
@@ -250,6 +264,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
               contextMenuGroupId: _contextMenuGroupId,
               contextMenuBuilderFactory: _contextMenuBuilderFor,
               enableContextMenuLongPress: !_shouldUseEditSheet(),
+              segmentTitleBuilder: widget.segmentTitleBuilder,
             ),
           ),
         );
@@ -1055,6 +1070,7 @@ class _FreeBusyTileStack extends StatelessWidget {
     required this.contextMenuGroupId,
     required this.contextMenuBuilderFactory,
     required this.enableContextMenuLongPress,
+    required this.segmentTitleBuilder,
   });
 
   final List<DateTime> columns;
@@ -1076,6 +1092,9 @@ class _FreeBusyTileStack extends StatelessWidget {
   final TaskContextMenuBuilder? Function(_FreeBusySegment segment)
       contextMenuBuilderFactory;
   final bool enableContextMenuLongPress;
+  final String Function(
+          CalendarFreeBusyType type, DateTime start, DateTime end)?
+      segmentTitleBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -1115,6 +1134,7 @@ class _FreeBusyTileStack extends StatelessWidget {
               onResizePreview: onResizePreview,
               onResizeEnd: onResizeEnd,
               onSuppressInsert: onSuppressInsert,
+              segmentTitleBuilder: segmentTitleBuilder,
             ),
           ),
         );
@@ -1145,6 +1165,7 @@ class _FreeBusyTaskTile extends StatelessWidget {
     required this.contextMenuGroupId,
     required this.contextMenuBuilder,
     required this.enableContextMenuLongPress,
+    required this.segmentTitleBuilder,
   });
 
   final _FreeBusySegment segment;
@@ -1166,10 +1187,18 @@ class _FreeBusyTaskTile extends StatelessWidget {
   final ValueKey<String> contextMenuGroupId;
   final TaskContextMenuBuilder? contextMenuBuilder;
   final bool enableContextMenuLongPress;
+  final String Function(
+          CalendarFreeBusyType type, DateTime start, DateTime end)?
+      segmentTitleBuilder;
 
   @override
   Widget build(BuildContext context) {
-    final CalendarTask task = segment.asTask;
+    final String? customTitle = segmentTitleBuilder?.call(
+      segment.type,
+      segment.start,
+      segment.end,
+    );
+    final CalendarTask task = segment.asTask(titleOverride: customTitle);
     final Color accentColor = segment.type.tileColor;
     final bool showControls =
         !isReadOnly && height >= _freeBusyTileControlMinHeight;
@@ -1208,8 +1237,130 @@ class _FreeBusyTaskTile extends StatelessWidget {
       overlay: overlay,
     );
 
-    return tile;
+    if (!isReadOnly) {
+      return tile;
+    }
+    final bool canShowPopover = _shouldShowPopover(
+      segment: segment,
+      title: customTitle,
+    );
+    if (canShowPopover) {
+      return _FreeBusyTilePopover(
+        label: customTitle!.trim(),
+        child: tile,
+      );
+    }
+    return _FreeBusyReadOnlyTapRegion(
+      onTap: onSelect,
+      child: tile,
+    );
   }
+}
+
+class _FreeBusyReadOnlyTapRegion extends StatelessWidget {
+  const _FreeBusyReadOnlyTapRegion({
+    required this.onTap,
+    required this.child,
+  });
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: child,
+    );
+  }
+}
+
+class _FreeBusyTilePopover extends StatefulWidget {
+  const _FreeBusyTilePopover({
+    required this.label,
+    required this.child,
+  });
+
+  final String label;
+  final Widget child;
+
+  @override
+  State<_FreeBusyTilePopover> createState() => _FreeBusyTilePopoverState();
+}
+
+class _FreeBusyTilePopoverState extends State<_FreeBusyTilePopover> {
+  late final ShadPopoverController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ShadPopoverController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    _controller.toggle();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiPopover(
+      controller: _controller,
+      closeOnTapOutside: true,
+      padding: EdgeInsets.zero,
+      shadows: calendarElevation2,
+      popover: (context) => _FreeBusyPopoverContent(label: widget.label),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _handleTap,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _FreeBusyPopoverContent extends StatelessWidget {
+  const _FreeBusyPopoverContent({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: calendarContainerColor,
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        border: Border.all(color: calendarBorderColor),
+      ),
+      child: Padding(
+        padding: _freeBusyPopoverPadding,
+        child: Text(
+          label,
+          style: context.textTheme.small.copyWith(
+            color: calendarTitleColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+bool _shouldShowPopover({
+  required _FreeBusySegment segment,
+  required String? title,
+}) {
+  if (segment.type.isBusyTentative) {
+    return false;
+  }
+  final String? trimmed = title?.trim();
+  return trimmed != null && trimmed.isNotEmpty;
 }
 
 class _FreeBusyTileControls extends StatelessWidget {
@@ -1315,10 +1466,11 @@ extension _FreeBusyTypeLabelX on CalendarFreeBusyType {
 }
 
 extension _FreeBusySegmentTaskX on _FreeBusySegment {
-  CalendarTask get asTask {
+  CalendarTask asTask({String? titleOverride}) {
+    final String resolvedTitle = titleOverride ?? type.label;
     return CalendarTask(
       id: id,
-      title: type.label,
+      title: resolvedTitle,
       scheduledTime: start,
       duration: end.difference(start),
       createdAt: createdAt,

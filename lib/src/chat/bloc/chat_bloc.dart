@@ -710,6 +710,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat chat,
     required RoomState roomState,
   }) async {
+    if (!roomState.hasSelfPresence) return;
     if (roomState.occupants.isEmpty) return;
     if (!roomState.myAffiliation.isNone) return;
     if (state.xmppConnectionState != ConnectionState.connected) return;
@@ -726,6 +727,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         error,
         stackTrace,
       );
+      _roomAffiliationRefreshAttempts.remove(roomJid);
     }
   }
 

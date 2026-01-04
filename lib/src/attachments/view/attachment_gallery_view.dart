@@ -31,13 +31,17 @@ const double _attachmentGalleryControlSpacing = 8.0;
 const double _attachmentGalleryControlRowSpacing = 12.0;
 const double _attachmentGalleryControlsBreakpoint = 520.0;
 const double _attachmentGalleryGridSpacing = 12.0;
-const double _attachmentGalleryGridMinTileWidth = 160.0;
+const double _attachmentGalleryGridMinTileWidth = 200.0;
 const int _attachmentGalleryGridMinColumns = 2;
 const int _attachmentGalleryGridMaxColumns = 4;
 const double _attachmentGalleryPreviewAspectRatio = 1.0;
+const double _attachmentGalleryPreviewMaxWidthFraction = 1.0;
 const double _attachmentGalleryFooterHeight = 56.0;
 const double _attachmentGalleryFooterSpacing = 8.0;
 const double _attachmentGalleryMetaSpacing = 4.0;
+const double _attachmentGalleryGridHorizontalPadding =
+    _attachmentGalleryHorizontalPadding * 2;
+const double _attachmentGalleryGridMinAvailableWidth = 0.0;
 const int _attachmentGalleryFilenameMaxLines = 2;
 const int _attachmentGalleryMetaMaxLines = 1;
 const String _attachmentGalleryMetaSeparator = ' - ';
@@ -111,7 +115,12 @@ extension AttachmentGallerySortOptionLabels on AttachmentGallerySortOption {
 AttachmentGalleryGridMetrics _resolveGridMetrics(double maxWidth) {
   final resolvedWidth =
       maxWidth > 0 ? maxWidth : _attachmentGalleryGridMinTileWidth;
-  final rawCount = (resolvedWidth / _attachmentGalleryGridMinTileWidth).floor();
+  final availableWidth =
+      (resolvedWidth - _attachmentGalleryGridHorizontalPadding)
+          .clamp(_attachmentGalleryGridMinAvailableWidth, resolvedWidth)
+          .toDouble();
+  final rawCount =
+      (availableWidth / _attachmentGalleryGridMinTileWidth).floor();
   final crossAxisCount = rawCount
       .clamp(
         _attachmentGalleryGridMinColumns,
@@ -119,7 +128,7 @@ AttachmentGalleryGridMetrics _resolveGridMetrics(double maxWidth) {
       )
       .toInt();
   final totalSpacing = _attachmentGalleryGridSpacing * (crossAxisCount - 1);
-  final tileWidth = (resolvedWidth - totalSpacing) / crossAxisCount;
+  final tileWidth = (availableWidth - totalSpacing) / crossAxisCount;
   final previewHeight = tileWidth / _attachmentGalleryPreviewAspectRatio;
   final tileHeight = previewHeight +
       _attachmentGalleryFooterHeight +
@@ -969,6 +978,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
           autoDownloadUserInitiated: autoDownloadUserInitiated,
           downloadDelegate: downloadDelegate,
           onAllowPressed: onAllowPressed,
+          maxWidthFraction: _attachmentGalleryPreviewMaxWidthFraction,
         ),
       ],
     );
@@ -1005,25 +1015,25 @@ class AttachmentGalleryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final metaLabel = metaText;
     final showFilename = metadata.mediaKind != AttachmentMediaKind.file;
+    final preview = AspectRatio(
+      aspectRatio: _attachmentGalleryPreviewAspectRatio,
+      child: ChatAttachmentPreview(
+        stanzaId: stanzaId,
+        metadataStream: metadataStream,
+        initialMetadata: metadata,
+        allowed: allowed,
+        autoDownloadSettings: autoDownloadSettings,
+        autoDownloadAllowed: autoDownloadAllowed,
+        autoDownloadUserInitiated: autoDownloadUserInitiated,
+        downloadDelegate: downloadDelegate,
+        onAllowPressed: onAllowPressed,
+        maxWidthFraction: _attachmentGalleryPreviewMaxWidthFraction,
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ChatAttachmentPreview(
-              stanzaId: stanzaId,
-              metadataStream: metadataStream,
-              initialMetadata: metadata,
-              allowed: allowed,
-              autoDownloadSettings: autoDownloadSettings,
-              autoDownloadAllowed: autoDownloadAllowed,
-              autoDownloadUserInitiated: autoDownloadUserInitiated,
-              downloadDelegate: downloadDelegate,
-              onAllowPressed: onAllowPressed,
-            ),
-          ),
-        ),
+        preview,
         const SizedBox(height: _attachmentGalleryFooterSpacing),
         if (showFilename)
           Text(

@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
+import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
 import 'package:flutter/material.dart';
 
 const double _fragmentCardRadius = 18.0;
@@ -106,10 +107,7 @@ class CalendarFragmentCard extends StatelessWidget {
                   if (footerDetails.isNotEmpty)
                     Padding(
                       padding: _fragmentFooterPadding,
-                      child: Text.rich(
-                        TextSpan(children: footerDetails),
-                        style: context.textTheme.muted,
-                      ),
+                      child: ChatInlineDetails(details: footerDetails),
                     ),
                 ],
               ),
