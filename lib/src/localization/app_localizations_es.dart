@@ -2252,6 +2252,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mucMembersTitle => 'Miembros';
 
   @override
+  String get mucEditAvatar => 'Editar avatar de la sala';
+
+  @override
+  String get mucAvatarMenuDescription =>
+      'Los miembros de la sala verán este avatar.';
+
+  @override
   String get mucInviteUser => 'Invitar usuario';
 
   @override
@@ -2451,7 +2458,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatsCreateChatRoomTitle => 'Crear sala de chat';
 
   @override
+  String get chatsCreateChatRoomAction => 'Crear sala';
+
+  @override
   String get chatsRoomNamePlaceholder => 'Nombre';
+
+  @override
+  String get chatsRoomNameRequiredError =>
+      'El nombre de la sala no puede estar vacío.';
+
+  @override
+  String chatsRoomNameInvalidCharacterError(Object character) {
+    return 'Los nombres de sala no pueden contener $character.';
+  }
 
   @override
   String get chatsArchiveTitle => 'Archivo';
@@ -2851,6 +2870,45 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get avatarSavedMessage => 'Avatar saved.';
+
+  @override
+  String get avatarOpenError => 'No se pudo abrir ese archivo.';
+
+  @override
+  String get avatarReadError => 'No se pudo leer ese archivo.';
+
+  @override
+  String get avatarInvalidImageError => 'Ese archivo no es una imagen válida.';
+
+  @override
+  String get avatarProcessError => 'No se pudo procesar esa imagen.';
+
+  @override
+  String get avatarTemplateLoadError =>
+      'No se pudo cargar esa opción de avatar.';
+
+  @override
+  String get avatarMissingDraftError => 'Primero elige o crea un avatar.';
+
+  @override
+  String get avatarXmppDisconnectedError =>
+      'Conéctate a XMPP antes de guardar tu avatar.';
+
+  @override
+  String get avatarPublishRejectedError =>
+      'Tu servidor rechazó la publicación del avatar.';
+
+  @override
+  String get avatarPublishTimeoutError =>
+      'La carga del avatar agotó el tiempo. Inténtalo de nuevo.';
+
+  @override
+  String get avatarPublishGenericError =>
+      'No se pudo publicar el avatar. Revisa tu conexión e inténtalo de nuevo.';
+
+  @override
+  String get avatarPublishUnexpectedError =>
+      'Error inesperado al subir el avatar.';
 
   @override
   String get avatarCropTitle => 'Crop & focus';

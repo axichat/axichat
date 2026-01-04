@@ -28,6 +28,8 @@ const _mucDiscoFeature = 'http://jabber.org/protocol/muc';
 const _discoInfoXmlns = 'http://jabber.org/protocol/disco#info';
 const _dataFormXmlns = 'jabber:x:data';
 const _dataFormTag = 'x';
+const _dataFormTypeAttr = 'type';
+const _dataFormTypeSubmit = 'submit';
 const _fieldTag = 'field';
 const _valueTag = 'value';
 const _varAttr = 'var';
@@ -40,6 +42,7 @@ const _dataUriPrefix = 'data:';
 const _dataUriBase64Delimiter = ';base64,';
 const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
+const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
 const _iqTypeAttr = 'type';
 const _iqTypeGet = 'get';
 const _iqTypeSet = 'set';
@@ -371,6 +374,7 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<String> createRoom({
     required String name,
     String? nickname,
+    AvatarUploadPayload? avatar,
     int maxHistoryStanzas = 0,
   }) async {
     final slug = _slugify(name);
@@ -401,6 +405,15 @@ mixin MucService on XmppBase, BaseStreamService {
       nickname: nick,
       autojoin: true,
     );
+    if (avatar != null) {
+      final updated = await updateRoomAvatar(
+        roomJid: roomJid,
+        avatar: avatar,
+      );
+      if (!updated) {
+        _mucLog.fine(_roomAvatarUpdateFailedLog);
+      }
+    }
     return roomJid;
   }
 
@@ -924,6 +937,104 @@ mixin MucService on XmppBase, BaseStreamService {
     );
     if (result == null) return false;
     return result.attributes[_iqTypeAttr]?.toString() == _iqTypeResult;
+  }
+
+  Future<bool> updateRoomAvatar({
+    required String roomJid,
+    required AvatarUploadPayload avatar,
+  }) async {
+    final configForm = await fetchRoomConfigurationForm(roomJid);
+    if (configForm == null) return false;
+    final encodedAvatar = _base64EncodeAvatarPublishPayload(avatar.bytes);
+    final resolvedHash = _resolveRoomAvatarHash(avatar);
+    final updatedForm = _updateRoomAvatarForm(
+      form: configForm,
+      avatarValue: encodedAvatar,
+      avatarHash: resolvedHash,
+    );
+    if (updatedForm == null) return false;
+    final updated = await submitRoomConfiguration(
+      roomJid: roomJid,
+      form: updatedForm,
+    );
+    if (!updated) return false;
+    if (this is AvatarService) {
+      await (this as AvatarService).storeAvatarBytesForJid(
+        jid: _roomKey(roomJid),
+        bytes: avatar.bytes,
+        hash: resolvedHash,
+      );
+    }
+    return true;
+  }
+
+  String _resolveRoomAvatarHash(AvatarUploadPayload avatar) {
+    final trimmed = avatar.hash.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+    return sha1.convert(avatar.bytes).toString();
+  }
+
+  mox.XMLNode? _updateRoomAvatarForm({
+    required mox.XMLNode form,
+    required String avatarValue,
+    required String avatarHash,
+  }) {
+    var hasAvatarField = false;
+    final updatedChildren = <mox.XMLNode>[];
+    for (final child in form.children) {
+      if (child.tag != _fieldTag) {
+        updatedChildren.add(child);
+        continue;
+      }
+      final varName = _fieldVarName(child);
+      if (varName == null) {
+        updatedChildren.add(child);
+        continue;
+      }
+      final lowerVar = varName.toLowerCase();
+      if (!lowerVar.contains(_avatarFieldToken)) {
+        updatedChildren.add(child);
+        continue;
+      }
+      if (lowerVar.contains(_avatarHashToken)) {
+        updatedChildren.add(
+          _replaceFieldValues(child, [avatarHash]),
+        );
+        continue;
+      }
+      hasAvatarField = true;
+      updatedChildren.add(
+        _replaceFieldValues(child, [avatarValue]),
+      );
+    }
+    if (!hasAvatarField) return null;
+    final updatedAttributes = _stringAttributes(form.attributes)
+      ..[_dataFormTypeAttr] = _dataFormTypeSubmit;
+    return mox.XMLNode(
+      tag: form.tag,
+      attributes: updatedAttributes,
+      children: updatedChildren,
+    );
+  }
+
+  Map<String, String> _stringAttributes(Map<String, dynamic> attributes) {
+    return attributes.map(
+      (key, value) => MapEntry(key, value.toString()),
+    );
+  }
+
+  mox.XMLNode _replaceFieldValues(mox.XMLNode field, List<String> values) {
+    final preservedChildren = field.children
+        .where((child) => child.tag != _valueTag)
+        .toList(growable: false);
+    final valueNodes = values
+        .map((value) => mox.XMLNode(tag: _valueTag, text: value))
+        .toList(growable: false);
+    return mox.XMLNode(
+      tag: field.tag,
+      attributes: _stringAttributes(field.attributes),
+      children: [...preservedChildren, ...valueNodes],
+    );
   }
 
   Future<void> setRoomSubject({

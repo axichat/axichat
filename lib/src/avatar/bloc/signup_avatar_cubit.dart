@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_image_utils.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
@@ -15,8 +16,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-enum SignupAvatarEditorMode { none, colorOnly, cropOnly }
 
 enum SignupAvatarErrorType {
   openFailed,
@@ -80,17 +79,17 @@ class SignupAvatarState extends Equatable {
     return template.hasAlphaBackground;
   }
 
-  SignupAvatarEditorMode get editorMode {
+  AvatarEditorMode get editorMode {
     final category = activeCategory;
     if (category == null) {
       return activeTemplate == null && sourceBytes != null
-          ? SignupAvatarEditorMode.cropOnly
-          : SignupAvatarEditorMode.none;
+          ? AvatarEditorMode.cropOnly
+          : AvatarEditorMode.none;
     }
     if (category == AvatarTemplateCategory.abstract) {
-      return SignupAvatarEditorMode.none;
+      return AvatarEditorMode.none;
     }
-    return SignupAvatarEditorMode.colorOnly;
+    return AvatarEditorMode.colorOnly;
   }
 
   SignupAvatarState copyWith({
@@ -268,6 +267,22 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         clearError: true,
       ),
     );
+  }
+
+  Future<void> seedAvatarFromBytes(Uint8List bytes) async {
+    if (bytes.isEmpty) return;
+    _stopAvatarCarousel();
+    _currentCarouselAvatar = null;
+    emit(
+      state.copyWith(
+        avatar: null,
+        avatarPreviewBytes: null,
+        carouselPreviewBytes: null,
+        processing: true,
+        clearError: true,
+      ),
+    );
+    await _applyAvatarFromBytes(bytes);
   }
 
   Future<void> shuffleTemplate(ShadColorScheme colors) async {

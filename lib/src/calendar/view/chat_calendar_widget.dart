@@ -47,6 +47,9 @@ const String _chatCalendarAvailabilityShareTooltip = 'Send availability';
 const double _chatCalendarParticipantsSpacing = 12.0;
 const String _chatCalendarAvailabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
+const bool _chatCalendarActionShowTransferMenu = false;
+const bool _chatCalendarActionMenuGhost = true;
+const bool _chatCalendarActionUsePrimary = true;
 const String _chatCalendarHeaderAssertMessage =
     'ChatCalendarWidget requires onBackPressed when showHeader and showBackButton are true.';
 const String _chatCalendarOverlayLabel = 'Availability overlay active';
@@ -525,14 +528,20 @@ class _ChatCalendarActionRow extends StatelessWidget {
         SyncControls(
           state: state,
           compact: true,
+          showTransferMenu: _chatCalendarActionShowTransferMenu,
         ),
         if (onShareAvailability != null)
           AxiIconButton.ghost(
             iconData: LucideIcons.send,
             tooltip: _chatCalendarAvailabilityShareTooltip,
             onPressed: onShareAvailability,
-            usePrimary: true,
+            usePrimary: _chatCalendarActionUsePrimary,
           ),
+        CalendarTransferMenu(
+          state: state,
+          ghost: _chatCalendarActionMenuGhost,
+          usePrimary: _chatCalendarActionUsePrimary,
+        ),
       ],
     );
   }

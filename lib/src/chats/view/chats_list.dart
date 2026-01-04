@@ -712,7 +712,7 @@ class _ChatListTileState extends State<ChatListTile> {
     if (trimmed == null || trimmed.isEmpty) {
       return null;
     }
-    if (CalendarSyncMessage.isCalendarSyncEnvelope(trimmed)) {
+    if (CalendarSyncMessage.looksLikeEnvelope(trimmed)) {
       return null;
     }
     final split = ChatSubjectCodec.splitXmppBody(trimmed);

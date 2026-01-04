@@ -756,7 +756,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatReportSpam.
   ///
   /// In en, this message translates to:
-  /// **'Report spam'**
+  /// **'Mark as spam'**
   String get chatReportSpam;
 
   /// No description provided for @chatSignatureToggleLabel.
@@ -4076,6 +4076,18 @@ abstract class AppLocalizations {
   /// **'Members'**
   String get mucMembersTitle;
 
+  /// No description provided for @mucEditAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit room avatar'**
+  String get mucEditAvatar;
+
+  /// No description provided for @mucAvatarMenuDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Room members will see this avatar.'**
+  String get mucAvatarMenuDescription;
+
   /// No description provided for @mucInviteUser.
   ///
   /// In en, this message translates to:
@@ -4406,11 +4418,29 @@ abstract class AppLocalizations {
   /// **'Create chat room'**
   String get chatsCreateChatRoomTitle;
 
+  /// No description provided for @chatsCreateChatRoomAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create room'**
+  String get chatsCreateChatRoomAction;
+
   /// No description provided for @chatsRoomNamePlaceholder.
   ///
   /// In en, this message translates to:
   /// **'Name'**
   String get chatsRoomNamePlaceholder;
+
+  /// No description provided for @chatsRoomNameRequiredError.
+  ///
+  /// In en, this message translates to:
+  /// **'Room name cannot be empty.'**
+  String get chatsRoomNameRequiredError;
+
+  /// No description provided for @chatsRoomNameInvalidCharacterError.
+  ///
+  /// In en, this message translates to:
+  /// **'Room names cannot contain {character}.'**
+  String chatsRoomNameInvalidCharacterError(Object character);
 
   /// No description provided for @chatsArchiveTitle.
   ///
@@ -5125,6 +5155,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Avatar saved.'**
   String get avatarSavedMessage;
+
+  /// No description provided for @avatarOpenError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open that file.'**
+  String get avatarOpenError;
+
+  /// No description provided for @avatarReadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read that file.'**
+  String get avatarReadError;
+
+  /// No description provided for @avatarInvalidImageError.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not a valid image.'**
+  String get avatarInvalidImageError;
+
+  /// No description provided for @avatarProcessError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to process that image.'**
+  String get avatarProcessError;
+
+  /// No description provided for @avatarTemplateLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load that avatar option.'**
+  String get avatarTemplateLoadError;
+
+  /// No description provided for @avatarMissingDraftError.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick or build an avatar first.'**
+  String get avatarMissingDraftError;
+
+  /// No description provided for @avatarXmppDisconnectedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to XMPP before saving your avatar.'**
+  String get avatarXmppDisconnectedError;
+
+  /// No description provided for @avatarPublishRejectedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Your server rejected avatar publishing.'**
+  String get avatarPublishRejectedError;
+
+  /// No description provided for @avatarPublishTimeoutError.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar upload timed out. Please try again.'**
+  String get avatarPublishTimeoutError;
+
+  /// No description provided for @avatarPublishGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not publish avatar. Check your connection and try again.'**
+  String get avatarPublishGenericError;
+
+  /// No description provided for @avatarPublishUnexpectedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unexpected error while uploading avatar.'**
+  String get avatarPublishUnexpectedError;
 
   /// No description provided for @avatarCropTitle.
   ///
