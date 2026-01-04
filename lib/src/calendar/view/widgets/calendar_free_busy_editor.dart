@@ -195,10 +195,12 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
         final double dayWidth =
             (resolvedWidth - timeColumnWidth) / columns.length;
         final double viewportHeight = widget.viewportHeight;
+        const double headerHeight = calendarWeekHeaderHeight;
+        final double bodyHeight = math.max(0, viewportHeight - headerHeight);
         final CalendarLayoutMetrics metrics = _layoutCalculator.resolveMetrics(
           zoomIndex: _freeBusyZoomIndex,
           isDayView: false,
-          availableHeight: viewportHeight,
+          availableHeight: bodyHeight,
         );
 
         final double contentHeight = _contentHeightForMetrics(metrics);
@@ -211,7 +213,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
           ),
           body: _FreeBusyGridSurface(
             width: resolvedWidth,
-            height: viewportHeight,
+            height: bodyHeight,
             contentHeight: contentHeight,
             columns: columns,
             controller: _surfaceController,
