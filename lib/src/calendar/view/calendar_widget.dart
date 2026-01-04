@@ -57,10 +57,6 @@ class CalendarNavSurface extends StatelessWidget {
 }
 
 const double _calendarShareActionSpacing = 8.0;
-const double _availabilityOverlayBarSpacing = 8.0;
-const double _availabilityOverlayBarIconSize = 18.0;
-const String _availabilityOverlayBarLabel = 'Availability overlay active';
-const String _availabilityOverlayBarClearLabel = 'Clear overlays';
 const String _calendarAvailabilityShareTooltip = 'Share availability';
 const String _calendarAvailabilityShareMissingJidMessage =
     'Calendar sharing is unavailable.';
@@ -223,13 +219,6 @@ class _CalendarWidgetState
                       availabilityCoordinator,
                     ),
           ),
-          if (state.model.availabilityOverlays.isNotEmpty)
-            _AvailabilityOverlayBar(
-              count: state.model.availabilityOverlays.length,
-              onClear: () => _clearAvailabilityOverlays(
-                state.model.availabilityOverlays.keys,
-              ),
-            ),
           Expanded(child: tintedLayout),
         ],
       ),
@@ -335,67 +324,6 @@ class _CalendarWidgetState
     if (navigator?.canPop() ?? false) {
       navigator?.pop();
     }
-  }
-
-  void _clearAvailabilityOverlays(Iterable<String> overlayIds) {
-    final bloc = context.read<CalendarBloc>();
-    for (final id in overlayIds) {
-      bloc.add(
-        CalendarEvent.availabilityOverlayRemoved(overlayId: id),
-      );
-    }
-  }
-}
-
-class _AvailabilityOverlayBar extends StatelessWidget {
-  const _AvailabilityOverlayBar({
-    required this.count,
-    required this.onClear,
-  });
-
-  final int count;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color background = context.colorScheme.muted;
-    final Color border = context.colorScheme.border;
-    final TextStyle textStyle = context.textTheme.small.copyWith(
-      color: context.colorScheme.mutedForeground,
-      fontWeight: FontWeight.w600,
-    );
-    final String label = count == 1
-        ? _availabilityOverlayBarLabel
-        : '$_availabilityOverlayBarLabel ($count)';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        border: Border(
-          bottom: BorderSide(color: border),
-        ),
-      ),
-      child: Padding(
-        padding: calendarMarginLarge,
-        child: Row(
-          children: [
-            Icon(
-              LucideIcons.layers,
-              size: _availabilityOverlayBarIconSize,
-              color: context.colorScheme.mutedForeground,
-            ),
-            const SizedBox(width: _availabilityOverlayBarSpacing),
-            Expanded(
-              child: Text(label, style: textStyle),
-            ),
-            ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              onPressed: onClear,
-              child: const Text(_availabilityOverlayBarClearLabel),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

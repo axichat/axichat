@@ -48,6 +48,7 @@ import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_availability_card.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_availability_request_sheet.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_availability_viewer.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
@@ -1318,8 +1319,10 @@ class _ChatState extends State<Chat> {
 
   Future<void> _handleAvailabilityRequest(
     CalendarAvailabilityShare share,
-    String? requesterJid,
-  ) async {
+    String? requesterJid, {
+    DateTime? preferredStart,
+    DateTime? preferredEnd,
+  }) async {
     if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
       _showSnackbar(_availabilityRequestEmailUnsupportedMessage);
       return;
@@ -1333,6 +1336,8 @@ class _ChatState extends State<Chat> {
       context: context,
       share: share,
       requesterJid: trimmedJid,
+      preferredStart: preferredStart,
+      preferredEnd: preferredEnd,
     );
     if (!mounted || request == null) {
       return;
@@ -1342,6 +1347,29 @@ class _ChatState extends State<Chat> {
             message: CalendarAvailabilityMessage.request(request: request),
           ),
         );
+  }
+
+  Future<void> _openAvailabilityShareViewer({
+    required CalendarAvailabilityShare share,
+    required bool chatCalendarAvailable,
+    String? requesterJid,
+  }) async {
+    final String? trimmedJid = requesterJid?.trim();
+    final AvailabilityRequestHandler? onRequest =
+        trimmedJid == null || trimmedJid.isEmpty
+            ? null
+            : (start, end) => _handleAvailabilityRequest(
+                  share,
+                  trimmedJid,
+                  preferredStart: start,
+                  preferredEnd: end,
+                );
+    await showCalendarAvailabilityShareViewer(
+      context: context,
+      share: share,
+      enableChatCalendar: chatCalendarAvailable,
+      onRequest: onRequest,
+    );
   }
 
   Future<void> _handleAvailabilityAccept(
@@ -5872,7 +5900,7 @@ class _ChatState extends State<Chat> {
                                                                     ? fragmentDetails
                                                                     : _emptyInlineSpans;
                                                             VoidCallback?
-                                                                availabilityOnRequest;
+                                                                availabilityOnOpen;
                                                             VoidCallback?
                                                                 availabilityOnAccept;
                                                             VoidCallback?
@@ -5896,19 +5924,21 @@ class _ChatState extends State<Chat> {
                                                                             roomState:
                                                                                 state.roomState,
                                                                           );
-                                                                  if (!isOwner) {
-                                                                    final actorId =
-                                                                        availabilityActorId;
-                                                                    if (actorId !=
-                                                                        null) {
-                                                                      availabilityOnRequest =
-                                                                          () =>
-                                                                              _handleAvailabilityRequest(
+                                                                  final String?
+                                                                      requesterJid =
+                                                                      isOwner
+                                                                          ? null
+                                                                          : availabilityActorId;
+                                                                  availabilityOnOpen =
+                                                                      () =>
+                                                                          _openAvailabilityShareViewer(
+                                                                            share:
                                                                                 value.share,
-                                                                                actorId,
-                                                                              );
-                                                                    }
-                                                                  }
+                                                                            requesterJid:
+                                                                                requesterJid,
+                                                                            chatCalendarAvailable:
+                                                                                chatCalendarAvailable,
+                                                                          );
                                                                 },
                                                                 request:
                                                                     (value) {
@@ -5999,8 +6029,8 @@ class _ChatState extends State<Chat> {
                                                                       availabilityMessage,
                                                                   footerDetails:
                                                                       availabilityFooterDetails,
-                                                                  onRequest:
-                                                                      availabilityOnRequest,
+                                                                  onOpen:
+                                                                      availabilityOnOpen,
                                                                   onAccept:
                                                                       availabilityOnAccept,
                                                                   onDecline:

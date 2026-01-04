@@ -59,6 +59,11 @@ class _AvailabilitySegment {
   bool get isFree => type.isFree;
 }
 
+const CalendarFreeBusyType _availabilityGapTypeDefault =
+    CalendarFreeBusyType.free;
+const CalendarFreeBusyType _availabilityGapTypeRedacted =
+    CalendarFreeBusyType.busyUnavailable;
+
 List<_AvailabilitySegment> _segmentsForOverlay(
   CalendarAvailabilityOverlay overlay, {
   required DateTime rangeStart,
@@ -67,6 +72,9 @@ List<_AvailabilitySegment> _segmentsForOverlay(
   if (!rangeEnd.isAfter(rangeStart)) {
     return <_AvailabilitySegment>[];
   }
+  final CalendarFreeBusyType gapType = overlay.isRedacted
+      ? _availabilityGapTypeRedacted
+      : _availabilityGapTypeDefault;
   final List<CalendarFreeBusyInterval> sorted =
       List<CalendarFreeBusyInterval>.from(overlay.intervals)
         ..sort((a, b) => a.start.value.compareTo(b.start.value));
@@ -77,7 +85,7 @@ List<_AvailabilitySegment> _segmentsForOverlay(
       _AvailabilitySegment(
         start: rangeStart,
         end: rangeEnd,
-        type: CalendarFreeBusyType.free,
+        type: gapType,
       ),
     ];
   }
@@ -97,7 +105,7 @@ List<_AvailabilitySegment> _segmentsForOverlay(
         _AvailabilitySegment(
           start: cursor,
           end: clippedStart,
-          type: CalendarFreeBusyType.free,
+          type: gapType,
         ),
       );
     }
@@ -115,7 +123,7 @@ List<_AvailabilitySegment> _segmentsForOverlay(
       _AvailabilitySegment(
         start: cursor,
         end: rangeEnd,
-        type: CalendarFreeBusyType.free,
+        type: gapType,
       ),
     );
   }
