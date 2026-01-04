@@ -1352,6 +1352,7 @@ class _ChatState extends State<Chat> {
   Future<void> _openAvailabilityShareViewer({
     required CalendarAvailabilityShare share,
     required bool chatCalendarAvailable,
+    required T Function<T>() locate,
     String? requesterJid,
   }) async {
     final String? trimmedJid = requesterJid?.trim();
@@ -1368,7 +1369,7 @@ class _ChatState extends State<Chat> {
       context: context,
       share: share,
       enableChatCalendar: chatCalendarAvailable,
-      locate: context.read,
+      locate: locate,
       onRequest: onRequest,
     );
   }
@@ -4115,6 +4116,19 @@ class _ChatState extends State<Chat> {
                               selector: (state) => state.active,
                               builder: (context, searchActive) {
                                 final l10n = context.l10n;
+                                final colors = context.colorScheme;
+                                final bool isGalleryRoute =
+                                    _chatRoute.isGallery;
+                                final bool isPinnedPanelVisible =
+                                    _pinnedPanelVisible;
+                                final bool isCalendarRoute =
+                                    showingChatCalendar;
+                                final bool isSettingsPanelVisible =
+                                    isSettingsRoute;
+                                final Color pinnedIconColor =
+                                    isPinnedPanelVisible
+                                        ? colors.primary
+                                        : colors.foreground;
                                 final List<AppBarActionItem> chatActions =
                                     <AppBarActionItem>[
                                   if (isGroupChat)
@@ -4122,6 +4136,7 @@ class _ChatState extends State<Chat> {
                                       label: l10n.chatRoomMembers,
                                       iconData: LucideIcons.users,
                                       onPressed: _showMembers,
+                                      usePrimary: false,
                                     ),
                                   AppBarActionItem(
                                     label: searchActive
@@ -4131,11 +4146,13 @@ class _ChatState extends State<Chat> {
                                     onPressed: () => context
                                         .read<ChatSearchCubit>()
                                         .toggleActive(),
+                                    usePrimary: searchActive,
                                   ),
                                   AppBarActionItem(
                                     label: l10n.chatAttachmentTooltip,
                                     iconData: LucideIcons.image,
                                     onPressed: _openChatAttachments,
+                                    usePrimary: isGalleryRoute,
                                   ),
                                   AppBarActionItem(
                                     label: _pinnedPanelVisible
@@ -4145,8 +4162,10 @@ class _ChatState extends State<Chat> {
                                     icon: _PinnedBadgeIcon(
                                       iconData: pinnedIcon,
                                       count: pinnedCount,
+                                      iconColor: pinnedIconColor,
                                     ),
                                     onPressed: _togglePinnedMessages,
+                                    usePrimary: isPinnedPanelVisible,
                                   ),
                                   if (chatCalendarAvailable)
                                     AppBarActionItem(
@@ -4161,6 +4180,7 @@ class _ChatState extends State<Chat> {
                                         }
                                         _openChatCalendar();
                                       },
+                                      usePrimary: isCalendarRoute,
                                     ),
                                   if (canShowSettings)
                                     AppBarActionItem(
@@ -4169,6 +4189,7 @@ class _ChatState extends State<Chat> {
                                           : l10n.chatSettings,
                                       iconData: LucideIcons.settings,
                                       onPressed: _toggleSettingsPanel,
+                                      usePrimary: isSettingsPanelVisible,
                                     ),
                                 ];
                                 final List<AppBarActionItem> combinedActions =
@@ -5136,9 +5157,8 @@ class _ChatState extends State<Chat> {
                                                                           .primaryForeground
                                                                       : colors
                                                                           .foreground;
-                                                          final timestampColor =
-                                                              chatTokens
-                                                                  .timestamp;
+                                                          final detailColor =
+                                                              textColor;
                                                           final chainedPrev =
                                                               _chatMessagesShouldChain(
                                                             message,
@@ -5181,14 +5201,11 @@ class _ChatState extends State<Chat> {
                                                             linkStyle:
                                                                 linkStyle,
                                                           );
-                                                          final timeColor = isError
-                                                              ? textColor
-                                                              : self
-                                                                  ? colors.primaryForeground
-                                                                  : timestampColor;
+                                                          final timeColor =
+                                                              detailColor;
                                                           final detailStyle =
                                                               context.textTheme
-                                                                  .muted
+                                                                  .small
                                                                   .copyWith(
                                                             color: timeColor,
                                                             fontSize: 11.0,
@@ -5198,7 +5215,7 @@ class _ChatState extends State<Chat> {
                                                                     .alphabetic,
                                                           );
                                                           final surfaceDetailColor =
-                                                              timestampColor;
+                                                              colors.foreground;
                                                           final surfaceDetailStyle =
                                                               detailStyle
                                                                   .copyWith(
@@ -5266,10 +5283,7 @@ class _ChatState extends State<Chat> {
                                                                   ? null
                                                                   : iconDetailSpan(
                                                                       statusIcon,
-                                                                      self
-                                                                          ? colors
-                                                                              .primaryForeground
-                                                                          : timestampColor,
+                                                                      detailColor,
                                                                       baseStyle:
                                                                           detailStyle,
                                                                     );
@@ -5285,7 +5299,7 @@ class _ChatState extends State<Chat> {
                                                           final transportDetail =
                                                               iconDetailSpan(
                                                             transportIconData,
-                                                            timeColor,
+                                                            detailColor,
                                                             baseStyle:
                                                                 detailStyle,
                                                           );
@@ -6003,8 +6017,10 @@ class _ChatState extends State<Chat> {
                                                                 hideTaskText
                                                                     ? surfaceDetails
                                                                     : _emptyInlineSpans;
-                                                            VoidCallback?
-                                                                availabilityOnOpen;
+                                                            CalendarAvailabilityShare?
+                                                                availabilityShare;
+                                                            String?
+                                                                availabilityShareRequesterJid;
                                                             VoidCallback?
                                                                 availabilityOnAccept;
                                                             VoidCallback?
@@ -6033,16 +6049,11 @@ class _ChatState extends State<Chat> {
                                                                       isOwner
                                                                           ? null
                                                                           : availabilityActorId;
-                                                                  availabilityOnOpen =
-                                                                      () =>
-                                                                          _openAvailabilityShareViewer(
-                                                                            share:
-                                                                                value.share,
-                                                                            requesterJid:
-                                                                                requesterJid,
-                                                                            chatCalendarAvailable:
-                                                                                chatCalendarAvailable,
-                                                                          );
+                                                                  availabilityShare =
+                                                                      value
+                                                                          .share;
+                                                                  availabilityShareRequesterJid =
+                                                                      requesterJid;
                                                                 },
                                                                 request:
                                                                     (value) {
@@ -6128,17 +6139,40 @@ class _ChatState extends State<Chat> {
                                                             if (availabilityMessage !=
                                                                 null) {
                                                               addExtra(
-                                                                CalendarAvailabilityMessageCard(
-                                                                  message:
-                                                                      availabilityMessage,
-                                                                  footerDetails:
-                                                                      availabilityFooterDetails,
-                                                                  onOpen:
-                                                                      availabilityOnOpen,
-                                                                  onAccept:
-                                                                      availabilityOnAccept,
-                                                                  onDecline:
-                                                                      availabilityOnDecline,
+                                                                Builder(
+                                                                  builder:
+                                                                      (context) {
+                                                                    final CalendarAvailabilityShare?
+                                                                        resolvedShare =
+                                                                        availabilityShare;
+                                                                    final String?
+                                                                        resolvedRequesterJid =
+                                                                        availabilityShareRequesterJid;
+                                                                    final VoidCallback?
+                                                                        resolvedOnOpen =
+                                                                        resolvedShare ==
+                                                                                null
+                                                                            ? null
+                                                                            : () =>
+                                                                                _openAvailabilityShareViewer(
+                                                                                  share: resolvedShare,
+                                                                                  requesterJid: resolvedRequesterJid,
+                                                                                  chatCalendarAvailable: chatCalendarAvailable,
+                                                                                  locate: context.read,
+                                                                                );
+                                                                    return CalendarAvailabilityMessageCard(
+                                                                      message:
+                                                                          availabilityMessage,
+                                                                      footerDetails:
+                                                                          availabilityFooterDetails,
+                                                                      onOpen:
+                                                                          resolvedOnOpen,
+                                                                      onAccept:
+                                                                          availabilityOnAccept,
+                                                                      onDecline:
+                                                                          availabilityOnDecline,
+                                                                    );
+                                                                  },
                                                                 ),
                                                                 shape:
                                                                     _calendarMessageCardShadowShape,
@@ -8730,10 +8764,12 @@ class _PinnedBadgeIcon extends StatelessWidget {
   const _PinnedBadgeIcon({
     required this.iconData,
     required this.count,
+    required this.iconColor,
   });
 
   final IconData iconData;
   final int count;
+  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -8745,8 +8781,9 @@ class _PinnedBadgeIcon extends StatelessWidget {
     final Icon icon = Icon(
       iconData,
       size: iconSize,
-      color: colors.primary,
+      color: iconColor,
     );
+    final Color badgeColor = iconColor;
     if (count <= _pinnedBadgeHiddenCount) {
       return icon;
     }
@@ -8759,7 +8796,7 @@ class _PinnedBadgeIcon extends StatelessWidget {
         color: colors.card,
         shape: BoxShape.circle,
         border: Border.all(
-          color: colors.primary,
+          color: badgeColor,
           width: _pinnedBadgeBorderWidth,
         ),
       ),
@@ -8772,7 +8809,7 @@ class _PinnedBadgeIcon extends StatelessWidget {
             child: Text(
               label,
               style: context.textTheme.small.copyWith(
-                color: colors.primary,
+                color: badgeColor,
                 fontWeight: FontWeight.w700,
               ),
             ),
