@@ -52,10 +52,6 @@ const bool _chatCalendarActionMenuGhost = true;
 const bool _chatCalendarActionUsePrimary = true;
 const String _chatCalendarHeaderAssertMessage =
     'ChatCalendarWidget requires onBackPressed when showHeader and showBackButton are true.';
-const String _chatCalendarOverlayLabel = 'Availability overlay active';
-const String _chatCalendarOverlayClearLabel = 'Clear overlays';
-const double _chatCalendarOverlayIconSize = 18.0;
-const double _chatCalendarOverlaySpacing = 8.0;
 
 CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
@@ -280,13 +276,6 @@ class _ChatCalendarWidgetState
                         availabilityCoordinator,
                       ),
             ),
-          if (state.model.availabilityOverlays.isNotEmpty)
-            _ChatCalendarOverlayBar(
-              count: state.model.availabilityOverlays.length,
-              onClear: () => _clearAvailabilityOverlays(
-                state.model.availabilityOverlays.keys,
-              ),
-            ),
           Expanded(child: tintedLayout),
         ],
       ),
@@ -364,15 +353,6 @@ class _ChatCalendarWidgetState
     );
   }
 
-  void _clearAvailabilityOverlays(Iterable<String> overlayIds) {
-    final bloc = context.read<ChatCalendarBloc>();
-    for (final id in overlayIds) {
-      bloc.add(
-        CalendarEvent.availabilityOverlayRemoved(overlayId: id),
-      );
-    }
-  }
-
   @override
   Color resolveSurfaceColor(BuildContext context) =>
       CalendarNavSurface.backgroundColor(context);
@@ -386,58 +366,6 @@ class _ChatCalendarWidgetState
     MediaQueryData mediaQuery,
   ) {
     return sizeClass == CalendarSizeClass.expanded;
-  }
-}
-
-class _ChatCalendarOverlayBar extends StatelessWidget {
-  const _ChatCalendarOverlayBar({
-    required this.count,
-    required this.onClear,
-  });
-
-  final int count;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color background = context.colorScheme.muted;
-    final Color border = context.colorScheme.border;
-    final TextStyle textStyle = context.textTheme.small.copyWith(
-      color: context.colorScheme.mutedForeground,
-      fontWeight: FontWeight.w600,
-    );
-    final String label = count == 1
-        ? _chatCalendarOverlayLabel
-        : '$_chatCalendarOverlayLabel ($count)';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        border: Border(
-          bottom: BorderSide(color: border),
-        ),
-      ),
-      child: Padding(
-        padding: calendarMarginLarge,
-        child: Row(
-          children: [
-            Icon(
-              LucideIcons.layers,
-              size: _chatCalendarOverlayIconSize,
-              color: context.colorScheme.mutedForeground,
-            ),
-            const SizedBox(width: _chatCalendarOverlaySpacing),
-            Expanded(
-              child: Text(label, style: textStyle),
-            ),
-            ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              onPressed: onClear,
-              child: const Text(_chatCalendarOverlayClearLabel),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
