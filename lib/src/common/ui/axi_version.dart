@@ -19,7 +19,7 @@ class AxiVersion extends StatelessWidget {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox.shrink();
         return ShadGestureDetector(
-          onTap: () => showShadDialog(
+          onTap: () => showFadeScaleDialog(
             context: context,
             builder: (context) => ShadDialog(
               title: Text(

@@ -129,7 +129,7 @@ class _IcsSelectField<T> extends StatelessWidget {
         const SizedBox(height: calendarGutterSm),
         IgnorePointer(
           ignoring: !enabled,
-          child: ShadSelect<T>(
+          child: AxiSelect<T>(
             initialValue: value,
             onChanged: onChanged,
             options: options,

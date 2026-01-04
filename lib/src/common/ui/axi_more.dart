@@ -143,7 +143,7 @@ class _AxiMoreState extends State<AxiMore> {
               onPressed: sheetAction,
             );
     }
-    return ShadPopover(
+    return AxiPopover(
       controller: popoverController,
       closeOnTapOutside: true,
       padding: EdgeInsets.zero,

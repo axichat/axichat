@@ -1616,7 +1616,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
       useSheet ? QuickAddModalSurface.bottomSheet : QuickAddModalSurface.dialog;
 
   if (!useSheet) {
-    return showDialog<void>(
+    return showFadeScaleDialog<void>(
       context: context,
       barrierColor: Colors.black54,
       builder: (dialogContext) {

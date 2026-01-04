@@ -235,15 +235,18 @@ class _CalendarCollectionsButtonState extends State<CalendarCollectionsButton> {
                 showWhenUnlinked: false,
                 child: Material(
                   color: Colors.transparent,
-                  child: CalendarCollectionsPanel(
-                    context: widget.context,
-                    collectionSettings: _collectionSettings,
-                    overlaySettings: _overlaySettings,
-                    onCollectionVisibilityChanged: _handleCollectionVisibility,
-                    onCollectionLayerChanged: _handleCollectionLayer,
-                    onOverlayVisibilityChanged: _handleOverlayVisibility,
-                    onOverlayLayerChanged: _handleOverlayLayer,
-                    onClose: _removeOverlay,
+                  child: InBoundsFadeScale(
+                    child: CalendarCollectionsPanel(
+                      context: widget.context,
+                      collectionSettings: _collectionSettings,
+                      overlaySettings: _overlaySettings,
+                      onCollectionVisibilityChanged:
+                          _handleCollectionVisibility,
+                      onCollectionLayerChanged: _handleCollectionLayer,
+                      onOverlayVisibilityChanged: _handleOverlayVisibility,
+                      onOverlayLayerChanged: _handleOverlayLayer,
+                      onClose: _removeOverlay,
+                    ),
                   ),
                 ),
               ),
@@ -1016,7 +1019,7 @@ class _LayerSelectField extends StatelessWidget {
         children: [
           Text(label.toUpperCase(), style: labelStyle),
           const SizedBox(height: calendarInsetSm),
-          ShadSelect<CalendarLayerPosition>(
+          AxiSelect<CalendarLayerPosition>(
             initialValue: value,
             onChanged: (next) {
               if (next == null) {

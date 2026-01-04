@@ -2145,67 +2145,69 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                         final bool shouldUpdateOccurrence =
                             storedTask == null && occurrenceTask != null;
 
-                        return EditTaskDropdown<T>(
-                          task: displayTask,
-                          maxHeight: layout.maxHeight,
-                          onClose: () => _closeTaskPopover(taskId,
-                              reason: 'dropdown-close'),
-                          scaffoldMessenger: scaffoldMessenger,
-                          locationHelper:
-                              LocationAutocompleteHelper.fromState(state),
-                          onTaskUpdated: (updatedTask) {
-                            context.read<T>().add(
-                                  CalendarEvent.taskUpdated(
-                                    task: updatedTask,
-                                  ),
-                                );
-                          },
-                          onOccurrenceUpdated: shouldUpdateOccurrence
-                              ? (updatedTask, scope) {
-                                  context.read<T>().add(
-                                        CalendarEvent.taskOccurrenceUpdated(
-                                          taskId: baseId,
-                                          occurrenceId: taskId,
-                                          scheduledTime:
-                                              updatedTask.scheduledTime,
-                                          duration: updatedTask.duration,
-                                          endDate: updatedTask.endDate,
-                                          checklist: updatedTask.checklist,
-                                          range: scope.range,
-                                        ),
-                                      );
-
-                                  final seriesUpdate = latestTask.copyWith(
-                                    title: updatedTask.title,
-                                    description: updatedTask.description,
-                                    location: updatedTask.location,
-                                    deadline: updatedTask.deadline,
-                                    priority: updatedTask.priority,
-                                    isCompleted: updatedTask.isCompleted,
-                                    checklist: updatedTask.checklist,
-                                    recurrence: updatedTask.recurrence,
-                                    reminders: updatedTask.reminders,
-                                    icsMeta: updatedTask.icsMeta,
-                                    modifiedAt: DateTime.now(),
+                        return InBoundsFadeScale(
+                          child: EditTaskDropdown<T>(
+                            task: displayTask,
+                            maxHeight: layout.maxHeight,
+                            onClose: () => _closeTaskPopover(taskId,
+                                reason: 'dropdown-close'),
+                            scaffoldMessenger: scaffoldMessenger,
+                            locationHelper:
+                                LocationAutocompleteHelper.fromState(state),
+                            onTaskUpdated: (updatedTask) {
+                              context.read<T>().add(
+                                    CalendarEvent.taskUpdated(
+                                      task: updatedTask,
+                                    ),
                                   );
-
-                                  if (seriesUpdate != latestTask) {
+                            },
+                            onOccurrenceUpdated: shouldUpdateOccurrence
+                                ? (updatedTask, scope) {
                                     context.read<T>().add(
-                                          CalendarEvent.taskUpdated(
-                                            task: seriesUpdate,
+                                          CalendarEvent.taskOccurrenceUpdated(
+                                            taskId: baseId,
+                                            occurrenceId: taskId,
+                                            scheduledTime:
+                                                updatedTask.scheduledTime,
+                                            duration: updatedTask.duration,
+                                            endDate: updatedTask.endDate,
+                                            checklist: updatedTask.checklist,
+                                            range: scope.range,
                                           ),
                                         );
+
+                                    final seriesUpdate = latestTask.copyWith(
+                                      title: updatedTask.title,
+                                      description: updatedTask.description,
+                                      location: updatedTask.location,
+                                      deadline: updatedTask.deadline,
+                                      priority: updatedTask.priority,
+                                      isCompleted: updatedTask.isCompleted,
+                                      checklist: updatedTask.checklist,
+                                      recurrence: updatedTask.recurrence,
+                                      reminders: updatedTask.reminders,
+                                      icsMeta: updatedTask.icsMeta,
+                                      modifiedAt: DateTime.now(),
+                                    );
+
+                                    if (seriesUpdate != latestTask) {
+                                      context.read<T>().add(
+                                            CalendarEvent.taskUpdated(
+                                              task: seriesUpdate,
+                                            ),
+                                          );
+                                    }
                                   }
-                                }
-                              : null,
-                          onTaskDeleted: (deletedTaskId) {
-                            context.read<T>().add(
-                                  CalendarEvent.taskDeleted(
-                                    taskId: deletedTaskId,
-                                  ),
-                                );
-                            _closeTaskPopover(taskId, reason: 'task-deleted');
-                          },
+                                : null,
+                            onTaskDeleted: (deletedTaskId) {
+                              context.read<T>().add(
+                                    CalendarEvent.taskDeleted(
+                                      taskId: deletedTaskId,
+                                    ),
+                                  );
+                              _closeTaskPopover(taskId, reason: 'task-deleted');
+                            },
+                          ),
                         );
                       },
                     ),
@@ -3829,7 +3831,7 @@ class _CalendarGridContextMenu extends StatelessWidget {
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: onPointerDown,
-      child: ShadContextMenu(
+      child: AxiContextMenu(
         controller: controller,
         groupId: groupId,
         anchor: anchor == null ? null : ShadGlobalAnchor(anchor!),

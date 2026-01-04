@@ -358,7 +358,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     final showAutoTrustToggle = canTrustChat;
     final autoTrustLabel = l10n.attachmentGalleryChatTrustLabel;
     final autoTrustHint = l10n.attachmentGalleryChatTrustHint;
-    final decision = await showShadDialog<AttachmentApprovalDecision>(
+    final decision = await showFadeScaleDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -771,7 +771,7 @@ class AttachmentGallerySelect<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadSelect<T>(
+    return AxiSelect<T>(
       initialValue: value,
       onChanged: (value) {
         if (value == null) return;

@@ -579,7 +579,7 @@ class _PathActionsState extends State<_PathActions> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
-          child: ShadPopover(
+          child: AxiPopover(
             controller: _menuController,
             closeOnTapOutside: true,
             padding: EdgeInsets.zero,

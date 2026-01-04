@@ -49,6 +49,8 @@ const _roomConfigSubmitFailedLog = 'Room configuration update rejected.';
 const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
+const int _roomAvatarVerificationAttempts = 3;
+const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
 const _iqTypeAttr = 'type';
 const _iqTypeGet = 'get';
 const _iqTypeSet = 'set';
@@ -952,6 +954,7 @@ mixin MucService on XmppBase, BaseStreamService {
     required String roomJid,
     required AvatarUploadPayload avatar,
   }) async {
+    final normalizedRoomJid = _roomKey(roomJid);
     final resolvedHash = _resolveRoomAvatarHash(avatar);
     final encodedAvatar = _base64EncodeAvatarPublishPayload(avatar.bytes);
     final trimmedMimeType = avatar.mimeType.trim();
@@ -964,7 +967,7 @@ mixin MucService on XmppBase, BaseStreamService {
       encodedAvatar,
     ];
     var updated = false;
-    final configForm = await fetchRoomConfigurationForm(roomJid);
+    final configForm = await fetchRoomConfigurationForm(normalizedRoomJid);
     if (configForm != null) {
       for (final avatarValue in avatarCandidates) {
         final updatedForm = _updateRoomAvatarForm(
@@ -978,7 +981,7 @@ mixin MucService on XmppBase, BaseStreamService {
           break;
         }
         updated = await submitRoomConfiguration(
-          roomJid: roomJid,
+          roomJid: normalizedRoomJid,
           form: updatedForm,
         );
         if (updated) {
@@ -989,12 +992,51 @@ mixin MucService on XmppBase, BaseStreamService {
     if (!updated) {
       return false;
     }
+    final verified = await _verifyRoomAvatarUpdate(
+      roomJid: normalizedRoomJid,
+      expectedHash: resolvedHash,
+    );
+    if (!verified) {
+      return false;
+    }
     await _storeRoomAvatarLocally(
-      roomJid: roomJid,
+      roomJid: normalizedRoomJid,
       bytes: avatar.bytes,
       hash: resolvedHash,
     );
     return true;
+  }
+
+  Future<bool> _verifyRoomAvatarUpdate({
+    required String roomJid,
+    required String expectedHash,
+  }) async {
+    for (var attempt = 0;
+        attempt < _roomAvatarVerificationAttempts;
+        attempt++) {
+      final payload = await _fetchRoomAvatarPayload(roomJid);
+      final payloadHash = payload.hash?.trim();
+      if (payloadHash?.isNotEmpty == true) {
+        if (payloadHash == expectedHash) {
+          return true;
+        }
+      } else {
+        final data = payload.data;
+        if (data?.isNotEmpty == true) {
+          final decoded = _decodeRoomAvatarData(data!);
+          if (decoded != null) {
+            final decodedHash = sha1.convert(decoded).toString();
+            if (decodedHash == expectedHash) {
+              return true;
+            }
+          }
+        }
+      }
+      if (attempt < _roomAvatarVerificationAttempts - 1) {
+        await Future<void>.delayed(_roomAvatarVerificationDelay);
+      }
+    }
+    return false;
   }
 
   Future<bool> _storeRoomAvatarLocally({

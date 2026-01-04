@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
@@ -55,6 +56,8 @@ class SignupAvatarEditorPanel extends StatefulWidget {
 }
 
 class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
+  static const _previewTransitionDuration = Duration(milliseconds: 220);
+
   bool _shuffling = false;
   bool _shufflingBackground = false;
   int _previewVersion = 0;
@@ -216,12 +219,13 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
       crossAxisAlignment: CrossAxisAlignment.center,
       spacing: 12.0,
       children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          switchInCurve: Curves.easeIn,
-          switchOutCurve: Curves.easeOut,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
+        PageTransitionSwitcher(
+          duration: _previewTransitionDuration,
+          transitionBuilder: (child, primaryAnimation, secondaryAnimation) =>
+              SharedAxisTransition(
+            animation: primaryAnimation,
+            secondaryAnimation: secondaryAnimation,
+            transitionType: SharedAxisTransitionType.scaled,
             child: child,
           ),
           child: hasPreviewBytes

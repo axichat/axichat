@@ -1298,7 +1298,7 @@ Future<void> _openImagePreview(
 }) async {
   if (!await file.exists()) return;
   if (!context.mounted) return;
-  await showShadDialog<void>(
+  await showFadeScaleDialog<void>(
     context: context,
     barrierDismissible: true,
     builder: (dialogContext) {

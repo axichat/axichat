@@ -12,10 +12,8 @@ const double _availabilityAccentWidth = 4.0;
 const double _availabilityAccentRadius = 14.0;
 const double _availabilityContentSpacing = 6.0;
 const double _availabilitySectionSpacing = 8.0;
-const double _availabilityHelperSpacing = 6.0;
 const int _availabilityRequestDescriptionMaxLines = 3;
 const double _availabilityActionSpacing = 8.0;
-const double _availabilityOpenIconSize = 16.0;
 
 const EdgeInsets _availabilityCardPadding =
     EdgeInsets.symmetric(horizontal: 12, vertical: 10);
@@ -24,7 +22,6 @@ const EdgeInsets _availabilityActionPadding = EdgeInsets.only(top: 6);
 
 const String _availabilityShareLabel = 'Availability';
 const String _availabilityShareSubtitle = 'Tap to view free/busy.';
-const String _availabilityShareOpenLabel = 'View availability';
 const String _availabilityRequestLabel = 'Availability request';
 const String _availabilityAcceptedLabel = 'Availability accepted';
 const String _availabilityDeclinedLabel = 'Availability declined';
@@ -32,7 +29,6 @@ const String _availabilityRangeSeparator = ' - ';
 const String _availabilityAcceptButtonLabel = 'Accept';
 const String _availabilityDeclineButtonLabel = 'Decline';
 const String _availabilityRequestTitleFallback = 'Requested time';
-const IconData _availabilityShareOpenIcon = LucideIcons.calendarDays;
 
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 
@@ -56,7 +52,11 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final accentColor = _accentColorForMessage(context, message);
-    return DecoratedBox(
+    final bool isShare = message.maybeMap(
+      share: (_) => true,
+      orElse: () => false,
+    );
+    final Widget card = DecoratedBox(
       decoration: ShapeDecoration(
         color: colors.card,
         shape: ContinuousRectangleBorder(
@@ -78,7 +78,6 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
                   message.map(
                     share: (value) => _AvailabilityShareBody(
                       share: value.share,
-                      onOpen: onOpen,
                     ),
                     request: (value) => _AvailabilityRequestBody(
                       request: value.request,
@@ -103,6 +102,14 @@ class CalendarAvailabilityMessageCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+    if (!isShare || onOpen == null) {
+      return card;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: onOpen,
+      child: card,
     );
   }
 }
@@ -129,11 +136,9 @@ class _AvailabilityAccent extends StatelessWidget {
 class _AvailabilityShareBody extends StatelessWidget {
   const _AvailabilityShareBody({
     required this.share,
-    required this.onOpen,
   });
 
   final CalendarAvailabilityShare share;
-  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -142,20 +147,8 @@ class _AvailabilityShareBody extends StatelessWidget {
       overlay.rangeStart.value,
       overlay.rangeEnd.value,
     );
-    final Widget content = _AvailabilityShareContent(
+    return _AvailabilityShareContent(
       rangeLabel: rangeLabel,
-      onOpen: onOpen,
-    );
-    if (onOpen == null) {
-      return content;
-    }
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(_availabilityCardRadius),
-        child: content,
-      ),
     );
   }
 }
@@ -163,11 +156,9 @@ class _AvailabilityShareBody extends StatelessWidget {
 class _AvailabilityShareContent extends StatelessWidget {
   const _AvailabilityShareContent({
     required this.rangeLabel,
-    required this.onOpen,
   });
 
   final String rangeLabel;
-  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -191,38 +182,6 @@ class _AvailabilityShareContent extends StatelessWidget {
           ),
         ),
         Text(_availabilityShareSubtitle, style: helperStyle),
-        const SizedBox(height: _availabilityHelperSpacing),
-        _AvailabilityOpenRow(onOpen: onOpen),
-      ],
-    );
-  }
-}
-
-class _AvailabilityOpenRow extends StatelessWidget {
-  const _AvailabilityOpenRow({required this.onOpen});
-
-  final VoidCallback? onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isEnabled = onOpen != null;
-    final Color foreground = isEnabled
-        ? context.colorScheme.foreground
-        : context.colorScheme.mutedForeground;
-    final TextStyle textStyle = context.textTheme.small.copyWith(
-      fontWeight: FontWeight.w600,
-      color: foreground,
-    );
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          _availabilityShareOpenIcon,
-          size: _availabilityOpenIconSize,
-          color: foreground,
-        ),
-        const SizedBox(width: _availabilityActionSpacing),
-        Text(_availabilityShareOpenLabel, style: textStyle),
       ],
     );
   }

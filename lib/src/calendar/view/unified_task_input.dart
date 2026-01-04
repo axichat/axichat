@@ -274,6 +274,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       initialDate: _selectedDate ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (dialogContext, child) => InBoundsFadeScaleChild(child: child),
     );
 
     if (picked != null) {
@@ -285,6 +286,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     final picked = await showTimePicker(
       context: context,
       initialTime: _selectedTime ?? TimeOfDay.now(),
+      builder: (dialogContext, child) => InBoundsFadeScaleChild(child: child),
     );
 
     if (picked != null) {
@@ -824,7 +826,7 @@ class _UnifiedTaskDurationField extends StatelessWidget {
           style: textTheme.muted,
         ),
         const SizedBox(height: calendarGutterSm),
-        ShadSelect<Duration>(
+        AxiSelect<Duration>(
           placeholder: Text(context.l10n.calendarSelectDuration),
           options: durationOptions
               .map(
@@ -1012,7 +1014,7 @@ void showUnifiedTaskInput<T extends BaseCalendarBloc>(
       ),
     );
   } else {
-    showDialog<void>(
+    showFadeScaleDialog<void>(
       context: context,
       builder: (context) => buildTaskInput(),
     );

@@ -77,6 +77,9 @@ const _roomAvatarPermissionDeniedMessage =
 const _roomAvatarUpdateSuccessMessage = 'Room avatar updated.';
 const _roomAvatarUpdateFailureMessage = 'Could not update room avatar.';
 const _roomAvatarUpdateFailedLogMessage = 'Failed to update room avatar.';
+const _roomAffiliationRefreshFailedLogMessage =
+    'Failed to refresh room affiliations.';
+const _mucOccupantSeparator = '/';
 const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
@@ -225,6 +228,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatInviteJoinRequested>(_onInviteJoinRequested);
     on<ChatLeaveRoomRequested>(_onLeaveRoomRequested);
     on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
+    on<ChatRoomMembersOpened>(_onChatRoomMembersOpened);
     on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
     on<ChatEmailImagesLoaded>(_onEmailImagesLoaded);
@@ -335,6 +339,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _mamCatchUpCompleted = false;
   bool _emailHistoryLoading = false;
   bool _pinHydrationInFlight = false;
+  final Set<String> _roomAffiliationRefreshAttempts = <String>{};
   Completer<void>? _mamLoadingCompleter;
 
   RestartableTimer? _typingTimer;
@@ -362,18 +367,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  bool _isAxiDomainJid(String? value) {
-    final bare = _bareJid(value);
-    if (bare == null) return false;
-    final normalized = bare.trim().toLowerCase();
-    if (normalized.isEmpty) return false;
-    return _axiDomainPattern.hasMatch(normalized);
-  }
-
   bool _xmppAllowedForChat(Chat chat) {
-    if (chat.defaultTransport.isEmail) return false;
+    if (chat.isEmailBacked) return false;
     final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
-    return _isAxiDomainJid(candidate);
+    return candidate.trim().isNotEmpty;
   }
 
   bool get _shouldUseCoreDraftFallback {
@@ -654,6 +651,83 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<void> _onChatRoomMembersOpened(
+    ChatRoomMembersOpened event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null || chat.type != ChatType.groupChat) return;
+    await _ensureMucMembership(chat);
+    _seedLocalRoomOccupant(chat, state.roomState);
+    final roomState = state.roomState;
+    if (roomState == null) return;
+    await _refreshRoomAffiliationsIfNeeded(
+      chat: chat,
+      roomState: roomState,
+    );
+  }
+
+  String? _resolveLocalRoomNickname(Chat chat, String selfJid) {
+    final nickname = chat.myNickname?.trim();
+    if (nickname?.isNotEmpty == true) return nickname;
+    try {
+      final local = mox.JID.fromString(selfJid).local.trim();
+      if (local.isNotEmpty) return local;
+    } on Exception {
+      return null;
+    }
+    return null;
+  }
+
+  void _seedLocalRoomOccupant(Chat chat, RoomState? roomState) {
+    if (_mucService.hasLeftRoom(chat.jid)) return;
+    final roomJid = _bareJid(chat.jid);
+    if (roomJid == null || roomJid.isEmpty) return;
+    final selfJid = _bareJid(_chatsService.myJid);
+    if (selfJid == null || selfJid.isEmpty) return;
+    if (roomState?.myOccupantId?.isNotEmpty == true) return;
+    final normalizedSelfJid = selfJid.toLowerCase();
+    final alreadySeeded = roomState?.occupants.values.any(
+          (occupant) =>
+              _bareJid(occupant.realJid)?.toLowerCase() == normalizedSelfJid,
+        ) ??
+        false;
+    if (alreadySeeded) return;
+    final nick = _resolveLocalRoomNickname(chat, selfJid);
+    if (nick == null || nick.isEmpty) return;
+    final occupantId = '$roomJid$_mucOccupantSeparator$nick';
+    _mucService.updateOccupantFromPresence(
+      roomJid: roomJid,
+      occupantId: occupantId,
+      nick: nick,
+      realJid: selfJid,
+      isPresent: true,
+    );
+  }
+
+  Future<void> _refreshRoomAffiliationsIfNeeded({
+    required Chat chat,
+    required RoomState roomState,
+  }) async {
+    if (roomState.occupants.isEmpty) return;
+    if (!roomState.myAffiliation.isNone) return;
+    if (state.xmppConnectionState != ConnectionState.connected) return;
+    final roomJid = _bareJid(chat.jid);
+    if (roomJid == null || roomJid.isEmpty) return;
+    if (_roomAffiliationRefreshAttempts.contains(roomJid)) return;
+    _roomAffiliationRefreshAttempts.add(roomJid);
+    try {
+      await _mucService.fetchRoomOwners(roomJid: roomJid);
+      await _mucService.fetchRoomAdmins(roomJid: roomJid);
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(
+        _roomAffiliationRefreshFailedLogMessage,
+        error,
+        stackTrace,
+      );
+    }
+  }
+
   void _subscribeToMessages({
     required int limit,
     required MessageTimelineFilter filter,
@@ -851,6 +925,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chatJid == null) return;
     if (chatJid != _bareJid(event.roomState.roomJid)) return;
     emit(state.copyWith(roomState: event.roomState));
+    final chat = state.chat;
+    if (chat == null || chat.type != ChatType.groupChat) return;
+    _seedLocalRoomOccupant(chat, event.roomState);
+    unawaited(
+      _refreshRoomAffiliationsIfNeeded(
+        chat: chat,
+        roomState: event.roomState,
+      ),
+    );
   }
 
   void _primeRoomState(Chat chat) {

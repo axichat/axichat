@@ -245,6 +245,7 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
       initialDate: _composerController.selectedDate ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      builder: (dialogContext, child) => InBoundsFadeScaleChild(child: child),
     );
     if (date != null) {
       _composerController
@@ -257,6 +258,7 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
     final time = await showTimePicker(
       context: context,
       initialTime: _composerController.selectedTime ?? TimeOfDay.now(),
+      builder: (dialogContext, child) => InBoundsFadeScaleChild(child: child),
     );
     if (time != null) {
       _composerController
