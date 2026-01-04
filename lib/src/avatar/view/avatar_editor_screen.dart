@@ -36,11 +36,13 @@ class AvatarEditorScreen extends StatelessWidget {
           value: locate<SettingsCubit>(),
         ),
         BlocProvider(
-          create: (_) => AvatarEditorCubit(
+          create: (context) => AvatarEditorCubit(
             xmppService: locate<XmppService>(),
             templates: templates,
             profileCubit: locate<ProfileCubit>(),
-          )..initialize(context.colorScheme),
+          )..initialize(
+              ShadTheme.of(context, listen: false).colorScheme,
+            ),
         ),
       ],
       child: _AvatarEditorBody(

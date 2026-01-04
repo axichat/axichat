@@ -275,6 +275,35 @@ const _selectionAttachmentBaseGap = 16.0;
 const _selectionAttachmentSelectedGap = 8.0;
 const _attachmentPreviewSpacing = 8.0;
 const double _messageExtraSpacing = 4.0;
+const double _attachmentSurfaceCornerRadius = 20.0;
+const double _calendarMessageCardCornerRadius = 18.0;
+const ShapeBorder _attachmentSurfaceShadowShape = ContinuousRectangleBorder(
+  borderRadius: BorderRadius.all(
+    Radius.circular(_attachmentSurfaceCornerRadius),
+  ),
+);
+const ShapeBorder _attachmentSurfaceStackedShadowShape =
+    ContinuousRectangleBorder(
+  borderRadius: BorderRadius.only(
+    topLeft: Radius.circular(_attachmentSurfaceCornerRadius),
+    topRight: Radius.circular(_attachmentSurfaceCornerRadius),
+  ),
+);
+const ShapeBorder _inviteAttachmentShadowShape = ContinuousRectangleBorder(
+  borderRadius: BorderRadius.all(
+    Radius.circular(_inviteAttachmentCornerRadius),
+  ),
+);
+const ShapeBorder _calendarMessageCardShadowShape = ContinuousRectangleBorder(
+  borderRadius: BorderRadius.all(
+    Radius.circular(_calendarMessageCardCornerRadius),
+  ),
+);
+const ShapeBorder _calendarTaskShadowShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.all(
+    Radius.circular(calendarEventRadius),
+  ),
+);
 const double _inviteAttachmentCornerRadius = 20.0;
 const double _inviteAttachmentPaddingValue = 12.0;
 const _inviteAttachmentPadding = EdgeInsets.all(_inviteAttachmentPaddingValue);
@@ -844,21 +873,25 @@ BorderRadius _bubbleBorderRadius({
   required bool chainedPrevious,
   required bool chainedNext,
   bool isSelected = false,
+  bool flattenBottom = false,
 }) {
-  if (isSelected) {
-    return const BorderRadius.all(Radius.circular(_bubbleRadius));
-  }
   const radius = Radius.circular(_bubbleRadius);
   var topLeading = radius;
   var topTrailing = radius;
   var bottomLeading = radius;
   var bottomTrailing = radius;
-  if (isSelf) {
-    if (chainedPrevious) topTrailing = Radius.zero;
-    if (chainedNext) bottomTrailing = Radius.zero;
-  } else {
-    if (chainedPrevious) topLeading = Radius.zero;
-    if (chainedNext) bottomLeading = Radius.zero;
+  if (!isSelected) {
+    if (isSelf) {
+      if (chainedPrevious) topTrailing = Radius.zero;
+      if (chainedNext) bottomTrailing = Radius.zero;
+    } else {
+      if (chainedPrevious) topLeading = Radius.zero;
+      if (chainedNext) bottomLeading = Radius.zero;
+    }
+  }
+  if (flattenBottom) {
+    bottomLeading = Radius.zero;
+    bottomTrailing = Radius.zero;
   }
   return BorderRadius.only(
     topLeft: topLeading,
@@ -5395,15 +5428,45 @@ class _ChatState extends State<Chat> {
                                                               message.customProperties?[
                                                                       'id'] ??
                                                                   '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
+                                                          final isDesktopPlatform =
+                                                              EnvScope.maybeOf(
+                                                                          context)
+                                                                      ?.isDesktopPlatform ??
+                                                                  false;
                                                           final bubbleTextChildren =
                                                               <Widget>[];
                                                           final bubbleExtraChildren =
                                                               <Widget>[];
                                                           void addExtra(
                                                             Widget child, {
+                                                            required ShapeBorder
+                                                                shape,
                                                             double spacing =
                                                                 _messageExtraSpacing,
                                                           }) {
+                                                            final Widget
+                                                                extraChild =
+                                                                _MessageExtraItem(
+                                                              shape: shape,
+                                                              onLongPress: widget
+                                                                          .readOnly ||
+                                                                      isDesktopPlatform
+                                                                  ? null
+                                                                  : () =>
+                                                                      _toggleMessageSelection(
+                                                                        messageModel,
+                                                                      ),
+                                                              onSecondaryTapUp:
+                                                                  isDesktopPlatform &&
+                                                                          !widget
+                                                                              .readOnly
+                                                                      ? (_) =>
+                                                                          _toggleMessageSelection(
+                                                                            messageModel,
+                                                                          )
+                                                                      : null,
+                                                              child: child,
+                                                            );
                                                             if (bubbleExtraChildren
                                                                 .isNotEmpty) {
                                                               bubbleExtraChildren
@@ -5413,7 +5476,9 @@ class _ChatState extends State<Chat> {
                                                                         spacing,
                                                                   ),
                                                                 )
-                                                                ..add(child);
+                                                                ..add(
+                                                                  extraChild,
+                                                                );
                                                               return;
                                                             }
                                                             if (bubbleTextChildren
@@ -5428,7 +5493,9 @@ class _ChatState extends State<Chat> {
                                                               );
                                                             }
                                                             bubbleExtraChildren
-                                                                .add(child);
+                                                                .add(
+                                                              extraChild,
+                                                            );
                                                           }
 
                                                           if (quotedModel !=
@@ -5566,6 +5633,8 @@ class _ChatState extends State<Chat> {
                                                                   messageModel,
                                                                 ),
                                                               ),
+                                                              shape:
+                                                                  _inviteAttachmentShadowShape,
                                                               spacing:
                                                                   _attachmentPreviewSpacing,
                                                             );
@@ -5911,9 +5980,17 @@ class _ChatState extends State<Chat> {
                                                                   onDecline:
                                                                       availabilityOnDecline,
                                                                 ),
+                                                                shape:
+                                                                    _calendarMessageCardShadowShape,
                                                               );
                                                             } else if (calendarTaskIcs !=
                                                                 null) {
+                                                              final ShapeBorder
+                                                                  calendarTaskShape =
+                                                                  chatCalendarBloc ==
+                                                                          null
+                                                                      ? _calendarMessageCardShadowShape
+                                                                      : _calendarTaskShadowShape;
                                                               addExtra(
                                                                 chatCalendarBloc ==
                                                                         null
@@ -5936,6 +6013,8 @@ class _ChatState extends State<Chat> {
                                                                         footerDetails:
                                                                             taskFooterDetails,
                                                                       ),
+                                                                shape:
+                                                                    calendarTaskShape,
                                                               );
                                                             } else if (displayFragment !=
                                                                 null) {
@@ -5963,6 +6042,8 @@ class _ChatState extends State<Chat> {
                                                               );
                                                               addExtra(
                                                                 fragmentCard,
+                                                                shape:
+                                                                    _calendarMessageCardShadowShape,
                                                               );
                                                             }
                                                             final String?
@@ -6290,6 +6371,17 @@ class _ChatState extends State<Chat> {
                                                               final attachmentId =
                                                                   attachmentIds[
                                                                       index];
+                                                              final bool
+                                                                  isLastAttachment =
+                                                                  index ==
+                                                                      attachmentIds
+                                                                              .length -
+                                                                          1;
+                                                              final ShapeBorder
+                                                                  attachmentShape =
+                                                                  isLastAttachment
+                                                                      ? _attachmentSurfaceShadowShape
+                                                                      : _attachmentSurfaceStackedShadowShape;
                                                               addExtra(
                                                                 ChatAttachmentPreview(
                                                                   stanzaId:
@@ -6324,6 +6416,8 @@ class _ChatState extends State<Chat> {
                                                                                 senderEmail: state.chat?.emailAddress,
                                                                               ),
                                                                 ),
+                                                                shape:
+                                                                    attachmentShape,
                                                                 spacing:
                                                                     _attachmentPreviewSpacing,
                                                               );
@@ -6408,6 +6502,10 @@ class _ChatState extends State<Chat> {
                                                               ),
                                                             );
                                                           }
+                                                          final bool
+                                                              hasBubbleExtras =
+                                                              bubbleExtraChildren
+                                                                  .isNotEmpty;
                                                           final bubbleBorderRadius =
                                                               _bubbleBorderRadius(
                                                             isSelf: self,
@@ -6417,6 +6515,8 @@ class _ChatState extends State<Chat> {
                                                                 chainedNext,
                                                             isSelected:
                                                                 isSelected,
+                                                            flattenBottom:
+                                                                hasBubbleExtras,
                                                           );
                                                           final selectionAllowance =
                                                               selectionOverlay !=
@@ -6444,6 +6544,25 @@ class _ChatState extends State<Chat> {
                                                               hasBubbleText =
                                                               bubbleTextChildren
                                                                   .isNotEmpty;
+                                                          final bool
+                                                              hasBubbleCutout =
+                                                              showCompactReactions ||
+                                                                  showReplyStrip ||
+                                                                  showRecipientCutout;
+                                                          final double
+                                                              bubbleAnchorHeight =
+                                                              hasBubbleText ||
+                                                                      !hasBubbleCutout
+                                                                  ? 0.0
+                                                                  : math.max(
+                                                                      showCompactReactions
+                                                                          ? _reactionCutoutDepth
+                                                                          : 0.0,
+                                                                      (showReplyStrip ||
+                                                                              showRecipientCutout)
+                                                                          ? _recipientCutoutDepth
+                                                                          : 0.0,
+                                                                    );
                                                           final Color
                                                               bubbleSurfaceColor =
                                                               hasBubbleText
@@ -6457,19 +6576,30 @@ class _ChatState extends State<Chat> {
                                                                   : Colors
                                                                       .transparent;
                                                           final bubbleContent =
-                                                              Padding(
-                                                            padding:
-                                                                bubblePadding,
-                                                            child: Column(
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              spacing:
-                                                                  _messageExtraSpacing,
-                                                              children:
-                                                                  bubbleTextChildren,
-                                                            ),
-                                                          );
+                                                              hasBubbleText
+                                                                  ? Padding(
+                                                                      padding:
+                                                                          bubblePadding,
+                                                                      child:
+                                                                          Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        spacing:
+                                                                            _messageExtraSpacing,
+                                                                        children:
+                                                                            bubbleTextChildren,
+                                                                      ),
+                                                                    )
+                                                                  : bubbleAnchorHeight >
+                                                                          0
+                                                                      ? SizedBox(
+                                                                          width:
+                                                                              bubbleConstraints.maxWidth,
+                                                                          height:
+                                                                              bubbleAnchorHeight,
+                                                                        )
+                                                                      : const SizedBox
+                                                                          .shrink();
                                                           final nextIsTailSpacer =
                                                               next?.customProperties?[
                                                                       'selectionSpacer'] ==
@@ -7220,27 +7350,7 @@ class _ChatState extends State<Chat> {
                                                             () => GlobalKey(),
                                                           );
                                                           final bubbleDisplay =
-                                                              isRenderableBubble
-                                                                  ? _MessageArrivalAnimator(
-                                                                      key:
-                                                                          ValueKey(
-                                                                        'arrival-${messageModel.stanzaID}',
-                                                                      ),
-                                                                      animate:
-                                                                          _shouldAnimateMessage(
-                                                                        messageModel,
-                                                                      ),
-                                                                      isSelf:
-                                                                          self,
-                                                                      child:
-                                                                          alignedBubble,
-                                                                    )
-                                                                  : alignedBubble;
-                                                          final isDesktopPlatform =
-                                                              EnvScope.maybeOf(
-                                                                          context)
-                                                                      ?.isDesktopPlatform ??
-                                                                  false;
+                                                              alignedBubble;
                                                           final selectableBubble =
                                                               GestureDetector(
                                                             behavior:
@@ -7399,6 +7509,24 @@ class _ChatState extends State<Chat> {
                                                             child:
                                                                 animatedMessage,
                                                           );
+                                                          final Widget
+                                                              messageArrival =
+                                                              isRenderableBubble
+                                                                  ? _MessageArrivalAnimator(
+                                                                      key:
+                                                                          ValueKey(
+                                                                        'arrival-${messageModel.stanzaID}',
+                                                                      ),
+                                                                      animate:
+                                                                          _shouldAnimateMessage(
+                                                                        messageModel,
+                                                                      ),
+                                                                      isSelf:
+                                                                          self,
+                                                                      child:
+                                                                          messageRegion,
+                                                                    )
+                                                                  : messageRegion;
                                                           final alignedMessage =
                                                               SizedBox(
                                                             width:
@@ -7412,7 +7540,7 @@ class _ChatState extends State<Chat> {
                                                               alignment:
                                                                   messageRowAlignment,
                                                               child:
-                                                                  messageRegion,
+                                                                  messageArrival,
                                                             ),
                                                           );
                                                           return KeyedSubtree(
@@ -10174,13 +10302,47 @@ class _MessageExtraGap extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(height: height);
 }
 
+class _MessageExtraItem extends StatelessWidget {
+  const _MessageExtraItem({
+    required this.child,
+    required this.shape,
+    this.onLongPress,
+    this.onSecondaryTapUp,
+  });
+
+  final Widget child;
+  final ShapeBorder shape;
+  final GestureLongPressCallback? onLongPress;
+  final GestureTapUpCallback? onSecondaryTapUp;
+
+  @override
+  Widget build(BuildContext context) {
+    final clippedChild = ClipPath(
+      clipper: ShapeBorderClipper(shape: shape),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+    if (onLongPress == null && onSecondaryTapUp == null) {
+      return clippedChild;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPress: onLongPress,
+      onSecondaryTapUp: onSecondaryTapUp,
+      child: clippedChild,
+    );
+  }
+}
+
 class _MessageExtraShadow extends StatelessWidget {
   const _MessageExtraShadow({
     required this.child,
+    required this.shape,
     required this.shadows,
   });
 
   final Widget child;
+  final ShapeBorder shape;
   final List<BoxShadow> shadows;
 
   @override
@@ -10189,8 +10351,9 @@ class _MessageExtraShadow extends StatelessWidget {
       return child;
     }
     return DecoratedBox(
-      decoration: BoxDecoration(
-        boxShadow: shadows,
+      decoration: ShapeDecoration(
+        shape: shape,
+        shadows: shadows,
       ),
       child: child,
     );
@@ -10218,16 +10381,19 @@ class _MessageExtrasColumn extends StatelessWidget {
     final bool showShadow = shadowValue > 0;
     final List<BoxShadow> resolvedShadows =
         showShadow ? _scaleShadows(shadows, shadowValue) : const <BoxShadow>[];
-    final decoratedChildren = children
-        .map(
-          (child) => child is _MessageExtraGap || !showShadow
-              ? child
-              : _MessageExtraShadow(
-                  shadows: resolvedShadows,
-                  child: child,
-                ),
-        )
-        .toList();
+    final decoratedChildren = children.map((child) {
+      if (child is _MessageExtraGap || !showShadow) {
+        return child;
+      }
+      if (child is _MessageExtraItem) {
+        return _MessageExtraShadow(
+          shape: child.shape,
+          shadows: resolvedShadows,
+          child: child,
+        );
+      }
+      return child;
+    }).toList();
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: crossAxisAlignment,

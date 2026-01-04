@@ -5,14 +5,16 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
-import 'package:axichat/src/avatar/view/signup_avatar_error_text.dart';
+import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
+import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -49,11 +51,18 @@ class ChatsAddButton extends StatelessWidget {
               value: locate<AuthenticationCubit>(),
             ),
             BlocProvider(
-              create: (context) =>
-                  SignupAvatarCubit()..setVisible(true, context.colorScheme),
+              create: (context) {
+                final colors = ShadTheme.of(context, listen: false).colorScheme;
+                return AvatarEditorCubit(
+                  xmppService: locate<XmppService>(),
+                  templates: buildDefaultAvatarTemplates(),
+                )
+                  ..initialize(colors)
+                  ..seedRandomTemplate(colors);
+              },
             ),
           ],
-          child: BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
+          child: BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
             builder: (context, avatarState) {
               return StatefulBuilder(
                 builder: (context, setState) {
@@ -64,11 +73,10 @@ class ChatsAddButton extends StatelessWidget {
                   const avatarEditorMaxWidth = 960.0;
                   const avatarEditorCloseInset = 6.0;
                   const dialogMaxHeightRatio = 0.8;
-                  final avatarErrorText = signupAvatarErrorText(
-                    avatarState: avatarState,
-                    l10n: l10n,
-                  );
-                  final canSubmit = title.isNotEmpty && !avatarState.processing;
+                  final avatarErrorText = avatarState.error;
+                  final canSubmit = title.isNotEmpty &&
+                      !avatarState.isBusy &&
+                      avatarState.draft != null;
                   return AxiInputDialog(
                     title: Text(l10n.chatsCreateChatRoomTitle),
                     content: BlocConsumer<ChatsCubit, ChatsState>(
@@ -110,7 +118,7 @@ class ChatsAddButton extends StatelessWidget {
                                           child: SignupAvatarSelector(
                                             bytes: avatarState.displayedBytes,
                                             username: title,
-                                            processing: avatarState.processing,
+                                            processing: avatarState.isBusy,
                                             onTap: () {
                                               setState(() {
                                                 showAvatarEditor = true;
@@ -188,26 +196,28 @@ class ChatsAddButton extends StatelessWidget {
                                                       avatarState.sourceBytes,
                                                   cropRect:
                                                       avatarState.cropRect,
-                                                  imageWidth:
-                                                      avatarState.imageWidth,
-                                                  imageHeight:
-                                                      avatarState.imageHeight,
+                                                  imageWidth: avatarState
+                                                      .imageWidth
+                                                      ?.toDouble(),
+                                                  imageHeight: avatarState
+                                                      .imageHeight
+                                                      ?.toDouble(),
                                                   onCropChanged: (rect) => context
-                                                      .read<SignupAvatarCubit>()
+                                                      .read<AvatarEditorCubit>()
                                                       .updateCropRect(
                                                         rect,
                                                       ),
-                                                  onCropReset: context
-                                                      .read<SignupAvatarCubit>()
-                                                      .resetCrop,
+                                                  onCropReset: () => context
+                                                      .read<AvatarEditorCubit>()
+                                                      .resetCrop(),
                                                   onShuffle: () => context
-                                                      .read<SignupAvatarCubit>()
+                                                      .read<AvatarEditorCubit>()
                                                       .shuffleTemplate(
                                                         context.colorScheme,
                                                       ),
-                                                  onUpload: context
-                                                      .read<SignupAvatarCubit>()
-                                                      .pickAvatarFromFiles,
+                                                  onUpload: () => context
+                                                      .read<AvatarEditorCubit>()
+                                                      .pickImage(),
                                                   canShuffleBackground:
                                                       avatarState
                                                           .canShuffleBackground,
@@ -215,7 +225,7 @@ class ChatsAddButton extends StatelessWidget {
                                                           .canShuffleBackground
                                                       ? () => context
                                                           .read<
-                                                              SignupAvatarCubit>()
+                                                              AvatarEditorCubit>()
                                                           .shuffleBackground(
                                                             context.colorScheme,
                                                           )
@@ -269,16 +279,19 @@ class ChatsAddButton extends StatelessWidget {
                                   invalidCharacterValidationMessage);
                               return;
                             }
-                            final avatarCubit =
-                                context.read<SignupAvatarCubit>();
-                            if (avatarCubit.state.processing) return;
-                            if (avatarCubit.state.avatar == null) {
-                              avatarCubit.materializeCurrentCarouselAvatar();
+                            if (context
+                                .read<AvatarEditorCubit>()
+                                .state
+                                .isBusy) {
+                              return;
                             }
                             setState(() => validationError = null);
                             context.read<ChatsCubit>().createChatRoom(
                                   title: trimmed,
-                                  avatar: avatarCubit.state.avatar,
+                                  avatar: context
+                                      .read<AvatarEditorCubit>()
+                                      .state
+                                      .draft,
                                 );
                           },
                   );

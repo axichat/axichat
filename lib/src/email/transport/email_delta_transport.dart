@@ -69,6 +69,7 @@ const Duration _originIdHydrationDelay =
     Duration(milliseconds: _originIdHydrationDelayMs);
 const String _pendingOutgoingStanzaPrefix = 'dc-pending';
 const String _pendingOutgoingStanzaSeparator = '-';
+const bool _defaultScheduleAccountHydration = true;
 
 enum _DeltaSecurityModeResolution {
   auto,
@@ -789,7 +790,11 @@ class EmailDeltaTransport implements ChatTransport {
       if (context == null) {
         return null;
       }
-      return _registerSession(accountId: resolvedId, context: context);
+      return _registerSession(
+        accountId: resolvedId,
+        context: context,
+        scheduleHydration: _contextOpened,
+      );
     }
     return _ensureAccountSession(resolvedId);
   }
@@ -797,6 +802,7 @@ class EmailDeltaTransport implements ChatTransport {
   _DeltaAccountSession _registerSession({
     required int accountId,
     required DeltaContextHandle context,
+    bool scheduleHydration = _defaultScheduleAccountHydration,
   }) {
     final existing = _accountSessions[accountId];
     if (existing != null) {
@@ -815,10 +821,12 @@ class EmailDeltaTransport implements ChatTransport {
       consumer: consumer,
     );
     _accountSessions[accountId] = session;
-    _scheduleAccountAddressHydration(
-      context: context,
-      accountId: accountId,
-    );
+    if (scheduleHydration) {
+      _scheduleAccountAddressHydration(
+        context: context,
+        accountId: accountId,
+      );
+    }
     if (_ioRunning) {
       _attachEventSubscription(session);
     }
@@ -948,7 +956,7 @@ class EmailDeltaTransport implements ChatTransport {
         opened = await _tryOpenAccountsContext(prefix, passphrase);
       }
       if (!opened) {
-        await _openLegacyContext(prefix, passphrase);
+        await _openSingleContext(prefix, passphrase);
       }
       completer.complete();
     } catch (error, stackTrace) {
@@ -986,7 +994,7 @@ class EmailDeltaTransport implements ChatTransport {
         _accounts ??= await _createAccounts(prefix);
       } on DeltaSafeException catch (error, stackTrace) {
         _log.warning(
-          'Delta accounts unavailable, falling back to legacy mode',
+          'Delta accounts unavailable, falling back to single-account mode',
           error,
           stackTrace,
         );
@@ -998,12 +1006,13 @@ class EmailDeltaTransport implements ChatTransport {
         await _clearSessions();
         return false;
       }
-      final legacyFile = await _deltaDatabaseFile(prefix);
-      final legacyPath = await legacyFile.exists() ? legacyFile.path : null;
+      final databaseFile = await _deltaDatabaseFile(prefix);
+      final databasePath =
+          await databaseFile.exists() ? databaseFile.path : null;
       int accountId;
       try {
         accountId = await _accounts!.ensureAccount(
-          legacyDatabasePath: legacyPath,
+          legacyDatabasePath: databasePath,
         );
       } on DeltaSafeException catch (error, stackTrace) {
         if (!shouldRetry(error)) {
@@ -1040,7 +1049,7 @@ class EmailDeltaTransport implements ChatTransport {
               (resetAttempted == false && !_accountsSupported);
           if (!retry) {
             _log.warning(
-              'Failed to open Delta account at ${legacyFile.path}; disabling accounts support',
+              'Failed to open Delta account at ${databaseFile.path}; disabling accounts support',
               error,
               stackTrace,
             );
@@ -1054,7 +1063,7 @@ class EmailDeltaTransport implements ChatTransport {
           }
           resetAttempted = true;
           _log.warning(
-            'Failed to open Delta account at ${legacyFile.path}, resetting storage',
+            'Failed to open Delta account at ${databaseFile.path}, resetting storage',
             error,
             stackTrace,
           );
@@ -1075,13 +1084,13 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
-  Future<void> _openLegacyContext(String prefix, String passphrase) async {
+  Future<void> _openSingleContext(String prefix, String passphrase) async {
     final file = await _deltaDatabaseFile(prefix);
     await file.parent.create(recursive: true);
     var resetAttempted = false;
     while (true) {
       if (_context == null) {
-        _log.fine('Opening legacy Delta context at ${file.path}');
+        _log.fine('Opening Delta context at ${file.path}');
         _context = await _deltaSafe.createContext(
           databasePath: file.path,
           osName: 'dart',
@@ -1091,6 +1100,7 @@ class EmailDeltaTransport implements ChatTransport {
         _registerSession(
           accountId: deltaAccountIdLegacy,
           context: _context!,
+          scheduleHydration: _contextOpened,
         );
       }
       if (_contextOpened) {
@@ -1099,6 +1109,10 @@ class EmailDeltaTransport implements ChatTransport {
       try {
         await _context!.open(passphrase: passphrase);
         _contextOpened = true;
+        _scheduleAccountAddressHydration(
+          context: _context!,
+          accountId: deltaAccountIdLegacy,
+        );
       } on DeltaSafeException catch (error, stackTrace) {
         if (resetAttempted) {
           rethrow;
@@ -1438,7 +1452,16 @@ class EmailDeltaTransport implements ChatTransport {
     FileMetadataData? metadata,
   }) async {
     final XmppDatabase db = await _databaseBuilder();
-    final Message? existing = await db.getMessageByStanzaID(stanzaId);
+    Message? existing = await db.getMessageByStanzaID(stanzaId);
+    final String targetStanzaId = deltaMessageStanzaId(msgId);
+    if (existing != null && stanzaId != targetStanzaId) {
+      final resolvedStanzaId = await _replaceOutgoingStanzaId(
+        db: db,
+        from: stanzaId,
+        to: targetStanzaId,
+      );
+      existing = existing.copyWith(stanzaID: resolvedStanzaId);
+    }
     final String? previousMetadataId = existing?.fileMetadataID;
     final String? messageId = existing?.id;
     if (metadata != null) {
@@ -1501,6 +1524,23 @@ class EmailDeltaTransport implements ChatTransport {
         previousMetadataId != metadata.id) {
       await db.deleteFileMetadata(previousMetadataId);
     }
+  }
+
+  Future<String> _replaceOutgoingStanzaId({
+    required XmppDatabase db,
+    required String from,
+    required String to,
+  }) async {
+    final String trimmedFrom = from.trim();
+    final String trimmedTo = to.trim();
+    if (trimmedFrom.isEmpty || trimmedTo.isEmpty || trimmedFrom == trimmedTo) {
+      return trimmedFrom;
+    }
+    final replaced = await db.replaceMessageStanzaId(
+      from: trimmedFrom,
+      to: trimmedTo,
+    );
+    return replaced ? trimmedTo : trimmedFrom;
   }
 
   Future<void> _markOutgoingMessageFailed({
@@ -1886,8 +1926,8 @@ class EmailDeltaTransport implements ChatTransport {
         );
       }
     }
-    final legacy = await _deltaDatabaseFile(prefix);
-    await _deleteDatabaseArtifacts(legacy);
+    final databaseFile = await _deltaDatabaseFile(prefix);
+    await _deleteDatabaseArtifacts(databaseFile);
   }
 
   Future<void> deleteStorageArtifacts() async {
