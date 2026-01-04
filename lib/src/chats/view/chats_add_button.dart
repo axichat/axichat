@@ -4,7 +4,6 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
@@ -25,7 +24,6 @@ class ChatsAddButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final locate = context.read;
     final l10n = context.l10n;
     const restrictedRoomNameCharacter = '+';
     final createLabel = l10n.chatsCreateChatRoomAction;
@@ -42,26 +40,16 @@ class ChatsAddButton extends StatelessWidget {
         String title = '';
         String? validationError;
         var showAvatarEditor = false;
-        return MultiBlocProvider(
-          providers: [
-            BlocProvider.value(
-              value: locate<ChatsCubit>(),
-            ),
-            BlocProvider.value(
-              value: locate<AuthenticationCubit>(),
-            ),
-            BlocProvider(
-              create: (context) {
-                final colors = ShadTheme.of(context, listen: false).colorScheme;
-                return AvatarEditorCubit(
-                  xmppService: locate<XmppService>(),
-                  templates: buildDefaultAvatarTemplates(),
-                )
-                  ..initialize(colors)
-                  ..seedRandomTemplate(colors);
-              },
-            ),
-          ],
+        return BlocProvider(
+          create: (context) {
+            final colors = ShadTheme.of(context, listen: false).colorScheme;
+            return AvatarEditorCubit(
+              xmppService: context.read<XmppService>(),
+              templates: buildDefaultAvatarTemplates(),
+            )
+              ..initialize(colors)
+              ..seedRandomTemplate(colors);
+          },
           child: BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
             builder: (context, avatarState) {
               return StatefulBuilder(
@@ -73,31 +61,31 @@ class ChatsAddButton extends StatelessWidget {
                   const avatarEditorMaxWidth = 960.0;
                   const avatarEditorCloseInset = 6.0;
                   const dialogMaxHeightRatio = 0.8;
-                  final avatarErrorText = avatarState.error;
+                  final avatarErrorText = avatarState.localizedErrorText(l10n);
                   final canSubmit = title.isNotEmpty &&
                       !avatarState.isBusy &&
                       avatarState.draft != null;
-                  return AxiInputDialog(
-                    title: Text(l10n.chatsCreateChatRoomTitle),
-                    content: BlocConsumer<ChatsCubit, ChatsState>(
-                      listener: (context, state) {
-                        if (state.creationStatus.isSuccess) {
-                          context.pop();
-                          context.read<ChatsCubit>().clearCreationStatus();
-                        }
-                      },
-                      builder: (context, state) {
-                        final loading = state.creationStatus.isLoading;
-                        final previewWidth = math.min(
-                          MediaQuery.sizeOf(context).width,
-                          avatarEditorMaxWidth,
-                        );
-                        final dialogMaxHeight =
-                            MediaQuery.sizeOf(context).height *
-                                dialogMaxHeightRatio;
-                        final keyboardInset =
-                            MediaQuery.viewInsetsOf(context).bottom;
-                        return Padding(
+                  return BlocConsumer<ChatsCubit, ChatsState>(
+                    listener: (context, state) {
+                      if (state.creationStatus.isSuccess) {
+                        context.pop();
+                        context.read<ChatsCubit>().clearCreationStatus();
+                      }
+                    },
+                    builder: (context, state) {
+                      final loading = state.creationStatus.isLoading;
+                      final previewWidth = math.min(
+                        MediaQuery.sizeOf(context).width,
+                        avatarEditorMaxWidth,
+                      );
+                      final dialogMaxHeight =
+                          MediaQuery.sizeOf(context).height *
+                              dialogMaxHeightRatio;
+                      final keyboardInset =
+                          MediaQuery.viewInsetsOf(context).bottom;
+                      return AxiInputDialog(
+                        title: Text(l10n.chatsCreateChatRoomTitle),
+                        content: Padding(
                           padding: EdgeInsets.only(bottom: keyboardInset),
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
@@ -256,44 +244,41 @@ class ChatsAddButton extends StatelessWidget {
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                    callbackText: createLabel,
-                    loading: context
-                        .watch<ChatsCubit>()
-                        .state
-                        .creationStatus
-                        .isLoading,
-                    callback: !canSubmit
-                        ? null
-                        : () {
-                            final trimmed = title.trim();
-                            if (trimmed.isEmpty) {
-                              setState(() => validationError =
-                                  emptyTitleValidationMessage);
-                              return;
-                            }
-                            if (trimmed.contains(restrictedRoomNameCharacter)) {
-                              setState(() => validationError =
-                                  invalidCharacterValidationMessage);
-                              return;
-                            }
-                            if (context
-                                .read<AvatarEditorCubit>()
-                                .state
-                                .isBusy) {
-                              return;
-                            }
-                            setState(() => validationError = null);
-                            context.read<ChatsCubit>().createChatRoom(
-                                  title: trimmed,
-                                  avatar: context
-                                      .read<AvatarEditorCubit>()
-                                      .state
-                                      .draft,
-                                );
-                          },
+                        ),
+                        callbackText: createLabel,
+                        loading: loading,
+                        callback: !canSubmit
+                            ? null
+                            : () {
+                                final trimmed = title.trim();
+                                if (trimmed.isEmpty) {
+                                  setState(() => validationError =
+                                      emptyTitleValidationMessage);
+                                  return;
+                                }
+                                if (trimmed
+                                    .contains(restrictedRoomNameCharacter)) {
+                                  setState(() => validationError =
+                                      invalidCharacterValidationMessage);
+                                  return;
+                                }
+                                if (context
+                                    .read<AvatarEditorCubit>()
+                                    .state
+                                    .isBusy) {
+                                  return;
+                                }
+                                setState(() => validationError = null);
+                                context.read<ChatsCubit>().createChatRoom(
+                                      title: trimmed,
+                                      avatar: context
+                                          .read<AvatarEditorCubit>()
+                                          .state
+                                          .draft,
+                                    );
+                              },
+                      );
+                    },
                   );
                 },
               );

@@ -7281,17 +7281,13 @@ class _ChatState extends State<Chat> {
                                                                       .centerRight
                                                                   : Alignment
                                                                       .centerLeft;
+                                                          final messageColumnAlignment = self
+                                                              ? CrossAxisAlignment
+                                                                  .end
+                                                              : CrossAxisAlignment
+                                                                  .start;
                                                           final attachmentsAligned =
-                                                              SizedBox(
-                                                            width:
-                                                                messageRowMaxWidth,
-                                                            child: Align(
-                                                              alignment:
-                                                                  messageRowAlignment,
-                                                              child:
-                                                                  attachments,
-                                                            ),
-                                                          );
+                                                              attachments;
                                                           final extraShadows =
                                                               _selectedBubbleShadows(
                                                             bubbleHighlightColor,
@@ -7321,23 +7317,20 @@ class _ChatState extends State<Chat> {
                                                                         shadowValue,
                                                                         child,
                                                                       ) {
-                                                                        return SizedBox(
-                                                                          width:
-                                                                              messageRowMaxWidth,
+                                                                        return ConstrainedBox(
+                                                                          constraints:
+                                                                              bubbleConstraints,
                                                                           child:
-                                                                              Align(
-                                                                            alignment:
-                                                                                messageRowAlignment,
-                                                                            child:
-                                                                                ConstrainedBox(
-                                                                              constraints: bubbleConstraints,
-                                                                              child: _MessageExtrasColumn(
-                                                                                shadowValue: shadowValue,
-                                                                                shadows: extraShadows,
-                                                                                crossAxisAlignment: self ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                                                                children: bubbleExtraChildren,
-                                                                              ),
-                                                                            ),
+                                                                              _MessageExtrasColumn(
+                                                                            shadowValue:
+                                                                                shadowValue,
+                                                                            shadows:
+                                                                                extraShadows,
+                                                                            crossAxisAlignment: self
+                                                                                ? CrossAxisAlignment.end
+                                                                                : CrossAxisAlignment.start,
+                                                                            children:
+                                                                                bubbleExtraChildren,
                                                                           ),
                                                                         );
                                                                       },
@@ -7448,24 +7441,13 @@ class _ChatState extends State<Chat> {
                                                             child:
                                                                 bubbleWithSlack,
                                                           );
-                                                          bubbleWithSlack =
-                                                              Align(
-                                                            alignment: self
-                                                                ? Alignment
-                                                                    .centerRight
-                                                                : Alignment
-                                                                    .centerLeft,
-                                                            child:
-                                                                bubbleWithSlack,
-                                                          );
                                                           final messageBody =
                                                               Column(
                                                             mainAxisSize:
                                                                 MainAxisSize
                                                                     .min,
                                                             crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .center,
+                                                                messageColumnAlignment,
                                                             children: [
                                                               bubbleWithSlack,
                                                               if (bubbleExtraChildren

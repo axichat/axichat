@@ -23,6 +23,31 @@ enum AvatarSource {
   template,
 }
 
+enum AvatarEditorErrorType {
+  openFailed,
+  readFailed,
+  invalidImage,
+  processingFailed,
+  templateLoadFailed,
+  missingDraft,
+  xmppDisconnected,
+  publishRejected,
+  publishTimeout,
+  publishGeneric,
+  publishUnexpected,
+  publishServerMessage,
+}
+
+class AvatarEditorError extends Equatable {
+  const AvatarEditorError(this.type, {this.message});
+
+  final AvatarEditorErrorType type;
+  final String? message;
+
+  @override
+  List<Object?> get props => [type, message];
+}
+
 class AvatarEditorState extends Equatable {
   const AvatarEditorState({
     required this.backgroundColor,
@@ -51,7 +76,7 @@ class AvatarEditorState extends Equatable {
   final bool shuffling;
   final bool processing;
   final bool publishing;
-  final String? error;
+  final AvatarEditorError? error;
   final Rect? cropRect;
   final int? imageWidth;
   final int? imageHeight;
@@ -69,7 +94,7 @@ class AvatarEditorState extends Equatable {
     bool? shuffling,
     bool? processing,
     bool? publishing,
-    String? error,
+    AvatarEditorError? error,
     Rect? cropRect,
     int? imageWidth,
     int? imageHeight,
@@ -164,17 +189,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const _sourceMaxDimension = 768;
   static const _sourceJpegQuality = 86;
   static const _rebuildDelay = Duration(milliseconds: 220);
-  static const _missingDraftMessage = 'Pick or build an avatar first.';
-  static const _xmppDisconnectedMessage =
-      'Connect to XMPP before saving your avatar.';
-  static const _avatarPublishRejectedMessage =
-      'Your server rejected avatar publishing.';
-  static const _avatarPublishTimeoutMessage =
-      'Avatar upload timed out. Please try again.';
-  static const _avatarPublishGenericMessage =
-      'Could not publish avatar. Check your connection and try again.';
-  static const _avatarPublishUnexpectedMessage =
-      'Unexpected error while uploading avatar.';
 
   final XmppService _xmppService;
   final ProfileCubit? _profileCubit;
@@ -257,14 +271,18 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       final bytes = file.bytes ??
           (file.path != null ? await File(file.path!).readAsBytes() : null);
       if (bytes == null || bytes.isEmpty) {
-        _emitIfOpen(state.copyWith(error: 'Could not read that file.'));
+        _emitIfOpen(
+          state.copyWith(
+            error: const AvatarEditorError(AvatarEditorErrorType.readFailed),
+          ),
+        );
         return;
       }
       await _loadFromBytes(bytes, buildDraft: true);
     } catch (_) {
       _emitIfOpen(
         state.copyWith(
-          error: 'Unable to open that image. Please try a different file.',
+          error: const AvatarEditorError(AvatarEditorErrorType.openFailed),
         ),
       );
     }
@@ -316,7 +334,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         state.copyWith(
           processing: false,
           clearDraft: true,
-          error: 'Failed to load that avatar option.',
+          error: const AvatarEditorError(
+            AvatarEditorErrorType.templateLoadFailed,
+          ),
         ),
       );
     }
@@ -420,13 +440,19 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Future<void> publish() async {
     final draft = state.draft;
     if (draft == null) {
-      _emitIfOpen(state.copyWith(error: _missingDraftMessage));
+      _emitIfOpen(
+        state.copyWith(
+          error: const AvatarEditorError(AvatarEditorErrorType.missingDraft),
+        ),
+      );
       return;
     }
     if (!_xmppService.connected) {
       _emitIfOpen(
         state.copyWith(
-          error: _xmppDisconnectedMessage,
+          error: const AvatarEditorError(
+            AvatarEditorErrorType.xmppDisconnected,
+          ),
         ),
       );
       return;
@@ -450,33 +476,37 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       );
     } on XmppAvatarException catch (error) {
       final cause = error.wrapped;
-      final message = switch (cause) {
-        TimeoutException() => _avatarPublishTimeoutMessage,
-        mox.PubSubError() => _pubSubErrorMessage(cause),
-        mox.AvatarError() => _avatarPublishRejectedMessage,
-        _ => _avatarPublishGenericMessage,
+      final errorType = switch (cause) {
+        TimeoutException() => AvatarEditorErrorType.publishTimeout,
+        mox.PubSubError() => AvatarEditorErrorType.publishServerMessage,
+        mox.AvatarError() => AvatarEditorErrorType.publishRejected,
+        _ => AvatarEditorErrorType.publishGeneric,
       };
+      final message =
+          cause is mox.PubSubError ? _pubSubErrorMessage(cause) : null;
       _emitIfOpen(
         state.copyWith(
           publishing: false,
-          error: message,
+          error: AvatarEditorError(errorType, message: message),
         ),
       );
     } catch (_) {
       _emitIfOpen(
         state.copyWith(
           publishing: false,
-          error: _avatarPublishUnexpectedMessage,
+          error: const AvatarEditorError(
+            AvatarEditorErrorType.publishUnexpected,
+          ),
         ),
       );
     }
   }
 
-  String _pubSubErrorMessage(mox.PubSubError error) {
+  String? _pubSubErrorMessage(mox.PubSubError error) {
     final message = error.message.trim();
     final suggestion = error.recoverySuggestion?.trim();
     if (suggestion == null || suggestion.isEmpty) {
-      return message.isEmpty ? _avatarPublishGenericMessage : message;
+      return message.isEmpty ? null : message;
     }
     if (message.isEmpty) return suggestion;
     return '$message $suggestion';
@@ -580,7 +610,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
               processing: false,
               clearDraft: true,
               clearPreviewBytes: true,
-              error: 'Unable to process that image.',
+              error: const AvatarEditorError(
+                AvatarEditorErrorType.processingFailed,
+              ),
             ),
           );
         }
@@ -743,7 +775,9 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       _emitIfOpen(
         state.copyWith(
           processing: false,
-          error: 'That file is not a valid image.',
+          error: const AvatarEditorError(
+            AvatarEditorErrorType.invalidImage,
+          ),
         ),
       );
     }

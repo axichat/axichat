@@ -2761,6 +2761,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get avatarSavedMessage => 'Avatar saved.';
 
   @override
+  String get avatarOpenError => '无法打开该文件。';
+
+  @override
+  String get avatarReadError => '无法读取该文件。';
+
+  @override
+  String get avatarInvalidImageError => '该文件不是有效的图像。';
+
+  @override
+  String get avatarProcessError => '无法处理该图像。';
+
+  @override
+  String get avatarTemplateLoadError => '无法加载该头像选项。';
+
+  @override
+  String get avatarMissingDraftError => '请先选择或创建头像。';
+
+  @override
+  String get avatarXmppDisconnectedError => '保存头像前请先连接到 XMPP。';
+
+  @override
+  String get avatarPublishRejectedError => '服务器拒绝了头像发布。';
+
+  @override
+  String get avatarPublishTimeoutError => '头像上传超时。请重试。';
+
+  @override
+  String get avatarPublishGenericError => '无法发布头像。请检查连接并重试。';
+
+  @override
+  String get avatarPublishUnexpectedError => '上传头像时发生意外错误。';
+
+  @override
   String get avatarCropTitle => 'Crop & focus';
 
   @override
@@ -5835,6 +5868,39 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get avatarSavedMessage => 'Avatar saved.';
+
+  @override
+  String get avatarOpenError => '無法開啟該檔案。';
+
+  @override
+  String get avatarReadError => '無法讀取該檔案。';
+
+  @override
+  String get avatarInvalidImageError => '該檔案不是有效的影像。';
+
+  @override
+  String get avatarProcessError => '無法處理該影像。';
+
+  @override
+  String get avatarTemplateLoadError => '無法載入該頭像選項。';
+
+  @override
+  String get avatarMissingDraftError => '請先選擇或建立頭像。';
+
+  @override
+  String get avatarXmppDisconnectedError => '儲存頭像前請先連線到 XMPP。';
+
+  @override
+  String get avatarPublishRejectedError => '你的伺服器拒絕了頭像發佈。';
+
+  @override
+  String get avatarPublishTimeoutError => '頭像上傳逾時。請再試一次。';
+
+  @override
+  String get avatarPublishGenericError => '無法發佈頭像。請檢查連線後再試一次。';
+
+  @override
+  String get avatarPublishUnexpectedError => '上傳頭像時發生意外錯誤。';
 
   @override
   String get avatarCropTitle => 'Crop & focus';

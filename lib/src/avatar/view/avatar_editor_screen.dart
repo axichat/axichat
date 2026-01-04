@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/view/widgets/avatar_cropper.dart';
@@ -190,9 +191,10 @@ class _AvatarSummaryCard extends StatelessWidget {
     final colors = context.colorScheme;
     final size = isWide ? 104.0 : 88.0;
     final previewBytes = state.previewBytes ?? state.sourceBytes;
+    final errorText = state.localizedErrorText(l10n);
     final avatarSavedMessage = l10n.avatarSavedMessage;
     final showSuccessMessage = !state.publishing &&
-        state.error == null &&
+        errorText == null &&
         state.lastSavedHash != null &&
         state.draft?.hash == state.lastSavedHash;
 
@@ -324,7 +326,7 @@ class _AvatarSummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          if (state.error != null)
+          if (errorText != null)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12.0),
@@ -334,7 +336,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                 border: Border.all(color: colors.destructive),
               ),
               child: Text(
-                state.error!,
+                errorText,
                 style:
                     context.textTheme.small.copyWith(color: colors.destructive),
               ),

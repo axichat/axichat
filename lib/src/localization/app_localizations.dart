@@ -5156,6 +5156,72 @@ abstract class AppLocalizations {
   /// **'Avatar saved.'**
   String get avatarSavedMessage;
 
+  /// No description provided for @avatarOpenError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open that file.'**
+  String get avatarOpenError;
+
+  /// No description provided for @avatarReadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read that file.'**
+  String get avatarReadError;
+
+  /// No description provided for @avatarInvalidImageError.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not a valid image.'**
+  String get avatarInvalidImageError;
+
+  /// No description provided for @avatarProcessError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to process that image.'**
+  String get avatarProcessError;
+
+  /// No description provided for @avatarTemplateLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load that avatar option.'**
+  String get avatarTemplateLoadError;
+
+  /// No description provided for @avatarMissingDraftError.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick or build an avatar first.'**
+  String get avatarMissingDraftError;
+
+  /// No description provided for @avatarXmppDisconnectedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to XMPP before saving your avatar.'**
+  String get avatarXmppDisconnectedError;
+
+  /// No description provided for @avatarPublishRejectedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Your server rejected avatar publishing.'**
+  String get avatarPublishRejectedError;
+
+  /// No description provided for @avatarPublishTimeoutError.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar upload timed out. Please try again.'**
+  String get avatarPublishTimeoutError;
+
+  /// No description provided for @avatarPublishGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not publish avatar. Check your connection and try again.'**
+  String get avatarPublishGenericError;
+
+  /// No description provided for @avatarPublishUnexpectedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unexpected error while uploading avatar.'**
+  String get avatarPublishUnexpectedError;
+
   /// No description provided for @avatarCropTitle.
   ///
   /// In en, this message translates to:
