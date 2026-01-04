@@ -1,34 +1,44 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
-import 'package:axichat/src/calendar/utils/calendar_free_busy_style.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/layout/calendar_layout.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_render_surface.dart';
+import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
+import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:uuid/uuid.dart';
 
 const double _freeBusyGridViewportHeight = 360.0;
 const double _freeBusyPreviewViewportHeight = 220.0;
-const double _freeBusyTileCornerRadius = 10.0;
-const double _freeBusyTileBorderWidth = 1.0;
-const double _freeBusyTilePadding = 8.0;
-const double _freeBusyTileLabelSpacing = 6.0;
-const double _freeBusyTileHandleHeight = 8.0;
-const double _freeBusyTileHandleIconSize = 12.0;
-const double _freeBusyTileActionSpacing = 6.0;
 const double _freeBusyTileSplitIconSize = 16.0;
+const double _freeBusyTileOverlayPadding = 6.0;
+const double _freeBusyTileOverlayGap = 6.0;
+const double _freeBusyTileControlMinHeight = 40.0;
+const double _freeBusySwitchScale = 0.9;
 const double _freeBusyHeaderFontSize = 12.0;
+const double _freeBusyTapSlop = 4.0;
+const double _freeBusyResizeHandleExtent = 8.0;
+const double _freeBusySheetSpacing = 16.0;
+const double _freeBusySheetGap = 8.0;
+const double _freeBusySheetActionSpacing = 8.0;
+const double _freeBusySheetLabelLetterSpacing = 0.4;
+const double _freeBusySheetActionPaddingHorizontal = 12.0;
+const double _freeBusySheetActionPaddingVertical = 10.0;
+const double _freeBusySheetActionCornerRadius = 12.0;
 const int _freeBusyDayLabelLength = 3;
 const int _freeBusyZoomIndex = 0;
 const int _freeBusyMinutesPerStep = 15;
@@ -38,6 +48,16 @@ const Duration _freeBusyDayStep = Duration(days: 1);
 const Duration _freeBusyMinimumDuration = calendarMinimumTaskDuration;
 const String _freeBusyFreeLabel = 'Free';
 const String _freeBusyBusyLabel = 'Busy';
+const String _freeBusyMutualLabel = 'Mutual';
+const String _freeBusyEditTitle = 'Edit availability';
+const String _freeBusyEditSubtitle = 'Adjust the time range and status.';
+const String _freeBusyToggleLabel = 'Free/Busy';
+const String _freeBusySplitLabel = 'Split';
+const String _freeBusySplitTooltip = 'Split segment';
+const String _freeBusyToggleToFreeLabel = 'Mark free';
+const String _freeBusyToggleToBusyLabel = 'Mark busy';
+const String _freeBusyRangeLabel = 'Range';
+const Uuid _freeBusySegmentIdGenerator = Uuid();
 
 const List<String> _freeBusyDayNames = <String>[
   'SUNDAY',
@@ -59,6 +79,7 @@ class CalendarFreeBusyEditor extends StatefulWidget {
     this.tzid,
     this.viewportHeight = _freeBusyGridViewportHeight,
     this.isReadOnly = false,
+    this.onIntervalTapped,
   });
 
   const CalendarFreeBusyEditor.preview({
@@ -67,6 +88,7 @@ class CalendarFreeBusyEditor extends StatefulWidget {
     required DateTime rangeEnd,
     required List<CalendarFreeBusyInterval> intervals,
     String? tzid,
+    ValueChanged<CalendarFreeBusyInterval>? onIntervalTapped,
   }) : this(
           key: key,
           rangeStart: rangeStart,
@@ -76,6 +98,7 @@ class CalendarFreeBusyEditor extends StatefulWidget {
           onIntervalsChanged: _noopIntervalsChanged,
           viewportHeight: _freeBusyPreviewViewportHeight,
           isReadOnly: true,
+          onIntervalTapped: onIntervalTapped,
         );
 
   final DateTime rangeStart;
@@ -85,6 +108,7 @@ class CalendarFreeBusyEditor extends StatefulWidget {
   final String? tzid;
   final double viewportHeight;
   final bool isReadOnly;
+  final ValueChanged<CalendarFreeBusyInterval>? onIntervalTapped;
 
   static void _noopIntervalsChanged(List<CalendarFreeBusyInterval> _) {}
 
@@ -101,10 +125,16 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   final CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
   late final TaskInteractionController _interactionController =
       TaskInteractionController();
-  final Map<_ResizeKey, double> _resizeCarryover =
-      HashMap<_ResizeKey, double>();
+  final ShadPopoverController _contextMenuController = ShadPopoverController();
+  final ValueKey<String> _contextMenuGroupId =
+      const ValueKey<String>('free-busy-context-menu');
   List<_FreeBusySegment> _segments = <_FreeBusySegment>[];
   String? _activeSegmentId;
+  int? _activePointerId;
+  Offset? _pointerDownLocal;
+  bool _pointerDownPrimary = false;
+  bool _tapCandidate = false;
+  bool _suppressInsert = false;
 
   @override
   void initState() {
@@ -138,6 +168,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   void dispose() {
     _verticalController.dispose();
     _interactionController.dispose();
+    _contextMenuController.dispose();
     super.dispose();
   }
 
@@ -169,9 +200,8 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
           isDayView: false,
           availableHeight: viewportHeight,
         );
-        final double minutesPerPixel =
-            metrics.minutesPerSlot / metrics.slotHeight;
 
+        final double contentHeight = _contentHeightForMetrics(metrics);
         final Widget content = _FreeBusyGridFrame(
           width: resolvedWidth,
           header: _FreeBusyGridHeaderRow(
@@ -182,25 +212,42 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
           body: _FreeBusyGridSurface(
             width: resolvedWidth,
             height: viewportHeight,
+            contentHeight: contentHeight,
             columns: columns,
             controller: _surfaceController,
             verticalController: _verticalController,
             layoutCalculator: _layoutCalculator,
             layoutTheme: _layoutTheme,
             interactionController: _interactionController,
+            onPointerDown: _handlePointerDown,
+            onPointerMove: _handlePointerMove,
+            onPointerUp: (event) => _handlePointerUp(
+              event,
+              timeColumnWidth: timeColumnWidth,
+              dayWidth: dayWidth,
+              columns: columns,
+              metrics: metrics,
+            ),
+            onPointerCancel: _handlePointerCancel,
             tiles: _FreeBusyTileStack(
               columns: columns,
               segments: _segments,
               timeColumnWidth: timeColumnWidth,
               dayWidth: dayWidth,
               metrics: metrics,
-              minutesPerPixel: minutesPerPixel,
+              interactionController: _interactionController,
               isReadOnly: widget.isReadOnly,
               activeId: _activeSegmentId,
               onSelect: _handleSegmentSelected,
               onToggleType: _handleToggleType,
               onSplit: _handleSplitSegment,
-              onResize: _handleResizeDelta,
+              onResizePreview: _handleResizePreview,
+              onResizeEnd: _handleResizeCommit,
+              onSuppressInsert: _markInsertSuppressed,
+              contextMenuController: _contextMenuController,
+              contextMenuGroupId: _contextMenuGroupId,
+              contextMenuBuilderFactory: _contextMenuBuilderFor,
+              enableContextMenuLongPress: !_shouldUseEditSheet(),
             ),
           ),
         );
@@ -220,6 +267,14 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   }
 
   void _handleSegmentSelected(_FreeBusySegment segment) {
+    if (widget.isReadOnly) {
+      widget.onIntervalTapped?.call(segment.toInterval(widget.tzid));
+      return;
+    }
+    final bool useSheet = _shouldUseEditSheet();
+    if (useSheet) {
+      _openEditSheet(segment);
+    }
     setState(() {
       _activeSegmentId = segment.id;
     });
@@ -231,6 +286,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     }
     setState(() {
       segment.type = segment.type.toggled;
+      segment.modifiedAt = DateTime.now();
       _segments = _mergeAdjacent(_segments);
     });
     _emitIntervals();
@@ -258,59 +314,124 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
       if (index == -1) {
         return;
       }
+      final DateTime now = DateTime.now();
+      final _FreeBusySegment left = _FreeBusySegment(
+        id: _freeBusySegmentIdGenerator.v4(),
+        start: segment.start,
+        end: snapped,
+        type: segment.type,
+        createdAt: now,
+        modifiedAt: now,
+      );
+      final _FreeBusySegment right = _FreeBusySegment(
+        id: _freeBusySegmentIdGenerator.v4(),
+        start: snapped,
+        end: segment.end,
+        type: segment.type,
+        createdAt: now,
+        modifiedAt: now,
+      );
       _segments
         ..removeAt(index)
         ..insertAll(
           index,
-          [
-            segment.copyWith(end: snapped),
-            segment.copyWith(start: snapped),
-          ],
+          [left, right],
         );
       _segments = _mergeAdjacent(_segments);
     });
     _emitIntervals();
   }
 
-  void _handleResizeDelta(_FreeBusyResizeRequest request) {
+  void _handleSplitSegmentAt(
+    _FreeBusySegment segment,
+    DateTime splitTime,
+  ) {
     if (widget.isReadOnly) {
       return;
     }
-    final _ResizeKey key = _ResizeKey(
-      segmentId: request.segment.id,
-      direction: request.direction,
-    );
-    final double updated = (_resizeCarryover[key] ?? 0) + request.deltaMinutes;
-    final int stepMinutes = request.minutesPerStep;
-    final int steps = (updated / stepMinutes).truncate();
-    if (steps == 0) {
-      _resizeCarryover[key] = updated;
+    final DateTime start = segment.start;
+    final DateTime end = segment.end;
+    final Duration span = end.difference(start);
+    if (span <= _freeBusyMinimumDuration * 2) {
       return;
     }
-    final double remainder = updated - (steps * stepMinutes);
-    _resizeCarryover[key] = remainder;
-    final int deltaMinutes = steps * stepMinutes;
-    _applyResizeDelta(request.segment, request.direction, deltaMinutes);
-  }
-
-  void _applyResizeDelta(
-    _FreeBusySegment segment,
-    _FreeBusyResizeDirection direction,
-    int deltaMinutes,
-  ) {
+    DateTime snapped = _snapToStep(splitTime);
+    snapped = _clampDateTime(
+      snapped,
+      min: start.add(_freeBusyMinimumDuration),
+      max: end.subtract(_freeBusyMinimumDuration),
+    );
+    if (!snapped.isAfter(start) || !snapped.isBefore(end)) {
+      return;
+    }
     setState(() {
       final int index = _segments.indexOf(segment);
       if (index == -1) {
         return;
       }
-      final _FreeBusySegment current = _segments[index];
-      final DateTime dayStart = _startOfDay(current.start);
-      final DateTime dayEnd = _endOfDay(current.start, widget.rangeEnd);
-      if (direction.isTop) {
-        final DateTime nextStart =
-            current.start.add(Duration(minutes: deltaMinutes));
+      final DateTime now = DateTime.now();
+      final _FreeBusySegment left = _FreeBusySegment(
+        id: _freeBusySegmentIdGenerator.v4(),
+        start: segment.start,
+        end: snapped,
+        type: segment.type,
+        createdAt: now,
+        modifiedAt: now,
+      );
+      final _FreeBusySegment right = _FreeBusySegment(
+        id: _freeBusySegmentIdGenerator.v4(),
+        start: snapped,
+        end: segment.end,
+        type: segment.type,
+        createdAt: now,
+        modifiedAt: now,
+      );
+      _segments
+        ..removeAt(index)
+        ..insertAll(
+          index,
+          [left, right],
+        );
+      _segments = _mergeAdjacent(_segments);
+    });
+    _emitIntervals();
+  }
+
+  void _handleResizePreview(CalendarTask task) {
+    if (widget.isReadOnly) {
+      return;
+    }
+    _applyTaskResize(task, emit: false);
+  }
+
+  void _handleResizeCommit(CalendarTask task) {
+    if (widget.isReadOnly) {
+      return;
+    }
+    _applyTaskResize(task, emit: true);
+  }
+
+  void _applyTaskResize(
+    CalendarTask task, {
+    required bool emit,
+  }) {
+    final int index = _segmentIndexFor(task.id);
+    if (index == -1) {
+      return;
+    }
+    final _FreeBusySegment current = _segments[index];
+    final DateTime start = task.scheduledTime ?? current.start;
+    final Duration duration = task.duration ?? _freeBusyMinimumDuration;
+    final DateTime end = start.add(duration);
+    final DateTime dayStart = _startOfDay(current.start);
+    final DateTime dayEnd = _endOfDay(current.start, widget.rangeEnd);
+    final bool startChanged = !start.isAtSameMomentAs(current.start);
+    final bool endChanged = !end.isAtSameMomentAs(current.end);
+
+    setState(() {
+      if (startChanged) {
         final DateTime clampedStart = _clampDateTime(
-          nextStart,
+          start,
           min: dayStart,
           max: current.end.subtract(_freeBusyMinimumDuration),
         );
@@ -321,11 +442,10 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
           }
         }
         current.start = clampedStart;
-      } else {
-        final DateTime nextEnd =
-            current.end.add(Duration(minutes: deltaMinutes));
+      }
+      if (endChanged) {
         final DateTime clampedEnd = _clampDateTime(
-          nextEnd,
+          end,
           min: current.start.add(_freeBusyMinimumDuration),
           max: dayEnd,
         );
@@ -337,9 +457,271 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
         }
         current.end = clampedEnd;
       }
+      current.modifiedAt = DateTime.now();
+      _segments = _mergeAdjacent(_segments);
+    });
+    if (emit) {
+      _emitIntervals();
+    }
+  }
+
+  void _updateSegmentRange(
+    _FreeBusySegment segment, {
+    required DateTime start,
+    required DateTime end,
+  }) {
+    if (widget.isReadOnly) {
+      return;
+    }
+    if (!end.isAfter(start)) {
+      return;
+    }
+    final DateTime dayStart = _startOfDay(segment.start);
+    final DateTime dayEnd = _endOfDay(segment.start, widget.rangeEnd);
+    final DateTime clampedStart = _clampDateTime(
+      start,
+      min: dayStart,
+      max: end.subtract(_freeBusyMinimumDuration),
+    );
+    final DateTime clampedEnd = _clampDateTime(
+      end,
+      min: clampedStart.add(_freeBusyMinimumDuration),
+      max: dayEnd,
+    );
+    setState(() {
+      final int index = _segments.indexOf(segment);
+      if (index == -1) {
+        return;
+      }
+      if (index > 0) {
+        final _FreeBusySegment previous = _segments[index - 1];
+        if (_isSameDay(previous.start, segment.start)) {
+          previous.end = clampedStart;
+        }
+      }
+      if (index + 1 < _segments.length) {
+        final _FreeBusySegment next = _segments[index + 1];
+        if (_isSameDay(next.start, segment.start)) {
+          next.start = clampedEnd;
+        }
+      }
+      segment.start = clampedStart;
+      segment.end = clampedEnd;
+      segment.modifiedAt = DateTime.now();
       _segments = _mergeAdjacent(_segments);
     });
     _emitIntervals();
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (widget.isReadOnly) {
+      return;
+    }
+    _suppressInsert = false;
+    _activePointerId = event.pointer;
+    _pointerDownLocal = event.localPosition;
+    _pointerDownPrimary = _isPrimaryPointer(event);
+    _tapCandidate = _pointerDownPrimary;
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (!_tapCandidate || event.pointer != _activePointerId) {
+      return;
+    }
+    final Offset? down = _pointerDownLocal;
+    if (down == null) {
+      return;
+    }
+    if ((event.localPosition - down).distance > _freeBusyTapSlop) {
+      _tapCandidate = false;
+    }
+  }
+
+  void _handlePointerUp(
+    PointerUpEvent event, {
+    required double timeColumnWidth,
+    required double dayWidth,
+    required List<DateTime> columns,
+    required CalendarLayoutMetrics metrics,
+  }) {
+    final bool shouldInsert = _tapCandidate &&
+        _pointerDownPrimary &&
+        event.pointer == _activePointerId &&
+        _interactionController.activeResizeInteraction == null &&
+        !_suppressInsert;
+    _resetPointerState();
+    _suppressInsert = false;
+    if (!shouldInsert) {
+      return;
+    }
+    final DateTime? slot = _slotForLocalPosition(
+      event.localPosition,
+      timeColumnWidth: timeColumnWidth,
+      dayWidth: dayWidth,
+      columns: columns,
+      metrics: metrics,
+    );
+    if (slot == null) {
+      return;
+    }
+    _insertSegmentAt(slot);
+  }
+
+  void _handlePointerCancel() {
+    _resetPointerState();
+    _suppressInsert = false;
+  }
+
+  void _resetPointerState() {
+    _activePointerId = null;
+    _pointerDownLocal = null;
+    _pointerDownPrimary = false;
+    _tapCandidate = false;
+  }
+
+  void _markInsertSuppressed() {
+    _suppressInsert = true;
+  }
+
+  int _segmentIndexFor(String id) {
+    return _segments.indexWhere((segment) => segment.id == id);
+  }
+
+  _FreeBusySegment? _segmentAt(DateTime target) {
+    for (final _FreeBusySegment segment in _segments) {
+      if (!target.isBefore(segment.start) && target.isBefore(segment.end)) {
+        return segment;
+      }
+    }
+    return null;
+  }
+
+  DateTime? _slotForLocalPosition(
+    Offset localPosition, {
+    required double timeColumnWidth,
+    required double dayWidth,
+    required List<DateTime> columns,
+    required CalendarLayoutMetrics metrics,
+  }) {
+    final double x = localPosition.dx;
+    if (x <= timeColumnWidth) {
+      return null;
+    }
+    final int columnIndex = ((x - timeColumnWidth) / dayWidth).floor();
+    if (columnIndex < 0 || columnIndex >= columns.length) {
+      return null;
+    }
+    final DateTime dayStart = columns[columnIndex];
+    final double scrollOffset = _verticalController.hasClients
+        ? _verticalController.position.pixels
+        : 0;
+    final double y = localPosition.dy + scrollOffset;
+    final double minutesFromStart =
+        (y / metrics.slotHeight) * metrics.minutesPerSlot;
+    final int snappedMinutes =
+        (minutesFromStart / _freeBusyMinutesPerStep).round() *
+            _freeBusyMinutesPerStep;
+    final DateTime base = DateTime(dayStart.year, dayStart.month, dayStart.day);
+    final DateTime slot = base.add(Duration(minutes: snappedMinutes));
+    final DateTime rangeStart = widget.rangeStart;
+    final DateTime rangeEnd = widget.rangeEnd;
+    final DateTime dayEnd = _endOfDay(dayStart, rangeEnd);
+    final DateTime maxStart = dayEnd.subtract(_freeBusyMinimumDuration);
+    return _clampDateTime(slot, min: rangeStart, max: maxStart);
+  }
+
+  void _insertSegmentAt(DateTime slot) {
+    if (widget.isReadOnly) {
+      return;
+    }
+    final _FreeBusySegment? target = _segmentAt(slot);
+    if (target == null) {
+      return;
+    }
+    final DateTime start = target.start;
+    final DateTime end = target.end;
+    final Duration span = end.difference(start);
+    if (span <= _freeBusyMinimumDuration) {
+      _handleToggleType(target);
+      return;
+    }
+    DateTime insertStart = _snapToStep(slot);
+    insertStart = _clampDateTime(
+      insertStart,
+      min: start,
+      max: end.subtract(_freeBusyMinimumDuration),
+    );
+    DateTime insertEnd = insertStart.add(_freeBusyMinimumDuration);
+    if (insertStart.isBefore(start.add(_freeBusyMinimumDuration))) {
+      insertStart = start;
+      insertEnd = start.add(_freeBusyMinimumDuration);
+    }
+    if (insertEnd.isAfter(end.subtract(_freeBusyMinimumDuration))) {
+      insertEnd = end;
+      insertStart = end.subtract(_freeBusyMinimumDuration);
+    }
+    final DateTime now = DateTime.now();
+    final _FreeBusySegment inserted = _FreeBusySegment(
+      id: _freeBusySegmentIdGenerator.v4(),
+      start: insertStart,
+      end: insertEnd,
+      type: target.type.toggled,
+      createdAt: now,
+      modifiedAt: now,
+    );
+    final List<_FreeBusySegment> next = <_FreeBusySegment>[];
+    if (insertStart.isAfter(start)) {
+      next.add(
+        _FreeBusySegment(
+          id: _freeBusySegmentIdGenerator.v4(),
+          start: start,
+          end: insertStart,
+          type: target.type,
+          createdAt: now,
+          modifiedAt: now,
+        ),
+      );
+    }
+    next.add(inserted);
+    if (insertEnd.isBefore(end)) {
+      next.add(
+        _FreeBusySegment(
+          id: _freeBusySegmentIdGenerator.v4(),
+          start: insertEnd,
+          end: end,
+          type: target.type,
+          createdAt: now,
+          modifiedAt: now,
+        ),
+      );
+    }
+    setState(() {
+      final int index = _segments.indexOf(target);
+      if (index == -1) {
+        return;
+      }
+      _segments
+        ..removeAt(index)
+        ..insertAll(index, next);
+      _segments = _mergeAdjacent(_segments);
+      _activeSegmentId = inserted.id;
+    });
+    _emitIntervals();
+  }
+
+  bool _isPrimaryPointer(PointerDownEvent event) {
+    final bool primaryPressed = (event.buttons & kPrimaryButton) != 0;
+    if (primaryPressed) {
+      return true;
+    }
+    if (event.buttons != 0) {
+      return false;
+    }
+    final PointerDeviceKind kind = event.kind;
+    if (kind == PointerDeviceKind.mouse || kind == PointerDeviceKind.trackpad) {
+      return false;
+    }
+    return true;
   }
 
   void _emitIntervals() {
@@ -350,10 +732,79 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     widget.onIntervalsChanged(intervals);
   }
 
+  bool _shouldUseEditSheet() {
+    final bool isDesktop = ResponsiveHelper.isDesktop(context);
+    final bool hasMouse =
+        RendererBinding.instance.mouseTracker.mouseIsConnected;
+    return !isDesktop || !hasMouse;
+  }
+
+  TaskContextMenuBuilder? _contextMenuBuilderFor(
+    _FreeBusySegment segment,
+  ) {
+    if (widget.isReadOnly || _shouldUseEditSheet()) {
+      return null;
+    }
+    return (context, request) {
+      final String toggleLabel = segment.type.isFree
+          ? _freeBusyToggleToBusyLabel
+          : _freeBusyToggleToFreeLabel;
+      final List<Widget> items = [
+        ShadContextMenuItem(
+          leading: const Icon(Icons.swap_horiz),
+          onPressed: () {
+            request.markCloseIntent();
+            _contextMenuController.hide();
+            _handleToggleType(segment);
+          },
+          child: Text(toggleLabel),
+        ),
+      ];
+      final DateTime? splitTime = request.splitTime;
+      if (splitTime != null) {
+        items.add(
+          ShadContextMenuItem(
+            leading: const Icon(Icons.call_split),
+            onPressed: () {
+              request.markCloseIntent();
+              _contextMenuController.hide();
+              _handleSplitSegmentAt(segment, splitTime);
+            },
+            child: Text(
+              'Split at ${TimeFormatter.formatTime(splitTime)}',
+            ),
+          ),
+        );
+      }
+      return items;
+    };
+  }
+
+  Future<void> _openEditSheet(_FreeBusySegment segment) async {
+    await showAdaptiveBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => _FreeBusyEditSheet(
+        segment: segment,
+        rangeStart: widget.rangeStart,
+        rangeEnd: widget.rangeEnd,
+        onToggle: () => _handleToggleType(segment),
+        onSplit: () => _handleSplitSegment(segment),
+        onRangeChanged: (start, end) =>
+            _updateSegmentRange(segment, start: start, end: end),
+      ),
+    );
+  }
+
   double _fallbackWidth(int columnCount) {
     final double timeColumnWidth = _layoutTheme.timeColumnWidth;
     const double minDayWidth = calendarCompactDayColumnWidth;
     return timeColumnWidth + (minDayWidth * columnCount);
+  }
+
+  double _contentHeightForMetrics(CalendarLayoutMetrics metrics) {
+    final int totalSlots = _layoutTheme.visibleHourRows * metrics.slotsPerHour;
+    return metrics.slotHeight * totalSlots;
   }
 }
 
@@ -493,23 +944,33 @@ class _FreeBusyGridSurface extends StatelessWidget {
   const _FreeBusyGridSurface({
     required this.width,
     required this.height,
+    required this.contentHeight,
     required this.columns,
     required this.controller,
     required this.verticalController,
     required this.layoutCalculator,
     required this.layoutTheme,
     required this.interactionController,
+    required this.onPointerDown,
+    required this.onPointerMove,
+    required this.onPointerUp,
+    required this.onPointerCancel,
     required this.tiles,
   });
 
   final double width;
   final double height;
+  final double contentHeight;
   final List<DateTime> columns;
   final CalendarSurfaceController controller;
   final ScrollController verticalController;
   final CalendarLayoutCalculator layoutCalculator;
   final CalendarLayoutTheme layoutTheme;
   final TaskInteractionController interactionController;
+  final ValueChanged<PointerDownEvent> onPointerDown;
+  final ValueChanged<PointerMoveEvent> onPointerMove;
+  final ValueChanged<PointerUpEvent> onPointerUp;
+  final VoidCallback onPointerCancel;
   final Widget tiles;
 
   @override
@@ -522,39 +983,51 @@ class _FreeBusyGridSurface extends StatelessWidget {
     return SizedBox(
       width: width,
       height: height,
-      child: Stack(
-        children: [
-          SizedBox(
-            height: height,
-            child: SingleChildScrollView(
-              controller: verticalController,
-              child: SizedBox(
-                width: width,
-                child: IgnorePointer(
-                  child: CalendarRenderSurface(
-                    columns: columnSpecs,
-                    startHour: _freeBusyStartHour,
-                    endHour: _freeBusyEndHour,
-                    zoomIndex: _freeBusyZoomIndex,
-                    allowDayViewZoom: false,
-                    weekStartDate: weekStart,
-                    weekEndDate: weekEnd,
-                    layoutCalculator: layoutCalculator,
-                    layoutTheme: layoutTheme,
-                    controller: controller,
-                    verticalScrollController: verticalController,
-                    minutesPerStep: _freeBusyMinutesPerStep,
-                    interactionController: interactionController,
-                    availabilityWindows: const <CalendarAvailabilityWindow>[],
-                    availabilityOverlays: const <CalendarAvailabilityOverlay>[],
-                    children: const <Widget>[],
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: onPointerDown,
+        onPointerMove: onPointerMove,
+        onPointerUp: onPointerUp,
+        onPointerCancel: (_) => onPointerCancel(),
+        child: Stack(
+          children: [
+            SizedBox(
+              height: height,
+              child: SingleChildScrollView(
+                controller: verticalController,
+                child: SizedBox(
+                  width: width,
+                  height: contentHeight,
+                  child: Stack(
+                    children: [
+                      IgnorePointer(
+                        child: CalendarRenderSurface(
+                          columns: columnSpecs,
+                          startHour: _freeBusyStartHour,
+                          endHour: _freeBusyEndHour,
+                          zoomIndex: _freeBusyZoomIndex,
+                          allowDayViewZoom: false,
+                          weekStartDate: weekStart,
+                          weekEndDate: weekEnd,
+                          layoutCalculator: layoutCalculator,
+                          layoutTheme: layoutTheme,
+                          controller: controller,
+                          verticalScrollController: verticalController,
+                          minutesPerStep: _freeBusyMinutesPerStep,
+                          interactionController: interactionController,
+                          availabilityWindows: const <CalendarAvailabilityWindow>[],
+                          availabilityOverlays: const <CalendarAvailabilityOverlay>[],
+                          children: const <Widget>[],
+                        ),
+                      ),
+                      Positioned.fill(child: tiles),
+                    ],
                   ),
                 ),
               ),
             ),
-          ),
-          tiles,
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -567,13 +1040,19 @@ class _FreeBusyTileStack extends StatelessWidget {
     required this.timeColumnWidth,
     required this.dayWidth,
     required this.metrics,
-    required this.minutesPerPixel,
+    required this.interactionController,
     required this.isReadOnly,
     required this.activeId,
     required this.onSelect,
     required this.onToggleType,
     required this.onSplit,
-    required this.onResize,
+    required this.onResizePreview,
+    required this.onResizeEnd,
+    required this.onSuppressInsert,
+    required this.contextMenuController,
+    required this.contextMenuGroupId,
+    required this.contextMenuBuilderFactory,
+    required this.enableContextMenuLongPress,
   });
 
   final List<DateTime> columns;
@@ -581,13 +1060,20 @@ class _FreeBusyTileStack extends StatelessWidget {
   final double timeColumnWidth;
   final double dayWidth;
   final CalendarLayoutMetrics metrics;
-  final double minutesPerPixel;
+  final TaskInteractionController interactionController;
   final bool isReadOnly;
   final String? activeId;
   final ValueChanged<_FreeBusySegment> onSelect;
   final ValueChanged<_FreeBusySegment> onToggleType;
   final ValueChanged<_FreeBusySegment> onSplit;
-  final ValueChanged<_FreeBusyResizeRequest> onResize;
+  final ValueChanged<CalendarTask> onResizePreview;
+  final ValueChanged<CalendarTask> onResizeEnd;
+  final VoidCallback onSuppressInsert;
+  final ShadPopoverController contextMenuController;
+  final ValueKey<String> contextMenuGroupId;
+  final TaskContextMenuBuilder? Function(_FreeBusySegment segment)
+      contextMenuBuilderFactory;
+  final bool enableContextMenuLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -607,18 +1093,26 @@ class _FreeBusyTileStack extends StatelessWidget {
             top: entry.top,
             width: entry.width,
             height: entry.height,
-            child: _FreeBusyTile(
+            child: _FreeBusyTaskTile(
               segment: segment,
               isActive: activeId == segment.id,
-              minutesPerPixel: minutesPerPixel,
+              interactionController: interactionController,
               minutesPerStep: metrics.minutesPerSlot,
+              stepHeight: metrics.slotHeight,
+              hourHeight: metrics.hourHeight,
+              width: entry.width,
+              height: entry.height,
               isReadOnly: isReadOnly,
+              contextMenuController: contextMenuController,
+              contextMenuGroupId: contextMenuGroupId,
+              contextMenuBuilder: contextMenuBuilderFactory(segment),
+              enableContextMenuLongPress: enableContextMenuLongPress,
               onSelect: () => onSelect(segment),
               onToggleType: () => onToggleType(segment),
               onSplit: () => onSplit(segment),
-              onResize: (request) => onResize(
-                request.copyWith(segment: segment),
-              ),
+              onResizePreview: onResizePreview,
+              onResizeEnd: onResizeEnd,
+              onSuppressInsert: onSuppressInsert,
             ),
           ),
         );
@@ -628,198 +1122,143 @@ class _FreeBusyTileStack extends StatelessWidget {
   }
 }
 
-class _FreeBusyTile extends StatelessWidget {
-  const _FreeBusyTile({
+class _FreeBusyTaskTile extends StatelessWidget {
+  const _FreeBusyTaskTile({
     required this.segment,
     required this.isActive,
-    required this.minutesPerPixel,
+    required this.interactionController,
     required this.minutesPerStep,
+    required this.stepHeight,
+    required this.hourHeight,
+    required this.width,
+    required this.height,
     required this.isReadOnly,
     required this.onSelect,
     required this.onToggleType,
     required this.onSplit,
-    required this.onResize,
+    required this.onResizePreview,
+    required this.onResizeEnd,
+    required this.onSuppressInsert,
+    required this.contextMenuController,
+    required this.contextMenuGroupId,
+    required this.contextMenuBuilder,
+    required this.enableContextMenuLongPress,
   });
 
   final _FreeBusySegment segment;
   final bool isActive;
-  final double minutesPerPixel;
+  final TaskInteractionController interactionController;
   final int minutesPerStep;
+  final double stepHeight;
+  final double hourHeight;
+  final double width;
+  final double height;
   final bool isReadOnly;
   final VoidCallback onSelect;
   final VoidCallback onToggleType;
   final VoidCallback onSplit;
-  final ValueChanged<_FreeBusyResizeRequest> onResize;
+  final ValueChanged<CalendarTask> onResizePreview;
+  final ValueChanged<CalendarTask> onResizeEnd;
+  final VoidCallback onSuppressInsert;
+  final ShadPopoverController contextMenuController;
+  final ValueKey<String> contextMenuGroupId;
+  final TaskContextMenuBuilder? contextMenuBuilder;
+  final bool enableContextMenuLongPress;
 
   @override
   Widget build(BuildContext context) {
-    final Color baseColor = segment.type.baseColor;
-    final Color fillColor = baseColor.withValues(alpha: 0.16);
-    final Color borderColor = isActive ? baseColor : calendarBorderColor;
-    final Color labelColor = baseColor;
-    final String label = segment.type.label;
-    final String timeRange = _formatTimeRange(segment.start, segment.end);
+    final CalendarTask task = segment.asTask;
+    final Color accentColor = segment.type.tileColor;
+    final bool showControls =
+        !isReadOnly && height >= _freeBusyTileControlMinHeight;
+    final Widget? overlay = showControls
+        ? _FreeBusyTileControls(
+            isFree: segment.type.isFree,
+            onToggle: onToggleType,
+            onSplit: onSplit,
+            onSuppressInsert: onSuppressInsert,
+          )
+        : null;
+    final Widget tile = ResizableTaskWidget(
+      interactionController: interactionController,
+      task: task,
+      onResizePreview: isReadOnly ? null : onResizePreview,
+      onResizeEnd: isReadOnly ? null : onResizeEnd,
+      hourHeight: hourHeight,
+      stepHeight: stepHeight,
+      minutesPerStep: minutesPerStep,
+      width: width,
+      height: height,
+      isDayView: false,
+      enableInteractions: !isReadOnly,
+      isSelectionMode: false,
+      isSelected: isActive,
+      onTap: (_, __) => onSelect(),
+      contextMenuController: isReadOnly ? null : contextMenuController,
+      contextMenuGroupId: isReadOnly ? null : contextMenuGroupId,
+      contextMenuBuilder: isReadOnly ? null : contextMenuBuilder,
+      onDragPointerDown: null,
+      onResizePointerMove: null,
+      contextMenuLongPressEnabled:
+          isReadOnly ? false : enableContextMenuLongPress,
+      resizeHandleExtent: _freeBusyResizeHandleExtent,
+      accentColorOverride: accentColor,
+      overlay: overlay,
+    );
 
-    return GestureDetector(
-      onTap: onSelect,
+    return tile;
+  }
+}
+
+class _FreeBusyTileControls extends StatelessWidget {
+  const _FreeBusyTileControls({
+    required this.isFree,
+    required this.onToggle,
+    required this.onSplit,
+    required this.onSuppressInsert,
+  });
+
+  final bool isFree;
+  final VoidCallback onToggle;
+  final VoidCallback onSplit;
+  final VoidCallback onSuppressInsert;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => onSuppressInsert(),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: fillColor,
-          borderRadius: BorderRadius.circular(_freeBusyTileCornerRadius),
-          border: Border.all(
-            color: borderColor,
-            width: _freeBusyTileBorderWidth,
-          ),
+          color: calendarContainerColor.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: calendarBorderColor),
         ),
-        child: Column(
-          children: [
-            _FreeBusyResizeHandle(
-              direction: _FreeBusyResizeDirection.top,
-              minutesPerPixel: minutesPerPixel,
-              minutesPerStep: minutesPerStep,
-              isReadOnly: isReadOnly,
-              onResize: onResize,
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(_freeBusyTilePadding),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            label,
-                            style: context.textTheme.small.copyWith(
-                              color: labelColor,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: _freeBusyTileLabelSpacing),
-                          Text(
-                            timeRange,
-                            style: context.textTheme.small.copyWith(
-                              color: calendarSubtitleColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!isReadOnly)
-                      Column(
-                        children: [
-                          ShadSwitch(
-                            value: segment.type.isFree,
-                            onChanged: (_) => onToggleType(),
-                          ),
-                          const SizedBox(height: _freeBusyTileActionSpacing),
-                          AxiIconButton.ghost(
-                            iconData: Icons.call_split,
-                            tooltip: 'Split segment',
-                            onPressed: onSplit,
-                            iconSize: _freeBusyTileSplitIconSize,
-                          ),
-                        ],
-                      ),
-                  ],
+        child: Padding(
+          padding: const EdgeInsets.all(_freeBusyTileOverlayPadding),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Transform.scale(
+                scale: _freeBusySwitchScale,
+                child: ShadSwitch(
+                  value: isFree,
+                  onChanged: (_) => onToggle(),
                 ),
               ),
-            ),
-            _FreeBusyResizeHandle(
-              direction: _FreeBusyResizeDirection.bottom,
-              minutesPerPixel: minutesPerPixel,
-              minutesPerStep: minutesPerStep,
-              isReadOnly: isReadOnly,
-              onResize: onResize,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FreeBusyResizeHandle extends StatelessWidget {
-  const _FreeBusyResizeHandle({
-    required this.direction,
-    required this.minutesPerPixel,
-    required this.minutesPerStep,
-    required this.isReadOnly,
-    required this.onResize,
-  });
-
-  final _FreeBusyResizeDirection direction;
-  final double minutesPerPixel;
-  final int minutesPerStep;
-  final bool isReadOnly;
-  final ValueChanged<_FreeBusyResizeRequest> onResize;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: _freeBusyTileHandleHeight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanUpdate: isReadOnly
-            ? null
-            : (details) {
-                final double deltaMinutes = details.delta.dy * minutesPerPixel;
-                onResize(
-                  _FreeBusyResizeRequest(
-                    segment: _FreeBusySegment.placeholder(),
-                    direction: direction,
-                    deltaMinutes: deltaMinutes,
-                    minutesPerStep: minutesPerStep,
-                  ),
-                );
-              },
-        child: Center(
-          child: Icon(
-            direction.isTop
-                ? LucideIcons.gripHorizontal
-                : LucideIcons.gripHorizontal,
-            size: _freeBusyTileHandleIconSize,
-            color: calendarSubtitleColor,
+              const SizedBox(width: _freeBusyTileOverlayGap),
+              AxiIconButton.ghost(
+                iconData: Icons.call_split,
+                tooltip: _freeBusySplitTooltip,
+                onPressed: onSplit,
+                iconSize: _freeBusyTileSplitIconSize,
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-}
-
-class _FreeBusyResizeRequest {
-  const _FreeBusyResizeRequest({
-    required this.segment,
-    required this.direction,
-    required this.deltaMinutes,
-    required this.minutesPerStep,
-  });
-
-  final _FreeBusySegment segment;
-  final _FreeBusyResizeDirection direction;
-  final double deltaMinutes;
-  final int minutesPerStep;
-
-  _FreeBusyResizeRequest copyWith({
-    _FreeBusySegment? segment,
-  }) {
-    return _FreeBusyResizeRequest(
-      segment: segment ?? this.segment,
-      direction: direction,
-      deltaMinutes: deltaMinutes,
-      minutesPerStep: minutesPerStep,
-    );
-  }
-}
-
-enum _FreeBusyResizeDirection {
-  top,
-  bottom;
-
-  bool get isTop => this == _FreeBusyResizeDirection.top;
-  bool get isBottom => this == _FreeBusyResizeDirection.bottom;
 }
 
 class _FreeBusyTileGeometry {
@@ -842,61 +1281,57 @@ class _FreeBusySegment {
     required this.start,
     required this.end,
     required this.type,
+    required this.createdAt,
+    required this.modifiedAt,
   });
-
-  factory _FreeBusySegment.placeholder() {
-    return _FreeBusySegment(
-      id: const Uuid().v4(),
-      start: DateTime.now(),
-      end: DateTime.now(),
-      type: CalendarFreeBusyType.free,
-    );
-  }
 
   final String id;
   DateTime start;
   DateTime end;
   CalendarFreeBusyType type;
-
-  _FreeBusySegment copyWith({
-    DateTime? start,
-    DateTime? end,
-    CalendarFreeBusyType? type,
-  }) {
-    return _FreeBusySegment(
-      id: id,
-      start: start ?? this.start,
-      end: end ?? this.end,
-      type: type ?? this.type,
-    );
-  }
-}
-
-class _ResizeKey {
-  const _ResizeKey({
-    required this.segmentId,
-    required this.direction,
-  });
-
-  final String segmentId;
-  final _FreeBusyResizeDirection direction;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _ResizeKey &&
-        other.segmentId == segmentId &&
-        other.direction == direction;
-  }
-
-  @override
-  int get hashCode => Object.hash(segmentId, direction);
+  DateTime createdAt;
+  DateTime modifiedAt;
 }
 
 extension _FreeBusyTypeLabelX on CalendarFreeBusyType {
   CalendarFreeBusyType get toggled =>
       isFree ? CalendarFreeBusyType.busy : CalendarFreeBusyType.free;
 
-  String get label => isFree ? _freeBusyFreeLabel : _freeBusyBusyLabel;
+  String get label => switch (this) {
+        CalendarFreeBusyType.free => _freeBusyFreeLabel,
+        CalendarFreeBusyType.busy => _freeBusyBusyLabel,
+        CalendarFreeBusyType.busyUnavailable => _freeBusyBusyLabel,
+        CalendarFreeBusyType.busyTentative => _freeBusyMutualLabel,
+      };
+
+  Color get tileColor => switch (this) {
+        CalendarFreeBusyType.free => calendarSuccessColor,
+        CalendarFreeBusyType.busy => calendarDangerColor,
+        CalendarFreeBusyType.busyUnavailable => calendarDangerColor,
+        CalendarFreeBusyType.busyTentative => calendarPrimaryColor,
+      };
+}
+
+extension _FreeBusySegmentTaskX on _FreeBusySegment {
+  CalendarTask get asTask {
+    return CalendarTask(
+      id: id,
+      title: type.label,
+      scheduledTime: start,
+      duration: end.difference(start),
+      createdAt: createdAt,
+      modifiedAt: modifiedAt,
+      endDate: end,
+    );
+  }
+
+  CalendarFreeBusyInterval toInterval(String? tzid) {
+    return CalendarFreeBusyInterval(
+      start: CalendarDateTime(value: start, tzid: tzid),
+      end: CalendarDateTime(value: end, tzid: tzid),
+      type: type,
+    );
+  }
 }
 
 List<_FreeBusySegment> _segmentsFromIntervals({
@@ -911,15 +1346,17 @@ List<_FreeBusySegment> _segmentsFromIntervals({
       List<CalendarFreeBusyInterval>.from(intervals)
         ..sort((a, b) => a.start.value.compareTo(b.start.value));
   final List<_FreeBusySegment> segments = <_FreeBusySegment>[];
-  const Uuid idGenerator = Uuid();
+  final DateTime now = DateTime.now();
   DateTime cursor = rangeStart;
   if (sorted.isEmpty) {
     return <_FreeBusySegment>[
       _FreeBusySegment(
-        id: idGenerator.v4(),
+        id: _freeBusySegmentIdGenerator.v4(),
         start: rangeStart,
         end: rangeEnd,
         type: CalendarFreeBusyType.free,
+        createdAt: now,
+        modifiedAt: now,
       ),
     ];
   }
@@ -937,19 +1374,23 @@ List<_FreeBusySegment> _segmentsFromIntervals({
     if (clippedStart.isAfter(cursor)) {
       segments.add(
         _FreeBusySegment(
-          id: idGenerator.v4(),
+          id: _freeBusySegmentIdGenerator.v4(),
           start: cursor,
           end: clippedStart,
           type: CalendarFreeBusyType.free,
+          createdAt: now,
+          modifiedAt: now,
         ),
       );
     }
     segments.add(
       _FreeBusySegment(
-        id: idGenerator.v4(),
+        id: _freeBusySegmentIdGenerator.v4(),
         start: clippedStart,
         end: clippedEnd,
         type: _sanitizeType(interval.type),
+        createdAt: now,
+        modifiedAt: now,
       ),
     );
     cursor = clippedEnd;
@@ -957,10 +1398,12 @@ List<_FreeBusySegment> _segmentsFromIntervals({
   if (cursor.isBefore(rangeEnd)) {
     segments.add(
       _FreeBusySegment(
-        id: idGenerator.v4(),
+        id: _freeBusySegmentIdGenerator.v4(),
         start: cursor,
         end: rangeEnd,
         type: CalendarFreeBusyType.free,
+        createdAt: now,
+        modifiedAt: now,
       ),
     );
   }
@@ -987,20 +1430,24 @@ List<_FreeBusySegment> _splitByDay(List<_FreeBusySegment> segments) {
       ).add(_freeBusyDayStep);
       result.add(
         _FreeBusySegment(
-          id: segment.id,
+          id: _freeBusySegmentIdGenerator.v4(),
           start: start,
           end: dayEnd,
           type: segment.type,
+          createdAt: segment.createdAt,
+          modifiedAt: segment.modifiedAt,
         ),
       );
       start = dayEnd;
     }
     result.add(
       _FreeBusySegment(
-        id: segment.id,
+        id: _freeBusySegmentIdGenerator.v4(),
         start: start,
         end: end,
         type: segment.type,
+        createdAt: segment.createdAt,
+        modifiedAt: segment.modifiedAt,
       ),
     );
   }
@@ -1015,6 +1462,9 @@ List<_FreeBusySegment> _mergeAdjacent(List<_FreeBusySegment> segments) {
     ..sort((a, b) => a.start.compareTo(b.start));
   final List<_FreeBusySegment> merged = <_FreeBusySegment>[];
   for (final _FreeBusySegment segment in sorted) {
+    if (!segment.end.isAfter(segment.start)) {
+      continue;
+    }
     if (merged.isEmpty) {
       merged.add(segment);
       continue;
@@ -1022,6 +1472,7 @@ List<_FreeBusySegment> _mergeAdjacent(List<_FreeBusySegment> segments) {
     final _FreeBusySegment last = merged.last;
     if (last.type == segment.type && last.end.isAtSameMomentAs(segment.start)) {
       last.end = segment.end;
+      last.modifiedAt = DateTime.now();
       continue;
     }
     merged.add(segment);
@@ -1085,6 +1536,179 @@ List<_FreeBusyTileGeometry> _segmentGeometry({
   return geometry;
 }
 
+class _FreeBusyEditSheet extends StatefulWidget {
+  const _FreeBusyEditSheet({
+    required this.segment,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.onToggle,
+    required this.onSplit,
+    required this.onRangeChanged,
+  });
+
+  final _FreeBusySegment segment;
+  final DateTime rangeStart;
+  final DateTime rangeEnd;
+  final VoidCallback onToggle;
+  final VoidCallback onSplit;
+  final void Function(DateTime start, DateTime end) onRangeChanged;
+
+  @override
+  State<_FreeBusyEditSheet> createState() => _FreeBusyEditSheetState();
+}
+
+class _FreeBusyEditSheetState extends State<_FreeBusyEditSheet> {
+  late DateTime? _start;
+  late DateTime? _end;
+
+  @override
+  void initState() {
+    super.initState();
+    _start = widget.segment.start;
+    _end = widget.segment.end;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final header = AxiSheetHeader(
+      title: const Text(_freeBusyEditTitle),
+      subtitle: const Text(_freeBusyEditSubtitle),
+      onClose: () => Navigator.of(context).maybePop(),
+    );
+    return AxiSheetScaffold.scroll(
+      header: header,
+      children: [
+        _FreeBusySheetActions(
+          isFree: widget.segment.type.isFree,
+          onToggle: widget.onToggle,
+          onSplit: widget.onSplit,
+        ),
+        const SizedBox(height: _freeBusySheetSpacing),
+        const _FreeBusySheetSectionLabel(text: _freeBusyRangeLabel),
+        ScheduleRangeFields(
+          start: _start,
+          end: _end,
+          onStartChanged: _handleStartChanged,
+          onEndChanged: _handleEndChanged,
+          minDate: _startOfDay(widget.segment.start),
+          maxDate: _endOfDay(widget.segment.start, widget.rangeEnd),
+        ),
+      ],
+    );
+  }
+
+  void _handleStartChanged(DateTime? value) {
+    setState(() {
+      _start = value;
+      final DateTime? start = _start;
+      final DateTime? end = _end;
+      if (start != null && end != null && !end.isAfter(start)) {
+        _end = _clampDateTime(
+          start.add(_freeBusyMinimumDuration),
+          min: start.add(_freeBusyMinimumDuration),
+          max: _endOfDay(widget.segment.start, widget.rangeEnd),
+        );
+      }
+    });
+    _emitRange();
+  }
+
+  void _handleEndChanged(DateTime? value) {
+    setState(() {
+      _end = value;
+    });
+    _emitRange();
+  }
+
+  void _emitRange() {
+    final DateTime? start = _start;
+    final DateTime? end = _end;
+    if (start == null || end == null || !end.isAfter(start)) {
+      return;
+    }
+    widget.onRangeChanged(start, end);
+  }
+}
+
+class _FreeBusySheetActions extends StatelessWidget {
+  const _FreeBusySheetActions({
+    required this.isFree,
+    required this.onToggle,
+    required this.onSplit,
+  });
+
+  final bool isFree;
+  final VoidCallback onToggle;
+  final VoidCallback onSplit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: context.colorScheme.card,
+              borderRadius:
+                  BorderRadius.circular(_freeBusySheetActionCornerRadius),
+              border: Border.all(color: context.colorScheme.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _freeBusySheetActionPaddingHorizontal,
+                vertical: _freeBusySheetActionPaddingVertical,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _freeBusyToggleLabel,
+                    style: context.textTheme.small.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: context.colorScheme.mutedForeground,
+                    ),
+                  ),
+                  ShadSwitch(
+                    value: isFree,
+                    onChanged: (_) => onToggle(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: _freeBusySheetActionSpacing),
+        ShadButton.outline(
+          size: ShadButtonSize.sm,
+          onPressed: onSplit,
+          child: const Text(_freeBusySplitLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class _FreeBusySheetSectionLabel extends StatelessWidget {
+  const _FreeBusySheetSectionLabel({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _freeBusySheetGap),
+      child: Text(
+        text,
+        style: context.textTheme.small.copyWith(
+          fontWeight: FontWeight.w700,
+          color: context.colorScheme.mutedForeground,
+          letterSpacing: _freeBusySheetLabelLetterSpacing,
+        ),
+      ),
+    );
+  }
+}
+
 DateTime _normalizeDay(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
@@ -1113,10 +1737,6 @@ String _dayLabel(DateTime date) {
   final String dayName = _freeBusyDayNames[index];
   final String shortName = dayName.substring(0, _freeBusyDayLabelLength);
   return '$shortName ${date.day}';
-}
-
-String _formatTimeRange(DateTime start, DateTime end) {
-  return '${TimeFormatter.formatTime(start)} - ${TimeFormatter.formatTime(end)}';
 }
 
 DateTime _startOfDay(DateTime value) {
@@ -1157,6 +1777,9 @@ DateTime _snapToStep(DateTime value) {
 }
 
 CalendarFreeBusyType _sanitizeType(CalendarFreeBusyType type) {
+  if (type == CalendarFreeBusyType.busyTentative) {
+    return CalendarFreeBusyType.busyTentative;
+  }
   return type.isFree ? CalendarFreeBusyType.free : CalendarFreeBusyType.busy;
 }
 
