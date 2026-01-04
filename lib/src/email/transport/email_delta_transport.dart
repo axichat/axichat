@@ -136,7 +136,7 @@ class EmailDeltaTransport implements ChatTransport {
   bool _contextOpened = false;
   Future<void>? _contextOpening;
   bool _ioRunning = false;
-  bool _accountsSupported = false;
+  bool _accountsSupported = true;
   final Map<int, _DeltaAccountSession> _accountSessions = {};
   final Map<int, StreamSubscription<DeltaCoreEvent>> _eventSubscriptions = {};
   final Map<int, Future<void>> _accountOpening = {};
@@ -744,7 +744,7 @@ class EmailDeltaTransport implements ChatTransport {
   int? _resolveAccountId(int? accountId) {
     final requestedAccountId = accountId;
     if (requestedAccountId != null) {
-      return deltaAccountIdLegacy;
+      return requestedAccountId;
     }
     final context = _context;
     if (context == null) {
