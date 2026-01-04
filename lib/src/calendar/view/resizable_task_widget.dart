@@ -88,6 +88,8 @@ class ResizableTaskWidget extends StatefulWidget {
   final ValueChanged<Offset>? onResizePointerMove;
   final bool contextMenuLongPressEnabled;
   final double resizeHandleExtent;
+  final Color? accentColorOverride;
+  final Widget? overlay;
 
   const ResizableTaskWidget({
     super.key,
@@ -115,6 +117,8 @@ class ResizableTaskWidget extends StatefulWidget {
     this.onResizePointerMove,
     this.contextMenuLongPressEnabled = true,
     this.resizeHandleExtent = 8.0,
+    this.accentColorOverride,
+    this.overlay,
   });
 
   @override
@@ -216,6 +220,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 resizeSession != null && resizeSession.taskId == task.id;
 
             Widget buildContent() {
+              final Color accentColor =
+                  widget.accentColorOverride ?? _taskColor;
               final taskBody = _ResizableTaskBody(
                 task: task,
                 isHovering: isHovering,
@@ -227,10 +233,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 isSelected: widget.isSelected,
                 height: widget.height,
                 width: widget.width,
-                accentColor: _taskColor,
+                accentColor: accentColor,
                 accentWidth: _accentWidth,
                 accentPadding: _accentPadding,
                 timeLabel: _formatTimeRange(),
+                overlay: widget.overlay,
               );
 
               final Widget sizedBody = SizedBox(
@@ -326,6 +333,7 @@ class _ResizableTaskBody extends StatelessWidget {
     required this.accentWidth,
     required this.accentPadding,
     required this.timeLabel,
+    required this.overlay,
   });
 
   static const double _minDescriptionHeight = 56;
@@ -348,6 +356,7 @@ class _ResizableTaskBody extends StatelessWidget {
   final double accentWidth;
   final double accentPadding;
   final String timeLabel;
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) {
@@ -423,7 +432,7 @@ class _ResizableTaskBody extends StatelessWidget {
         (availableHeight - padding * 2).clamp(0.0, double.infinity);
 
     if (innerHeight <= 10) {
-      return Container(
+      final Widget compactBody = Container(
         margin: const EdgeInsets.all(2),
         decoration: decoration,
         child: Stack(
@@ -457,6 +466,10 @@ class _ResizableTaskBody extends StatelessWidget {
             ),
           ],
         ),
+      );
+      return _ResizableTaskOverlay(
+        overlay: overlay,
+        child: compactBody,
       );
     }
 
@@ -584,7 +597,7 @@ class _ResizableTaskBody extends StatelessWidget {
       children.add(_TaskLocationRow(location: task.location!));
     }
 
-    return Container(
+    final Widget detailedBody = Container(
       margin: const EdgeInsets.all(2),
       decoration: decoration,
       child: Stack(
@@ -615,6 +628,39 @@ class _ResizableTaskBody extends StatelessWidget {
           ),
         ],
       ),
+    );
+    return _ResizableTaskOverlay(
+      overlay: overlay,
+      child: detailedBody,
+    );
+  }
+}
+
+class _ResizableTaskOverlay extends StatelessWidget {
+  const _ResizableTaskOverlay({
+    required this.child,
+    required this.overlay,
+  });
+
+  static const double _overlayInset = 4.0;
+
+  final Widget child;
+  final Widget? overlay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (overlay == null) {
+      return child;
+    }
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: _overlayInset,
+          right: _overlayInset,
+          child: overlay!,
+        ),
+      ],
     );
   }
 }

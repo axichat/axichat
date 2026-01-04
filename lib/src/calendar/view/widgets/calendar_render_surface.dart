@@ -646,8 +646,8 @@ class RenderCalendarSurface extends RenderBox
   final List<_DayColumnGeometry> _dayGeometries = <_DayColumnGeometry>[];
   static const double _tapTolerance = 12.0;
   static const double _scrollTapSuppressionThreshold = 1.0;
-  static const double _availabilityOverlayAlpha = 0.08;
-  static const double _availabilityWindowAlpha = 0.12;
+  static const double _availabilityOverlayAlpha = 0.32;
+  static const double _availabilityWindowAlpha = 0.2;
   static const double _availabilityOverlayInset = 1.0;
   static const double _availabilityOverlayMinHeight = 1.0;
   static const double _availabilityOverlayMinWidth = 0.0;
