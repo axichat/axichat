@@ -20,22 +20,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-const double _chipHeight = 36.0;
 const Duration _chipMotionDuration = Duration(milliseconds: 320);
 const Curve _chipMotionCurve = Curves.easeInOutCubic;
-const Duration _barAnimationDuration = Duration(milliseconds: 360);
 const int _maxAutocompleteSuggestions = 8;
 const double _suggestionTileHeight = 56;
 const double _suggestionMaxHeight = 320;
-const double _expandedHeaderPadding = 4;
 const double _chipAvatarSize = 20.0;
 const double _chipStatusBadgeSize = 12.0;
 const double _chipStatusBadgeBorderWidth = 1.5;
-const double _visibilityBadgeRadius = 8.0;
-const double _visibilityBadgeFontSize = 11.0;
-const double _visibilityBadgeSpacing = 6.0;
-const EdgeInsets _visibilityBadgePadding =
-    EdgeInsets.symmetric(horizontal: 6, vertical: 2);
 const EdgeInsetsGeometry _recipientChipPadding = EdgeInsetsDirectional.fromSTEB(
   4,
   0,
@@ -110,7 +102,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     _barCollapsed = widget.collapsedByDefault;
     _collapseController = AnimationController(
       vsync: this,
-      duration: _barAnimationDuration,
+      duration: chipsBarAnimationDuration,
       value: _barCollapsed ? 0 : 1,
     );
     _collapseAnimation = CurvedAnimation(
@@ -210,7 +202,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         ),
     ];
 
-    final barBackground = _containerBackground(colors);
+    final barBackground = chipsBarBackground(colors);
     final availableAutocompleteChats = widget.availableChats
         .where(
           (chat) => !widget.recipients
@@ -221,31 +213,22 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final knownAddresses = _knownAddresses();
     final headerPadding = EdgeInsets.symmetric(
       horizontal: widget.horizontalPadding,
-      vertical: _expandedHeaderPadding,
+      vertical: calendarInsetMd,
     );
     final bodyPadding =
         EdgeInsets.symmetric(horizontal: widget.horizontalPadding);
-    final headerStyle = theme.textTheme.labelSmall?.copyWith(
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-      color: colors.onSurfaceVariant.withValues(alpha: 0.9),
-      letterSpacing: 0.4,
-    );
+    final headerStyle = chipsBarHeaderTextStyle(context);
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
     final arrowIcon =
         _barCollapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up;
-    return AnimatedContainer(
-      duration: _barAnimationDuration,
-      curve: Curves.easeInOutCubic,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: barBackground,
-        border: Border(
-          top: BorderSide(color: context.colorScheme.border, width: 1),
-        ),
-      ),
+    return ChipsBarSurface(
+      backgroundColor: barBackground,
       padding: bodyPadding,
+      borderSide: BorderSide(
+        color: context.colorScheme.border,
+        width: 1,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -286,11 +269,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                   behavior: HitTestBehavior.opaque,
                   onTap: _toggleBarCollapsed,
                   child: AnimatedContainer(
-                    duration: _barAnimationDuration,
+                    duration: chipsBarAnimationDuration,
                     curve: Curves.easeInOutCubic,
                     padding: headerPadding,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius:
+                          BorderRadius.circular(chipsBarHeaderBorderRadius),
                       border: _headerFocused
                           ? Border.all(
                               color: colors.primary,
@@ -308,34 +292,35 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                         ),
                         if (showVisibilityBadge) ...[
                           Container(
-                            padding: _visibilityBadgePadding,
+                            padding: chipsBarBadgePadding,
                             decoration: BoxDecoration(
                               color: colors.surfaceContainerHighest,
-                              borderRadius:
-                                  BorderRadius.circular(_visibilityBadgeRadius),
+                              borderRadius: BorderRadius.circular(
+                                chipsBarHeaderBadgeRadius,
+                              ),
                               border: Border.all(
                                 color: context.colorScheme.border,
                               ),
                             ),
                             child: Text(
                               normalizedVisibilityLabel,
-                              style: headerStyle?.copyWith(
-                                fontSize: _visibilityBadgeFontSize,
+                              style: headerStyle.copyWith(
+                                fontSize: chipsBarHeaderBadgeFontSize,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-                          const SizedBox(width: _visibilityBadgeSpacing),
+                          const SizedBox(width: calendarInsetLg),
                         ],
                         const SizedBox(width: 8),
-                        _RecipientsCountBadge(
+                        ChipsBarCountBadge(
                           count: recipients.length,
                           expanded: !_barCollapsed,
                           colors: colors,
                         ),
                         const SizedBox(width: 4),
                         AnimatedSwitcher(
-                          duration: _barAnimationDuration,
+                          duration: chipsBarAnimationDuration,
                           switchInCurve: Curves.easeOutCubic,
                           switchOutCurve: Curves.easeInCubic,
                           child: Icon(
@@ -357,7 +342,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
               sizeFactor: _collapseAnimation,
               axisAlignment: -1,
               child: AnimatedSize(
-                duration: _barAnimationDuration,
+                duration: chipsBarAnimationDuration,
                 curve: Curves.easeInOutCubic,
                 alignment: Alignment.topLeft,
                 child: Padding(
@@ -398,13 +383,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         ],
       ),
     );
-  }
-
-  Color _containerBackground(ColorScheme colors) {
-    final overlay = colors.brightness == Brightness.dark
-        ? Colors.white.withValues(alpha: 0.06)
-        : colors.primary.withValues(alpha: 0.07);
-    return Color.alphaBlend(overlay, colors.surfaceContainerHigh);
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -897,7 +875,7 @@ class _RecipientChip extends StatelessWidget {
         : (included ? accentColor : Colors.transparent);
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: _chipHeight),
+      constraints: const BoxConstraints(minHeight: chipsBarHeight),
       child: InputChip(
         shape: const StadiumBorder(),
         showCheckmark: false,
@@ -1052,42 +1030,6 @@ class _RecipientChipAvatar extends StatelessWidget {
       };
 }
 
-class _RecipientsCountBadge extends StatelessWidget {
-  const _RecipientsCountBadge({
-    required this.count,
-    required this.expanded,
-    required this.colors,
-  });
-
-  final int count;
-  final bool expanded;
-  final ColorScheme colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final background =
-        expanded ? colors.primary : colors.primary.withValues(alpha: 0.09);
-    final foreground = expanded ? colors.onPrimary : colors.primary;
-    return AnimatedContainer(
-      duration: _barAnimationDuration,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        '$count',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: foreground,
-          letterSpacing: 0.4,
-        ),
-      ),
-    );
-  }
-}
-
 class _ActionChip extends StatelessWidget {
   const _ActionChip({
     required this.label,
@@ -1104,7 +1046,7 @@ class _ActionChip extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final foreground = colors.onSurfaceVariant;
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: _chipHeight),
+      constraints: const BoxConstraints(minHeight: chipsBarHeight),
       child: ActionChip(
         shape: const StadiumBorder(),
         avatar: Icon(icon, size: 14, color: foreground),
@@ -1612,7 +1554,7 @@ final class _RecipientAutocompleteOverlayState
           onTapOutside: (_) => widget.focusNode.unfocus(),
           child: SizedBox(
             key: _triggerKey,
-            height: _chipHeight,
+            height: chipsBarHeight,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Align(
@@ -1620,7 +1562,7 @@ final class _RecipientAutocompleteOverlayState
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: widget.backgroundColor,
-                    borderRadius: BorderRadius.circular(_chipHeight / 2),
+                    borderRadius: BorderRadius.circular(chipsBarHeight / 2),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),

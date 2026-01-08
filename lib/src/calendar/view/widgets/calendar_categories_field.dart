@@ -4,14 +4,14 @@
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
-import 'package:axichat/src/calendar/view/widgets/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 const String _categoriesSectionTitle = 'Categories';
 const String _categoriesHintText = 'Add category';
-const String _categoriesAddTooltip = 'Add category';
 const String _categoriesSplitPattern = r'[,\n]';
+const double _categoryInputMinWidth = 140.0;
+const double _categoryInputMaxWidth = 260.0;
+const double _categoryChipMaxWidth = 180.0;
 
 class CalendarCategoriesField extends StatefulWidget {
   const CalendarCategoriesField({
@@ -122,92 +122,61 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
 
   @override
   Widget build(BuildContext context) {
-    final Widget chips = widget.categories.isEmpty
-        ? const SizedBox.shrink()
-        : Wrap(
-            spacing: calendarGutterSm,
-            runSpacing: calendarInsetLg,
-            children: widget.categories
-                .map(
-                  (category) => _CategoryChip(
-                    label: category,
-                    onRemove: () => _removeCategory(category),
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final Color barBackground = chipsBarBackground(colors);
+    final TextStyle headerStyle = chipsBarHeaderTextStyle(context);
+    final List<Widget> chipWidgets = widget.categories
+        .map(
+          (category) => _CategoryChip(
+            label: category,
+            onRemove: widget.enabled ? () => _removeCategory(category) : null,
+          ),
+        )
+        .toList()
+      ..add(
+        _CategoryInputField(
+          controller: _controller,
+          focusNode: _focusNode,
+          hintText: widget.hintText,
+          onSubmitted: _submitInput,
+          enabled: widget.enabled,
+          backgroundColor: barBackground,
+        ),
+      );
+
+    return ChipsBarSurface(
+      backgroundColor: barBackground,
+      borderSide: BorderSide(color: context.colorScheme.border),
+      includeTopBorder: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: calendarInsetMd),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.title.toUpperCase(),
+                    style: headerStyle,
                   ),
-                )
-                .toList(),
-          );
-
-    final Widget inputRow = ValueListenableBuilder<TextEditingValue>(
-      valueListenable: _controller,
-      builder: (context, value, _) {
-        final bool canSubmit = value.text.trim().isNotEmpty;
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: TaskTextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                hintText: widget.hintText,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _submitInput(),
-                textCapitalization: TextCapitalization.words,
-                enabled: widget.enabled,
-              ),
+                ),
+                ChipsBarCountBadge(
+                  count: widget.categories.length,
+                  expanded: true,
+                  colors: colors,
+                ),
+              ],
             ),
-            const SizedBox(width: calendarGutterSm),
-            _CategoryAddButton(
-              enabled: widget.enabled && canSubmit,
-              onPressed: _submitInput,
-            ),
-          ],
-        );
-      },
-    );
-
-    final Widget content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TaskSectionHeader(title: widget.title),
-        const SizedBox(height: calendarGutterSm),
-        inputRow,
-        if (widget.categories.isNotEmpty) ...[
-          const SizedBox(height: calendarGutterSm),
-          chips,
+          ),
+          const SizedBox(height: calendarInsetLg),
+          Wrap(
+            spacing: calendarGutterSm,
+            runSpacing: calendarGutterSm,
+            children: chipWidgets,
+          ),
         ],
-      ],
-    );
-    if (widget.enabled) {
-      return content;
-    }
-    return IgnorePointer(child: content);
-  }
-}
-
-class _CategoryAddButton extends StatelessWidget {
-  const _CategoryAddButton({
-    required this.enabled,
-    required this.onPressed,
-  });
-
-  final bool enabled;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final VoidCallback? handler = enabled ? onPressed : null;
-    final Color foreground =
-        enabled ? calendarPrimaryColor : calendarSubtitleColor;
-    return AxiIconButton(
-      iconData: Icons.add,
-      tooltip: _categoriesAddTooltip,
-      onPressed: handler,
-      color: foreground,
-      backgroundColor: calendarContainerColor,
-      borderColor: calendarBorderColor,
-      iconSize: calendarGutterLg,
-      buttonSize: AxiIconButton.kDefaultSize,
-      tapTargetSize: AxiIconButton.kTapTargetSize,
+      ),
     );
   }
 }
@@ -215,71 +184,118 @@ class _CategoryAddButton extends StatelessWidget {
 class _CategoryChip extends StatelessWidget {
   const _CategoryChip({
     required this.label,
-    required this.onRemove,
+    this.onRemove,
   });
 
   final String label;
-  final VoidCallback onRemove;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarTitleColor,
-      fontWeight: FontWeight.w600,
-    );
-    return Container(
+    final TextStyle labelStyle = Theme.of(context).textTheme.bodyMedium ??
+        const TextStyle(fontWeight: FontWeight.w600);
+    return InputChip(
+      shape: const StadiumBorder(),
+      showCheckmark: false,
+      backgroundColor: calendarContainerColor,
+      selectedColor: calendarContainerColor,
+      side: BorderSide(color: calendarBorderColor),
+      labelStyle: labelStyle.copyWith(color: calendarTitleColor),
+      label: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _categoryChipMaxWidth),
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      deleteIcon: onRemove == null
+          ? null
+          : Icon(
+              Icons.close,
+              size: calendarGutterMd,
+              color: calendarSubtitleColor,
+            ),
+      onDeleted: onRemove,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+        vertical: calendarInsetSm,
       ),
-      decoration: BoxDecoration(
-        color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(color: calendarBorderColor),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              label,
-              style: labelStyle,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: calendarInsetMd),
-          _CategoryRemoveButton(onPressed: onRemove),
-        ],
-      ),
+      labelPadding: const EdgeInsets.symmetric(horizontal: calendarInsetSm),
     );
   }
 }
 
-class _CategoryRemoveButton extends StatelessWidget {
-  const _CategoryRemoveButton({
-    required this.onPressed,
+class _CategoryInputField extends StatelessWidget {
+  const _CategoryInputField({
+    required this.controller,
+    required this.focusNode,
+    required this.hintText,
+    required this.onSubmitted,
+    required this.enabled,
+    required this.backgroundColor,
   });
 
-  final VoidCallback onPressed;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String hintText;
+  final VoidCallback onSubmitted;
+  final bool enabled;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    final Color foreground = calendarSubtitleColor;
-    final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
-    return Material(
-      type: MaterialType.transparency,
-      child: InkResponse(
-        onTap: onPressed,
-        containedInkWell: true,
-        radius: calendarGutterLg,
-        borderRadius: radius,
-        hoverColor: calendarPrimaryColor.withValues(alpha: 0.08),
-        child: Padding(
-          padding: const EdgeInsets.all(calendarInsetSm),
-          child: Icon(
-            Icons.close,
-            size: calendarGutterMd,
-            color: foreground,
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final Color hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
+    final TextStyle? textStyle = Theme.of(context).textTheme.bodyMedium;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minWidth: _categoryInputMinWidth,
+        maxWidth: _categoryInputMaxWidth,
+      ),
+      child: SizedBox(
+        height: chipsBarHeight,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(chipsBarHeight / 2),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                inputDecorationTheme: const InputDecorationTheme(
+                  isDense: true,
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              child: AxiTextField(
+                controller: controller,
+                focusNode: focusNode,
+                maxLines: 1,
+                enabled: enabled,
+                textInputAction: TextInputAction.done,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  hintText: hintText,
+                  hintStyle: textStyle?.copyWith(color: hintColor),
+                ),
+                style: textStyle,
+                strutStyle: textStyle == null
+                    ? null
+                    : StrutStyle.fromTextStyle(textStyle),
+                textAlignVertical: TextAlignVertical.center,
+                onSubmitted: (_) => onSubmitted(),
+              ),
+            ),
           ),
         ),
       ),
