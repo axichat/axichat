@@ -118,7 +118,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   final _locationController = TextEditingController();
   late final Listenable _formActivityListenable;
   CalendarTaskDraftStore? _draftStore;
-  final bool _suppressDraftSync = false;
+  bool _suppressDraftSync = false;
   bool _draftStoreResolved = false;
   final TextEditingController _selectionTitleController =
       TextEditingController();
