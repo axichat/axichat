@@ -105,6 +105,8 @@
   "attachmentGalleryFilesLabel": "Files",
   "attachmentGallerySentLabel": "Sent",
   "attachmentGalleryReceivedLabel": "Received",
+  "attachmentGalleryLayoutGridLabel": "Grid view",
+  "attachmentGalleryLayoutListLabel": "List view",
   "attachmentGallerySortNameAscLabel": "Name A-Z",
   "attachmentGallerySortNameDescLabel": "Name Z-A",
   "attachmentGallerySortSizeAscLabel": "Size small to large",

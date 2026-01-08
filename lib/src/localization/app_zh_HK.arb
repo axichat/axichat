@@ -77,6 +77,8 @@
   "attachmentGalleryFilesLabel": "檔案",
   "attachmentGallerySentLabel": "已傳送",
   "attachmentGalleryReceivedLabel": "已接收",
+  "attachmentGalleryLayoutGridLabel": "Grid view",
+  "attachmentGalleryLayoutListLabel": "List view",
   "attachmentGallerySortNameAscLabel": "名稱 A-Z",
   "attachmentGallerySortNameDescLabel": "名稱 Z-A",
   "attachmentGallerySortSizeAscLabel": "大小由小到大",

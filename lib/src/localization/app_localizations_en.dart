@@ -242,6 +242,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachmentGalleryReceivedLabel => 'Received';
 
   @override
+  String get attachmentGalleryLayoutGridLabel => 'Grid view';
+
+  @override
+  String get attachmentGalleryLayoutListLabel => 'List view';
+
+  @override
   String get attachmentGallerySortNameAscLabel => 'Name A-Z';
 
   @override

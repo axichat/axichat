@@ -235,6 +235,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attachmentGalleryReceivedLabel => '已接收';
 
   @override
+  String get attachmentGalleryLayoutGridLabel => 'Grid view';
+
+  @override
+  String get attachmentGalleryLayoutListLabel => 'List view';
+
+  @override
   String get attachmentGallerySortNameAscLabel => '名称 A-Z';
 
   @override
@@ -3342,6 +3348,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get attachmentGalleryReceivedLabel => '已接收';
+
+  @override
+  String get attachmentGalleryLayoutGridLabel => 'Grid view';
+
+  @override
+  String get attachmentGalleryLayoutListLabel => 'List view';
 
   @override
   String get attachmentGallerySortNameAscLabel => '名稱 A-Z';
