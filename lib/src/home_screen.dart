@@ -25,6 +25,7 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
+import 'package:axichat/src/calendar/view/controllers/task_form_draft_store.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
@@ -503,7 +504,6 @@ class _HomeScreenState extends State<HomeScreen> {
             if (calendarStorage != null)
               RepositoryProvider<CalendarTaskDraftStore>(
                 create: (_) => CalendarTaskDraftStore(),
-                dispose: (_, store) => store.clearAll(),
               ),
           ],
           child: MultiBlocProvider(
