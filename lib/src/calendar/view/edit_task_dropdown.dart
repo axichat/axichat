@@ -150,6 +150,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   final FocusNode _titleFocusNode = FocusNode();
   CalendarTaskDraftStore? _draftStore;
   bool _suppressDraftSync = false;
+  bool _closingForVisibility = false;
 
   bool _isImportant = false;
   bool _isUrgent = false;
@@ -183,6 +184,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       ..addListener(_refresh)
       ..addListener(_persistDraft);
     _draftStore = _maybeReadDraftStore(context);
+    _draftStore?.addListener(_handleDraftStoreChanged);
     final TaskEditDraft? draft = _draftStore?.draftForTask(widget.task.id);
     if (draft != null) {
       _hydrateFromDraft(draft, rebuild: false);
@@ -201,6 +203,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       ..removeListener(_persistDraft)
       ..dispose();
     _titleFocusNode.dispose();
+    _draftStore?.removeListener(_handleDraftStoreChanged);
     super.dispose();
   }
 
@@ -209,6 +212,24 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       return;
     }
     setState(() {});
+  }
+
+  void _handleDraftStoreChanged() {
+    final CalendarTaskDraftStore? store = _draftStore;
+    if (store == null || store.isCalendarVisible) {
+      return;
+    }
+    if (store.editSession?.taskId != widget.task.id) {
+      return;
+    }
+    if (_closingForVisibility) {
+      return;
+    }
+    _closingForVisibility = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _closingForVisibility = false;
+    });
+    widget.onClose();
   }
 
   @override
@@ -347,6 +368,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _geo = draft.geo;
       _organizer = draft.organizer;
       _attendees = List<CalendarAttendee>.from(draft.attendees);
+      _attachments = List<CalendarAttachment>.from(
+        widget.task.icsMeta?.attachments ?? _emptyAttachments,
+      );
     }
 
     _suppressDraftSync = true;
@@ -464,6 +488,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               onDelete: () {
                 widget.onTaskDeleted(widget.task.id);
                 _draftStore?.clearTaskDraft(widget.task.id);
+                _draftStore?.clearEditSession(widget.task.id);
                 widget.onClose();
               },
               onCancel: _handleCancel,
@@ -963,11 +988,13 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       widget.onTaskUpdated(updatedTask);
     }
     _draftStore?.clearTaskDraft(widget.task.id);
+    _draftStore?.clearEditSession(widget.task.id);
     widget.onClose();
   }
 
   void _handleCancel() {
     _draftStore?.clearTaskDraft(widget.task.id);
+    _draftStore?.clearEditSession(widget.task.id);
     widget.onClose();
   }
 }

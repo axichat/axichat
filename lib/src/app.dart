@@ -62,6 +62,7 @@ const String _shareFileSchemePrefix = 'file://';
 const String _emptyShareBody = '';
 const int _shareAttachmentUnknownSizeBytes = 0;
 const int _shareAttachmentMinSizeBytes = 1;
+const Duration _shareIntentNavigationDelay = Duration.zero;
 
 class Axichat extends StatefulWidget {
   Axichat({
@@ -241,6 +242,7 @@ class MaterialAxichat extends StatefulWidget {
 class _MaterialAxichatState extends State<MaterialAxichat> {
   late final XmppService _xmppService;
   late final EmailService _emailService;
+  bool _shareIntentHandling = false;
 
   late final GoRouter _router = GoRouter(
     restorationScopeId: 'app',
@@ -600,32 +602,60 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   }
 
   Future<void> _handleShareIntent() async {
-    if (!context.read<ShareIntentCubit>().state.hasPayload) return;
+    if (_shareIntentHandling) return;
+    final ShareIntentState shareState = context.read<ShareIntentCubit>().state;
+    if (!shareState.hasPayload) return;
     if (context.read<AuthenticationCubit>().state is! AuthenticationComplete) {
       return;
     }
+    _shareIntentHandling = true;
     final MessageService messageService = context.read<MessageService>();
-    final List<String> attachmentMetadataIds = await _persistSharedAttachments(
-      messageService: messageService,
-      attachments: context.read<ShareIntentCubit>().state.payload!.attachments,
-    );
-    if (!mounted) return;
-    final String resolvedBody =
-        context.read<ShareIntentCubit>().state.payload?.text?.trim() ??
-            _emptyShareBody;
-    final bool hasBody = resolvedBody.isNotEmpty;
-    if (!hasBody && attachmentMetadataIds.isEmpty) {
+    try {
+      final SharePayload payload = shareState.payload!;
+      final bool shouldNavigateHome = _shouldNavigateToHomeForShare();
+      if (shouldNavigateHome) {
+        _router.go(const HomeRoute().location);
+        await Future<void>.delayed(_shareIntentNavigationDelay);
+      }
+      final List<String> attachmentMetadataIds =
+          await _persistSharedAttachments(
+        messageService: messageService,
+        attachments: payload.attachments,
+      );
+      if (!mounted) return;
+      final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
+      final bool hasBody = resolvedBody.isNotEmpty;
+      if (!hasBody && attachmentMetadataIds.isEmpty) {
+        context.read<ShareIntentCubit>().consume();
+        return;
+      }
+      openComposeDraft(
+        context,
+        navigator: _router.routerDelegate.navigatorKey.currentState,
+        body: resolvedBody,
+        jids: const [''],
+        attachmentMetadataIds: attachmentMetadataIds,
+      );
       context.read<ShareIntentCubit>().consume();
-      return;
+    } finally {
+      _shareIntentHandling = false;
     }
-    openComposeDraft(
-      context,
-      navigator: _router.routerDelegate.navigatorKey.currentState,
-      body: resolvedBody,
-      jids: const [''],
-      attachmentMetadataIds: attachmentMetadataIds,
-    );
-    context.read<ShareIntentCubit>().consume();
+  }
+
+  bool _shouldNavigateToHomeForShare() {
+    final String homeLocation = const HomeRoute().location;
+    final String currentLocation =
+        _router.routeInformationProvider.value.uri.path;
+    final String matchedLocation = _router.state.matchedLocation;
+    if (currentLocation == homeLocation || matchedLocation == homeLocation) {
+      return false;
+    }
+    final AuthenticationRouteData? currentRoute =
+        routeLocations[currentLocation] ?? routeLocations[matchedLocation];
+    if (currentRoute == null) {
+      return true;
+    }
+    return currentRoute.authenticationRequired == false;
   }
 
   Future<List<String>> _persistSharedAttachments({

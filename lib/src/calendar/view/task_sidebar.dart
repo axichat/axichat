@@ -120,6 +120,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   CalendarTaskDraftStore? _draftStore;
   bool _suppressDraftSync = false;
   bool _draftStoreResolved = false;
+  bool _restoreSidebarEditQueued = false;
   final TextEditingController _selectionTitleController =
       TextEditingController();
   final TextEditingController _selectionDescriptionController =
@@ -616,6 +617,46 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _draftStore?.clearSidebarDraft();
   }
 
+  void _handleDraftStoreChanged() {
+    final CalendarTaskDraftStore? store = _draftStore;
+    if (store == null || !store.isCalendarVisible) {
+      return;
+    }
+    final TaskEditSessionState? session = store.editSession;
+    if (session == null || !session.isSuspended || !session.host.isSidebar) {
+      return;
+    }
+    if (_sidebarController.state.activePopoverTaskId != null &&
+        session.surface.isPopover) {
+      return;
+    }
+    if (_restoreSidebarEditQueued) {
+      return;
+    }
+    _restoreSidebarEditQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreSidebarEditQueued = false;
+      if (!mounted) {
+        return;
+      }
+      _restoreSidebarEditSession(session);
+    });
+  }
+
+  void _restoreSidebarEditSession(TaskEditSessionState session) {
+    final CalendarTask? task =
+        context.read<B>().state.model.resolveTaskInstance(session.taskId);
+    if (task == null) {
+      _draftStore?.clearEditSession(session.taskId);
+      return;
+    }
+    if (session.surface.isSheet) {
+      unawaited(_showTaskEditSheet(context, task));
+      return;
+    }
+    _openTaskPopover(session.taskId);
+  }
+
   void _pruneTaskPopoverControllers(Set<String> activeTaskIds) {
     final List<String> staleIds = <String>[];
     _taskPopoverControllers.forEach((id, controller) {
@@ -676,10 +717,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     }
     _draftStoreResolved = true;
     _draftStore = _maybeReadDraftStore(context);
+    _draftStore?.addListener(_handleDraftStoreChanged);
     final TaskSidebarDraft? draft = _draftStore?.sidebarDraft;
     if (draft != null) {
       _applySidebarDraft(draft);
     }
+    _handleDraftStoreChanged();
   }
 
   @override
@@ -713,6 +756,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     }
     _sidebarController.dispose();
     _selectionMessageTimer?.cancel();
+    _draftStore?.removeListener(_handleDraftStoreChanged);
     super.dispose();
   }
 
@@ -2490,6 +2534,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   void _deleteSidebarTask(CalendarTask task) {
     context.read<B>().add(CalendarEvent.taskDeleted(taskId: task.id));
+    _draftStore
+      ?..clearTaskDraft(task.id)
+      ..clearEditSession(task.id);
     _closeTaskPopover(task.id);
     _taskPopoverControllers.remove(task.id)?.dispose();
   }
@@ -2541,6 +2588,15 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (!TaskEditSessionTracker.instance.begin(task.id, this)) {
       return;
     }
+
+    _draftStore?.activateEditSession(
+      TaskEditSessionState(
+        taskId: task.id,
+        surface: TaskEditSurface.sheet,
+        host: TaskEditHost.sidebar,
+        visibility: TaskFormVisibility.open,
+      ),
+    );
 
     final String baseId = task.baseId;
     final locate = context.read;
@@ -2644,6 +2700,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         },
       );
     } finally {
+      _draftStore?.suspendEditSession(task.id);
       TaskEditSessionTracker.instance.end(task.id, this);
     }
   }
@@ -2853,6 +2910,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   Future<void> _addTask() async {
     _activateQuickTaskValidation();
+    _checklistController.commitPendingEntry();
     final bool isValid = _addTaskFormKey.currentState?.validate() ?? false;
     if (!isValid) {
       _titleFocusNode.requestFocus();
@@ -3066,6 +3124,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         if (_sidebarController.state.activePopoverTaskId == taskId) {
           _sidebarController.setActivePopoverTaskId(null);
         }
+        _draftStore?.suspendEditSession(taskId);
         TaskEditSessionTracker.instance.end(taskId, this);
       }
     });
@@ -3087,6 +3146,14 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       return;
     }
 
+    _draftStore?.activateEditSession(
+      TaskEditSessionState(
+        taskId: taskId,
+        surface: TaskEditSurface.popover,
+        host: TaskEditHost.sidebar,
+        visibility: TaskFormVisibility.open,
+      ),
+    );
     final controller = _popoverControllerFor(taskId);
     final String? activeId = _sidebarController.state.activePopoverTaskId;
     if (activeId != null && activeId != taskId) {
