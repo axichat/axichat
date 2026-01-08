@@ -1512,7 +1512,7 @@ class _SignupAvatarSelectorState extends State<_SignupAvatarSelector> {
                         SharedAxisTransition(
                   animation: primaryAnimation,
                   secondaryAnimation: secondaryAnimation,
-                  transitionType: SharedAxisTransitionType.scaled,
+                  transitionType: SharedAxisTransitionType.fade,
                   child: child,
                 ),
                 child: AxiAvatar(

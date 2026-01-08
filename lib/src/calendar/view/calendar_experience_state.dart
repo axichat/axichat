@@ -16,7 +16,6 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'calendar_navigation.dart';
-import 'controllers/task_form_draft_store.dart';
 import 'feedback_system.dart';
 import 'models/calendar_drag_payload.dart';
 import 'quick_add_modal.dart';
@@ -31,17 +30,6 @@ import 'widgets/calendar_scaffolds.dart';
 import 'widgets/calendar_sidebar_host.dart';
 import 'task_sidebar.dart';
 
-CalendarTaskDraftStore? _maybeReadDraftStore(BuildContext context) {
-  try {
-    return RepositoryProvider.of<CalendarTaskDraftStore>(
-      context,
-      listen: false,
-    );
-  } on FlutterError {
-    return null;
-  }
-}
-
 /// Base [State] used by both the authenticated and guest calendar surfaces to
 /// host the shared drag/tab interactions, sidebars, and layout switching.
 abstract class CalendarExperienceState<W extends StatefulWidget,
@@ -55,8 +43,6 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
       GlobalKey<TaskSidebarState<B>>();
   final ValueNotifier<bool> _cancelBucketHoverNotifier =
       ValueNotifier<bool>(false);
-  CalendarTaskDraftStore? _draftStore;
-  bool _quickAddRestoreQueued = false;
 
   bool get _hasMouseDevice =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
@@ -87,25 +73,11 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final CalendarTaskDraftStore? store = _maybeReadDraftStore(context);
-    if (store == _draftStore) {
-      return;
-    }
-    _draftStore?.removeListener(_handleDraftStoreChanged);
-    _draftStore = store;
-    _draftStore?.addListener(_handleDraftStoreChanged);
-    _handleDraftStoreChanged();
-  }
-
-  @override
   void dispose() {
     disposeCalendarDragTabMixin();
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
     _cancelBucketHoverNotifier.dispose();
-    _draftStore?.removeListener(_handleDraftStoreChanged);
     super.dispose();
   }
 
@@ -281,67 +253,6 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     showQuickAddModal(
       context: context,
       prefilledDateTime: prefilledTime,
-      locationHelper: helper,
-      calendarBloc: calendarBloc,
-      locate: locate,
-      onTaskAdded: (task) => calendarBloc.add(
-        CalendarEvent.taskAdded(
-          title: task.title,
-          scheduledTime: task.scheduledTime,
-          description: task.description,
-          duration: task.duration,
-          deadline: task.deadline,
-          location: task.location,
-          priority: task.priority ?? TaskPriority.none,
-          recurrence: task.recurrence,
-          checklist: task.checklist,
-          endDate: task.endDate,
-          reminders: task.reminders,
-          icsMeta: task.icsMeta,
-        ),
-      ),
-    );
-  }
-
-  void _handleDraftStoreChanged() {
-    final CalendarTaskDraftStore? store = _draftStore;
-    if (store == null || !store.isCalendarVisible) {
-      return;
-    }
-    final QuickAddSessionState? session = store.quickAddSession;
-    if (session == null || !session.isSuspended) {
-      return;
-    }
-    if (_quickAddRestoreQueued) {
-      return;
-    }
-    _quickAddRestoreQueued = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _quickAddRestoreQueued = false;
-      if (!mounted) {
-        return;
-      }
-      final QuickAddSessionState? next = store.quickAddSession;
-      if (next == null || !next.isSuspended) {
-        return;
-      }
-      _restoreQuickAddModal(next);
-    });
-  }
-
-  void _restoreQuickAddModal(QuickAddSessionState session) {
-    final CalendarTaskDraftStore? store = _draftStore;
-    if (store == null) {
-      return;
-    }
-    store.activateQuickAddSession(session);
-    final LocationAutocompleteHelper helper =
-        LocationAutocompleteHelper.fromState(calendarBloc.state);
-    final locate = context.read;
-    showQuickAddModal(
-      context: context,
-      prefilledDateTime: session.prefilledDateTime,
-      prefilledText: session.prefilledText,
       locationHelper: helper,
       calendarBloc: calendarBloc,
       locate: locate,
