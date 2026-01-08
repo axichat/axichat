@@ -34,7 +34,7 @@ const double _participantSelectIconSize = 16;
 const int _participantTextSelectionOffset = 0;
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
 
-class CalendarParticipantsField extends StatelessWidget {
+class CalendarParticipantsField extends StatefulWidget {
   const CalendarParticipantsField({
     super.key,
     required this.organizer,
@@ -53,29 +53,60 @@ class CalendarParticipantsField extends StatelessWidget {
   final bool enabled;
 
   @override
+  State<CalendarParticipantsField> createState() =>
+      _CalendarParticipantsFieldState();
+}
+
+class _CalendarParticipantsFieldState extends State<CalendarParticipantsField> {
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = _shouldStartExpanded(widget);
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarParticipantsField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_expanded && _shouldStartExpanded(widget)) {
+      setState(() => _expanded = true);
+    }
+  }
+
+  bool _shouldStartExpanded(CalendarParticipantsField widget) {
+    final String? address = widget.organizer?.address.trim();
+    final String? name = widget.organizer?.commonName?.trim();
+    final bool hasOrganizer = (address != null && address.isNotEmpty) ||
+        (name != null && name.isNotEmpty);
+    return hasOrganizer || widget.attendees.isNotEmpty;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(title: title),
-        const SizedBox(height: calendarGutterSm),
         _OrganizerField(
-          organizer: organizer,
-          onChanged: onOrganizerChanged,
-          enabled: enabled,
+          organizer: widget.organizer,
+          onChanged: widget.onOrganizerChanged,
+          enabled: widget.enabled,
         ),
         const SizedBox(height: calendarGutterMd),
         _AttendeesField(
-          attendees: attendees,
-          onChanged: onAttendeesChanged,
-          enabled: enabled,
+          attendees: widget.attendees,
+          onChanged: widget.onAttendeesChanged,
+          enabled: widget.enabled,
         ),
       ],
     );
-    if (enabled) {
-      return content;
-    }
-    return IgnorePointer(child: content);
+    return TaskSectionExpander(
+      title: widget.title,
+      isExpanded: _expanded,
+      onToggle: () => setState(() => _expanded = !_expanded),
+      enabled: widget.enabled,
+      child: content,
+    );
   }
 }
 

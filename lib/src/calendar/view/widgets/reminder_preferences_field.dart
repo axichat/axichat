@@ -23,7 +23,6 @@ const String _reminderAtDeadlineLabel = 'At deadline';
 const String _reminderAdvancedLabel = 'Advanced alarms';
 const String _reminderAdvancedActiveLabel = 'Active';
 const String _reminderAdvancedSummary = 'Advanced alarms applied';
-const double _reminderAdvancedLabelLetterSpacing = 0.4;
 const double _reminderAdvancedBadgeOpacity = 0.16;
 const double _reminderAdvancedBadgeFontSize = 11;
 const double _reminderAdvancedBadgeRadius = 10;
@@ -200,31 +199,31 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
         ],
         if (allowAdvanced) ...[
           const SizedBox(height: calendarGutterMd),
-          _ReminderAdvancedToggle(
+          TaskSectionExpander(
+            title: _reminderAdvancedLabel,
             isExpanded: _advancedExpanded,
-            hasAdvancedData: hasAdvancedData,
-            onPressed: () {
-              setState(() => _advancedExpanded = !_advancedExpanded);
-            },
-          ),
-          if (_advancedExpanded) ...[
-            const SizedBox(height: calendarGutterSm),
-            CalendarAlarmsField(
+            onToggle: () => setState(() {
+              _advancedExpanded = !_advancedExpanded;
+            }),
+            badge:
+                hasAdvancedData ? const _ReminderAdvancedActiveBadge() : null,
+            collapsedHint: hasAdvancedData
+                ? Text(
+                    _reminderAdvancedSummary,
+                    style: context.textTheme.muted.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  )
+                : null,
+            enabled: enabled,
+            child: CalendarAlarmsField(
               alarms: resolvedAdvancedAlarms,
               title: _reminderAdvancedLabel,
               referenceStart: widget.referenceStart,
               showReminderNote: false,
               onChanged: onAdvancedChanged,
             ),
-          ] else if (hasAdvancedData) ...[
-            const SizedBox(height: calendarGutterSm),
-            Text(
-              _reminderAdvancedSummary,
-              style: context.textTheme.muted.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+          ),
         ],
       ],
     );
@@ -267,58 +266,6 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
           deadlineOffsets: nextDeadline,
         )
         .normalized(forceEnabled: true);
-  }
-}
-
-class _ReminderAdvancedToggle extends StatelessWidget {
-  const _ReminderAdvancedToggle({
-    required this.isExpanded,
-    required this.hasAdvancedData,
-    required this.onPressed,
-  });
-
-  final bool isExpanded;
-  final bool hasAdvancedData;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w700,
-      letterSpacing: _reminderAdvancedLabelLetterSpacing,
-    );
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterSm,
-            vertical: calendarGutterSm,
-          ),
-          child: Row(
-            children: [
-              Text(
-                _reminderAdvancedLabel.toUpperCase(),
-                style: labelStyle,
-              ),
-              if (hasAdvancedData) ...[
-                const SizedBox(width: calendarInsetSm),
-                const _ReminderAdvancedActiveBadge(),
-              ],
-              const Spacer(),
-              Icon(
-                isExpanded ? Icons.expand_less : Icons.expand_more,
-                size: calendarGutterMd,
-                color: calendarSubtitleColor,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

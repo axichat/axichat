@@ -42,6 +42,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -274,6 +275,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _settingsSubscription = _settingsCubit.stream.listen((state) {
       _settingsState = state;
     });
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () => unawaited(_handleLifecycleResumed()),
+      onShow: () => unawaited(_handleLifecycleResumed()),
+    );
   }
 
   static const messageBatchSize = 50;
@@ -329,6 +334,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
   StreamSubscription<SettingsState>? _settingsSubscription;
+  AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   String? _emailSyncComposerMessage;
   String? _mamBeforeId;
@@ -364,6 +370,61 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       for (final message in messages) {
         await db.markMessageDisplayed(message.stanzaID);
       }
+    }
+  }
+
+  Future<void> _handleLifecycleResumed() async {
+    final chat = state.chat;
+    if (chat == null) return;
+    await _syncReadStateForActiveChat(
+      chat: chat,
+      items: state.items,
+      allowSend: true,
+    );
+  }
+
+  Future<void> _syncReadStateForActiveChat({
+    required Chat chat,
+    required List<Message> items,
+    required bool allowSend,
+  }) async {
+    if (!allowSend) {
+      return;
+    }
+    final scopedItems = items
+        .where((message) => message.chatJid == chat.jid)
+        .toList(growable: false);
+    final selfBare = _bareJid(_chatsService.myJid);
+    if (_xmppAllowedForChat(chat) && chat.type != ChatType.groupChat) {
+      for (final item in scopedItems) {
+        if (!item.displayed &&
+            _bareJid(item.senderJid) != selfBare &&
+            item.body?.isNotEmpty == true) {
+          _messageService.sendReadMarker(chat.jid, item.stanzaID);
+        }
+      }
+    }
+    final emailService = _emailService;
+    if (emailService == null || !chat.defaultTransport.isEmail) {
+      return;
+    }
+    final seenCandidates = scopedItems
+        .where((message) => message.deltaMsgId != null)
+        .where((message) => !message.displayed)
+        .where((message) => _bareJid(message.senderJid) != selfBare)
+        .toList(growable: false);
+    final hasUnread = chat.unreadCount > 0;
+    if (hasUnread || seenCandidates.isNotEmpty) {
+      await emailService.markNoticedChat(chat);
+    }
+    if (seenCandidates.isEmpty) {
+      return;
+    }
+    final shouldSendReadReceipts = _settingsState.readReceipts;
+    if (shouldSendReadReceipts) {
+      await emailService.markSeenMessages(seenCandidates);
+    } else {
+      await _markEmailMessagesDisplayedLocally(seenCandidates);
     }
   }
 
@@ -841,6 +902,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _settingsSubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
+    _lifecycleListener?.dispose();
+    _lifecycleListener = null;
     return super.close();
   }
 
@@ -1044,40 +1107,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     final chat = state.chat;
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
-    if (chat != null &&
-        _xmppAllowedForChat(chat) &&
-        chat.type != ChatType.groupChat &&
-        lifecycleState == AppLifecycleState.resumed) {
-      final selfBare = _bareJid(_chatsService.myJid);
-      for (final item in filteredItems) {
-        if (!item.displayed &&
-            _bareJid(item.senderJid) != selfBare &&
-            item.body?.isNotEmpty == true) {
-          _messageService.sendReadMarker(chat.jid, item.stanzaID);
-        }
-      }
-    }
-    final emailService = _emailService;
-    if (chat != null &&
-        chat.defaultTransport.isEmail &&
-        emailService != null &&
-        lifecycleState == AppLifecycleState.resumed) {
-      await emailService.markNoticedChat(chat);
-      final selfBare = _bareJid(_chatsService.myJid);
-      final seenCandidates = filteredItems
-          .where((message) => message.deltaMsgId != null)
-          .where((message) => !message.displayed)
-          .where((message) => _bareJid(message.senderJid) != selfBare)
-          .toList();
-      if (seenCandidates.isEmpty) {
-        return;
-      }
-      final shouldSendReadReceipts = _settingsState.readReceipts;
-      if (shouldSendReadReceipts) {
-        await emailService.markSeenMessages(seenCandidates);
-      } else {
-        await _markEmailMessagesDisplayedLocally(seenCandidates);
-      }
+    if (chat != null) {
+      await _syncReadStateForActiveChat(
+        chat: chat,
+        items: filteredItems,
+        allowSend: lifecycleState == AppLifecycleState.resumed,
+      );
     }
   }
 

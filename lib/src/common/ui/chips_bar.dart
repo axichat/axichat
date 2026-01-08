@@ -25,10 +25,8 @@ TextStyle chipsBarHeaderTextStyle(BuildContext context) {
   return (base ?? const TextStyle()).copyWith(
     fontSize: chipsBarHeaderFontSize,
     fontWeight: FontWeight.w600,
-    color: Theme.of(context)
-        .colorScheme
-        .onSurfaceVariant
-        .withValues(alpha: 0.9),
+    color:
+        Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
     letterSpacing: chipsBarHeaderLetterSpacing,
   );
 }
@@ -64,8 +62,8 @@ class ChipsBarSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color resolvedBackground =
         backgroundColor ?? chipsBarBackground(Theme.of(context).colorScheme);
-    final BorderSide resolvedBorder = borderSide ??
-        BorderSide(color: Theme.of(context).colorScheme.outline);
+    final BorderSide resolvedBorder =
+        borderSide ?? BorderSide(color: Theme.of(context).colorScheme.outline);
     final Border? border =
         includeTopBorder ? Border(top: resolvedBorder) : null;
     return AnimatedContainer(

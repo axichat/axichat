@@ -1764,10 +1764,6 @@ class EmailService {
       _startImapSyncLoop();
       return;
     }
-    _stopImapSyncLoop();
-
-    final operationId = ++_foregroundKeepaliveOperationId;
-
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
@@ -1777,14 +1773,18 @@ class EmailService {
     final bridge = _foregroundBridge;
     if (bridge == null) {
       _log.fine('Foreground bridge unavailable, skipping keepalive.');
+      _startImapSyncLoop();
       return;
     }
+
+    final operationId = ++_foregroundKeepaliveOperationId;
 
     await start();
     if (!_isForegroundKeepaliveOpCurrent(operationId)) {
       return;
     }
 
+    _stopImapSyncLoop();
     _attachForegroundKeepaliveListener();
 
     try {
@@ -1812,11 +1812,13 @@ class EmailService {
       );
       _foregroundKeepaliveEnabled = false;
       await _releaseForegroundKeepaliveResources();
+      _startImapSyncLoop();
       return;
     }
 
     if (!_isForegroundKeepaliveOpCurrent(operationId)) {
       await _releaseForegroundKeepaliveResources();
+      _startImapSyncLoop();
       return;
     }
 
