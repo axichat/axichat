@@ -472,10 +472,10 @@ mixin MucService on XmppBase, BaseStreamService {
       unawaited(
         manager
             .joinRoom(
-              mox.JID.fromString(normalizedRoom).toBare(),
-              nickname,
-              maxHistoryStanzas: resolvedHistoryStanzas,
-            )
+          mox.JID.fromString(normalizedRoom).toBare(),
+          nickname,
+          maxHistoryStanzas: resolvedHistoryStanzas,
+        )
             .then((result) {
           if (result.isType<mox.MUCError>()) {
             _completeJoinAttempt(

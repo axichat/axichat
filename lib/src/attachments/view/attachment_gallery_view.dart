@@ -34,9 +34,7 @@ const double _attachmentGalleryGridSpacing = 12.0;
 const double _attachmentGalleryGridMinTileWidth = 200.0;
 const int _attachmentGalleryGridMinColumns = 2;
 const int _attachmentGalleryGridMaxColumns = 4;
-const double _attachmentGalleryPreviewAspectRatio = 1.0;
 const double _attachmentGalleryPreviewMaxWidthFraction = 1.0;
-const double _attachmentGalleryFooterHeight = 56.0;
 const double _attachmentGalleryFooterSpacing = 8.0;
 const double _attachmentGalleryMetaSpacing = 4.0;
 const double _attachmentGalleryGridHorizontalPadding =
@@ -129,14 +127,9 @@ AttachmentGalleryGridMetrics _resolveGridMetrics(double maxWidth) {
       .toInt();
   final totalSpacing = _attachmentGalleryGridSpacing * (crossAxisCount - 1);
   final tileWidth = (availableWidth - totalSpacing) / crossAxisCount;
-  final previewHeight = tileWidth / _attachmentGalleryPreviewAspectRatio;
-  final tileHeight = previewHeight +
-      _attachmentGalleryFooterHeight +
-      _attachmentGalleryFooterSpacing;
-  final childAspectRatio = tileWidth / tileHeight;
   return AttachmentGalleryGridMetrics(
     crossAxisCount: crossAxisCount,
-    childAspectRatio: childAspectRatio,
+    tileWidth: tileWidth,
   );
 }
 
@@ -256,11 +249,11 @@ String? _resolveMetaText({
 class AttachmentGalleryGridMetrics {
   const AttachmentGalleryGridMetrics({
     required this.crossAxisCount,
-    required this.childAspectRatio,
+    required this.tileWidth,
   });
 
   final int crossAxisCount;
-  final double childAspectRatio;
+  final double tileWidth;
 }
 
 class AttachmentGalleryPanel extends StatelessWidget {
