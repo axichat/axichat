@@ -4,6 +4,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+class _CalendarShortcutManager extends ShortcutManager {
+  _CalendarShortcutManager({
+    required super.shortcuts,
+  });
+
+  @override
+  KeyEventResult handleKeypress(BuildContext context, KeyEvent event) {
+    if (CalendarKeyboardScope._isEditableFocused()) {
+      return KeyEventResult.ignored;
+    }
+    return super.handleKeypress(context, event);
+  }
+}
+
 class CalendarKeyboardScope extends StatelessWidget {
   const CalendarKeyboardScope({
     super.key,
@@ -100,8 +114,8 @@ class CalendarKeyboardScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Shortcuts(
-      shortcuts: _shortcuts,
+    return Shortcuts.manager(
+      manager: _CalendarShortcutManager(shortcuts: _shortcuts),
       child: Actions(
         actions: {
           CalendarUndoIntent: CallbackAction<CalendarUndoIntent>(

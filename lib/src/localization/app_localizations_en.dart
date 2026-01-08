@@ -505,6 +505,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get draftSaved => 'Draft saved';
 
   @override
+  String get draftAutosaved => 'Autosaved';
+
+  @override
   String get draftErrorTitle => 'Whoops';
 
   @override
@@ -1743,7 +1746,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Show message content in notifications and on the lock screen.';
 
   @override
-  String get settingsReadReceipts => 'Send read receipts';
+  String get settingsChatReadReceipts => 'Send chat read receipts';
+
+  @override
+  String get settingsChatReadReceiptsDescription =>
+      'When on, opening a chat while the app is active sends read receipts for visible messages.';
+
+  @override
+  String get settingsEmailReadReceipts => 'Send email read receipts';
+
+  @override
+  String get settingsEmailReadReceiptsDescription =>
+      'When on, opening an email chat while the app is active sends read receipts (MDNs) for visible messages.';
 
   @override
   String get settingsTypingIndicators => 'Send typing indicators';

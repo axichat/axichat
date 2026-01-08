@@ -201,11 +201,23 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: Text(l10n.settingsReadReceipts),
-                value: state.readReceipts,
-                onChanged: (readReceipts) => context
+                label: Text(l10n.settingsChatReadReceipts),
+                sublabel: Text(l10n.settingsChatReadReceiptsDescription),
+                value: state.chatReadReceipts,
+                onChanged: (enabled) => context
                     .read<SettingsCubit>()
-                    .toggleReadReceipts(readReceipts),
+                    .toggleChatReadReceipts(enabled),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: Text(l10n.settingsEmailReadReceipts),
+                sublabel: Text(l10n.settingsEmailReadReceiptsDescription),
+                value: state.emailReadReceipts,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleEmailReadReceipts(enabled),
               ),
             ),
             Padding(

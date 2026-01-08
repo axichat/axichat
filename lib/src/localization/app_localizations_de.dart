@@ -514,6 +514,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get draftSaved => 'Entwurf gespeichert';
 
   @override
+  String get draftAutosaved => 'Automatisch gespeichert';
+
+  @override
   String get draftErrorTitle => 'Hoppla';
 
   @override
@@ -1772,7 +1775,19 @@ class AppLocalizationsDe extends AppLocalizations {
       'Nachrichteninhalt in Benachrichtigungen und auf dem Sperrbildschirm anzeigen.';
 
   @override
-  String get settingsReadReceipts => 'Lesebestätigungen senden';
+  String get settingsChatReadReceipts => 'Lesebestätigungen für Chats senden';
+
+  @override
+  String get settingsChatReadReceiptsDescription =>
+      'Wenn aktiviert, sendet das Öffnen eines Chats bei aktiver App Lesebestätigungen für sichtbare Nachrichten.';
+
+  @override
+  String get settingsEmailReadReceipts =>
+      'Lesebestätigungen für E-Mails senden';
+
+  @override
+  String get settingsEmailReadReceiptsDescription =>
+      'Wenn aktiviert, sendet das Öffnen eines E-Mail-Chats bei aktiver App Lesebestätigungen (MDNs) für sichtbare Nachrichten.';
 
   @override
   String get settingsTypingIndicators => 'Tippanzeigen senden';

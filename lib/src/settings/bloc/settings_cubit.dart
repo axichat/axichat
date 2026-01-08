@@ -51,8 +51,12 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(notificationPreviewsEnabled: enabled));
   }
 
-  void toggleReadReceipts(bool readReceipts) {
-    emit(state.copyWith(readReceipts: readReceipts));
+  void toggleChatReadReceipts(bool enabled) {
+    emit(state.copyWith(chatReadReceipts: enabled));
+  }
+
+  void toggleEmailReadReceipts(bool enabled) {
+    emit(state.copyWith(emailReadReceipts: enabled));
   }
 
   void toggleColorfulAvatars(bool colorfulAvatars) {
@@ -151,7 +155,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'themeMode': 'theme_mode',
         'shadColor': 'shad_color',
         'notificationPreviewsEnabled': 'notification_previews_enabled',
-        'readReceipts': 'read_receipts',
+        'chatReadReceipts': 'chat_read_receipts',
+        'emailReadReceipts': 'email_read_receipts',
         'indicateTyping': 'indicate_typing',
         'lowMotion': 'low_motion',
         'colorfulAvatars': 'colorful_avatars',
@@ -172,6 +177,13 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         if (migrated.containsKey(entry.key) &&
             !migrated.containsKey(entry.value)) {
           migrated[entry.value] = migrated[entry.key];
+        }
+      }
+      if (!migrated.containsKey('chat_read_receipts')) {
+        if (migrated.containsKey('read_receipts')) {
+          migrated['chat_read_receipts'] = migrated['read_receipts'];
+        } else if (migrated.containsKey('readReceipts')) {
+          migrated['chat_read_receipts'] = migrated['readReceipts'];
         }
       }
       return SettingsState.fromJson(migrated);

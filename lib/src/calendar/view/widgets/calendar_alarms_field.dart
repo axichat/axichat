@@ -154,6 +154,7 @@ class CalendarAlarmsField extends StatelessWidget {
     this.title = _alarmsSectionTitle,
     this.referenceStart,
     this.showReminderNote = true,
+    this.showHeader = true,
   });
 
   final List<CalendarAlarm> alarms;
@@ -161,23 +162,31 @@ class CalendarAlarmsField extends StatelessWidget {
   final String title;
   final DateTime? referenceStart;
   final bool showReminderNote;
+  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
     final List<CalendarAlarm> items = alarms;
+    final Widget addButton = _AlarmAddButton(
+      onPressed: () {
+        final List<CalendarAlarm> next = List<CalendarAlarm>.from(items)
+          ..add(_defaultAlarm());
+        onChanged(next);
+      },
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(
-          title: title,
-          trailing: _AlarmAddButton(
-            onPressed: () {
-              final List<CalendarAlarm> next = List<CalendarAlarm>.from(items)
-                ..add(_defaultAlarm());
-              onChanged(next);
-            },
+        if (showHeader)
+          TaskSectionHeader(
+            title: title,
+            trailing: addButton,
+          )
+        else
+          Align(
+            alignment: Alignment.centerRight,
+            child: addButton,
           ),
-        ),
         if (showReminderNote) ...[
           const SizedBox(height: calendarInsetSm),
           Text(

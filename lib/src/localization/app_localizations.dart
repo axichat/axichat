@@ -1005,6 +1005,12 @@ abstract class AppLocalizations {
   /// **'Draft saved'**
   String get draftSaved;
 
+  /// No description provided for @draftAutosaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Autosaved'**
+  String get draftAutosaved;
+
   /// No description provided for @draftErrorTitle.
   ///
   /// In en, this message translates to:
@@ -3182,11 +3188,29 @@ abstract class AppLocalizations {
   /// **'Show message content in notifications and on the lock screen.'**
   String get settingsNotificationPreviewsDescription;
 
-  /// No description provided for @settingsReadReceipts.
+  /// No description provided for @settingsChatReadReceipts.
   ///
   /// In en, this message translates to:
-  /// **'Send read receipts'**
-  String get settingsReadReceipts;
+  /// **'Send chat read receipts'**
+  String get settingsChatReadReceipts;
+
+  /// No description provided for @settingsChatReadReceiptsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, opening a chat while the app is active sends read receipts for visible messages.'**
+  String get settingsChatReadReceiptsDescription;
+
+  /// No description provided for @settingsEmailReadReceipts.
+  ///
+  /// In en, this message translates to:
+  /// **'Send email read receipts'**
+  String get settingsEmailReadReceipts;
+
+  /// No description provided for @settingsEmailReadReceiptsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, opening an email chat while the app is active sends read receipts (MDNs) for visible messages.'**
+  String get settingsEmailReadReceiptsDescription;
 
   /// No description provided for @settingsTypingIndicators.
   ///

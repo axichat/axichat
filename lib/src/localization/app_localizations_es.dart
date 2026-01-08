@@ -513,6 +513,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get draftSaved => 'Borrador guardado';
 
   @override
+  String get draftAutosaved => 'Guardado automáticamente';
+
+  @override
   String get draftErrorTitle => 'Ups';
 
   @override
@@ -1766,7 +1769,20 @@ class AppLocalizationsEs extends AppLocalizations {
       'Mostrar el contenido de los mensajes en notificaciones y en la pantalla de bloqueo.';
 
   @override
-  String get settingsReadReceipts => 'Enviar confirmaciones de lectura';
+  String get settingsChatReadReceipts =>
+      'Enviar confirmaciones de lectura de chats';
+
+  @override
+  String get settingsChatReadReceiptsDescription =>
+      'Si está activado, abrir un chat mientras la app está activa envía confirmaciones de lectura para los mensajes visibles.';
+
+  @override
+  String get settingsEmailReadReceipts =>
+      'Enviar confirmaciones de lectura de correo';
+
+  @override
+  String get settingsEmailReadReceiptsDescription =>
+      'Si está activado, abrir un chat de correo mientras la app está activa envía confirmaciones de lectura (MDN) para los mensajes visibles.';
 
   @override
   String get settingsTypingIndicators => 'Enviar indicadores de escritura';

@@ -491,6 +491,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftSaved => '草稿已保存';
 
   @override
+  String get draftAutosaved => '已自动保存';
+
+  @override
   String get draftErrorTitle => '糟糕';
 
   @override
@@ -1687,7 +1690,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNotificationPreviewsDescription => '在通知和锁屏上显示消息内容。';
 
   @override
-  String get settingsReadReceipts => '发送已读回执';
+  String get settingsChatReadReceipts => '发送聊天已读回执';
+
+  @override
+  String get settingsChatReadReceiptsDescription =>
+      '开启后，在应用处于活动状态时打开聊天会为可见消息发送已读回执。';
+
+  @override
+  String get settingsEmailReadReceipts => '发送邮件已读回执';
+
+  @override
+  String get settingsEmailReadReceiptsDescription =>
+      '开启后，在应用处于活动状态时打开邮件聊天会为可见消息发送已读回执（MDN）。';
 
   @override
   String get settingsTypingIndicators => '发送正在输入指示';
@@ -3606,6 +3620,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get draftSaved => '草稿已儲存';
 
   @override
+  String get draftAutosaved => '已自動儲存';
+
+  @override
   String get draftErrorTitle => '糟了';
 
   @override
@@ -4802,7 +4819,18 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsNotificationPreviewsDescription => '在通知和鎖定畫面上顯示訊息內容。';
 
   @override
-  String get settingsReadReceipts => '傳送已讀回條';
+  String get settingsChatReadReceipts => '傳送聊天已讀回條';
+
+  @override
+  String get settingsChatReadReceiptsDescription =>
+      '開啟後，在應用處於活動狀態時開啟聊天會為可見訊息傳送已讀回條。';
+
+  @override
+  String get settingsEmailReadReceipts => '傳送電郵已讀回條';
+
+  @override
+  String get settingsEmailReadReceiptsDescription =>
+      '開啟後，在應用處於活動狀態時開啟電郵聊天會為可見訊息傳送已讀回條（MDN）。';
 
   @override
   String get settingsTypingIndicators => '傳送輸入指示';

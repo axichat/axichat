@@ -102,7 +102,7 @@ class TaskSectionExpander extends StatelessWidget {
     final Widget header = Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onToggle,
+        onTap: enabled ? onToggle : null,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),

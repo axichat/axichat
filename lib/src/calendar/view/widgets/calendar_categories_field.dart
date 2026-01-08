@@ -43,16 +43,28 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
   void initState() {
     super.initState();
     _controller = TextEditingController();
+    _focusNode.addListener(_handleFocusChanged);
   }
 
   @override
   void dispose() {
+    _focusNode.removeListener(_handleFocusChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
-  void _submitInput() {
+  void _handleFocusChanged() {
+    if (_focusNode.hasFocus || !widget.enabled) {
+      return;
+    }
+    _submitInput(requestFocus: false);
+  }
+
+  void _submitInput({bool requestFocus = true}) {
+    if (!widget.enabled) {
+      return;
+    }
     final String raw = _controller.text.trim();
     if (raw.isEmpty) {
       return;
@@ -67,11 +79,18 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
     );
     if (next.length == widget.categories.length) {
       _controller.clear();
-      _focusNode.requestFocus();
+      _maybeRequestFocus(requestFocus);
       return;
     }
     widget.onChanged(next);
     _controller.clear();
+    _maybeRequestFocus(requestFocus);
+  }
+
+  void _maybeRequestFocus(bool requestFocus) {
+    if (!requestFocus) {
+      return;
+    }
     _focusNode.requestFocus();
   }
 
