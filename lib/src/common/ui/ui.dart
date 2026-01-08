@@ -40,6 +40,7 @@ export 'axi_text_input.dart';
 export 'axi_tooltip.dart';
 export 'axi_transport_chip.dart';
 export 'axi_version.dart';
+export 'chips_bar.dart';
 export 'cutout.dart';
 export 'display_fingerprint.dart';
 export 'display_time_since.dart';
