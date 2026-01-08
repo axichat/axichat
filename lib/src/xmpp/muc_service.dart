@@ -39,6 +39,7 @@ const _mucRoomInfoFormType = 'http://jabber.org/protocol/muc#roominfo';
 const _mucRoomConfigFormType = 'http://jabber.org/protocol/muc#roomconfig';
 const _avatarFieldToken = 'avatar';
 const _avatarHashToken = 'hash';
+const _avatarSha1Token = 'sha1';
 const _avatarMimeToken = 'mime';
 const _avatarTypeToken = 'type';
 const _dataUriPrefix = 'data:';
@@ -1551,13 +1552,15 @@ mixin MucService on XmppBase, BaseStreamService {
         updatedChildren.add(child);
         continue;
       }
-      if (lowerVar.contains(_avatarHashToken)) {
+      if (_isAvatarHashField(lowerVar)) {
+        hasAvatarField = true;
         updatedChildren.add(
           _replaceFieldValues(child, [avatarHash]),
         );
         continue;
       }
       if (_isAvatarMimeField(lowerVar)) {
+        hasAvatarField = true;
         if (resolvedMimeType == null || resolvedMimeType.isEmpty) {
           updatedChildren.add(child);
           continue;
@@ -1603,6 +1606,11 @@ mixin MucService on XmppBase, BaseStreamService {
     final lowerField = fieldName.toLowerCase();
     return lowerField.contains(_avatarMimeToken) ||
         lowerField.contains(_avatarTypeToken);
+  }
+
+  bool _isAvatarHashField(String lowerField) {
+    return lowerField.contains(_avatarHashToken) ||
+        lowerField.contains(_avatarSha1Token);
   }
 
   String? _buildRoomAvatarDataUri({
@@ -1852,12 +1860,13 @@ mixin MucService on XmppBase, BaseStreamService {
       if (values.isEmpty) continue;
       final lowerVar = varName.toLowerCase();
       if (!lowerVar.contains(_avatarFieldToken)) continue;
-      if (lowerVar.contains(_avatarHashToken)) {
+      if (_isAvatarHashField(lowerVar)) {
         final value = _normalizeRoomAvatarValue(values.first);
         if (value == null) continue;
         hash = value;
         continue;
       }
+      if (_isAvatarMimeField(lowerVar)) continue;
       final joined = _normalizeRoomAvatarValue(values.join());
       if (joined == null) continue;
       data ??= joined;

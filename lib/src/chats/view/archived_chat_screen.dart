@@ -13,6 +13,7 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/share/share_intent_coordinator.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -68,6 +69,7 @@ class ArchivedChatScreen extends StatelessWidget {
             mucService: xmppService,
             notificationService: notificationService,
             emailService: emailService,
+            shareIntentCoordinator: locate<ShareIntentCoordinator>(),
             omemoService: omemoService,
             settingsCubit: settingsCubit,
           ),

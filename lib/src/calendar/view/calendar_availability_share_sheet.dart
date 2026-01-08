@@ -38,6 +38,7 @@ const double _availabilitySheetProgressStrokeWidth = 2.0;
 const double _availabilitySheetLabelLetterSpacing = 0.4;
 const double _availabilityEditorPanelGap = 16.0;
 const double _availabilityEditorPanelMaxWidth = 420.0;
+const bool _calendarUseRootNavigator = false;
 const double _availabilityChatTilePaddingHorizontal = 16.0;
 const double _availabilityChatTilePaddingVertical = 8.0;
 const double _availabilityPresetChipSpacing = 8.0;
@@ -460,6 +461,7 @@ class _CalendarAvailabilityShareScreenState
     try {
       return await showFadeScaleDialog<String>(
         context: context,
+        useRootNavigator: _calendarUseRootNavigator,
         builder: (dialogContext) => AxiInputDialog(
           title: const Text(_availabilitySharePresetNameTitle),
           callbackText: _availabilityShareSaveLabel,

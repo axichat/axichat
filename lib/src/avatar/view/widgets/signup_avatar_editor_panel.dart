@@ -141,6 +141,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final previewFillColor = colors.card;
     final l10n = context.l10n;
     const avatarActionSpacing = 8.0;
     final showCrop = widget.mode == AvatarEditorMode.cropOnly;
@@ -225,7 +226,8 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
               SharedAxisTransition(
             animation: primaryAnimation,
             secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.fade,
+            transitionType: SharedAxisTransitionType.scaled,
+            fillColor: previewFillColor,
             child: child,
           ),
           child: hasPreviewBytes

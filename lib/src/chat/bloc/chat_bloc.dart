@@ -34,6 +34,7 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/share/share_intent_coordinator.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/database.dart'
     show MessageAttachmentData, PinnedMessageEntry;
@@ -162,6 +163,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required NotificationService notificationService,
     required MucService mucService,
     required SettingsCubit settingsCubit,
+    required ShareIntentCoordinator shareIntentCoordinator,
     EmailService? emailService,
     OmemoService? omemoService,
   })  : _messageService = messageService,
@@ -172,6 +174,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _mucService = mucService,
         _settingsCubit = settingsCubit,
         _settingsState = settingsCubit.state,
+        _shareIntentCoordinator = shareIntentCoordinator,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
@@ -214,6 +217,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
     on<_HttpUploadSupportUpdated>(_onHttpUploadSupportUpdated);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
+    on<ChatShareIntentApplied>(_onChatShareIntentApplied);
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
     on<ChatPendingAttachmentRemoved>(_onChatPendingAttachmentRemoved);
     on<ChatViewFilterChanged>(_onChatViewFilterChanged);
@@ -233,6 +237,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
     on<ChatContactRenameRequested>(_onContactRenameRequested);
     on<ChatEmailImagesLoaded>(_onEmailImagesLoaded);
+    _bindShareIntentStream();
     if (jid != null) {
       final chatLookupJid = _chatLookupJid;
       if (chatLookupJid == null) return;
@@ -309,6 +314,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       : _isEmailOnlyAddress(jid)
           ? jid!.trim().toLowerCase()
           : jid;
+  late final String? _normalizedShareJid =
+      ShareIntentCoordinator.normalizeJid(_chatLookupJid ?? jid);
   final MessageService _messageService;
   XmppService? _xmppService;
   final ChatsService _chatsService;
@@ -318,6 +325,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final MucService _mucService;
   final SettingsCubit _settingsCubit;
   SettingsState _settingsState;
+  final ShareIntentCoordinator _shareIntentCoordinator;
   final Logger _log = Logger('ChatBloc');
   var _pendingAttachmentSeed = 0;
   var _composerHydrationSeed = 0;
@@ -334,10 +342,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
   StreamSubscription<SettingsState>? _settingsSubscription;
+  StreamSubscription<ShareIntentDispatch>? _shareIntentSubscription;
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   String? _emailSyncComposerMessage;
   String? _mamBeforeId;
+  final Queue<ShareIntentDraftPayload> _pendingShareIntents =
+      Queue<ShareIntentDraftPayload>();
   int? _mamTotalCount;
   bool _mamComplete = false;
   bool _mamLoading = false;
@@ -880,6 +891,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             (participants) => add(_TypingParticipantsUpdated(participants)));
   }
 
+  void _bindShareIntentStream() {
+    final String? normalizedJid = _normalizedShareJid;
+    if (normalizedJid == null) {
+      return;
+    }
+    _shareIntentSubscription = _shareIntentCoordinator.stream.listen(
+      (dispatch) {
+        if (dispatch.normalizedJid != normalizedJid) {
+          return;
+        }
+        final ShareIntentDispatch? consumed =
+            _shareIntentCoordinator.consume(dispatch.id);
+        if (consumed == null) {
+          return;
+        }
+        add(ChatShareIntentApplied(consumed.payload));
+      },
+    );
+    final List<ShareIntentDispatch> pending =
+        _shareIntentCoordinator.drainForChat(normalizedJid);
+    for (final dispatch in pending) {
+      add(ChatShareIntentApplied(dispatch.payload));
+    }
+  }
+
   Future<void> _syncPinnedMessagesForChat(Chat chat) async {
     final chatJid = _resolvePinnedMessagesChatJid(chat);
     if (chatJid == null) {
@@ -903,6 +939,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _connectivitySubscription?.cancel();
     await _httpUploadSupportSubscription?.cancel();
     await _settingsSubscription?.cancel();
+    await _shareIntentSubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     _lifecycleListener?.dispose();
@@ -983,6 +1020,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } else {
       emit(state.copyWith(roomState: null));
     }
+    _applyQueuedShareIntents(emit);
     await _primeDemoPendingAttachment(event.chat, emit);
   }
 
@@ -2798,6 +2836,52 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _rehydrateEmailDraft(message, emit);
     } else {
       await _rehydrateXmppDraft(message, emit);
+    }
+  }
+
+  void _onChatShareIntentApplied(
+    ChatShareIntentApplied event,
+    Emitter<ChatState> emit,
+  ) {
+    final payload = event.payload;
+    if (payload.isEmpty) {
+      return;
+    }
+    if (state.chat == null) {
+      _pendingShareIntents.add(payload);
+      return;
+    }
+    _applyShareIntentPayload(payload, emit);
+  }
+
+  void _applyShareIntentPayload(
+    ShareIntentDraftPayload payload,
+    Emitter<ChatState> emit,
+  ) {
+    final String? trimmedText = payload.text?.trim();
+    if (trimmedText != null && trimmedText.isNotEmpty) {
+      final nextHydrationId = ++_composerHydrationSeed;
+      emit(
+        state.copyWith(
+          composerHydrationId: nextHydrationId,
+          composerHydrationText: trimmedText,
+        ),
+      );
+    }
+    for (final attachment in payload.attachments) {
+      add(ChatAttachmentPicked(attachment));
+    }
+  }
+
+  void _applyQueuedShareIntents(Emitter<ChatState> emit) {
+    if (_pendingShareIntents.isEmpty) {
+      return;
+    }
+    final List<ShareIntentDraftPayload> pending =
+        List<ShareIntentDraftPayload>.from(_pendingShareIntents);
+    _pendingShareIntents.clear();
+    for (final payload in pending) {
+      _applyShareIntentPayload(payload, emit);
     }
   }
 

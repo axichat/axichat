@@ -21,6 +21,8 @@ import 'widgets/calendar_completion_checkbox.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_checklist.dart';
 
+const bool _calendarUseRootNavigator = false;
+
 abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
   const BaseTaskTile({
     super.key,
@@ -168,6 +170,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
     final locate = context.read;
     showFadeScaleDialog(
       context: context,
+      useRootNavigator: _calendarUseRootNavigator,
       builder: (dialogContext) => AlertDialog(
         title: Text(dialogContext.l10n.calendarDeleteTask),
         content: Text(

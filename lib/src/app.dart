@@ -32,7 +32,9 @@ import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/share/share_intent_coordinator.dart';
 import 'package:axichat/src/share/share_intent_cubit.dart';
+import 'package:axichat/src/share/view/share_intent_sheet.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -60,6 +62,7 @@ Timer? _pendingAuthNavigation;
 AuthenticationState? _lastAuthState;
 const String _shareFileSchemePrefix = 'file://';
 const String _emptyShareBody = '';
+const List<String> _emptyShareJids = [''];
 const int _shareAttachmentUnknownSizeBytes = 0;
 const int _shareAttachmentMinSizeBytes = 1;
 const Duration _shareIntentNavigationDelay = Duration.zero;
@@ -93,11 +96,14 @@ class _AxichatState extends State<Axichat> {
       CalendarReminderController(
     notificationService: widget._notificationService,
   );
+  late final ShareIntentCoordinator _shareIntentCoordinator =
+      ShareIntentCoordinator();
 
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
     unawaited(_reminderController.clearAll());
+    _shareIntentCoordinator.dispose();
     super.dispose();
   }
 
@@ -150,6 +156,7 @@ class _AxichatState extends State<Axichat> {
         RepositoryProvider<MessageService>(
           create: (context) => context.read<XmppService>(),
         ),
+        RepositoryProvider.value(value: _shareIntentCoordinator),
         RepositoryProvider.value(value: widget._notificationService),
         RepositoryProvider.value(value: widget._capability),
         RepositoryProvider.value(value: widget._policy),
@@ -603,53 +610,106 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
 
   Future<void> _handleShareIntent() async {
     if (_shareIntentHandling) return;
-    final ShareIntentState shareState = context.read<ShareIntentCubit>().state;
+    final ShareIntentCubit shareCubit = context.read<ShareIntentCubit>();
+    final ShareIntentState shareState = shareCubit.state;
     if (!shareState.hasPayload) return;
     if (context.read<AuthenticationCubit>().state is! AuthenticationComplete) {
       return;
     }
     _shareIntentHandling = true;
-    final MessageService messageService = context.read<MessageService>();
     try {
       final SharePayload payload = shareState.payload!;
-      final bool shouldNavigateHome = _shouldNavigateToHomeForShare();
-      if (shouldNavigateHome) {
-        _router.go(const HomeRoute().location);
-        await Future<void>.delayed(_shareIntentNavigationDelay);
-      }
-      final List<String> attachmentMetadataIds =
-          await _persistSharedAttachments(
-        messageService: messageService,
-        attachments: payload.attachments,
-      );
       if (!mounted) return;
       final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
       final bool hasBody = resolvedBody.isNotEmpty;
-      if (!hasBody && attachmentMetadataIds.isEmpty) {
-        context.read<ShareIntentCubit>().consume();
+      if (_shouldNavigateToHomeForShare()) {
+        _router.go(const HomeRoute().location);
+        await Future<void>.delayed(_shareIntentNavigationDelay);
+      }
+      if (!mounted) return;
+      final List<Chat> chats =
+          context.read<ChatsCubit>().state.items ?? const <Chat>[];
+      final ShareIntentDestination? destination = await showShareIntentSheet(
+        context: context,
+        chats: chats,
+      );
+      if (!mounted) return;
+      if (destination == null) {
+        _consumeSharePayload(shareCubit, payload);
         return;
       }
-      openComposeDraft(
-        context,
-        navigator: _router.routerDelegate.navigatorKey.currentState,
-        body: resolvedBody,
-        jids: const [''],
-        attachmentMetadataIds: attachmentMetadataIds,
-      );
-      context.read<ShareIntentCubit>().consume();
+      if (destination is ShareIntentComposeDestination) {
+        final MessageService messageService = context.read<MessageService>();
+        final List<String> attachmentMetadataIds =
+            await _persistSharedAttachments(
+          messageService: messageService,
+          attachments: payload.attachments,
+        );
+        if (!mounted) return;
+        if (!hasBody && attachmentMetadataIds.isEmpty) {
+          _consumeSharePayload(shareCubit, payload);
+          return;
+        }
+        openComposeDraft(
+          context,
+          navigator: _router.routerDelegate.navigatorKey.currentState,
+          body: resolvedBody,
+          jids: _emptyShareJids,
+          attachmentMetadataIds: attachmentMetadataIds,
+        );
+        _consumeSharePayload(shareCubit, payload);
+        return;
+      }
+      if (destination is ShareIntentChatDestination) {
+        final List<EmailAttachment> attachments =
+            await _prepareSharedAttachments(
+          attachments: payload.attachments,
+          optimize: false,
+        );
+        if (!mounted) return;
+        if (!hasBody && attachments.isEmpty) {
+          _consumeSharePayload(shareCubit, payload);
+          return;
+        }
+        final ShareIntentDraftPayload draftPayload = ShareIntentDraftPayload(
+          text: hasBody ? resolvedBody : null,
+          attachments: attachments,
+        );
+        context.read<ShareIntentCoordinator>().enqueueForChat(
+              jid: destination.chat.jid,
+              payload: draftPayload,
+            );
+        await _navigateToHomeForChatShare();
+        if (!mounted) return;
+        await context.read<ChatsCubit>().openChat(jid: destination.chat.jid);
+        _consumeSharePayload(shareCubit, payload);
+      }
     } finally {
       _shareIntentHandling = false;
+      if (mounted && shareCubit.state.hasPayload) {
+        unawaited(_handleShareIntent());
+      }
     }
   }
 
-  bool _shouldNavigateToHomeForShare() {
+  bool _isOnHomeRoute() {
     final String homeLocation = const HomeRoute().location;
     final String currentLocation =
         _router.routeInformationProvider.value.uri.path;
     final String matchedLocation = _router.state.matchedLocation;
     if (currentLocation == homeLocation || matchedLocation == homeLocation) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _shouldNavigateToHomeForShare() {
+    if (_isOnHomeRoute()) {
       return false;
     }
+    final String currentLocation =
+        _router.routeInformationProvider.value.uri.path;
+    final String matchedLocation = _router.state.matchedLocation;
     final AuthenticationRouteData? currentRoute =
         routeLocations[currentLocation] ?? routeLocations[matchedLocation];
     if (currentRoute == null) {
@@ -658,12 +718,41 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     return currentRoute.authenticationRequired == false;
   }
 
+  Future<void> _navigateToHomeForChatShare() async {
+    if (_isOnHomeRoute()) {
+      return;
+    }
+    _router.go(const HomeRoute().location);
+    await Future<void>.delayed(_shareIntentNavigationDelay);
+  }
+
+  void _consumeSharePayload(ShareIntentCubit shareCubit, SharePayload payload) {
+    if (!identical(shareCubit.state.payload, payload)) {
+      return;
+    }
+    shareCubit.consume();
+  }
+
   Future<List<String>> _persistSharedAttachments({
     required MessageService messageService,
     required List<ShareAttachmentPayload> attachments,
   }) async {
-    if (attachments.isEmpty) {
+    final List<EmailAttachment> prepared = await _prepareSharedAttachments(
+      attachments: attachments,
+      optimize: true,
+    );
+    if (prepared.isEmpty) {
       return const <String>[];
+    }
+    return messageService.persistDraftAttachmentMetadata(prepared);
+  }
+
+  Future<List<EmailAttachment>> _prepareSharedAttachments({
+    required List<ShareAttachmentPayload> attachments,
+    required bool optimize,
+  }) async {
+    if (attachments.isEmpty) {
+      return const <EmailAttachment>[];
     }
     final List<EmailAttachment> prepared = <EmailAttachment>[];
     for (final ShareAttachmentPayload attachment in attachments) {
@@ -692,14 +781,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         sizeBytes: resolvedSizeBytes,
         mimeType: mimeType,
       );
-      emailAttachment =
-          await EmailAttachmentOptimizer.optimize(emailAttachment);
+      if (optimize) {
+        emailAttachment =
+            await EmailAttachmentOptimizer.optimize(emailAttachment);
+      }
       prepared.add(emailAttachment);
     }
-    if (prepared.isEmpty) {
-      return const <String>[];
-    }
-    return messageService.persistDraftAttachmentMetadata(prepared);
+    return List<EmailAttachment>.unmodifiable(prepared);
   }
 
   String _normalizeSharedAttachmentPath(String path) {

@@ -11,6 +11,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/share/share_intent_coordinator.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
 import 'package:flutter_test/flutter_test.dart';
@@ -49,6 +50,7 @@ void main() {
   late MockNotificationService notificationService;
   late MockMucService mucService;
   late MockSettingsCubit settingsCubit;
+  late ShareIntentCoordinator shareIntentCoordinator;
 
   late StreamController<List<Message>> messageStreamController;
   late StreamController<Chat?> chatStreamController;
@@ -79,6 +81,7 @@ void main() {
     notificationService = MockNotificationService();
     mucService = MockMucService();
     settingsCubit = MockSettingsCubit();
+    shareIntentCoordinator = ShareIntentCoordinator();
 
     messageStreamController = StreamController<List<Message>>.broadcast();
     chatStreamController = StreamController<Chat?>.broadcast();
@@ -196,6 +199,7 @@ void main() {
   });
 
   tearDown(() async {
+    shareIntentCoordinator.dispose();
     await messageStreamController.close();
     await chatStreamController.close();
   });
@@ -256,6 +260,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     messageStreamController.add(const <Message>[]);
@@ -340,6 +345,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     messageStreamController.add(const <Message>[]);
@@ -380,6 +386,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     messageStreamController.add(const <Message>[]);
@@ -439,6 +446,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     messageStreamController.add(const <Message>[]);
@@ -524,6 +532,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     messageStreamController.add(const <Message>[]);
@@ -579,6 +588,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     messageStreamController.add(const <Message>[]);
@@ -648,6 +658,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     messageStreamController.add(const <Message>[]);
@@ -695,6 +706,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     messageStreamController.add(const <Message>[]);
@@ -732,6 +744,7 @@ void main() {
       notificationService: notificationService,
       emailService: emailService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     chatStreamController.add(emailChat);
@@ -784,6 +797,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     chatStreamController.add(initialChat);
@@ -853,6 +867,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     chatStreamController.add(initialChat);
@@ -938,6 +953,7 @@ void main() {
       mucService: mucService,
       notificationService: notificationService,
       settingsCubit: settingsCubit,
+      shareIntentCoordinator: shareIntentCoordinator,
     );
 
     chatStreamController.add(initialChat);
