@@ -34,11 +34,8 @@ class TaskSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = textStyle ??
-        TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+        calendarHeaderTextStyle.copyWith(
           color: calendarSubtitleColor,
-          letterSpacing: 0.2,
         );
     final String displayTitle = uppercase ? title.toUpperCase() : title;
 
@@ -59,6 +56,94 @@ class TaskSectionHeader extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Expandable task form section with a toggleable header and animated body.
+class TaskSectionExpander extends StatelessWidget {
+  const TaskSectionExpander({
+    super.key,
+    required this.title,
+    required this.isExpanded,
+    required this.onToggle,
+    required this.child,
+    this.badge,
+    this.uppercase = true,
+    this.enabled = true,
+    this.collapsedHint,
+  });
+
+  final String title;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final Widget child;
+  final Widget? badge;
+  final bool uppercase;
+  final bool enabled;
+  final Widget? collapsedHint;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget trailing = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (badge != null) ...[
+          badge!,
+          const SizedBox(width: calendarInsetSm),
+        ],
+        Icon(
+          isExpanded ? Icons.expand_less : Icons.expand_more,
+          size: calendarGutterLg,
+          color: calendarSubtitleColor,
+        ),
+      ],
+    );
+    final Widget header = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
+          child: SizedBox(
+            width: double.infinity,
+            child: TaskSectionHeader(
+              title: title,
+              uppercase: uppercase,
+              trailing: trailing,
+            ),
+          ),
+        ),
+      ),
+    );
+    final Widget body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isExpanded) ...[
+          const SizedBox(height: calendarGutterSm),
+          IgnorePointer(
+            ignoring: !enabled,
+            child: child,
+          ),
+        ] else if (collapsedHint != null) ...[
+          const SizedBox(height: calendarGutterSm),
+          collapsedHint!,
+        ],
+      ],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        header,
+        AxiAnimatedSize(
+          duration: baseAnimationDuration,
+          curve: Curves.easeInOutCubic,
+          alignment: Alignment.topCenter,
+          child: body,
+        ),
+      ],
     );
   }
 }

@@ -65,6 +65,7 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
       ];
 
   final Map<String, String> _roomPasswords = {};
+  final Map<String, String> _roomNicknames = {};
 
   void rememberPassword({
     required String roomJid,
@@ -81,10 +82,32 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     _roomPasswords.remove(normalizedRoom);
   }
 
+  void rememberNickname({
+    required String roomJid,
+    required String nickname,
+  }) {
+    final normalizedRoom = _normalizeRoomKey(roomJid);
+    final normalizedNick = nickname.trim();
+    if (normalizedRoom == null || normalizedNick.isEmpty) return;
+    _roomNicknames[normalizedRoom] = normalizedNick;
+  }
+
+  void forgetNickname(String roomJid) {
+    final normalizedRoom = _normalizeRoomKey(roomJid);
+    if (normalizedRoom == null) return;
+    _roomNicknames.remove(normalizedRoom);
+  }
+
   String? passwordForRoom(String roomJid) {
     final normalizedRoom = _normalizeRoomKey(roomJid);
     if (normalizedRoom == null) return null;
     return _roomPasswords[normalizedRoom];
+  }
+
+  String? _nickForRoom(String roomJid) {
+    final normalizedRoom = _normalizeRoomKey(roomJid);
+    if (normalizedRoom == null) return null;
+    return _roomNicknames[normalizedRoom];
   }
 
   String? _normalizeRoomKey(String roomJid) {
@@ -138,10 +161,28 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
         .map((status) => status.attributes['code'])
         .whereType<String>()
         .toSet();
-    if (!statuses.contains(mucStatusSelfPresence)) return state;
-
     final roomBare = fromJid.toBare();
     final roomJid = roomBare.toString();
+    final itemJid = item.attributes['jid'];
+    final ownBareJid = getAttributes().getFullJID().toBare().toString();
+    final isSelfByJid = itemJid is String && itemJid.isNotEmpty
+        ? _matchesBareJid(itemJid, ownBareJid)
+        : false;
+    final storedNick = _nickForRoom(roomJid);
+    final isSelfByNick = storedNick?.isNotEmpty == true
+        ? storedNick!.toLowerCase() == nick.toLowerCase()
+        : false;
+    final isSelfPresence = statuses.contains(mucStatusSelfPresence) ||
+        statuses.contains(mucStatusNickAssigned) ||
+        isSelfByJid ||
+        isSelfByNick;
+    if (!isSelfPresence) return state;
+    final resolvedStatuses = statuses.contains(mucStatusSelfPresence)
+        ? statuses
+        : <String>{
+            ...statuses,
+            ..._selfPresenceFallbackStatusCodes,
+          };
     final isUnavailable = presence.type == 'unavailable';
     final newNickAttr = item.attributes['nick'];
     final newNick = newNickAttr is String ? newNickAttr.trim() : null;
@@ -171,12 +212,19 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
         role: role,
         isAvailable: !isUnavailable,
         isNickChange: isNickChange,
-        statusCodes: statuses,
+        statusCodes: resolvedStatuses,
         reason: reason?.isNotEmpty == true ? reason : null,
         newNick: isNickChange ? newNick : null,
       ),
     );
 
     return state;
+  }
+
+  bool _matchesBareJid(String left, String right) {
+    final normalizedLeft = _normalizeRoomKey(left);
+    final normalizedRight = _normalizeRoomKey(right);
+    if (normalizedLeft == null || normalizedRight == null) return false;
+    return normalizedLeft == normalizedRight;
   }
 }

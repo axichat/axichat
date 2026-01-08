@@ -265,6 +265,7 @@ List<String> _bundledLibraryFiles() {
   final exeDir = File(Platform.resolvedExecutable).parent;
   for (final name in _platformLibraryNames()) {
     addPath(_joinPath(exeDir.path, [name]));
+    addPath(_joinPath(exeDir.path, ['lib', name]));
   }
 
   return results;

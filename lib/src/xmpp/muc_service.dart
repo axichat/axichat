@@ -128,6 +128,10 @@ final class _RoomAvatarPayload {
 mixin MucService on XmppBase, BaseStreamService {
   final _mucLog = Logger('MucService');
   static const Duration _mucJoinTimeout = Duration(seconds: 10);
+  static const int _mucJoinSelfPresencePollIntervalMs = 200;
+  static const Duration _mucJoinSelfPresencePollInterval = Duration(
+    milliseconds: _mucJoinSelfPresencePollIntervalMs,
+  );
   static const int _defaultMucJoinHistoryStanzas = 50;
   static const int _mucSnapshotStart = 0;
   static const int _mucSnapshotEnd = 0;
@@ -296,6 +300,53 @@ mixin MucService on XmppBase, BaseStreamService {
     completer.complete();
   }
 
+  Future<void> _pollForSelfPresenceFromMucManager(String roomJid) async {
+    final normalizedRoom = _roomKey(roomJid);
+    final manager = _connection.getManager<MUCManager>();
+    if (manager == null) return;
+    final activeCompleter = _mucJoinCompleters[normalizedRoom];
+    if (activeCompleter == null || activeCompleter.isCompleted) return;
+    final roomBare = mox.JID.fromString(normalizedRoom).toBare();
+    final deadline = DateTime.timestamp().add(_mucJoinTimeout);
+    while (DateTime.timestamp().isBefore(deadline)) {
+      final currentCompleter = _mucJoinCompleters[normalizedRoom];
+      if (currentCompleter == null || currentCompleter.isCompleted) return;
+      final existing = roomStateFor(normalizedRoom);
+      if (existing?.hasSelfPresence == true) {
+        _completeJoinAttempt(normalizedRoom);
+        return;
+      }
+      try {
+        final roomState = await manager.getRoomState(roomBare);
+        if (roomState == null) {
+          await Future<void>.delayed(_mucJoinSelfPresencePollInterval);
+          continue;
+        }
+        final nick = roomState.nick?.trim();
+        final affiliation = roomState.affiliation;
+        final role = roomState.role;
+        if (nick == null || nick.isEmpty || affiliation == null || role == null) {
+          await Future<void>.delayed(_mucJoinSelfPresencePollInterval);
+          continue;
+        }
+        if (!roomState.joined) {
+          roomState.joined = true;
+        }
+        _handleOwnDataChanged(
+          roomJid: roomBare,
+          nick: nick,
+          affiliation: affiliation,
+          role: role,
+        );
+        _syncMembersFromMucManager(roomBare, roomState.members);
+        return;
+      } on Exception {
+        // Ignore poll errors and retry until timeout.
+      }
+      await Future<void>.delayed(_mucJoinSelfPresencePollInterval);
+    }
+  }
+
   void _markRoomLeft(
     String roomJid, {
     Set<String>? statusCodes,
@@ -348,10 +399,30 @@ mixin MucService on XmppBase, BaseStreamService {
     );
   }
 
+  void _rememberRoomNickname({
+    required String roomJid,
+    required String nickname,
+  }) {
+    final normalizedNick = nickname.trim();
+    if (normalizedNick.isEmpty) return;
+    final manager = _connection.getManager<MucJoinBootstrapManager>();
+    if (manager == null) return;
+    manager.rememberNickname(
+      roomJid: roomJid,
+      nickname: normalizedNick,
+    );
+  }
+
   void _forgetRoomPassword({required String roomJid}) {
     final manager = _connection.getManager<MucJoinBootstrapManager>();
     if (manager == null) return;
     manager.forgetPassword(roomJid);
+  }
+
+  void _forgetRoomNickname({required String roomJid}) {
+    final manager = _connection.getManager<MucJoinBootstrapManager>();
+    if (manager == null) return;
+    manager.forgetNickname(roomJid);
   }
 
   String? _passwordForRoom(String roomJid) {
@@ -462,6 +533,7 @@ mixin MucService on XmppBase, BaseStreamService {
     }
     _markRoomJoined(normalizedRoom);
     _roomNicknames[normalizedRoom] = nickname;
+    _rememberRoomNickname(roomJid: normalizedRoom, nickname: nickname);
     _rememberRoomPassword(roomJid: normalizedRoom, password: password);
     final manager = _connection.getManager<MUCManager>();
     if (manager == null) throw XmppMessageException();
@@ -493,6 +565,7 @@ mixin MucService on XmppBase, BaseStreamService {
           );
         }),
       );
+      unawaited(_pollForSelfPresenceFromMucManager(normalizedRoom));
       await joinCompleter.future.timeout(_mucJoinTimeout);
       unawaited(_refreshRoomAvatar(normalizedRoom));
     } on TimeoutException {
@@ -750,6 +823,7 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<void> leaveRoom(String roomJid) async {
     if (_connection.getManager<MUCManager>() case final manager?) {
       await manager.leaveRoom(mox.JID.fromString(roomJid));
+      _forgetRoomNickname(roomJid: roomJid);
       _forgetRoomPassword(roomJid: roomJid);
       _explicitlyLeftRooms.add(_roomKey(roomJid));
       _markRoomLeft(roomJid, statusCodes: const <String>{});
@@ -765,6 +839,7 @@ mixin MucService on XmppBase, BaseStreamService {
   }) async {
     final trimmed = nickname.trim();
     _roomNicknames[_roomKey(roomJid)] = trimmed;
+    _rememberRoomNickname(roomJid: roomJid, nickname: trimmed);
     await _applyLocalNickname(roomJid: roomJid, nickname: trimmed);
     await joinRoom(
       roomJid: roomJid,
@@ -1642,6 +1717,7 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<void> _applyBookmarkRetraction(mox.JID roomBare) async {
     final roomJid = roomBare.toBare().toString();
     if (roomJid.isEmpty) return;
+    _forgetRoomNickname(roomJid: roomJid);
     _forgetRoomPassword(roomJid: roomJid);
     _explicitlyLeftRooms.add(_roomKey(roomJid));
     if (!_leftRooms.contains(_roomKey(roomJid))) {
@@ -1685,6 +1761,7 @@ mixin MucService on XmppBase, BaseStreamService {
 
     _markRoomJoined(roomJid);
     _roomNicknames[roomJid] = nextNick;
+    _rememberRoomNickname(roomJid: roomJid, nickname: nextNick);
 
     final occupantJid = event.isNickChange && event.newNick?.isNotEmpty == true
         ? '$roomJid/$nextNick'
@@ -1758,6 +1835,17 @@ mixin MucService on XmppBase, BaseStreamService {
       role: member.role.toOccupantRole,
       isPresent: true,
     );
+  }
+
+  void _syncMembersFromMucManager(
+    mox.JID roomJid,
+    Map<String, mox.RoomMember> members,
+  ) {
+    if (members.isEmpty) return;
+    final snapshot = members.values.toList(growable: false);
+    for (final member in snapshot) {
+      _handleMemberUpsert(roomJid, member);
+    }
   }
 
   void _handleMemberLeft(mox.JID roomJid, String nick) {
