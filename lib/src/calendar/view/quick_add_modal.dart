@@ -119,6 +119,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   CalendarTaskDraftStore? _draftStore;
   late final Listenable _draftActivityListenable;
   bool _suppressDraftSync = false;
+  bool _visibilityDismissPending = false;
 
   @override
   void initState() {
@@ -169,6 +170,8 @@ class _QuickAddModalState extends State<QuickAddModal>
     ]);
     _draftActivityListenable.addListener(_persistQuickAddDraft);
     _draftStore = _maybeReadDraftStore(context);
+    _draftStore?.addListener(_handleDraftStoreChanged);
+    _activateQuickAddSession();
     final QuickAddDraft? draft = _draftStore?.quickAddDraft;
     if (draft != null) {
       _applyDraft(draft);
@@ -200,6 +203,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     _checklistController.dispose();
     _taskNameFocusNode.dispose();
     _formController.dispose();
+    _draftStore?.removeListener(_handleDraftStoreChanged);
     super.dispose();
   }
 
@@ -602,6 +606,43 @@ class _QuickAddModalState extends State<QuickAddModal>
     _remindersLocked = false;
   }
 
+  void _activateQuickAddSession() {
+    final CalendarTaskDraftStore? store = _draftStore;
+    if (store == null) {
+      return;
+    }
+    final QuickAddSurface surface =
+        widget.surface == QuickAddModalSurface.bottomSheet
+            ? QuickAddSurface.sheet
+            : QuickAddSurface.dialog;
+    store.activateQuickAddSession(
+      QuickAddSessionState(
+        surface: surface,
+        visibility: TaskFormVisibility.open,
+        prefilledDateTime: widget.prefilledDateTime,
+        prefilledText: widget.prefilledText,
+      ),
+    );
+  }
+
+  void _clearQuickAddSession() {
+    _draftStore?.clearQuickAddSession();
+  }
+
+  void _handleDraftStoreChanged() {
+    final CalendarTaskDraftStore? store = _draftStore;
+    if (store == null || store.isCalendarVisible) {
+      return;
+    }
+    if (_visibilityDismissPending) {
+      return;
+    }
+    _visibilityDismissPending = true;
+    _dismissModal().whenComplete(() {
+      _visibilityDismissPending = false;
+    });
+  }
+
   void _applyPrefill(DateTime? prefilled) {
     _resetParserLocks();
     if (prefilled != null) {
@@ -673,6 +714,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   Future<void> _handleCancelPressed() async {
     _clearQuickAddDraft();
+    _clearQuickAddSession();
     await _dismissModal();
   }
 
@@ -840,6 +882,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     widget.onTaskAdded(task);
     _clearQuickAddDraft();
+    _clearQuickAddSession();
 
     if (hasQueuedPaths && calendarBloc != null && previousIds != null) {
       final CalendarTask? createdTask =
@@ -920,6 +963,11 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     if (!mounted) {
       return;
+    }
+
+    final CalendarTaskDraftStore? store = _draftStore;
+    if (store != null && store.quickAddSession?.isOpen == true) {
+      store.suspendQuickAddSession();
     }
 
     widget.onDismiss?.call();

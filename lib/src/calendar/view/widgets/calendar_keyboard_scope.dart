@@ -4,21 +4,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:axichat/src/calendar/view/calendar_grid.dart';
+
+const String _keyboardScopeFocusLabel = 'CalendarKeyboardScope';
+
 class _CalendarShortcutManager extends ShortcutManager {
   _CalendarShortcutManager({
     required super.shortcuts,
-  });
+    required bool Function() shouldHandleShortcuts,
+  }) : _shouldHandleShortcuts = shouldHandleShortcuts;
+
+  final bool Function() _shouldHandleShortcuts;
 
   @override
   KeyEventResult handleKeypress(BuildContext context, KeyEvent event) {
-    if (CalendarKeyboardScope._isEditableFocused()) {
+    if (!_shouldHandleShortcuts()) {
       return KeyEventResult.ignored;
     }
     return super.handleKeypress(context, event);
   }
 }
 
-class CalendarKeyboardScope extends StatelessWidget {
+class CalendarKeyboardScope extends StatefulWidget {
   const CalendarKeyboardScope({
     super.key,
     required this.child,
@@ -44,10 +51,33 @@ class CalendarKeyboardScope extends StatelessWidget {
   final VoidCallback? onJumpToToday;
   final VoidCallback? onCancelDrag;
 
+  static bool _isEditableFocused() {
+    final focusNode = FocusManager.instance.primaryFocus;
+    if (focusNode == null) {
+      return false;
+    }
+    final context = focusNode.context;
+    if (context == null) {
+      return false;
+    }
+    if (context.widget is EditableText) {
+      return true;
+    }
+    return context.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  @override
+  State<CalendarKeyboardScope> createState() => _CalendarKeyboardScopeState();
+}
+
+class _CalendarKeyboardScopeState extends State<CalendarKeyboardScope> {
+  late final FocusNode _focusNode =
+      FocusNode(debugLabel: _keyboardScopeFocusLabel);
+
   Map<ShortcutActivator, Intent> get _shortcuts {
     final Map<ShortcutActivator, Intent> shortcuts =
         Map<ShortcutActivator, Intent>.from(_undoRedoShortcuts);
-    if (onNavigatePrevious != null) {
+    if (widget.onNavigatePrevious != null) {
       shortcuts[const SingleActivator(LogicalKeyboardKey.arrowLeft)] =
           const CalendarNavigatePreviousIntent();
       shortcuts[const SingleActivator(LogicalKeyboardKey.arrowUp)] =
@@ -55,7 +85,7 @@ class CalendarKeyboardScope extends StatelessWidget {
       shortcuts[const SingleActivator(LogicalKeyboardKey.pageUp)] =
           const CalendarNavigatePreviousIntent();
     }
-    if (onNavigateNext != null) {
+    if (widget.onNavigateNext != null) {
       shortcuts[const SingleActivator(LogicalKeyboardKey.arrowRight)] =
           const CalendarNavigateNextIntent();
       shortcuts[const SingleActivator(LogicalKeyboardKey.arrowDown)] =
@@ -63,7 +93,7 @@ class CalendarKeyboardScope extends StatelessWidget {
       shortcuts[const SingleActivator(LogicalKeyboardKey.pageDown)] =
           const CalendarNavigateNextIntent();
     }
-    if (onJumpToToday != null) {
+    if (widget.onJumpToToday != null) {
       shortcuts[const SingleActivator(LogicalKeyboardKey.home)] =
           const CalendarNavigateTodayIntent();
       shortcuts[const SingleActivator(LogicalKeyboardKey.keyT, control: true)] =
@@ -71,7 +101,7 @@ class CalendarKeyboardScope extends StatelessWidget {
       shortcuts[const SingleActivator(LogicalKeyboardKey.keyT, meta: true)] =
           const CalendarNavigateTodayIntent();
     }
-    if (onCancelDrag != null) {
+    if (widget.onCancelDrag != null) {
       shortcuts.addAll(_cancelShortcuts);
     }
     return shortcuts;
@@ -97,88 +127,106 @@ class CalendarKeyboardScope extends StatelessWidget {
     SingleActivator(LogicalKeyboardKey.escape): CalendarCancelDragIntent(),
   };
 
-  static bool _isEditableFocused() {
+  bool _shouldHandleShortcuts() {
     final focusNode = FocusManager.instance.primaryFocus;
-    if (focusNode == null) {
-      return false;
-    }
-    final context = focusNode.context;
-    if (context == null) {
-      return false;
-    }
-    if (context.widget is EditableText) {
+    if (focusNode == null || focusNode == _focusNode) {
       return true;
     }
-    return context.findAncestorWidgetOfExactType<EditableText>() != null;
+    final focusContext = focusNode.context;
+    if (focusContext == null) {
+      return false;
+    }
+    if (CalendarKeyboardScope._isEditableFocused()) {
+      return false;
+    }
+    final bool isGridFocus = focusContext.widget is FocusableActionDetector &&
+        focusContext.findAncestorWidgetOfExactType<CalendarGrid>() != null;
+    return isGridFocus;
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Shortcuts.manager(
-      manager: _CalendarShortcutManager(shortcuts: _shortcuts),
+      manager: _CalendarShortcutManager(
+        shortcuts: _shortcuts,
+        shouldHandleShortcuts: _shouldHandleShortcuts,
+      ),
       child: Actions(
         actions: {
           CalendarUndoIntent: CallbackAction<CalendarUndoIntent>(
             onInvoke: (_) {
-              if (!canUndo || _isEditableFocused()) {
+              if (!widget.canUndo ||
+                  CalendarKeyboardScope._isEditableFocused()) {
                 return null;
               }
-              onUndo();
+              widget.onUndo();
               return null;
             },
           ),
           CalendarRedoIntent: CallbackAction<CalendarRedoIntent>(
             onInvoke: (_) {
-              if (!canRedo || _isEditableFocused()) {
+              if (!widget.canRedo ||
+                  CalendarKeyboardScope._isEditableFocused()) {
                 return null;
               }
-              onRedo();
+              widget.onRedo();
               return null;
             },
           ),
           CalendarNavigatePreviousIntent:
               CallbackAction<CalendarNavigatePreviousIntent>(
             onInvoke: (_) {
-              if (onNavigatePrevious == null || _isEditableFocused()) {
+              if (widget.onNavigatePrevious == null ||
+                  CalendarKeyboardScope._isEditableFocused()) {
                 return null;
               }
-              onNavigatePrevious!.call();
+              widget.onNavigatePrevious!.call();
               return null;
             },
           ),
           CalendarNavigateNextIntent:
               CallbackAction<CalendarNavigateNextIntent>(
             onInvoke: (_) {
-              if (onNavigateNext == null || _isEditableFocused()) {
+              if (widget.onNavigateNext == null ||
+                  CalendarKeyboardScope._isEditableFocused()) {
                 return null;
               }
-              onNavigateNext!.call();
+              widget.onNavigateNext!.call();
               return null;
             },
           ),
           CalendarNavigateTodayIntent:
               CallbackAction<CalendarNavigateTodayIntent>(
             onInvoke: (_) {
-              if (onJumpToToday == null || _isEditableFocused()) {
+              if (widget.onJumpToToday == null ||
+                  CalendarKeyboardScope._isEditableFocused()) {
                 return null;
               }
-              onJumpToToday!.call();
+              widget.onJumpToToday!.call();
               return null;
             },
           ),
           CalendarCancelDragIntent: CallbackAction<CalendarCancelDragIntent>(
             onInvoke: (_) {
-              if (onCancelDrag == null || _isEditableFocused()) {
+              if (widget.onCancelDrag == null ||
+                  CalendarKeyboardScope._isEditableFocused()) {
                 return null;
               }
-              onCancelDrag!.call();
+              widget.onCancelDrag!.call();
               return null;
             },
           ),
         },
         child: Focus(
-          autofocus: autofocus,
-          child: child,
+          autofocus: widget.autofocus,
+          focusNode: _focusNode,
+          child: widget.child,
         ),
       ),
     );

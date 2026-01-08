@@ -38,6 +38,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 const double _draftComposerControlExtent = 42;
 const double _draftSubjectHeight = 32;
 const Duration _draftAutosaveDelay = Duration(seconds: 2);
+const int _draftSaveEpochStep = 1;
+const int _initialDraftSaveEpoch = 0;
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -91,6 +93,7 @@ class _DraftFormState extends State<DraftForm> {
   int? _lastSavedSignature;
   DateTime? _lastAutosaveAt;
   bool _autosaveInFlight = false;
+  int _saveEpoch = _initialDraftSaveEpoch;
 
   @override
   void initState() {
@@ -718,6 +721,7 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _saveDraft({required bool autoSave}) async {
     if (context.read<DraftCubit?>() == null) return;
+    final int saveEpoch = _saveEpoch;
     final bool wasNewDraft = id == null;
     final List<String> attachmentIds =
         _pendingAttachments.map((pending) => pending.id).toList();
@@ -730,7 +734,7 @@ class _DraftFormState extends State<DraftForm> {
           attachments: _currentAttachments(),
           autoSave: autoSave,
         );
-    if (!mounted) return;
+    if (!mounted || saveEpoch != _saveEpoch) return;
     final int signature = _draftSignature(
       recipients: recipients,
       body: _bodyTextController.text,
@@ -823,6 +827,10 @@ class _DraftFormState extends State<DraftForm> {
     _autosaveTimer = Timer(_draftAutosaveDelay, _handleAutosaveTick);
   }
 
+  void _invalidatePendingSaves() {
+    _saveEpoch += _draftSaveEpochStep;
+  }
+
   Future<void> _handleAutosaveTick() async {
     if (!mounted || _autosaveInFlight) {
       return;
@@ -904,6 +912,7 @@ class _DraftFormState extends State<DraftForm> {
     final l10n = context.l10n;
     final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
     _autosaveTimer?.cancel();
+    _invalidatePendingSaves();
     if (id != null && context.read<DraftCubit?>() != null) {
       await context.read<DraftCubit>().deleteDraft(id: id!);
     }
@@ -945,6 +954,7 @@ class _DraftFormState extends State<DraftForm> {
   Future<void> _handleSendDraft() async {
     final l10n = context.l10n;
     _autosaveTimer?.cancel();
+    _invalidatePendingSaves();
     setState(() {
       _showValidationMessages = true;
       _sendErrorMessage = null;

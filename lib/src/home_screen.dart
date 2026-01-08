@@ -82,6 +82,17 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
       ),
     ];
 
+CalendarTaskDraftStore? _maybeReadDraftStore(BuildContext context) {
+  try {
+    return RepositoryProvider.of<CalendarTaskDraftStore>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
+  }
+}
+
 const double _secondaryPaneGutter = 0.0;
 const int _homeChatPageIndex = 0;
 const int _homeCalendarPageIndex = 1;
@@ -102,6 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool Function(KeyEvent event)? _globalShortcutHandler;
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
   CalendarAvailabilityShareCoordinator? _availabilityShareCoordinator;
+  bool? _lastCalendarVisible;
 
   @override
   void initState() {
@@ -331,6 +343,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     final bool openCalendar = hasCalendarBloc &&
                         (context.watch<ChatsCubit?>()?.state.openCalendar ??
                             false);
+                    final CalendarTaskDraftStore? draftStore =
+                        _maybeReadDraftStore(context);
+                    if (draftStore != null &&
+                        _lastCalendarVisible != openCalendar) {
+                      _lastCalendarVisible = openCalendar;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        draftStore.setCalendarVisible(openCalendar);
+                      });
+                    }
                     final bool openChatCalendar =
                         context.watch<ChatsCubit?>()?.state.openChatCalendar ??
                             false;

@@ -95,6 +95,18 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   void consume() {
     if (state.hasPayload) {
       emit(const ShareIntentState.idle());
+      unawaited(_resetInitialSharedMedia());
+    }
+  }
+
+  Future<void> _resetInitialSharedMedia() async {
+    if (!_isSupportedPlatform) {
+      return;
+    }
+    try {
+      await _handler.resetInitialSharedMedia();
+    } on PlatformException {
+      // Share handler reset not available; ignore.
     }
   }
 

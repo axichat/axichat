@@ -46,6 +46,7 @@ import 'layout/calendar_layout.dart'
 import 'controllers/zoom_controls_controller.dart';
 import 'controllers/task_interaction_controller.dart';
 import 'controllers/task_popover_controller.dart';
+import 'controllers/task_form_draft_store.dart';
 import 'resizable_task_widget.dart';
 import 'task_edit_session_tracker.dart';
 import 'widgets/calendar_render_surface.dart';
@@ -64,6 +65,21 @@ export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
 const double _headerNavButtonExtent = 44.0;
 const String _taskShareIcsActionLabel = 'Share as .ics';
+const String _taskPopoverCloseReasonCalendarHidden = 'calendar-hidden';
+const String _taskPopoverCloseReasonMissingTask = 'missing-task';
+const String _taskPopoverCloseReasonSwitchTarget = 'switch-target';
+const String _taskPopoverCloseReasonTaskDeleted = 'task-deleted';
+
+CalendarTaskDraftStore? _maybeReadDraftStore(BuildContext context) {
+  try {
+    return RepositoryProvider.of<CalendarTaskDraftStore>(
+      context,
+      listen: false,
+    );
+  } on FlutterError {
+    return null;
+  }
+}
 
 class _CalendarScrollController extends ScrollController {
   _CalendarScrollController({required this.onAttached});
@@ -185,6 +201,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late final ShadPopoverController _gridContextMenuController;
   DateTime? _contextMenuSlot;
   double _edgeAutoScrollOffsetPerFrame = 0;
+  CalendarTaskDraftStore? _draftStore;
+  bool _draftStoreResolved = false;
+  bool _restoreSessionQueued = false;
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
   int? _lastHandledFocusToken;
@@ -751,6 +770,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _processFocusRequest(widget.focusRequest);
+    if (_draftStoreResolved) {
+      return;
+    }
+    _draftStoreResolved = true;
+    _draftStore = _maybeReadDraftStore(context);
+    _draftStore?.addListener(_handleDraftStoreChanged);
+    _handleDraftStoreChanged();
   }
 
   @override
@@ -774,6 +800,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController.dispose();
     _taskPopoverController.dispose();
     _inlineErrorTimer?.cancel();
+    _draftStore?.removeListener(_handleDraftStoreChanged);
     super.dispose();
   }
 
@@ -1318,6 +1345,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
 
+    _draftStore?.activateEditSession(
+      TaskEditSessionState(
+        taskId: task.id,
+        surface: TaskEditSurface.sheet,
+        host: TaskEditHost.grid,
+        visibility: TaskFormVisibility.open,
+      ),
+    );
+
     final String baseId = baseTaskIdFrom(task.id);
     final CalendarTask latestTask =
         context.read<T>().state.model.tasks[baseId] ?? task;
@@ -1430,8 +1466,75 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         },
       );
     } finally {
+      _draftStore?.suspendEditSession(task.id);
       TaskEditSessionTracker.instance.end(task.id, this);
     }
+  }
+
+  void _handleDraftStoreChanged() {
+    final CalendarTaskDraftStore? store = _draftStore;
+    if (store == null) {
+      return;
+    }
+    if (!store.isCalendarVisible) {
+      final String? activeId = _taskPopoverController.activeTaskId;
+      if (activeId != null) {
+        _closeTaskPopover(activeId,
+            reason: _taskPopoverCloseReasonCalendarHidden);
+      }
+      return;
+    }
+    final TaskEditSessionState? session = store.editSession;
+    if (session == null || !session.isSuspended || !session.host.isGrid) {
+      return;
+    }
+    _queueEditSessionRestore();
+  }
+
+  void _queueEditSessionRestore() {
+    if (_restoreSessionQueued) {
+      return;
+    }
+    _restoreSessionQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreSessionQueued = false;
+      if (!mounted) {
+        return;
+      }
+      _restoreEditSession();
+    });
+  }
+
+  void _restoreEditSession() {
+    final CalendarTaskDraftStore? store = _draftStore;
+    if (store == null || !store.isCalendarVisible) {
+      return;
+    }
+    if (_taskPopoverController.activeTaskId != null) {
+      return;
+    }
+    final TaskEditSessionState? session = store.editSession;
+    if (session == null || !session.isSuspended) {
+      return;
+    }
+    if (!session.host.isGrid) {
+      return;
+    }
+    final CalendarTask? task = _resolveTaskForId(session.taskId, widget.state);
+    if (task == null) {
+      store.clearEditSession(session.taskId);
+      return;
+    }
+    if (session.surface.isSheet) {
+      unawaited(_showTaskEditSheet(task));
+      return;
+    }
+    final Rect? bounds = _surfaceController.globalRectForTask(session.taskId);
+    if (bounds == null) {
+      return;
+    }
+    final layout = _calculateTaskPopoverLayout(bounds);
+    _openTaskPopover(task, layout);
   }
 
   void _updateCompactState(BuildContext context) {
@@ -1910,7 +2013,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     final CalendarTask? resolved = _resolveTaskForId(activeId, widget.state);
     if (resolved == null) {
-      _closeTaskPopover(activeId, reason: 'missing-task');
+      _closeTaskPopover(activeId, reason: _taskPopoverCloseReasonMissingTask);
     }
   }
 
@@ -2012,6 +2115,25 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _closeTaskPopover(String taskId, {String reason = 'manual'}) {
     _taskPopoverController.removeLayout(taskId);
+    final CalendarTaskDraftStore? store = _draftStore;
+    final TaskEditSessionState? session = store?.editSession;
+    final bool isSessionForTask = session?.taskId == taskId;
+    if (isSessionForTask) {
+      final bool shouldClear = reason == _taskPopoverCloseReasonMissingTask ||
+          reason == _taskPopoverCloseReasonTaskDeleted ||
+          reason == _taskPopoverCloseReasonSwitchTarget;
+      final bool shouldClearDraft =
+          reason == _taskPopoverCloseReasonMissingTask ||
+              reason == _taskPopoverCloseReasonTaskDeleted;
+      if (shouldClear) {
+        store?.clearEditSession(taskId);
+        if (shouldClearDraft) {
+          store?.clearTaskDraft(taskId);
+        }
+      } else {
+        store?.suspendEditSession(taskId);
+      }
+    }
     if (_taskPopoverController.activeTaskId != taskId) {
       TaskEditSessionTracker.instance.end(taskId, this);
       return;
@@ -2026,13 +2148,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _openTaskPopover(CalendarTask task, TaskPopoverLayout layout) {
     final activeId = _taskPopoverController.activeTaskId;
     if (activeId != null && activeId != task.id) {
-      _closeTaskPopover(activeId, reason: 'switch-target');
+      _closeTaskPopover(activeId, reason: _taskPopoverCloseReasonSwitchTarget);
     }
 
     if (!TaskEditSessionTracker.instance.begin(task.id, this)) {
       return;
     }
 
+    _draftStore?.activateEditSession(
+      TaskEditSessionState(
+        taskId: task.id,
+        surface: TaskEditSurface.popover,
+        host: TaskEditHost.grid,
+        visibility: TaskFormVisibility.open,
+      ),
+    );
     _taskPopoverController.activate(task.id, layout);
     _ensurePopoverEntry();
     _armPopoverDismissQueue();
@@ -2127,7 +2257,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           if (mounted) {
                             _closeTaskPopover(
                               taskId,
-                              reason: 'missing-task',
+                              reason: _taskPopoverCloseReasonMissingTask,
                             );
                           }
                           return const SizedBox.shrink();
@@ -2205,7 +2335,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                       taskId: deletedTaskId,
                                     ),
                                   );
-                              _closeTaskPopover(taskId, reason: 'task-deleted');
+                              _closeTaskPopover(
+                                taskId,
+                                reason: _taskPopoverCloseReasonTaskDeleted,
+                              );
                             },
                           ),
                         );
