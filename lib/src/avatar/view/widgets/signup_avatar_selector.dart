@@ -76,42 +76,44 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
           children: [
             SizedBox.square(
               dimension: _size,
-              child: PageTransitionSwitcher(
-                duration: const Duration(milliseconds: 220),
-                transitionBuilder:
-                    (child, primaryAnimation, secondaryAnimation) =>
-                        SharedAxisTransition(
-                  animation: primaryAnimation,
-                  secondaryAnimation: secondaryAnimation,
-                  transitionType: SharedAxisTransitionType.scaled,
-                  child: child,
-                ),
-                child: hasBytes
-                    ? AxiAvatar(
-                        key: ValueKey(_previewVersion),
-                        jid: displayJid,
-                        size: _size,
-                        subscription: Subscription.none,
-                        presence: null,
-                        avatarBytes: bytes,
-                      )
-                    : SizedBox.square(
-                        key: ValueKey(_previewVersion),
-                        dimension: _size,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: colors.card,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: colors.border),
-                          ),
-                          child: ClipOval(
-                            child: Image.asset(
-                              _fallbackSignupAvatarAssetPath,
-                              fit: BoxFit.cover,
+              child: ClipOval(
+                child: PageTransitionSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder:
+                      (child, primaryAnimation, secondaryAnimation) =>
+                          SharedAxisTransition(
+                    animation: primaryAnimation,
+                    secondaryAnimation: secondaryAnimation,
+                    transitionType: SharedAxisTransitionType.fade,
+                    child: child,
+                  ),
+                  child: hasBytes
+                      ? AxiAvatar(
+                          key: ValueKey(_previewVersion),
+                          jid: displayJid,
+                          size: _size,
+                          subscription: Subscription.none,
+                          presence: null,
+                          avatarBytes: bytes,
+                        )
+                      : SizedBox.square(
+                          key: ValueKey(_previewVersion),
+                          dimension: _size,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colors.card,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: ClipOval(
+                              child: Image.asset(
+                                _fallbackSignupAvatarAssetPath,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                ),
               ),
             ),
             AnimatedOpacity(

@@ -43,12 +43,18 @@ const _avatarMimeToken = 'mime';
 const _avatarTypeToken = 'type';
 const _dataUriPrefix = 'data:';
 const _dataUriBase64Delimiter = ';base64,';
+const _vCardTempXmlns = mox.vCardTempXmlns;
+const _vCardTag = 'vCard';
+const _vCardPhotoTag = 'PHOTO';
+const _vCardBinvalTag = 'BINVAL';
+const _vCardTypeTag = 'TYPE';
 const _roomAvatarFieldMissingLog =
     'Room configuration form missing avatar field.';
 const _roomConfigSubmitFailedLog = 'Room configuration update rejected.';
 const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
+const _roomAvatarVCardSubmitFailedLog = 'Room vCard avatar update rejected.';
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
 const Set<String> _selfPresenceFallbackStatusCodes = {mucStatusSelfPresence};
@@ -1351,11 +1357,19 @@ mixin MucService on XmppBase, BaseStreamService {
       }
     }
     if (!updated) {
+      updated = await _updateRoomAvatarViaVCard(
+        roomJid: normalizedRoomJid,
+        encodedAvatar: encodedAvatar,
+        mimeType: trimmedMimeType,
+      );
+    }
+    if (!updated) {
       return false;
     }
     final verified = await _verifyRoomAvatarUpdate(
       roomJid: normalizedRoomJid,
       expectedHash: resolvedHash,
+      allowVCard: true,
     );
     if (!verified) {
       return false;
@@ -1371,6 +1385,7 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<bool> _verifyRoomAvatarUpdate({
     required String roomJid,
     required String expectedHash,
+    bool allowVCard = false,
   }) async {
     for (var attempt = 0;
         attempt < _roomAvatarVerificationAttempts;
@@ -1393,10 +1408,101 @@ mixin MucService on XmppBase, BaseStreamService {
           }
         }
       }
+      if (allowVCard) {
+        final verified = await _verifyRoomAvatarVCard(
+          roomJid: roomJid,
+          expectedHash: expectedHash,
+        );
+        if (verified) {
+          return true;
+        }
+      }
       if (attempt < _roomAvatarVerificationAttempts - 1) {
         await Future<void>.delayed(_roomAvatarVerificationDelay);
       }
     }
+    return false;
+  }
+
+  Future<bool> _verifyRoomAvatarVCard({
+    required String roomJid,
+    required String expectedHash,
+  }) async {
+    final bytes = await _fetchRoomVCardAvatarBytes(roomJid);
+    if (bytes == null || bytes.isEmpty) return false;
+    final hash = sha1.convert(bytes).toString();
+    return hash == expectedHash;
+  }
+
+  Future<Uint8List?> _fetchRoomVCardAvatarBytes(String roomJid) async {
+    final stanza = mox.Stanza.iq(
+      type: _iqTypeGet,
+      to: roomJid,
+      children: [
+        mox.XMLNode.xmlns(
+          tag: _vCardTag,
+          xmlns: _vCardTempXmlns,
+        ),
+      ],
+    );
+    final result = await _connection.sendStanza(
+      mox.StanzaDetails(
+        stanza,
+        shouldEncrypt: false,
+      ),
+    );
+    if (result == null) return null;
+    if (result.attributes[_iqTypeAttr]?.toString() != _iqTypeResult) {
+      return null;
+    }
+    final vcard = result.firstTag(_vCardTag, xmlns: _vCardTempXmlns);
+    final binval =
+        vcard?.firstTag(_vCardPhotoTag)?.firstTag(_vCardBinvalTag)?.innerText();
+    final normalized = _normalizeRoomAvatarValue(binval);
+    if (normalized == null) return null;
+    return _decodeRoomAvatarData(normalized);
+  }
+
+  Future<bool> _updateRoomAvatarViaVCard({
+    required String roomJid,
+    required String encodedAvatar,
+    required String mimeType,
+  }) async {
+    final trimmedMimeType = mimeType.trim();
+    final photoChildren = <mox.XMLNode>[
+      mox.XMLNode(tag: _vCardBinvalTag, text: encodedAvatar),
+    ];
+    if (trimmedMimeType.isNotEmpty) {
+      photoChildren.add(
+        mox.XMLNode(tag: _vCardTypeTag, text: trimmedMimeType),
+      );
+    }
+    final stanza = mox.Stanza.iq(
+      type: _iqTypeSet,
+      to: roomJid,
+      children: [
+        mox.XMLNode.xmlns(
+          tag: _vCardTag,
+          xmlns: _vCardTempXmlns,
+          children: [
+            mox.XMLNode(
+              tag: _vCardPhotoTag,
+              children: photoChildren,
+            ),
+          ],
+        ),
+      ],
+    );
+    final result = await _connection.sendStanza(
+      mox.StanzaDetails(
+        stanza,
+        shouldEncrypt: false,
+      ),
+    );
+    if (result == null) return false;
+    final type = result.attributes[_iqTypeAttr]?.toString();
+    if (type == _iqTypeResult) return true;
+    _mucLog.fine(_roomAvatarVCardSubmitFailedLog);
     return false;
   }
 
@@ -1684,9 +1790,15 @@ mixin MucService on XmppBase, BaseStreamService {
     final normalizedRoom = _roomKey(roomJid);
     try {
       final payload = await _fetchRoomAvatarPayload(normalizedRoom);
-      if (payload.data == null || payload.data!.isEmpty) return;
+      if (payload.data == null || payload.data!.isEmpty) {
+        await (this as AvatarService).prefetchAvatarForJid(normalizedRoom);
+        return;
+      }
       final decoded = _decodeRoomAvatarData(payload.data!);
-      if (decoded == null) return;
+      if (decoded == null) {
+        await (this as AvatarService).prefetchAvatarForJid(normalizedRoom);
+        return;
+      }
       await (this as AvatarService).storeAvatarBytesForJid(
         jid: normalizedRoom,
         bytes: decoded,
