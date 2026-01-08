@@ -18,26 +18,6 @@ typedef DeadlineChanged = void Function(DateTime? value);
 const double _deadlinePickerOverlayWidth = 320.0;
 const double _deadlinePickerDropdownMinWidth = 320.0;
 
-class _AttachAwareScrollController extends ScrollController {
-  _AttachAwareScrollController({
-    required VoidCallback onAttach,
-    super.initialScrollOffset = 0,
-  }) : _onAttach = onAttach;
-
-  final VoidCallback _onAttach;
-
-  @override
-  void attach(ScrollPosition position) {
-    super.attach(position);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!hasClients) {
-        return;
-      }
-      _onAttach();
-    });
-  }
-}
-
 class DeadlinePickerField extends StatefulWidget {
   const DeadlinePickerField({
     super.key,
@@ -107,12 +87,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     50,
     55,
   ];
-  static const double _timeItemHeight = 40;
   static const double _timePickerDesiredHeight = 660.0;
   static const double _datePickerExpandedHeight = 428.0;
-  static const int _expectedScrollPositions = 1;
-  static const double _scrollOffsetClampMin = 0.0;
-  static const double _scrollOffsetEpsilon = 0.5;
 
   final LayerLink _layerLink = LayerLink();
   final GlobalKey _dropdownKey = GlobalKey();
@@ -126,9 +102,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   DateTime? _currentValue;
   DateTime? _initialValue;
   late DateTime _visibleMonth;
-  late final ScrollController _hourScrollController;
-  late final ScrollController _minuteScrollController;
-  DateTime? _pendingTimeJump;
   DateTime? _minDate;
   DateTime? _maxDate;
 
@@ -186,14 +159,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     _visibleMonth = _monthStart(base);
     _minDate = _normalizeMinDate(widget.minDate);
     _maxDate = _normalizeMaxDate(widget.maxDate);
-    _hourScrollController = _AttachAwareScrollController(
-      initialScrollOffset: _hourOffset(base.hour),
-      onAttach: _handleTimeListAttached,
-    );
-    _minuteScrollController = _AttachAwareScrollController(
-      initialScrollOffset: _minuteOffset(_roundToFive(base.minute)),
-      onAttach: _handleTimeListAttached,
-    );
     _ensureVisibleMonthInRange();
   }
 
@@ -204,7 +169,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       final base = widget.value ?? DateTime.now();
       _currentValue = widget.value;
       _visibleMonth = _monthStart(base);
-      _jumpToCurrent(base);
     }
     if (widget.minDate != oldWidget.minDate) {
       _minDate = _normalizeMinDate(widget.minDate);
@@ -239,8 +203,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       _portalController.hide();
     }
     _isOpen = false;
-    _hourScrollController.dispose();
-    _minuteScrollController.dispose();
     super.dispose();
   }
 
@@ -346,7 +308,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 );
                 setSheetState(() => _currentValue = updated);
                 widget.onChanged(updated);
-                _animateHour(hour);
               }
 
               void handleMinuteSelected(int minute) {
@@ -361,7 +322,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 );
                 setSheetState(() => _currentValue = updated);
                 widget.onChanged(updated);
-                _animateMinute(minute);
               }
 
               void handleCancel() {
@@ -374,19 +334,12 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 if (!_sameMoment(widget.value, target)) {
                   widget.onChanged(target);
                 }
-                final DateTime reference = target ?? DateTime.now();
-                _jumpToCurrent(reference);
                 closeSheet();
               }
 
               void handleClear() {
-                final fallback = DateTime.now();
                 setSheetState(() => _currentValue = null);
                 widget.onChanged(null);
-                if (widget.showTimeSelectors) {
-                  _animateHour(fallback.hour);
-                  _animateMinute(_roundToFive(fallback.minute));
-                }
                 closeSheet();
               }
 
@@ -420,8 +373,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 selectedMinute: _roundToFive(selectedTime.minute),
                 hourValues: _hourValues,
                 minuteValues: _minuteValues,
-                hourController: _hourScrollController,
-                minuteController: _minuteScrollController,
                 onHourSelected: handleHourSelected,
                 onMinuteSelected: handleMinuteSelected,
               );
@@ -582,7 +533,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     setState(() => _currentValue = updated);
     widget.onChanged(updated);
     _markOverlayNeedsBuild();
-    _animateHour(hour);
   }
 
   void _onMinuteSelected(int minute) {
@@ -598,18 +548,12 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     setState(() => _currentValue = updated);
     widget.onChanged(updated);
     _markOverlayNeedsBuild();
-    _animateMinute(minute);
   }
 
   void _clearDeadline() {
-    final fallback = DateTime.now();
     setState(() => _currentValue = null);
     widget.onChanged(null);
     _markOverlayNeedsBuild();
-    if (widget.showTimeSelectors) {
-      _animateHour(fallback.hour);
-      _animateMinute(_roundToFive(fallback.minute));
-    }
     _hideOverlay();
   }
 
@@ -619,8 +563,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     if (!_sameMoment(widget.value, target)) {
       widget.onChanged(target);
     }
-    final DateTime reference = target ?? DateTime.now();
-    _jumpToCurrent(reference);
     _markOverlayNeedsBuild();
     _hideOverlay();
   }
@@ -769,8 +711,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           selectedMinute: _roundToFive(selectedTime.minute),
           hourValues: _hourValues,
           minuteValues: _minuteValues,
-          hourController: _hourScrollController,
-          minuteController: _minuteScrollController,
           onHourSelected: _onHourSelected,
           onMinuteSelected: _onMinuteSelected,
         );
@@ -853,101 +793,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   int _roundToFive(int minute) {
     final rounded = (minute / 5).round() * 5;
     return rounded == 60 ? 0 : rounded;
-  }
-
-  double _hourOffset(int hour) {
-    final index = _hourValues.indexOf(hour);
-    if (index <= 0) return 0;
-    return index * (_timeItemHeight + 1);
-  }
-
-  double _minuteOffset(int minute) {
-    final rounded = _roundToFive(minute);
-    final index = _minuteValues.indexOf(rounded);
-    if (index <= 0) return 0;
-    return index * (_timeItemHeight + 1);
-  }
-
-  void _animateHour(int hour) {
-    if (!_hourScrollController.hasClients) return;
-    final target = _hourOffset(hour);
-    _hourScrollController.animateTo(
-      target,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void _animateMinute(int minute) {
-    if (!_minuteScrollController.hasClients) return;
-    final target = _minuteOffset(minute);
-    _minuteScrollController.animateTo(
-      target,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void _jumpToCurrent(DateTime reference) {
-    if (_applyTimeJump(reference)) {
-      _pendingTimeJump = null;
-    } else {
-      _pendingTimeJump = reference;
-    }
-  }
-
-  void _handleTimeListAttached() {
-    if (_pendingTimeJump == null) {
-      return;
-    }
-    if (_applyTimeJump(_pendingTimeJump!)) {
-      _pendingTimeJump = null;
-    }
-  }
-
-  bool _applyTimeJump(DateTime reference) {
-    final ScrollPosition? hourPosition =
-        _resolvedScrollPosition(_hourScrollController);
-    final ScrollPosition? minutePosition =
-        _resolvedScrollPosition(_minuteScrollController);
-    if (hourPosition == null || minutePosition == null) {
-      return false;
-    }
-    final double hourTarget =
-        _clampedOffsetForPosition(hourPosition, _hourOffset(reference.hour));
-    if ((hourPosition.pixels - hourTarget).abs() > _scrollOffsetEpsilon) {
-      _hourScrollController.jumpTo(hourTarget);
-    }
-
-    final double minuteTarget = _clampedOffsetForPosition(
-      minutePosition,
-      _minuteOffset(_roundToFive(reference.minute)),
-    );
-    if ((minutePosition.pixels - minuteTarget).abs() > _scrollOffsetEpsilon) {
-      _minuteScrollController.jumpTo(minuteTarget);
-    }
-    return true;
-  }
-
-  ScrollPosition? _resolvedScrollPosition(ScrollController controller) {
-    if (!controller.hasClients) {
-      return null;
-    }
-    final positions = controller.positions;
-    if (positions.length != _expectedScrollPositions) {
-      return null;
-    }
-    final ScrollPosition position = positions.single;
-    if (!position.hasContentDimensions) {
-      return null;
-    }
-    return position;
-  }
-
-  double _clampedOffsetForPosition(ScrollPosition position, double target) {
-    final double maxExtent = position.maxScrollExtent;
-    final double upperBound = math.max(_scrollOffsetClampMin, maxExtent);
-    return target.clamp(_scrollOffsetClampMin, upperBound);
   }
 }
 
@@ -1494,8 +1339,6 @@ class _DeadlineTimeSelectors extends StatelessWidget {
     required this.selectedMinute,
     required this.hourValues,
     required this.minuteValues,
-    required this.hourController,
-    required this.minuteController,
     required this.onHourSelected,
     required this.onMinuteSelected,
   });
@@ -1505,8 +1348,6 @@ class _DeadlineTimeSelectors extends StatelessWidget {
   final int selectedMinute;
   final List<int> hourValues;
   final List<int> minuteValues;
-  final ScrollController hourController;
-  final ScrollController minuteController;
   final ValueChanged<int> onHourSelected;
   final ValueChanged<int> onMinuteSelected;
 
@@ -1539,33 +1380,28 @@ class _DeadlineTimeSelectors extends StatelessWidget {
             ),
           ),
           const SizedBox(height: calendarFormGap),
-          SizedBox(
-            height: 210,
-            child: Row(
-              children: [
-                Expanded(
-                  child: _DeadlineTimeColumn(
-                    label: context.l10n.calendarHour,
-                    values: hourValues,
-                    selectedValue: selectedHour,
-                    controller: hourController,
-                    onSelected: onHourSelected,
-                    formatter: (value) => value.toString().padLeft(2, '0'),
-                    showRightDivider: true,
-                  ),
+          Row(
+            children: [
+              Expanded(
+                child: _DeadlineTimeDropdown(
+                  label: context.l10n.calendarHour,
+                  values: hourValues,
+                  selectedValue: selectedHour,
+                  onSelected: onHourSelected,
+                  formatter: (value) => value.toString().padLeft(2, '0'),
                 ),
-                Expanded(
-                  child: _DeadlineTimeColumn(
-                    label: context.l10n.calendarMinute,
-                    values: minuteValues,
-                    selectedValue: selectedMinute,
-                    controller: minuteController,
-                    onSelected: onMinuteSelected,
-                    formatter: (value) => value.toString().padLeft(2, '0'),
-                  ),
+              ),
+              const SizedBox(width: calendarGutterSm),
+              Expanded(
+                child: _DeadlineTimeDropdown(
+                  label: context.l10n.calendarMinute,
+                  values: minuteValues,
+                  selectedValue: selectedMinute,
+                  onSelected: onMinuteSelected,
+                  formatter: (value) => value.toString().padLeft(2, '0'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1573,120 +1409,74 @@ class _DeadlineTimeSelectors extends StatelessWidget {
   }
 }
 
-class _DeadlineTimeColumn extends StatelessWidget {
-  const _DeadlineTimeColumn({
+class _DeadlineTimeDropdown extends StatelessWidget {
+  const _DeadlineTimeDropdown({
     required this.label,
     required this.values,
     required this.selectedValue,
-    required this.controller,
     required this.onSelected,
     required this.formatter,
-    this.showRightDivider = false,
   });
 
   final String label;
   final List<int> values;
   final int selectedValue;
-  final ScrollController controller;
   final ValueChanged<int> onSelected;
   final String Function(int value) formatter;
-  final bool showRightDivider;
 
   @override
   Widget build(BuildContext context) {
+    final TextStyle labelStyle = TextStyle(
+      fontSize: 10,
+      fontWeight: FontWeight.w600,
+      color: calendarSubtitleColor,
+      letterSpacing: 0.3,
+    );
+    final ShadDecoration dropdownDecoration = ShadDecoration(
+      color: calendarContainerColor,
+      border: ShadBorder.all(
+        color: calendarBorderColor,
+        radius: BorderRadius.circular(calendarBorderRadius),
+        width: calendarBorderStroke,
+      ),
+    );
+    const EdgeInsets dropdownPadding = EdgeInsets.symmetric(
+      horizontal: calendarGutterMd,
+      vertical: calendarGutterSm,
+    );
+    final Icon dropdownIcon = Icon(
+      Icons.keyboard_arrow_down_rounded,
+      size: calendarGutterMd,
+      color: calendarSubtitleColor,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
-            letterSpacing: 0.3,
-          ),
-        ),
+        Text(label, style: labelStyle),
         const SizedBox(height: calendarInsetLg),
-        Expanded(
-          child: DecoratedBox(
-            decoration: showRightDivider
-                ? BoxDecoration(
-                    border: Border(
-                      right: BorderSide(color: calendarBorderColor, width: 1),
-                    ),
-                  )
-                : const BoxDecoration(),
-            child: Scrollbar(
-              controller: controller,
-              child: ListView.separated(
-                controller: controller,
-                padding: EdgeInsets.zero,
-                physics: const ClampingScrollPhysics(),
-                itemCount: values.length,
-                separatorBuilder: (_, __) => Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: calendarBorderColor,
+        AxiSelect<int>(
+          initialValue: selectedValue,
+          onChanged: (selected) {
+            if (selected == null) {
+              return;
+            }
+            onSelected(selected);
+          },
+          options: values
+              .map(
+                (value) => ShadOption<int>(
+                  value: value,
+                  child: Text(formatter(value)),
                 ),
-                itemBuilder: (_, index) {
-                  final value = values[index];
-                  final isSelected = value == selectedValue;
-                  return _DeadlineTimeButton(
-                    label: formatter(value),
-                    selected: isSelected,
-                    onTap: () => onSelected(value),
-                  );
-                },
-              ),
-            ),
-          ),
+              )
+              .toList(growable: false),
+          selectedOptionBuilder: (context, value) => Text(formatter(value)),
+          decoration: dropdownDecoration,
+          padding: dropdownPadding,
+          trailing: dropdownIcon,
         ),
       ],
-    );
-  }
-}
-
-class _DeadlineTimeButton extends StatelessWidget {
-  const _DeadlineTimeButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: _DeadlinePickerFieldState._timeItemHeight,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: onTap,
-          hoverColor: calendarPrimaryColor.withValues(alpha: 0.08),
-          splashColor: calendarPrimaryColor.withValues(alpha: 0.12),
-          child: Container(
-            decoration: BoxDecoration(
-              color: selected
-                  ? calendarPrimaryColor.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: selected ? calendarPrimaryColor : calendarTitleColor,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

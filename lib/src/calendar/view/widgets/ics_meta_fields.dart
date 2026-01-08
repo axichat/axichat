@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const String _icsMetaSectionTitle = 'Status & visibility';
-const String _icsMetaVisibilityTitle = 'Visibility';
+const String _icsMetaSectionTitle = 'Status & availability';
+const String _icsMetaVisibilityTitle = 'Availability';
 const String _icsMetaStatusLabel = 'Status';
-const String _icsMetaTransparencyLabel = 'Availability';
+const String _icsMetaTransparencyLabel = 'Show as';
+const String _icsMetaTransparencyHelper =
+    'Controls whether this blocks your free/busy time.';
 const String _icsMetaDefaultLabel = 'Default';
 const double _icsMetaLabelFontSize = 12;
 const double _icsMetaLabelLetterSpacing = 0.2;
@@ -90,6 +93,13 @@ class CalendarIcsMetaFields extends StatelessWidget {
               transparency?.label ?? _icsMetaDefaultLabel,
           onChanged: enabled ? onTransparencyChanged : null,
           enabled: enabled,
+        ),
+        const SizedBox(height: calendarInsetSm),
+        Text(
+          _icsMetaTransparencyHelper,
+          style: context.textTheme.muted.copyWith(
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );

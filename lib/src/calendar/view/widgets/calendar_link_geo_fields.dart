@@ -45,6 +45,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
   late final TextEditingController _urlController;
   late final TextEditingController _latitudeController;
   late final TextEditingController _longitudeController;
+  late bool _expanded;
 
   @override
   void initState() {
@@ -54,6 +55,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
         TextEditingController(text: _formatCoordinate(widget.geo?.latitude));
     _longitudeController =
         TextEditingController(text: _formatCoordinate(widget.geo?.longitude));
+    _expanded = _shouldStartExpanded(widget);
   }
 
   @override
@@ -71,6 +73,9 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
         _longitudeController,
         _formatCoordinate(widget.geo?.longitude),
       );
+    }
+    if (!_expanded && _shouldStartExpanded(widget)) {
+      setState(() => _expanded = true);
     }
   }
 
@@ -120,6 +125,11 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
     widget.onGeoChanged(CalendarGeo(latitude: lat, longitude: lon));
   }
 
+  bool _shouldStartExpanded(CalendarLinkGeoFields widget) {
+    final String? url = widget.url?.trim();
+    return (url != null && url.isNotEmpty) || widget.geo != null;
+  }
+
   String _formatUrlLabel(String value) {
     final Uri? uri = Uri.tryParse(value);
     if (uri == null) {
@@ -162,8 +172,6 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(title: widget.title),
-        const SizedBox(height: calendarGutterSm),
         if (hasChips) ...[
           Wrap(
             spacing: calendarInsetSm,
@@ -214,10 +222,13 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
         ),
       ],
     );
-    if (widget.enabled) {
-      return content;
-    }
-    return IgnorePointer(child: content);
+    return TaskSectionExpander(
+      title: widget.title,
+      isExpanded: _expanded,
+      onToggle: () => setState(() => _expanded = !_expanded),
+      enabled: widget.enabled,
+      child: content,
+    );
   }
 }
 

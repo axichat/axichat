@@ -325,7 +325,10 @@ mixin MucService on XmppBase, BaseStreamService {
         final nick = roomState.nick?.trim();
         final affiliation = roomState.affiliation;
         final role = roomState.role;
-        if (nick == null || nick.isEmpty || affiliation == null || role == null) {
+        if (nick == null ||
+            nick.isEmpty ||
+            affiliation == null ||
+            role == null) {
           await Future<void>.delayed(_mucJoinSelfPresencePollInterval);
           continue;
         }
