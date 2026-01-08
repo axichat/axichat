@@ -191,7 +191,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    if (!widget.enabled) {
+    if (!mounted || !widget.enabled) {
       return;
     }
     _stopPointerTracking();
@@ -242,6 +242,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       pointerOffsetY = height;
     }
 
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _suppressDrag = suppressDrag;
       _lastPointerLocal = anchorLocal;
@@ -257,22 +260,14 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   }
 
   void _handlePointerUp(PointerUpEvent event) {
-    if (_suppressDrag) {
-      setState(() {
-        _suppressDrag = false;
-      });
-    }
+    _clearDragSuppression();
     if (!_dragSessionActive && _trackedPointerId == event.pointer) {
       _stopPointerTracking();
     }
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
-    if (_suppressDrag) {
-      setState(() {
-        _suppressDrag = false;
-      });
-    }
+    _clearDragSuppression();
     if (!_dragSessionActive && _trackedPointerId == event.pointer) {
       _stopPointerTracking();
     }
@@ -294,15 +289,24 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   }
 
   void _handleDragFinished({required bool cancelled}) {
-    if (_suppressDrag) {
-      setState(() {
-        _suppressDrag = false;
-      });
-    }
+    _clearDragSuppression();
     _dragSessionActive = false;
     _lastDragUpdateTime = null;
     widget.onDragEnded(widget.task);
     _stopPointerTracking();
+  }
+
+  void _clearDragSuppression() {
+    if (!_suppressDrag) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _suppressDrag = false;
+      });
+    } else {
+      _suppressDrag = false;
+    }
   }
 
   bool _isPointerOverResizeHandle(Offset local, Size size) {
