@@ -17,7 +17,15 @@ final class DraftsAvailable extends DraftState {
 }
 
 final class DraftSaveComplete extends DraftState {
-  const DraftSaveComplete({required super.items});
+  const DraftSaveComplete({
+    required super.items,
+    this.autoSaved = false,
+  });
+
+  final bool autoSaved;
+
+  @override
+  List<Object?> get props => [items, autoSaved];
 }
 
 final class DraftSending extends DraftState {

@@ -36,11 +36,13 @@ class _TaskChecklistState extends State<TaskChecklist> {
   final FocusNode _newItemFocusNode =
       FocusNode(debugLabel: 'taskChecklistAddItem');
   final Map<String, TextEditingController> _itemControllers = {};
+  bool _syncingPendingEntry = false;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_syncControllers);
+    _newItemController.addListener(_handlePendingEntryChanged);
     _syncControllers();
   }
 
@@ -57,6 +59,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
   @override
   void dispose() {
     widget.controller.removeListener(_syncControllers);
+    _newItemController.removeListener(_handlePendingEntryChanged);
     _newItemController.dispose();
     _newItemFocusNode.dispose();
     for (final controller in _itemControllers.values) {
@@ -85,9 +88,25 @@ class _TaskChecklistState extends State<TaskChecklist> {
         );
       }
     }
+    final pendingEntry = widget.controller.pendingEntry;
+    if (_newItemController.text != pendingEntry) {
+      _syncingPendingEntry = true;
+      _newItemController.value = TextEditingValue(
+        text: pendingEntry,
+        selection: TextSelection.collapsed(offset: pendingEntry.length),
+      );
+      _syncingPendingEntry = false;
+    }
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _handlePendingEntryChanged() {
+    if (_syncingPendingEntry) {
+      return;
+    }
+    widget.controller.setPendingEntry(_newItemController.text);
   }
 
   @override
@@ -180,8 +199,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
                 placeholder: widget.addPlaceholder,
                 focusNode: _newItemFocusNode,
                 onSubmitted: () {
-                  widget.controller.addItem(_newItemController.text);
-                  _newItemController.clear();
+                  widget.controller.commitPendingEntry();
                   _newItemFocusNode.requestFocus();
                 },
               ),

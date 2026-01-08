@@ -395,7 +395,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .where((message) => message.chatJid == chat.jid)
         .toList(growable: false);
     final selfBare = _bareJid(_chatsService.myJid);
-    if (_xmppAllowedForChat(chat) && chat.type != ChatType.groupChat) {
+    final shouldSendChatReadReceipts = _settingsState.chatReadReceipts;
+    if (shouldSendChatReadReceipts &&
+        _xmppAllowedForChat(chat) &&
+        chat.type != ChatType.groupChat) {
       for (final item in scopedItems) {
         if (!item.displayed &&
             _bareJid(item.senderJid) != selfBare &&
@@ -420,8 +423,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (seenCandidates.isEmpty) {
       return;
     }
-    final shouldSendReadReceipts = _settingsState.readReceipts;
-    if (shouldSendReadReceipts) {
+    final shouldSendEmailReadReceipts = _settingsState.emailReadReceipts;
+    if (shouldSendEmailReadReceipts) {
       await emailService.markSeenMessages(seenCandidates);
     } else {
       await _markEmailMessagesDisplayedLocally(seenCandidates);

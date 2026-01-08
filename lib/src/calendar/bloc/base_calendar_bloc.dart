@@ -633,8 +633,7 @@ abstract class BaseCalendarBloc
           _resolveParsedText(event.task.location, parsed.location);
       final RecurrenceRule? recurrence =
           _resolveParsedRecurrence(event.task.recurrence, parsed.recurrence);
-      final TaskPriority? priority =
-          _resolveParsedNullablePriority(event.task.priority, parsed.priority);
+      final TaskPriority? priority = _normalizePriority(event.task.priority);
       final ReminderPreferences reminders =
           _resolveParsedReminders(event.task.reminders, parsed.reminders);
       final DateTime? computedEndDate = event.task.endDate ??
@@ -2145,13 +2144,6 @@ abstract class BaseCalendarBloc
     }
     final TaskPriority? resolved = _normalizePriority(parsed);
     return resolved ?? TaskPriority.none;
-  }
-
-  TaskPriority? _resolveParsedNullablePriority(
-    TaskPriority? explicit,
-    TaskPriority? parsed,
-  ) {
-    return _normalizePriority(explicit) ?? _normalizePriority(parsed);
   }
 
   ReminderPreferences _resolveParsedReminders(

@@ -1224,6 +1224,7 @@ class XmppService extends XmppBase
     await _connection.registerFeatureNegotiators(featureNegotiators);
 
     await _connection.registerManagers(featureManagers);
+    await _prepareMucRoomsFromStateStore();
 
     _streamResumptionAttempted = false;
     if (_enableStreamManagement) {

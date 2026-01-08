@@ -498,124 +498,133 @@ class _HomeScreenState extends State<HomeScreen> {
       body: DefaultTabController(
         length: tabs.length,
         animationDuration: context.watch<SettingsCubit>().animationDuration,
-        child: MultiBlocProvider(
+        child: MultiRepositoryProvider(
           providers: [
-            BlocProvider(
-              create: (context) => HomeSearchCubit(
-                tabs: tabs.map((tab) => tab.id).toList(),
-                initialFilters: initialTabFilters,
-              ),
-            ),
-            if (isRoster)
-              BlocProvider(
-                create: (context) => RosterCubit(
-                  rosterService: context.read<XmppService>(),
-                ),
-              ),
-            BlocProvider(
-              create: (context) => ProfileCubit(
-                xmppService: context.read<XmppService>(),
-                presenceService: isPresence
-                    ? context.read<XmppService>() as PresenceService
-                    : null,
-                omemoService: isOmemo
-                    ? context.read<XmppService>() as OmemoService
-                    : null,
-              ),
-            ),
-            if (isBlocking)
-              BlocProvider(
-                create: (context) => BlocklistCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
-              ),
-            // Always provide CalendarBloc for logged-in users
             if (calendarStorage != null)
-              BlocProvider<CalendarBloc>(
-                create: (context) {
-                  final reminderController =
-                      context.read<CalendarReminderController>();
-                  final xmppService = context.read<XmppService>();
-                  const bool seedDemoCalendar = kEnableDemoChats;
-                  final storage = calendarStorage;
+              RepositoryProvider<CalendarTaskDraftStore>(
+                create: (_) => CalendarTaskDraftStore(),
+                dispose: (_, store) => store.clearAll(),
+              ),
+          ],
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider(
+                create: (context) => HomeSearchCubit(
+                  tabs: tabs.map((tab) => tab.id).toList(),
+                  initialFilters: initialTabFilters,
+                ),
+              ),
+              if (isRoster)
+                BlocProvider(
+                  create: (context) => RosterCubit(
+                    rosterService: context.read<XmppService>(),
+                  ),
+                ),
+              BlocProvider(
+                create: (context) => ProfileCubit(
+                  xmppService: context.read<XmppService>(),
+                  presenceService: isPresence
+                      ? context.read<XmppService>() as PresenceService
+                      : null,
+                  omemoService: isOmemo
+                      ? context.read<XmppService>() as OmemoService
+                      : null,
+                ),
+              ),
+              if (isBlocking)
+                BlocProvider(
+                  create: (context) => BlocklistCubit(
+                    xmppService: context.read<XmppService>(),
+                  ),
+                ),
+              // Always provide CalendarBloc for logged-in users
+              if (calendarStorage != null)
+                BlocProvider<CalendarBloc>(
+                  create: (context) {
+                    final reminderController =
+                        context.read<CalendarReminderController>();
+                    final xmppService = context.read<XmppService>();
+                    const bool seedDemoCalendar = kEnableDemoChats;
+                    final storage = calendarStorage;
 
-                  final CalendarBloc bloc = CalendarBloc(
-                    reminderController: reminderController,
-                    syncManagerBuilder: (bloc) {
-                      final manager = CalendarSyncManager(
-                        readModel: () => bloc.currentModel,
-                        applyModel: (model) async {
-                          if (bloc.isClosed) return;
-                          bloc.add(
-                            CalendarEvent.remoteModelApplied(model: model),
-                          );
-                        },
-                        sendCalendarMessage: (outbound) async {
-                          if (bloc.isClosed) {
-                            return;
-                          }
-                          final jid = xmppService.myJid;
-                          if (jid != null) {
-                            await xmppService.sendCalendarSyncMessage(
-                              jid: jid,
-                              outbound: outbound,
-                            );
-                          }
-                        },
-                        sendSnapshotFile: xmppService.uploadCalendarSnapshot,
-                      );
-
-                      xmppService
-                        ..setCalendarSyncCallback(
-                          (inbound) async {
-                            if (bloc.isClosed) return false;
-                            return await manager.onCalendarMessage(inbound);
-                          },
-                        )
-                        ..setCalendarSyncWarningCallback(
-                          (warning) async {
+                    final CalendarBloc bloc = CalendarBloc(
+                      reminderController: reminderController,
+                      syncManagerBuilder: (bloc) {
+                        final manager = CalendarSyncManager(
+                          readModel: () => bloc.currentModel,
+                          applyModel: (model) async {
                             if (bloc.isClosed) return;
                             bloc.add(
-                              CalendarEvent.syncWarningRaised(
-                                warning: warning,
-                              ),
+                              CalendarEvent.remoteModelApplied(model: model),
                             );
                           },
+                          sendCalendarMessage: (outbound) async {
+                            if (bloc.isClosed) {
+                              return;
+                            }
+                            final jid = xmppService.myJid;
+                            if (jid != null) {
+                              await xmppService.sendCalendarSyncMessage(
+                                jid: jid,
+                                outbound: outbound,
+                              );
+                            }
+                          },
+                          sendSnapshotFile: xmppService.uploadCalendarSnapshot,
                         );
-                      return manager;
-                    },
-                    availabilityCoordinator: availabilityShareCoordinator,
-                    storage: storage,
-                    onDispose: () {
-                      xmppService
-                        ..clearCalendarSyncCallback()
-                        ..clearCalendarSyncWarningCallback();
-                    },
-                  )..add(const CalendarEvent.started());
-                  if (seedDemoCalendar) {
-                    bloc.add(
-                      CalendarEvent.remoteModelApplied(
-                        model: DemoCalendar.franklin(
-                          anchor: DateTime.now(),
+
+                        xmppService
+                          ..setCalendarSyncCallback(
+                            (inbound) async {
+                              if (bloc.isClosed) return false;
+                              return await manager.onCalendarMessage(inbound);
+                            },
+                          )
+                          ..setCalendarSyncWarningCallback(
+                            (warning) async {
+                              if (bloc.isClosed) return;
+                              bloc.add(
+                                CalendarEvent.syncWarningRaised(
+                                  warning: warning,
+                                ),
+                              );
+                            },
+                          );
+                        return manager;
+                      },
+                      availabilityCoordinator: availabilityShareCoordinator,
+                      storage: storage,
+                      onDispose: () {
+                        xmppService
+                          ..clearCalendarSyncCallback()
+                          ..clearCalendarSyncWarningCallback();
+                      },
+                    )..add(const CalendarEvent.started());
+                    if (seedDemoCalendar) {
+                      bloc.add(
+                        CalendarEvent.remoteModelApplied(
+                          model: DemoCalendar.franklin(
+                            anchor: DateTime.now(),
+                          ),
                         ),
-                      ),
-                    );
-                  }
-                  return bloc;
-                },
+                      );
+                    }
+                    return bloc;
+                  },
+                ),
+              BlocProvider(
+                create: (context) => ConnectivityCubit(
+                  xmppBase: context.read<XmppService>(),
+                ),
               ),
-            BlocProvider(
-              create: (context) => ConnectivityCubit(
-                xmppBase: context.read<XmppService>(),
+              BlocProvider(
+                create: (context) => EmailSyncCubit(
+                  emailService: context.read<EmailService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => EmailSyncCubit(
-                emailService: context.read<EmailService>(),
-              ),
-            ),
-          ],
-          child: calendarAwareContent,
+            ],
+            child: calendarAwareContent,
+          ),
         ),
       ),
     );

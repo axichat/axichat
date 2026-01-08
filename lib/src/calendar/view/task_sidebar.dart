@@ -54,6 +54,7 @@ import 'calendar_transfer_sheet.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_checklist_controller.dart';
 import 'controllers/task_draft_controller.dart';
+import 'controllers/task_form_draft_store.dart';
 import 'edit_task_dropdown.dart';
 import 'feedback_system.dart';
 import 'layout/calendar_layout.dart';
@@ -78,6 +79,15 @@ import 'widgets/reminder_preferences_field.dart';
 import 'task_edit_session_tracker.dart';
 
 const String _taskShareIcsActionLabel = 'Share as .ics';
+
+CalendarTaskDraftStore? _maybeReadDraftStore(BuildContext context) {
+  try {
+    return RepositoryProvider.of<CalendarTaskDraftStore>(context,
+        listen: false);
+  } on FlutterError {
+    return null;
+  }
+}
 
 class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   const TaskSidebar({
@@ -107,6 +117,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   late final Listenable _formActivityListenable;
+  CalendarTaskDraftStore? _draftStore;
+  final bool _suppressDraftSync = false;
+  bool _draftStoreResolved = false;
   final TextEditingController _selectionTitleController =
       TextEditingController();
   final TextEditingController _selectionDescriptionController =
@@ -199,6 +212,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _descriptionController.text.trim().isNotEmpty ||
       _locationController.text.trim().isNotEmpty ||
       _checklistController.hasItems ||
+      _checklistController.hasPendingEntry ||
       _draftController.startTime != null ||
       _draftController.endTime != null ||
       _draftController.deadline != null ||
@@ -542,6 +556,66 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _remindersLocked = false;
   }
 
+  void _applySidebarDraft(TaskSidebarDraft draft) {
+    _suppressDraftSync = true;
+    _titleController.value = TextEditingValue(
+      text: draft.title,
+      selection: TextSelection.collapsed(offset: draft.title.length),
+    );
+    _descriptionController.value = TextEditingValue(
+      text: draft.description,
+      selection: TextSelection.collapsed(offset: draft.description.length),
+    );
+    _locationController.value = TextEditingValue(
+      text: draft.location,
+      selection: TextSelection.collapsed(offset: draft.location.length),
+    );
+    _checklistController
+      ..setItems(draft.checklist)
+      ..setPendingEntry(draft.pendingChecklistEntry);
+    draft.snapshot.applyTo(_draftController);
+    _queuedCriticalPathIds
+      ..clear()
+      ..addAll(draft.queuedCriticalPathIds);
+    _locationLocked = draft.location.trim().isNotEmpty;
+    _scheduleLocked =
+        draft.snapshot.startTime != null || draft.snapshot.endTime != null;
+    _deadlineLocked = draft.snapshot.deadline != null;
+    _recurrenceLocked = draft.snapshot.recurrence.isActive;
+    _priorityLocked = draft.snapshot.isImportant || draft.snapshot.isUrgent;
+    _remindersLocked =
+        draft.snapshot.reminders != ReminderPreferences.defaults();
+    _suppressDraftSync = false;
+  }
+
+  void _handleSidebarDraftChanged() {
+    if (_suppressDraftSync) {
+      return;
+    }
+    final CalendarTaskDraftStore? store = _draftStore;
+    if (store == null) {
+      return;
+    }
+    final TaskSidebarDraft draft = TaskSidebarDraft(
+      title: _titleController.text,
+      description: _descriptionController.text,
+      location: _locationController.text,
+      checklist: _checklistController.items.toList(),
+      pendingChecklistEntry: _checklistController.pendingEntry,
+      snapshot: TaskDraftSnapshot.fromController(_draftController),
+      queuedCriticalPathIds: List<String>.from(_queuedCriticalPathIds),
+    );
+    if (!draft.hasContent) {
+      store.clearSidebarDraft();
+      return;
+    }
+    store.setSidebarDraft(draft);
+  }
+
+  void _clearSidebarDraft() {
+    _draftStore?.clearSidebarDraft();
+  }
+
   void _pruneTaskPopoverControllers(Set<String> activeTaskIds) {
     final List<String> staleIds = <String>[];
     _taskPopoverControllers.forEach((id, controller) {
@@ -580,6 +654,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _draftController,
       _checklistController,
     ]);
+    _formActivityListenable.addListener(_handleSidebarDraftChanged);
     _selectionRecurrenceNotifier =
         ValueNotifier<RecurrenceFormValue>(const RecurrenceFormValue());
     _selectionRecurrenceMixedNotifier = ValueNotifier<bool>(false);
@@ -596,11 +671,21 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_draftStoreResolved) {
+      return;
+    }
+    _draftStoreResolved = true;
+    _draftStore = _maybeReadDraftStore(context);
+    final TaskSidebarDraft? draft = _draftStore?.sidebarDraft;
+    if (draft != null) {
+      _applySidebarDraft(draft);
+    }
   }
 
   @override
   void dispose() {
     TaskEditSessionTracker.instance.endForOwner(this);
+    _formActivityListenable.removeListener(_handleSidebarDraftChanged);
     _titleController.dispose();
     _titleFocusNode.dispose();
     _descriptionController.dispose();
@@ -2711,6 +2796,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     setState(() {
       _queuedCriticalPathIds.add(pathId);
     });
+    _handleSidebarDraftChanged();
   }
 
   void _removeQueuedCriticalPath(String pathId) {
@@ -2720,6 +2806,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     setState(() {
       _queuedCriticalPathIds.removeWhere((id) => id == pathId);
     });
+    _handleSidebarDraftChanged();
   }
 
   void _clearQueuedCriticalPaths() {
@@ -2727,6 +2814,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       return;
     }
     setState(() => _queuedCriticalPathIds.clear());
+    _handleSidebarDraftChanged();
   }
 
   Future<void> _queueCriticalPathForDraft() async {
@@ -2934,6 +3022,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _locationController.clear();
     }
     _checklistController.clear();
+    _clearSidebarDraft();
     if (mounted) {
       FocusScope.of(context).requestFocus(_titleFocusNode);
     }
@@ -5949,8 +6038,6 @@ class _AdvancedOptions extends StatelessWidget {
             ),
           ),
           const SizedBox(height: calendarInsetMd),
-          TaskChecklist(controller: checklistController),
-          const SizedBox(height: calendarFormGap),
           TaskLocationField(
             controller: locationController,
             hintText: l10n.calendarLocationHint,
@@ -5960,7 +6047,9 @@ class _AdvancedOptions extends StatelessWidget {
             ),
             autocomplete: locationHelper,
           ),
-          const SizedBox(height: calendarGutterMd),
+          const SizedBox(height: calendarInsetMd),
+          TaskChecklist(controller: checklistController),
+          const SizedBox(height: calendarFormGap),
           _AdvancedScheduleSection(
             draftController: draftController,
             onStartChanged: onStartChanged,

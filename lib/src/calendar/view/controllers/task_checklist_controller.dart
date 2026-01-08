@@ -18,10 +18,16 @@ class TaskChecklistController extends ChangeNotifier {
         );
 
   static const Uuid _uuid = Uuid();
+  static const String _emptyPendingEntry = '';
   List<TaskChecklistItem> _items;
+  String _pendingEntry = _emptyPendingEntry;
 
   UnmodifiableListView<TaskChecklistItem> get items =>
       UnmodifiableListView(_items);
+
+  String get pendingEntry => _pendingEntry;
+
+  bool get hasPendingEntry => _pendingEntry.trim().isNotEmpty;
 
   bool get hasItems => _items.isNotEmpty;
 
@@ -41,6 +47,35 @@ class TaskChecklistController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPendingEntry(String value) {
+    if (_pendingEntry == value) {
+      return;
+    }
+    _pendingEntry = value;
+    notifyListeners();
+  }
+
+  void commitPendingEntry() {
+    final String trimmed = _pendingEntry.trim();
+    if (trimmed.isEmpty) {
+      if (_pendingEntry != _emptyPendingEntry) {
+        _pendingEntry = _emptyPendingEntry;
+        notifyListeners();
+      }
+      return;
+    }
+    _pendingEntry = _emptyPendingEntry;
+    _items = [
+      ..._items,
+      TaskChecklistItem(
+        id: _uuid.v4(),
+        label: trimmed,
+        isCompleted: false,
+      ),
+    ];
+    notifyListeners();
+  }
+
   void addItem(String label) {
     final trimmed = label.trim();
     if (trimmed.isEmpty) {
@@ -54,6 +89,9 @@ class TaskChecklistController extends ChangeNotifier {
         isCompleted: false,
       ),
     ];
+    if (_pendingEntry != _emptyPendingEntry) {
+      _pendingEntry = _emptyPendingEntry;
+    }
     notifyListeners();
   }
 
@@ -128,10 +166,11 @@ class TaskChecklistController extends ChangeNotifier {
   }
 
   void clear() {
-    if (_items.isEmpty) {
+    if (_items.isEmpty && _pendingEntry == _emptyPendingEntry) {
       return;
     }
     _items = <TaskChecklistItem>[];
+    _pendingEntry = _emptyPendingEntry;
     notifyListeners();
   }
 

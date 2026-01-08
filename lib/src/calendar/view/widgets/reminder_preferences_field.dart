@@ -221,6 +221,7 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
               title: _reminderAdvancedLabel,
               referenceStart: widget.referenceStart,
               showReminderNote: false,
+              showHeader: false,
               onChanged: onAdvancedChanged,
             ),
           ),
