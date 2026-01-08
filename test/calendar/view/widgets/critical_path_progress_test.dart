@@ -4,7 +4,11 @@ import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/view/widgets/critical_path_panel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-CalendarTask _task(String id, {required bool completed}) {
+CalendarTask _task(
+  String id, {
+  required bool completed,
+  List<TaskChecklistItem> checklist = const [],
+}) {
   final DateTime now = DateTime(2024, 1, 1);
   return CalendarTask(
     id: id,
@@ -23,7 +27,7 @@ CalendarTask _task(String id, {required bool completed}) {
     recurrence: null,
     occurrenceOverrides: const {},
     reminders: ReminderPreferences.defaults(),
-    checklist: const [],
+    checklist: checklist,
   );
 }
 
@@ -85,6 +89,96 @@ void main() {
 
       final progress = computeCriticalPathProgress(path: path, tasks: tasks);
 
+      expect(progress.completed, 1);
+    });
+
+    test('counts checklist progress after predecessor completes', () {
+      final path = CalendarCriticalPath(
+        id: 'path-4',
+        name: 'Checklist Path',
+        taskIds: const ['a', 'b'],
+        createdAt: DateTime(2024, 1, 1),
+        modifiedAt: DateTime(2024, 1, 1),
+        isArchived: false,
+      );
+      final tasks = <String, CalendarTask>{
+        'a': _task('a', completed: true),
+        'b': _task(
+          'b',
+          completed: false,
+          checklist: [
+            const TaskChecklistItem(
+              id: 'b1',
+              label: 'b1',
+              isCompleted: true,
+            ),
+            const TaskChecklistItem(
+              id: 'b2',
+              label: 'b2',
+              isCompleted: false,
+            ),
+            const TaskChecklistItem(
+              id: 'b3',
+              label: 'b3',
+              isCompleted: true,
+            ),
+          ],
+        ),
+      };
+
+      final progress = computeCriticalPathProgress(path: path, tasks: tasks);
+
+      expect(progress.total, 5);
+      expect(progress.completed, 3);
+    });
+
+    test('gates checklist progress behind incomplete predecessors', () {
+      final path = CalendarCriticalPath(
+        id: 'path-5',
+        name: 'Checklist Blocked Path',
+        taskIds: const ['a', 'b'],
+        createdAt: DateTime(2024, 1, 1),
+        modifiedAt: DateTime(2024, 1, 1),
+        isArchived: false,
+      );
+      final tasks = <String, CalendarTask>{
+        'a': _task(
+          'a',
+          completed: false,
+          checklist: [
+            const TaskChecklistItem(
+              id: 'a1',
+              label: 'a1',
+              isCompleted: true,
+            ),
+            const TaskChecklistItem(
+              id: 'a2',
+              label: 'a2',
+              isCompleted: false,
+            ),
+          ],
+        ),
+        'b': _task(
+          'b',
+          completed: false,
+          checklist: [
+            const TaskChecklistItem(
+              id: 'b1',
+              label: 'b1',
+              isCompleted: true,
+            ),
+            const TaskChecklistItem(
+              id: 'b2',
+              label: 'b2',
+              isCompleted: true,
+            ),
+          ],
+        ),
+      };
+
+      final progress = computeCriticalPathProgress(path: path, tasks: tasks);
+
+      expect(progress.total, 6);
       expect(progress.completed, 1);
     });
   });

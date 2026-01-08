@@ -994,6 +994,7 @@ void showUnifiedTaskInput<T extends BaseCalendarBloc>(
   DateTime? initialDate,
   TimeOfDay? initialTime,
 }) {
+  const bool useRootNavigator = false;
   final locate = context.read;
   Widget buildTaskInput() => BlocProvider.value(
         value: locate<T>(),
@@ -1016,6 +1017,7 @@ void showUnifiedTaskInput<T extends BaseCalendarBloc>(
   } else {
     showFadeScaleDialog<void>(
       context: context,
+      useRootNavigator: useRootNavigator,
       builder: (context) => buildTaskInput(),
     );
   }

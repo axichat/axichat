@@ -16,6 +16,12 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const String _criticalPathShareActionLabel = 'Share to chat';
+const String _criticalPathProgressSeparator = 'of';
+const String _criticalPathProgressSuffix = 'steps completed in order';
+const String _criticalPathProgressHint =
+    'Complete tasks and checklist items in the listed order to advance';
+const List<TaskChecklistItem> _emptyChecklistItems = <TaskChecklistItem>[];
+const int _criticalPathTaskUnit = 1;
 
 class CriticalPathPanel extends StatelessWidget {
   const CriticalPathPanel({
@@ -398,12 +404,13 @@ class CriticalPathCard extends StatelessWidget {
             ),
             const SizedBox(height: calendarInsetSm),
             Text(
-              '${progress.completed} of ${progress.total} tasks completed in order',
+              '${progress.completed} $_criticalPathProgressSeparator '
+              '${progress.total} $_criticalPathProgressSuffix',
               style: context.textTheme.muted.copyWith(fontSize: 12),
             ),
             const SizedBox(height: calendarInsetSm),
             Text(
-              'Complete tasks in the listed order to advance',
+              _criticalPathProgressHint,
               style: context.textTheme.muted.copyWith(fontSize: 11),
             ),
             const SizedBox(height: calendarInsetSm),
@@ -788,15 +795,27 @@ CriticalPathProgress computeCriticalPathProgress({
   required CalendarCriticalPath path,
   required Map<String, CalendarTask> tasks,
 }) {
-  final int total = path.taskIds.length;
+  int total = 0;
   int completed = 0;
+  bool canAdvance = true;
   for (final String id in path.taskIds) {
     final String baseId = baseTaskIdFrom(id);
     final CalendarTask? task = tasks[baseId] ?? tasks[id];
-    if (task == null || !task.isCompleted) {
-      break;
+    final List<TaskChecklistItem> checklist =
+        task?.checklist ?? _emptyChecklistItems;
+    final int checklistCount = checklist.length;
+    total += _criticalPathTaskUnit + checklistCount;
+    if (!canAdvance) {
+      continue;
     }
-    completed += 1;
+    if (checklistCount > 0) {
+      completed += checklist.where((item) => item.isCompleted).length;
+    }
+    if (task?.isCompleted ?? false) {
+      completed += _criticalPathTaskUnit;
+      continue;
+    }
+    canAdvance = false;
   }
   return CriticalPathProgress(
     total: total,

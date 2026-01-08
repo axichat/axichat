@@ -52,6 +52,7 @@ const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
 const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
+const List<TaskChecklistItem> _emptyChecklistItems = <TaskChecklistItem>[];
 const double _taskPopoverMinWidth = 320.0;
 const Alignment _taskPopoverTransformAlignment = Alignment.centerLeft;
 const String _occurrenceScopeTitle = 'Apply changes to';
@@ -150,6 +151,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   final FocusNode _titleFocusNode = FocusNode();
   CalendarTaskDraftStore? _draftStore;
   bool _suppressDraftSync = false;
+  bool _suppressChecklistPersist = false;
+  List<TaskChecklistItem> _lastChecklistSnapshot = _emptyChecklistItems;
 
   bool _isImportant = false;
   bool _isUrgent = false;
@@ -181,7 +184,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     _locationController = TextEditingController()..addListener(_persistDraft);
     _checklistController = TaskChecklistController()
       ..addListener(_refresh)
-      ..addListener(_persistDraft);
+      ..addListener(_persistDraft)
+      ..addListener(_handleChecklistChanged);
     _draftStore = _maybeReadDraftStore(context);
     final TaskEditDraft? draft = _draftStore?.draftForTask(widget.task.id);
     if (draft != null) {
@@ -199,6 +203,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     _checklistController
       ..removeListener(_refresh)
       ..removeListener(_persistDraft)
+      ..removeListener(_handleChecklistChanged)
       ..dispose();
     _titleFocusNode.dispose();
     super.dispose();
@@ -254,6 +259,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       }
 
       _checklistController.setItems(task.checklist);
+      _setChecklistSnapshot(_checklistController.items);
 
       _isImportant = task.isImportant || task.isCritical;
       _isUrgent = task.isUrgent || task.isCritical;
@@ -293,12 +299,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     }
 
     _suppressDraftSync = true;
+    _suppressChecklistPersist = true;
     if (rebuild && mounted) {
       setState(apply);
     } else {
       apply();
     }
     _suppressDraftSync = false;
+    _suppressChecklistPersist = false;
   }
 
   void _hydrateFromDraft(
@@ -328,6 +336,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _checklistController
         ..setItems(draft.checklist)
         ..setPendingEntry(draft.pendingChecklistEntry);
+      _setChecklistSnapshot(_checklistController.items);
 
       _isImportant = draft.isImportant;
       _isUrgent = draft.isUrgent;
@@ -353,12 +362,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     }
 
     _suppressDraftSync = true;
+    _suppressChecklistPersist = true;
     if (rebuild && mounted) {
       setState(apply);
     } else {
       apply();
     }
     _suppressDraftSync = false;
+    _suppressChecklistPersist = false;
   }
 
   void _persistDraft() {
@@ -395,6 +406,61 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         attendees: _attendees,
       ),
     );
+  }
+
+  void _handleChecklistChanged() {
+    if (_suppressChecklistPersist || !widget.editMode.allowsChecklistEdits) {
+      return;
+    }
+    final List<TaskChecklistItem> current =
+        List<TaskChecklistItem>.from(_checklistController.items);
+    final bool shouldPersist = _isChecklistCompletionChange(
+      previous: _lastChecklistSnapshot,
+      current: current,
+    );
+    _setChecklistSnapshot(current);
+    if (!shouldPersist) {
+      return;
+    }
+    _persistChecklistCompletion(current);
+  }
+
+  bool _isChecklistCompletionChange({
+    required List<TaskChecklistItem> previous,
+    required List<TaskChecklistItem> current,
+  }) {
+    if (previous.length != current.length) {
+      return false;
+    }
+    bool completionChanged = false;
+    for (final MapEntry<int, TaskChecklistItem> entry
+        in current.asMap().entries) {
+      final TaskChecklistItem before = previous[entry.key];
+      final TaskChecklistItem after = entry.value;
+      if (before.id != after.id || before.label != after.label) {
+        return false;
+      }
+      if (before.isCompleted != after.isCompleted) {
+        completionChanged = true;
+      }
+    }
+    return completionChanged;
+  }
+
+  void _persistChecklistCompletion(List<TaskChecklistItem> checklist) {
+    final CalendarTask updatedTask = widget.task.copyWith(
+      checklist: checklist,
+    );
+    if (widget.task.isOccurrence && widget.onOccurrenceUpdated != null) {
+      widget.onOccurrenceUpdated!(updatedTask, _occurrenceScope);
+      return;
+    }
+    widget.onTaskUpdated(updatedTask);
+  }
+
+  void _setChecklistSnapshot(Iterable<TaskChecklistItem> items) {
+    _lastChecklistSnapshot =
+        List<TaskChecklistItem>.from(items, growable: false);
   }
 
   void _updateDraft(VoidCallback update) {

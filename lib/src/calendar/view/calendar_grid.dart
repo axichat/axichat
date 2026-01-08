@@ -68,6 +68,7 @@ const String _taskShareIcsActionLabel = 'Share as .ics';
 const String _taskPopoverCloseReasonMissingTask = 'missing-task';
 const String _taskPopoverCloseReasonSwitchTarget = 'switch-target';
 const String _taskPopoverCloseReasonTaskDeleted = 'task-deleted';
+const bool _calendarUseRootOverlay = false;
 
 CalendarTaskDraftStore? _maybeReadDraftStore(BuildContext context) {
   try {
@@ -2074,7 +2075,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
 
-    final overlayState = Overlay.of(context, rootOverlay: true);
+    final overlayState = Overlay.of(
+      context,
+      rootOverlay: _calendarUseRootOverlay,
+    );
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
 
     _activePopoverEntry = OverlayEntry(

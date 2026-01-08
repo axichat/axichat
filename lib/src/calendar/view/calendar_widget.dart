@@ -63,6 +63,9 @@ const String _calendarAvailabilityShareMissingJidMessage =
 const bool _calendarActionShowTransferMenu = false;
 const bool _calendarActionMenuGhost = true;
 const bool _calendarActionUsePrimary = true;
+const String _calendarSurfacePageId = 'calendar-surface';
+const ValueKey<String> _calendarSurfacePageKey =
+    ValueKey<String>(_calendarSurfacePageId);
 
 CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
@@ -82,6 +85,8 @@ class _CalendarWidgetState
   bool _mobileInitialScrollSynced = false;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
+  late final GlobalKey<NavigatorState> _calendarNavigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
   void dispose() {
@@ -204,7 +209,7 @@ class _CalendarWidgetState
     final availabilityCoordinator = _maybeReadAvailabilityShareCoordinator(
       context,
     );
-    return CalendarHoverTitleScope(
+    final Widget calendarBody = CalendarHoverTitleScope(
       controller: _hoverTitleController,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -222,6 +227,10 @@ class _CalendarWidgetState
           Expanded(child: tintedLayout),
         ],
       ),
+    );
+    return _CalendarSurfaceNavigator(
+      navigatorKey: _calendarNavigatorKey,
+      child: calendarBody,
     );
   }
 
@@ -407,6 +416,30 @@ class _CalendarActionRow extends StatelessWidget {
           state: state,
           ghost: _calendarActionMenuGhost,
           usePrimary: _calendarActionUsePrimary,
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarSurfaceNavigator extends StatelessWidget {
+  const _CalendarSurfaceNavigator({
+    required this.navigatorKey,
+    required this.child,
+  });
+
+  final GlobalKey<NavigatorState> navigatorKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Navigator(
+      key: navigatorKey,
+      onDidRemovePage: (page) {},
+      pages: [
+        MaterialPage<void>(
+          key: _calendarSurfacePageKey,
+          child: child,
         ),
       ],
     );
