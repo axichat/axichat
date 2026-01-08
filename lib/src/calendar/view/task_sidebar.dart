@@ -5385,7 +5385,9 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                           tileOrigin = Offset.zero;
                         }
                       }
-                      final screenSize = MediaQuery.of(tileContext).size;
+                      final mediaQuery = MediaQuery.of(tileContext);
+                      final screenSize = mediaQuery.size;
+                      final viewPadding = mediaQuery.viewPadding;
 
                       const double margin = calendarPopoverScreenMargin;
                       const double dropdownMaxHeight =
@@ -5395,95 +5397,174 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                           calendarPopoverPreferredVerticalGap;
                       const double preferredHorizontalGap =
                           calendarPopoverPreferredHorizontalGap;
+                      const double centerDivider = 2.0;
+                      const double zeroClamp = 0.0;
+                      const double heightDifferenceThreshold = 4.0;
+                      const double minimumHeight = calendarTaskPopoverMinHeight;
 
-                      final availableBelow = screenSize.height -
-                          (tileOrigin.dy + tileSize.height) -
-                          margin;
-                      final availableAbove = tileOrigin.dy - margin;
-                      final availableRight = screenSize.width -
-                          (tileOrigin.dx + tileSize.width) -
-                          margin;
-                      final availableLeft = tileOrigin.dx - margin;
+                      final usableLeft = viewPadding.left + margin;
+                      final usableRight =
+                          screenSize.width - viewPadding.right - margin;
+                      final usableTop = viewPadding.top + margin;
+                      final usableBottom =
+                          screenSize.height - viewPadding.bottom - margin;
+                      final usableHeight =
+                          math.max(zeroClamp, usableBottom - usableTop);
 
-                      final normalizedAbove = math.max(0.0, availableAbove);
-                      final normalizedBelow = math.max(0.0, availableBelow);
+                      final availableBelow =
+                          usableBottom - (tileOrigin.dy + tileSize.height);
+                      final availableAbove = tileOrigin.dy - usableTop;
+                      final availableRight =
+                          usableRight - (tileOrigin.dx + tileSize.width);
+                      final availableLeft = tileOrigin.dx - usableLeft;
 
-                      final heightIfAbove =
-                          math.min(dropdownMaxHeight, normalizedAbove);
-                      final heightIfBelow =
-                          math.min(dropdownMaxHeight, normalizedBelow);
+                      const double requiredHorizontalSpace =
+                          dropdownWidth + preferredHorizontalGap;
+                      final bool canOpenRight =
+                          availableRight >= requiredHorizontalSpace;
+                      final bool canOpenLeft =
+                          availableLeft >= requiredHorizontalSpace;
+                      final bool openToLeft = canOpenLeft &&
+                          (!canOpenRight || availableLeft > availableRight);
+                      final bool openToSide = canOpenRight || canOpenLeft;
 
-                      bool showAbove;
-                      if (heightIfAbove <= 0 && heightIfBelow <= 0) {
-                        showAbove = false;
-                      } else if (heightIfBelow <= 0) {
-                        showAbove = true;
-                      } else if (heightIfAbove <= 0) {
-                        showAbove = false;
-                      } else if ((heightIfBelow - heightIfAbove).abs() <= 4) {
-                        showAbove = normalizedAbove > normalizedBelow;
+                      double effectiveMaxHeight;
+                      late final ShadAnchor anchor;
+
+                      if (openToSide) {
+                        if (usableHeight <= zeroClamp) {
+                          effectiveMaxHeight = minimumHeight;
+                        } else {
+                          effectiveMaxHeight =
+                              math.min(dropdownMaxHeight, usableHeight);
+                          if (effectiveMaxHeight < minimumHeight) {
+                            effectiveMaxHeight = usableHeight;
+                          }
+                        }
+
+                        final double halfHeight =
+                            effectiveMaxHeight / centerDivider;
+                        final double triggerCenterY =
+                            tileOrigin.dy + tileSize.height / centerDivider;
+                        final double clampedCenterY = triggerCenterY.clamp(
+                          usableTop + halfHeight,
+                          usableBottom - halfHeight,
+                        );
+                        final double overlayTop = clampedCenterY - halfHeight;
+
+                        final double desiredLeft = openToLeft
+                            ? tileOrigin.dx -
+                                dropdownWidth -
+                                preferredHorizontalGap
+                            : tileOrigin.dx +
+                                tileSize.width +
+                                preferredHorizontalGap;
+                        final double overlayLeft = desiredLeft.clamp(
+                          usableLeft,
+                          usableRight - dropdownWidth,
+                        );
+
+                        final double offsetDx = openToLeft
+                            ? overlayLeft + dropdownWidth - tileOrigin.dx
+                            : overlayLeft - (tileOrigin.dx + tileSize.width);
+                        final double offsetDy =
+                            overlayTop - (triggerCenterY - halfHeight);
+
+                        final Alignment targetAnchor = openToLeft
+                            ? Alignment.centerLeft
+                            : Alignment.centerRight;
+                        final Alignment childAnchor = openToLeft
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft;
+
+                        anchor = ShadAnchor(
+                          overlayAlignment: targetAnchor,
+                          childAlignment: childAnchor,
+                          offset: Offset(offsetDx, offsetDy),
+                        );
                       } else {
-                        showAbove = heightIfAbove > heightIfBelow;
+                        final normalizedAbove =
+                            math.max(zeroClamp, availableAbove);
+                        final normalizedBelow =
+                            math.max(zeroClamp, availableBelow);
+
+                        final heightIfAbove =
+                            math.min(dropdownMaxHeight, normalizedAbove);
+                        final heightIfBelow =
+                            math.min(dropdownMaxHeight, normalizedBelow);
+
+                        bool showAbove;
+                        if (heightIfAbove <= zeroClamp &&
+                            heightIfBelow <= zeroClamp) {
+                          showAbove = false;
+                        } else if (heightIfBelow <= zeroClamp) {
+                          showAbove = true;
+                        } else if (heightIfAbove <= zeroClamp) {
+                          showAbove = false;
+                        } else if ((heightIfBelow - heightIfAbove).abs() <=
+                            heightDifferenceThreshold) {
+                          showAbove = normalizedAbove > normalizedBelow;
+                        } else {
+                          showAbove = heightIfAbove > heightIfBelow;
+                        }
+
+                        final availableSpace =
+                            showAbove ? normalizedAbove : normalizedBelow;
+                        final double fallbackMaxHeight =
+                            usableHeight <= zeroClamp
+                                ? minimumHeight
+                                : math.min(dropdownMaxHeight, usableHeight);
+
+                        effectiveMaxHeight = availableSpace > zeroClamp
+                            ? math.min(dropdownMaxHeight, availableSpace)
+                            : fallbackMaxHeight;
+                        if (effectiveMaxHeight < minimumHeight &&
+                            availableSpace > zeroClamp) {
+                          effectiveMaxHeight = availableSpace;
+                        }
+
+                        final extraAbove = math.max(
+                          zeroClamp,
+                          normalizedAbove - effectiveMaxHeight,
+                        );
+                        final extraBelow = math.max(
+                          zeroClamp,
+                          normalizedBelow - effectiveMaxHeight,
+                        );
+                        final extraVerticalSpace =
+                            showAbove ? extraAbove : extraBelow;
+                        final appliedVerticalGap = math.min(
+                          preferredVerticalGap,
+                          extraVerticalSpace,
+                        );
+
+                        final triggerLeft = tileOrigin.dx;
+                        final double centeredLeft = tileOrigin.dx +
+                            (tileSize.width - dropdownWidth) / centerDivider;
+                        final double overlayLeft = centeredLeft.clamp(
+                          usableLeft,
+                          usableRight - dropdownWidth,
+                        );
+                        final double horizontalOffset =
+                            overlayLeft - triggerLeft;
+
+                        final verticalOffset = showAbove
+                            ? -appliedVerticalGap
+                            : appliedVerticalGap;
+
+                        final targetAnchor = showAbove
+                            ? Alignment.topLeft
+                            : Alignment.bottomLeft;
+                        final childAnchor = showAbove
+                            ? Alignment.bottomLeft
+                            : Alignment.topLeft;
+
+                        anchor = ShadAnchor(
+                          overlayAlignment: targetAnchor,
+                          childAlignment: childAnchor,
+                          offset: Offset(horizontalOffset, verticalOffset),
+                        );
                       }
-
-                      final availableSpace =
-                          showAbove ? normalizedAbove : normalizedBelow;
-
-                      double effectiveMaxHeight = availableSpace > 0
-                          ? math.min(dropdownMaxHeight, availableSpace)
-                          : dropdownMaxHeight;
-                      if (effectiveMaxHeight <= 0) {
-                        effectiveMaxHeight = dropdownMaxHeight;
-                      }
-
-                      bool openToLeft =
-                          availableRight < dropdownWidth && availableLeft > 0;
-                      if (openToLeft && availableLeft < dropdownWidth) {
-                        openToLeft = availableLeft >= availableRight;
-                      }
-
-                      final extraAbove =
-                          math.max(0.0, normalizedAbove - effectiveMaxHeight);
-                      final extraBelow =
-                          math.max(0.0, normalizedBelow - effectiveMaxHeight);
-                      final extraVerticalSpace =
-                          showAbove ? extraAbove : extraBelow;
-                      final appliedVerticalGap =
-                          math.min(preferredVerticalGap, extraVerticalSpace);
-
-                      final triggerLeft = tileOrigin.dx;
-                      final triggerRight = tileOrigin.dx + tileSize.width;
-
-                      double desiredLeft;
-                      if (openToLeft) {
-                        desiredLeft = triggerRight -
-                            dropdownWidth -
-                            preferredHorizontalGap;
-                      } else {
-                        desiredLeft = triggerLeft + preferredHorizontalGap;
-                      }
-
-                      const double minLeft = margin;
-                      final maxLeft = screenSize.width - margin - dropdownWidth;
-                      final overlayLeft = desiredLeft.clamp(minLeft, maxLeft);
-                      final horizontalOffset = overlayLeft - triggerLeft;
-
-                      final verticalOffset =
-                          showAbove ? -appliedVerticalGap : appliedVerticalGap;
-
-                      final targetAnchor =
-                          showAbove ? Alignment.topLeft : Alignment.bottomLeft;
-                      final childAnchor =
-                          showAbove ? Alignment.bottomLeft : Alignment.topLeft;
-
-                      final anchor = ShadAnchor(
-                        overlayAlignment: targetAnchor,
-                        childAlignment: childAnchor,
-                        offset: Offset(
-                          horizontalOffset,
-                          verticalOffset,
-                        ),
-                      );
 
                       final scaffoldMessenger =
                           ScaffoldMessenger.maybeOf(tileContext);

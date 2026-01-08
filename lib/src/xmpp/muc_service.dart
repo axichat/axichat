@@ -496,6 +496,7 @@ mixin MucService on XmppBase, BaseStreamService {
       await joinCompleter.future.timeout(_mucJoinTimeout);
       unawaited(_refreshRoomAvatar(normalizedRoom));
     } on TimeoutException {
+      _mucJoinCompleters.remove(normalizedRoom);
       final roomState = roomStateFor(normalizedRoom);
       if (roomState?.hasSelfPresence != true) {
         _mucLog.fine('Timed out waiting for room join to complete.');
@@ -1845,9 +1846,10 @@ mixin MucService on XmppBase, BaseStreamService {
     OccupantAffiliation? affiliation,
     OccupantRole? role,
     bool isPresent = true,
+    bool fromPresence = false,
   }) {
     if (_leftRooms.contains(_roomKey(roomJid))) return;
-    _upsertOccupant(
+    final updated = _upsertOccupant(
       roomJid: roomJid,
       occupantId: occupantId,
       nick: nick,
@@ -1856,6 +1858,21 @@ mixin MucService on XmppBase, BaseStreamService {
       role: role,
       isPresent: isPresent,
     );
+    if (!fromPresence || !isPresent) return;
+    final myOccupantId = updated.myOccupantId;
+    if (myOccupantId == null || myOccupantId != occupantId) return;
+    final codes = updated.selfPresenceStatusCodes;
+    if (codes.contains(mucStatusSelfPresence)) return;
+    final mergedCodes = <String>{
+      ...codes,
+      ..._selfPresenceFallbackStatusCodes,
+    };
+    _applySelfPresenceStatus(
+      roomJid: roomJid,
+      statusCodes: mergedCodes,
+      reason: updated.selfPresenceReason,
+    );
+    _completeJoinAttempt(roomJid);
   }
 
   void removeOccupant({

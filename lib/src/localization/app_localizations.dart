@@ -513,6 +513,18 @@ abstract class AppLocalizations {
   /// **'Received'**
   String get attachmentGalleryReceivedLabel;
 
+  /// No description provided for @attachmentGalleryLayoutGridLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid view'**
+  String get attachmentGalleryLayoutGridLabel;
+
+  /// No description provided for @attachmentGalleryLayoutListLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'List view'**
+  String get attachmentGalleryLayoutListLabel;
+
   /// No description provided for @attachmentGallerySortNameAscLabel.
   ///
   /// In en, this message translates to:

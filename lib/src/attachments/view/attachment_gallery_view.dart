@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:math' as math;
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/attachment_auto_download_settings.dart';
 import 'package:axichat/src/attachments/attachment_gallery_repository.dart';
@@ -126,7 +128,10 @@ AttachmentGalleryGridMetrics _resolveGridMetrics(double maxWidth) {
       )
       .toInt();
   final totalSpacing = _attachmentGalleryGridSpacing * (crossAxisCount - 1);
-  final tileWidth = (availableWidth - totalSpacing) / crossAxisCount;
+  final tileWidth = math.max(
+    _attachmentGalleryGridMinAvailableWidth,
+    (availableWidth - totalSpacing) / crossAxisCount,
+  );
   return AttachmentGalleryGridMetrics(
     crossAxisCount: crossAxisCount,
     tileWidth: tileWidth,
@@ -318,8 +323,25 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
   AttachmentGalleryTypeFilter _typeFilter = AttachmentGalleryTypeFilter.all;
   AttachmentGallerySourceFilter _sourceFilter =
       AttachmentGallerySourceFilter.all;
+  AttachmentGalleryLayout? _layoutOverride;
 
   String get _searchQuery => _searchController.text.trim().toLowerCase();
+
+  AttachmentGalleryLayout _resolveLayout({
+    required bool hasVisualMedia,
+  }) {
+    final defaultLayout = hasVisualMedia
+        ? AttachmentGalleryLayout.grid
+        : AttachmentGalleryLayout.list;
+    return _layoutOverride ?? defaultLayout;
+  }
+
+  void _setLayout(AttachmentGalleryLayout nextLayout) {
+    if (_layoutOverride == nextLayout) return;
+    setState(() {
+      _layoutOverride = nextLayout;
+    });
+  }
 
   bool _isOneTimeAttachmentAllowed(String stanzaId) {
     final trimmed = stanzaId.trim();
@@ -464,9 +486,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
         final hasVisualMedia = filteredItems.any(
           (item) => item.metadata.mediaKind != AttachmentMediaKind.file,
         );
-        final layout = hasVisualMedia
-            ? AttachmentGalleryLayout.grid
-            : AttachmentGalleryLayout.list;
+        final layout = _resolveLayout(hasVisualMedia: hasVisualMedia);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -497,6 +517,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                     _sourceFilter = value;
                   });
                 },
+                layout: layout,
+                onLayoutChanged: _setLayout,
                 onClearSearch: _searchController.clear,
               ),
             ),
@@ -542,34 +564,61 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                           builder: (context, constraints) {
                             final gridMetrics =
                                 _resolveGridMetrics(constraints.maxWidth);
-                            return GridView.builder(
+                            final rowCount = (filteredItems.length /
+                                    gridMetrics.crossAxisCount)
+                                .ceil();
+                            return ListView.separated(
                               padding: const EdgeInsets.fromLTRB(
                                 _attachmentGalleryHorizontalPadding,
                                 0,
                                 _attachmentGalleryHorizontalPadding,
                                 _attachmentGalleryBottomPadding,
                               ),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: gridMetrics.crossAxisCount,
-                                mainAxisSpacing: _attachmentGalleryGridSpacing,
-                                crossAxisSpacing: _attachmentGalleryGridSpacing,
-                                childAspectRatio: gridMetrics.childAspectRatio,
+                              itemCount: rowCount,
+                              separatorBuilder: (_, __) => const SizedBox(
+                                height: _attachmentGalleryGridSpacing,
                               ),
-                              itemCount: filteredItems.length,
-                              itemBuilder: (context, index) =>
-                                  AttachmentGalleryEntry(
-                                item: filteredItems[index],
-                                chatOverride: chatOverride,
-                                chatLookup: chatLookup,
-                                showChatLabel: showChatLabel,
-                                autoDownloadSettings: autoDownloadSettings,
-                                layout: layout,
-                                isOneTimeAttachmentAllowed:
-                                    _isOneTimeAttachmentAllowed,
-                                shouldAllowAttachment: _shouldAllowAttachment,
-                                onApproveAttachment: _approveAttachment,
-                              ),
+                              itemBuilder: (context, rowIndex) {
+                                final rowStart =
+                                    rowIndex * gridMetrics.crossAxisCount;
+                                final rowEnd = math.min(
+                                  rowStart + gridMetrics.crossAxisCount,
+                                  filteredItems.length,
+                                );
+                                final rowItems =
+                                    filteredItems.sublist(rowStart, rowEnd);
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    for (var index = 0;
+                                        index < rowItems.length;
+                                        index += 1) ...[
+                                      SizedBox(
+                                        width: gridMetrics.tileWidth,
+                                        child: AttachmentGalleryEntry(
+                                          item: rowItems[index],
+                                          chatOverride: chatOverride,
+                                          chatLookup: chatLookup,
+                                          showChatLabel: showChatLabel,
+                                          autoDownloadSettings:
+                                              autoDownloadSettings,
+                                          layout: layout,
+                                          isOneTimeAttachmentAllowed:
+                                              _isOneTimeAttachmentAllowed,
+                                          shouldAllowAttachment:
+                                              _shouldAllowAttachment,
+                                          onApproveAttachment:
+                                              _approveAttachment,
+                                        ),
+                                      ),
+                                      if (index < rowItems.length - 1)
+                                        const SizedBox(
+                                          width: _attachmentGalleryGridSpacing,
+                                        ),
+                                    ],
+                                  ],
+                                );
+                              },
                             );
                           },
                         ),
@@ -621,6 +670,8 @@ class AttachmentGalleryControls extends StatelessWidget {
     required this.onTypeFilterChanged,
     required this.sourceFilter,
     required this.onSourceFilterChanged,
+    required this.layout,
+    required this.onLayoutChanged,
     required this.onClearSearch,
   });
 
@@ -631,6 +682,8 @@ class AttachmentGalleryControls extends StatelessWidget {
   final ValueChanged<AttachmentGalleryTypeFilter> onTypeFilterChanged;
   final AttachmentGallerySourceFilter sourceFilter;
   final ValueChanged<AttachmentGallerySourceFilter> onSourceFilterChanged;
+  final AttachmentGalleryLayout layout;
+  final ValueChanged<AttachmentGalleryLayout> onLayoutChanged;
   final VoidCallback onClearSearch;
 
   @override
@@ -642,6 +695,8 @@ class AttachmentGalleryControls extends StatelessWidget {
         AttachmentGallerySearchRow(
           searchController: searchController,
           onClearSearch: onClearSearch,
+          layout: layout,
+          onLayoutChanged: onLayoutChanged,
         ),
         AttachmentGalleryFilterRow(
           sortOption: sortOption,
@@ -661,10 +716,14 @@ class AttachmentGallerySearchRow extends StatelessWidget {
     super.key,
     required this.searchController,
     required this.onClearSearch,
+    required this.layout,
+    required this.onLayoutChanged,
   });
 
   final TextEditingController searchController;
   final VoidCallback onClearSearch;
+  final AttachmentGalleryLayout layout;
+  final ValueChanged<AttachmentGalleryLayout> onLayoutChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -684,6 +743,49 @@ class AttachmentGallerySearchRow extends StatelessWidget {
           iconData: LucideIcons.x,
           tooltip: l10n.commonClear,
           onPressed: canClear ? onClearSearch : null,
+        ),
+        const SizedBox(width: _attachmentGalleryControlSpacing),
+        AttachmentGalleryLayoutToggle(
+          layout: layout,
+          onChanged: onLayoutChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class AttachmentGalleryLayoutToggle extends StatelessWidget {
+  const AttachmentGalleryLayoutToggle({
+    super.key,
+    required this.layout,
+    required this.onChanged,
+  });
+
+  final AttachmentGalleryLayout layout;
+  final ValueChanged<AttachmentGalleryLayout> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final bool isGrid = layout == AttachmentGalleryLayout.grid;
+    final bool isList = layout == AttachmentGalleryLayout.list;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AxiIconButton.ghost(
+          iconData: LucideIcons.layoutGrid,
+          tooltip: l10n.attachmentGalleryLayoutGridLabel,
+          usePrimary: isGrid,
+          onPressed:
+              isGrid ? null : () => onChanged(AttachmentGalleryLayout.grid),
+        ),
+        const SizedBox(width: _attachmentGalleryControlSpacing),
+        AxiIconButton.ghost(
+          iconData: LucideIcons.list,
+          tooltip: l10n.attachmentGalleryLayoutListLabel,
+          usePrimary: isList,
+          onPressed:
+              isList ? null : () => onChanged(AttachmentGalleryLayout.list),
         ),
       ],
     );
@@ -1008,22 +1110,20 @@ class AttachmentGalleryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final metaLabel = metaText;
     final showFilename = metadata.mediaKind != AttachmentMediaKind.file;
-    final preview = AspectRatio(
-      aspectRatio: _attachmentGalleryPreviewAspectRatio,
-      child: ChatAttachmentPreview(
-        stanzaId: stanzaId,
-        metadataStream: metadataStream,
-        initialMetadata: metadata,
-        allowed: allowed,
-        autoDownloadSettings: autoDownloadSettings,
-        autoDownloadAllowed: autoDownloadAllowed,
-        autoDownloadUserInitiated: autoDownloadUserInitiated,
-        downloadDelegate: downloadDelegate,
-        onAllowPressed: onAllowPressed,
-        maxWidthFraction: _attachmentGalleryPreviewMaxWidthFraction,
-      ),
+    final preview = ChatAttachmentPreview(
+      stanzaId: stanzaId,
+      metadataStream: metadataStream,
+      initialMetadata: metadata,
+      allowed: allowed,
+      autoDownloadSettings: autoDownloadSettings,
+      autoDownloadAllowed: autoDownloadAllowed,
+      autoDownloadUserInitiated: autoDownloadUserInitiated,
+      downloadDelegate: downloadDelegate,
+      onAllowPressed: onAllowPressed,
+      maxWidthFraction: _attachmentGalleryPreviewMaxWidthFraction,
     );
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         preview,
