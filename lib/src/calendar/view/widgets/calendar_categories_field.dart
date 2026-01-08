@@ -124,25 +124,25 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
     final Color barBackground = chipsBarBackground(colors);
-    final TextStyle headerStyle = chipsBarHeaderTextStyle(context);
-    final List<Widget> chipWidgets = widget.categories
-        .map(
-          (category) => _CategoryChip(
-            label: category,
-            onRemove: widget.enabled ? () => _removeCategory(category) : null,
-          ),
-        )
-        .toList()
-      ..add(
-        _CategoryInputField(
-          controller: _controller,
-          focusNode: _focusNode,
-          hintText: widget.hintText,
-          onSubmitted: _submitInput,
-          enabled: widget.enabled,
-          backgroundColor: barBackground,
+    final TextStyle headerStyle = calendarHeaderTextStyle.copyWith(
+      color: calendarSubtitleColor,
+    );
+    final List<Widget> chipWidgets = <Widget>[
+      ...widget.categories.map(
+        (category) => _CategoryChip(
+          label: category,
+          onRemove: widget.enabled ? () => _removeCategory(category) : null,
         ),
-      );
+      ),
+      _CategoryInputField(
+        controller: _controller,
+        focusNode: _focusNode,
+        hintText: widget.hintText,
+        onSubmitted: _submitInput,
+        enabled: widget.enabled,
+        backgroundColor: barBackground,
+      ),
+    ];
 
     return ChipsBarSurface(
       backgroundColor: barBackground,
