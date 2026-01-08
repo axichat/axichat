@@ -3,8 +3,6 @@
 
 import 'dart:collection';
 
-import 'package:flutter/foundation.dart';
-
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
@@ -14,106 +12,6 @@ import 'package:axichat/src/calendar/view/controllers/task_draft_controller.dart
 import 'package:axichat/src/calendar/view/widgets/recurrence_editor.dart';
 
 const int _maxTaskDraftEntries = 8;
-
-enum TaskFormVisibility {
-  open,
-  suspended;
-
-  bool get isOpen => this == TaskFormVisibility.open;
-
-  bool get isSuspended => this == TaskFormVisibility.suspended;
-}
-
-enum TaskEditSurface {
-  popover,
-  sheet;
-
-  bool get isPopover => this == TaskEditSurface.popover;
-
-  bool get isSheet => this == TaskEditSurface.sheet;
-}
-
-enum TaskEditHost {
-  grid,
-  sidebar;
-
-  bool get isGrid => this == TaskEditHost.grid;
-
-  bool get isSidebar => this == TaskEditHost.sidebar;
-}
-
-enum QuickAddSurface {
-  dialog,
-  sheet;
-
-  bool get isDialog => this == QuickAddSurface.dialog;
-
-  bool get isSheet => this == QuickAddSurface.sheet;
-}
-
-class TaskEditSessionState {
-  const TaskEditSessionState({
-    required this.taskId,
-    required this.surface,
-    required this.host,
-    required this.visibility,
-  });
-
-  final String taskId;
-  final TaskEditSurface surface;
-  final TaskEditHost host;
-  final TaskFormVisibility visibility;
-
-  bool get isOpen => visibility.isOpen;
-
-  bool get isSuspended => visibility.isSuspended;
-
-  TaskEditSessionState copyWith({
-    String? taskId,
-    TaskEditSurface? surface,
-    TaskEditHost? host,
-    TaskFormVisibility? visibility,
-  }) {
-    return TaskEditSessionState(
-      taskId: taskId ?? this.taskId,
-      surface: surface ?? this.surface,
-      host: host ?? this.host,
-      visibility: visibility ?? this.visibility,
-    );
-  }
-}
-
-class QuickAddSessionState {
-  const QuickAddSessionState({
-    required this.surface,
-    required this.visibility,
-    this.prefilledDateTime,
-    this.prefilledText,
-  });
-
-  final QuickAddSurface surface;
-  final TaskFormVisibility visibility;
-  final DateTime? prefilledDateTime;
-  final String? prefilledText;
-
-  bool get isOpen => visibility.isOpen;
-
-  bool get isSuspended => visibility.isSuspended;
-
-  QuickAddSessionState copyWith({
-    QuickAddSurface? surface,
-    TaskFormVisibility? visibility,
-    DateTime? prefilledDateTime,
-    String? prefilledText,
-  }) {
-    return QuickAddSessionState(
-      surface: surface ?? this.surface,
-      visibility: visibility ?? this.visibility,
-      prefilledDateTime: prefilledDateTime ?? this.prefilledDateTime,
-      prefilledText: prefilledText ?? this.prefilledText,
-    );
-  }
-}
 
 class TaskDraftSnapshot {
   const TaskDraftSnapshot({
@@ -313,20 +211,14 @@ class TaskEditDraft {
   final List<CalendarAttendee> attendees;
 }
 
-class CalendarTaskDraftStore extends ChangeNotifier {
+class CalendarTaskDraftStore {
   TaskSidebarDraft? _sidebarDraft;
   QuickAddDraft? _quickAddDraft;
   final Map<String, TaskEditDraft> _taskDrafts = <String, TaskEditDraft>{};
   final ListQueue<String> _taskDraftOrder = ListQueue<String>();
-  TaskEditSessionState? _editSession;
-  QuickAddSessionState? _quickAddSession;
-  bool _calendarVisible = true;
 
   TaskSidebarDraft? get sidebarDraft => _sidebarDraft;
   QuickAddDraft? get quickAddDraft => _quickAddDraft;
-  TaskEditSessionState? get editSession => _editSession;
-  QuickAddSessionState? get quickAddSession => _quickAddSession;
-  bool get isCalendarVisible => _calendarVisible;
 
   TaskEditDraft? draftForTask(String taskId) => _taskDrafts[taskId];
 
@@ -362,67 +254,6 @@ class CalendarTaskDraftStore extends ChangeNotifier {
     _quickAddDraft = null;
     _taskDrafts.clear();
     _taskDraftOrder.clear();
-    _editSession = null;
-    _quickAddSession = null;
-  }
-
-  void setCalendarVisible(bool value) {
-    if (_calendarVisible == value) {
-      return;
-    }
-    _calendarVisible = value;
-    if (!value) {
-      _editSession = _suspendSession(_editSession);
-      _quickAddSession = _suspendSession(_quickAddSession);
-    }
-    notifyListeners();
-  }
-
-  void activateEditSession(TaskEditSessionState session) {
-    _editSession = session.copyWith(visibility: TaskFormVisibility.open);
-    notifyListeners();
-  }
-
-  void suspendEditSession(String taskId) {
-    if (_editSession?.taskId != taskId) {
-      return;
-    }
-    final TaskEditSessionState? suspended = _suspendSession(_editSession);
-    if (suspended == _editSession) {
-      return;
-    }
-    _editSession = suspended;
-    notifyListeners();
-  }
-
-  void clearEditSession(String taskId) {
-    if (_editSession?.taskId != taskId) {
-      return;
-    }
-    _editSession = null;
-    notifyListeners();
-  }
-
-  void activateQuickAddSession(QuickAddSessionState session) {
-    _quickAddSession = session.copyWith(visibility: TaskFormVisibility.open);
-    notifyListeners();
-  }
-
-  void suspendQuickAddSession() {
-    final QuickAddSessionState? suspended = _suspendSession(_quickAddSession);
-    if (suspended == _quickAddSession) {
-      return;
-    }
-    _quickAddSession = suspended;
-    notifyListeners();
-  }
-
-  void clearQuickAddSession() {
-    if (_quickAddSession == null) {
-      return;
-    }
-    _quickAddSession = null;
-    notifyListeners();
   }
 
   void _touchTaskDraft(String taskId) {
@@ -438,27 +269,7 @@ class CalendarTaskDraftStore extends ChangeNotifier {
     while (_taskDrafts.length > _maxTaskDraftEntries &&
         _taskDraftOrder.isNotEmpty) {
       final String oldest = _taskDraftOrder.removeFirst();
-      if (_editSession?.taskId == oldest) {
-        _taskDraftOrder.add(oldest);
-        continue;
-      }
       _taskDrafts.remove(oldest);
     }
-  }
-
-  T? _suspendSession<T extends Object>(T? session) {
-    if (session is TaskEditSessionState) {
-      if (session.isSuspended) {
-        return session;
-      }
-      return session.copyWith(visibility: TaskFormVisibility.suspended) as T;
-    }
-    if (session is QuickAddSessionState) {
-      if (session.isSuspended) {
-        return session;
-      }
-      return session.copyWith(visibility: TaskFormVisibility.suspended) as T;
-    }
-    return session;
   }
 }

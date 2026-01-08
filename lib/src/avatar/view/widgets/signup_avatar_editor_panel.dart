@@ -225,7 +225,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
               SharedAxisTransition(
             animation: primaryAnimation,
             secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.scaled,
+            transitionType: SharedAxisTransitionType.fade,
             child: child,
           ),
           child: hasPreviewBytes
