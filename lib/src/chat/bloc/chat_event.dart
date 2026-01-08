@@ -314,6 +314,15 @@ final class ChatMessageEditRequested extends ChatEvent {
   List<Object?> get props => [message];
 }
 
+final class ChatShareIntentApplied extends ChatEvent {
+  const ChatShareIntentApplied(this.payload);
+
+  final ShareIntentDraftPayload payload;
+
+  @override
+  List<Object?> get props => [payload];
+}
+
 final class ChatAttachmentPicked extends ChatEvent {
   const ChatAttachmentPicked(this.attachment);
 

@@ -56,6 +56,7 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final fillColor = colors.background;
     final displayJid = widget.username.isEmpty
         ? 'avatar@axichat'
         : '${widget.username}@preview';
@@ -84,7 +85,8 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
                           SharedAxisTransition(
                     animation: primaryAnimation,
                     secondaryAnimation: secondaryAnimation,
-                    transitionType: SharedAxisTransitionType.fade,
+                    transitionType: SharedAxisTransitionType.scaled,
+                    fillColor: fillColor,
                     child: child,
                   ),
                   child: hasBytes

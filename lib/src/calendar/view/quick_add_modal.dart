@@ -45,6 +45,7 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
+const bool _calendarUseRootNavigator = false;
 
 enum QuickAddModalSurface { dialog, bottomSheet }
 
@@ -1729,6 +1730,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
     return showFadeScaleDialog<void>(
       context: context,
       barrierColor: Colors.black54,
+      useRootNavigator: _calendarUseRootNavigator,
       builder: (dialogContext) {
         final B? resolvedBloc = resolveBloc();
         final bool hasBloc = resolvedBloc != null;
