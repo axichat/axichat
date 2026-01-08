@@ -67,8 +67,13 @@ const _subjectTag = 'subject';
 const _messageTypeGroupchat = 'groupchat';
 const _messageTypeNormal = 'normal';
 const _mucServiceHostStorageKeyName = 'muc_service_host';
+const _mucPrejoinRoomsStorageKeyName = 'muc_prejoin_rooms';
+const _mucPrejoinRoomJidKey = 'room_jid';
+const _mucPrejoinRoomNickKey = 'nickname';
 final _mucServiceHostStorageKey =
     XmppStateStore.registerKey(_mucServiceHostStorageKeyName);
+final _mucPrejoinRoomsStorageKey =
+    XmppStateStore.registerKey(_mucPrejoinRoomsStorageKeyName);
 
 extension _MoxAffiliationConversion on mox.Affiliation {
   OccupantAffiliation get toOccupantAffiliation => switch (this) {
@@ -114,6 +119,37 @@ final class MucAffiliationEntry {
   final OccupantRole? role;
   final String? reason;
 }
+
+final class MucPrejoinRoom {
+  const MucPrejoinRoom({
+    required this.roomJid,
+    required this.nickname,
+  });
+
+  final String roomJid;
+  final String nickname;
+
+  Map<String, String> toJson() => {
+        _mucPrejoinRoomJidKey: roomJid,
+        _mucPrejoinRoomNickKey: nickname,
+      };
+
+  static MucPrejoinRoom? fromJson(Object? value) {
+    if (value is! Map) return null;
+    final roomJid = value[_mucPrejoinRoomJidKey];
+    final nickname = value[_mucPrejoinRoomNickKey];
+    if (roomJid is! String || nickname is! String) return null;
+    final trimmedRoom = roomJid.trim();
+    final trimmedNickname = nickname.trim();
+    if (trimmedRoom.isEmpty || trimmedNickname.isEmpty) return null;
+    return MucPrejoinRoom(
+      roomJid: trimmedRoom,
+      nickname: trimmedNickname,
+    );
+  }
+}
+
+const List<MucPrejoinRoom> _emptyMucPrejoinRooms = <MucPrejoinRoom>[];
 
 final class _RoomAvatarPayload {
   const _RoomAvatarPayload({
@@ -189,6 +225,167 @@ mixin MucService on XmppBase, BaseStreamService {
     );
   }
 
+  Future<void> _prepareMucRoomsFromStateStore() async {
+    final manager = _connection.getManager<MUCManager>();
+    if (manager == null) return;
+    final rooms = await _loadMucPrejoinRooms();
+    if (rooms.isEmpty) return;
+    final joins = <mox.MUCRoomJoin>[];
+    for (final room in rooms) {
+      final roomJid = _normalizeBareJid(room.roomJid);
+      if (roomJid == null || roomJid.isEmpty) continue;
+      final nickname = room.nickname.trim();
+      if (nickname.isEmpty) continue;
+      final jid = mox.JID.fromString(roomJid).toBare();
+      joins.add((jid, nickname));
+      _roomNicknames[_roomKey(roomJid)] = nickname;
+    }
+    if (joins.isEmpty) return;
+    await manager.prepareRoomList(joins);
+  }
+
+  Future<List<MucPrejoinRoom>> _loadMucPrejoinRooms() async {
+    final stored = await _dbOpReturning<XmppStateStore, Object?>(
+      (ss) => ss.read(key: _mucPrejoinRoomsStorageKey),
+    );
+    if (stored is! List) return _emptyMucPrejoinRooms;
+    final roomsByJid = <String, MucPrejoinRoom>{};
+    for (final entry in stored) {
+      final room = MucPrejoinRoom.fromJson(entry);
+      if (room == null) continue;
+      final normalizedRoom = _normalizeBareJid(room.roomJid);
+      if (normalizedRoom == null || normalizedRoom.isEmpty) continue;
+      final nickname = room.nickname.trim();
+      if (nickname.isEmpty) continue;
+      roomsByJid[normalizedRoom] = MucPrejoinRoom(
+        roomJid: normalizedRoom,
+        nickname: nickname,
+      );
+    }
+    if (roomsByJid.isEmpty) return _emptyMucPrejoinRooms;
+    return List<MucPrejoinRoom>.unmodifiable(roomsByJid.values);
+  }
+
+  Future<void> _persistMucPrejoinRooms(List<MucPrejoinRoom> rooms) async {
+    if (rooms.isEmpty) {
+      await _dbOp<XmppStateStore>(
+        (ss) async => ss.delete(key: _mucPrejoinRoomsStorageKey),
+        awaitDatabase: true,
+      );
+      return;
+    }
+    final uniqueByRoom = <String, MucPrejoinRoom>{};
+    for (final room in rooms) {
+      final normalizedRoom = _normalizeBareJid(room.roomJid);
+      if (normalizedRoom == null || normalizedRoom.isEmpty) continue;
+      final nickname = room.nickname.trim();
+      if (nickname.isEmpty) continue;
+      uniqueByRoom[normalizedRoom] = MucPrejoinRoom(
+        roomJid: normalizedRoom,
+        nickname: nickname,
+      );
+    }
+    final payload = uniqueByRoom.values
+        .map((room) => room.toJson())
+        .toList(growable: false);
+    await _dbOp<XmppStateStore>(
+      (ss) async => ss.write(key: _mucPrejoinRoomsStorageKey, value: payload),
+      awaitDatabase: true,
+    );
+  }
+
+  Future<void> _persistMucPrejoinRoomsFromBookmarks(
+    List<MucBookmark> bookmarks,
+  ) async {
+    final rooms = await _collectMucPrejoinRoomsFromBookmarks(bookmarks);
+    await _persistMucPrejoinRooms(rooms);
+  }
+
+  Future<List<MucPrejoinRoom>> _collectMucPrejoinRoomsFromBookmarks(
+    List<MucBookmark> bookmarks,
+  ) async {
+    if (bookmarks.isEmpty) return _emptyMucPrejoinRooms;
+    final roomsByJid = <String, MucPrejoinRoom>{};
+    for (final bookmark in bookmarks) {
+      if (!bookmark.autojoin) continue;
+      final roomJid = bookmark.roomBare.toBare().toString();
+      final normalizedRoom = _normalizeBareJid(roomJid);
+      if (normalizedRoom == null || normalizedRoom.isEmpty) continue;
+      final nickname = (await _resolveMucPrejoinNickname(bookmark)).trim();
+      if (nickname.isEmpty) continue;
+      roomsByJid[normalizedRoom] = MucPrejoinRoom(
+        roomJid: normalizedRoom,
+        nickname: nickname,
+      );
+    }
+    if (roomsByJid.isEmpty) return _emptyMucPrejoinRooms;
+    return List<MucPrejoinRoom>.unmodifiable(roomsByJid.values);
+  }
+
+  Future<String> _resolveMucPrejoinNickname(MucBookmark bookmark) async {
+    final trimmedBookmarkNick = bookmark.nick?.trim();
+    if (trimmedBookmarkNick?.isNotEmpty == true) {
+      return trimmedBookmarkNick!;
+    }
+    final roomJid = bookmark.roomBare.toBare().toString();
+    final cachedNickname = _roomNicknames[roomJid];
+    if (cachedNickname?.isNotEmpty == true) {
+      return cachedNickname!;
+    }
+    if (isDatabaseReady) {
+      final storedNickname = await _dbOpReturning<XmppDatabase, String?>(
+        (db) async => (await db.getChat(roomJid))?.myNickname,
+      );
+      final trimmedStored = storedNickname?.trim();
+      if (trimmedStored?.isNotEmpty == true) {
+        return trimmedStored!;
+      }
+    }
+    return _nickForRoom(null);
+  }
+
+  Future<void> _updateMucPrejoinRoomsForBookmark(MucBookmark bookmark) async {
+    final roomJid = _normalizeBareJid(bookmark.roomBare.toString());
+    if (roomJid == null || roomJid.isEmpty) return;
+    final existing = await _loadMucPrejoinRooms();
+    if (existing.isEmpty && !bookmark.autojoin) return;
+    final roomsByJid = <String, MucPrejoinRoom>{};
+    for (final room in existing) {
+      final normalizedRoom = _normalizeBareJid(room.roomJid);
+      if (normalizedRoom == null || normalizedRoom.isEmpty) continue;
+      roomsByJid[normalizedRoom] = room;
+    }
+    if (!bookmark.autojoin) {
+      if (!roomsByJid.containsKey(roomJid)) return;
+      roomsByJid.remove(roomJid);
+      await _persistMucPrejoinRooms(
+        roomsByJid.values.toList(growable: false),
+      );
+      return;
+    }
+    final nickname = (await _resolveMucPrejoinNickname(bookmark)).trim();
+    if (nickname.isEmpty) return;
+    roomsByJid[roomJid] = MucPrejoinRoom(
+      roomJid: roomJid,
+      nickname: nickname,
+    );
+    await _persistMucPrejoinRooms(
+      roomsByJid.values.toList(growable: false),
+    );
+  }
+
+  Future<void> _removeMucPrejoinRoom(mox.JID roomBare) async {
+    final roomJid = _normalizeBareJid(roomBare.toString());
+    if (roomJid == null || roomJid.isEmpty) return;
+    final existing = await _loadMucPrejoinRooms();
+    if (existing.isEmpty) return;
+    final updated = existing
+        .where((room) => !_sameBareJid(room.roomJid, roomJid))
+        .toList(growable: false);
+    if (updated.length == existing.length) return;
+    await _persistMucPrejoinRooms(updated);
+  }
+
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
@@ -220,10 +417,18 @@ mixin MucService on XmppBase, BaseStreamService {
         _updateRoomSubject(event.roomJid, event.subject);
       })
       ..registerHandler<MucBookmarkUpdatedEvent>((event) async {
-        await applyMucBookmarks([event.bookmark]);
+        try {
+          await applyMucBookmarks([event.bookmark]);
+        } finally {
+          await _updateMucPrejoinRoomsForBookmark(event.bookmark);
+        }
       })
       ..registerHandler<MucBookmarkRetractedEvent>((event) async {
-        await _applyBookmarkRetraction(event.roomBare);
+        try {
+          await _applyBookmarkRetraction(event.roomBare);
+        } finally {
+          await _removeMucPrejoinRoom(event.roomBare);
+        }
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
@@ -1382,6 +1587,7 @@ mixin MucService on XmppBase, BaseStreamService {
     await applyMucBookmarks(bookmarks);
     if (snapshot.isComplete) {
       await _reconcileMucBookmarkRemovals(bookmarks);
+      await _persistMucPrejoinRoomsFromBookmarks(bookmarks);
     }
   }
 

@@ -515,6 +515,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get draftSaved => 'Brouillon enregistré';
 
   @override
+  String get draftAutosaved => 'Enregistré automatiquement';
+
+  @override
   String get draftErrorTitle => 'Oups';
 
   @override
@@ -1772,7 +1775,20 @@ class AppLocalizationsFr extends AppLocalizations {
       'Afficher le contenu des messages dans les notifications et sur l’écran de verrouillage.';
 
   @override
-  String get settingsReadReceipts => 'Envoyer les accusés de lecture';
+  String get settingsChatReadReceipts =>
+      'Envoyer les accusés de lecture des chats';
+
+  @override
+  String get settingsChatReadReceiptsDescription =>
+      'Activé, l’ouverture d’un chat lorsque l’app est active envoie des accusés de lecture pour les messages visibles.';
+
+  @override
+  String get settingsEmailReadReceipts =>
+      'Envoyer les accusés de lecture des e-mails';
+
+  @override
+  String get settingsEmailReadReceiptsDescription =>
+      'Activé, l’ouverture d’un chat e-mail lorsque l’app est active envoie des accusés de lecture (MDN) pour les messages visibles.';
 
   @override
   String get settingsTypingIndicators => 'Envoyer les indicateurs de saisie';

@@ -302,7 +302,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             .read<EmailService>()
             .updateMessageStorageMode(xmppService.messageStorageMode);
         xmppService.toggleAllChatsMarkerResponsive(
-          responsive: state.readReceipts,
+          responsive: state.chatReadReceipts,
         );
         final localeOverride = state.language.locale;
         const chatNeutrals = ChatNeutrals();
