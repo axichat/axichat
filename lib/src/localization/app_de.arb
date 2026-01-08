@@ -77,6 +77,8 @@
   "attachmentGalleryFilesLabel": "Dateien",
   "attachmentGallerySentLabel": "Gesendet",
   "attachmentGalleryReceivedLabel": "Empfangen",
+  "attachmentGalleryLayoutGridLabel": "Grid view",
+  "attachmentGalleryLayoutListLabel": "List view",
   "attachmentGallerySortNameAscLabel": "Name A-Z",
   "attachmentGallerySortNameDescLabel": "Name Z-A",
   "attachmentGallerySortSizeAscLabel": "Größe klein bis groß",

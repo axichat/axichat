@@ -3,7 +3,7 @@
 
 import 'dart:ui';
 
-import 'package:axichat/src/common/ui/in_bounds_fade_scale.dart';
+import 'package:axichat/src/common/ui/fade_scale_effect.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -43,16 +43,15 @@ class AxiPopover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effects = fadeScaleEffectsFor(context);
     return ShadPopover(
-      popover: (context) => InBoundsFadeScale(
-        child: popover(context),
-      ),
+      popover: popover,
       controller: controller,
       visible: visible,
       closeOnTapOutside: closeOnTapOutside,
       focusNode: focusNode,
       anchor: anchor,
-      effects: const [],
+      effects: effects,
       shadows: shadows,
       padding: padding,
       decoration: decoration,

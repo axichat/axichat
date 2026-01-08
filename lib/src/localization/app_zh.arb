@@ -77,6 +77,8 @@
   "attachmentGalleryFilesLabel": "文件",
   "attachmentGallerySentLabel": "已发送",
   "attachmentGalleryReceivedLabel": "已接收",
+  "attachmentGalleryLayoutGridLabel": "Grid view",
+  "attachmentGalleryLayoutListLabel": "List view",
   "attachmentGallerySortNameAscLabel": "名称 A-Z",
   "attachmentGallerySortNameDescLabel": "名称 Z-A",
   "attachmentGallerySortSizeAscLabel": "大小从小到大",

@@ -467,10 +467,12 @@ class XmppPresenceManager extends mox.PresenceManager {
       }
     }
     final item = _mucItemNode(mucUser);
-    final affiliation = OccupantAffiliation.fromString(
-      item?.attributes['affiliation'] as String?,
-    );
-    final role = OccupantRole.fromString(item?.attributes['role'] as String?);
+    final affiliationAttr = item?.attributes['affiliation'];
+    final roleAttr = item?.attributes['role'];
+    final affiliation = affiliationAttr is String
+        ? OccupantAffiliation.fromString(affiliationAttr)
+        : null;
+    final role = roleAttr is String ? OccupantRole.fromString(roleAttr) : null;
     final realJid = item?.attributes['jid'] as String?;
     final occupantId = _resolveMucOccupantId(
       rawOccupantId: _extractMucOccupantId(stanza),
@@ -489,6 +491,7 @@ class XmppPresenceManager extends mox.PresenceManager {
         affiliation: affiliation,
         role: role,
         isPresent: !isUnavailable,
+        fromPresence: true,
       );
     }
     return true;
