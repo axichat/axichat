@@ -32,9 +32,7 @@ import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/routes.dart';
-import 'package:axichat/src/share/share_intent_coordinator.dart';
 import 'package:axichat/src/share/share_intent_cubit.dart';
-import 'package:axichat/src/share/view/share_intent_sheet.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -63,8 +61,6 @@ AuthenticationState? _lastAuthState;
 const String _shareFileSchemePrefix = 'file://';
 const String _emptyShareBody = '';
 const List<String> _emptyShareJids = [''];
-const List<RosterItem> _emptyShareContacts = <RosterItem>[];
-const List<Chat> _emptyShareChats = <Chat>[];
 const int _shareAttachmentUnknownSizeBytes = 0;
 const int _shareAttachmentMinSizeBytes = 1;
 const Duration _shareIntentNavigationDelay = Duration.zero;
@@ -98,14 +94,11 @@ class _AxichatState extends State<Axichat> {
       CalendarReminderController(
     notificationService: widget._notificationService,
   );
-  late final ShareIntentCoordinator _shareIntentCoordinator =
-      ShareIntentCoordinator();
 
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
     unawaited(_reminderController.clearAll());
-    _shareIntentCoordinator.dispose();
     super.dispose();
   }
 
@@ -158,7 +151,6 @@ class _AxichatState extends State<Axichat> {
         RepositoryProvider<MessageService>(
           create: (context) => context.read<XmppService>(),
         ),
-        RepositoryProvider.value(value: _shareIntentCoordinator),
         RepositoryProvider.value(value: widget._notificationService),
         RepositoryProvider.value(value: widget._capability),
         RepositoryProvider.value(value: widget._policy),
@@ -504,12 +496,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   listener: (context, state) {
                     final previousAuthState = _lastAuthState;
                     _lastAuthState = state;
-                    final wasAuthenticated =
-                        previousAuthState is AuthenticationComplete;
-                    final isAuthenticated = state is AuthenticationComplete;
-                    if (wasAuthenticated && !isAuthenticated) {
-                      context.read<ShareIntentCoordinator>().clearPending();
-                    }
                     final currentLocation =
                         _router.routeInformationProvider.value.uri.path;
                     final matchedLocation = _router.state.matchedLocation;
@@ -636,101 +622,30 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         await Future<void>.delayed(_shareIntentNavigationDelay);
       }
       if (!context.mounted) return;
-      final List<RosterItem> contacts = await _loadShareContacts(context);
-      if (!context.mounted) return;
-      final List<Chat> cachedChats =
-          context.read<ChatsCubit>().state.items ?? _emptyShareChats;
-      final List<Chat> chats =
-          cachedChats.isEmpty ? await _loadShareChats(context) : cachedChats;
-      if (!context.mounted) return;
-      final ShareIntentDestination? destination = await showShareIntentSheet(
-        context: context,
-        contacts: contacts,
-        groupChats: chats,
+      final MessageService messageService = context.read<MessageService>();
+      final List<String> attachmentMetadataIds =
+          await _persistSharedAttachments(
+        messageService: messageService,
+        attachments: payload.attachments,
       );
       if (!context.mounted) return;
-      if (destination == null) {
+      if (!hasBody && attachmentMetadataIds.isEmpty) {
         _consumeSharePayload(shareCubit, payload);
         return;
       }
-      if (destination is ShareIntentComposeDestination) {
-        final MessageService messageService = context.read<MessageService>();
-        final List<String> attachmentMetadataIds =
-            await _persistSharedAttachments(
-          messageService: messageService,
-          attachments: payload.attachments,
-        );
-        if (!context.mounted) return;
-        if (!hasBody && attachmentMetadataIds.isEmpty) {
-          _consumeSharePayload(shareCubit, payload);
-          return;
-        }
-        openComposeDraft(
-          context,
-          navigator: _router.routerDelegate.navigatorKey.currentState,
-          body: resolvedBody,
-          jids: _emptyShareJids,
-          attachmentMetadataIds: attachmentMetadataIds,
-        );
-        _consumeSharePayload(shareCubit, payload);
-        return;
-      }
-      final String? destinationJid = switch (destination) {
-        ShareIntentContactDestination(:final contact) => contact.jid,
-        ShareIntentChatDestination(:final chat) => chat.jid,
-        _ => null,
-      };
-      if (destinationJid != null) {
-        final List<EmailAttachment> attachments =
-            await _prepareSharedAttachments(
-          attachments: payload.attachments,
-          optimize: false,
-        );
-        if (!context.mounted) return;
-        if (!hasBody && attachments.isEmpty) {
-          _consumeSharePayload(shareCubit, payload);
-          return;
-        }
-        final ShareIntentDraftPayload draftPayload = ShareIntentDraftPayload(
-          text: hasBody ? resolvedBody : null,
-          attachments: attachments,
-        );
-        context.read<ShareIntentCoordinator>().enqueueForChat(
-              jid: destinationJid,
-              payload: draftPayload,
-            );
-        await _navigateToHomeForChatShare();
-        if (!context.mounted) return;
-        await context.read<ChatsCubit>().openChat(jid: destinationJid);
-        _consumeSharePayload(shareCubit, payload);
-      }
+      openComposeDraft(
+        context,
+        navigator: _router.routerDelegate.navigatorKey.currentState,
+        body: resolvedBody,
+        jids: _emptyShareJids,
+        attachmentMetadataIds: attachmentMetadataIds,
+      );
+      _consumeSharePayload(shareCubit, payload);
     } finally {
       _shareIntentHandling = false;
       if (context.mounted && shareCubit.state.hasPayload) {
         unawaited(_handleShareIntent(context));
       }
-    }
-  }
-
-  Future<List<RosterItem>> _loadShareContacts(BuildContext context) async {
-    final XmppService xmppService = context.read<XmppService>();
-    try {
-      return await xmppService.rosterStream().first;
-    } on XmppAbortedException {
-      return _emptyShareContacts;
-    } on Exception {
-      return _emptyShareContacts;
-    }
-  }
-
-  Future<List<Chat>> _loadShareChats(BuildContext context) async {
-    final XmppService xmppService = context.read<XmppService>();
-    try {
-      return await xmppService.chatsStream().first;
-    } on XmppAbortedException {
-      return _emptyShareChats;
-    } on Exception {
-      return _emptyShareChats;
     }
   }
 
@@ -758,14 +673,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       return true;
     }
     return currentRoute.authenticationRequired == false;
-  }
-
-  Future<void> _navigateToHomeForChatShare() async {
-    if (_isOnHomeRoute()) {
-      return;
-    }
-    _router.go(const HomeRoute().location);
-    await Future<void>.delayed(_shareIntentNavigationDelay);
   }
 
   void _consumeSharePayload(ShareIntentCubit shareCubit, SharePayload payload) {

@@ -19,7 +19,6 @@ import 'package:axichat/src/calendar/view/widgets/calendar_ics_diagnostics_secti
 import 'package:axichat/src/calendar/view/widgets/calendar_invitation_status_field.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_link_geo_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_participants_field.dart';
-import 'package:axichat/src/calendar/view/widgets/ics_meta_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/reminder_preferences_field.dart';
 import 'package:axichat/src/calendar/view/widgets/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
@@ -342,18 +341,6 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       referenceStart: _startDate,
                       title: 'Reminder',
                       anchor: ReminderAnchor.start,
-                    ),
-                    TaskSectionDivider(
-                      color: colors.border,
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    CalendarIcsMetaFields(
-                      status: _status,
-                      transparency: _transparency,
-                      onStatusChanged: (value) =>
-                          setState(() => _status = value),
-                      onTransparencyChanged: (value) =>
-                          setState(() => _transparency = value),
                     ),
                     TaskSectionDivider(
                       color: colors.border,

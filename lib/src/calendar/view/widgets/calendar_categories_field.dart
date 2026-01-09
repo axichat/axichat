@@ -3,8 +3,8 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'task_form_section.dart';
 
 const String _categoriesSectionTitle = 'Categories';
 const String _categoriesHintText = 'Add category';
@@ -38,12 +38,14 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
   static final RegExp _splitter = RegExp(_categoriesSplitPattern);
   late final TextEditingController _controller;
   final FocusNode _focusNode = FocusNode();
+  late bool _expanded;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController();
     _focusNode.addListener(_handleFocusChanged);
+    _expanded = _shouldStartExpanded(widget);
   }
 
   @override
@@ -52,6 +54,14 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarCategoriesField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_expanded && _shouldStartExpanded(widget)) {
+      setState(() => _expanded = true);
+    }
   }
 
   void _handleFocusChanged() {
@@ -139,13 +149,14 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
     widget.onChanged(next);
   }
 
+  bool _shouldStartExpanded(CalendarCategoriesField widget) {
+    return widget.categories.isNotEmpty;
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
-    final Color barBackground = chipsBarBackground(colors);
-    final TextStyle headerStyle = calendarHeaderTextStyle.copyWith(
-      color: calendarSubtitleColor,
-    );
+    final Color barBackground = calendarContainerColor;
     final List<Widget> chipWidgets = <Widget>[
       ...widget.categories.map(
         (category) => _CategoryChip(
@@ -162,40 +173,31 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
         backgroundColor: barBackground,
       ),
     ];
-
-    return ChipsBarSurface(
+    final Widget content = ChipsBarSurface(
       backgroundColor: barBackground,
-      borderSide: BorderSide(color: context.colorScheme.border),
+      borderSide: BorderSide(color: calendarBorderColor),
       includeTopBorder: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: calendarInsetMd),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.title.toUpperCase(),
-                    style: headerStyle,
-                  ),
-                ),
-                ChipsBarCountBadge(
-                  count: widget.categories.length,
-                  expanded: true,
-                  colors: colors,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: calendarInsetLg),
-          Wrap(
-            spacing: calendarGutterSm,
-            runSpacing: calendarGutterSm,
-            children: chipWidgets,
-          ),
-        ],
+      padding: calendarPaddingLg,
+      child: Wrap(
+        spacing: calendarGutterSm,
+        runSpacing: calendarGutterSm,
+        children: chipWidgets,
       ),
+    );
+    final Widget? badge = widget.categories.isEmpty
+        ? null
+        : ChipsBarCountBadge(
+            count: widget.categories.length,
+            expanded: _expanded,
+            colors: colors,
+          );
+    return TaskSectionExpander(
+      title: widget.title,
+      isExpanded: _expanded,
+      onToggle: () => setState(() => _expanded = !_expanded),
+      badge: badge,
+      enabled: widget.enabled,
+      child: content,
     );
   }
 }

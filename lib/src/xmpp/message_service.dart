@@ -36,10 +36,6 @@ const String _mamOriginRejectedLog =
     'Rejected archive message without local account routing.';
 const String _mucMutationRejectedLog =
     'Rejected group chat mutation from unknown occupant.';
-const String _mucSendJoinPendingLog =
-    'Ensuring room join before sending group chat message.';
-const String _mucSendJoinMissingLog =
-    'Room join missing; aborting group chat send.';
 const bool _mucSendAllowRejoin = true;
 const String _pinPubSubNamespace = 'urn:axi:pins';
 const String _pinPubSubNodePrefix = 'urn:axi:pins:';
@@ -2197,23 +2193,38 @@ mixin MessageService
     required String roomJid,
   }) async {
     if (connectionState != ConnectionState.connected) return;
-    final roomState = roomStateFor(roomJid);
-    if (roomState?.hasSelfPresence == true) return;
+    late final String normalizedRoom;
+    try {
+      normalizedRoom = _roomKey(roomJid);
+    } on Exception {
+      throw XmppMessageException();
+    }
+    final manager = _connection.getManager<MUCManager>();
+    if (manager == null) {
+      throw XmppMessageException();
+    }
+    final roomJidParsed = mox.JID.fromString(normalizedRoom);
+    final managerState = await manager.getRoomState(roomJidParsed);
+    final managerJoined = managerState?.joined == true;
+    final localState = roomStateFor(normalizedRoom);
+    final localJoined = localState?.hasSelfPresence == true;
+    if (managerJoined && localJoined) return;
 
-    _log.fine(_mucSendJoinPendingLog);
     try {
       await ensureJoined(
-        roomJid: roomJid,
+        roomJid: normalizedRoom,
         allowRejoin: _mucSendAllowRejoin,
       );
     } on Exception {
       // Join failures are surfaced by the follow-up presence check.
     }
 
-    final updatedRoomState = roomStateFor(roomJid);
-    if (updatedRoomState?.hasSelfPresence == true) return;
+    final updatedManagerState = await manager.getRoomState(roomJidParsed);
+    final updatedManagerJoined = updatedManagerState?.joined == true;
+    final updatedLocalState = roomStateFor(normalizedRoom);
+    final updatedLocalJoined = updatedLocalState?.hasSelfPresence == true;
+    if (updatedManagerJoined && updatedLocalJoined) return;
 
-    _log.fine(_mucSendJoinMissingLog);
     throw XmppMessageException();
   }
 
@@ -3788,6 +3799,15 @@ mixin MessageService
 
     final peer = event.from.toBare().toString();
     final isMuc = event.type == 'groupchat';
+    if (isMuc) {
+      await _dbOp<XmppDatabase>(
+        (db) async {
+          db.markMessageReceived(id);
+          db.markMessageAcked(id);
+        },
+      );
+      return;
+    }
     final target = isMuc ? event.from.toString() : peer;
     final messageType = _chatStateMessageType(target);
     final capabilities =

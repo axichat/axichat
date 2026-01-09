@@ -60,7 +60,6 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_tile.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/share/share_intent_coordinator.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -377,8 +376,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   notificationService:
                                       context.read<NotificationService>(),
                                   emailService: context.read<EmailService>(),
-                                  shareIntentCoordinator:
-                                      context.read<ShareIntentCoordinator>(),
                                   omemoService: isOmemo
                                       ? context.read<XmppService>()
                                           as OmemoService

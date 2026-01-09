@@ -63,6 +63,8 @@ const int _alarmHoursPerDay = 24;
 const int _alarmDaysPerWeek = 7;
 const int _alarmTextSelectionOffset = 0;
 
+const double _alarmCompactWidth = calendarQuickAddModalCompactMaxWidth;
+
 const double _alarmRemoveButtonSize = 26;
 const double _alarmRemoveTapTargetSize = 34;
 const double _alarmRecipientButtonSize = 24;
@@ -270,6 +272,59 @@ class _AlarmAddButton extends StatelessWidget {
   }
 }
 
+class _AlarmFieldLabel extends StatelessWidget {
+  const _AlarmFieldLabel({
+    required this.text,
+  });
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: context.textTheme.small.copyWith(
+        color: calendarSubtitleColor,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+class _AlarmAdaptiveRow extends StatelessWidget {
+  const _AlarmAdaptiveRow({
+    required this.leading,
+    required this.trailing,
+    required this.isCompact,
+  });
+
+  final Widget leading;
+  final Widget trailing;
+  final bool isCompact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isCompact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          leading,
+          const SizedBox(height: calendarGutterMd),
+          trailing,
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: leading),
+        const SizedBox(width: calendarGutterMd),
+        Expanded(child: trailing),
+      ],
+    );
+  }
+}
+
 class _AlarmCard extends StatefulWidget {
   const _AlarmCard({
     required this.index,
@@ -331,96 +386,109 @@ class _AlarmCardState extends State<_AlarmCard> {
       fontWeight: FontWeight.w500,
     );
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterMd,
-        vertical: calendarGutterMd,
-      ),
-      decoration: BoxDecoration(
-        color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(
-          color: calendarBorderColor,
-          width: calendarBorderStroke,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isCompact = constraints.maxWidth <= _alarmCompactWidth;
+        final Widget actionField = _AlarmActionField(
+          action: alarm.action,
+          enabled: !isProcedure,
+          helper: isProcedure
+              ? Text(
+                  _alarmActionProcedureHelper,
+                  style: helperStyle,
+                )
+              : null,
+          onChanged: (next) {
+            widget.onChanged(
+              alarm.copyWith(
+                action: next,
+              ),
+            );
+          },
+        );
+        final Widget triggerField = _AlarmTriggerTypeField(
+          trigger: trigger,
+          referenceStart: widget.referenceStart,
+          isCompact: isCompact,
+          onChanged: (next) => widget.onChanged(
+            alarm.copyWith(trigger: next),
+          ),
+        );
+        final Widget actionTriggerRow = _AlarmAdaptiveRow(
+          leading: actionField,
+          trailing: triggerField,
+          isCompact: isCompact,
+        );
+
+        return Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: calendarGutterMd,
+            vertical: calendarGutterMd,
+          ),
+          decoration: BoxDecoration(
+            color: calendarContainerColor,
+            borderRadius: BorderRadius.circular(calendarBorderRadius),
+            border: Border.all(
+              color: calendarBorderColor,
+              width: calendarBorderStroke,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '$_alarmItemLabel ${widget.index + _alarmIndexOffset}',
-                style: titleStyle,
+              Row(
+                children: [
+                  Text(
+                    '$_alarmItemLabel ${widget.index + _alarmIndexOffset}',
+                    style: titleStyle,
+                  ),
+                  const Spacer(),
+                  AxiIconButton(
+                    iconData: Icons.close,
+                    tooltip: _alarmRemoveTooltip,
+                    onPressed: widget.onRemove,
+                    color: calendarSubtitleColor,
+                    backgroundColor: calendarContainerColor,
+                    borderColor: calendarBorderColor,
+                    iconSize: calendarGutterMd,
+                    buttonSize: _alarmRemoveButtonSize,
+                    tapTargetSize: _alarmRemoveTapTargetSize,
+                  ),
+                ],
               ),
-              const Spacer(),
-              AxiIconButton(
-                iconData: Icons.close,
-                tooltip: _alarmRemoveTooltip,
-                onPressed: widget.onRemove,
-                color: calendarSubtitleColor,
-                backgroundColor: calendarContainerColor,
-                borderColor: calendarBorderColor,
-                iconSize: calendarGutterMd,
-                buttonSize: _alarmRemoveButtonSize,
-                tapTargetSize: _alarmRemoveTapTargetSize,
+              const SizedBox(height: calendarInsetMd),
+              actionTriggerRow,
+              const SizedBox(height: calendarGutterMd),
+              _AlarmRepeatField(
+                repeatController: _repeatController,
+                repeat: alarm.repeat,
+                duration: alarm.duration,
+                isCompact: isCompact,
+                onRepeatChanged: (next) {
+                  widget.onChanged(alarm.copyWith(repeat: next));
+                },
+                onDurationChanged: (next) {
+                  widget.onChanged(alarm.copyWith(duration: next));
+                },
               ),
+              if (isEmail) ...[
+                const SizedBox(height: calendarGutterMd),
+                _AlarmRecipientsField(
+                  recipients: alarm.recipients,
+                  isCompact: isCompact,
+                  onChanged: (next) => widget.onChanged(
+                    alarm.copyWith(recipients: next),
+                  ),
+                ),
+              ],
+              if (alarm.acknowledged != null) ...[
+                const SizedBox(height: calendarGutterMd),
+                _AlarmAcknowledgedRow(value: alarm.acknowledged!),
+              ],
             ],
           ),
-          const SizedBox(height: calendarInsetMd),
-          _AlarmActionField(
-            action: alarm.action,
-            enabled: !isProcedure,
-            onChanged: (next) {
-              widget.onChanged(
-                alarm.copyWith(
-                  action: next,
-                ),
-              );
-            },
-          ),
-          if (isProcedure) ...[
-            const SizedBox(height: calendarInsetSm),
-            Text(
-              _alarmActionProcedureHelper,
-              style: helperStyle,
-            ),
-          ],
-          const SizedBox(height: calendarGutterMd),
-          _AlarmTriggerTypeField(
-            trigger: trigger,
-            referenceStart: widget.referenceStart,
-            onChanged: (next) => widget.onChanged(
-              alarm.copyWith(trigger: next),
-            ),
-          ),
-          const SizedBox(height: calendarGutterMd),
-          _AlarmRepeatField(
-            repeatController: _repeatController,
-            repeat: alarm.repeat,
-            duration: alarm.duration,
-            onRepeatChanged: (next) {
-              widget.onChanged(alarm.copyWith(repeat: next));
-            },
-            onDurationChanged: (next) {
-              widget.onChanged(alarm.copyWith(duration: next));
-            },
-          ),
-          if (isEmail) ...[
-            const SizedBox(height: calendarGutterMd),
-            _AlarmRecipientsField(
-              recipients: alarm.recipients,
-              onChanged: (next) => widget.onChanged(
-                alarm.copyWith(recipients: next),
-              ),
-            ),
-          ],
-          if (alarm.acknowledged != null) ...[
-            const SizedBox(height: calendarGutterMd),
-            _AlarmAcknowledgedRow(value: alarm.acknowledged!),
-          ],
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -454,11 +522,13 @@ class _AlarmActionField extends StatelessWidget {
     required this.action,
     required this.enabled,
     required this.onChanged,
+    this.helper,
   });
 
   final CalendarAlarmAction action;
   final bool enabled;
   final ValueChanged<CalendarAlarmAction> onChanged;
+  final Widget? helper;
 
   @override
   Widget build(BuildContext context) {
@@ -467,63 +537,61 @@ class _AlarmActionField extends StatelessWidget {
       CalendarAlarmAction.audio,
       CalendarAlarmAction.email,
     ];
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
+    final TextStyle valueStyle = context.textTheme.small.copyWith(
+      color: calendarTitleColor,
       fontWeight: FontWeight.w600,
     );
-    if (!enabled) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(_alarmActionLabel.toUpperCase(), style: labelStyle),
-          const SizedBox(height: calendarInsetSm),
-          Text(action.label, style: labelStyle),
-        ],
-      );
-    }
+    final Widget? helperWidget = helper;
+    final Widget content = enabled
+        ? AxiSelect<CalendarAlarmAction>(
+            enabled: enabled,
+            initialValue: action,
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              onChanged(value);
+            },
+            options: options
+                .map(
+                  (option) => ShadOption<CalendarAlarmAction>(
+                    value: option,
+                    child: Text(option.label),
+                  ),
+                )
+                .toList(growable: false),
+            selectedOptionBuilder: (context, selected) => Text(
+              selected.label,
+            ),
+            decoration: ShadDecoration(
+              color: calendarContainerColor,
+              border: ShadBorder.all(
+                color: calendarBorderColor,
+                radius: BorderRadius.circular(calendarBorderRadius),
+                width: calendarBorderStroke,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd,
+              vertical: calendarGutterSm,
+            ),
+            trailing: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: calendarGutterMd,
+              color: calendarSubtitleColor,
+            ),
+          )
+        : Text(action.label, style: valueStyle);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_alarmActionLabel.toUpperCase(), style: labelStyle),
+        const _AlarmFieldLabel(text: _alarmActionLabel),
         const SizedBox(height: calendarInsetSm),
-        AxiSelect<CalendarAlarmAction>(
-          enabled: enabled,
-          initialValue: action,
-          onChanged: (value) {
-            if (value == null) {
-              return;
-            }
-            onChanged(value);
-          },
-          options: options
-              .map(
-                (option) => ShadOption<CalendarAlarmAction>(
-                  value: option,
-                  child: Text(option.label),
-                ),
-              )
-              .toList(growable: false),
-          selectedOptionBuilder: (context, selected) => Text(
-            selected.label,
-          ),
-          decoration: ShadDecoration(
-            color: calendarContainerColor,
-            border: ShadBorder.all(
-              color: calendarBorderColor,
-              radius: BorderRadius.circular(calendarBorderRadius),
-              width: calendarBorderStroke,
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterSm,
-          ),
-          trailing: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: calendarGutterMd,
-            color: calendarSubtitleColor,
-          ),
-        ),
+        content,
+        if (helperWidget != null) ...[
+          const SizedBox(height: calendarInsetSm),
+          helperWidget,
+        ],
       ],
     );
   }
@@ -533,23 +601,21 @@ class _AlarmTriggerTypeField extends StatelessWidget {
   const _AlarmTriggerTypeField({
     required this.trigger,
     required this.referenceStart,
+    required this.isCompact,
     required this.onChanged,
   });
 
   final CalendarAlarmTrigger trigger;
   final DateTime? referenceStart;
+  final bool isCompact;
   final ValueChanged<CalendarAlarmTrigger> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_alarmTriggerTypeLabel.toUpperCase(), style: labelStyle),
+        const _AlarmFieldLabel(text: _alarmTriggerTypeLabel),
         const SizedBox(height: calendarInsetSm),
         AxiSelect<CalendarAlarmTriggerType>(
           initialValue: trigger.type,
@@ -622,6 +688,7 @@ class _AlarmTriggerTypeField extends StatelessWidget {
         else
           _AlarmRelativeTriggerField(
             trigger: trigger,
+            isCompact: isCompact,
             onChanged: (next) => onChanged(next),
           ),
       ],
@@ -666,10 +733,12 @@ class _AlarmAbsoluteTriggerField extends StatelessWidget {
 class _AlarmRelativeTriggerField extends StatelessWidget {
   const _AlarmRelativeTriggerField({
     required this.trigger,
+    required this.isCompact,
     required this.onChanged,
   });
 
   final CalendarAlarmTrigger trigger;
+  final bool isCompact;
   final ValueChanged<CalendarAlarmTrigger> onChanged;
 
   @override
@@ -680,24 +749,28 @@ class _AlarmRelativeTriggerField extends StatelessWidget {
         trigger.offsetDirection ?? CalendarAlarmOffsetDirection.before;
     final Duration? offset = trigger.offset;
 
+    final Widget relativeRow = _AlarmAdaptiveRow(
+      leading: _AlarmRelativeSelectRow(
+        label: _alarmRelativeToLabel,
+        value: relativeTo,
+        onChanged: (next) => onChanged(
+          trigger.copyWith(relativeTo: next),
+        ),
+      ),
+      trailing: _AlarmOffsetDirectionRow(
+        label: _alarmDirectionLabel,
+        value: direction,
+        onChanged: (next) => onChanged(
+          trigger.copyWith(offsetDirection: next),
+        ),
+      ),
+      isCompact: isCompact,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _AlarmRelativeSelectRow(
-          label: _alarmRelativeToLabel,
-          value: relativeTo,
-          onChanged: (next) => onChanged(
-            trigger.copyWith(relativeTo: next),
-          ),
-        ),
-        const SizedBox(height: calendarInsetMd),
-        _AlarmOffsetDirectionRow(
-          label: _alarmDirectionLabel,
-          value: direction,
-          onChanged: (next) => onChanged(
-            trigger.copyWith(offsetDirection: next),
-          ),
-        ),
+        relativeRow,
         const SizedBox(height: calendarInsetMd),
         _AlarmDurationRow(
           label: _alarmOffsetLabel,
@@ -776,14 +849,10 @@ class _AlarmSelectRow<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(), style: labelStyle),
+        _AlarmFieldLabel(text: label),
         const SizedBox(height: calendarInsetSm),
         AxiSelect<T>(
           initialValue: value,
@@ -831,6 +900,7 @@ class _AlarmRepeatField extends StatelessWidget {
     required this.repeatController,
     required this.repeat,
     required this.duration,
+    required this.isCompact,
     required this.onRepeatChanged,
     required this.onDurationChanged,
   });
@@ -838,50 +908,66 @@ class _AlarmRepeatField extends StatelessWidget {
   final TextEditingController repeatController;
   final int? repeat;
   final Duration? duration;
+  final bool isCompact;
   final ValueChanged<int?> onRepeatChanged;
   final ValueChanged<Duration?> onDurationChanged;
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
+    final Widget repeatCountField = _AlarmRepeatCountField(
+      controller: repeatController,
+      onChanged: onRepeatChanged,
+    );
+    final Widget repeatEveryField = _AlarmDurationRow(
+      label: _alarmRepeatEveryLabel,
+      hintText: _alarmOffsetHint,
+      value: duration,
+      allowZero: false,
+      onChanged: onDurationChanged,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_alarmRepeatLabel.toUpperCase(), style: labelStyle),
+        const _AlarmFieldLabel(text: _alarmRepeatLabel),
         const SizedBox(height: calendarInsetSm),
-        Row(
-          children: [
-            Expanded(
-              child: TaskTextField(
-                controller: repeatController,
-                hintText: _alarmRepeatCountHint,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                onChanged: (value) {
-                  final int? parsed = int.tryParse(value);
-                  onRepeatChanged(
-                    parsed != null && parsed >= _alarmMinRepeatValue
-                        ? parsed
-                        : null,
-                  );
-                },
-                inputFormatters: _digitsOnlyInputFormatters,
-              ),
-            ),
-            const SizedBox(width: calendarGutterSm),
-            Expanded(
-              child: _AlarmDurationRow(
-                label: _alarmRepeatEveryLabel,
-                hintText: _alarmOffsetHint,
-                value: duration,
-                allowZero: false,
-                onChanged: onDurationChanged,
-              ),
-            ),
-          ],
+        _AlarmAdaptiveRow(
+          leading: repeatCountField,
+          trailing: repeatEveryField,
+          isCompact: isCompact,
+        ),
+      ],
+    );
+  }
+}
+
+class _AlarmRepeatCountField extends StatelessWidget {
+  const _AlarmRepeatCountField({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AlarmFieldLabel(text: _alarmRepeatCountHint),
+        const SizedBox(height: calendarInsetSm),
+        TaskTextField(
+          controller: controller,
+          hintText: _alarmRepeatCountHint,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          onChanged: (value) {
+            final int? parsed = int.tryParse(value);
+            onChanged(
+              parsed != null && parsed >= _alarmMinRepeatValue ? parsed : null,
+            );
+          },
+          inputFormatters: _digitsOnlyInputFormatters,
         ),
       ],
     );
@@ -905,14 +991,10 @@ class _AlarmDurationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(), style: labelStyle),
+        _AlarmFieldLabel(text: label),
         const SizedBox(height: calendarInsetSm),
         AlarmDurationField(
           value: value,
@@ -1073,10 +1155,12 @@ class _AlarmDurationFieldState extends State<AlarmDurationField> {
 class _AlarmRecipientsField extends StatefulWidget {
   const _AlarmRecipientsField({
     required this.recipients,
+    required this.isCompact,
     required this.onChanged,
   });
 
   final List<CalendarAlarmRecipient> recipients;
+  final bool isCompact;
   final ValueChanged<List<CalendarAlarmRecipient>> onChanged;
 
   @override
@@ -1105,48 +1189,58 @@ class _AlarmRecipientsFieldState extends State<_AlarmRecipientsField> {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
+    final Widget addressField = TaskTextField(
+      controller: _addressController,
+      focusNode: _addressFocusNode,
+      hintText: _alarmRecipientAddressHint,
+      textInputAction: TextInputAction.next,
+      keyboardType: TextInputType.emailAddress,
     );
+    final Widget nameField = TaskTextField(
+      controller: _nameController,
+      hintText: _alarmRecipientNameHint,
+      textInputAction: TextInputAction.done,
+    );
+    final Widget addButton = AxiIconButton(
+      iconData: Icons.add,
+      tooltip: _alarmsAddTooltip,
+      onPressed: _addRecipient,
+      color: calendarPrimaryColor,
+      backgroundColor: calendarContainerColor,
+      borderColor: calendarBorderColor,
+      iconSize: calendarGutterLg,
+      buttonSize: AxiIconButton.kDefaultSize,
+      tapTargetSize: AxiIconButton.kTapTargetSize,
+    );
+    final Widget inputRow = widget.isCompact
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              addressField,
+              const SizedBox(height: calendarGutterSm),
+              nameField,
+              const SizedBox(height: calendarGutterSm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: addButton,
+              ),
+            ],
+          )
+        : Row(
+            children: [
+              Expanded(child: addressField),
+              const SizedBox(width: calendarGutterSm),
+              Expanded(child: nameField),
+              const SizedBox(width: calendarGutterSm),
+              addButton,
+            ],
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_alarmRecipientsLabel.toUpperCase(), style: labelStyle),
+        const _AlarmFieldLabel(text: _alarmRecipientsLabel),
         const SizedBox(height: calendarInsetSm),
-        Row(
-          children: [
-            Expanded(
-              child: TaskTextField(
-                controller: _addressController,
-                focusNode: _addressFocusNode,
-                hintText: _alarmRecipientAddressHint,
-                textInputAction: TextInputAction.next,
-                keyboardType: TextInputType.emailAddress,
-              ),
-            ),
-            const SizedBox(width: calendarGutterSm),
-            Expanded(
-              child: TaskTextField(
-                controller: _nameController,
-                hintText: _alarmRecipientNameHint,
-                textInputAction: TextInputAction.done,
-              ),
-            ),
-            const SizedBox(width: calendarGutterSm),
-            AxiIconButton(
-              iconData: Icons.add,
-              tooltip: _alarmsAddTooltip,
-              onPressed: _addRecipient,
-              color: calendarPrimaryColor,
-              backgroundColor: calendarContainerColor,
-              borderColor: calendarBorderColor,
-              iconSize: calendarGutterLg,
-              buttonSize: AxiIconButton.kDefaultSize,
-              tapTargetSize: AxiIconButton.kTapTargetSize,
-            ),
-          ],
-        ),
+        inputRow,
         if (widget.recipients.isNotEmpty) ...[
           const SizedBox(height: calendarInsetMd),
           Wrap(
@@ -1274,14 +1368,10 @@ class _AlarmAcknowledgedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.small.copyWith(
-      color: calendarSubtitleColor,
-      fontWeight: FontWeight.w600,
-    );
     final String formatted = TimeFormatter.formatFriendlyDateTime(value);
     return Row(
       children: [
-        Text(_alarmAcknowledgedLabel.toUpperCase(), style: labelStyle),
+        const _AlarmFieldLabel(text: _alarmAcknowledgedLabel),
         const SizedBox(width: calendarGutterSm),
         Expanded(
           child: Text(

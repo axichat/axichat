@@ -8572,6 +8572,7 @@ class _ChatState extends State<Chat> {
 
   void _setChatRoute(_ChatRoute nextRoute) {
     if (!mounted) return;
+    final bool leavingCalendar = _chatRoute.isCalendar && !nextRoute.isCalendar;
     setState(() {
       _previousChatRoute = _chatRoute;
       _chatRoute = nextRoute;
@@ -8580,6 +8581,9 @@ class _ChatState extends State<Chat> {
         _focusNode.unfocus();
       }
     });
+    if (leavingCalendar) {
+      FocusScope.of(context).unfocus();
+    }
     if (!nextRoute.isDetails) {
       if (context.read<SettingsCubit>().animationDuration == Duration.zero) {
         context.read<ChatBloc>().add(const ChatMessageFocused(null));
