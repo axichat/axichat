@@ -171,8 +171,11 @@ class _AvatarEditorToolsSection extends StatelessWidget {
   }
 }
 
-const _avatarEditorToolsSpacing = 12.0;
-const _avatarEditorToolsMaxPanelWidth = 420.0;
+const double _avatarEditorToolsSpacing = 12.0;
+const double _avatarEditorToolsMaxPanelWidth = 420.0;
+const double _avatarEditorActionGap = 8.0;
+const double _avatarEditorSecondaryIconSize = 20.0;
+const double _avatarEditorPrimaryIconSize = 18.0;
 
 class _AvatarSummaryCard extends StatelessWidget {
   const _AvatarSummaryCard({
@@ -243,7 +246,7 @@ class _AvatarSummaryCard extends StatelessWidget {
               ),
               Column(
                 mainAxisSize: MainAxisSize.min,
-                spacing: 8.0,
+                spacing: _avatarEditorActionGap,
                 children: [
                   ShadButton.outline(
                     size: ShadButtonSize.sm,
@@ -255,12 +258,12 @@ class _AvatarSummaryCard extends StatelessWidget {
                                 .shuffleTemplate(colors),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      spacing: 8.0,
                       children: [
-                        if (state.shuffling)
-                          SizedBox(
-                            width: 20,
-                            height: 20,
+                        ButtonSpinnerSlot(
+                          isVisible: state.shuffling,
+                          spinner: SizedBox(
+                            width: _avatarEditorSecondaryIconSize,
+                            height: _avatarEditorSecondaryIconSize,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.4,
                               valueColor: AlwaysStoppedAnimation<Color>(
@@ -269,9 +272,18 @@ class _AvatarSummaryCard extends StatelessWidget {
                               backgroundColor:
                                   colors.foreground.withValues(alpha: 0.2),
                             ),
-                          )
-                        else
-                          const Icon(LucideIcons.refreshCw, size: 20),
+                          ),
+                          slotSize: _avatarEditorSecondaryIconSize,
+                          gap: _avatarEditorActionGap,
+                          duration: baseAnimationDuration,
+                        ),
+                        if (!state.shuffling) ...[
+                          const Icon(
+                            LucideIcons.refreshCw,
+                            size: _avatarEditorSecondaryIconSize,
+                          ),
+                          const SizedBox(width: _avatarEditorActionGap),
+                        ],
                         Text(l10n.signupAvatarShuffle),
                       ],
                     ),
@@ -283,7 +295,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                         : context.read<AvatarEditorCubit>().pickImage,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      spacing: 8.0,
+                      spacing: _avatarEditorActionGap,
                       children: [
                         const Icon(LucideIcons.upload),
                         Text(l10n.signupAvatarUploadImage),
@@ -299,12 +311,12 @@ class _AvatarSummaryCard extends StatelessWidget {
                         : context.read<AvatarEditorCubit>().publish,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      spacing: 8.0,
                       children: [
-                        if (state.publishing)
-                          SizedBox(
-                            width: 18,
-                            height: 18,
+                        ButtonSpinnerSlot(
+                          isVisible: state.publishing,
+                          spinner: SizedBox(
+                            width: _avatarEditorPrimaryIconSize,
+                            height: _avatarEditorPrimaryIconSize,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(
@@ -315,9 +327,18 @@ class _AvatarSummaryCard extends StatelessWidget {
                                 alpha: 0.2,
                               ),
                             ),
-                          )
-                        else
-                          const Icon(LucideIcons.save, size: 18),
+                          ),
+                          slotSize: _avatarEditorPrimaryIconSize,
+                          gap: _avatarEditorActionGap,
+                          duration: baseAnimationDuration,
+                        ),
+                        if (!state.publishing) ...[
+                          const Icon(
+                            LucideIcons.save,
+                            size: _avatarEditorPrimaryIconSize,
+                          ),
+                          const SizedBox(width: _avatarEditorActionGap),
+                        ],
                         Text(l10n.avatarSaveAvatar),
                       ],
                     ),

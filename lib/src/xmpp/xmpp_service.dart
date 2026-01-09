@@ -524,6 +524,14 @@ class XmppService extends XmppBase
 
   XmppStreamReady? get lastStreamReady => _lastStreamReady;
 
+  bool get hasGlobalMamSyncForCurrentSession {
+    final completedAt = mamGlobalSyncCompletedAt;
+    if (completedAt == null) return false;
+    final streamReady = lastStreamReady;
+    if (streamReady == null) return true;
+    return !completedAt.isBefore(streamReady.timestamp);
+  }
+
   @override
   AttachmentAutoDownloadSettings get attachmentAutoDownloadSettings =>
       _attachmentAutoDownloadSettings;

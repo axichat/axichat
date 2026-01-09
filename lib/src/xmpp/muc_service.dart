@@ -503,6 +503,34 @@ mixin MucService on XmppBase, BaseStreamService {
 
   bool hasLeftRoom(String roomJid) => _leftRooms.contains(_roomKey(roomJid));
 
+  bool _hasMucManagerPresence(mox.RoomState? managerState) {
+    final nick = managerState?.nick?.trim();
+    if (nick == null || nick.isEmpty) return false;
+    if (managerState?.affiliation == null) return false;
+    if (managerState?.role == null) return false;
+    return true;
+  }
+
+  Future<bool> _hasMucPresenceForSend({
+    required String roomJid,
+  }) async {
+    if (connectionState != ConnectionState.connected) return false;
+    late final String normalizedRoom;
+    try {
+      normalizedRoom = _roomKey(roomJid);
+    } on Exception {
+      return false;
+    }
+    final roomState = roomStateFor(normalizedRoom);
+    if (roomState?.hasSelfPresence != true) return false;
+    final manager = _connection.getManager<MUCManager>();
+    if (manager == null) return false;
+    final managerState = await manager.getRoomState(
+      mox.JID.fromString(normalizedRoom).toBare(),
+    );
+    return _hasMucManagerPresence(managerState);
+  }
+
   void _markRoomJoined(String roomJid) {
     _leftRooms.remove(_roomKey(roomJid));
   }
@@ -596,6 +624,7 @@ mixin MucService on XmppBase, BaseStreamService {
   }) {
     final key = _roomKey(roomJid);
     _leftRooms.add(key);
+    _instantRoomPendingRooms.remove(key);
     final normalizedReason = _normalizeSubject(reason);
     final room = RoomState(
       roomJid: key,

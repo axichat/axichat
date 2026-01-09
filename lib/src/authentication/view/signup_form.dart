@@ -1060,32 +1060,20 @@ class _SignupFormState extends State<SignupForm>
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        AnimatedContainer(
+                                        ButtonSpinnerSlot(
+                                          isVisible: isCheckingPwned,
+                                          spinner: AxiProgressIndicator(
+                                            dimension:
+                                                _signupButtonSpinnerDimension,
+                                            color: context
+                                                .colorScheme.primaryForeground,
+                                            semanticsLabel:
+                                                l10n.authPasswordPending,
+                                          ),
+                                          slotSize:
+                                              _signupButtonSpinnerSlotSize,
+                                          gap: _signupButtonSpinnerGap,
                                           duration: animationDuration,
-                                          curve: Curves.easeInOut,
-                                          width: isCheckingPwned
-                                              ? _signupButtonSpinnerSlotSize
-                                              : 0,
-                                          height: isCheckingPwned
-                                              ? _signupButtonSpinnerSlotSize
-                                              : 0,
-                                          child: isCheckingPwned
-                                              ? AxiProgressIndicator(
-                                                  dimension:
-                                                      _signupButtonSpinnerDimension,
-                                                  color: context.colorScheme
-                                                      .primaryForeground,
-                                                  semanticsLabel:
-                                                      l10n.authPasswordPending,
-                                                )
-                                              : null,
-                                        ),
-                                        AnimatedContainer(
-                                          duration: animationDuration,
-                                          curve: Curves.easeInOut,
-                                          width: isCheckingPwned
-                                              ? _signupButtonSpinnerGap
-                                              : 0,
                                         ),
                                         Text(l10n.signupContinue),
                                       ],
@@ -1107,32 +1095,19 @@ class _SignupFormState extends State<SignupForm>
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      AnimatedContainer(
+                                      ButtonSpinnerSlot(
+                                        isVisible: loading,
+                                        spinner: AxiProgressIndicator(
+                                          dimension:
+                                              _signupButtonSpinnerDimension,
+                                          color: context
+                                              .colorScheme.primaryForeground,
+                                          semanticsLabel:
+                                              l10n.authSignupPending,
+                                        ),
+                                        slotSize: _signupButtonSpinnerSlotSize,
+                                        gap: _signupButtonSpinnerGap,
                                         duration: animationDuration,
-                                        curve: Curves.easeInOut,
-                                        width: loading
-                                            ? _signupButtonSpinnerSlotSize
-                                            : 0,
-                                        height: loading
-                                            ? _signupButtonSpinnerSlotSize
-                                            : 0,
-                                        child: loading
-                                            ? AxiProgressIndicator(
-                                                dimension:
-                                                    _signupButtonSpinnerDimension,
-                                                color: context.colorScheme
-                                                    .primaryForeground,
-                                                semanticsLabel:
-                                                    l10n.authSignupPending,
-                                              )
-                                            : null,
-                                      ),
-                                      AnimatedContainer(
-                                        duration: animationDuration,
-                                        curve: Curves.easeInOut,
-                                        width: loading
-                                            ? _signupButtonSpinnerGap
-                                            : 0,
                                       ),
                                       Text(l10n.authSignUp),
                                     ],
@@ -1299,6 +1274,7 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     const avatarActionSpacing = 8.0;
+    const avatarActionIconSize = 20.0;
     final mode = widget.mode;
     final showCrop = mode == _AvatarEditorMode.cropOnly;
     final busy = _shuffling || _shufflingBackground;
@@ -1424,11 +1400,11 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
               onPressed: busy ? null : _handleShuffle,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                spacing: 8.0,
                 children: [
-                  if (_shuffling)
-                    SizedBox.square(
-                      dimension: 20,
+                  ButtonSpinnerSlot(
+                    isVisible: _shuffling,
+                    spinner: SizedBox.square(
+                      dimension: avatarActionIconSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(
@@ -1437,9 +1413,18 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
                         backgroundColor:
                             colors.primaryForeground.withValues(alpha: 0.2),
                       ),
-                    )
-                  else
-                    const Icon(LucideIcons.refreshCw, size: 20),
+                    ),
+                    slotSize: avatarActionIconSize,
+                    gap: avatarActionSpacing,
+                    duration: baseAnimationDuration,
+                  ),
+                  if (!_shuffling) ...[
+                    const Icon(
+                      LucideIcons.refreshCw,
+                      size: avatarActionIconSize,
+                    ),
+                    const SizedBox(width: avatarActionSpacing),
+                  ],
                   Text(l10n.signupAvatarShuffle),
                 ],
               ),
@@ -1450,11 +1435,11 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
                   : () => unawaited(_handleShuffleBackground()),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                spacing: 8.0,
                 children: [
-                  if (_shufflingBackground)
-                    SizedBox.square(
-                      dimension: 20,
+                  ButtonSpinnerSlot(
+                    isVisible: _shufflingBackground,
+                    spinner: SizedBox.square(
+                      dimension: avatarActionIconSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(
@@ -1463,9 +1448,18 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
                         backgroundColor:
                             colors.secondaryForeground.withValues(alpha: 0.2),
                       ),
-                    )
-                  else
-                    const Icon(LucideIcons.palette, size: 20),
+                    ),
+                    slotSize: avatarActionIconSize,
+                    gap: avatarActionSpacing,
+                    duration: baseAnimationDuration,
+                  ),
+                  if (!_shufflingBackground) ...[
+                    const Icon(
+                      LucideIcons.palette,
+                      size: avatarActionIconSize,
+                    ),
+                    const SizedBox(width: avatarActionSpacing),
+                  ],
                   Text(l10n.signupAvatarBackgroundColor),
                 ],
               ),
@@ -1474,9 +1468,9 @@ class _SignupAvatarEditorPanelState extends State<_SignupAvatarEditorPanel> {
               onPressed: busy ? null : () => unawaited(widget.onUpload()),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                spacing: 8.0,
                 children: [
                   const Icon(LucideIcons.upload),
+                  const SizedBox(width: avatarActionSpacing),
                   Text(l10n.signupAvatarUploadImage),
                 ],
               ),

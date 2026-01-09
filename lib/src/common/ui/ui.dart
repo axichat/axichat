@@ -11,6 +11,7 @@ export 'axi_app_bar.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
 export 'app_bar_actions.dart';
+export 'button_spinner_slot.dart';
 export 'axi_checkbox_form_field.dart';
 export 'axi_confirm.dart';
 export 'axi_context_menu_region.dart';

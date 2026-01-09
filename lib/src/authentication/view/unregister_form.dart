@@ -115,24 +115,20 @@ class _UnregisterFormState extends State<UnregisterForm> {
                     color: context.colorScheme.primaryForeground,
                     semanticsLabel: l10n.authUnregisterProgressLabel,
                   );
+                  final spinnerSlot = ButtonSpinnerSlot(
+                    isVisible: loading,
+                    spinner: spinner,
+                    slotSize: _unregisterSpinnerSlotSize,
+                    gap: _unregisterSpinnerGap,
+                    duration: animationDuration,
+                  );
                   return ShadButton.destructive(
                     enabled: !loading,
                     onPressed: () => _onPressed(context),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        AnimatedContainer(
-                          duration: animationDuration,
-                          curve: Curves.easeInOut,
-                          width: loading ? _unregisterSpinnerSlotSize : 0,
-                          height: loading ? _unregisterSpinnerSlotSize : 0,
-                          child: loading ? spinner : null,
-                        ),
-                        AnimatedContainer(
-                          duration: animationDuration,
-                          curve: Curves.easeInOut,
-                          width: loading ? _unregisterSpinnerGap : 0,
-                        ),
+                        spinnerSlot,
                         Text(l10n.commonContinue),
                       ],
                     ),

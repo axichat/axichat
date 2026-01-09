@@ -86,6 +86,13 @@ class BlocklistUnblockAllButton extends StatelessWidget {
           color: context.colorScheme.foreground,
           semanticsLabel: context.l10n.blocklistWaitingForUnblock,
         );
+        final spinnerSlot = ButtonSpinnerSlot(
+          isVisible: disabled,
+          spinner: spinner,
+          slotSize: _blocklistSpinnerSlotSize,
+          gap: _blocklistSpinnerGap,
+          duration: baseAnimationDuration,
+        );
         return ShadButton.destructive(
           enabled: !disabled,
           onPressed: () async {
@@ -97,18 +104,7 @@ class BlocklistUnblockAllButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedContainer(
-                duration: baseAnimationDuration,
-                curve: Curves.easeInOut,
-                width: disabled ? _blocklistSpinnerSlotSize : 0,
-                height: disabled ? _blocklistSpinnerSlotSize : 0,
-                child: disabled ? spinner : null,
-              ),
-              AnimatedContainer(
-                duration: baseAnimationDuration,
-                curve: Curves.easeInOut,
-                width: disabled ? _blocklistSpinnerGap : 0,
-              ),
+              spinnerSlot,
               Text(context.l10n.blocklistUnblockAll),
             ],
           ),

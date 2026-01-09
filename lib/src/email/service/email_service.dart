@@ -3984,6 +3984,9 @@ class EmailService {
     return _transport.deleteContact(contactId);
   }
 
+  /// Deletes a contact by address from core.
+  ///
+  /// Returns true if the contact was deleted.
   /// Gets a contact by ID from core.
   Future<DeltaContact?> getContact(int contactId) async {
     await _ensureReady();

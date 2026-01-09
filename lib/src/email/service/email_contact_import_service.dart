@@ -1,14 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/email/service/email_contact_import_models.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:path/path.dart' as p;
 
 const int _byteOrderMark = 0xfeff;
+const int _utf16CodeUnitSize = 2;
+const List<int> _utf8BomBytes = <int>[0xef, 0xbb, 0xbf];
+const List<int> _utf16LeBomBytes = <int>[0xff, 0xfe];
+const List<int> _utf16BeBomBytes = <int>[0xfe, 0xff];
 const int _startIndex = 0;
 const int _nextIndex = 1;
 const int _headerRowIndex = 0;
@@ -24,9 +31,14 @@ const String _csvQuote = '"';
 const String _lineFeed = '\n';
 const String _carriageReturn = '\r';
 const String _extensionDelimiter = '.';
+const String _vcardGroupDelimiter = '.';
 const String _emptyValue = '';
 const String _spaceValue = ' ';
 const String _tabValue = '\t';
+const String _angleBracketOpen = '<';
+const String _angleBracketClose = '>';
+const String _emailAtSymbol = '@';
+const String _dotValue = '.';
 const String _vcardBeginKey = 'BEGIN:VCARD';
 const String _vcardEndKey = 'END:VCARD';
 const String _vcardFullNameKey = 'FN';
@@ -151,13 +163,68 @@ class EmailContactImportService {
 
   Future<String> _readFile(File file) async {
     try {
-      final String content = await file.readAsString();
+      final List<int> bytes = await file.readAsBytes();
+      final String content = _decodeFileBytes(bytes);
       return _stripBom(content);
     } catch (_) {
       throw const EmailContactImportException(
         EmailContactImportFailureReason.readFailure,
       );
     }
+  }
+
+  String _decodeFileBytes(List<int> bytes) {
+    if (bytes.isEmpty) {
+      return _emptyValue;
+    }
+    if (_startsWithBytes(bytes, _utf8BomBytes)) {
+      return utf8.decode(bytes.sublist(_utf8BomBytes.length));
+    }
+    if (_startsWithBytes(bytes, _utf16LeBomBytes)) {
+      return _decodeUtf16(
+        bytes.sublist(_utf16LeBomBytes.length),
+        Endian.little,
+      );
+    }
+    if (_startsWithBytes(bytes, _utf16BeBomBytes)) {
+      return _decodeUtf16(
+        bytes.sublist(_utf16BeBomBytes.length),
+        Endian.big,
+      );
+    }
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
+  bool _startsWithBytes(List<int> bytes, List<int> prefix) {
+    if (bytes.length < prefix.length) {
+      return false;
+    }
+    for (int index = _startIndex; index < prefix.length; index += _nextIndex) {
+      if (bytes[index] != prefix[index]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  String _decodeUtf16(List<int> bytes, Endian endian) {
+    if (bytes.isEmpty) {
+      return _emptyValue;
+    }
+    final int length = bytes.length - (bytes.length % _utf16CodeUnitSize);
+    if (length <= _startIndex) {
+      return _emptyValue;
+    }
+    final Uint8List data =
+        Uint8List.fromList(bytes.sublist(_startIndex, length));
+    final ByteData byteData = ByteData.sublistView(data);
+    final int codeUnitCount = length ~/ _utf16CodeUnitSize;
+    final List<int> codeUnits = List<int>.filled(codeUnitCount, _startIndex);
+    for (int index = _startIndex; index < codeUnitCount; index += _nextIndex) {
+      final int offset = index * _utf16CodeUnitSize;
+      codeUnits[index] = byteData.getUint16(offset, endian);
+    }
+    return String.fromCharCodes(codeUnits);
   }
 
   String _stripBom(String content) {
@@ -190,7 +257,7 @@ class EmailContactImportService {
     final List<String> headers = rows[_headerRowIndex];
     final _CsvHeaderMap headerMap = _CsvHeaderMap.fromHeaders(headers);
     if (headerMap.emailIndices.isEmpty) {
-      return const <EmailContactImportContact>[];
+      return _parseHeaderlessCsvContacts(rows);
     }
     final List<EmailContactImportContact> contacts =
         <EmailContactImportContact>[];
@@ -204,15 +271,148 @@ class EmailContactImportService {
         if (email == null) {
           continue;
         }
+        final List<String> candidates = _extractEmailCandidates(email);
+        if (candidates.isEmpty) {
+          continue;
+        }
+        for (final String candidate in candidates) {
+          contacts.add(
+            EmailContactImportContact(
+              address: candidate,
+              displayName: displayName,
+            ),
+          );
+        }
+      }
+    }
+    return contacts;
+  }
+
+  List<EmailContactImportContact> _parseHeaderlessCsvContacts(
+    List<List<String>> rows,
+  ) {
+    final List<EmailContactImportContact> contacts =
+        <EmailContactImportContact>[];
+    for (final List<String> row in rows) {
+      final _HeaderlessRowParseResult parsed = _parseHeaderlessRow(row);
+      if (parsed.emails.isEmpty) {
+        continue;
+      }
+      for (final String email in parsed.emails) {
         contacts.add(
           EmailContactImportContact(
             address: email,
-            displayName: displayName,
+            displayName: parsed.displayName,
           ),
         );
       }
     }
     return contacts;
+  }
+
+  _HeaderlessRowParseResult _parseHeaderlessRow(List<String> row) {
+    final List<String> emails = <String>[];
+    final List<String> nameParts = <String>[];
+    for (final String value in row) {
+      final String trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final String? bracketed = _extractBracketedEmail(trimmed);
+      if (bracketed != null) {
+        final List<String> resolved = _filterEmailCandidates(
+          _extractEmailCandidates(bracketed),
+        );
+        if (resolved.isNotEmpty) {
+          emails.addAll(resolved);
+          final String nameCandidate = trimmed
+              .substring(_startIndex, trimmed.indexOf(_angleBracketOpen))
+              .trim();
+          if (nameCandidate.isNotEmpty) {
+            nameParts.add(nameCandidate);
+          }
+          continue;
+        }
+      }
+      final List<String> candidates = _extractEmailCandidates(trimmed);
+      final List<String> resolved = _filterEmailCandidates(candidates);
+      if (resolved.isNotEmpty) {
+        emails.addAll(resolved);
+        continue;
+      }
+      nameParts.add(trimmed);
+    }
+    final String? displayName = nameParts.isEmpty ? null : nameParts.first;
+    return _HeaderlessRowParseResult(
+      emails: emails,
+      displayName: displayName,
+    );
+  }
+
+  List<String> _extractEmailCandidates(String value) {
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return const <String>[];
+    }
+    final String? bracketed = _extractBracketedEmail(trimmed);
+    final String candidate = bracketed ?? trimmed;
+    final String normalized = candidate.toLowerCase();
+    final bool hasMailto = normalized.startsWith(_mailtoPrefix);
+    final String sanitized =
+        hasMailto ? candidate.substring(_mailtoPrefix.length) : candidate;
+    final Iterable<String> parts = sanitized.split(_vcardEmailSplitExpression);
+    return parts
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+  }
+
+  String? _extractBracketedEmail(String value) {
+    final int start = value.indexOf(_angleBracketOpen);
+    if (start < _startIndex) {
+      return null;
+    }
+    final int end = value.indexOf(_angleBracketClose, start + _nextIndex);
+    if (end <= start) {
+      return null;
+    }
+    return value.substring(start + _nextIndex, end);
+  }
+
+  List<String> _filterEmailCandidates(Iterable<String> candidates) {
+    final List<String> resolved = <String>[];
+    for (final String candidate in candidates) {
+      final String normalized = normalizeEmailAddress(candidate);
+      if (normalized.isEmpty) {
+        continue;
+      }
+      if (_looksLikeEmail(normalized)) {
+        resolved.add(candidate.trim());
+      }
+    }
+    return resolved;
+  }
+
+  bool _looksLikeEmail(String value) {
+    final String normalized = normalizeEmailAddress(value);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (normalized.isValidEmailAddress) {
+      return true;
+    }
+    final int atIndex = normalized.indexOf(_emailAtSymbol);
+    if (atIndex <= _startIndex || atIndex >= normalized.length - _nextIndex) {
+      return false;
+    }
+    final int dotIndex = normalized.indexOf(
+      _dotValue,
+      atIndex + _nextIndex,
+    );
+    if (dotIndex <= atIndex + _nextIndex) {
+      return false;
+    }
+    return dotIndex < normalized.length - _nextIndex;
   }
 
   String _detectCsvDelimiter(String content) {
@@ -347,10 +547,33 @@ class EmailContactImportService {
   }
 
   bool _isVcardField(String upperLine, String key) {
-    if (upperLine.startsWith('$key$_vcardValueDelimiter')) {
-      return true;
+    final String? field = _vcardFieldName(upperLine);
+    return field == key;
+  }
+
+  String? _vcardFieldName(String upperLine) {
+    final int delimiterIndex = _vcardDelimiterIndex(upperLine);
+    if (delimiterIndex <= _startIndex) {
+      return null;
     }
-    return upperLine.startsWith('$key$_vcardNameSeparator');
+    final String rawName = upperLine.substring(_startIndex, delimiterIndex);
+    final int groupIndex = rawName.lastIndexOf(_vcardGroupDelimiter);
+    if (groupIndex < _startIndex) {
+      return rawName;
+    }
+    return rawName.substring(groupIndex + _nextIndex);
+  }
+
+  int _vcardDelimiterIndex(String value) {
+    final int valueIndex = value.indexOf(_vcardValueDelimiter);
+    final int paramIndex = value.indexOf(_vcardNameSeparator);
+    if (valueIndex < _startIndex) {
+      return paramIndex;
+    }
+    if (paramIndex < _startIndex) {
+      return valueIndex;
+    }
+    return valueIndex < paramIndex ? valueIndex : paramIndex;
   }
 
   String? _vcardValue(String line) {
@@ -428,6 +651,10 @@ class EmailContactImportService {
       } catch (_) {
         failed += _nextIndex;
       }
+    }
+
+    if (imported > _startIndex) {
+      await _emailService.syncContactsFromCore();
     }
 
     if (imported == _startIndex && failed > _startIndex) {
@@ -577,6 +804,16 @@ class _CsvParser {
     }
     return false;
   }
+}
+
+class _HeaderlessRowParseResult {
+  const _HeaderlessRowParseResult({
+    required this.emails,
+    this.displayName,
+  });
+
+  final List<String> emails;
+  final String? displayName;
 }
 
 String _canonicalHeaderKey(String value) {

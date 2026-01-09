@@ -19,6 +19,7 @@ const _lastIdAttr = 'last_id';
 const _pinnedAttr = 'pinned';
 const _mutedUntilAttr = 'muted_until';
 const _archivedAttr = 'archived';
+const Duration _ensureNodeBackoff = Duration(minutes: 5);
 
 final class ConvItem {
   const ConvItem({
@@ -181,6 +182,9 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   final Map<String, ConvItem> _cache = {};
   final SyncRateLimiter _rateLimiter =
       SyncRateLimiter(conversationIndexSyncRateLimit);
+  DateTime? _lastEnsureAttempt;
+  bool _ensureNodeInFlight = false;
+  bool _nodeReady = false;
 
   @override
   Future<bool> isSupported() async => true;
@@ -297,40 +301,63 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     return false;
   }
 
+  bool _shouldAttemptEnsureNode() {
+    if (_ensureNodeInFlight || _nodeReady) return false;
+    final lastAttempt = _lastEnsureAttempt;
+    if (lastAttempt == null) return true;
+    final now = DateTime.timestamp();
+    return now.difference(lastAttempt) >= _ensureNodeBackoff;
+  }
+
   Future<void> ensureNode() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-
-    final config = _nodeConfig();
-
-    final configured =
-        await pubsub.configureNode(host, conversationIndexNode, config);
-    if (!configured.isType<mox.PubSubError>()) {
-      return;
-    }
-
+    if (!_shouldAttemptEnsureNode()) return;
+    _ensureNodeInFlight = true;
+    _lastEnsureAttempt = DateTime.timestamp();
     try {
-      final created = await pubsub.createNodeWithConfig(
-        host,
-        _createNodeConfig(),
-        nodeId: conversationIndexNode,
-      );
-      if (created != null) {
-        await pubsub.configureNode(host, conversationIndexNode, config);
+      final config = _nodeConfig();
+
+      final configured =
+          await pubsub.configureNode(host, conversationIndexNode, config);
+      if (!configured.isType<mox.PubSubError>()) {
+        _nodeReady = true;
         return;
       }
-    } on Exception {
-      // ignore and retry below
-    }
 
-    try {
-      final created =
-          await pubsub.createNode(host, nodeId: conversationIndexNode);
-      if (created == null) return;
-      await pubsub.configureNode(host, conversationIndexNode, config);
-    } on Exception {
-      return;
+      try {
+        final created = await pubsub.createNodeWithConfig(
+          host,
+          _createNodeConfig(),
+          nodeId: conversationIndexNode,
+        );
+        if (created != null) {
+          final applied =
+              await pubsub.configureNode(host, conversationIndexNode, config);
+          if (!applied.isType<mox.PubSubError>()) {
+            _nodeReady = true;
+          }
+          return;
+        }
+      } on Exception {
+        // ignore and retry below
+      }
+
+      try {
+        final created =
+            await pubsub.createNode(host, nodeId: conversationIndexNode);
+        if (created == null) return;
+        final applied =
+            await pubsub.configureNode(host, conversationIndexNode, config);
+        if (!applied.isType<mox.PubSubError>()) {
+          _nodeReady = true;
+        }
+      } on Exception {
+        return;
+      }
+    } finally {
+      _ensureNodeInFlight = false;
     }
   }
 

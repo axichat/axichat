@@ -30,6 +30,7 @@ const bool _deliverNotificationsEnabled = true;
 const bool _deliverPayloadsEnabled = true;
 const bool _persistItemsEnabled = true;
 const bool _presenceBasedDeliveryDisabled = false;
+const Duration _ensureNodeBackoff = Duration(minutes: 5);
 
 final class SpamSyncPayload {
   const SpamSyncPayload({
@@ -156,6 +157,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
 
   final Map<String, SpamSyncPayload> _cache = {};
   final SyncRateLimiter _rateLimiter = SyncRateLimiter(spamSyncRateLimit);
+  DateTime? _lastEnsureAttempt;
+  bool _ensureNodeInFlight = false;
+  bool _nodeReady = false;
 
   @override
   Future<bool> isSupported() async => true;
@@ -261,99 +265,114 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
 
   void _setAccessModel(mox.AccessModel accessModel) {
     _accessModel = accessModel;
+    _nodeReady = true;
+  }
+
+  bool _shouldAttemptEnsureNode() {
+    if (_ensureNodeInFlight || _nodeReady) return false;
+    final lastAttempt = _lastEnsureAttempt;
+    if (lastAttempt == null) return true;
+    final now = DateTime.timestamp();
+    return now.difference(lastAttempt) >= _ensureNodeBackoff;
   }
 
   Future<void> ensureNode() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-
-    final primaryConfig = _nodeConfig(mox.AccessModel.whitelist);
-    final configured = await pubsub.configureNode(
-      host,
-      spamPubSubNode,
-      primaryConfig,
-    );
-    if (!configured.isType<mox.PubSubError>()) {
-      _setAccessModel(mox.AccessModel.whitelist);
-      return;
-    }
-
-    final fallbackConfig = _nodeConfig(mox.AccessModel.authorize);
-    final fallbackConfigured = await pubsub.configureNode(
-      host,
-      spamPubSubNode,
-      fallbackConfig,
-    );
-    if (!fallbackConfigured.isType<mox.PubSubError>()) {
-      _setAccessModel(mox.AccessModel.authorize);
-      return;
-    }
-
+    if (!_shouldAttemptEnsureNode()) return;
+    _ensureNodeInFlight = true;
+    _lastEnsureAttempt = DateTime.timestamp();
     try {
-      final created = await pubsub.createNodeWithConfig(
-        host,
-        _createNodeConfig(mox.AccessModel.whitelist),
-        nodeId: spamPubSubNode,
-      );
-      if (created != null) {
-        final applied = await pubsub.configureNode(
-          host,
-          spamPubSubNode,
-          primaryConfig,
-        );
-        if (!applied.isType<mox.PubSubError>()) {
-          _setAccessModel(mox.AccessModel.whitelist);
-          return;
-        }
-      }
-    } on Exception {
-      // ignore and retry below
-    }
-
-    try {
-      final created = await pubsub.createNodeWithConfig(
-        host,
-        _createNodeConfig(mox.AccessModel.authorize),
-        nodeId: spamPubSubNode,
-      );
-      if (created != null) {
-        final applied = await pubsub.configureNode(
-          host,
-          spamPubSubNode,
-          fallbackConfig,
-        );
-        if (!applied.isType<mox.PubSubError>()) {
-          _setAccessModel(mox.AccessModel.authorize);
-          return;
-        }
-      }
-    } on Exception {
-      // ignore and retry below
-    }
-
-    try {
-      final created = await pubsub.createNode(host, nodeId: spamPubSubNode);
-      if (created == null) return;
-      final appliedPrimary = await pubsub.configureNode(
+      final primaryConfig = _nodeConfig(mox.AccessModel.whitelist);
+      final configured = await pubsub.configureNode(
         host,
         spamPubSubNode,
         primaryConfig,
       );
-      if (!appliedPrimary.isType<mox.PubSubError>()) {
+      if (!configured.isType<mox.PubSubError>()) {
         _setAccessModel(mox.AccessModel.whitelist);
         return;
       }
-      final appliedFallback = await pubsub.configureNode(
+
+      final fallbackConfig = _nodeConfig(mox.AccessModel.authorize);
+      final fallbackConfigured = await pubsub.configureNode(
         host,
         spamPubSubNode,
         fallbackConfig,
       );
-      if (!appliedFallback.isType<mox.PubSubError>()) {
+      if (!fallbackConfigured.isType<mox.PubSubError>()) {
         _setAccessModel(mox.AccessModel.authorize);
+        return;
       }
-    } on Exception {
-      return;
+
+      try {
+        final created = await pubsub.createNodeWithConfig(
+          host,
+          _createNodeConfig(mox.AccessModel.whitelist),
+          nodeId: spamPubSubNode,
+        );
+        if (created != null) {
+          final applied = await pubsub.configureNode(
+            host,
+            spamPubSubNode,
+            primaryConfig,
+          );
+          if (!applied.isType<mox.PubSubError>()) {
+            _setAccessModel(mox.AccessModel.whitelist);
+            return;
+          }
+        }
+      } on Exception {
+        // ignore and retry below
+      }
+
+      try {
+        final created = await pubsub.createNodeWithConfig(
+          host,
+          _createNodeConfig(mox.AccessModel.authorize),
+          nodeId: spamPubSubNode,
+        );
+        if (created != null) {
+          final applied = await pubsub.configureNode(
+            host,
+            spamPubSubNode,
+            fallbackConfig,
+          );
+          if (!applied.isType<mox.PubSubError>()) {
+            _setAccessModel(mox.AccessModel.authorize);
+            return;
+          }
+        }
+      } on Exception {
+        // ignore and retry below
+      }
+
+      try {
+        final created = await pubsub.createNode(host, nodeId: spamPubSubNode);
+        if (created == null) return;
+        final appliedPrimary = await pubsub.configureNode(
+          host,
+          spamPubSubNode,
+          primaryConfig,
+        );
+        if (!appliedPrimary.isType<mox.PubSubError>()) {
+          _setAccessModel(mox.AccessModel.whitelist);
+          return;
+        }
+        final appliedFallback = await pubsub.configureNode(
+          host,
+          spamPubSubNode,
+          fallbackConfig,
+        );
+        if (!appliedFallback.isType<mox.PubSubError>()) {
+          _setAccessModel(mox.AccessModel.authorize);
+        }
+      } on Exception {
+        return;
+      }
+    } finally {
+      _ensureNodeInFlight = false;
     }
   }
 

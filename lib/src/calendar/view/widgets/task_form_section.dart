@@ -13,6 +13,8 @@ import 'recurrence_editor.dart';
 import 'schedule_range_fields.dart';
 import 'task_text_field.dart';
 
+const double _taskFormActionIconSize = 16.0;
+
 /// Standard section title used across the calendar task forms. Keeps typography
 /// and spacing consistent while allowing trailing actions or custom padding.
 class TaskSectionHeader extends StatelessWidget {
@@ -979,6 +981,13 @@ class TaskPrimaryButton extends StatelessWidget {
     final bool disabled = isBusy || onPressed == null;
     final colors = context.colorScheme;
     final foreground = colors.primaryForeground;
+    final spinner = SizedBox.square(
+      dimension: _taskFormActionIconSize,
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        valueColor: AlwaysStoppedAnimation<Color>(foreground),
+      ),
+    );
     return ShadButton(
       size: size,
       backgroundColor: calendarPrimaryColor,
@@ -986,26 +995,24 @@ class TaskPrimaryButton extends StatelessWidget {
       foregroundColor: foreground,
       hoverForegroundColor: foreground,
       onPressed: disabled ? null : onPressed,
-      child: isBusy
-          ? SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(foreground),
-              ),
-            )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 16),
-                  const SizedBox(width: calendarInsetMd),
-                ],
-                Text(label),
-              ],
-            ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ButtonSpinnerSlot(
+            isVisible: isBusy,
+            spinner: spinner,
+            slotSize: _taskFormActionIconSize,
+            gap: calendarInsetMd,
+            duration: baseAnimationDuration,
+          ),
+          if (!isBusy && icon != null) ...[
+            Icon(icon, size: _taskFormActionIconSize),
+            const SizedBox(width: calendarInsetMd),
+          ],
+          Text(label),
+        ],
+      ),
     ).withTapBounce(enabled: !disabled);
   }
 }
@@ -1038,6 +1045,10 @@ class TaskSecondaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
     final Color resolvedForeground = foregroundColor ?? calendarSubtitleColor;
+    const spinner = SizedBox.square(
+      dimension: _taskFormActionIconSize,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
     return ShadButton.outline(
       size: size,
       onPressed: disabled ? null : onPressed,
@@ -1045,22 +1056,23 @@ class TaskSecondaryButton extends StatelessWidget {
       hoverForegroundColor: hoverForegroundColor ?? calendarPrimaryColor,
       hoverBackgroundColor:
           hoverBackgroundColor ?? calendarPrimaryColor.withValues(alpha: 0.08),
-      child: isBusy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 16),
-                  const SizedBox(width: calendarInsetMd),
-                ],
-                Text(label),
-              ],
-            ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ButtonSpinnerSlot(
+            isVisible: isBusy,
+            spinner: spinner,
+            slotSize: _taskFormActionIconSize,
+            gap: calendarInsetMd,
+            duration: baseAnimationDuration,
+          ),
+          if (!isBusy && icon != null) ...[
+            Icon(icon, size: _taskFormActionIconSize),
+            const SizedBox(width: calendarInsetMd),
+          ],
+          Text(label),
+        ],
+      ),
     ).withTapBounce(enabled: !disabled);
   }
 }
@@ -1085,25 +1097,30 @@ class TaskDestructiveButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
+    const spinner = SizedBox.square(
+      dimension: _taskFormActionIconSize,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
     return ShadButton.destructive(
       size: size,
       onPressed: disabled ? null : onPressed,
-      child: isBusy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 16),
-                  const SizedBox(width: calendarInsetMd),
-                ],
-                Text(label),
-              ],
-            ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ButtonSpinnerSlot(
+            isVisible: isBusy,
+            spinner: spinner,
+            slotSize: _taskFormActionIconSize,
+            gap: calendarInsetMd,
+            duration: baseAnimationDuration,
+          ),
+          if (!isBusy && icon != null) ...[
+            Icon(icon, size: _taskFormActionIconSize),
+            const SizedBox(width: calendarInsetMd),
+          ],
+          Text(label),
+        ],
+      ),
     ).withTapBounce(enabled: !disabled);
   }
 }

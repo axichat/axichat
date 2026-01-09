@@ -1047,7 +1047,7 @@
     }
   },
   "calendarBackToCalendar": "返回日曆",
-  "calendarLoadingMessage": "Loading calendar...",
+  "calendarLoadingMessage": "正在載入日曆...",
   "calendarCriticalPathAddTask": "新增任務",
   "calendarCriticalPathAddToTitle": "加入關鍵路徑",
   "calendarCriticalPathCreatePrompt": "建立關鍵路徑以開始",
@@ -1060,23 +1060,23 @@
   "calendarCriticalPathsAll": "所有路徑",
   "calendarCriticalPathsEmpty": "暫時沒有關鍵路徑",
   "calendarCriticalPathsNew": "新增關鍵路徑",
-  "calendarCriticalPathRenameTitle": "Rename critical path",
-  "calendarCriticalPathDeleteTitle": "Delete critical path",
+  "calendarCriticalPathRenameTitle": "重新命名關鍵路徑",
+  "calendarCriticalPathDeleteTitle": "刪除關鍵路徑",
   "calendarCriticalPathsTitle": "關鍵路徑",
   "calendarCriticalPathShareAction": "分享至聊天",
-  "calendarCriticalPathShareTitle": "Share critical path",
-  "calendarCriticalPathShareSubtitle": "Send a critical path to a chat.",
-  "calendarCriticalPathShareTargetLabel": "Share with",
-  "calendarCriticalPathShareButtonLabel": "Share",
-  "calendarCriticalPathShareMissingChats": "No eligible chats available.",
-  "calendarCriticalPathShareMissingRecipient": "Select a chat to share with.",
-  "calendarCriticalPathShareMissingService": "Calendar sharing is unavailable.",
-  "calendarCriticalPathShareDenied": "Calendar cards are disabled for your role in this room.",
-  "calendarCriticalPathShareFailed": "Failed to share critical path.",
-  "calendarCriticalPathShareSuccess": "Critical path shared.",
-  "calendarCriticalPathShareChatTypeDirect": "Direct chat",
-  "calendarCriticalPathShareChatTypeGroup": "Group chat",
-  "calendarCriticalPathShareChatTypeNote": "Notes",
+  "calendarCriticalPathShareTitle": "分享關鍵路徑",
+  "calendarCriticalPathShareSubtitle": "將關鍵路徑發送到聊天。",
+  "calendarCriticalPathShareTargetLabel": "分享給",
+  "calendarCriticalPathShareButtonLabel": "分享",
+  "calendarCriticalPathShareMissingChats": "沒有可用的聊天。",
+  "calendarCriticalPathShareMissingRecipient": "請選擇要分享的聊天。",
+  "calendarCriticalPathShareMissingService": "日曆分享不可用。",
+  "calendarCriticalPathShareDenied": "你的角色在此房間中已停用日曆卡片。",
+  "calendarCriticalPathShareFailed": "分享關鍵路徑失敗。",
+  "calendarCriticalPathShareSuccess": "關鍵路徑已分享。",
+  "calendarCriticalPathShareChatTypeDirect": "直接聊天",
+  "calendarCriticalPathShareChatTypeGroup": "群組聊天",
+  "calendarCriticalPathShareChatTypeNote": "備註",
   "calendarCriticalPathProgressSummary": "{total, plural, one {已按順序完成{completed}/{total}項任務} other {已按順序完成{completed}/{total}項任務}}",
   "@calendarCriticalPathProgressSummary": {
     "description": "Summary of completed tasks in a critical path.",
@@ -1149,37 +1149,37 @@
     }
   },
   "calendarCriticalPathCreateFailed": "無法建立關鍵路徑。",
-  "calendarTaskSearchTitle": "Search tasks",
-  "calendarTaskSearchAddToTitle": "Add to {name}",
+  "calendarTaskSearchTitle": "搜尋任務",
+  "calendarTaskSearchAddToTitle": "加入到{name}",
   "@calendarTaskSearchAddToTitle": {
     "placeholders": {
       "name": {}
     }
   },
-  "calendarTaskSearchSubtitle": "Search titles, descriptions, locations, categories, priorities, and deadlines.",
-  "calendarTaskSearchAddToSubtitle": "Tap a task to append it to the critical path order.",
+  "calendarTaskSearchSubtitle": "搜尋標題、描述、地點、分類、優先級與截止日期。",
+  "calendarTaskSearchAddToSubtitle": "點按任務以將其加入關鍵路徑順序。",
   "calendarTaskSearchHint": "title:, desc:, location:, category:work, priority:urgent, status:done",
   "@calendarTaskSearchHint": {
     "description": "Search query hint. Keep filter tokens (title:, desc:, etc) in English."
   },
-  "calendarTaskSearchEmptyPrompt": "Start typing to search tasks",
-  "calendarTaskSearchEmptyNoResults": "No results found",
-  "calendarTaskSearchEmptyHint": "Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.",
+  "calendarTaskSearchEmptyPrompt": "開始輸入以搜尋任務",
+  "calendarTaskSearchEmptyNoResults": "找不到結果",
+  "calendarTaskSearchEmptyHint": "使用過濾條件，如 title:, desc:, location:, priority:critical, status:done, deadline:today.",
   "@calendarTaskSearchEmptyHint": {
     "description": "Search tips. Keep filter tokens (title:, desc:, etc) in English."
   },
-  "calendarTaskSearchFilterScheduled": "Scheduled",
-  "calendarTaskSearchFilterUnscheduled": "Unscheduled",
-  "calendarTaskSearchFilterReminders": "Reminders",
-  "calendarTaskSearchFilterOpen": "Open",
-  "calendarTaskSearchFilterCompleted": "Completed",
-  "calendarTaskSearchDueDate": "Due {date}",
+  "calendarTaskSearchFilterScheduled": "已安排",
+  "calendarTaskSearchFilterUnscheduled": "未安排",
+  "calendarTaskSearchFilterReminders": "提醒",
+  "calendarTaskSearchFilterOpen": "未完成",
+  "calendarTaskSearchFilterCompleted": "已完成",
+  "calendarTaskSearchDueDate": "到期 {date}",
   "@calendarTaskSearchDueDate": {
     "placeholders": {
       "date": {}
     }
   },
-  "calendarTaskSearchOverdueDate": "Overdue · {date}",
+  "calendarTaskSearchOverdueDate": "逾期 · {date}",
   "@calendarTaskSearchOverdueDate": {
     "placeholders": {
       "date": {}

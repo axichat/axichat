@@ -1320,6 +1320,13 @@ class _AvailabilityActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const spinner = SizedBox(
+      width: _availabilitySheetHeaderIconSize,
+      height: _availabilitySheetHeaderIconSize,
+      child: CircularProgressIndicator(
+        strokeWidth: _availabilitySheetProgressStrokeWidth,
+      ),
+    );
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -1335,20 +1342,20 @@ class _AvailabilityActionRow extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isBusy)
-                const SizedBox(
-                  width: _availabilitySheetHeaderIconSize,
-                  height: _availabilitySheetHeaderIconSize,
-                  child: CircularProgressIndicator(
-                    strokeWidth: _availabilitySheetProgressStrokeWidth,
-                  ),
-                )
-              else
+              ButtonSpinnerSlot(
+                isVisible: isBusy,
+                spinner: spinner,
+                slotSize: _availabilitySheetHeaderIconSize,
+                gap: _availabilitySheetSectionGap,
+                duration: baseAnimationDuration,
+              ),
+              if (!isBusy) ...[
                 const Icon(
                   LucideIcons.send,
                   size: _availabilitySheetHeaderIconSize,
                 ),
-              const SizedBox(width: _availabilitySheetSectionGap),
+                const SizedBox(width: _availabilitySheetSectionGap),
+              ],
               Text(label),
             ],
           ),
