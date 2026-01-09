@@ -40,6 +40,8 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
   static const int _outgoingHandlerPriority = 120;
   static const String _presenceTag = 'presence';
   static const String _passwordTag = 'password';
+  static const String _presenceTypeUnavailable = 'unavailable';
+  static const String _presenceTypeError = 'error';
 
   @override
   Future<bool> isSupported() async => true;
@@ -124,7 +126,7 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     mox.Stanza presence,
     mox.StanzaHandlerData state,
   ) async {
-    if (presence.type == 'unavailable') return state;
+    if (presence.type == _presenceTypeUnavailable) return state;
     final mucJoin = presence.firstTag('x', xmlns: _mucJoinXmlns);
     if (mucJoin == null) return state;
 
@@ -183,7 +185,9 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
             ...statuses,
             ..._selfPresenceFallbackStatusCodes,
           };
-    final isUnavailable = presence.type == 'unavailable';
+    final String? presenceType = presence.type;
+    final bool isUnavailable = presenceType == _presenceTypeUnavailable ||
+        presenceType == _presenceTypeError;
     final newNickAttr = item.attributes['nick'];
     final newNick = newNickAttr is String ? newNickAttr.trim() : null;
     final isNickChange =

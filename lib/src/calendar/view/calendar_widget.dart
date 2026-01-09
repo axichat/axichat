@@ -68,6 +68,15 @@ const ValueKey<String> _calendarSurfacePageKey =
     ValueKey<String>(_calendarSurfacePageId);
 const bool _calendarSurfacePopEnabledDefault = true;
 
+bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
+  try {
+    return context.watch<ChatsCubit?>()?.state.openCalendar ??
+        _calendarSurfacePopEnabledDefault;
+  } on FlutterError {
+    return _calendarSurfacePopEnabledDefault;
+  }
+}
+
 CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
   BuildContext context,
 ) {
@@ -78,15 +87,6 @@ CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
     );
   } on FlutterError {
     return null;
-  }
-}
-
-bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
-  try {
-    return context.watch<ChatsCubit?>()?.state.openCalendar ??
-        _calendarSurfacePopEnabledDefault;
-  } on FlutterError {
-    return _calendarSurfacePopEnabledDefault;
   }
 }
 
@@ -331,19 +331,14 @@ class _CalendarWidgetState
     }
 
     final router = GoRouter.maybeOf(context);
-    if (router != null) {
-      if (router.canPop()) {
-        router.pop();
-      } else {
-        router.go('/');
-      }
+    if (router == null) {
       return;
     }
-
-    final navigator = Navigator.maybeOf(context);
-    if (navigator?.canPop() ?? false) {
-      navigator?.pop();
+    if (router.canPop()) {
+      router.pop();
+      return;
     }
+    router.go('/');
   }
 }
 
