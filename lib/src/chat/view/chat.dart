@@ -1058,6 +1058,7 @@ class _ChatState extends State<Chat> {
   late final ScrollController _scrollController;
   bool _composerHasText = false;
   String _lastSubjectValue = '';
+  bool _subjectChangeSuppressed = false;
   ChatCalendarBloc? _chatCalendarBloc;
   String? _chatCalendarJid;
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
@@ -2080,6 +2081,9 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleSubjectChanged() {
+    if (_subjectChangeSuppressed) {
+      return;
+    }
     final text = _subjectController.text;
     if (_lastSubjectValue == text) {
       return;
@@ -3552,11 +3556,13 @@ class _ChatState extends State<Chat> {
                         current.emailSubjectHydrationId,
                 listener: (context, state) {
                   final subject = state.emailSubjectHydrationText ?? '';
+                  _subjectChangeSuppressed = true;
                   _subjectController
                     ..text = subject
                     ..selection =
                         TextSelection.collapsed(offset: subject.length);
                   _lastSubjectValue = subject;
+                  _subjectChangeSuppressed = false;
                   if (subject.isNotEmpty && !_subjectFocusNode.hasFocus) {
                     _subjectFocusNode.requestFocus();
                   }

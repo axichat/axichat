@@ -943,6 +943,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emailSubjectHydrationText:
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
+      emailSubjectAutofillEligible:
+          resetContext ? true : state.emailSubjectAutofillEligible,
+      emailSubjectAutofilled:
+          resetContext ? false : state.emailSubjectAutofilled,
       roomState: resetContext ? null : state.roomState,
       pinnedMessages:
           resetContext ? _emptyPinnedMessageItems : state.pinnedMessages,
@@ -1110,6 +1114,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _hydrateShareContexts(filteredItems, emit);
       await _hydrateShareReplies(filteredItems, emit);
     }
+    _maybeAutofillEmailSubject(filteredItems, emit);
 
     final chat = state.chat;
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
@@ -3116,7 +3121,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (state.emailSubject == event.subject) {
       return;
     }
-    emit(state.copyWith(emailSubject: event.subject));
+    emit(
+      state.copyWith(
+        emailSubject: event.subject,
+        emailSubjectAutofilled: false,
+        emailSubjectAutofillEligible: false,
+      ),
+    );
   }
 
   Future<void> _stopTyping() async {
@@ -4118,8 +4129,49 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailSubject: '',
         emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
         emailSubjectHydrationText: '',
+        emailSubjectAutofillEligible: true,
+        emailSubjectAutofilled: false,
       ),
     );
+  }
+
+  void _maybeAutofillEmailSubject(
+    List<Message> messages,
+    Emitter<ChatState> emit,
+  ) {
+    final chat = state.chat;
+    if (chat == null || !chat.isEmailBacked) {
+      return;
+    }
+    if (!state.emailSubjectAutofillEligible) {
+      return;
+    }
+    final currentSubject = state.emailSubject?.trim();
+    if (currentSubject?.isNotEmpty == true) {
+      return;
+    }
+    final subject = _latestEmailSubject(messages);
+    if (subject == null) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        emailSubject: subject,
+        emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
+        emailSubjectHydrationText: subject,
+        emailSubjectAutofilled: true,
+      ),
+    );
+  }
+
+  String? _latestEmailSubject(List<Message> messages) {
+    for (final message in messages) {
+      final subject = message.subject?.trim();
+      if (subject?.isNotEmpty == true) {
+        return subject;
+      }
+    }
+    return null;
   }
 
   String _composeEmailBody(String body, Message? quoted) {
@@ -4440,6 +4492,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             : state.emailSubjectHydrationId,
         emailSubjectHydrationText:
             shouldHydrateSubject ? nextSubject : state.emailSubject,
+        emailSubjectAutofillEligible: false,
+        emailSubjectAutofilled: false,
       ),
     );
   }

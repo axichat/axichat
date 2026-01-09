@@ -1370,14 +1370,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 maxHeight: maxHeight,
                 isSheet: true,
                 inlineActionsBloc: locate<T>(),
-                inlineActionsBuilder: (state) {
+                inlineActionsBuilder: (actionState) {
                   final CalendarTask? latest =
-                      state.model.tasks[displayTask.id] ??
-                          state.model.tasks[displayTask.baseId];
+                      actionState.model.tasks[displayTask.id] ??
+                          actionState.model.tasks[displayTask.baseId];
                   final CalendarTask resolved = latest ?? displayTask;
                   return _taskContextActions(
                     task: resolved,
-                    state: state,
+                    state: actionState,
                     onTaskDeleted: () => Navigator.of(sheetContext).maybePop(),
                     includeDeleteAction: false,
                     includeCompletionAction: false,
