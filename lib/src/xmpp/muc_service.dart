@@ -30,6 +30,7 @@ const _dataFormXmlns = 'jabber:x:data';
 const _dataFormTag = 'x';
 const _dataFormTypeAttr = 'type';
 const _dataFormTypeSubmit = 'submit';
+const _dataFormFieldTypeHidden = 'hidden';
 const _fieldTag = 'field';
 const _valueTag = 'value';
 const _varAttr = 'var';
@@ -188,6 +189,8 @@ mixin MucService on XmppBase, BaseStreamService {
   final _explicitlyLeftRooms = <String>{};
   final _mucJoinInFlight = <String>{};
   final _mucJoinCompleters = <String, Completer<void>>{};
+  final _instantRoomConfigCompleters = <String, Completer<void>>{};
+  final _instantRoomConfiguredRooms = <String>{};
   final _seededDummyRooms = <String>{};
   String? _mucServiceHost;
   bool _mucBookmarksSyncInFlight = false;
@@ -765,14 +768,21 @@ mixin MucService on XmppBase, BaseStreamService {
         )
             .then((result) {
           if (result.isType<mox.MUCError>()) {
+            _markRoomLeft(
+              normalizedRoom,
+              statusCodes: const <String>{},
+            );
             _completeJoinAttempt(
               normalizedRoom,
               error: XmppMessageException(),
             );
             return;
           }
-          _completeJoinAttempt(normalizedRoom);
         }).catchError((Object error, StackTrace stackTrace) {
+          _markRoomLeft(
+            normalizedRoom,
+            statusCodes: const <String>{},
+          );
           _completeJoinAttempt(
             normalizedRoom,
             error: error,
@@ -813,6 +823,7 @@ mixin MucService on XmppBase, BaseStreamService {
     }
     final hasSelfPresence = room?.hasSelfPresence == true;
     if (hasSelfPresence) {
+      await _awaitInstantRoomConfigurationIfNeeded(key);
       return;
     }
     final manager = _connection.getManager<MUCManager>();
@@ -843,6 +854,7 @@ mixin MucService on XmppBase, BaseStreamService {
         maxHistoryStanzas: maxHistoryStanzas,
         password: password,
       );
+      await _awaitInstantRoomConfigurationIfNeeded(key);
     } finally {
       _mucJoinInFlight.remove(key);
     }
@@ -1602,6 +1614,64 @@ mixin MucService on XmppBase, BaseStreamService {
     _mucLog.fine('$_roomConfigSubmitFailedLog $trimmedCondition');
   }
 
+  mox.XMLNode _createInstantRoomConfigurationForm() {
+    final formAttributes = <String, String>{}..[_dataFormTypeAttr] =
+        _dataFormTypeSubmit;
+    final fieldAttributes = <String, String>{}
+      ..[_varAttr] = _formTypeFieldVar
+      ..[_dataFormTypeAttr] = _dataFormFieldTypeHidden;
+    final field = mox.XMLNode(
+      tag: _fieldTag,
+      attributes: fieldAttributes,
+      children: [
+        mox.XMLNode(tag: _valueTag, text: _mucRoomConfigFormType),
+      ],
+    );
+    return mox.XMLNode.xmlns(
+      tag: _dataFormTag,
+      xmlns: _dataFormXmlns,
+      attributes: formAttributes,
+      children: [field],
+    );
+  }
+
+  Future<void> _ensureInstantRoomConfiguration({
+    required String roomJid,
+  }) async {
+    final key = _roomKey(roomJid);
+    if (_instantRoomConfiguredRooms.contains(key)) return;
+    final existingCompleter = _instantRoomConfigCompleters[key];
+    if (existingCompleter != null) {
+      return existingCompleter.future;
+    }
+    final completer = Completer<void>();
+    _instantRoomConfigCompleters[key] = completer;
+    try {
+      final form = _createInstantRoomConfigurationForm();
+      final configured = await submitRoomConfiguration(
+        roomJid: key,
+        form: form,
+      );
+      if (!configured) {
+        throw XmppMessageException();
+      }
+      _instantRoomConfiguredRooms.add(key);
+      completer.complete();
+    } catch (error, stackTrace) {
+      completer.completeError(error, stackTrace);
+    } finally {
+      _instantRoomConfigCompleters.remove(key);
+    }
+    return completer.future;
+  }
+
+  Future<void> _awaitInstantRoomConfigurationIfNeeded(String roomJid) async {
+    final key = _roomKey(roomJid);
+    final room = _roomStates[key];
+    if (room == null || !room.roomCreated) return;
+    await _ensureInstantRoomConfiguration(roomJid: key);
+  }
+
   bool _isAvatarMimeField(String fieldName) {
     final lowerField = fieldName.toLowerCase();
     return lowerField.contains(_avatarMimeToken) ||
@@ -2076,11 +2146,19 @@ mixin MucService on XmppBase, BaseStreamService {
   void _handleSelfPresence(MucSelfPresenceEvent event) {
     final roomJid = _roomKey(event.roomJid);
     if (!event.isAvailable && !event.isNickChange) {
+      final Set<String> statusCodes =
+          event.isError ? const <String>{} : event.statusCodes;
       _markRoomLeft(
         roomJid,
-        statusCodes: event.statusCodes,
+        statusCodes: statusCodes,
         reason: event.reason,
       );
+      if (event.isError) {
+        _completeJoinAttempt(
+          roomJid,
+          error: XmppMessageException(),
+        );
+      }
       return;
     }
 
@@ -2111,6 +2189,14 @@ mixin MucService on XmppBase, BaseStreamService {
       statusCodes: event.statusCodes,
       reason: event.reason,
     );
+    if (event.statusCodes.contains(mucStatusRoomCreated)) {
+      _instantRoomConfiguredRooms.remove(roomJid);
+      unawaited(
+        _ensureInstantRoomConfiguration(
+          roomJid: roomJid,
+        ),
+      );
+    }
     _completeJoinAttempt(roomJid);
     if (event.statusCodes.contains(mucStatusConfigurationChanged)) {
       unawaited(_refreshRoomAvatar(roomJid));
@@ -2146,6 +2232,7 @@ mixin MucService on XmppBase, BaseStreamService {
         affiliation: affiliation.value,
         role: role.value,
         isAvailable: true,
+        isError: false,
         isNickChange: false,
         statusCodes: statusCodes,
         reason: null,
