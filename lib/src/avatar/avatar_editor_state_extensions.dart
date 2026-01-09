@@ -12,6 +12,8 @@ extension AvatarEditorStateView on AvatarEditorState {
   Uint8List? get displayedBytes =>
       previewBytes ?? carouselPreviewBytes ?? sourceBytes;
 
+  bool get hasCarouselPreview => carouselPreviewBytes != null;
+
   AvatarEditorMode get editorMode {
     if (source == AvatarSource.upload && sourceBytes != null) {
       return AvatarEditorMode.cropOnly;
@@ -34,6 +36,9 @@ extension AvatarEditorStateView on AvatarEditorState {
   bool get isBusy => processing || shuffling || publishing;
 
   bool get hasUserSelectedAvatar => draft != null;
+
+  bool get canUseCarouselAvatar =>
+      hasCarouselPreview && !hasUserSelectedAvatar && !isBusy;
 }
 
 extension AvatarEditorStateLocalization on AvatarEditorState {

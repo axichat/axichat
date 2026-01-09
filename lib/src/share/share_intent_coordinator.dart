@@ -55,6 +55,10 @@ class ShareIntentCoordinator {
 
   Stream<ShareIntentDispatch> get stream => _controller.stream;
 
+  void clearPending() {
+    _pendingByJid.clear();
+  }
+
   static String? normalizeJid(String? raw) {
     final String? trimmed = raw?.trim();
     if (trimmed == null || trimmed.isEmpty) {
@@ -131,7 +135,7 @@ class ShareIntentCoordinator {
   }
 
   void dispose() {
-    _pendingByJid.clear();
+    clearPending();
     unawaited(_controller.close());
   }
 }

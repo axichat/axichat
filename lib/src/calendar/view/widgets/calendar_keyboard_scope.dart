@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:axichat/src/calendar/view/calendar_grid.dart';
+import 'package:axichat/src/common/ui/axi_editable_text.dart' as axi;
 
 const String _keyboardScopeFocusLabel = 'CalendarKeyboardScope';
 
@@ -52,18 +53,20 @@ class CalendarKeyboardScope extends StatefulWidget {
   final VoidCallback? onCancelDrag;
 
   static bool _isEditableFocused() {
-    final focusNode = FocusManager.instance.primaryFocus;
+    final FocusNode? focusNode = FocusManager.instance.primaryFocus;
     if (focusNode == null) {
       return false;
     }
-    final context = focusNode.context;
+    final BuildContext? context = focusNode.context;
     if (context == null) {
       return false;
     }
-    if (context.widget is EditableText) {
+    final Widget widget = context.widget;
+    if (widget is EditableText || widget is axi.EditableText) {
       return true;
     }
-    return context.findAncestorWidgetOfExactType<EditableText>() != null;
+    return context.findAncestorWidgetOfExactType<EditableText>() != null ||
+        context.findAncestorWidgetOfExactType<axi.EditableText>() != null;
   }
 
   @override

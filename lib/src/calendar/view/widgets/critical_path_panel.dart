@@ -17,11 +17,14 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 const String _criticalPathShareActionLabel = 'Share to chat';
 const String _criticalPathProgressSeparator = 'of';
-const String _criticalPathProgressSuffix = 'steps completed in order';
+const String _criticalPathProgressSuffix = 'tasks completed in order';
 const String _criticalPathProgressHint =
-    'Complete tasks and checklist items in the listed order to advance';
+    'Complete tasks in the listed order to advance';
 const List<TaskChecklistItem> _emptyChecklistItems = <TaskChecklistItem>[];
 const int _criticalPathTaskUnit = 1;
+const int _criticalPathZeroCount = 0;
+const double _criticalPathZeroProgress = 0.0;
+const double _criticalPathMaxProgress = 1.0;
 
 class CriticalPathPanel extends StatelessWidget {
   const CriticalPathPanel({
@@ -296,7 +299,8 @@ class CriticalPathPanel extends StatelessWidget {
 
   bool _isPathCompleted(CalendarCriticalPath path) {
     final CriticalPathProgress progress = _progressFor(path);
-    return progress.total > 0 && progress.completed >= progress.total;
+    return progress.total > _criticalPathZeroCount &&
+        progress.completed >= progress.total;
   }
 
   void _handleReorder(
@@ -356,8 +360,7 @@ class CriticalPathCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final double progressValue =
-        progress.total == 0 ? 0 : progress.completed / progress.total;
+    final double progressValue = progress.progressValue;
     final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
     final bool highlighted = isFocused || isActive;
     final Color borderColor = highlighted ? colors.primary : colors.border;
@@ -785,41 +788,61 @@ class _CriticalPathReorderHandle extends StatelessWidget {
 }
 
 class CriticalPathProgress {
-  const CriticalPathProgress({required this.total, required this.completed});
+  const CriticalPathProgress({
+    required this.total,
+    required this.completed,
+    required this.progressValue,
+  });
 
   final int total;
   final int completed;
+  final double progressValue;
 }
 
 CriticalPathProgress computeCriticalPathProgress({
   required CalendarCriticalPath path,
   required Map<String, CalendarTask> tasks,
 }) {
-  int total = 0;
-  int completed = 0;
-  bool canAdvance = true;
+  final int total = path.taskIds.length;
+  if (total == _criticalPathZeroCount) {
+    return const CriticalPathProgress(
+      total: _criticalPathZeroCount,
+      completed: _criticalPathZeroCount,
+      progressValue: _criticalPathZeroProgress,
+    );
+  }
+  int completed = _criticalPathZeroCount;
+  double progressUnits = _criticalPathZeroProgress;
   for (final String id in path.taskIds) {
     final String baseId = baseTaskIdFrom(id);
     final CalendarTask? task = tasks[baseId] ?? tasks[id];
-    final List<TaskChecklistItem> checklist =
-        task?.checklist ?? _emptyChecklistItems;
-    final int checklistCount = checklist.length;
-    total += _criticalPathTaskUnit + checklistCount;
-    if (!canAdvance) {
-      continue;
+    if (task == null) {
+      progressUnits = completed.toDouble();
+      break;
     }
-    if (checklistCount > 0) {
-      completed += checklist.where((item) => item.isCompleted).length;
-    }
-    if (task?.isCompleted ?? false) {
+    if (task.isCompleted) {
       completed += _criticalPathTaskUnit;
+      progressUnits = completed.toDouble();
       continue;
     }
-    canAdvance = false;
+    final List<TaskChecklistItem> checklist =
+        task.checklist.isEmpty ? _emptyChecklistItems : task.checklist;
+    final int checklistCount = checklist.length;
+    if (checklistCount == _criticalPathZeroCount) {
+      progressUnits = completed.toDouble();
+      break;
+    }
+    final int completedChecklist =
+        checklist.where((item) => item.isCompleted).length;
+    progressUnits = completed + completedChecklist / checklistCount;
+    break;
   }
+  final double progressValue = (progressUnits / total)
+      .clamp(_criticalPathZeroProgress, _criticalPathMaxProgress);
   return CriticalPathProgress(
     total: total,
     completed: completed,
+    progressValue: progressValue,
   );
 }
 

@@ -178,7 +178,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   RecurrenceFormValue get _selectionRecurrence =>
       _selectionRecurrenceNotifier.value;
-  final Map<String, ShadPopoverController> _taskPopoverControllers = {};
+  final Map<TaskPopoverAnchorToken, ShadPopoverController>
+      _popoverControllersByAnchor =
+      <TaskPopoverAnchorToken, ShadPopoverController>{};
+  ShadPopoverController? _activePopoverController;
   bool _selectionTitleDirty = false;
   bool _selectionDescriptionDirty = false;
   bool _selectionLocationDirty = false;
@@ -617,22 +620,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _pruneTaskPopoverControllers(Set<String> activeTaskIds) {
-    final List<String> staleIds = <String>[];
-    _taskPopoverControllers.forEach((id, controller) {
-      if (!activeTaskIds.contains(id)) {
-        controller.hide();
-        controller.dispose();
-        staleIds.add(id);
-      }
-    });
-    if (staleIds.isNotEmpty) {
-      for (final id in staleIds) {
-        _taskPopoverControllers.remove(id);
-      }
-    }
     final String? activeId = _sidebarController.state.activePopoverTaskId;
     if (activeId != null && !activeTaskIds.contains(activeId)) {
-      _sidebarController.setActivePopoverTaskId(null);
+      _closeTaskPopover(activeId);
     }
   }
 
@@ -708,9 +698,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _selectionReminderAnchorNotifier.dispose();
     _sidebarAutoScrollTicker?.dispose();
     _parserDebounce?.cancel();
-    for (final controller in _taskPopoverControllers.values) {
+    for (final controller in _popoverControllersByAnchor.values) {
       controller.dispose();
     }
+    _popoverControllersByAnchor.clear();
     _sidebarController.dispose();
     _selectionMessageTimer?.cancel();
     super.dispose();
@@ -2492,7 +2483,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     context.read<B>().add(CalendarEvent.taskDeleted(taskId: task.id));
     _draftStore?.clearTaskDraft(task.id);
     _closeTaskPopover(task.id);
-    _taskPopoverControllers.remove(task.id)?.dispose();
   }
 
   List<Widget> _sidebarContextMenuItems(CalendarTask task) {
@@ -2635,8 +2625,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                       taskId: taskId,
                     ),
                   );
-                  _taskPopoverControllers.remove(task.id)?.dispose();
-                  _sidebarController.setActivePopoverTaskId(null);
+                  _closeTaskPopover(taskId);
                   Navigator.of(sheetContext).maybePop();
                 },
               ),
@@ -3047,60 +3036,127 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     }
   }
 
-  ShadPopoverController _popoverControllerFor(String taskId) {
-    if (_taskPopoverControllers.containsKey(taskId)) {
-      return _taskPopoverControllers[taskId]!;
+  ShadPopoverController _popoverControllerFor(
+    TaskPopoverAnchorToken anchorToken,
+    String taskId,
+  ) {
+    final ShadPopoverController? existing =
+        _popoverControllersByAnchor[anchorToken];
+    if (existing != null) {
+      return existing;
     }
-    final controller = ShadPopoverController();
+    final ShadPopoverController controller = ShadPopoverController();
     controller.addListener(() {
       if (!mounted) return;
       if (!controller.isOpen) {
-        if (_sidebarController.state.activePopoverTaskId == taskId) {
-          _sidebarController.setActivePopoverTaskId(null);
-        }
-        TaskEditSessionTracker.instance.end(taskId, this);
+        _handlePopoverClosed(
+          taskId: taskId,
+          anchorToken: anchorToken,
+        );
       }
     });
-    _taskPopoverControllers[taskId] = controller;
+    _popoverControllersByAnchor[anchorToken] = controller;
     return controller;
   }
 
-  void _toggleTaskPopover(String taskId) {
-    final controller = _popoverControllerFor(taskId);
-    if (controller.isOpen) {
-      _closeTaskPopover(taskId);
-    } else {
-      _openTaskPopover(taskId);
+  void _handlePopoverClosed({
+    required String taskId,
+    TaskPopoverAnchorToken? anchorToken,
+  }) {
+    final CalendarSidebarState uiState = _sidebarController.state;
+    if (uiState.activePopoverTaskId != taskId) {
+      return;
     }
+    if (anchorToken != null &&
+        uiState.activePopoverAnchorToken != anchorToken) {
+      return;
+    }
+    _activePopoverController = null;
+    _sidebarController.setActivePopoverTaskId(
+      null,
+      anchorToken: null,
+    );
+    TaskEditSessionTracker.instance.end(taskId, this);
   }
 
-  void _openTaskPopover(String taskId) {
+  void _toggleTaskPopover({
+    required String taskId,
+    required TaskPopoverAnchorToken anchorToken,
+    required ShadPopoverController controller,
+  }) {
+    if (controller.isOpen) {
+      _closeTaskPopover(taskId);
+      return;
+    }
+    _openTaskPopover(
+      taskId: taskId,
+      anchorToken: anchorToken,
+      controller: controller,
+    );
+  }
+
+  void _openTaskPopover({
+    required String taskId,
+    required TaskPopoverAnchorToken anchorToken,
+    required ShadPopoverController controller,
+  }) {
+    final String? activeId = _sidebarController.state.activePopoverTaskId;
+    if (activeId != null && activeId != taskId) {
+      _closeTaskPopover(activeId);
+    }
     if (!TaskEditSessionTracker.instance.begin(taskId, this)) {
       return;
     }
-    final controller = _popoverControllerFor(taskId);
-    final String? activeId = _sidebarController.state.activePopoverTaskId;
-    if (activeId != null && activeId != taskId) {
-      final activeController = _taskPopoverControllers[activeId];
-      activeController?.hide();
-    }
+    _activePopoverController = controller;
     controller.show();
-    if (activeId != taskId) {
-      _sidebarController.setActivePopoverTaskId(taskId);
-    }
+    _sidebarController.setActivePopoverTaskId(
+      taskId,
+      anchorToken: anchorToken,
+    );
   }
 
   void _closeTaskPopover([String? taskId]) {
-    final String? id = taskId ?? _sidebarController.state.activePopoverTaskId;
-    if (id == null) {
+    final CalendarSidebarState uiState = _sidebarController.state;
+    final String? activeId = uiState.activePopoverTaskId;
+    if (activeId == null) {
       return;
     }
-    final controller = _taskPopoverControllers[id];
-    controller?.hide();
-    if (_sidebarController.state.activePopoverTaskId == id && mounted) {
-      _sidebarController.setActivePopoverTaskId(null);
+    if (taskId != null && activeId != taskId) {
+      return;
     }
-    TaskEditSessionTracker.instance.end(id, this);
+    final ShadPopoverController? controller = _activePopoverController;
+    if (controller == null) {
+      _handlePopoverClosed(
+        taskId: activeId,
+        anchorToken: uiState.activePopoverAnchorToken,
+      );
+      return;
+    }
+    controller.hide();
+  }
+
+  void _releaseTaskPopoverAnchor(
+    TaskPopoverAnchorToken anchorToken,
+    String taskId,
+  ) {
+    final ShadPopoverController? controller =
+        _popoverControllersByAnchor.remove(anchorToken);
+    if (controller == null) {
+      _handlePopoverClosed(
+        taskId: taskId,
+        anchorToken: anchorToken,
+      );
+      return;
+    }
+    if (controller.isOpen) {
+      controller.hide();
+    } else {
+      _handlePopoverClosed(
+        taskId: taskId,
+        anchorToken: anchorToken,
+      );
+    }
+    controller.dispose();
   }
 }
 
@@ -3469,14 +3525,6 @@ class _SelectionBatchEditSection extends StatelessWidget {
           onChanged: onDescriptionChanged,
         ),
         const SizedBox(height: calendarGutterSm),
-        IgnorePointer(
-          ignoring: !hasTasks,
-          child: Opacity(
-            opacity: hasTasks ? 1 : 0.6,
-            child: TaskChecklist(controller: checklistController),
-          ),
-        ),
-        const SizedBox(height: calendarGutterSm),
         _SelectionLocationField(
           controller: locationController,
           helper: locationHelper,
@@ -3484,6 +3532,14 @@ class _SelectionBatchEditSection extends StatelessWidget {
           onChanged: onLocationChanged,
           label: l10n.calendarBatchLocation,
           hint: l10n.calendarBatchLocationHint,
+        ),
+        const SizedBox(height: calendarGutterSm),
+        IgnorePointer(
+          ignoring: !hasTasks,
+          child: Opacity(
+            opacity: hasTasks ? 1 : 0.6,
+            child: TaskChecklist(controller: checklistController),
+          ),
         ),
         const SizedBox(height: calendarGutterMd),
         Align(
@@ -5732,13 +5788,7 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatelessWidget {
                                           taskId: taskId,
                                         ),
                                       );
-                                  host._taskPopoverControllers
-                                      .remove(task.id)
-                                      ?.dispose();
-                                  host._sidebarController
-                                      .setActivePopoverTaskId(null);
-                                  TaskEditSessionTracker.instance
-                                      .end(task.id, host);
+                                  host._closeTaskPopover(taskId);
                                 },
                               );
                             },

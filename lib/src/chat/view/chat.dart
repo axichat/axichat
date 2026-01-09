@@ -2650,16 +2650,11 @@ class _ChatState extends State<Chat> {
         }
         final String fileName =
             file.name.isNotEmpty ? file.name : path.split('/').last;
-        final String? resolvedMimeType = await resolveMimeTypeFromPath(
-          path: path,
-          fileName: fileName,
-        );
         attachments.add(
           EmailAttachment(
             path: path,
             fileName: fileName,
             sizeBytes: file.size > 0 ? file.size : 0,
-            mimeType: resolvedMimeType,
           ),
         );
       }
