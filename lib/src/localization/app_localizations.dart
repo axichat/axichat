@@ -4766,6 +4766,12 @@ abstract class AppLocalizations {
   /// **'Back to calendar'**
   String get calendarBackToCalendar;
 
+  /// No description provided for @calendarLoadingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading calendar...'**
+  String get calendarLoadingMessage;
+
   /// No description provided for @calendarCriticalPathAddTask.
   ///
   /// In en, this message translates to:
@@ -4838,6 +4844,18 @@ abstract class AppLocalizations {
   /// **'New critical path'**
   String get calendarCriticalPathsNew;
 
+  /// No description provided for @calendarCriticalPathRenameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename critical path'**
+  String get calendarCriticalPathRenameTitle;
+
+  /// No description provided for @calendarCriticalPathDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete critical path'**
+  String get calendarCriticalPathDeleteTitle;
+
   /// No description provided for @calendarCriticalPathsTitle.
   ///
   /// In en, this message translates to:
@@ -4849,6 +4867,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Share to chat'**
   String get calendarCriticalPathShareAction;
+
+  /// No description provided for @calendarCriticalPathShareTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share critical path'**
+  String get calendarCriticalPathShareTitle;
+
+  /// No description provided for @calendarCriticalPathShareSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a critical path to a chat.'**
+  String get calendarCriticalPathShareSubtitle;
+
+  /// No description provided for @calendarCriticalPathShareTargetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Share with'**
+  String get calendarCriticalPathShareTargetLabel;
+
+  /// No description provided for @calendarCriticalPathShareButtonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get calendarCriticalPathShareButtonLabel;
+
+  /// No description provided for @calendarCriticalPathShareMissingChats.
+  ///
+  /// In en, this message translates to:
+  /// **'No eligible chats available.'**
+  String get calendarCriticalPathShareMissingChats;
+
+  /// No description provided for @calendarCriticalPathShareMissingRecipient.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a chat to share with.'**
+  String get calendarCriticalPathShareMissingRecipient;
+
+  /// No description provided for @calendarCriticalPathShareMissingService.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sharing is unavailable.'**
+  String get calendarCriticalPathShareMissingService;
+
+  /// No description provided for @calendarCriticalPathShareDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar cards are disabled for your role in this room.'**
+  String get calendarCriticalPathShareDenied;
+
+  /// No description provided for @calendarCriticalPathShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to share critical path.'**
+  String get calendarCriticalPathShareFailed;
+
+  /// No description provided for @calendarCriticalPathShareSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical path shared.'**
+  String get calendarCriticalPathShareSuccess;
+
+  /// No description provided for @calendarCriticalPathShareChatTypeDirect.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct chat'**
+  String get calendarCriticalPathShareChatTypeDirect;
+
+  /// No description provided for @calendarCriticalPathShareChatTypeGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Group chat'**
+  String get calendarCriticalPathShareChatTypeGroup;
+
+  /// No description provided for @calendarCriticalPathShareChatTypeNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get calendarCriticalPathShareChatTypeNote;
 
   /// Summary of completed tasks in a critical path.
   ///
@@ -4939,6 +5035,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to create a critical path.'**
   String get calendarCriticalPathCreateFailed;
+
+  /// No description provided for @calendarTaskSearchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search tasks'**
+  String get calendarTaskSearchTitle;
+
+  /// No description provided for @calendarTaskSearchAddToTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to {name}'**
+  String calendarTaskSearchAddToTitle(Object name);
+
+  /// No description provided for @calendarTaskSearchSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search titles, descriptions, locations, categories, priorities, and deadlines.'**
+  String get calendarTaskSearchSubtitle;
+
+  /// No description provided for @calendarTaskSearchAddToSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a task to append it to the critical path order.'**
+  String get calendarTaskSearchAddToSubtitle;
+
+  /// Search query hint. Keep filter tokens (title:, desc:, etc) in English.
+  ///
+  /// In en, this message translates to:
+  /// **'title:, desc:, location:, category:work, priority:urgent, status:done'**
+  String get calendarTaskSearchHint;
+
+  /// No description provided for @calendarTaskSearchEmptyPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Start typing to search tasks'**
+  String get calendarTaskSearchEmptyPrompt;
+
+  /// No description provided for @calendarTaskSearchEmptyNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No results found'**
+  String get calendarTaskSearchEmptyNoResults;
+
+  /// Search tips. Keep filter tokens (title:, desc:, etc) in English.
+  ///
+  /// In en, this message translates to:
+  /// **'Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.'**
+  String get calendarTaskSearchEmptyHint;
+
+  /// No description provided for @calendarTaskSearchFilterScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled'**
+  String get calendarTaskSearchFilterScheduled;
+
+  /// No description provided for @calendarTaskSearchFilterUnscheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Unscheduled'**
+  String get calendarTaskSearchFilterUnscheduled;
+
+  /// No description provided for @calendarTaskSearchFilterReminders.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders'**
+  String get calendarTaskSearchFilterReminders;
+
+  /// No description provided for @calendarTaskSearchFilterOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get calendarTaskSearchFilterOpen;
+
+  /// No description provided for @calendarTaskSearchFilterCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get calendarTaskSearchFilterCompleted;
+
+  /// No description provided for @calendarTaskSearchDueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {date}'**
+  String calendarTaskSearchDueDate(Object date);
+
+  /// No description provided for @calendarTaskSearchOverdueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue · {date}'**
+  String calendarTaskSearchOverdueDate(Object date);
 
   /// No description provided for @calendarDeleteTaskConfirm.
   ///
@@ -5971,6 +6157,133 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only for trusted chats.'**
   String get settingsAutoDownloadArchivesDescription;
+
+  /// No description provided for @emailContactsImportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import contacts'**
+  String get emailContactsImportTitle;
+
+  /// No description provided for @emailContactsImportSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Gmail, Outlook, Yahoo CSVs, or vCards.'**
+  String get emailContactsImportSubtitle;
+
+  /// No description provided for @emailContactsImportFileAccessError.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to access the selected file.'**
+  String get emailContactsImportFileAccessError;
+
+  /// No description provided for @emailContactsImportAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get emailContactsImportAction;
+
+  /// No description provided for @emailContactsImportFormatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Format'**
+  String get emailContactsImportFormatLabel;
+
+  /// No description provided for @emailContactsImportFileLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get emailContactsImportFileLabel;
+
+  /// No description provided for @emailContactsImportNoFile.
+  ///
+  /// In en, this message translates to:
+  /// **'No file selected'**
+  String get emailContactsImportNoFile;
+
+  /// No description provided for @emailContactsImportChooseFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose file'**
+  String get emailContactsImportChooseFile;
+
+  /// No description provided for @emailContactsImportFormatGmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Gmail CSV'**
+  String get emailContactsImportFormatGmail;
+
+  /// No description provided for @emailContactsImportFormatOutlook.
+  ///
+  /// In en, this message translates to:
+  /// **'Outlook CSV'**
+  String get emailContactsImportFormatOutlook;
+
+  /// No description provided for @emailContactsImportFormatYahoo.
+  ///
+  /// In en, this message translates to:
+  /// **'Yahoo CSV'**
+  String get emailContactsImportFormatYahoo;
+
+  /// No description provided for @emailContactsImportFormatGenericCsv.
+  ///
+  /// In en, this message translates to:
+  /// **'Generic CSV'**
+  String get emailContactsImportFormatGenericCsv;
+
+  /// No description provided for @emailContactsImportFormatVcard.
+  ///
+  /// In en, this message translates to:
+  /// **'vCard (VCF)'**
+  String get emailContactsImportFormatVcard;
+
+  /// No description provided for @emailContactsImportNoValidContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'No valid contacts found.'**
+  String get emailContactsImportNoValidContacts;
+
+  /// No description provided for @emailContactsImportAccountRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up email before importing contacts.'**
+  String get emailContactsImportAccountRequired;
+
+  /// No description provided for @emailContactsImportEmptyFile.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected file is empty.'**
+  String get emailContactsImportEmptyFile;
+
+  /// No description provided for @emailContactsImportReadFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read that file.'**
+  String get emailContactsImportReadFailure;
+
+  /// No description provided for @emailContactsImportUnsupportedFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsupported file type.'**
+  String get emailContactsImportUnsupportedFile;
+
+  /// No description provided for @emailContactsImportNoContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts found in that file.'**
+  String get emailContactsImportNoContacts;
+
+  /// No description provided for @emailContactsImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed.'**
+  String get emailContactsImportFailed;
+
+  /// No description provided for @emailContactsImportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {imported} contacts. {duplicates} duplicates, {invalid} invalid, {failed} failed.'**
+  String emailContactsImportSuccess(
+      Object imported, Object duplicates, Object invalid, Object failed);
 
   /// No description provided for @chatChooseTextToAdd.
   ///

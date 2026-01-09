@@ -13,8 +13,7 @@ const double _inputDialogSpinnerPadding = 1.0;
 const double _inputDialogSpinnerSlotSize =
     _inputDialogSpinnerDimension + (_inputDialogSpinnerPadding * 2);
 const double _inputDialogSpinnerGap = 8.0;
-const Duration _inputDialogLoadingAnimation =
-    Duration(milliseconds: 200);
+const Duration _inputDialogLoadingAnimation = Duration(milliseconds: 200);
 
 class AxiInputDialog extends StatelessWidget {
   const AxiInputDialog({

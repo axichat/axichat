@@ -104,6 +104,8 @@ const List<CalendarZoomLevel> kCalendarZoomLevels = <CalendarZoomLevel>[
   CalendarZoomLevel(hourHeight: 184, daySubdivisions: 4, label: 'Expanded'),
 ];
 
+const Duration _overlapFallbackDuration = Duration(hours: 1);
+
 /// Immutable layout metrics resolved for the active viewport.
 class CalendarLayoutMetrics {
   const CalendarLayoutMetrics({
@@ -423,17 +425,65 @@ class _ActiveTask {
   final int columnIndex;
 }
 
+class _OverlapCandidate {
+  const _OverlapCandidate({
+    required this.taskId,
+    required this.start,
+    required this.end,
+  });
+
+  final String taskId;
+  final DateTime start;
+  final DateTime end;
+}
+
+DateTime _stripSubMinute(DateTime value) {
+  return DateTime(
+    value.year,
+    value.month,
+    value.day,
+    value.hour,
+    value.minute,
+  );
+}
+
+DateTime _resolveOverlapEnd(CalendarTask task, DateTime start) {
+  final DateTime? effectiveEnd = task.effectiveEndDate;
+  if (effectiveEnd != null && effectiveEnd.isAfter(start)) {
+    return effectiveEnd;
+  }
+  final Duration resolvedDuration = task.duration ?? _overlapFallbackDuration;
+  if (resolvedDuration <= Duration.zero) {
+    return start;
+  }
+  return start.add(resolvedDuration);
+}
+
 Map<String, OverlapInfo> calculateOverlapColumns(List<CalendarTask> tasks) {
-  final sortedTasks = tasks.where((task) => task.scheduledTime != null).toList()
-    ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
+  final List<_OverlapCandidate> sortedTasks =
+      tasks.where((task) => task.scheduledTime != null).map((task) {
+    final DateTime scheduled = task.scheduledTime!;
+    final DateTime normalizedStart = _stripSubMinute(scheduled);
+    final DateTime rawEnd = _resolveOverlapEnd(task, scheduled);
+    final DateTime normalizedEnd = _stripSubMinute(rawEnd);
+    final DateTime effectiveEnd = normalizedEnd.isAfter(normalizedStart)
+        ? normalizedEnd
+        : normalizedStart;
+    return _OverlapCandidate(
+      taskId: task.id,
+      start: normalizedStart,
+      end: effectiveEnd,
+    );
+  }).toList()
+        ..sort((a, b) => a.start.compareTo(b.start));
 
   final List<_ActiveTask> active = <_ActiveTask>[];
   final Map<String, _MutableOverlapInfo> overlapMap =
       <String, _MutableOverlapInfo>{};
 
-  for (final CalendarTask task in sortedTasks) {
-    final DateTime start = task.scheduledTime!;
-    final DateTime end = start.add(task.duration ?? const Duration(hours: 1));
+  for (final _OverlapCandidate task in sortedTasks) {
+    final DateTime start = task.start;
+    final DateTime end = task.end;
 
     active.removeWhere((entry) => !entry.end.isAfter(start));
 
@@ -445,7 +495,7 @@ Map<String, OverlapInfo> calculateOverlapColumns(List<CalendarTask> tasks) {
     }
 
     final _ActiveTask newEntry = _ActiveTask(
-      taskId: task.id,
+      taskId: task.taskId,
       end: end,
       columnIndex: columnIndex,
     );
@@ -457,7 +507,7 @@ Map<String, OverlapInfo> calculateOverlapColumns(List<CalendarTask> tasks) {
       columnIndex: columnIndex,
       totalColumns: totalColumns,
     );
-    overlapMap[task.id] = mutableInfo;
+    overlapMap[task.taskId] = mutableInfo;
 
     for (final _ActiveTask entry in active) {
       final _MutableOverlapInfo? info = overlapMap[entry.taskId];

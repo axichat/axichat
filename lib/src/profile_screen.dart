@@ -10,7 +10,9 @@ import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
+import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
@@ -62,6 +64,11 @@ class ProfileScreen extends StatelessWidget {
           ),
           BlocProvider.value(
             value: locate<EmailSyncCubit>(),
+          ),
+          BlocProvider(
+            create: (context) => EmailContactImportCubit(
+              emailService: locate<EmailService>(),
+            ),
           ),
           BlocProvider.value(
             value: locate<SettingsCubit>(),

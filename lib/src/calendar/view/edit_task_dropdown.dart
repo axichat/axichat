@@ -377,6 +377,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         scheduleTouched: false,
         checklistTouched: true,
       );
+      final CalendarTask? seriesTask = _resolveLatestSeriesSnapshot();
+      if (seriesTask != null) {
+        final CalendarTask seriesUpdate =
+            seriesTask.copyWith(checklist: checklist);
+        if (seriesUpdate != seriesTask) {
+          widget.onTaskUpdated(seriesUpdate);
+        }
+      }
       return;
     }
     widget.onTaskUpdated(updatedTask);
@@ -398,16 +406,21 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
   CalendarTask _resolveLatestTaskSnapshot() {
     final String baseId = baseTaskIdFrom(widget.task.id);
-    final CalendarTask? baseTask =
-        context.read<B>().state.model.tasks[baseId];
+    final CalendarTask? baseTask = context.read<B>().state.model.tasks[baseId];
     if (baseTask == null) {
       return widget.task;
     }
     if (!widget.task.isOccurrence) {
       return baseTask;
     }
-    final CalendarTask? occurrenceTask = baseTask.occurrenceForId(widget.task.id);
+    final CalendarTask? occurrenceTask =
+        baseTask.occurrenceForId(widget.task.id);
     return occurrenceTask ?? baseTask;
+  }
+
+  CalendarTask? _resolveLatestSeriesSnapshot() {
+    final String baseId = baseTaskIdFrom(widget.task.id);
+    return context.read<B>().state.model.tasks[baseId];
   }
 
   AlarmReminderSplit _splitTaskAlarms(CalendarTask task) {
@@ -884,18 +897,30 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   void _handleSave() {
     final TaskEditMode editMode = widget.editMode;
     _checklistController.commitPendingEntry();
+    final bool isOccurrenceEdit =
+        widget.task.isOccurrence && widget.onOccurrenceUpdated != null;
     if (editMode.isChecklistOnly) {
       final CalendarTask baseTask = _resolveLatestTaskSnapshot();
+      final List<TaskChecklistItem> checklistItems =
+          _checklistController.items.toList();
       final CalendarTask updatedTask = baseTask.copyWith(
-        checklist: _checklistController.items.toList(),
+        checklist: checklistItems,
       );
-      if (widget.task.isOccurrence && widget.onOccurrenceUpdated != null) {
+      if (isOccurrenceEdit) {
         widget.onOccurrenceUpdated!(
           updatedTask,
           _occurrenceScope,
           scheduleTouched: false,
           checklistTouched: true,
         );
+        final CalendarTask? seriesTask = _resolveLatestSeriesSnapshot();
+        if (seriesTask != null) {
+          final CalendarTask seriesUpdate =
+              seriesTask.copyWith(checklist: checklistItems);
+          if (seriesUpdate != seriesTask) {
+            widget.onTaskUpdated(seriesUpdate);
+          }
+        }
       } else {
         widget.onTaskUpdated(updatedTask);
       }
@@ -912,17 +937,18 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
     final CalendarTask baseTask = _resolveLatestTaskSnapshot();
     final bool titleTouched = _isTouched(_TaskEditField.title);
-    final String title = titleTouched ? _titleController.text.trim() : baseTask.title;
+    final String nextTitle = _titleController.text.trim();
+    final String title = titleTouched ? nextTitle : baseTask.title;
 
     final bool priorityTouched = _isTouched(_TaskEditField.priority);
-    final TaskPriority? priority = priorityTouched
-        ? () {
-            if (_isImportant && _isUrgent) return TaskPriority.critical;
-            if (_isImportant) return TaskPriority.important;
-            if (_isUrgent) return TaskPriority.urgent;
-            return TaskPriority.none;
-          }()
-        : baseTask.priority;
+    final TaskPriority nextPriority = () {
+      if (_isImportant && _isUrgent) return TaskPriority.critical;
+      if (_isImportant) return TaskPriority.important;
+      if (_isUrgent) return TaskPriority.urgent;
+      return TaskPriority.none;
+    }();
+    final TaskPriority? priority =
+        priorityTouched ? nextPriority : baseTask.priority;
 
     final bool scheduleTouched = _isTouched(_TaskEditField.schedule);
     DateTime? scheduledTime;
@@ -953,39 +979,44 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       endDate = baseTask.endDate;
     }
 
-    final bool recurrenceTouched =
-        _isTouched(_TaskEditField.recurrence) || scheduleTouched;
-    final DateTime? recurrenceAnchor =
+    final bool recurrenceTouched = _isTouched(_TaskEditField.recurrence) ||
+        (!isOccurrenceEdit && scheduleTouched);
+    final DateTime recurrenceAnchor =
         scheduledTime ?? baseTask.scheduledTime ?? DateTime.now();
-    final RecurrenceRule? recurrence = recurrenceTouched
+    final RecurrenceRule? nextRecurrence = recurrenceTouched
         ? (_recurrence.isActive
             ? _recurrence
                 .resolveLinkedLimits(recurrenceAnchor)
                 .toRule(start: recurrenceAnchor)
             : null)
+        : null;
+    final RecurrenceRule? recurrence = recurrenceTouched
+        ? (nextRecurrence?.isNone == true ? null : nextRecurrence)
         : baseTask.recurrence;
 
     final bool descriptionTouched = _isTouched(_TaskEditField.description);
-    final String? description = descriptionTouched
-        ? (_descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim())
-        : baseTask.description;
+    final String descriptionText = _descriptionController.text.trim();
+    final String? nextDescription =
+        descriptionText.isEmpty ? null : descriptionText;
+    final String? description =
+        descriptionTouched ? nextDescription : baseTask.description;
     final bool locationTouched = _isTouched(_TaskEditField.location);
-    final String? location = locationTouched
-        ? (_locationController.text.trim().isEmpty
-            ? null
-            : _locationController.text.trim())
-        : baseTask.location;
+    final String locationText = _locationController.text.trim();
+    final String? nextLocation = locationText.isEmpty ? null : locationText;
+    final String? location = locationTouched ? nextLocation : baseTask.location;
     final bool deadlineTouched = _isTouched(_TaskEditField.deadline);
-    final DateTime? deadline = deadlineTouched ? _deadline : baseTask.deadline;
+    final DateTime? nextDeadline = _deadline;
+    final DateTime? deadline =
+        deadlineTouched ? nextDeadline : baseTask.deadline;
     final bool completionTouched = _isTouched(_TaskEditField.completion);
+    final bool nextIsCompleted = _isCompleted;
     final bool isCompleted =
-        completionTouched ? _isCompleted : baseTask.isCompleted;
+        completionTouched ? nextIsCompleted : baseTask.isCompleted;
     final bool checklistTouched = _isTouched(_TaskEditField.checklist);
-    final List<TaskChecklistItem> checklist = checklistTouched
-        ? _checklistController.items.toList()
-        : baseTask.checklist;
+    final List<TaskChecklistItem> checklistItems =
+        _checklistController.items.toList();
+    final List<TaskChecklistItem> checklist =
+        checklistTouched ? checklistItems : baseTask.checklist;
 
     final bool remindersTouched = _isTouched(_TaskEditField.reminders);
     final bool advancedAlarmsTouched =
@@ -993,9 +1024,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     final AlarmReminderSplit baseSplit = _splitTaskAlarms(baseTask);
     final ReminderPreferences remindersForAlarms =
         remindersTouched ? _reminders : baseSplit.reminders;
-    final List<CalendarAlarm> advancedAlarmsForMerge = advancedAlarmsTouched
-        ? _advancedAlarms
-        : baseSplit.advancedAlarms;
+    final List<CalendarAlarm> advancedAlarmsForMerge =
+        advancedAlarmsTouched ? _advancedAlarms : baseSplit.advancedAlarms;
     final bool shouldUpdateAlarms = remindersTouched || advancedAlarmsTouched;
     final List<CalendarAlarm>? alarmsOverride = shouldUpdateAlarms
         ? mergeAdvancedAlarms(
@@ -1007,26 +1037,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         remindersTouched ? remindersForAlarms : baseTask.reminders;
 
     final bool categoriesTouched = _isTouched(_TaskEditField.categories);
-    final List<String>? categoriesOverride = categoriesTouched
-        ? resolveCategoryOverride(
-            base: baseTask.icsMeta,
-            categories: _categories,
-          )
-        : null;
     final bool organizerTouched = _isTouched(_TaskEditField.organizer);
-    final CalendarOrganizer? organizerOverride = organizerTouched
-        ? resolveOrganizerOverride(
-            base: baseTask.icsMeta,
-            organizer: _organizer,
-          )
-        : null;
     final bool attendeesTouched = _isTouched(_TaskEditField.attendees);
-    final List<CalendarAttendee>? attendeesOverride = attendeesTouched
-        ? resolveAttendeeOverride(
-            base: baseTask.icsMeta,
-            attendees: _attendees,
-          )
-        : null;
     final bool urlTouched = _isTouched(_TaskEditField.url);
     final bool geoTouched = _isTouched(_TaskEditField.geo);
     final bool shouldUpdateIcsMeta = categoriesTouched ||
@@ -1035,19 +1047,43 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         urlTouched ||
         geoTouched ||
         shouldUpdateAlarms;
-    final CalendarIcsMeta? icsMeta = shouldUpdateIcsMeta
-        ? applyIcsMetaOverrides(
-            base: baseTask.icsMeta,
-            categories: categoriesOverride,
-            url: urlTouched ? _url : null,
-            geo: geoTouched ? _geo : null,
-            organizer: organizerOverride,
-            attendees: attendeesOverride,
-            alarms: alarmsOverride,
-          )
-        : baseTask.icsMeta;
 
-    final updatedTask = baseTask.copyWith(
+    CalendarIcsMeta? resolveIcsMeta(CalendarIcsMeta? base) {
+      if (!shouldUpdateIcsMeta) {
+        return base;
+      }
+      final List<String>? categoriesOverride = categoriesTouched
+          ? resolveCategoryOverride(
+              base: base,
+              categories: _categories,
+            )
+          : null;
+      final CalendarOrganizer? organizerOverride = organizerTouched
+          ? resolveOrganizerOverride(
+              base: base,
+              organizer: _organizer,
+            )
+          : null;
+      final List<CalendarAttendee>? attendeesOverride = attendeesTouched
+          ? resolveAttendeeOverride(
+              base: base,
+              attendees: _attendees,
+            )
+          : null;
+      return applyIcsMetaOverrides(
+        base: base,
+        categories: categoriesOverride,
+        url: urlTouched ? _url : null,
+        geo: geoTouched ? _geo : null,
+        organizer: organizerOverride,
+        attendees: attendeesOverride,
+        alarms: alarmsOverride,
+      );
+    }
+
+    final CalendarIcsMeta? icsMeta = resolveIcsMeta(baseTask.icsMeta);
+
+    final CalendarTask updatedTask = baseTask.copyWith(
       title: title,
       description: description,
       location: location,
@@ -1057,19 +1093,49 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       deadline: deadline,
       priority: priority,
       isCompleted: isCompleted,
-      recurrence: recurrence?.isNone == true ? null : recurrence,
+      recurrence: recurrence,
       checklist: checklist,
       reminders: remindersField,
       icsMeta: icsMeta,
     );
 
-    if (widget.task.isOccurrence && widget.onOccurrenceUpdated != null) {
-      widget.onOccurrenceUpdated!(
-        updatedTask,
-        _occurrenceScope,
-        scheduleTouched: scheduleTouched,
-        checklistTouched: checklistTouched,
-      );
+    if (isOccurrenceEdit) {
+      if (scheduleTouched || checklistTouched) {
+        widget.onOccurrenceUpdated!(
+          updatedTask,
+          _occurrenceScope,
+          scheduleTouched: scheduleTouched,
+          checklistTouched: checklistTouched,
+        );
+      }
+
+      final CalendarTask? seriesTask = _resolveLatestSeriesSnapshot();
+      if (seriesTask != null) {
+        final ReminderPreferences? seriesReminders =
+            remindersTouched ? remindersForAlarms : seriesTask.reminders;
+        final CalendarIcsMeta? seriesIcsMeta =
+            resolveIcsMeta(seriesTask.icsMeta);
+        final CalendarTask seriesUpdate = seriesTask.copyWith(
+          title: titleTouched ? nextTitle : seriesTask.title,
+          description:
+              descriptionTouched ? nextDescription : seriesTask.description,
+          location: locationTouched ? nextLocation : seriesTask.location,
+          deadline: deadlineTouched ? nextDeadline : seriesTask.deadline,
+          priority: priorityTouched ? nextPriority : seriesTask.priority,
+          isCompleted:
+              completionTouched ? nextIsCompleted : seriesTask.isCompleted,
+          checklist: checklistTouched ? checklistItems : seriesTask.checklist,
+          recurrence: recurrenceTouched
+              ? (nextRecurrence?.isNone == true ? null : nextRecurrence)
+              : seriesTask.recurrence,
+          reminders: seriesReminders,
+          icsMeta: seriesIcsMeta,
+        );
+
+        if (seriesUpdate != seriesTask) {
+          widget.onTaskUpdated(seriesUpdate);
+        }
+      }
     } else {
       widget.onTaskUpdated(updatedTask);
     }
@@ -1339,8 +1405,9 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
               const SizedBox(height: calendarInsetSm),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final double? width =
-                      constraints.maxWidth.isFinite ? constraints.maxWidth : null;
+                  final double? width = constraints.maxWidth.isFinite
+                      ? constraints.maxWidth
+                      : null;
                   final chipWrap = Wrap(
                     spacing: 12,
                     runSpacing: 10,

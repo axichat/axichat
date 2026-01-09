@@ -1499,5 +1499,34 @@
   "settingsAutoDownloadDocumentsDescription": "Only for trusted chats.",
   "settingsAutoDownloadArchives": "Auto-download archives",
   "settingsAutoDownloadArchivesDescription": "Only for trusted chats.",
+  "emailContactsImportTitle": "Import contacts",
+  "emailContactsImportSubtitle": "Gmail, Outlook, Yahoo CSVs, or vCards.",
+  "emailContactsImportFileAccessError": "Unable to access the selected file.",
+  "emailContactsImportAction": "Import",
+  "emailContactsImportFormatLabel": "Format",
+  "emailContactsImportFileLabel": "File",
+  "emailContactsImportNoFile": "No file selected",
+  "emailContactsImportChooseFile": "Choose file",
+  "emailContactsImportFormatGmail": "Gmail CSV",
+  "emailContactsImportFormatOutlook": "Outlook CSV",
+  "emailContactsImportFormatYahoo": "Yahoo CSV",
+  "emailContactsImportFormatGenericCsv": "Generic CSV",
+  "emailContactsImportFormatVcard": "vCard (VCF)",
+  "emailContactsImportNoValidContacts": "No valid contacts found.",
+  "emailContactsImportAccountRequired": "Set up email before importing contacts.",
+  "emailContactsImportEmptyFile": "The selected file is empty.",
+  "emailContactsImportReadFailure": "Couldn't read that file.",
+  "emailContactsImportUnsupportedFile": "Unsupported file type.",
+  "emailContactsImportNoContacts": "No contacts found in that file.",
+  "emailContactsImportFailed": "Import failed.",
+  "emailContactsImportSuccess": "Imported {imported} contacts. {duplicates} duplicates, {invalid} invalid, {failed} failed.",
+  "@emailContactsImportSuccess": {
+    "placeholders": {
+      "imported": {},
+      "duplicates": {},
+      "invalid": {},
+      "failed": {}
+    }
+  },
   "chatChooseTextToAdd": "Choose text to add"
 }
