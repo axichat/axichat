@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -27,25 +28,6 @@ const EdgeInsets _criticalPathShareChatTilePadding = EdgeInsets.symmetric(
   vertical: 8,
 );
 
-const String _criticalPathShareTitle = 'Share critical path';
-const String _criticalPathShareSubtitle = 'Send a critical path to a chat.';
-const String _criticalPathShareTargetLabel = 'Share with';
-const String _criticalPathShareButtonLabel = 'Share';
-const String _criticalPathShareMissingChatsMessage =
-    'No eligible chats available.';
-const String _criticalPathShareMissingRecipientMessage =
-    'Select a chat to share with.';
-const String _criticalPathShareMissingServiceMessage =
-    'Calendar sharing is unavailable.';
-const String _criticalPathShareDeniedMessage =
-    'Calendar cards are disabled for your role in this room.';
-const String _criticalPathShareSendFailureMessage =
-    'Failed to share critical path.';
-const String _criticalPathShareSendSuccessMessage = 'Critical path shared.';
-const String _criticalPathShareChatTypeDirectLabel = 'Direct chat';
-const String _criticalPathShareChatTypeGroupLabel = 'Group chat';
-const String _criticalPathShareChatTypeNoteLabel = 'Notes';
-
 Future<void> showCalendarCriticalPathShareSheet({
   required BuildContext context,
   required CalendarCriticalPath path,
@@ -57,7 +39,10 @@ Future<void> showCalendarCriticalPathShareSheet({
   final List<Chat> available =
       chats.where((chat) => chat.supportsChatCalendar).toList(growable: false);
   if (available.isEmpty) {
-    FeedbackSystem.showInfo(context, _criticalPathShareMissingChatsMessage);
+    FeedbackSystem.showInfo(
+      context,
+      context.l10n.calendarCriticalPathShareMissingChats,
+    );
     return;
   }
   final result = await showAdaptiveBottomSheet<bool>(
@@ -73,7 +58,10 @@ Future<void> showCalendarCriticalPathShareSheet({
   if (result != true || !context.mounted) {
     return;
   }
-  FeedbackSystem.showSuccess(context, _criticalPathShareSendSuccessMessage);
+  FeedbackSystem.showSuccess(
+    context,
+    context.l10n.calendarCriticalPathShareSuccess,
+  );
 }
 
 class CalendarCriticalPathShareSheet extends StatefulWidget {
@@ -112,19 +100,19 @@ class _CalendarCriticalPathShareSheetState
   @override
   Widget build(BuildContext context) {
     final header = AxiSheetHeader(
-      title: const Text(_criticalPathShareTitle),
-      subtitle: const Text(_criticalPathShareSubtitle),
+      title: Text(context.l10n.calendarCriticalPathShareTitle),
+      subtitle: Text(context.l10n.calendarCriticalPathShareSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
     return AxiSheetScaffold.scroll(
       header: header,
       children: [
-        const _CriticalPathShareSectionLabel(
-          text: _criticalPathShareTargetLabel,
+        _CriticalPathShareSectionLabel(
+          text: context.l10n.calendarCriticalPathShareTargetLabel,
         ),
         if (widget.availableChats.isEmpty)
-          const _CriticalPathShareEmptyMessage(
-            message: _criticalPathShareMissingChatsMessage,
+          _CriticalPathShareEmptyMessage(
+            message: context.l10n.calendarCriticalPathShareMissingChats,
           )
         else
           _CriticalPathShareChatPicker(
@@ -136,7 +124,7 @@ class _CalendarCriticalPathShareSheetState
         _CriticalPathShareActionRow(
           isBusy: _isSending,
           onPressed: _handleSharePressed,
-          label: _criticalPathShareButtonLabel,
+          label: context.l10n.calendarCriticalPathShareButtonLabel,
         ),
       ],
     );
@@ -153,7 +141,9 @@ class _CalendarCriticalPathShareSheetState
     final selected = _selectedChat;
     if (selected == null) {
       FeedbackSystem.showInfo(
-          context, _criticalPathShareMissingRecipientMessage);
+        context,
+        context.l10n.calendarCriticalPathShareMissingRecipient,
+      );
       return;
     }
     if (_isSending) {
@@ -164,7 +154,9 @@ class _CalendarCriticalPathShareSheetState
     try {
       if (xmppService == null) {
         FeedbackSystem.showInfo(
-            context, _criticalPathShareMissingServiceMessage);
+          context,
+          context.l10n.calendarCriticalPathShareMissingService,
+        );
         return;
       }
       final CalendarFragmentShareDecision decision =
@@ -173,7 +165,10 @@ class _CalendarCriticalPathShareSheetState
         roomState: xmppService.roomStateFor(selected.jid),
       );
       if (!decision.canWrite) {
-        FeedbackSystem.showInfo(context, _criticalPathShareDeniedMessage);
+        FeedbackSystem.showInfo(
+          context,
+          context.l10n.calendarCriticalPathShareDenied,
+        );
         return;
       }
       final CalendarFragment fragment = _buildFragment();
@@ -191,7 +186,10 @@ class _CalendarCriticalPathShareSheetState
       Navigator.of(context).pop(true);
     } on Exception {
       if (mounted) {
-        FeedbackSystem.showError(context, _criticalPathShareSendFailureMessage);
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathShareFailed,
+        );
       }
     } finally {
       if (mounted) {
@@ -254,7 +252,7 @@ class _CriticalPathShareChatPicker extends StatelessWidget {
               shape: AxiAvatarShape.circle,
             ),
             title: chat.displayName,
-            subtitle: chat.type.label,
+            subtitle: chat.type.label(context),
             selected: selected?.jid == chat.jid,
             onTap: () => onSelected(chat),
             contentPadding: _criticalPathShareChatTilePadding,
@@ -340,9 +338,11 @@ XmppService? _maybeReadXmppService(BuildContext context) {
 }
 
 extension _ChatTypeLabelX on ChatType {
-  String get label => switch (this) {
-        ChatType.chat => _criticalPathShareChatTypeDirectLabel,
-        ChatType.groupChat => _criticalPathShareChatTypeGroupLabel,
-        ChatType.note => _criticalPathShareChatTypeNoteLabel,
+  String label(BuildContext context) => switch (this) {
+        ChatType.chat =>
+          context.l10n.calendarCriticalPathShareChatTypeDirect,
+        ChatType.groupChat =>
+          context.l10n.calendarCriticalPathShareChatTypeGroup,
+        ChatType.note => context.l10n.calendarCriticalPathShareChatTypeNote,
       };
 }

@@ -27,6 +27,12 @@ const int _inviteRoomJidMaxLength = 1024;
 const int _calendarFragmentPayloadMaxLength = 200000;
 const int _calendarTaskIcsPayloadMaxLength = 200000;
 const int _calendarAvailabilityPayloadMaxLength = 200000;
+const String _messageTypeError = 'error';
+const String _errorTypeAttr = 'type';
+const String _errorTypeModify = 'modify';
+const String _errorTypeWait = 'wait';
+const String _errorConditionNotAcceptable = 'not-acceptable';
+const String _errorConditionResourceConstraint = 'resource-constraint';
 
 final class DirectMucInviteData implements mox.StanzaHandlerExtension {
   const DirectMucInviteData({
@@ -212,6 +218,16 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
   }
 }
 
+final class StanzaErrorConditionData implements mox.StanzaHandlerExtension {
+  const StanzaErrorConditionData({
+    required this.condition,
+    this.type,
+  });
+
+  final String condition;
+  final String? type;
+}
+
 final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
   const CalendarFragmentPayload({required this.fragment});
 
@@ -393,6 +409,30 @@ String? _normalizeInviteText(String? text, {required int maxLength}) {
   return trimmed;
 }
 
+String? _normalizeStanzaErrorType(String? rawType) {
+  final trimmed = rawType?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  return trimmed;
+}
+
+StanzaErrorConditionData? _parseStanzaErrorCondition(mox.Stanza stanza) {
+  final String? stanzaType = stanza.type?.trim();
+  if (stanzaType != _messageTypeError) return null;
+  final mox.XMLNode? errorNode = stanza.firstTag(_errorTag);
+  if (errorNode == null) return null;
+  final mox.XMLNode? conditionNode =
+      errorNode.firstTagByXmlns(mox.fullStanzaXmlns);
+  final String? condition = conditionNode?.tag.trim();
+  if (condition == null || condition.isEmpty) return null;
+  final String? normalizedType = _normalizeStanzaErrorType(
+    errorNode.attributes[_errorTypeAttr]?.toString(),
+  );
+  return StanzaErrorConditionData(
+    condition: condition,
+    type: normalizedType,
+  );
+}
+
 class MessageSanitizerManager extends mox.XmppManagerBase {
   MessageSanitizerManager() : super('axi.message.sanitizer');
 
@@ -462,6 +502,12 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
       _log.warning('Dropping malformed message stanza missing required fields');
       state.done = true;
       return state;
+    }
+
+    final StanzaErrorConditionData? errorCondition =
+        _parseStanzaErrorCondition(stanza);
+    if (errorCondition != null) {
+      state.extensions.set(errorCondition);
     }
 
     if (_isMucInvite(stanza)) {

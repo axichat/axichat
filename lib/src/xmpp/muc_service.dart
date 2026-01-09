@@ -61,6 +61,7 @@ const _roomAvatarVCardSubmitFailedLog = 'Room vCard avatar update rejected.';
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
 const Set<String> _selfPresenceFallbackStatusCodes = {mucStatusSelfPresence};
+const Set<String> _emptyStatusCodes = <String>{};
 const _iqTypeAttr = 'type';
 const _iqTypeGet = 'get';
 const _iqTypeSet = 'set';
@@ -192,6 +193,7 @@ mixin MucService on XmppBase, BaseStreamService {
   final _mucJoinCompleters = <String, Completer<void>>{};
   final _instantRoomConfigCompleters = <String, Completer<void>>{};
   final _instantRoomConfiguredRooms = <String>{};
+  final _instantRoomPendingRooms = <String>{};
   final _seededDummyRooms = <String>{};
   String? _mucServiceHost;
   bool _mucBookmarksSyncInFlight = false;
@@ -401,6 +403,10 @@ mixin MucService on XmppBase, BaseStreamService {
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
+      ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
+        if (event.state == ConnectionState.connected) return;
+        _clearSelfPresenceOnDisconnect();
+      })
       ..registerHandler<MucSelfPresenceEvent>((event) async {
         await _handleSelfPresence(event);
       })
@@ -499,6 +505,23 @@ mixin MucService on XmppBase, BaseStreamService {
 
   void _markRoomJoined(String roomJid) {
     _leftRooms.remove(_roomKey(roomJid));
+  }
+
+  void _clearSelfPresenceOnDisconnect() {
+    if (_roomStates.isEmpty) return;
+    for (final entry in _roomStates.entries) {
+      final room = entry.value;
+      if (room.selfPresenceStatusCodes.isEmpty &&
+          room.selfPresenceReason == null) {
+        continue;
+      }
+      final updated = room.copyWith(
+        selfPresenceStatusCodes: _emptyStatusCodes,
+        selfPresenceReason: null,
+      );
+      _roomStates[entry.key] = updated;
+      _roomStreams[entry.key]?.add(updated);
+    }
   }
 
   void _completeJoinAttempt(
@@ -801,10 +824,11 @@ mixin MucService on XmppBase, BaseStreamService {
     int? maxHistoryStanzas,
     String? password,
     bool allowRejoin = false,
+    bool forceRejoin = false,
   }) async {
     final key = _roomKey(roomJid);
-    if (_explicitlyLeftRooms.contains(key)) return;
-    if (_leftRooms.contains(key) && !allowRejoin) return;
+    if (_explicitlyLeftRooms.contains(key) && !forceRejoin) return;
+    if (_leftRooms.contains(key) && !allowRejoin && !forceRejoin) return;
     final room = _roomStates[key];
     if (room != null) {
       final codes = room.selfPresenceStatusCodes;
@@ -815,21 +839,13 @@ mixin MucService on XmppBase, BaseStreamService {
       }
     }
     final hasSelfPresence = room?.hasSelfPresence == true;
-    if (hasSelfPresence) {
+    if (hasSelfPresence && !forceRejoin) {
       await _awaitInstantRoomConfigurationIfNeeded(key);
       return;
     }
-    final manager = _connection.getManager<MUCManager>();
-    if (manager != null) {
-      try {
-        final roomState =
-            await manager.getRoomState(mox.JID.fromString(roomJid).toBare());
-        if (roomState?.joined == true) {
-          return;
-        }
-      } on Exception {
-        // Ignore MUC manager state lookup failures.
-      }
+    if (forceRejoin) {
+      _explicitlyLeftRooms.remove(key);
+      _leftRooms.remove(key);
     }
     if (_mucJoinInFlight.contains(key)) return;
     final preferredNick = nickname?.trim();
@@ -1628,6 +1644,13 @@ mixin MucService on XmppBase, BaseStreamService {
     );
   }
 
+  bool _shouldAttemptInstantRoomConfiguration(String roomJid) {
+    final key = _roomKey(roomJid);
+    if (_instantRoomPendingRooms.contains(key)) return true;
+    final room = _roomStates[key];
+    return room?.roomCreated == true;
+  }
+
   Future<void> _ensureInstantRoomConfiguration({
     required String roomJid,
   }) async {
@@ -1649,6 +1672,7 @@ mixin MucService on XmppBase, BaseStreamService {
         throw XmppMessageException();
       }
       _instantRoomConfiguredRooms.add(key);
+      _instantRoomPendingRooms.remove(key);
       completer.complete();
     } catch (error, stackTrace) {
       completer.completeError(error, stackTrace);
@@ -1660,8 +1684,7 @@ mixin MucService on XmppBase, BaseStreamService {
 
   Future<void> _awaitInstantRoomConfigurationIfNeeded(String roomJid) async {
     final key = _roomKey(roomJid);
-    final room = _roomStates[key];
-    if (room == null || !room.roomCreated) return;
+    if (!_shouldAttemptInstantRoomConfiguration(key)) return;
     await _ensureInstantRoomConfiguration(roomJid: key);
   }
 
@@ -2184,12 +2207,22 @@ mixin MucService on XmppBase, BaseStreamService {
     );
     if (event.statusCodes.contains(mucStatusRoomCreated)) {
       _instantRoomConfiguredRooms.remove(roomJid);
+      _instantRoomPendingRooms.add(roomJid);
       try {
         await _ensureInstantRoomConfiguration(
           roomJid: roomJid,
         );
       } on Exception catch (error, stackTrace) {
         _mucLog.fine(_instantRoomConfigFailedLog, error, stackTrace);
+        _markRoomLeft(
+          roomJid,
+          statusCodes: _emptyStatusCodes,
+        );
+        _completeJoinAttempt(
+          roomJid,
+          error: XmppMessageException(),
+        );
+        return;
       }
     }
     _completeJoinAttempt(roomJid);

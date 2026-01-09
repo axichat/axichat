@@ -46,7 +46,6 @@ import 'layout/calendar_layout.dart'
 import 'controllers/zoom_controls_controller.dart';
 import 'controllers/task_interaction_controller.dart';
 import 'controllers/task_popover_controller.dart';
-import 'controllers/task_form_draft_store.dart';
 import 'resizable_task_widget.dart';
 import 'task_edit_session_tracker.dart';
 import 'widgets/calendar_render_surface.dart';
@@ -69,17 +68,6 @@ const String _taskPopoverCloseReasonMissingTask = 'missing-task';
 const String _taskPopoverCloseReasonSwitchTarget = 'switch-target';
 const String _taskPopoverCloseReasonTaskDeleted = 'task-deleted';
 const bool _calendarUseRootOverlay = false;
-
-CalendarTaskDraftStore? _maybeReadDraftStore(BuildContext context) {
-  try {
-    return RepositoryProvider.of<CalendarTaskDraftStore>(
-      context,
-      listen: false,
-    );
-  } on FlutterError {
-    return null;
-  }
-}
 
 class _CalendarScrollController extends ScrollController {
   _CalendarScrollController({required this.onAttached});
@@ -201,7 +189,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late final ShadPopoverController _gridContextMenuController;
   DateTime? _contextMenuSlot;
   double _edgeAutoScrollOffsetPerFrame = 0;
-  CalendarTaskDraftStore? _draftStore;
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
   int? _lastHandledFocusToken;
@@ -768,7 +755,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _processFocusRequest(widget.focusRequest);
-    _draftStore = _maybeReadDraftStore(context);
   }
 
   @override
@@ -2030,12 +2016,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _closeTaskPopover(String taskId, {String reason = 'manual'}) {
     _taskPopoverController.removeLayout(taskId);
-    final bool shouldClearDraft =
-        reason == _taskPopoverCloseReasonMissingTask ||
-            reason == _taskPopoverCloseReasonTaskDeleted;
-    if (shouldClearDraft) {
-      _draftStore?.clearTaskDraft(taskId);
-    }
     if (_taskPopoverController.activeTaskId != taskId) {
       TaskEditSessionTracker.instance.end(taskId, this);
       return;
@@ -2632,49 +2612,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Future<void> _showAddToCriticalPathPicker(CalendarTask task) async {
-    final CriticalPathPickerResult? result = await showCriticalPathPicker(
+    await addTaskToCriticalPath(
       context: context,
-      paths: widget.state.criticalPaths,
+      bloc: context.read<T>(),
+      task: task,
     );
-    if (!mounted) {
-      return;
-    }
-    if (result == null) {
-      return;
-    }
-    if (result.createNew) {
-      await _promptCriticalPathNameAndCreate(taskId: task.id);
-      return;
-    }
-    final String? pathId = result.pathId;
-    if (pathId != null) {
-      context.read<T>().add(
-            CalendarEvent.criticalPathTaskAdded(
-              pathId: pathId,
-              taskId: task.id,
-            ),
-          );
-    }
-  }
-
-  Future<void> _promptCriticalPathNameAndCreate(
-      {required String taskId}) async {
-    final String? name = await promptCriticalPathName(
-      context: context,
-      title: 'New critical path',
-    );
-    if (!mounted) {
-      return;
-    }
-    if (name == null) {
-      return;
-    }
-    context.read<T>().add(
-          CalendarEvent.criticalPathCreated(
-            name: name,
-            taskId: taskId,
-          ),
-        );
   }
 
   List<TaskContextAction> _taskContextActions({

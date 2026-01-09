@@ -94,6 +94,7 @@ const double _attachmentVideoFallbackAspectRatio = 16 / 9;
 const double _attachmentRemoteIconSize = 18.0;
 const double _attachmentRemoteSpacing = 8.0;
 const double _attachmentRemoteBodySpacing = 12.0;
+const double _attachmentRemoteSpinnerSize = 16.0;
 const int _attachmentFileNameMaxLines = 1;
 const TextOverflow _attachmentFileNameOverflow = TextOverflow.ellipsis;
 const double _attachmentFileIconWidth = 42.0;
@@ -2011,14 +2012,37 @@ class _EncryptedAttachment extends StatelessWidget {
                       child: ShadButton(
                         onPressed: onPressed,
                         enabled: onPressed != null,
-                        leading: downloading
-                            ? _AttachmentSpinner(
-                                size: 16,
-                                color: colors.primaryForeground,
-                              )
-                            : null,
-                        child: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedContainer(
+                              duration: baseAnimationDuration,
+                              curve: Curves.easeInOut,
+                              width: downloading
+                                  ? _attachmentRemoteSpinnerSize
+                                  : 0,
+                              height: downloading
+                                  ? _attachmentRemoteSpinnerSize
+                                  : 0,
+                              child: downloading
+                                  ? _AttachmentSpinner(
+                                      size: _attachmentRemoteSpinnerSize,
+                                      color: colors.primaryForeground,
+                                    )
+                                  : null,
+                            ),
+                            AnimatedContainer(
+                              duration: baseAnimationDuration,
+                              curve: Curves.easeInOut,
+                              width:
+                                  downloading ? _attachmentRemoteSpacing : 0,
+                            ),
+                            Text(
+                              downloading
+                                  ? l10n.chatAttachmentLoading
+                                  : openLabel,
+                            ),
+                          ],
                         ),
                       ).withTapBounce(enabled: onPressed != null),
                     ),
@@ -2093,14 +2117,37 @@ class _RemoteImageAttachment extends StatelessWidget {
                       child: ShadButton(
                         onPressed: onPressed,
                         enabled: onPressed != null,
-                        leading: downloading
-                            ? _AttachmentSpinner(
-                                size: 16,
-                                color: colors.primaryForeground,
-                              )
-                            : null,
-                        child: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedContainer(
+                              duration: baseAnimationDuration,
+                              curve: Curves.easeInOut,
+                              width: downloading
+                                  ? _attachmentRemoteSpinnerSize
+                                  : 0,
+                              height: downloading
+                                  ? _attachmentRemoteSpinnerSize
+                                  : 0,
+                              child: downloading
+                                  ? _AttachmentSpinner(
+                                      size: _attachmentRemoteSpinnerSize,
+                                      color: colors.primaryForeground,
+                                    )
+                                  : null,
+                            ),
+                            AnimatedContainer(
+                              duration: baseAnimationDuration,
+                              curve: Curves.easeInOut,
+                              width:
+                                  downloading ? _attachmentRemoteSpacing : 0,
+                            ),
+                            Text(
+                              downloading
+                                  ? l10n.chatAttachmentLoading
+                                  : openLabel,
+                            ),
+                          ],
                         ),
                       ).withTapBounce(enabled: onPressed != null),
                     ),
@@ -2175,14 +2222,37 @@ class _RemoteVideoAttachment extends StatelessWidget {
                       child: ShadButton(
                         onPressed: onPressed,
                         enabled: onPressed != null,
-                        leading: downloading
-                            ? _AttachmentSpinner(
-                                size: 16,
-                                color: colors.primaryForeground,
-                              )
-                            : null,
-                        child: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedContainer(
+                              duration: baseAnimationDuration,
+                              curve: Curves.easeInOut,
+                              width: downloading
+                                  ? _attachmentRemoteSpinnerSize
+                                  : 0,
+                              height: downloading
+                                  ? _attachmentRemoteSpinnerSize
+                                  : 0,
+                              child: downloading
+                                  ? _AttachmentSpinner(
+                                      size: _attachmentRemoteSpinnerSize,
+                                      color: colors.primaryForeground,
+                                    )
+                                  : null,
+                            ),
+                            AnimatedContainer(
+                              duration: baseAnimationDuration,
+                              curve: Curves.easeInOut,
+                              width:
+                                  downloading ? _attachmentRemoteSpacing : 0,
+                            ),
+                            Text(
+                              downloading
+                                  ? l10n.chatAttachmentLoading
+                                  : openLabel,
+                            ),
+                          ],
                         ),
                       ).withTapBounce(enabled: onPressed != null),
                     ),

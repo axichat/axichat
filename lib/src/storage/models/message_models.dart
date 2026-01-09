@@ -24,7 +24,6 @@ const uuid = Uuid();
 const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
 const int _maxCalendarTaskIcsBytes = maxMessageHtmlBytes;
 const int deltaAccountIdLegacy = 0;
-const String _messageTypeGroupChat = 'groupchat';
 
 // ENUMS WARNING: New values must only be added to the end of the list.
 // If not, the database will break
@@ -455,12 +454,10 @@ class Message with _$Message implements Insertable<Message> {
     mox.JID? toJidOverride,
     String? type,
   }) {
-    final bool includeChatState = type != _messageTypeGroupChat;
-    final bool includeMarkable = type != _messageTypeGroupChat;
     final extensions = <mox.StanzaHandlerExtension>[
-      if (includeMarkable) const mox.MarkableData(true),
+      const mox.MarkableData(true),
       mox.MessageIdData(stanzaID),
-      if (includeChatState) mox.ChatState.active,
+      mox.ChatState.active,
     ];
 
     var outgoingBody = plainText;

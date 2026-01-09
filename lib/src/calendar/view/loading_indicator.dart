@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -53,14 +54,16 @@ class LoadingIndicator extends StatelessWidget {
 class CalendarLoadingIndicator extends StatelessWidget {
   const CalendarLoadingIndicator({
     super.key,
-    this.message = 'Loading calendar...',
+    this.message,
   });
 
-  final String message;
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final String resolvedMessage =
+        message ?? context.l10n.calendarLoadingMessage;
     return Container(
       padding: calendarPaddingXl,
       decoration: BoxDecoration(
@@ -80,12 +83,12 @@ class CalendarLoadingIndicator extends StatelessWidget {
             child: _CalendarSpinner(
               size: 42,
               strokeWidth: 4,
-              semanticsLabel: message,
+              semanticsLabel: resolvedMessage,
             ),
           ),
           const SizedBox(height: calendarGutterLg),
           Text(
-            message,
+            resolvedMessage,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: colors.foreground,
                       fontWeight: FontWeight.w600,

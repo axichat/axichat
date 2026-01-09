@@ -54,7 +54,6 @@ import 'calendar_transfer_sheet.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_checklist_controller.dart';
 import 'controllers/task_draft_controller.dart';
-import 'controllers/task_form_draft_store.dart';
 import 'edit_task_dropdown.dart';
 import 'feedback_system.dart';
 import 'layout/calendar_layout.dart';
@@ -78,15 +77,6 @@ import 'widgets/reminder_preferences_field.dart';
 import 'task_edit_session_tracker.dart';
 
 const String _taskShareIcsActionLabel = 'Share as .ics';
-
-CalendarTaskDraftStore? _maybeReadDraftStore(BuildContext context) {
-  try {
-    return RepositoryProvider.of<CalendarTaskDraftStore>(context,
-        listen: false);
-  } on FlutterError {
-    return null;
-  }
-}
 
 class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   const TaskSidebar({
@@ -116,9 +106,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   late final Listenable _formActivityListenable;
-  CalendarTaskDraftStore? _draftStore;
-  bool _suppressDraftSync = false;
-  bool _draftStoreResolved = false;
   final TextEditingController _selectionTitleController =
       TextEditingController();
   final TextEditingController _selectionDescriptionController =
@@ -550,66 +537,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _remindersLocked = false;
   }
 
-  void _applySidebarDraft(TaskSidebarDraft draft) {
-    _suppressDraftSync = true;
-    _titleController.value = TextEditingValue(
-      text: draft.title,
-      selection: TextSelection.collapsed(offset: draft.title.length),
-    );
-    _descriptionController.value = TextEditingValue(
-      text: draft.description,
-      selection: TextSelection.collapsed(offset: draft.description.length),
-    );
-    _locationController.value = TextEditingValue(
-      text: draft.location,
-      selection: TextSelection.collapsed(offset: draft.location.length),
-    );
-    _checklistController
-      ..setItems(draft.checklist)
-      ..setPendingEntry(draft.pendingChecklistEntry);
-    draft.snapshot.applyTo(_draftController);
-    _queuedCriticalPathIds
-      ..clear()
-      ..addAll(draft.queuedCriticalPathIds);
-    _locationLocked = draft.location.trim().isNotEmpty;
-    _scheduleLocked =
-        draft.snapshot.startTime != null || draft.snapshot.endTime != null;
-    _deadlineLocked = draft.snapshot.deadline != null;
-    _recurrenceLocked = draft.snapshot.recurrence.isActive;
-    _priorityLocked = draft.snapshot.isImportant || draft.snapshot.isUrgent;
-    _remindersLocked =
-        draft.snapshot.reminders != ReminderPreferences.defaults();
-    _suppressDraftSync = false;
-  }
-
-  void _handleSidebarDraftChanged() {
-    if (_suppressDraftSync) {
-      return;
-    }
-    final CalendarTaskDraftStore? store = _draftStore;
-    if (store == null) {
-      return;
-    }
-    final TaskSidebarDraft draft = TaskSidebarDraft(
-      title: _titleController.text,
-      description: _descriptionController.text,
-      location: _locationController.text,
-      checklist: _checklistController.items.toList(),
-      pendingChecklistEntry: _checklistController.pendingEntry,
-      snapshot: TaskDraftSnapshot.fromController(_draftController),
-      queuedCriticalPathIds: List<String>.from(_queuedCriticalPathIds),
-    );
-    if (!draft.hasContent) {
-      store.clearSidebarDraft();
-      return;
-    }
-    store.setSidebarDraft(draft);
-  }
-
-  void _clearSidebarDraft() {
-    _draftStore?.clearSidebarDraft();
-  }
-
   void _pruneTaskPopoverControllers(Set<String> activeTaskIds) {
     final String? activeId = _sidebarController.state.activePopoverTaskId;
     if (activeId != null && !activeTaskIds.contains(activeId)) {
@@ -635,7 +562,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _draftController,
       _checklistController,
     ]);
-    _formActivityListenable.addListener(_handleSidebarDraftChanged);
     _selectionRecurrenceNotifier =
         ValueNotifier<RecurrenceFormValue>(const RecurrenceFormValue());
     _selectionRecurrenceMixedNotifier = ValueNotifier<bool>(false);
@@ -650,23 +576,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_draftStoreResolved) {
-      return;
-    }
-    _draftStoreResolved = true;
-    _draftStore = _maybeReadDraftStore(context);
-    final TaskSidebarDraft? draft = _draftStore?.sidebarDraft;
-    if (draft != null) {
-      _applySidebarDraft(draft);
-    }
-  }
-
-  @override
   void dispose() {
     TaskEditSessionTracker.instance.endForOwner(this);
-    _formActivityListenable.removeListener(_handleSidebarDraftChanged);
     _titleController.dispose();
     _titleFocusNode.dispose();
     _descriptionController.dispose();
@@ -2152,7 +2063,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       ),
       TaskContextAction(
         icon: Icons.route,
-        label: 'Add to critical path',
+        label: context.l10n.calendarAddToCriticalPath,
         onSelected: () => _showAddToCriticalPathPicker(task),
       ),
     ];
@@ -2208,7 +2119,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   Future<void> _handleCreateCriticalPath({String? taskId}) async {
     await _promptForCriticalPathName(
-      title: 'New critical path',
+      title: context.l10n.calendarCriticalPathsNew,
       onSubmit: (name) {
         context.read<B>().add(
               CalendarEvent.criticalPathCreated(
@@ -2222,7 +2133,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   Future<void> _handleRenameCriticalPath(CalendarCriticalPath path) async {
     await _promptForCriticalPathName(
-      title: 'Rename critical path',
+      title: context.l10n.calendarCriticalPathRenameTitle,
       initialValue: path.name,
       onSubmit: (name) {
         context.read<B>().add(
@@ -2354,29 +2265,11 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<void> _showAddToCriticalPathPicker(CalendarTask task) async {
-    final CriticalPathPickerResult? result = await showCriticalPathPicker(
+    await addTaskToCriticalPath(
       context: context,
-      paths: context.read<B>().state.criticalPaths,
+      bloc: context.read<B>(),
+      task: task,
     );
-    if (!mounted) {
-      return;
-    }
-    if (result == null) {
-      return;
-    }
-    if (result.createNew) {
-      await _handleCreateCriticalPath(taskId: task.id);
-      return;
-    }
-    final String? pathId = result.pathId;
-    if (pathId != null) {
-      context.read<B>().add(
-            CalendarEvent.criticalPathTaskAdded(
-              pathId: pathId,
-              taskId: task.id,
-            ),
-          );
-    }
   }
 
   void _toggleSidebarTaskCompletion(CalendarTask task, bool completed) {
@@ -2423,7 +2316,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                 children: [
                   Expanded(
                     child: Text(
-                      'Delete critical path',
+                      context.l10n.calendarCriticalPathDeleteTitle,
                       style: textTheme.h3.copyWith(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -2474,7 +2367,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   void _deleteSidebarTask(CalendarTask task) {
     context.read<B>().add(CalendarEvent.taskDeleted(taskId: task.id));
-    _draftStore?.clearTaskDraft(task.id);
     _closeTaskPopover(task.id);
   }
 
@@ -2538,6 +2430,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final bool shouldUpdateOccurrence =
         storedTask == null && occurrenceTask != null;
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+    final List<TaskContextAction> inlineActions =
+        _sidebarInlineActions(displayTask);
+    final LocationAutocompleteHelper locationHelper =
+        LocationAutocompleteHelper.fromState(locate<B>().state);
+    final CalendarMethod? collectionMethod =
+        locate<B>().state.model.collection?.method;
     try {
       await showAdaptiveBottomSheet<void>(
         context: context,
@@ -2561,35 +2459,49 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                 task: displayTask,
                 maxHeight: maxHeight,
                 isSheet: true,
-                inlineActionsBloc: locate<B>(),
-                inlineActionsBuilder: (_) => _sidebarInlineActions(displayTask),
+                inlineActions: inlineActions,
+                collectionMethod: collectionMethod,
                 onClose: closeSheet,
                 scaffoldMessenger: scaffoldMessenger,
-                locationHelper: LocationAutocompleteHelper.fromState(
-                  locate<B>().state,
-                ),
+                locationHelper: locationHelper,
                 onTaskUpdated: (updatedTask) {
-                  locate<B>().add(
+                  context.read<B>().add(
                     CalendarEvent.taskUpdated(
                       task: updatedTask,
                     ),
                   );
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
-                    ? (updatedTask, scope) {
-                        locate<B>().add(
-                          CalendarEvent.taskOccurrenceUpdated(
-                            taskId: baseId,
-                            occurrenceId: task.id,
-                            scheduledTime: updatedTask.scheduledTime,
-                            duration: updatedTask.duration,
-                            endDate: updatedTask.endDate,
-                            checklist: updatedTask.checklist,
-                            range: scope.range,
-                          ),
-                        );
+                    ? (updatedTask, scope,
+                        {required bool scheduleTouched,
+                        required bool checklistTouched}) {
+                        if (scheduleTouched || checklistTouched) {
+                          context.read<B>().add(
+                                CalendarEvent.taskOccurrenceUpdated(
+                                  taskId: baseId,
+                                  occurrenceId: task.id,
+                                  scheduledTime: scheduleTouched
+                                      ? updatedTask.scheduledTime
+                                      : null,
+                                  duration: scheduleTouched
+                                      ? updatedTask.duration
+                                      : null,
+                                  endDate: scheduleTouched
+                                      ? updatedTask.endDate
+                                      : null,
+                                  checklist: checklistTouched
+                                      ? updatedTask.checklist
+                                      : null,
+                                  range: scope.range,
+                                ),
+                              );
+                        }
 
-                        final CalendarTask seriesUpdate = latestTask.copyWith(
+                        final CalendarTask currentSeries =
+                            context.read<B>().state.model.tasks[baseId] ??
+                                latestTask;
+                        final CalendarTask seriesUpdate =
+                            currentSeries.copyWith(
                           title: updatedTask.title,
                           description: updatedTask.description,
                           location: updatedTask.location,
@@ -2603,8 +2515,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                           modifiedAt: DateTime.now(),
                         );
 
-                        if (seriesUpdate != latestTask) {
-                          locate<B>().add(
+                        if (seriesUpdate != currentSeries) {
+                          context.read<B>().add(
                             CalendarEvent.taskUpdated(
                               task: seriesUpdate,
                             ),
@@ -2613,7 +2525,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                       }
                     : null,
                 onTaskDeleted: (taskId) {
-                  locate<B>().add(
+                  context.read<B>().add(
                     CalendarEvent.taskDeleted(
                       taskId: taskId,
                     ),
@@ -2779,7 +2691,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     setState(() {
       _queuedCriticalPathIds.add(pathId);
     });
-    _handleSidebarDraftChanged();
   }
 
   void _removeQueuedCriticalPath(String pathId) {
@@ -2789,7 +2700,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     setState(() {
       _queuedCriticalPathIds.removeWhere((id) => id == pathId);
     });
-    _handleSidebarDraftChanged();
   }
 
   void _clearQueuedCriticalPaths() {
@@ -2797,7 +2707,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       return;
     }
     setState(() => _queuedCriticalPathIds.clear());
-    _handleSidebarDraftChanged();
   }
 
   Future<void> _queueCriticalPathForDraft() async {
@@ -2808,7 +2717,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       stayOpen: true,
       onPathSelected: (path) async {
         _addQueuedCriticalPath(path.id);
-        return 'Will add to "${path.name}" on save';
+        return context.l10n.calendarCriticalPathQueuedAdd(path.name);
       },
       onCreateNewPath: () async {
         final String? name = await promptCriticalPathName(
@@ -2829,7 +2738,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
           return null;
         }
         _addQueuedCriticalPath(createdId);
-        return 'Created "$name" and queued';
+        return context.l10n.calendarCriticalPathQueuedCreate(name);
       },
     );
   }
@@ -2969,8 +2878,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         }
       } else {
         setState(() {
-          _quickTaskError =
-              'Task saved but could not be added to a critical path.';
+          _quickTaskError = context.l10n.calendarCriticalPathAddAfterSaveFailed;
         });
         _addTaskFormKey.currentState?.validate();
       }
@@ -2996,7 +2904,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _descriptionController.clear();
     _locationController.clear();
     _checklistController.clear();
-    _clearSidebarDraft();
     if (mounted) {
       FocusScope.of(context).requestFocus(_titleFocusNode);
     }
@@ -3436,7 +3343,7 @@ class _SelectionActionsRow<B extends BaseCalendarBloc> extends StatelessWidget {
       gap: calendarGutterSm,
       children: [
         TaskSecondaryButton(
-          label: 'Add to critical path',
+          label: l10n.calendarAddToCriticalPath,
           icon: Icons.route,
           onPressed: hasTasks
               ? () => addTasksToCriticalPath(
@@ -5742,10 +5649,15 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                                   storedTask ?? occurrenceTask ?? latestTask;
                               final bool shouldUpdateOccurrence =
                                   storedTask == null && occurrenceTask != null;
+                              final List<TaskContextAction> inlineActions =
+                                  host._sidebarInlineActions(displayTask);
 
                               return EditTaskDropdown<B>(
                                 task: displayTask,
                                 maxHeight: effectiveMaxHeight,
+                                inlineActions: inlineActions,
+                                collectionMethod:
+                                    state.model.collection?.method,
                                 onClose: () => host._closeTaskPopover(task.id),
                                 scaffoldMessenger: scaffoldMessenger,
                                 locationHelper:
@@ -5758,21 +5670,34 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                                       );
                                 },
                                 onOccurrenceUpdated: shouldUpdateOccurrence
-                                    ? (updatedTask, scope) {
-                                        context.read<B>().add(
-                                              CalendarEvent
-                                                  .taskOccurrenceUpdated(
-                                                taskId: baseId,
-                                                occurrenceId: task.id,
-                                                scheduledTime:
-                                                    updatedTask.scheduledTime,
-                                                duration: updatedTask.duration,
-                                                endDate: updatedTask.endDate,
-                                                checklist:
-                                                    updatedTask.checklist,
-                                                range: scope.range,
-                                              ),
-                                            );
+                                    ? (updatedTask, scope,
+                                        {required bool scheduleTouched,
+                                        required bool checklistTouched}) {
+                                        if (scheduleTouched ||
+                                            checklistTouched) {
+                                          context.read<B>().add(
+                                                CalendarEvent
+                                                    .taskOccurrenceUpdated(
+                                                  taskId: baseId,
+                                                  occurrenceId: task.id,
+                                                  scheduledTime:
+                                                      scheduleTouched
+                                                          ? updatedTask
+                                                              .scheduledTime
+                                                          : null,
+                                                  duration: scheduleTouched
+                                                      ? updatedTask.duration
+                                                      : null,
+                                                  endDate: scheduleTouched
+                                                      ? updatedTask.endDate
+                                                      : null,
+                                                  checklist: checklistTouched
+                                                      ? updatedTask.checklist
+                                                      : null,
+                                                  range: scope.range,
+                                                ),
+                                              );
+                                        }
 
                                         final CalendarTask seriesUpdate =
                                             latestTask.copyWith(
@@ -6188,7 +6113,7 @@ class _AdvancedOptions extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: TaskSecondaryButton(
-              label: 'Add to critical path',
+              label: context.l10n.calendarAddToCriticalPath,
               icon: Icons.route,
               onPressed: onAddToCriticalPath,
             ).withTapBounce(),

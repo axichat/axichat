@@ -16,6 +16,11 @@ const double _unregisterErrorPaddingValue = 10.0;
 const double _unregisterFieldPaddingValue = 8.0;
 const double _unregisterSpacerHeight = 40.0;
 const double _unregisterButtonGap = 16.0;
+const double _unregisterSpinnerDimension = 16.0;
+const double _unregisterSpinnerPadding = 1.0;
+const double _unregisterSpinnerSlotSize =
+    _unregisterSpinnerDimension + (_unregisterSpinnerPadding * 2);
+const double _unregisterSpinnerGap = 8.0;
 const EdgeInsets _unregisterErrorPadding =
     EdgeInsets.all(_unregisterErrorPaddingValue);
 const EdgeInsets _unregisterFieldPadding =
@@ -72,6 +77,8 @@ class _UnregisterFormState extends State<UnregisterForm> {
       builder: (context, state) {
         final l10n = context.l10n;
         final loading = state is AuthenticationUnregisterInProgress;
+        final animationDuration =
+            context.watch<SettingsCubit>().animationDuration;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -103,23 +110,32 @@ class _UnregisterFormState extends State<UnregisterForm> {
               const SizedBox.square(dimension: _unregisterButtonGap),
               Builder(
                 builder: (context) {
+                  final spinner = AxiProgressIndicator(
+                    dimension: _unregisterSpinnerDimension,
+                    color: context.colorScheme.primaryForeground,
+                    semanticsLabel: l10n.authUnregisterProgressLabel,
+                  );
                   return ShadButton.destructive(
                     enabled: !loading,
                     onPressed: () => _onPressed(context),
-                    leading: AnimatedCrossFade(
-                      crossFadeState: loading
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
-                      duration:
-                          context.watch<SettingsCubit>().animationDuration,
-                      firstChild: const SizedBox(),
-                      secondChild: AxiProgressIndicator(
-                        color: context.colorScheme.primaryForeground,
-                        semanticsLabel: l10n.authUnregisterProgressLabel,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedContainer(
+                          duration: animationDuration,
+                          curve: Curves.easeInOut,
+                          width: loading ? _unregisterSpinnerSlotSize : 0,
+                          height: loading ? _unregisterSpinnerSlotSize : 0,
+                          child: loading ? spinner : null,
+                        ),
+                        AnimatedContainer(
+                          duration: animationDuration,
+                          curve: Curves.easeInOut,
+                          width: loading ? _unregisterSpinnerGap : 0,
+                        ),
+                        Text(l10n.commonContinue),
+                      ],
                     ),
-                    trailing: const SizedBox.shrink(),
-                    child: Text(l10n.commonContinue),
                   ).withTapBounce(enabled: !loading);
                 },
               ),

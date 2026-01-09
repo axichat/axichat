@@ -128,6 +128,8 @@ void _configureLogging() {
   if (_loggerConfigured) return;
   _loggerConfigured = true;
 
+  SafeLogging.setVerboseXmppTraffic(enabled: kDebugMode);
+
   if (kDebugMode) {
     Logger.root
       ..level = Level.ALL

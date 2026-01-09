@@ -1060,6 +1060,79 @@
   "calendarCriticalPathsEmpty": "暫時沒有關鍵路徑",
   "calendarCriticalPathsNew": "新增關鍵路徑",
   "calendarCriticalPathsTitle": "關鍵路徑",
+  "calendarCriticalPathShareAction": "分享至聊天",
+  "calendarCriticalPathProgressSummary": "{total, plural, one {已按順序完成{completed}/{total}項任務} other {已按順序完成{completed}/{total}項任務}}",
+  "@calendarCriticalPathProgressSummary": {
+    "description": "Summary of completed tasks in a critical path.",
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathProgressHint": "按清單順序完成任務以推進進度。",
+  "calendarCriticalPathProgressLabel": "進度",
+  "calendarCriticalPathProgressPercent": "{percent}%",
+  "@calendarCriticalPathProgressPercent": {
+    "description": "Progress percentage label for critical path progress.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathFocus": "聚焦",
+  "calendarCriticalPathUnfocus": "取消聚焦",
+  "calendarCriticalPathCompletedLabel": "已完成",
+  "calendarCriticalPathQueuedAdd": "儲存時將新增到「{name}」",
+  "@calendarCriticalPathQueuedAdd": {
+    "description": "Status message when queuing a critical path for a draft.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarCriticalPathQueuedCreate": "已建立「{name}」並加入佇列",
+  "@calendarCriticalPathQueuedCreate": {
+    "description": "Status message when creating a critical path and queuing it.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarCriticalPathUnavailable": "此檢視中無法使用關鍵路徑。",
+  "calendarCriticalPathAddAfterSaveFailed": "任務已儲存，但無法新增到關鍵路徑。",
+  "calendarCriticalPathAddSuccess": "{count, plural, one {已新增到「{name}」。} other {已將{count}個任務新增到「{name}」。}}",
+  "@calendarCriticalPathAddSuccess": {
+    "description": "Success message after adding tasks to a critical path.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {}
+    }
+  },
+  "calendarCriticalPathCreateSuccess": "{count, plural, one {已建立「{name}」並新增任務。} other {已建立「{name}」並新增{count}個任務。}}",
+  "@calendarCriticalPathCreateSuccess": {
+    "description": "Success message after creating a critical path and adding tasks.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {}
+    }
+  },
+  "calendarCriticalPathAddFailed": "{count, plural, one {無法將任務新增到關鍵路徑。} other {無法將這些任務新增到關鍵路徑。}}",
+  "@calendarCriticalPathAddFailed": {
+    "description": "Error message when adding tasks to a critical path fails.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathCreateFailed": "無法建立關鍵路徑。",
   "calendarDeleteTaskConfirm": "刪除「{title}」？",
   "@calendarDeleteTaskConfirm": {
     "placeholders": {
