@@ -1807,7 +1807,11 @@ WHERE delta_chat_id IS NOT NULL
         return null;
       }
       for (final message in messages) {
-        if (!_isInternalSyncEnvelope(message.body)) {
+        final bool isInternalSync = await _isInternalSyncMessage(
+          body: message.body,
+          fileMetadataId: message.fileMetadataID,
+        );
+        if (!isInternalSync) {
           return message;
         }
       }
@@ -1962,9 +1966,14 @@ WHERE delta_chat_id IS NOT NULL
     final resolvedMessageId = message.id ?? uuid.v4();
     final trimmedBody = message.body?.trim();
     final hasBody = trimmedBody?.isNotEmpty == true;
-    final hasAttachment = message.fileMetadataID?.isNotEmpty == true;
+    final trimmedMetadataId = message.fileMetadataID?.trim();
+    final hasAttachment = trimmedMetadataId?.isNotEmpty == true;
     final messageTimestamp = message.timestamp ?? DateTime.timestamp();
-    final bool shouldUpdateChatSummary = !_isInternalSyncEnvelope(message.body);
+    final bool isInternalSync = await _isInternalSyncMessage(
+      body: message.body,
+      fileMetadataId: trimmedMetadataId,
+    );
+    final bool shouldUpdateChatSummary = !isInternalSync;
     final bool shouldIncrementUnread =
         shouldUpdateChatSummary && (hasBody || hasAttachment);
     final int unreadIncrement = shouldIncrementUnread.toBinary;

@@ -4,6 +4,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/view/email_contact_import_tile.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
@@ -297,6 +298,7 @@ class SettingsControls extends StatelessWidget {
                     .toggleAutoDownloadArchives(enabled),
               ),
             ),
+            const EmailContactImportTile(),
             const AxiListDivider(),
           ],
         );

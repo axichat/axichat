@@ -455,7 +455,6 @@ class _ResultMetadata extends StatelessWidget {
       children: tags,
     );
   }
-
 }
 
 class _MetadataTag extends StatelessWidget {
@@ -624,12 +623,15 @@ enum _QuickFilter {
 
 extension _QuickFilterLabelX on _QuickFilter {
   String label(BuildContext context) => switch (this) {
-        _QuickFilter.scheduled => context.l10n.calendarTaskSearchFilterScheduled,
+        _QuickFilter.scheduled =>
+          context.l10n.calendarTaskSearchFilterScheduled,
         _QuickFilter.unscheduled =>
           context.l10n.calendarTaskSearchFilterUnscheduled,
-        _QuickFilter.reminders => context.l10n.calendarTaskSearchFilterReminders,
+        _QuickFilter.reminders =>
+          context.l10n.calendarTaskSearchFilterReminders,
         _QuickFilter.open => context.l10n.calendarTaskSearchFilterOpen,
-        _QuickFilter.completed => context.l10n.calendarTaskSearchFilterCompleted,
+        _QuickFilter.completed =>
+          context.l10n.calendarTaskSearchFilterCompleted,
       };
 }
 

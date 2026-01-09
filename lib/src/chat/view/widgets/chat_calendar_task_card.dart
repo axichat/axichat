@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
@@ -111,6 +112,17 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
         storedTask == null && occurrenceTask != null;
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
     final locate = context.read;
+    final CalendarTaskCopyStyle copyStyle = editMode.isReadOnly
+        ? CalendarTaskCopyStyle.shallowClone
+        : CalendarTaskCopyStyle.linked;
+    final List<TaskContextAction> inlineActions = _inlineActionsForTask(
+      displayTask,
+      copyStyle: copyStyle,
+    );
+    final LocationAutocompleteHelper locationHelper =
+        LocationAutocompleteHelper.fromState(calendarState());
+    final CalendarMethod? collectionMethod =
+        calendarState().model.collection?.method;
 
     try {
       await showAdaptiveBottomSheet<void>(
@@ -122,9 +134,6 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
           final mediaQuery = MediaQuery.of(sheetContext);
           final double maxHeight =
               mediaQuery.size.height - mediaQuery.viewPadding.vertical;
-          final CalendarTaskCopyStyle copyStyle = editMode.isReadOnly
-              ? CalendarTaskCopyStyle.shallowClone
-              : CalendarTaskCopyStyle.linked;
           return BlocProvider.value(
             value: locate<ChatCalendarBloc>(),
             child: Builder(
@@ -133,16 +142,11 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                 maxHeight: maxHeight,
                 isSheet: true,
                 editMode: editMode,
-                inlineActionsBloc: locate<ChatCalendarBloc>(),
-                inlineActionsBuilder: (_) => _inlineActionsForTask(
-                  displayTask,
-                  copyStyle: copyStyle,
-                ),
+                inlineActions: inlineActions,
+                collectionMethod: collectionMethod,
                 onClose: () => Navigator.of(sheetContext).maybePop(),
                 scaffoldMessenger: scaffoldMessenger,
-                locationHelper: LocationAutocompleteHelper.fromState(
-                  locate<ChatCalendarBloc>().state,
-                ),
+                locationHelper: locationHelper,
                 onTaskUpdated: (updatedTask) {
                   if (!editMode.allowsAnyEdits) {
                     return;
@@ -163,59 +167,36 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                   Navigator.of(sheetContext).maybePop();
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
-                    ? (updatedTask, scope) {
+                    ? (updatedTask, scope,
+                        {required bool scheduleTouched,
+                        required bool checklistTouched}) {
                         if (!editMode.allowsAnyEdits) {
                           return;
                         }
-                        final DateTime? scheduledTime = editMode.allowsFullEdits
-                            ? updatedTask.scheduledTime
-                            : null;
-                        final Duration? duration = editMode.allowsFullEdits
-                            ? updatedTask.duration
-                            : null;
-                        final DateTime? endDate = editMode.allowsFullEdits
-                            ? updatedTask.endDate
-                            : null;
+                        final bool canUpdateSchedule =
+                            editMode.allowsFullEdits && scheduleTouched;
+                        final bool canUpdateChecklist =
+                            editMode.allowsChecklistEdits && checklistTouched;
+                        if (!canUpdateSchedule && !canUpdateChecklist) {
+                          return;
+                        }
                         locate<ChatCalendarBloc>().add(
                           CalendarEvent.taskOccurrenceUpdated(
                             taskId: baseId,
                             occurrenceId: task.id,
-                            scheduledTime: scheduledTime,
-                            duration: duration,
-                            endDate: endDate,
-                            checklist: updatedTask.checklist,
+                            scheduledTime: canUpdateSchedule
+                                ? updatedTask.scheduledTime
+                                : null,
+                            duration:
+                                canUpdateSchedule ? updatedTask.duration : null,
+                            endDate:
+                                canUpdateSchedule ? updatedTask.endDate : null,
+                            checklist: canUpdateChecklist
+                                ? updatedTask.checklist
+                                : null,
                             range: scope.range,
                           ),
                         );
-
-                        final DateTime now = DateTime.now();
-                        final CalendarTask seriesUpdate =
-                            editMode.allowsFullEdits
-                                ? latestTask.copyWith(
-                                    title: updatedTask.title,
-                                    description: updatedTask.description,
-                                    location: updatedTask.location,
-                                    deadline: updatedTask.deadline,
-                                    priority: updatedTask.priority,
-                                    isCompleted: updatedTask.isCompleted,
-                                    checklist: updatedTask.checklist,
-                                    recurrence: updatedTask.recurrence,
-                                    reminders: updatedTask.reminders,
-                                    icsMeta: updatedTask.icsMeta,
-                                    modifiedAt: now,
-                                  )
-                                : latestTask.copyWith(
-                                    checklist: updatedTask.checklist,
-                                    modifiedAt: now,
-                                  );
-
-                        if (seriesUpdate != latestTask) {
-                          locate<ChatCalendarBloc>().add(
-                            CalendarEvent.taskUpdated(
-                              task: seriesUpdate,
-                            ),
-                          );
-                        }
                       }
                     : null,
               ),

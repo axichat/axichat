@@ -1047,6 +1047,7 @@
     }
   },
   "calendarBackToCalendar": "返回日历",
+  "calendarLoadingMessage": "Loading calendar...",
   "calendarCriticalPathAddTask": "添加任务",
   "calendarCriticalPathAddToTitle": "添加到关键路径",
   "calendarCriticalPathCreatePrompt": "创建关键路径以开始",
@@ -1059,8 +1060,23 @@
   "calendarCriticalPathsAll": "所有路径",
   "calendarCriticalPathsEmpty": "还没有关键路径",
   "calendarCriticalPathsNew": "新建关键路径",
+  "calendarCriticalPathRenameTitle": "Rename critical path",
+  "calendarCriticalPathDeleteTitle": "Delete critical path",
   "calendarCriticalPathsTitle": "关键路径",
   "calendarCriticalPathShareAction": "分享到聊天",
+  "calendarCriticalPathShareTitle": "Share critical path",
+  "calendarCriticalPathShareSubtitle": "Send a critical path to a chat.",
+  "calendarCriticalPathShareTargetLabel": "Share with",
+  "calendarCriticalPathShareButtonLabel": "Share",
+  "calendarCriticalPathShareMissingChats": "No eligible chats available.",
+  "calendarCriticalPathShareMissingRecipient": "Select a chat to share with.",
+  "calendarCriticalPathShareMissingService": "Calendar sharing is unavailable.",
+  "calendarCriticalPathShareDenied": "Calendar cards are disabled for your role in this room.",
+  "calendarCriticalPathShareFailed": "Failed to share critical path.",
+  "calendarCriticalPathShareSuccess": "Critical path shared.",
+  "calendarCriticalPathShareChatTypeDirect": "Direct chat",
+  "calendarCriticalPathShareChatTypeGroup": "Group chat",
+  "calendarCriticalPathShareChatTypeNote": "Notes",
   "calendarCriticalPathProgressSummary": "{total, plural, one {已按顺序完成{completed}/{total}项任务} other {已按顺序完成{completed}/{total}项任务}}",
   "@calendarCriticalPathProgressSummary": {
     "description": "Summary of completed tasks in a critical path.",
@@ -1133,6 +1149,42 @@
     }
   },
   "calendarCriticalPathCreateFailed": "无法创建关键路径。",
+  "calendarTaskSearchTitle": "Search tasks",
+  "calendarTaskSearchAddToTitle": "Add to {name}",
+  "@calendarTaskSearchAddToTitle": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarTaskSearchSubtitle": "Search titles, descriptions, locations, categories, priorities, and deadlines.",
+  "calendarTaskSearchAddToSubtitle": "Tap a task to append it to the critical path order.",
+  "calendarTaskSearchHint": "title:, desc:, location:, category:work, priority:urgent, status:done",
+  "@calendarTaskSearchHint": {
+    "description": "Search query hint. Keep filter tokens (title:, desc:, etc) in English."
+  },
+  "calendarTaskSearchEmptyPrompt": "Start typing to search tasks",
+  "calendarTaskSearchEmptyNoResults": "No results found",
+  "calendarTaskSearchEmptyHint": "Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.",
+  "@calendarTaskSearchEmptyHint": {
+    "description": "Search tips. Keep filter tokens (title:, desc:, etc) in English."
+  },
+  "calendarTaskSearchFilterScheduled": "Scheduled",
+  "calendarTaskSearchFilterUnscheduled": "Unscheduled",
+  "calendarTaskSearchFilterReminders": "Reminders",
+  "calendarTaskSearchFilterOpen": "Open",
+  "calendarTaskSearchFilterCompleted": "Completed",
+  "calendarTaskSearchDueDate": "Due {date}",
+  "@calendarTaskSearchDueDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "calendarTaskSearchOverdueDate": "Overdue · {date}",
+  "@calendarTaskSearchOverdueDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
   "calendarDeleteTaskConfirm": "删除“{title}”？",
   "@calendarDeleteTaskConfirm": {
     "placeholders": {
@@ -1370,5 +1422,34 @@
   "settingsAutoDownloadDocumentsDescription": "Only for trusted chats.",
   "settingsAutoDownloadArchives": "Auto-download archives",
   "settingsAutoDownloadArchivesDescription": "Only for trusted chats.",
+  "emailContactsImportTitle": "Import contacts",
+  "emailContactsImportSubtitle": "Gmail, Outlook, Yahoo CSVs, or vCards.",
+  "emailContactsImportFileAccessError": "Unable to access the selected file.",
+  "emailContactsImportAction": "Import",
+  "emailContactsImportFormatLabel": "Format",
+  "emailContactsImportFileLabel": "File",
+  "emailContactsImportNoFile": "No file selected",
+  "emailContactsImportChooseFile": "Choose file",
+  "emailContactsImportFormatGmail": "Gmail CSV",
+  "emailContactsImportFormatOutlook": "Outlook CSV",
+  "emailContactsImportFormatYahoo": "Yahoo CSV",
+  "emailContactsImportFormatGenericCsv": "Generic CSV",
+  "emailContactsImportFormatVcard": "vCard (VCF)",
+  "emailContactsImportNoValidContacts": "No valid contacts found.",
+  "emailContactsImportAccountRequired": "Set up email before importing contacts.",
+  "emailContactsImportEmptyFile": "The selected file is empty.",
+  "emailContactsImportReadFailure": "Couldn't read that file.",
+  "emailContactsImportUnsupportedFile": "Unsupported file type.",
+  "emailContactsImportNoContacts": "No contacts found in that file.",
+  "emailContactsImportFailed": "Import failed.",
+  "emailContactsImportSuccess": "Imported {imported} contacts. {duplicates} duplicates, {invalid} invalid, {failed} failed.",
+  "@emailContactsImportSuccess": {
+    "placeholders": {
+      "imported": {},
+      "duplicates": {},
+      "invalid": {},
+      "failed": {}
+    }
+  },
   "chatChooseTextToAdd": "选择要添加的文本"
 }

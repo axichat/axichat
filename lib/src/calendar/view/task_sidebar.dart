@@ -26,6 +26,7 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
+import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
@@ -2466,10 +2467,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                 locationHelper: locationHelper,
                 onTaskUpdated: (updatedTask) {
                   context.read<B>().add(
-                    CalendarEvent.taskUpdated(
-                      task: updatedTask,
-                    ),
-                  );
+                        CalendarEvent.taskUpdated(
+                          task: updatedTask,
+                        ),
+                      );
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
                     ? (updatedTask, scope,
@@ -2496,40 +2497,14 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                                 ),
                               );
                         }
-
-                        final CalendarTask currentSeries =
-                            context.read<B>().state.model.tasks[baseId] ??
-                                latestTask;
-                        final CalendarTask seriesUpdate =
-                            currentSeries.copyWith(
-                          title: updatedTask.title,
-                          description: updatedTask.description,
-                          location: updatedTask.location,
-                          deadline: updatedTask.deadline,
-                          priority: updatedTask.priority,
-                          isCompleted: updatedTask.isCompleted,
-                          checklist: updatedTask.checklist,
-                          recurrence: updatedTask.recurrence,
-                          reminders: updatedTask.reminders,
-                          icsMeta: updatedTask.icsMeta,
-                          modifiedAt: DateTime.now(),
-                        );
-
-                        if (seriesUpdate != currentSeries) {
-                          context.read<B>().add(
-                            CalendarEvent.taskUpdated(
-                              task: seriesUpdate,
-                            ),
-                          );
-                        }
                       }
                     : null,
                 onTaskDeleted: (taskId) {
                   context.read<B>().add(
-                    CalendarEvent.taskDeleted(
-                      taskId: taskId,
-                    ),
-                  );
+                        CalendarEvent.taskDeleted(
+                          taskId: taskId,
+                        ),
+                      );
                   _closeTaskPopover(taskId);
                   Navigator.of(sheetContext).maybePop();
                 },
@@ -5680,11 +5655,10 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                                                     .taskOccurrenceUpdated(
                                                   taskId: baseId,
                                                   occurrenceId: task.id,
-                                                  scheduledTime:
-                                                      scheduleTouched
-                                                          ? updatedTask
-                                                              .scheduledTime
-                                                          : null,
+                                                  scheduledTime: scheduleTouched
+                                                      ? updatedTask
+                                                          .scheduledTime
+                                                      : null,
                                                   duration: scheduleTouched
                                                       ? updatedTask.duration
                                                       : null,
@@ -5695,29 +5669,6 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                                                       ? updatedTask.checklist
                                                       : null,
                                                   range: scope.range,
-                                                ),
-                                              );
-                                        }
-
-                                        final CalendarTask seriesUpdate =
-                                            latestTask.copyWith(
-                                          title: updatedTask.title,
-                                          description: updatedTask.description,
-                                          location: updatedTask.location,
-                                          deadline: updatedTask.deadline,
-                                          priority: updatedTask.priority,
-                                          isCompleted: updatedTask.isCompleted,
-                                          checklist: updatedTask.checklist,
-                                          recurrence: updatedTask.recurrence,
-                                          reminders: updatedTask.reminders,
-                                          icsMeta: updatedTask.icsMeta,
-                                          modifiedAt: DateTime.now(),
-                                        );
-
-                                        if (seriesUpdate != latestTask) {
-                                          context.read<B>().add(
-                                                CalendarEvent.taskUpdated(
-                                                  task: seriesUpdate,
                                                 ),
                                               );
                                         }
