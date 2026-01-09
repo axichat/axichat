@@ -20,7 +20,6 @@ const String _criticalPathProgressSeparator = 'of';
 const String _criticalPathProgressSuffix = 'tasks completed in order';
 const String _criticalPathProgressHint =
     'Complete tasks in the listed order to advance';
-const List<TaskChecklistItem> _emptyChecklistItems = <TaskChecklistItem>[];
 const int _criticalPathTaskUnit = 1;
 const int _criticalPathZeroCount = 0;
 const double _criticalPathZeroProgress = 0.0;
@@ -812,32 +811,19 @@ CriticalPathProgress computeCriticalPathProgress({
     );
   }
   int completed = _criticalPathZeroCount;
-  double progressUnits = _criticalPathZeroProgress;
   for (final String id in path.taskIds) {
     final String baseId = baseTaskIdFrom(id);
     final CalendarTask? task = tasks[baseId] ?? tasks[id];
     if (task == null) {
-      progressUnits = completed.toDouble();
       break;
     }
     if (task.isCompleted) {
       completed += _criticalPathTaskUnit;
-      progressUnits = completed.toDouble();
       continue;
     }
-    final List<TaskChecklistItem> checklist =
-        task.checklist.isEmpty ? _emptyChecklistItems : task.checklist;
-    final int checklistCount = checklist.length;
-    if (checklistCount == _criticalPathZeroCount) {
-      progressUnits = completed.toDouble();
-      break;
-    }
-    final int completedChecklist =
-        checklist.where((item) => item.isCompleted).length;
-    progressUnits = completed + completedChecklist / checklistCount;
     break;
   }
-  final double progressValue = (progressUnits / total)
+  final double progressValue = (completed / total)
       .clamp(_criticalPathZeroProgress, _criticalPathMaxProgress);
   return CriticalPathProgress(
     total: total,

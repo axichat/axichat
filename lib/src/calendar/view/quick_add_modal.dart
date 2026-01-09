@@ -1186,6 +1186,7 @@ class _QuickAddModalContent extends StatelessWidget {
                             return CalendarCategoriesField(
                               categories: formController.categories,
                               onChanged: onCategoriesChanged,
+                              surfaceColor: background,
                             );
                           },
                         ),

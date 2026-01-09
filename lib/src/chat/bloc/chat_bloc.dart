@@ -262,7 +262,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           if (connectionState == ConnectionState.connected) {
             final chat = state.chat;
             if (chat != null && _xmppAllowedForChat(chat)) {
-              unawaited(_catchUpFromMam());
+              final streamReady = xmppService.lastStreamReady;
+              final shouldCatchUp = streamReady?.isResumed != true;
+              if (shouldCatchUp) {
+                unawaited(_catchUpFromMam());
+              }
               unawaited(_prefetchPeerAvatar(chat));
               unawaited(_syncPinnedMessagesForChat(chat));
             }

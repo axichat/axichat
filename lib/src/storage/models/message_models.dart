@@ -456,8 +456,9 @@ class Message with _$Message implements Insertable<Message> {
     String? type,
   }) {
     final bool includeChatState = type != _messageTypeGroupChat;
+    final bool includeMarkable = type != _messageTypeGroupChat;
     final extensions = <mox.StanzaHandlerExtension>[
-      const mox.MarkableData(true),
+      if (includeMarkable) const mox.MarkableData(true),
       mox.MessageIdData(stanzaID),
       if (includeChatState) mox.ChatState.active,
     ];

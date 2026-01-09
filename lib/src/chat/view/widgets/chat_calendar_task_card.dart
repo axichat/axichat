@@ -55,9 +55,8 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
         final bool taskInCalendar =
             state.model.tasks.containsKey(widget.task.id);
         final bool tileReadOnly = widget.readOnly || !taskInCalendar;
-        final TaskEditMode editMode = widget.readOnly
-            ? TaskEditMode.readOnly
-            : TaskEditMode.checklistOnly;
+        final TaskEditMode editMode =
+            widget.readOnly ? TaskEditMode.readOnly : TaskEditMode.full;
         final VoidCallback tapAction = widget.readOnly
             ? () => _showTaskEditSheet(
                   context,
