@@ -17,6 +17,7 @@ import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/safe_logging.dart';
@@ -60,6 +61,8 @@ const _calendarTaskIcsAttachmentSendFailureMessage =
     'Unable to send calendar invite. Please try again.';
 const _calendarTaskIcsAttachmentSendFailureLogMessage =
     'Failed to send calendar task attachment';
+const _attachmentMimeTypeResolutionLogMessage =
+    'Failed to resolve attachment mime type';
 const _sendSignatureSeparator = '::';
 const _sendSignatureSubjectTag = '::subject:';
 const _sendSignatureAttachmentTag = '::attachments:';
@@ -2944,6 +2947,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       } on Exception catch (error, stackTrace) {
         _log.fine('Failed to resolve attachment size', error, stackTrace);
+      }
+    }
+    final String? existingMimeType = preparedAttachment.mimeType?.trim();
+    if (existingMimeType == null || existingMimeType.isEmpty) {
+      try {
+        final String? resolvedMimeType = await resolveMimeTypeFromPath(
+          path: preparedAttachment.path,
+          fileName: preparedAttachment.fileName,
+        );
+        final String? trimmedResolved = resolvedMimeType?.trim();
+        if (trimmedResolved != null && trimmedResolved.isNotEmpty) {
+          preparedAttachment =
+              preparedAttachment.copyWith(mimeType: trimmedResolved);
+        }
+      } on Exception catch (error, stackTrace) {
+        _log.fine(
+          _attachmentMimeTypeResolutionLogMessage,
+          error,
+          stackTrace,
+        );
       }
     }
     try {

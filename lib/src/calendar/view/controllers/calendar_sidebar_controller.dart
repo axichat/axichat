@@ -6,6 +6,10 @@ import 'package:flutter/foundation.dart';
 
 enum CalendarSidebarSection { unscheduled, reminders }
 
+class TaskPopoverAnchorToken {
+  TaskPopoverAnchorToken();
+}
+
 /// Declarative UI controller for the calendar sidebar. This controller keeps
 /// purely-presentational sidebar state out of the app-wide blocs while still
 /// enabling widgets to rebuild reactively.
@@ -108,12 +112,20 @@ class CalendarSidebarController extends ChangeNotifier {
     );
   }
 
-  void setActivePopoverTaskId(String? taskId) {
-    if (taskId != _state.activePopoverTaskId) {
+  void setActivePopoverTaskId(
+    String? taskId, {
+    TaskPopoverAnchorToken? anchorToken,
+  }) {
+    final TaskPopoverAnchorToken? resolvedAnchor =
+        taskId == null ? null : anchorToken;
+    if (taskId != _state.activePopoverTaskId ||
+        resolvedAnchor != _state.activePopoverAnchorToken) {
       _updateState(
         _state.copyWith(
           activePopoverTaskId: taskId,
           activePopoverTaskIdSpecified: true,
+          activePopoverAnchorToken: resolvedAnchor,
+          activePopoverAnchorTokenSpecified: true,
         ),
       );
     }
@@ -146,6 +158,7 @@ class CalendarSidebarState extends Equatable {
     this.showAdvancedOptions = false,
     this.expandedSection,
     this.activePopoverTaskId,
+    this.activePopoverAnchorToken,
   });
 
   final double width;
@@ -156,6 +169,7 @@ class CalendarSidebarState extends Equatable {
   final bool showAdvancedOptions;
   final CalendarSidebarSection? expandedSection;
   final String? activePopoverTaskId;
+  final TaskPopoverAnchorToken? activePopoverAnchorToken;
 
   CalendarSidebarState copyWith({
     double? width,
@@ -168,6 +182,8 @@ class CalendarSidebarState extends Equatable {
     bool expandedSectionSpecified = false,
     String? activePopoverTaskId,
     bool activePopoverTaskIdSpecified = false,
+    TaskPopoverAnchorToken? activePopoverAnchorToken,
+    bool activePopoverAnchorTokenSpecified = false,
   }) {
     return CalendarSidebarState(
       width: width ?? this.width,
@@ -182,6 +198,9 @@ class CalendarSidebarState extends Equatable {
       activePopoverTaskId: activePopoverTaskIdSpecified
           ? activePopoverTaskId
           : (activePopoverTaskId ?? this.activePopoverTaskId),
+      activePopoverAnchorToken: activePopoverAnchorTokenSpecified
+          ? activePopoverAnchorToken
+          : (activePopoverAnchorToken ?? this.activePopoverAnchorToken),
     );
   }
 
@@ -195,5 +214,6 @@ class CalendarSidebarState extends Equatable {
         showAdvancedOptions,
         expandedSection,
         activePopoverTaskId,
+        activePopoverAnchorToken,
       ];
 }

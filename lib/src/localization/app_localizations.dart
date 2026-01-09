@@ -2225,6 +2225,12 @@ abstract class AppLocalizations {
   /// **'Save avatar'**
   String get avatarSaveAvatar;
 
+  /// No description provided for @avatarUseThis.
+  ///
+  /// In en, this message translates to:
+  /// **'Set avatar'**
+  String get avatarUseThis;
+
   /// No description provided for @signupAvatarBackgroundColor.
   ///
   /// In en, this message translates to:

@@ -1219,6 +1219,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get avatarSaveAvatar => 'Guardar avatar';
 
   @override
+  String get avatarUseThis => 'Establecer avatar';
+
+  @override
   String get signupAvatarBackgroundColor => 'Color de fondo';
 
   @override

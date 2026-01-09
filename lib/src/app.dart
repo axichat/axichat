@@ -502,6 +502,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   listener: (context, state) {
                     final previousAuthState = _lastAuthState;
                     _lastAuthState = state;
+                    final wasAuthenticated =
+                        previousAuthState is AuthenticationComplete;
+                    final isAuthenticated = state is AuthenticationComplete;
+                    if (wasAuthenticated && !isAuthenticated) {
+                      context.read<ShareIntentCoordinator>().clearPending();
+                    }
                     final currentLocation =
                         _router.routeInformationProvider.value.uri.path;
                     final matchedLocation = _router.state.matchedLocation;
@@ -546,11 +552,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                             Timer(authCompletionDuration, navigateHome);
                       }
                     }
-                    unawaited(_handleShareIntent());
+                    unawaited(_handleShareIntent(context));
                   },
                 ),
                 BlocListener<ShareIntentCubit, ShareIntentState>(
-                  listener: (context, _) => unawaited(_handleShareIntent()),
+                  listener: (context, _) =>
+                      unawaited(_handleShareIntent(context)),
                 ),
               ],
               child: Stack(
@@ -608,7 +615,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     );
   }
 
-  Future<void> _handleShareIntent() async {
+  Future<void> _handleShareIntent(BuildContext context) async {
     if (_shareIntentHandling) return;
     final ShareIntentCubit shareCubit = context.read<ShareIntentCubit>();
     final ShareIntentState shareState = shareCubit.state;
@@ -619,21 +626,21 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     _shareIntentHandling = true;
     try {
       final SharePayload payload = shareState.payload!;
-      if (!mounted) return;
+      if (!context.mounted) return;
       final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
       final bool hasBody = resolvedBody.isNotEmpty;
       if (_shouldNavigateToHomeForShare()) {
         _router.go(const HomeRoute().location);
         await Future<void>.delayed(_shareIntentNavigationDelay);
       }
-      if (!mounted) return;
-      final List<Chat> chats =
-          context.read<ChatsCubit>().state.items ?? const <Chat>[];
+      if (!context.mounted) return;
+      final List<RosterItem> contacts = await _loadShareContacts(context);
+      if (!context.mounted) return;
       final ShareIntentDestination? destination = await showShareIntentSheet(
         context: context,
-        chats: chats,
+        contacts: contacts,
       );
-      if (!mounted) return;
+      if (!context.mounted) return;
       if (destination == null) {
         _consumeSharePayload(shareCubit, payload);
         return;
@@ -645,7 +652,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           messageService: messageService,
           attachments: payload.attachments,
         );
-        if (!mounted) return;
+        if (!context.mounted) return;
         if (!hasBody && attachmentMetadataIds.isEmpty) {
           _consumeSharePayload(shareCubit, payload);
           return;
@@ -660,13 +667,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         _consumeSharePayload(shareCubit, payload);
         return;
       }
-      if (destination is ShareIntentChatDestination) {
+      if (destination is ShareIntentContactDestination) {
         final List<EmailAttachment> attachments =
             await _prepareSharedAttachments(
           attachments: payload.attachments,
           optimize: false,
         );
-        if (!mounted) return;
+        if (!context.mounted) return;
         if (!hasBody && attachments.isEmpty) {
           _consumeSharePayload(shareCubit, payload);
           return;
@@ -676,19 +683,30 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           attachments: attachments,
         );
         context.read<ShareIntentCoordinator>().enqueueForChat(
-              jid: destination.chat.jid,
+              jid: destination.contact.jid,
               payload: draftPayload,
             );
         await _navigateToHomeForChatShare();
-        if (!mounted) return;
-        await context.read<ChatsCubit>().openChat(jid: destination.chat.jid);
+        if (!context.mounted) return;
+        await context.read<ChatsCubit>().openChat(jid: destination.contact.jid);
         _consumeSharePayload(shareCubit, payload);
       }
     } finally {
       _shareIntentHandling = false;
-      if (mounted && shareCubit.state.hasPayload) {
-        unawaited(_handleShareIntent());
+      if (context.mounted && shareCubit.state.hasPayload) {
+        unawaited(_handleShareIntent(context));
       }
+    }
+  }
+
+  Future<List<RosterItem>> _loadShareContacts(BuildContext context) async {
+    final XmppService xmppService = context.read<XmppService>();
+    try {
+      return await xmppService.rosterStream().first;
+    } on XmppAbortedException {
+      return const <RosterItem>[];
+    } on Exception {
+      return const <RosterItem>[];
     }
   }
 

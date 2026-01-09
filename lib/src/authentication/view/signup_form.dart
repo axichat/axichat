@@ -521,6 +521,8 @@ class _SignupFormState extends State<SignupForm>
         return BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
           builder: (context, avatarState) {
             final avatarErrorText = _avatarErrorText(avatarState, l10n);
+            final showUseAction = avatarState.hasCarouselPreview;
+            final useActionEnabled = avatarState.canUseCarouselAvatar;
             if (_lastCaptchaServer != state.server) {
               _lastCaptchaServer = state.server;
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -738,6 +740,12 @@ class _SignupFormState extends State<SignupForm>
                                                   onUpload: context
                                                       .read<SignupAvatarCubit>()
                                                       .pickAvatarFromFiles,
+                                                  onUseCurrent: () => context
+                                                      .read<SignupAvatarCubit>()
+                                                      .materializeCurrentCarouselAvatar(),
+                                                  showUseAction: showUseAction,
+                                                  useActionEnabled:
+                                                      useActionEnabled,
                                                   canShuffleBackground:
                                                       avatarState
                                                           .canShuffleBackground,

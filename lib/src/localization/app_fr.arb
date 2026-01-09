@@ -421,6 +421,7 @@
   "signupAvatarShuffle": "Mélanger un avatar par défaut",
   "signupAvatarMenuDescription": "Nous publierons l’avatar quand votre compte XMPP sera créé.",
   "avatarSaveAvatar": "Enregistrer l’avatar",
+  "avatarUseThis": "Définir l’avatar",
   "signupAvatarBackgroundColor": "Couleur d’arrière-plan",
   "signupAvatarDefaultsTitle": "Avatars par défaut",
   "signupAvatarCategoryAbstract": "Abstrait",

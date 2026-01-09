@@ -26,6 +26,9 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     required this.onShuffle,
     required this.onUpload,
     required this.canShuffleBackground,
+    this.onUseCurrent,
+    this.showUseAction = false,
+    this.useActionEnabled = false,
     this.onShuffleBackground,
     this.cropBytes,
     this.cropRect,
@@ -42,6 +45,9 @@ class SignupAvatarEditorPanel extends StatefulWidget {
   final Future<void> Function() onUpload;
   final bool canShuffleBackground;
   final Future<void> Function()? onShuffleBackground;
+  final VoidCallback? onUseCurrent;
+  final bool showUseAction;
+  final bool useActionEnabled;
   final Uint8List? cropBytes;
   final Rect? cropRect;
   final double? imageWidth;
@@ -141,11 +147,16 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final previewFillColor = colors.card;
     final l10n = context.l10n;
     const avatarActionSpacing = 8.0;
+    const avatarActionIconSize = 20.0;
     final showCrop = widget.mode == AvatarEditorMode.cropOnly;
     final busy = _shuffling || _shufflingBackground;
+    final showUseAction = widget.showUseAction;
+    final useActionEnabled = showUseAction &&
+        widget.useActionEnabled &&
+        !busy &&
+        widget.onUseCurrent != null;
     final cropBytes = showCrop ? widget.cropBytes ?? _lastPreviewBytes : null;
     final imageWidth = showCrop ? widget.imageWidth : null;
     final imageHeight = showCrop ? widget.imageHeight : null;
@@ -223,12 +234,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
         PageTransitionSwitcher(
           duration: _previewTransitionDuration,
           transitionBuilder: (child, primaryAnimation, secondaryAnimation) =>
-              SharedAxisTransition(
-            animation: primaryAnimation,
-            secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.scaled,
-            fillColor: previewFillColor,
-            child: child,
+              FadeTransition(
+            opacity: primaryAnimation,
+            child: FadeTransition(
+              opacity: ReverseAnimation(secondaryAnimation),
+              child: child,
+            ),
           ),
           child: hasPreviewBytes
               ? AxiAvatar(
@@ -269,15 +280,30 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           spacing: avatarActionSpacing,
           runSpacing: avatarActionSpacing,
           children: [
+            if (showUseAction)
+              ShadButton(
+                onPressed: useActionEnabled ? widget.onUseCurrent : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: avatarActionSpacing,
+                  children: [
+                    const Icon(
+                      LucideIcons.check,
+                      size: avatarActionIconSize,
+                    ),
+                    Text(l10n.avatarUseThis),
+                  ],
+                ),
+              ).withTapBounce(enabled: useActionEnabled),
             ShadButton(
               onPressed: busy ? null : _handleShuffle,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                spacing: 8.0,
+                spacing: avatarActionSpacing,
                 children: [
                   if (_shuffling)
                     SizedBox.square(
-                      dimension: 20,
+                      dimension: avatarActionIconSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(
@@ -288,7 +314,10 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                       ),
                     )
                   else
-                    const Icon(LucideIcons.refreshCw, size: 20),
+                    const Icon(
+                      LucideIcons.refreshCw,
+                      size: avatarActionIconSize,
+                    ),
                   Text(l10n.signupAvatarShuffle),
                 ],
               ),
@@ -299,11 +328,11 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                   : () => unawaited(_handleShuffleBackground()),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                spacing: 8.0,
+                spacing: avatarActionSpacing,
                 children: [
                   if (_shufflingBackground)
                     SizedBox.square(
-                      dimension: 20,
+                      dimension: avatarActionIconSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(
@@ -314,7 +343,10 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                       ),
                     )
                   else
-                    const Icon(LucideIcons.palette, size: 20),
+                    const Icon(
+                      LucideIcons.palette,
+                      size: avatarActionIconSize,
+                    ),
                   Text(l10n.signupAvatarBackgroundColor),
                 ],
               ),
@@ -323,9 +355,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
               onPressed: busy ? null : () => unawaited(widget.onUpload()),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                spacing: 8.0,
+                spacing: avatarActionSpacing,
                 children: [
-                  const Icon(LucideIcons.upload),
+                  const Icon(
+                    LucideIcons.upload,
+                    size: avatarActionIconSize,
+                  ),
                   Text(l10n.signupAvatarUploadImage),
                 ],
               ),

@@ -23,14 +23,12 @@ const EdgeInsets _shareIntentTilePadding = EdgeInsets.symmetric(
 );
 
 const String _shareIntentTitle = 'Share with';
-const String _shareIntentSubtitle = 'Choose a chat or open a compose window.';
+const String _shareIntentSubtitle =
+    'Choose a contact or open a compose window.';
 const String _shareIntentComposeLabel = 'New message';
 const String _shareIntentComposeHint = 'Pick recipients in compose.';
-const String _shareIntentChatsLabel = 'Chats';
-const String _shareIntentEmptyChatsMessage = 'No chats available.';
-const String _shareIntentChatTypeDirectLabel = 'Direct chat';
-const String _shareIntentChatTypeGroupLabel = 'Group chat';
-const String _shareIntentChatTypeNoteLabel = 'Notes';
+const String _shareIntentContactsLabel = 'Contacts';
+const String _shareIntentEmptyContactsMessage = 'No contacts available.';
 
 sealed class ShareIntentDestination extends Equatable {
   const ShareIntentDestination();
@@ -43,26 +41,30 @@ final class ShareIntentComposeDestination extends ShareIntentDestination {
   List<Object?> get props => [];
 }
 
-final class ShareIntentChatDestination extends ShareIntentDestination {
-  const ShareIntentChatDestination(this.chat);
+final class ShareIntentContactDestination extends ShareIntentDestination {
+  const ShareIntentContactDestination(this.contact);
 
-  final Chat chat;
+  final RosterItem contact;
 
   @override
-  List<Object?> get props => [chat];
+  List<Object?> get props => [contact];
 }
 
 Future<ShareIntentDestination?> showShareIntentSheet({
   required BuildContext context,
-  required List<Chat> chats,
+  required List<RosterItem> contacts,
 }) async {
-  final List<Chat> available =
-      chats.where((chat) => chat.type != ChatType.note).toList(growable: false);
+  final List<RosterItem> available = contacts
+      .where((contact) => contact.jid.trim().isNotEmpty)
+      .toList(growable: false)
+    ..sort(
+      (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+    );
   return showAdaptiveBottomSheet<ShareIntentDestination>(
     context: context,
     isScrollControlled: true,
     builder: (sheetContext) => ShareIntentSheet(
-      availableChats: available,
+      availableContacts: available,
     ),
   );
 }
@@ -70,10 +72,10 @@ Future<ShareIntentDestination?> showShareIntentSheet({
 class ShareIntentSheet extends StatelessWidget {
   const ShareIntentSheet({
     super.key,
-    required this.availableChats,
+    required this.availableContacts,
   });
 
-  final List<Chat> availableChats;
+  final List<RosterItem> availableContacts;
 
   @override
   Widget build(BuildContext context) {
@@ -92,17 +94,17 @@ class ShareIntentSheet extends StatelessWidget {
           ),
         ),
         const SizedBox(height: _shareIntentSectionSpacing),
-        const _ShareIntentSectionLabel(text: _shareIntentChatsLabel),
+        const _ShareIntentSectionLabel(text: _shareIntentContactsLabel),
         const SizedBox(height: _shareIntentSectionGap),
-        if (availableChats.isEmpty)
+        if (availableContacts.isEmpty)
           const _ShareIntentEmptyMessage(
-            message: _shareIntentEmptyChatsMessage,
+            message: _shareIntentEmptyContactsMessage,
           )
         else
-          _ShareIntentChatList(
-            chats: availableChats,
-            onSelected: (chat) => Navigator.of(context).pop(
-              ShareIntentChatDestination(chat),
+          _ShareIntentContactList(
+            contacts: availableContacts,
+            onSelected: (contact) => Navigator.of(context).pop(
+              ShareIntentContactDestination(contact),
             ),
           ),
       ],
@@ -165,30 +167,32 @@ class _ShareIntentComposeIcon extends StatelessWidget {
   }
 }
 
-class _ShareIntentChatList extends StatelessWidget {
-  const _ShareIntentChatList({
-    required this.chats,
+class _ShareIntentContactList extends StatelessWidget {
+  const _ShareIntentContactList({
+    required this.contacts,
     required this.onSelected,
   });
 
-  final List<Chat> chats;
-  final ValueChanged<Chat> onSelected;
+  final List<RosterItem> contacts;
+  final ValueChanged<RosterItem> onSelected;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        for (final chat in chats) ...[
+        for (final contact in contacts) ...[
           AxiListTile(
             leading: AxiAvatar(
-              jid: chat.jid,
+              jid: contact.jid,
               size: _shareIntentAvatarSize,
-              avatarPath: chat.avatarPath,
-              shape: AxiAvatarShape.circle,
+              subscription: contact.subscription,
+              presence: null,
+              status: contact.status,
+              avatarPath: contact.avatarPath,
             ),
-            title: chat.displayName,
-            subtitle: chat.type.label,
-            onTap: () => onSelected(chat),
+            title: contact.title,
+            subtitle: contact.jid,
+            onTap: () => onSelected(contact),
             contentPadding: _shareIntentTilePadding,
           ),
           const SizedBox(height: _shareIntentTileGap),
@@ -210,12 +214,4 @@ class _ShareIntentEmptyMessage extends StatelessWidget {
     );
     return Text(message, style: style);
   }
-}
-
-extension _ShareIntentChatTypeLabelX on ChatType {
-  String get label => switch (this) {
-        ChatType.chat => _shareIntentChatTypeDirectLabel,
-        ChatType.groupChat => _shareIntentChatTypeGroupLabel,
-        ChatType.note => _shareIntentChatTypeNoteLabel,
-      };
 }
