@@ -17,6 +17,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const double _loginSpinnerDimension = 16.0;
+const double _loginSpinnerPadding = 1.0;
+const double _loginSpinnerSlotSize =
+    _loginSpinnerDimension + (_loginSpinnerPadding * 2);
+const double _loginSpinnerGap = 8.0;
+
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key, this.onSubmitStart});
 
@@ -78,6 +84,8 @@ class _LoginFormState extends State<LoginForm> {
         final l10n = context.l10n;
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
+        final animationDuration =
+            context.watch<SettingsCubit>().animationDuration;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
         const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
         const errorMessagePadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
@@ -184,29 +192,36 @@ class _LoginFormState extends State<LoginForm> {
                     padding: horizontalPadding,
                     child: Builder(
                       builder: (context) {
+                        final spinner = AxiProgressIndicator(
+                          dimension: _loginSpinnerDimension,
+                          color: context.colorScheme.primaryForeground,
+                          semanticsLabel: l10n.authLoginPending,
+                        );
                         final button = ShadButton(
                           key: loginSubmitKey,
                           enabled: !loading,
                           onPressed: () => _onPressed(context),
-                          leading: AnimatedCrossFade(
-                            crossFadeState: loading
-                                ? CrossFadeState.showSecond
-                                : CrossFadeState.showFirst,
-                            duration: context
-                                .watch<SettingsCubit>()
-                                .animationDuration,
-                            firstChild: const SizedBox(),
-                            secondChild: AxiProgressIndicator(
-                              color: context.colorScheme.primaryForeground,
-                              semanticsLabel: l10n.authLoginPending,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedContainer(
+                                duration: animationDuration,
+                                curve: Curves.easeInOut,
+                                width: loading ? _loginSpinnerSlotSize : 0,
+                                height: loading ? _loginSpinnerSlotSize : 0,
+                                child: loading ? spinner : null,
+                              ),
+                              AnimatedContainer(
+                                duration: animationDuration,
+                                curve: Curves.easeInOut,
+                                width: loading ? _loginSpinnerGap : 0,
+                              ),
+                              Text(l10n.authLogin),
+                            ],
                           ),
-                          trailing: const SizedBox.shrink(),
-                          child: Text(l10n.authLogin),
                         ).withTapBounce(enabled: !loading);
                         return AxiAnimatedSize(
-                          duration:
-                              context.watch<SettingsCubit>().animationDuration,
+                          duration: animationDuration,
                           curve: Curves.easeInOut,
                           alignment: Alignment.centerLeft,
                           child: Align(
