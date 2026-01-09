@@ -140,6 +140,8 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
             final avatarErrorText = avatarState.localizedErrorText(l10n);
             final canSubmit =
                 _title.trim().isNotEmpty && !avatarState.isBusy && !loading;
+            final showUseAction = avatarState.hasCarouselPreview;
+            final useActionEnabled = avatarState.canUseCarouselAvatar;
             final previewWidth = math.min(
               MediaQuery.sizeOf(context).width,
               _avatarEditorMaxWidth,
@@ -248,6 +250,11 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                         onUpload: () => context
                                             .read<AvatarEditorCubit>()
                                             .pickImage(),
+                                        onUseCurrent: () => context
+                                            .read<AvatarEditorCubit>()
+                                            .materializeCurrentCarouselAvatar(),
+                                        showUseAction: showUseAction,
+                                        useActionEnabled: useActionEnabled,
                                         canShuffleBackground:
                                             avatarState.canShuffleBackground,
                                         onShuffleBackground:

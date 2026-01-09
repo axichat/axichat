@@ -4,6 +4,8 @@ import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/view/widgets/critical_path_panel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+const double _progressTolerance = 0.0001;
+
 CalendarTask _task(
   String id, {
   required bool completed,
@@ -50,8 +52,15 @@ void main() {
 
       final progress = computeCriticalPathProgress(path: path, tasks: tasks);
 
-      expect(progress.total, 3);
-      expect(progress.completed, 1, reason: 'later completed tasks are gated');
+      const int totalTasks = 3;
+      const int completedTasks = 1;
+      const double expectedProgress = completedTasks / totalTasks;
+
+      expect(progress.total, totalTasks);
+      expect(progress.completed, completedTasks,
+          reason: 'later completed tasks are gated');
+      expect(progress.progressValue,
+          closeTo(expectedProgress, _progressTolerance));
     });
 
     test('includes later tasks after earlier blockers are done', () {
@@ -70,7 +79,14 @@ void main() {
 
       final progress = computeCriticalPathProgress(path: path, tasks: tasks);
 
-      expect(progress.completed, 2);
+      const int totalTasks = 2;
+      const int completedTasks = 2;
+      const double expectedProgress = completedTasks / totalTasks;
+
+      expect(progress.total, totalTasks);
+      expect(progress.completed, completedTasks);
+      expect(progress.progressValue,
+          closeTo(expectedProgress, _progressTolerance));
     });
 
     test('treats missing tasks as incomplete blockers', () {
@@ -89,7 +105,14 @@ void main() {
 
       final progress = computeCriticalPathProgress(path: path, tasks: tasks);
 
-      expect(progress.completed, 1);
+      const int totalTasks = 3;
+      const int completedTasks = 1;
+      const double expectedProgress = completedTasks / totalTasks;
+
+      expect(progress.total, totalTasks);
+      expect(progress.completed, completedTasks);
+      expect(progress.progressValue,
+          closeTo(expectedProgress, _progressTolerance));
     });
 
     test('counts checklist progress after predecessor completes', () {
@@ -128,8 +151,18 @@ void main() {
 
       final progress = computeCriticalPathProgress(path: path, tasks: tasks);
 
-      expect(progress.total, 5);
-      expect(progress.completed, 3);
+      const int totalTasks = 2;
+      const int completedTasks = 1;
+      const int checklistCompleted = 2;
+      const int checklistTotal = 3;
+      const double checklistFraction = checklistCompleted / checklistTotal;
+      const double expectedProgressUnits = completedTasks + checklistFraction;
+      const double expectedProgress = expectedProgressUnits / totalTasks;
+
+      expect(progress.total, totalTasks);
+      expect(progress.completed, completedTasks);
+      expect(progress.progressValue,
+          closeTo(expectedProgress, _progressTolerance));
     });
 
     test('gates checklist progress behind incomplete predecessors', () {
@@ -145,18 +178,7 @@ void main() {
         'a': _task(
           'a',
           completed: false,
-          checklist: [
-            const TaskChecklistItem(
-              id: 'a1',
-              label: 'a1',
-              isCompleted: true,
-            ),
-            const TaskChecklistItem(
-              id: 'a2',
-              label: 'a2',
-              isCompleted: false,
-            ),
-          ],
+          checklist: const [],
         ),
         'b': _task(
           'b',
@@ -178,8 +200,54 @@ void main() {
 
       final progress = computeCriticalPathProgress(path: path, tasks: tasks);
 
-      expect(progress.total, 6);
-      expect(progress.completed, 1);
+      const int totalTasks = 2;
+      const int completedTasks = 0;
+      const double expectedProgress = completedTasks / totalTasks;
+
+      expect(progress.total, totalTasks);
+      expect(progress.completed, completedTasks);
+      expect(progress.progressValue,
+          closeTo(expectedProgress, _progressTolerance));
+    });
+
+    test('ignores checklist progress once parent task completes', () {
+      final path = CalendarCriticalPath(
+        id: 'path-6',
+        name: 'Checklist Ignored Path',
+        taskIds: const ['a'],
+        createdAt: DateTime(2024, 1, 1),
+        modifiedAt: DateTime(2024, 1, 1),
+        isArchived: false,
+      );
+      final tasks = <String, CalendarTask>{
+        'a': _task(
+          'a',
+          completed: true,
+          checklist: [
+            const TaskChecklistItem(
+              id: 'a1',
+              label: 'a1',
+              isCompleted: false,
+            ),
+            const TaskChecklistItem(
+              id: 'a2',
+              label: 'a2',
+              isCompleted: false,
+            ),
+          ],
+        ),
+      };
+
+      final progress = computeCriticalPathProgress(path: path, tasks: tasks);
+
+      const int totalTasks = 1;
+      const int completedTasks = 1;
+      const double expectedProgress = completedTasks / totalTasks;
+
+      expect(progress.total, totalTasks);
+      expect(progress.completed, completedTasks);
+      expect(progress.progressValue,
+          closeTo(expectedProgress, _progressTolerance));
     });
   });
 }

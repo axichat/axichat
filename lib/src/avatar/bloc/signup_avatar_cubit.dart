@@ -70,7 +70,12 @@ class SignupAvatarState extends Equatable {
 
   Uint8List? get displayedBytes => avatarPreviewBytes ?? carouselPreviewBytes;
 
+  bool get hasCarouselPreview => carouselPreviewBytes != null;
+
   bool get hasUserSelectedAvatar => avatar != null;
+
+  bool get canUseCarouselAvatar =>
+      !processing && avatar == null && carouselPreviewBytes != null;
 
   bool get canShuffleBackground {
     final template = activeTemplate;

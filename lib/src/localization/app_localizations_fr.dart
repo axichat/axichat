@@ -1222,6 +1222,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get avatarSaveAvatar => 'Enregistrer l’avatar';
 
   @override
+  String get avatarUseThis => 'Définir l’avatar';
+
+  @override
   String get signupAvatarBackgroundColor => 'Couleur d’arrière-plan';
 
   @override

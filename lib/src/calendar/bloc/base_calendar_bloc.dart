@@ -620,22 +620,17 @@ abstract class BaseCalendarBloc
       final List<TaskChecklistItem> checklist =
           _normalizedChecklist(event.task.checklist);
 
-      final NlAdapterResult parsedResult =
-          await _nlParserService.parse(event.task.title);
-      final CalendarTask parsed = parsedResult.task;
       final String? description =
-          _resolveParsedText(event.task.description, parsed.description);
-      final DateTime? scheduledTime =
-          event.task.scheduledTime ?? parsed.scheduledTime;
-      final Duration? duration = event.task.duration ?? parsed.duration;
-      final DateTime? deadline = event.task.deadline ?? parsed.deadline;
-      final String? location =
-          _resolveParsedText(event.task.location, parsed.location);
+          _resolveParsedText(event.task.description, null);
+      final DateTime? scheduledTime = event.task.scheduledTime;
+      final Duration? duration = event.task.duration;
+      final DateTime? deadline = event.task.deadline;
+      final String? location = _resolveParsedText(event.task.location, null);
       final RecurrenceRule? recurrence =
-          _resolveParsedRecurrence(event.task.recurrence, parsed.recurrence);
+          _resolveParsedRecurrence(event.task.recurrence, null);
       final TaskPriority? priority = _normalizePriority(event.task.priority);
       final ReminderPreferences reminders =
-          _resolveParsedReminders(event.task.reminders, parsed.reminders);
+          _resolveParsedReminders(event.task.reminders, null);
       final DateTime? computedEndDate = event.task.endDate ??
           (scheduledTime != null && duration != null
               ? scheduledTime.add(duration)

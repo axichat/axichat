@@ -1166,6 +1166,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get avatarSaveAvatar => '保存头像';
 
   @override
+  String get avatarUseThis => '设置头像';
+
+  @override
   String get signupAvatarBackgroundColor => '背景颜色';
 
   @override
@@ -4293,6 +4296,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get avatarSaveAvatar => '儲存頭像';
+
+  @override
+  String get avatarUseThis => '設定頭像';
 
   @override
   String get signupAvatarBackgroundColor => '背景顏色';

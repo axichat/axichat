@@ -262,6 +262,30 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _resumeAvatarCarouselIfNeeded();
   }
 
+  void materializeCurrentCarouselAvatar() {
+    if (state.draft != null ||
+        state.processing ||
+        state.shuffling ||
+        state.publishing) {
+      return;
+    }
+    final current = _currentCarouselAvatar;
+    if (current == null) return;
+    _stopAvatarCarousel();
+    _emitIfOpen(
+      state.copyWith(
+        source: AvatarSource.template,
+        draft: current.payload,
+        previewBytes: current.payload.bytes,
+        estimatedBytes: current.payload.bytes.length,
+        clearCarouselPreviewBytes: true,
+        clearSourceBytes: true,
+        clearTemplate: true,
+        clearError: true,
+      ),
+    );
+  }
+
   Future<void> seedFromBytes(Uint8List bytes) async {
     if (bytes.isEmpty) return;
     _stopAvatarCarousel();
