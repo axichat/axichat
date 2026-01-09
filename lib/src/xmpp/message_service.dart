@@ -36,6 +36,11 @@ const String _mamOriginRejectedLog =
     'Rejected archive message without local account routing.';
 const String _mucMutationRejectedLog =
     'Rejected group chat mutation from unknown occupant.';
+const String _mucSendJoinPendingLog =
+    'Ensuring room join before sending group chat message.';
+const String _mucSendJoinMissingLog =
+    'Room join missing; aborting group chat send.';
+const bool _mucSendAllowRejoin = true;
 const String _pinPubSubNamespace = 'urn:axi:pins';
 const String _pinPubSubNodePrefix = 'urn:axi:pins:';
 const String _pinTag = 'pin';
@@ -2188,6 +2193,30 @@ mixin MessageService
     );
   }
 
+  Future<void> _ensureMucJoinForSend({
+    required String roomJid,
+  }) async {
+    if (connectionState != ConnectionState.connected) return;
+    final roomState = roomStateFor(roomJid);
+    if (roomState?.hasSelfPresence == true) return;
+
+    _log.fine(_mucSendJoinPendingLog);
+    try {
+      await ensureJoined(
+        roomJid: roomJid,
+        allowRejoin: _mucSendAllowRejoin,
+      );
+    } on Exception {
+      // Join failures are surfaced by the follow-up presence check.
+    }
+
+    final updatedRoomState = roomStateFor(roomJid);
+    if (updatedRoomState?.hasSelfPresence == true) return;
+
+    _log.fine(_mucSendJoinMissingLog);
+    throw XmppMessageException();
+  }
+
   Future<void> sendMessage({
     required String jid,
     required String text,
@@ -2216,6 +2245,8 @@ mixin MessageService
       );
       throw XmppForeignDomainException();
     }
+    final offlineDemo = demoOfflineMode;
+    final isGroupChat = chatType == ChatType.groupChat;
     if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
       if (this is AvatarService) {
         unawaited(
@@ -2223,10 +2254,12 @@ mixin MessageService
         );
       }
     }
-    final senderJid = chatType == ChatType.groupChat
+    if (isGroupChat && !offlineDemo) {
+      await _ensureMucJoinForSend(roomJid: jid);
+    }
+    final senderJid = isGroupChat
         ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
         : accountJid;
-    final offlineDemo = demoOfflineMode;
     final storePreference = storeLocally ?? true;
     final shouldStore = storePreference && !noStore;
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -2445,13 +2478,17 @@ mixin MessageService
       _log.warning('Attempted to send an attachment before a JID was bound.');
       throw XmppMessageException();
     }
-    final senderJid = chatType == ChatType.groupChat
-        ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
-        : accountJid;
     if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
       _log.warning('Blocked XMPP attachment send to foreign domain.');
       throw XmppForeignDomainException();
     }
+    final isGroupChat = chatType == ChatType.groupChat;
+    if (isGroupChat) {
+      await _ensureMucJoinForSend(roomJid: jid);
+    }
+    final senderJid = isGroupChat
+        ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
+        : accountJid;
     final resolvedUpload = upload ?? await _uploadAttachment(attachment);
     final metadata = resolvedUpload.metadata;
     final getUrl = resolvedUpload.getUrl;
