@@ -24,11 +24,16 @@ const EdgeInsets _shareIntentTilePadding = EdgeInsets.symmetric(
 
 const String _shareIntentTitle = 'Share with';
 const String _shareIntentSubtitle =
-    'Choose a contact or open a compose window.';
+    'Choose a contact, a group chat, or open a compose window.';
 const String _shareIntentComposeLabel = 'New message';
 const String _shareIntentComposeHint = 'Pick recipients in compose.';
 const String _shareIntentContactsLabel = 'Contacts';
 const String _shareIntentEmptyContactsMessage = 'No contacts available.';
+const String _shareIntentGroupChatsLabel = 'Group chats';
+const String _shareIntentEmptyGroupChatsMessage = 'No group chats available.';
+const String _shareIntentChatTypeDirectLabel = 'Direct chat';
+const String _shareIntentChatTypeGroupLabel = 'Group chat';
+const String _shareIntentChatTypeNoteLabel = 'Notes';
 
 sealed class ShareIntentDestination extends Equatable {
   const ShareIntentDestination();
@@ -50,9 +55,19 @@ final class ShareIntentContactDestination extends ShareIntentDestination {
   List<Object?> get props => [contact];
 }
 
+final class ShareIntentChatDestination extends ShareIntentDestination {
+  const ShareIntentChatDestination(this.chat);
+
+  final Chat chat;
+
+  @override
+  List<Object?> get props => [chat];
+}
+
 Future<ShareIntentDestination?> showShareIntentSheet({
   required BuildContext context,
   required List<RosterItem> contacts,
+  required List<Chat> groupChats,
 }) async {
   final List<RosterItem> available = contacts
       .where((contact) => contact.jid.trim().isNotEmpty)
@@ -60,11 +75,20 @@ Future<ShareIntentDestination?> showShareIntentSheet({
     ..sort(
       (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
     );
+  final List<Chat> availableGroupChats = groupChats
+      .where((chat) => chat.type == ChatType.groupChat)
+      .toList(growable: false)
+    ..sort(
+      (a, b) => a.displayName.toLowerCase().compareTo(
+            b.displayName.toLowerCase(),
+          ),
+    );
   return showAdaptiveBottomSheet<ShareIntentDestination>(
     context: context,
     isScrollControlled: true,
     builder: (sheetContext) => ShareIntentSheet(
       availableContacts: available,
+      availableGroupChats: availableGroupChats,
     ),
   );
 }
@@ -73,9 +97,11 @@ class ShareIntentSheet extends StatelessWidget {
   const ShareIntentSheet({
     super.key,
     required this.availableContacts,
+    required this.availableGroupChats,
   });
 
   final List<RosterItem> availableContacts;
+  final List<Chat> availableGroupChats;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +131,20 @@ class ShareIntentSheet extends StatelessWidget {
             contacts: availableContacts,
             onSelected: (contact) => Navigator.of(context).pop(
               ShareIntentContactDestination(contact),
+            ),
+          ),
+        const SizedBox(height: _shareIntentSectionSpacing),
+        const _ShareIntentSectionLabel(text: _shareIntentGroupChatsLabel),
+        const SizedBox(height: _shareIntentSectionGap),
+        if (availableGroupChats.isEmpty)
+          const _ShareIntentEmptyMessage(
+            message: _shareIntentEmptyGroupChatsMessage,
+          )
+        else
+          _ShareIntentGroupChatList(
+            chats: availableGroupChats,
+            onSelected: (chat) => Navigator.of(context).pop(
+              ShareIntentChatDestination(chat),
             ),
           ),
       ],
@@ -202,6 +242,39 @@ class _ShareIntentContactList extends StatelessWidget {
   }
 }
 
+class _ShareIntentGroupChatList extends StatelessWidget {
+  const _ShareIntentGroupChatList({
+    required this.chats,
+    required this.onSelected,
+  });
+
+  final List<Chat> chats;
+  final ValueChanged<Chat> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (final chat in chats) ...[
+          AxiListTile(
+            leading: AxiAvatar(
+              jid: chat.jid,
+              size: _shareIntentAvatarSize,
+              avatarPath: chat.avatarPath,
+              shape: AxiAvatarShape.circle,
+            ),
+            title: chat.displayName,
+            subtitle: chat.type.label,
+            onTap: () => onSelected(chat),
+            contentPadding: _shareIntentTilePadding,
+          ),
+          const SizedBox(height: _shareIntentTileGap),
+        ],
+      ],
+    );
+  }
+}
+
 class _ShareIntentEmptyMessage extends StatelessWidget {
   const _ShareIntentEmptyMessage({required this.message});
 
@@ -214,4 +287,12 @@ class _ShareIntentEmptyMessage extends StatelessWidget {
     );
     return Text(message, style: style);
   }
+}
+
+extension _ChatTypeLabelX on ChatType {
+  String get label => switch (this) {
+        ChatType.chat => _shareIntentChatTypeDirectLabel,
+        ChatType.groupChat => _shareIntentChatTypeGroupLabel,
+        ChatType.note => _shareIntentChatTypeNoteLabel,
+      };
 }
