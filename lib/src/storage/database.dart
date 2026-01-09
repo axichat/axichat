@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:drift/drift.dart';
@@ -1907,6 +1908,25 @@ WHERE delta_chat_id IS NOT NULL
     return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed) ||
         CalendarSyncMessage.looksLikeEnvelope(trimmed) ||
         _isMessageStatusSyncEnvelope(trimmed);
+  }
+
+  Future<bool> _isInternalSyncMessage({
+    required String? body,
+    required String? fileMetadataId,
+  }) async {
+    if (_isInternalSyncEnvelope(body)) {
+      return true;
+    }
+    final String? trimmedMetadataId = fileMetadataId?.trim();
+    if (trimmedMetadataId == null || trimmedMetadataId.isEmpty) {
+      return false;
+    }
+    final FileMetadataData? metadata =
+        await fileMetadataAccessor.selectOne(trimmedMetadataId);
+    if (metadata == null) {
+      return false;
+    }
+    return metadata.isCalendarSnapshot;
   }
 
   bool _isMessageStatusSyncEnvelope(String raw) {
