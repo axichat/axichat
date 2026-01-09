@@ -145,9 +145,6 @@ class FeedbackSystem {
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) {
-      // Fallback: try to find ScaffoldMessenger in the root context
-      debugPrint(
-          'Warning: ScaffoldMessenger not found for feedback: ${feedback.message}');
       return;
     }
 

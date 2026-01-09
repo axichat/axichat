@@ -30,6 +30,12 @@ const String _calendarSyncMamBypassLog =
     'Allowing calendar sync message without sender role (MAM history).';
 const String _calendarSyncReadOnlyRejectedLog =
     'Rejected calendar sync message targeting read-only task.';
+const String _attachmentUploadStartLog =
+    'Uploading attachment to HTTP upload slot.';
+const String _attachmentUploadCompleteLog = 'Upload complete for attachment.';
+const String _attachmentUploadFailedLog = 'Failed to upload attachment.';
+const String _uploadSlotRequestLog = 'Requesting HTTP upload slot.';
+const String _uploadSlotRequestFailedLog = 'Failed to request upload slot.';
 const String _carbonOriginRejectedLog =
     'Rejected carbon message with unexpected sender.';
 const String _mamOriginRejectedLog =
@@ -2952,10 +2958,7 @@ mixin MessageService
     required String stanzaId,
     required bool shouldStore,
   }) async {
-    _log.fine(
-      'Uploading attachment ${metadata.filename} (${upload._sizeBytes} bytes) '
-      'to HTTP upload slot.',
-    );
+    _log.fine(_attachmentUploadStartLog);
     try {
       await _uploadFileToSlot(
         _UploadSlot(
@@ -2975,10 +2978,10 @@ mixin MessageService
         putUrl: upload._putUrl,
         contentType: upload._contentType,
       );
-      _log.fine('Upload complete for attachment ${metadata.filename}');
+      _log.fine(_attachmentUploadCompleteLog);
     } catch (error, stackTrace) {
       _log.warning(
-        'Failed to upload attachment ${metadata.filename}',
+        _attachmentUploadFailedLog,
         error,
         stackTrace,
       );
@@ -3027,10 +3030,7 @@ mixin MessageService
       throw XmppUploadNotSupportedException();
     }
     try {
-      _log.fine(
-        'Requesting HTTP upload slot for $filename size=$sizeBytes '
-        'contentType=$contentType',
-      );
+      _log.fine(_uploadSlotRequestLog);
       return await _requestUploadSlotViaStanza(
         uploadJid: uploadTarget,
         filename: filename,
@@ -3050,7 +3050,7 @@ mixin MessageService
       rethrow;
     } catch (error, stackTrace) {
       _log.warning(
-        'Failed to request upload slot for $filename',
+        _uploadSlotRequestFailedLog,
         error,
         stackTrace,
       );
@@ -4021,6 +4021,11 @@ mixin MessageService
 
   Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
     if (event.isCarbon) return;
+    final bool isDelayed =
+        event.extensions.get<mox.DelayedDeliveryData>() != null;
+    if (event.isFromMAM || isDelayed) {
+      return;
+    }
     final body = event.get<mox.MessageBodyData>()?.body?.trim();
     if (body != null &&
         body.isNotEmpty &&

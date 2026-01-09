@@ -56,6 +56,16 @@ const Duration _loginBackoffMaxDelay =
     Duration(minutes: _loginBackoffMaxMinutes);
 const String _loginBackoffMessagePrefix = 'Too many attempts. Wait ';
 const String _loginBackoffMessageSuffix = ' seconds before trying again.';
+const String _signupRollbackStageSkippedLog =
+    'Skipping rollback staging for previously authenticated account.';
+const String _signupRollbackSkippedLog =
+    'Skipping rollback for previously authenticated account.';
+const String _signupRollbackRequestSkippedLog =
+    'Skipping rollback request for previously authenticated account.';
+const String _signupCleanupBlockedLog =
+    'Signup blocked because cleanup is still pending.';
+const String _databaseSecretsCheckFailedLog =
+    'Failed to check database secrets for pending signup cleanup.';
 
 enum LogoutSeverity {
   auto,
@@ -1867,10 +1877,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     final normalizedKey = _normalizeSignupKey(username, host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
-      _log.info(
-        'Skipping rollback staging for previously authenticated account '
-        '$normalizedKey.',
-      );
+      _log.info(_signupRollbackStageSkippedLog);
       return;
     }
     final entry = _PendingAccountDeletion(
@@ -1908,10 +1915,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     final normalizedKey = _normalizeSignupKey(username, host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
-      _log.info(
-        'Skipping rollback for previously authenticated account '
-        '$normalizedKey.',
-      );
+      _log.info(_signupRollbackSkippedLog);
       return;
     }
     final deletion = _PendingAccountDeletion(
@@ -1932,18 +1936,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       final response = await _httpClient
           .get(Uri.parse('https://api.pwnedpasswords.com/range/$subhash'));
-      if (response.statusCode == 200) {
-        if (response.body.split('\r\n').any((e) {
-          final pwned = '$subhash${e.split(':')[0]}';
-          return pwned == hash;
-        })) {
-          return false;
-        }
+      if (response.statusCode != 200) {
+        return false;
       }
+      final bool isBreached = response.body.split('\r\n').any((entry) {
+        final pwned = '$subhash${entry.split(':')[0]}';
+        return pwned == hash;
+      });
+      return !isBreached;
     } on Exception catch (_) {
-      return true;
+      return false;
     }
-    return true;
   }
 
   Future<void> logout({LogoutSeverity severity = LogoutSeverity.auto}) async {
@@ -2392,10 +2395,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         final normalizedKey =
             _normalizeSignupKey(request.username, request.host);
         if (await _hasCompletedAuthentication(normalizedKey)) {
-          _log.fine(
-            'Skipping rollback for previously authenticated account '
-            '$normalizedKey.',
-          );
+          _log.fine(_signupRollbackSkippedLog);
           continue;
         }
         final succeeded = await _performAccountDeletion(request);
@@ -2438,9 +2438,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final normalizedKey = _normalizeSignupKey(username, host);
     if (cleanupPending) {
       _blockedSignupCredentialKey = normalizedKey;
-      _log.warning(
-        'Signup blocked for $username@$host because cleanup is still pending.',
-      );
+      _log.warning(_signupCleanupBlockedLog);
     } else if (_blockedSignupCredentialKey == normalizedKey) {
       _blockedSignupCredentialKey = null;
     }
@@ -2452,10 +2450,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   ) async {
     final normalizedKey = _normalizeSignupKey(deletion.username, deletion.host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
-      _log.fine(
-        'Skipping rollback request for previously authenticated account '
-        '$normalizedKey.',
-      );
+      _log.fine(_signupRollbackRequestSkippedLog);
       return true;
     }
     final emailDeleted = await _deleteProvisionedEmailAccountIfAvailable(
@@ -2594,7 +2589,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return secrets.hasSecrets;
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to check database secrets for $normalizedKey',
+        _databaseSecretsCheckFailedLog,
         error,
         stackTrace,
       );

@@ -6,6 +6,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
@@ -44,6 +45,18 @@ const double _profileHeaderWrapSpacing = 2.0;
 const double _profileCardSectionSpacing = 10.0;
 const double _profileStatusFieldPadding = 8.0;
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
+const String _aboutLegalese = 'Copyright (C) 2025 Eliot Lew\n'
+    'Copyright (C) 2025 Axichat LLC\n\n'
+    'This program is free software: you can redistribute it and/or modify '
+    'it under the terms of the GNU Affero General Public License as '
+    'published by the Free Software Foundation, either version 3 of the '
+    'License, or (at your option) any later version.\n\n'
+    'This program is distributed in the hope that it will be useful, '
+    'but WITHOUT ANY WARRANTY; without even the implied warranty of '
+    'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
+    'GNU Affero General Public License for more details.\n\n'
+    'You should have received a copy of the GNU Affero General Public License '
+    'along with this program. If not, see <https://www.gnu.org/licenses/>.';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key, required this.locate});
@@ -465,7 +478,7 @@ class _ProfileCardSection extends StatelessWidget {
                   ),
                 ],
               );
-              return ShadCard(
+              final Widget profileCard = ShadCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: _profileCardSectionSpacing,
@@ -513,9 +526,46 @@ class _ProfileCardSection extends StatelessWidget {
                   ],
                 ),
               );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: _profileCardSectionSpacing,
+                children: [
+                  profileCard,
+                  const _ProfileLegalLinks(),
+                ],
+              );
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class _ProfileLegalLinks extends StatelessWidget {
+  const _ProfileLegalLinks();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final Widget termsLink = AxiLink(
+      link: termsUrl,
+      text: l10n.termsAgreementTerms,
+    );
+    final Widget privacyLink = AxiLink(
+      link: privacyUrl,
+      text: l10n.termsAgreementPrivacy,
+    );
+    return Align(
+      alignment: Alignment.center,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: _profileActionSpacing,
+        runSpacing: _profileHeaderWrapSpacing,
+        children: [
+          termsLink,
+          privacyLink,
+        ],
       ),
     );
   }
@@ -624,17 +674,7 @@ class _SettingsPanel extends StatelessWidget {
             icon: const Icon(LucideIcons.info),
             applicationName: appDisplayName,
             applicationVersion: applicationVersion,
-            applicationLegalese: 'Copyright (C) 2025 Eliot Lew\n\n'
-                'This program is free software: you can redistribute it and/or modify '
-                'it under the terms of the GNU Affero General Public License as '
-                'published by the Free Software Foundation, either version 3 of the '
-                'License, or (at your option) any later version.\n\n'
-                'This program is distributed in the hope that it will be useful, '
-                'but WITHOUT ANY WARRANTY; without even the implied warranty of '
-                'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
-                'GNU Affero General Public License for more details.\n\n'
-                'You should have received a copy of the GNU Affero General Public License '
-                'along with this program. If not, see <https://www.gnu.org/licenses/>.',
+            applicationLegalese: _aboutLegalese,
           ),
         ),
       ],

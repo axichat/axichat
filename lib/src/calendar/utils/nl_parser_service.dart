@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -73,7 +72,6 @@ class NlScheduleParserService {
 
   void _maybeLogNotes(NlAdapterResult result) {
     if (result.parseNotes == null) return;
-    debugPrint('NL parser notes (${result.bucket.name}): ${result.parseNotes}');
   }
 
   Future<void> _ensureTimezonesInitialized() {
@@ -85,9 +83,6 @@ class NlScheduleParserService {
       _initializeTimezones();
       completer.complete();
     } catch (error, stackTrace) {
-      debugPrint(
-        'Timezone initialization failed, falling back to $_fallbackTz: $error',
-      );
       _timezoneInit = null;
       completer.completeError(error, stackTrace);
     }
@@ -108,8 +103,6 @@ class NlScheduleParserService {
     try {
       return tz.getLocation(tzName);
     } catch (error) {
-      debugPrint(
-          'Timezone lookup failed, falling back to $_fallbackTz: $error');
       return _fallbackLocation;
     }
   }

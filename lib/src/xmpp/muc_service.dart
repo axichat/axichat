@@ -50,6 +50,26 @@ const _vCardTag = 'vCard';
 const _vCardPhotoTag = 'PHOTO';
 const _vCardBinvalTag = 'BINVAL';
 const _vCardTypeTag = 'TYPE';
+const _mucJoinRequestedLog = 'MUC join requested.';
+const _mucJoinPollHasSelfPresenceLog = 'MUC join already has self presence.';
+const _mucJoinPollManagerStateLog = 'MUC join resolved using manager state.';
+const _mucJoinSelfPresenceEventLog = 'MUC self presence event.';
+const _mucJoinSyntheticPresenceLog = 'MUC self presence synthesized.';
+const _mucJoinCompletedLog = 'MUC join completed.';
+const _mucJoinTimeoutLog = 'Timed out waiting for room join to complete.';
+const _mucJoinLogSeparator = ' ';
+const _mucJoinAttemptIdLabel = 'attempt=';
+const _mucJoinHasSelfPresenceLabel = 'has_self_presence=';
+const _mucJoinJoinCompleterActiveLabel = 'join_completer_active=';
+const _mucJoinInFlightLabel = 'join_in_flight=';
+const _mucJoinManagerPresenceLabel = 'manager_presence=';
+const _mucJoinUsedFallbackLabel = 'used_fallback_status=';
+const _mucJoinIsErrorLabel = 'is_error=';
+const _mucJoinIsAvailableLabel = 'is_available=';
+const _mucJoinIsNickChangeLabel = 'is_nick_change=';
+const _mucJoinStatusCountLabel = 'status_count=';
+const _mucJoinHasSelfStatusLabel = 'has_self_status=';
+const _mucJoinErrorLabel = 'error=';
 const _roomAvatarFieldMissingLog =
     'Room configuration form missing avatar field.';
 const _roomConfigSubmitFailedLog = 'Room configuration update rejected.';
@@ -191,6 +211,9 @@ mixin MucService on XmppBase, BaseStreamService {
   final _explicitlyLeftRooms = <String>{};
   final _mucJoinInFlight = <String>{};
   final _mucJoinCompleters = <String, Completer<void>>{};
+  static const int _mucJoinAttemptIdStart = 1;
+  int _nextMucJoinAttemptId = _mucJoinAttemptIdStart;
+  final _mucJoinAttemptIds = <String, int>{};
   final _instantRoomConfigCompleters = <String, Completer<void>>{};
   final _instantRoomConfiguredRooms = <String>{};
   final _instantRoomPendingRooms = <String>{};
@@ -531,6 +554,78 @@ mixin MucService on XmppBase, BaseStreamService {
     return _hasMucManagerPresence(managerState);
   }
 
+  int _ensureJoinAttemptIdForKey(String roomKey) {
+    final existing = _mucJoinAttemptIds[roomKey];
+    if (existing != null) return existing;
+    final nextId = _nextMucJoinAttemptId;
+    _nextMucJoinAttemptId++;
+    _mucJoinAttemptIds[roomKey] = nextId;
+    return nextId;
+  }
+
+  int? _joinAttemptIdForKey(String roomKey) => _mucJoinAttemptIds[roomKey];
+
+  void _clearJoinAttemptId(String roomKey) {
+    _mucJoinAttemptIds.remove(roomKey);
+  }
+
+  void _logJoinEvent({
+    required String message,
+    int? attemptId,
+    bool? hasSelfPresence,
+    bool? joinCompleterActive,
+    bool? joinInFlight,
+    bool? managerPresence,
+    bool? usedFallbackStatusCodes,
+    bool? isErrorPresence,
+    bool? isAvailablePresence,
+    bool? isNickChange,
+    int? statusCount,
+    bool? hasSelfStatus,
+    bool? error,
+  }) {
+    final parts = <String>[message];
+    if (attemptId != null) {
+      parts.add(_mucJoinAttemptIdLabel + attemptId.toString());
+    }
+    if (hasSelfPresence != null) {
+      parts.add(_mucJoinHasSelfPresenceLabel + hasSelfPresence.toString());
+    }
+    if (joinCompleterActive != null) {
+      parts.add(
+        _mucJoinJoinCompleterActiveLabel + joinCompleterActive.toString(),
+      );
+    }
+    if (joinInFlight != null) {
+      parts.add(_mucJoinInFlightLabel + joinInFlight.toString());
+    }
+    if (managerPresence != null) {
+      parts.add(_mucJoinManagerPresenceLabel + managerPresence.toString());
+    }
+    if (usedFallbackStatusCodes != null) {
+      parts.add(_mucJoinUsedFallbackLabel + usedFallbackStatusCodes.toString());
+    }
+    if (isErrorPresence != null) {
+      parts.add(_mucJoinIsErrorLabel + isErrorPresence.toString());
+    }
+    if (isAvailablePresence != null) {
+      parts.add(_mucJoinIsAvailableLabel + isAvailablePresence.toString());
+    }
+    if (isNickChange != null) {
+      parts.add(_mucJoinIsNickChangeLabel + isNickChange.toString());
+    }
+    if (statusCount != null) {
+      parts.add(_mucJoinStatusCountLabel + statusCount.toString());
+    }
+    if (hasSelfStatus != null) {
+      parts.add(_mucJoinHasSelfStatusLabel + hasSelfStatus.toString());
+    }
+    if (error != null) {
+      parts.add(_mucJoinErrorLabel + error.toString());
+    }
+    _mucLog.fine(parts.join(_mucJoinLogSeparator));
+  }
+
   void _markRoomJoined(String roomJid) {
     _leftRooms.remove(_roomKey(roomJid));
   }
@@ -558,6 +653,16 @@ mixin MucService on XmppBase, BaseStreamService {
     StackTrace? stackTrace,
   }) {
     final key = _roomKey(roomJid);
+    final attemptId = _joinAttemptIdForKey(key);
+    if (attemptId != null) {
+      _logJoinEvent(
+        message: _mucJoinCompletedLog,
+        attemptId: attemptId,
+        hasSelfPresence: _roomStates[key]?.hasSelfPresence == true,
+        error: error != null,
+      );
+      _clearJoinAttemptId(key);
+    }
     final completer = _mucJoinCompleters.remove(key);
     if (completer == null || completer.isCompleted) return;
     if (error != null) {
@@ -573,6 +678,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (manager == null) return;
     final activeCompleter = _mucJoinCompleters[normalizedRoom];
     if (activeCompleter == null || activeCompleter.isCompleted) return;
+    final attemptId = _joinAttemptIdForKey(normalizedRoom);
     final roomBare = mox.JID.fromString(normalizedRoom).toBare();
     final deadline = DateTime.timestamp().add(_mucJoinTimeout);
     while (DateTime.timestamp().isBefore(deadline)) {
@@ -580,6 +686,11 @@ mixin MucService on XmppBase, BaseStreamService {
       if (currentCompleter == null || currentCompleter.isCompleted) return;
       final existing = roomStateFor(normalizedRoom);
       if (existing?.hasSelfPresence == true) {
+        _logJoinEvent(
+          message: _mucJoinPollHasSelfPresenceLog,
+          attemptId: attemptId,
+          hasSelfPresence: true,
+        );
         _completeJoinAttempt(normalizedRoom);
         return;
       }
@@ -599,6 +710,15 @@ mixin MucService on XmppBase, BaseStreamService {
           await Future<void>.delayed(_mucJoinSelfPresencePollInterval);
           continue;
         }
+        final usedFallbackStatusCodes =
+            _roomStates[normalizedRoom]?.selfPresenceStatusCodes.isNotEmpty !=
+                true;
+        _logJoinEvent(
+          message: _mucJoinPollManagerStateLog,
+          attemptId: attemptId,
+          managerPresence: true,
+          usedFallbackStatusCodes: usedFallbackStatusCodes,
+        );
         if (!roomState.joined) {
           roomState.joined = true;
         }
@@ -799,6 +919,18 @@ mixin MucService on XmppBase, BaseStreamService {
       normalizedRoom,
       () => Completer<void>(),
     );
+    final joinAttemptId = _ensureJoinAttemptIdForKey(normalizedRoom);
+    final hasSelfPresence =
+        _roomStates[normalizedRoom]?.hasSelfPresence == true;
+    final joinCompleterActive = !joinCompleter.isCompleted;
+    final joinInFlight = _mucJoinInFlight.contains(normalizedRoom);
+    _logJoinEvent(
+      message: _mucJoinRequestedLog,
+      attemptId: joinAttemptId,
+      hasSelfPresence: hasSelfPresence,
+      joinCompleterActive: joinCompleterActive,
+      joinInFlight: joinInFlight,
+    );
     if (clearExplicitLeave) {
       _explicitlyLeftRooms.remove(normalizedRoom);
     }
@@ -840,9 +972,14 @@ mixin MucService on XmppBase, BaseStreamService {
       unawaited(_refreshRoomAvatar(normalizedRoom));
     } on TimeoutException {
       _mucJoinCompleters.remove(normalizedRoom);
-      final roomState = roomStateFor(normalizedRoom);
-      if (roomState?.hasSelfPresence != true) {
-        _mucLog.fine('Timed out waiting for room join to complete.');
+      final roomState = _roomStates[normalizedRoom];
+      final hasSelfPresence = roomState?.hasSelfPresence == true;
+      if (!hasSelfPresence) {
+        _logJoinEvent(
+          message: _mucJoinTimeoutLog,
+          attemptId: _joinAttemptIdForKey(normalizedRoom),
+          hasSelfPresence: hasSelfPresence,
+        );
       }
     }
   }
@@ -2190,6 +2327,15 @@ mixin MucService on XmppBase, BaseStreamService {
 
   Future<void> _handleSelfPresence(MucSelfPresenceEvent event) async {
     final roomJid = _roomKey(event.roomJid);
+    _logJoinEvent(
+      message: _mucJoinSelfPresenceEventLog,
+      attemptId: _joinAttemptIdForKey(roomJid),
+      isErrorPresence: event.isError,
+      isAvailablePresence: event.isAvailable,
+      isNickChange: event.isNickChange,
+      statusCount: event.statusCodes.length,
+      hasSelfStatus: event.statusCodes.contains(mucStatusSelfPresence),
+    );
     if (!event.isAvailable && !event.isNickChange) {
       final Set<String> statusCodes =
           event.isError ? const <String>{} : event.statusCodes;
@@ -2277,10 +2423,16 @@ mixin MucService on XmppBase, BaseStreamService {
     required mox.Role role,
   }) async {
     final key = _roomKey(roomJid.toBare().toString());
-    final statusCodes =
-        _roomStates[key]?.selfPresenceStatusCodes.isNotEmpty == true
-            ? _roomStates[key]!.selfPresenceStatusCodes
-            : _selfPresenceFallbackStatusCodes;
+    final usedFallbackStatusCodes =
+        _roomStates[key]?.selfPresenceStatusCodes.isNotEmpty != true;
+    _logJoinEvent(
+      message: _mucJoinSyntheticPresenceLog,
+      attemptId: _joinAttemptIdForKey(key),
+      usedFallbackStatusCodes: usedFallbackStatusCodes,
+    );
+    final statusCodes = usedFallbackStatusCodes
+        ? _selfPresenceFallbackStatusCodes
+        : _roomStates[key]!.selfPresenceStatusCodes;
     await _handleSelfPresence(
       MucSelfPresenceEvent(
         roomJid: roomJid.toBare().toString(),

@@ -325,12 +325,6 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
 
   @override
   void onDragCancelRequested(CalendarDragPayload payload) {
-    debugPrint(
-      '[$dragLogTag] cancel drag task=${payload.task.id} '
-      'pickup=${payload.pickupScheduledTime} '
-      'snapshot=${payload.snapshot.scheduledTime} '
-      'origin=${payload.originSlot}',
-    );
     final CalendarTask restored = restoreTaskFromPayload(payload);
     calendarBloc.add(CalendarEvent.taskUpdated(task: restored));
     FeedbackSystem.showInfo(context, 'Drag canceled');
