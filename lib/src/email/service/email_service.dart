@@ -58,6 +58,8 @@ const _emailLogStateLabel = 'state';
 const _emailLogConnectivityLabel = 'connectivity';
 const _emailLogHasMessageLabel = 'hasMessage';
 const _emailLogUnknownValue = 'unknown';
+const _shareTokenInvalidLog =
+    'Rejected invalid share identifier for subject token.';
 const int _connectivityDowngradeGraceSeconds = 2;
 const _connectivityDowngradeGrace =
     Duration(seconds: _connectivityDowngradeGraceSeconds);
@@ -1372,7 +1374,7 @@ class EmailService {
       return ShareTokenCodec.subjectToken(shareId);
     } on ArgumentError catch (error, stackTrace) {
       _log.warning(
-        'Rejected invalid share identifier $shareId for subject token',
+        _shareTokenInvalidLog,
         error,
         stackTrace,
       );

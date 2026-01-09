@@ -36,6 +36,8 @@ const String _errorTypeWait = 'wait';
 const String _errorConditionNotAcceptable = 'not-acceptable';
 const String _errorConditionResourceConstraint = 'resource-constraint';
 
+int _utf8ByteLength(String value) => utf8.encode(value).length;
+
 final class DirectMucInviteData implements mox.StanzaHandlerExtension {
   const DirectMucInviteData({
     required this.roomJid,
@@ -264,7 +266,8 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
     if (payloadText.isEmpty) {
       return null;
     }
-    if (payloadText.length > _calendarFragmentPayloadMaxLength) {
+    final int payloadLength = _utf8ByteLength(payloadText);
+    if (payloadLength > _calendarFragmentPayloadMaxLength) {
       return null;
     }
     try {
@@ -321,7 +324,8 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
     if (payloadText.isEmpty) {
       return null;
     }
-    if (payloadText.length > _calendarTaskIcsPayloadMaxLength) {
+    final int payloadLength = _utf8ByteLength(payloadText);
+    if (payloadLength > _calendarTaskIcsPayloadMaxLength) {
       return null;
     }
     final readOnlyAttr =
@@ -378,7 +382,8 @@ final class CalendarAvailabilityMessagePayload
     if (payloadText.isEmpty) {
       return null;
     }
-    if (payloadText.length > _calendarAvailabilityPayloadMaxLength) {
+    final int payloadLength = _utf8ByteLength(payloadText);
+    if (payloadLength > _calendarAvailabilityPayloadMaxLength) {
       return null;
     }
     try {

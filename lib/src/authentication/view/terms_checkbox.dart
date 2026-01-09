@@ -2,12 +2,10 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-
-const termsUrl = 'https://axichat.com/terms.pdf';
-const privacyUrl = 'https://axichat.com/privacy.pdf';
 
 class TermsCheckbox extends StatelessWidget {
   const TermsCheckbox({super.key, this.enabled = true});

@@ -14,16 +14,17 @@ class ShareTokenParseResult {
 }
 
 class ShareTokenCodec {
-  static const int _legacyTokenLength = 4;
   static const int _minCapabilityLength = 16;
   static const int _maxCapabilityLength = 64;
+  static const String _secureRandomUnavailableMessage =
+      'Secure random unavailable for share token generation.';
   static final RegExp _pattern = RegExp(
-    '^\\s*\\[s:([A-Z0-9]{$_legacyTokenLength,$_maxCapabilityLength})\\]\\s*',
+    '^\\s*\\[s:([A-Z0-9]{$_minCapabilityLength,$_maxCapabilityLength})\\]\\s*',
     caseSensitive: false,
   );
   static final RegExp _footerPattern = RegExp(
     '^(.*?)(?:\\n\\n)?(?:--\\s*\\n)?\\s*Please do not remove:\\s*\\[s:'
-    '([A-Z0-9]{$_legacyTokenLength,$_maxCapabilityLength})\\]\\s*\$',
+    '([A-Z0-9]{$_minCapabilityLength,$_maxCapabilityLength})\\]\\s*\$',
     dotAll: true,
     caseSensitive: false,
   );
@@ -34,7 +35,7 @@ class ShareTokenCodec {
     try {
       return Random.secure();
     } on UnsupportedError {
-      return Random();
+      throw StateError(_secureRandomUnavailableMessage);
     }
   }
 

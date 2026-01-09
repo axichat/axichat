@@ -3,16 +3,21 @@
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:axichat/src/storage/credential_store.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-class DeleteCredentialsButton extends AxiIconButton {
-  DeleteCredentialsButton({super.key})
-      : assert(kDebugMode),
-        super.ghost(
-          iconData: LucideIcons.delete,
-          onPressed: () async {
-            await const FlutterSecureStorage().deleteAll();
-          },
-        );
+class DeleteCredentialsButton extends StatelessWidget {
+  const DeleteCredentialsButton({super.key}) : assert(kDebugMode);
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiIconButton.ghost(
+      iconData: LucideIcons.delete,
+      onPressed: () async {
+        await context.read<CredentialStore>().deleteAll(burn: true);
+      },
+    );
+  }
 }

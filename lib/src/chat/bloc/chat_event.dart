@@ -148,7 +148,7 @@ final class ChatMessageSent extends ChatEvent {
   final bool calendarTaskIcsReadOnly;
 
   @override
-  List<Object?> get props => [text, calendarTaskIcs, calendarTaskIcsReadOnly];
+  List<Object?> get props => [calendarTaskIcs, calendarTaskIcsReadOnly];
 }
 
 final class ChatAvailabilityMessageSent extends ChatEvent {

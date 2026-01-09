@@ -918,11 +918,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       pointerGlobalX: pickupGlobalX,
       originSlot: _computeOriginSlot(task.scheduledTime),
     );
-    debugPrint(
-      '[calendar] drag start task=${task.id} '
-      'scheduled=${task.scheduledTime} '
-      'origin=${_taskInteractionController.dragOriginSlot}',
-    );
     _notifyDragSessionStarted();
     final double? globalX = _taskInteractionController.dragPointerGlobalX;
     final double? globalY = _taskInteractionController.dragPointerGlobalY;
@@ -2492,9 +2487,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final CalendarTask? resolved =
         _resolveTaskForId(task.id, widget.state) ?? _visibleTasks[task.id];
     if (resolved == null) {
-      debugPrint(
-        '[calendar] drop ignored – unable to resolve task ${task.id}',
-      );
       FeedbackSystem.showError(context, 'Task not found');
       _handleTaskDragEnded(task);
       return;
