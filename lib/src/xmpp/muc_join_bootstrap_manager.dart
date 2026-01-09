@@ -11,6 +11,7 @@ final class MucSelfPresenceEvent extends mox.XmppEvent {
     required this.affiliation,
     required this.role,
     required this.isAvailable,
+    required this.isError,
     required this.isNickChange,
     required this.statusCodes,
     this.reason,
@@ -23,6 +24,7 @@ final class MucSelfPresenceEvent extends mox.XmppEvent {
   final String affiliation;
   final String role;
   final bool isAvailable;
+  final bool isError;
   final bool isNickChange;
   final Set<String> statusCodes;
   final String? reason;
@@ -186,8 +188,9 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
             ..._selfPresenceFallbackStatusCodes,
           };
     final String? presenceType = presence.type;
-    final bool isUnavailable = presenceType == _presenceTypeUnavailable ||
-        presenceType == _presenceTypeError;
+    final bool isError = presenceType == _presenceTypeError;
+    final bool isUnavailable = presenceType == _presenceTypeUnavailable;
+    final bool isAvailable = !isUnavailable && !isError;
     final newNickAttr = item.attributes['nick'];
     final newNick = newNickAttr is String ? newNickAttr.trim() : null;
     final isNickChange =
@@ -198,7 +201,7 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     final role = roleAttr is String ? roleAttr : 'none';
     final reason = item.firstTag('reason')?.innerText().trim();
 
-    if (!isUnavailable) {
+    if (isAvailable) {
       final mucManager =
           getAttributes().getManagerById<MUCManager>(mox.mucManager);
       final roomState = await mucManager?.getRoomState(roomBare);
@@ -214,7 +217,8 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
         nick: nick,
         affiliation: affiliation,
         role: role,
-        isAvailable: !isUnavailable,
+        isAvailable: isAvailable,
+        isError: isError,
         isNickChange: isNickChange,
         statusCodes: resolvedStatuses,
         reason: reason?.isNotEmpty == true ? reason : null,
