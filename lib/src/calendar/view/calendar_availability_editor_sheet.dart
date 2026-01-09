@@ -413,6 +413,13 @@ class _AvailabilityEditorActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const spinner = SizedBox(
+      width: _availabilityEditorHeaderIconSize,
+      height: _availabilityEditorHeaderIconSize,
+      child: CircularProgressIndicator(
+        strokeWidth: _availabilityEditorProgressStrokeWidth,
+      ),
+    );
     return Align(
       alignment: Alignment.centerRight,
       child: ShadButton(
@@ -421,20 +428,20 @@ class _AvailabilityEditorActionRow extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (isBusy)
-              const SizedBox(
-                width: _availabilityEditorHeaderIconSize,
-                height: _availabilityEditorHeaderIconSize,
-                child: CircularProgressIndicator(
-                  strokeWidth: _availabilityEditorProgressStrokeWidth,
-                ),
-              )
-            else
+            ButtonSpinnerSlot(
+              isVisible: isBusy,
+              spinner: spinner,
+              slotSize: _availabilityEditorHeaderIconSize,
+              gap: _availabilityEditorGap,
+              duration: baseAnimationDuration,
+            ),
+            if (!isBusy) ...[
               const Icon(
                 LucideIcons.check,
                 size: _availabilityEditorHeaderIconSize,
               ),
-            const SizedBox(width: _availabilityEditorGap),
+              const SizedBox(width: _availabilityEditorGap),
+            ],
             const Text(_availabilityEditorSaveLabel),
           ],
         ),

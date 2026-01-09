@@ -2544,7 +2544,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarBackToCalendar => '返回日历';
 
   @override
-  String get calendarLoadingMessage => 'Loading calendar...';
+  String get calendarLoadingMessage => '正在加载日历...';
 
   @override
   String get calendarCriticalPathAddTask => '添加任务';
@@ -2583,10 +2583,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarCriticalPathsNew => '新建关键路径';
 
   @override
-  String get calendarCriticalPathRenameTitle => 'Rename critical path';
+  String get calendarCriticalPathRenameTitle => '重命名关键路径';
 
   @override
-  String get calendarCriticalPathDeleteTitle => 'Delete critical path';
+  String get calendarCriticalPathDeleteTitle => '删除关键路径';
 
   @override
   String get calendarCriticalPathsTitle => '关键路径';
@@ -2595,49 +2595,43 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarCriticalPathShareAction => '分享到聊天';
 
   @override
-  String get calendarCriticalPathShareTitle => 'Share critical path';
+  String get calendarCriticalPathShareTitle => '分享关键路径';
 
   @override
-  String get calendarCriticalPathShareSubtitle =>
-      'Send a critical path to a chat.';
+  String get calendarCriticalPathShareSubtitle => '将关键路径发送到聊天。';
 
   @override
-  String get calendarCriticalPathShareTargetLabel => 'Share with';
+  String get calendarCriticalPathShareTargetLabel => '分享给';
 
   @override
-  String get calendarCriticalPathShareButtonLabel => 'Share';
+  String get calendarCriticalPathShareButtonLabel => '分享';
 
   @override
-  String get calendarCriticalPathShareMissingChats =>
-      'No eligible chats available.';
+  String get calendarCriticalPathShareMissingChats => '没有可用的聊天。';
 
   @override
-  String get calendarCriticalPathShareMissingRecipient =>
-      'Select a chat to share with.';
+  String get calendarCriticalPathShareMissingRecipient => '请选择要分享的聊天。';
 
   @override
-  String get calendarCriticalPathShareMissingService =>
-      'Calendar sharing is unavailable.';
+  String get calendarCriticalPathShareMissingService => '日历分享不可用。';
 
   @override
-  String get calendarCriticalPathShareDenied =>
-      'Calendar cards are disabled for your role in this room.';
+  String get calendarCriticalPathShareDenied => '你的角色在此房间中已禁用日历卡片。';
 
   @override
-  String get calendarCriticalPathShareFailed =>
-      'Failed to share critical path.';
+  String get calendarCriticalPathShareFailed => '分享关键路径失败。';
 
   @override
-  String get calendarCriticalPathShareSuccess => 'Critical path shared.';
+  String get calendarCriticalPathShareSuccess => '关键路径已分享。';
 
   @override
-  String get calendarCriticalPathShareChatTypeDirect => 'Direct chat';
+  String get calendarCriticalPathShareChatTypeDirect => '直接聊天';
 
   @override
-  String get calendarCriticalPathShareChatTypeGroup => 'Group chat';
+  String get calendarCriticalPathShareChatTypeGroup => '群聊';
 
   @override
-  String get calendarCriticalPathShareChatTypeNote => 'Notes';
+  String get calendarCriticalPathShareChatTypeNote => '笔记';
 
   @override
   String calendarCriticalPathProgressSummary(int completed, int total) {
@@ -2723,58 +2717,56 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarCriticalPathCreateFailed => '无法创建关键路径。';
 
   @override
-  String get calendarTaskSearchTitle => 'Search tasks';
+  String get calendarTaskSearchTitle => '搜索任务';
 
   @override
   String calendarTaskSearchAddToTitle(Object name) {
-    return 'Add to $name';
+    return '添加到$name';
   }
 
   @override
-  String get calendarTaskSearchSubtitle =>
-      'Search titles, descriptions, locations, categories, priorities, and deadlines.';
+  String get calendarTaskSearchSubtitle => '搜索标题、描述、地点、类别、优先级和截止日期。';
 
   @override
-  String get calendarTaskSearchAddToSubtitle =>
-      'Tap a task to append it to the critical path order.';
+  String get calendarTaskSearchAddToSubtitle => '点按任务以将其追加到关键路径顺序。';
 
   @override
   String get calendarTaskSearchHint =>
       'title:, desc:, location:, category:work, priority:urgent, status:done';
 
   @override
-  String get calendarTaskSearchEmptyPrompt => 'Start typing to search tasks';
+  String get calendarTaskSearchEmptyPrompt => '开始输入以搜索任务';
 
   @override
-  String get calendarTaskSearchEmptyNoResults => 'No results found';
+  String get calendarTaskSearchEmptyNoResults => '未找到结果';
 
   @override
   String get calendarTaskSearchEmptyHint =>
-      'Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.';
+      '使用过滤条件，如 title:, desc:, location:, priority:critical, status:done, deadline:today.';
 
   @override
-  String get calendarTaskSearchFilterScheduled => 'Scheduled';
+  String get calendarTaskSearchFilterScheduled => '已安排';
 
   @override
-  String get calendarTaskSearchFilterUnscheduled => 'Unscheduled';
+  String get calendarTaskSearchFilterUnscheduled => '未安排';
 
   @override
-  String get calendarTaskSearchFilterReminders => 'Reminders';
+  String get calendarTaskSearchFilterReminders => '提醒';
 
   @override
-  String get calendarTaskSearchFilterOpen => 'Open';
+  String get calendarTaskSearchFilterOpen => '未完成';
 
   @override
-  String get calendarTaskSearchFilterCompleted => 'Completed';
+  String get calendarTaskSearchFilterCompleted => '已完成';
 
   @override
   String calendarTaskSearchDueDate(Object date) {
-    return 'Due $date';
+    return '截止 $date';
   }
 
   @override
   String calendarTaskSearchOverdueDate(Object date) {
-    return 'Overdue · $date';
+    return '逾期 · $date';
   }
 
   @override
@@ -5940,7 +5932,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarBackToCalendar => '返回日曆';
 
   @override
-  String get calendarLoadingMessage => 'Loading calendar...';
+  String get calendarLoadingMessage => '正在載入日曆...';
 
   @override
   String get calendarCriticalPathAddTask => '新增任務';
@@ -5979,10 +5971,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarCriticalPathsNew => '新增關鍵路徑';
 
   @override
-  String get calendarCriticalPathRenameTitle => 'Rename critical path';
+  String get calendarCriticalPathRenameTitle => '重新命名關鍵路徑';
 
   @override
-  String get calendarCriticalPathDeleteTitle => 'Delete critical path';
+  String get calendarCriticalPathDeleteTitle => '刪除關鍵路徑';
 
   @override
   String get calendarCriticalPathsTitle => '關鍵路徑';
@@ -5991,49 +5983,43 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarCriticalPathShareAction => '分享至聊天';
 
   @override
-  String get calendarCriticalPathShareTitle => 'Share critical path';
+  String get calendarCriticalPathShareTitle => '分享關鍵路徑';
 
   @override
-  String get calendarCriticalPathShareSubtitle =>
-      'Send a critical path to a chat.';
+  String get calendarCriticalPathShareSubtitle => '將關鍵路徑發送到聊天。';
 
   @override
-  String get calendarCriticalPathShareTargetLabel => 'Share with';
+  String get calendarCriticalPathShareTargetLabel => '分享給';
 
   @override
-  String get calendarCriticalPathShareButtonLabel => 'Share';
+  String get calendarCriticalPathShareButtonLabel => '分享';
 
   @override
-  String get calendarCriticalPathShareMissingChats =>
-      'No eligible chats available.';
+  String get calendarCriticalPathShareMissingChats => '沒有可用的聊天。';
 
   @override
-  String get calendarCriticalPathShareMissingRecipient =>
-      'Select a chat to share with.';
+  String get calendarCriticalPathShareMissingRecipient => '請選擇要分享的聊天。';
 
   @override
-  String get calendarCriticalPathShareMissingService =>
-      'Calendar sharing is unavailable.';
+  String get calendarCriticalPathShareMissingService => '日曆分享不可用。';
 
   @override
-  String get calendarCriticalPathShareDenied =>
-      'Calendar cards are disabled for your role in this room.';
+  String get calendarCriticalPathShareDenied => '你的角色在此房間中已停用日曆卡片。';
 
   @override
-  String get calendarCriticalPathShareFailed =>
-      'Failed to share critical path.';
+  String get calendarCriticalPathShareFailed => '分享關鍵路徑失敗。';
 
   @override
-  String get calendarCriticalPathShareSuccess => 'Critical path shared.';
+  String get calendarCriticalPathShareSuccess => '關鍵路徑已分享。';
 
   @override
-  String get calendarCriticalPathShareChatTypeDirect => 'Direct chat';
+  String get calendarCriticalPathShareChatTypeDirect => '直接聊天';
 
   @override
-  String get calendarCriticalPathShareChatTypeGroup => 'Group chat';
+  String get calendarCriticalPathShareChatTypeGroup => '群組聊天';
 
   @override
-  String get calendarCriticalPathShareChatTypeNote => 'Notes';
+  String get calendarCriticalPathShareChatTypeNote => '備註';
 
   @override
   String calendarCriticalPathProgressSummary(int completed, int total) {
@@ -6119,58 +6105,56 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarCriticalPathCreateFailed => '無法建立關鍵路徑。';
 
   @override
-  String get calendarTaskSearchTitle => 'Search tasks';
+  String get calendarTaskSearchTitle => '搜尋任務';
 
   @override
   String calendarTaskSearchAddToTitle(Object name) {
-    return 'Add to $name';
+    return '加入到$name';
   }
 
   @override
-  String get calendarTaskSearchSubtitle =>
-      'Search titles, descriptions, locations, categories, priorities, and deadlines.';
+  String get calendarTaskSearchSubtitle => '搜尋標題、描述、地點、分類、優先級與截止日期。';
 
   @override
-  String get calendarTaskSearchAddToSubtitle =>
-      'Tap a task to append it to the critical path order.';
+  String get calendarTaskSearchAddToSubtitle => '點按任務以將其加入關鍵路徑順序。';
 
   @override
   String get calendarTaskSearchHint =>
       'title:, desc:, location:, category:work, priority:urgent, status:done';
 
   @override
-  String get calendarTaskSearchEmptyPrompt => 'Start typing to search tasks';
+  String get calendarTaskSearchEmptyPrompt => '開始輸入以搜尋任務';
 
   @override
-  String get calendarTaskSearchEmptyNoResults => 'No results found';
+  String get calendarTaskSearchEmptyNoResults => '找不到結果';
 
   @override
   String get calendarTaskSearchEmptyHint =>
-      'Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.';
+      '使用過濾條件，如 title:, desc:, location:, priority:critical, status:done, deadline:today.';
 
   @override
-  String get calendarTaskSearchFilterScheduled => 'Scheduled';
+  String get calendarTaskSearchFilterScheduled => '已安排';
 
   @override
-  String get calendarTaskSearchFilterUnscheduled => 'Unscheduled';
+  String get calendarTaskSearchFilterUnscheduled => '未安排';
 
   @override
-  String get calendarTaskSearchFilterReminders => 'Reminders';
+  String get calendarTaskSearchFilterReminders => '提醒';
 
   @override
-  String get calendarTaskSearchFilterOpen => 'Open';
+  String get calendarTaskSearchFilterOpen => '未完成';
 
   @override
-  String get calendarTaskSearchFilterCompleted => 'Completed';
+  String get calendarTaskSearchFilterCompleted => '已完成';
 
   @override
   String calendarTaskSearchDueDate(Object date) {
-    return 'Due $date';
+    return '到期 $date';
   }
 
   @override
   String calendarTaskSearchOverdueDate(Object date) {
-    return 'Overdue · $date';
+    return '逾期 · $date';
   }
 
   @override

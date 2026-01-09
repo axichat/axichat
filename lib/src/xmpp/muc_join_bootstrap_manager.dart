@@ -124,6 +124,19 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     }
   }
 
+  String? _extractRoomNickname(String roomJid) {
+    final trimmed = roomJid.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final jid = mox.JID.fromString(trimmed);
+      final nickname = jid.resource.trim();
+      if (nickname.isEmpty) return null;
+      return nickname;
+    } on Exception {
+      return null;
+    }
+  }
+
   Future<mox.StanzaHandlerData> _onOutgoingPresence(
     mox.Stanza presence,
     mox.StanzaHandlerData state,
@@ -137,6 +150,11 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
 
     final normalizedRoom = _normalizeRoomKey(toAttr);
     if (normalizedRoom == null) return state;
+
+    final nickname = _extractRoomNickname(toAttr);
+    if (nickname != null) {
+      _roomNicknames[normalizedRoom] = nickname;
+    }
 
     final password = _roomPasswords[normalizedRoom];
     if (password == null || password.isEmpty) return state;

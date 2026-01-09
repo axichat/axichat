@@ -1689,6 +1689,7 @@ mixin MessageService
       Duration(days: 3650);
   bool _mamLoginSyncInFlight = false;
   bool _mamGlobalSyncInFlight = false;
+  DateTime? _mamGlobalSyncCompletedAt;
   bool _calendarMamRehydrateInFlight = false;
   bool _calendarMamSnapshotSeen = false;
   bool _calendarMamSnapshotUnavailableNotified = false;
@@ -2222,6 +2223,7 @@ mixin MessageService
           _mamGlobalMaxTimestamp?.toUtc() ?? DateTime.timestamp().toUtc();
       await _storeMamGlobalLastSync(anchorTimestamp);
       await _storeMamGlobalDeniedUntil(null);
+      _mamGlobalSyncCompletedAt = DateTime.timestamp();
       return MamGlobalSyncOutcome.completed;
     } on XmppAbortedException {
       return MamGlobalSyncOutcome.failed;
@@ -2359,12 +2361,7 @@ mixin MessageService
     if (manager == null) {
       throw XmppMessageException();
     }
-    final roomJidParsed = mox.JID.fromString(normalizedRoom);
-    final managerState = await manager.getRoomState(roomJidParsed);
-    final managerJoined = managerState?.joined == true;
-    final localState = roomStateFor(normalizedRoom);
-    final localJoined = localState?.hasSelfPresence == true;
-    if (managerJoined && localJoined) {
+    if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
       await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
       return;
     }
@@ -2378,11 +2375,7 @@ mixin MessageService
       // Join failures are surfaced by the follow-up presence check.
     }
 
-    final updatedManagerState = await manager.getRoomState(roomJidParsed);
-    final updatedManagerJoined = updatedManagerState?.joined == true;
-    final updatedLocalState = roomStateFor(normalizedRoom);
-    final updatedLocalJoined = updatedLocalState?.hasSelfPresence == true;
-    if (updatedManagerJoined && updatedLocalJoined) {
+    if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
       await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
       return;
     }
@@ -3580,6 +3573,10 @@ mixin MessageService
         isMuc: isMuc,
       );
 
+  DateTime? get mamGlobalSyncCompletedAt => _mamGlobalSyncCompletedAt;
+
+  bool get isMamGlobalSyncInFlight => _mamGlobalSyncInFlight;
+
   Future<bool> resolveMamSupport() async {
     await _resolveMamSupportForAccount();
     return _mamSupported;
@@ -4196,6 +4193,7 @@ mixin MessageService
 
     _mamLoginSyncInFlight = false;
     _mamGlobalSyncInFlight = false;
+    _mamGlobalSyncCompletedAt = null;
     _mucMamUnsupportedRooms.clear();
     _mucJoinMamDeferredRooms.clear();
     _mamGlobalDeniedUntil = null;
@@ -4320,13 +4318,20 @@ mixin MessageService
       return false;
     }
     final RoomState? room = _roomStates[key];
-    final bool hasSelfPresence = room?.hasSelfPresence == true;
-    final bool roomCreated = room?.roomCreated == true;
+    if (room == null) return false;
+    if (room.wasBanned || room.wasKicked || room.roomShutdown) return false;
+
+    final String condition = conditionData?.condition ?? '';
+    final String? errorType = conditionData?.type;
+    if (condition == _errorConditionNotAcceptable &&
+        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
+      return true;
+    }
+
     final bool pendingConfig = _instantRoomPendingRooms.contains(key);
     if (pendingConfig) return true;
-    if (room == null) return false;
-    if (roomCreated) return true;
-    return !hasSelfPresence;
+    if (room.roomCreated) return true;
+    return room.hasSelfPresence != true;
   }
 
   String? _resolveGroupChatRoomJid({
@@ -4346,6 +4351,28 @@ mixin MessageService
     if (fromBare != null && fromBare != ownBare) return fromBare;
     if (toBare != null && toBare != ownBare) return toBare;
     return null;
+  }
+
+  String? _resolveGroupChatRoomJidFromEvent(mox.MessageEvent event) {
+    final String? fromBare =
+        _normalizeMucRoomJidCandidate(event.from.toBare().toString());
+    final String? toBare =
+        _normalizeMucRoomJidCandidate(event.to.toBare().toString());
+    final String? ownBare = _normalizeBareJidValue(_myJid?.toBare().toString());
+    if (ownBare == null || ownBare.isEmpty) {
+      return fromBare ?? toBare;
+    }
+    if (fromBare != null && fromBare != ownBare) return fromBare;
+    if (toBare != null && toBare != ownBare) return toBare;
+    return null;
+  }
+
+  bool _shouldClearMucPresenceForError(
+    StanzaErrorConditionData? conditionData,
+  ) {
+    if (conditionData == null) return false;
+    return conditionData.condition == _errorConditionNotAcceptable &&
+        _matchesStanzaErrorType(conditionData.type, _errorTypeModify);
   }
 
   Future<void> _repairMucJoin(String roomJid) async {
@@ -4381,22 +4408,27 @@ mixin MessageService
     );
     final _OutboundMessageSummary? summary =
         _outboundMessageSummaries.remove(stanzaId);
+    final bool summaryIsGroupChat = summary?.chatType == ChatType.groupChat;
+    final String? roomJid = summaryIsGroupChat
+        ? _resolveGroupChatRoomJid(event: event, summary: summary!)
+        : _resolveGroupChatRoomJidFromEvent(event);
+    if (roomJid != null &&
+        _isMucChatJid(roomJid) &&
+        _shouldAttemptMucRepairForRoom(
+          roomJid: roomJid,
+          conditionData: errorCondition,
+        )) {
+      if (_shouldClearMucPresenceForError(errorCondition)) {
+        final roomState = roomStateFor(roomJid);
+        if (roomState?.hasSelfPresence == true) {
+          _markRoomLeft(roomJid, statusCodes: _emptyStatusCodes);
+        }
+      }
+      unawaited(_repairMucJoin(roomJid));
+    }
     if (summary == null) {
       _log.info(_outboundMessageRejectedMissingSummaryLog);
       return true;
-    }
-    if (summary.chatType == ChatType.groupChat) {
-      final String? roomJid = _resolveGroupChatRoomJid(
-        event: event,
-        summary: summary,
-      );
-      if (roomJid != null &&
-          _shouldAttemptMucRepairForRoom(
-            roomJid: roomJid,
-            conditionData: errorCondition,
-          )) {
-        unawaited(_repairMucJoin(roomJid));
-      }
     }
     final String errorName = stanzaError == null
         ? _outboundSummaryUnknownType

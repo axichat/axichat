@@ -493,6 +493,13 @@ class _AvailabilitySheetActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const spinner = SizedBox(
+      width: _availabilityRequestSheetHeaderIconSize,
+      height: _availabilityRequestSheetHeaderIconSize,
+      child: CircularProgressIndicator(
+        strokeWidth: _availabilityRequestSheetProgressStrokeWidth,
+      ),
+    );
     return Align(
       alignment: Alignment.centerRight,
       child: ShadButton(
@@ -501,20 +508,20 @@ class _AvailabilitySheetActionRow extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (isBusy)
-              const SizedBox(
-                width: _availabilityRequestSheetHeaderIconSize,
-                height: _availabilityRequestSheetHeaderIconSize,
-                child: CircularProgressIndicator(
-                  strokeWidth: _availabilityRequestSheetProgressStrokeWidth,
-                ),
-              )
-            else
+            ButtonSpinnerSlot(
+              isVisible: isBusy,
+              spinner: spinner,
+              slotSize: _availabilityRequestSheetHeaderIconSize,
+              gap: _availabilityRequestSheetGap,
+              duration: baseAnimationDuration,
+            ),
+            if (!isBusy) ...[
               Icon(
                 iconData,
                 size: _availabilityRequestSheetHeaderIconSize,
               ),
-            const SizedBox(width: _availabilityRequestSheetGap),
+              const SizedBox(width: _availabilityRequestSheetGap),
+            ],
             Text(label),
           ],
         ),

@@ -347,6 +347,13 @@ class _TaskShareActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const spinner = SizedBox(
+      width: _taskShareHeaderIconSize,
+      height: _taskShareHeaderIconSize,
+      child: CircularProgressIndicator(
+        strokeWidth: _taskShareProgressStrokeWidth,
+      ),
+    );
     return Align(
       alignment: Alignment.centerRight,
       child: ShadButton(
@@ -355,20 +362,20 @@ class _TaskShareActionRow extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (isBusy)
-              const SizedBox(
-                width: _taskShareHeaderIconSize,
-                height: _taskShareHeaderIconSize,
-                child: CircularProgressIndicator(
-                  strokeWidth: _taskShareProgressStrokeWidth,
-                ),
-              )
-            else
+            ButtonSpinnerSlot(
+              isVisible: isBusy,
+              spinner: spinner,
+              slotSize: _taskShareHeaderIconSize,
+              gap: _taskShareSectionGap,
+              duration: baseAnimationDuration,
+            ),
+            if (!isBusy) ...[
               const Icon(
                 LucideIcons.share2,
                 size: _taskShareHeaderIconSize,
               ),
-            const SizedBox(width: _taskShareSectionGap),
+              const SizedBox(width: _taskShareSectionGap),
+            ],
             Text(label),
           ],
         ),
