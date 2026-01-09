@@ -409,7 +409,6 @@ class _AlarmCardState extends State<_AlarmCard> {
         final Widget triggerField = _AlarmTriggerTypeField(
           trigger: trigger,
           referenceStart: widget.referenceStart,
-          isCompact: isCompact,
           onChanged: (next) => widget.onChanged(
             alarm.copyWith(trigger: next),
           ),
@@ -419,6 +418,26 @@ class _AlarmCardState extends State<_AlarmCard> {
           trailing: triggerField,
           isCompact: isCompact,
         );
+        final Widget triggerDetails =
+            trigger.type == CalendarAlarmTriggerType.absolute
+                ? _AlarmAbsoluteTriggerField(
+                    value: trigger.absolute,
+                    referenceStart: widget.referenceStart,
+                    onChanged: (next) {
+                      widget.onChanged(
+                        alarm.copyWith(
+                          trigger: trigger.copyWith(absolute: next),
+                        ),
+                      );
+                    },
+                  )
+                : _AlarmRelativeTriggerField(
+                    trigger: trigger,
+                    isCompact: isCompact,
+                    onChanged: (next) => widget.onChanged(
+                      alarm.copyWith(trigger: next),
+                    ),
+                  );
 
         return Container(
           padding: const EdgeInsets.symmetric(
@@ -458,6 +477,8 @@ class _AlarmCardState extends State<_AlarmCard> {
               ),
               const SizedBox(height: calendarInsetMd),
               actionTriggerRow,
+              const SizedBox(height: calendarGutterMd),
+              triggerDetails,
               const SizedBox(height: calendarGutterMd),
               _AlarmRepeatField(
                 repeatController: _repeatController,
@@ -601,13 +622,11 @@ class _AlarmTriggerTypeField extends StatelessWidget {
   const _AlarmTriggerTypeField({
     required this.trigger,
     required this.referenceStart,
-    required this.isCompact,
     required this.onChanged,
   });
 
   final CalendarAlarmTrigger trigger;
   final DateTime? referenceStart;
-  final bool isCompact;
   final ValueChanged<CalendarAlarmTrigger> onChanged;
 
   @override
@@ -672,25 +691,6 @@ class _AlarmTriggerTypeField extends StatelessWidget {
             color: calendarSubtitleColor,
           ),
         ),
-        const SizedBox(height: calendarGutterMd),
-        if (trigger.type == CalendarAlarmTriggerType.absolute)
-          _AlarmAbsoluteTriggerField(
-            value: trigger.absolute,
-            referenceStart: referenceStart,
-            onChanged: (next) {
-              onChanged(
-                trigger.copyWith(
-                  absolute: next,
-                ),
-              );
-            },
-          )
-        else
-          _AlarmRelativeTriggerField(
-            trigger: trigger,
-            isCompact: isCompact,
-            onChanged: (next) => onChanged(next),
-          ),
       ],
     );
   }

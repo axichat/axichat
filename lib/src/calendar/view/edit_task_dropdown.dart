@@ -5,6 +5,7 @@ import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -428,15 +429,17 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     }
     final List<TaskChecklistItem> current =
         List<TaskChecklistItem>.from(_checklistController.items);
-    final bool shouldPersist = _isChecklistCompletionChange(
-      previous: _lastChecklistSnapshot,
-      current: current,
-    );
+    final bool shouldPersist = widget.editMode.isChecklistOnly
+        ? !listEquals(_lastChecklistSnapshot, current)
+        : _isChecklistCompletionChange(
+            previous: _lastChecklistSnapshot,
+            current: current,
+          );
     _setChecklistSnapshot(current);
     if (!shouldPersist) {
       return;
     }
-    _persistChecklistCompletion(current);
+    _persistChecklistUpdate(current);
   }
 
   bool _isChecklistCompletionChange({
@@ -461,7 +464,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     return completionChanged;
   }
 
-  void _persistChecklistCompletion(List<TaskChecklistItem> checklist) {
+  void _persistChecklistUpdate(List<TaskChecklistItem> checklist) {
     final CalendarTask updatedTask = widget.task.copyWith(
       checklist: checklist,
     );
@@ -693,6 +696,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onChanged: (value) => _updateDraft(() {
                         _categories = value;
                       }),
+                      surfaceColor: background,
                       enabled: allowsFullEdits,
                     ),
                     const TaskSectionDivider(

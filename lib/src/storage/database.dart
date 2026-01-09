@@ -63,8 +63,7 @@ const int _messageStatusSyncEnvelopeVersion = 1;
 const String _messageStatusSyncEnvelopeVersionKey = 'v';
 const String _messageStatusSyncEnvelopeIdKey = 'id';
 const int _pinnedMessagesSchemaVersion = 26;
-const int _messageSubjectSchemaVersion = 27;
-const int _schemaVersion = _messageSubjectSchemaVersion;
+const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
 abstract interface class XmppDatabase implements Database {
@@ -1519,9 +1518,6 @@ WHERE delta_chat_id IS NOT NULL
         if (from < _pinnedMessagesSchemaVersion) {
           await m.createTable(pinnedMessages);
         }
-        if (from < _messageSubjectSchemaVersion) {
-          await m.addColumn(messages, messages.subject);
-        }
       },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -2710,6 +2706,8 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   Future<void> _refreshChatSummaryAfterTrim({required String jid}) async {
+    const int summaryStartOffset = 0;
+    const int summaryPageSize = 1;
     const int emptyUnreadCount = 0;
     const summaryFilter = MessageTimelineFilter.allWithContact;
     final chat = await getChat(jid);
@@ -2722,8 +2720,8 @@ WHERE email_from_address IN ($placeholderClause)
     final bool hasAnyMessages = hasVisibleMessage ||
         (await getChatMessages(
           jid,
-          start: 0,
-          end: 1,
+          start: summaryStartOffset,
+          end: summaryPageSize,
           filter: summaryFilter,
         ))
             .isNotEmpty;

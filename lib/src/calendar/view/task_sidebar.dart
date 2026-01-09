@@ -6154,6 +6154,7 @@ class _AdvancedOptions extends StatelessWidget {
               return CalendarCategoriesField(
                 categories: draftController.categories,
                 onChanged: onCategoriesChanged,
+                surfaceColor: calendarContainerColor,
               );
             },
           ),
