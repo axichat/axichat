@@ -29,6 +29,12 @@ class LogoutButton extends StatelessWidget {
             value: locate<AuthenticationCubit>(),
             child: StatefulBuilder(
               builder: (context, setState) {
+                void updateSeverity(LogoutSeverity value) {
+                  setState(() {
+                    severity = value;
+                  });
+                }
+
                 return AxiInputDialog(
                   title: Text(title(l10n)),
                   content: Material(
@@ -41,23 +47,25 @@ class LogoutButton extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          ListTile(
+                          CheckboxListTile(
+                            controlAffinity: ListTileControlAffinity.leading,
                             title: Text(l10n.authLogoutNormal),
                             subtitle: Text(l10n.authLogoutNormalDescription),
+                            value: severity.isNormal,
                             selected: severity.isNormal,
-                            onTap: () => setState(() {
-                              severity = LogoutSeverity.normal;
-                            }),
+                            onChanged: (_) =>
+                                updateSeverity(LogoutSeverity.normal),
                           ),
                           const SizedBox(height: 12),
-                          ListTile(
+                          CheckboxListTile(
+                            controlAffinity: ListTileControlAffinity.leading,
                             title: Text(l10n.authLogoutBurn),
                             subtitle: Text(l10n.authLogoutBurnDescription),
                             isThreeLine: true,
+                            value: severity.isBurn,
                             selected: severity.isBurn,
-                            onTap: () => setState(() {
-                              severity = LogoutSeverity.burn;
-                            }),
+                            onChanged: (_) =>
+                                updateSeverity(LogoutSeverity.burn),
                           ),
                         ],
                       ),

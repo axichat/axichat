@@ -938,6 +938,9 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (host == null) return;
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
+    _nodeReady = false;
+    _lastEnsureAttempt = null;
+    unawaited(_bootstrap());
   }
 
   Future<void> _handleNodePurged(mox.PubSubNodePurgedEvent event) async {
@@ -946,6 +949,9 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (host == null) return;
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
+    _nodeReady = false;
+    _lastEnsureAttempt = null;
+    unawaited(_bootstrap());
   }
 
   Future<void> _refreshFromServer() async {

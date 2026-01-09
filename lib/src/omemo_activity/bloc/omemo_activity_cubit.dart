@@ -40,12 +40,6 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
   static final _logger = Logger('OmemoActivityCubit');
 
   void _handleEvent(mox.OmemoActivityEvent event) {
-    _logger.fine(
-      'Activity: operation=${event.operation.name} stage=${event.stage.name} '
-      'jid=${event.jid ?? '-'} device=${event.deviceId ?? '-'} '
-      'error=${event.error}',
-    );
-
     if (_handlePersistRatchetEvent(event)) {
       return;
     }
@@ -117,10 +111,6 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     // concrete device identifier. These represent steady-state ratchet saves
     // and should not surface user-facing progress state.
     if (event.deviceId == null) {
-      _logger.finest(
-        'Ignoring persistRatchet with no device id for '
-        '${event.jid ?? '(self)'}',
-      );
       return true;
     }
 
@@ -155,17 +145,8 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
       return true;
     }
 
-    _logger.finest(
-      'persistRatchet end: jid=${event.jid ?? '(self)'} '
-      'device=${event.deviceId ?? 'n/a'}',
-    );
-
     final tracker = _ratchetTrackers[key];
     if (tracker == null) {
-      _logger.warning(
-        'persistRatchet end without matching start: '
-        'jid=${event.jid ?? '(self)'} device=${event.deviceId ?? 'n/a'}',
-      );
       return false;
     }
 
@@ -240,10 +221,6 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
 
     final tracker = _ratchetTrackers[key];
     if (tracker == null) {
-      _logger.warning(
-        'ratchet fetch end without matching start: '
-        'jid=${event.jid ?? '(self)'} device=${event.deviceId ?? 'n/a'}',
-      );
       return false;
     }
 

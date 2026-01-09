@@ -528,7 +528,7 @@ class XmppService extends XmppBase
     final completedAt = mamGlobalSyncCompletedAt;
     if (completedAt == null) return false;
     final streamReady = lastStreamReady;
-    if (streamReady == null) return true;
+    if (streamReady == null) return false;
     return !completedAt.isBefore(streamReady.timestamp);
   }
 
