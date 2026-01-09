@@ -63,6 +63,8 @@ AuthenticationState? _lastAuthState;
 const String _shareFileSchemePrefix = 'file://';
 const String _emptyShareBody = '';
 const List<String> _emptyShareJids = [''];
+const List<RosterItem> _emptyShareContacts = <RosterItem>[];
+const List<Chat> _emptyShareChats = <Chat>[];
 const int _shareAttachmentUnknownSizeBytes = 0;
 const int _shareAttachmentMinSizeBytes = 1;
 const Duration _shareIntentNavigationDelay = Duration.zero;
@@ -636,9 +638,15 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       if (!context.mounted) return;
       final List<RosterItem> contacts = await _loadShareContacts(context);
       if (!context.mounted) return;
+      final List<Chat> cachedChats =
+          context.read<ChatsCubit>().state.items ?? _emptyShareChats;
+      final List<Chat> chats =
+          cachedChats.isEmpty ? await _loadShareChats(context) : cachedChats;
+      if (!context.mounted) return;
       final ShareIntentDestination? destination = await showShareIntentSheet(
         context: context,
         contacts: contacts,
+        groupChats: chats,
       );
       if (!context.mounted) return;
       if (destination == null) {
@@ -667,7 +675,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         _consumeSharePayload(shareCubit, payload);
         return;
       }
-      if (destination is ShareIntentContactDestination) {
+      final String? destinationJid = switch (destination) {
+        ShareIntentContactDestination(:final contact) => contact.jid,
+        ShareIntentChatDestination(:final chat) => chat.jid,
+        _ => null,
+      };
+      if (destinationJid != null) {
         final List<EmailAttachment> attachments =
             await _prepareSharedAttachments(
           attachments: payload.attachments,
@@ -683,12 +696,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           attachments: attachments,
         );
         context.read<ShareIntentCoordinator>().enqueueForChat(
-              jid: destination.contact.jid,
+              jid: destinationJid,
               payload: draftPayload,
             );
         await _navigateToHomeForChatShare();
         if (!context.mounted) return;
-        await context.read<ChatsCubit>().openChat(jid: destination.contact.jid);
+        await context.read<ChatsCubit>().openChat(jid: destinationJid);
         _consumeSharePayload(shareCubit, payload);
       }
     } finally {
@@ -704,9 +717,20 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     try {
       return await xmppService.rosterStream().first;
     } on XmppAbortedException {
-      return const <RosterItem>[];
+      return _emptyShareContacts;
     } on Exception {
-      return const <RosterItem>[];
+      return _emptyShareContacts;
+    }
+  }
+
+  Future<List<Chat>> _loadShareChats(BuildContext context) async {
+    final XmppService xmppService = context.read<XmppService>();
+    try {
+      return await xmppService.chatsStream().first;
+    } on XmppAbortedException {
+      return _emptyShareChats;
+    } on Exception {
+      return _emptyShareChats;
     }
   }
 
