@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
@@ -25,7 +24,6 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
 import 'controllers/quick_add_controller.dart';
 import 'controllers/task_checklist_controller.dart';
-import 'controllers/task_form_draft_store.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/recurrence_editor.dart';
@@ -47,15 +45,6 @@ const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
 const bool _calendarUseRootNavigator = false;
 
 enum QuickAddModalSurface { dialog, bottomSheet }
-
-CalendarTaskDraftStore? _maybeReadDraftStore(BuildContext context) {
-  try {
-    return RepositoryProvider.of<CalendarTaskDraftStore>(context,
-        listen: false);
-  } on FlutterError {
-    return null;
-  }
-}
 
 class QuickAddModal extends StatefulWidget {
   final DateTime? prefilledDateTime;
@@ -106,7 +95,6 @@ class _QuickAddModalState extends State<QuickAddModal>
   int _parserRequestId = 0;
   String _lastParserInput = '';
   bool _isApplyingParser = false;
-  bool _isApplyingDraft = false;
 
   bool _locationLocked = false;
   bool _scheduleLocked = false;
@@ -116,9 +104,6 @@ class _QuickAddModalState extends State<QuickAddModal>
   bool _remindersLocked = false;
   NlAdapterResult? _lastParserResult;
   String? _formError;
-  CalendarTaskDraftStore? _draftStore;
-  late final Listenable _draftActivityListenable;
-  bool _suppressDraftSync = false;
 
   @override
   void initState() {
@@ -160,24 +145,10 @@ class _QuickAddModalState extends State<QuickAddModal>
       initialEnd: prefilled?.add(const Duration(hours: 1)),
     );
     _parserService = NlScheduleParserService();
-    _draftActivityListenable = Listenable.merge([
-      _taskNameController,
-      _descriptionController,
-      _locationController,
-      _checklistController,
-      _formController,
-    ]);
-    _draftActivityListenable.addListener(_persistQuickAddDraft);
-    _draftStore = _maybeReadDraftStore(context);
-    final QuickAddDraft? draft = _draftStore?.quickAddDraft;
-    if (draft != null) {
-      _applyDraft(draft);
-    } else {
-      _applyPrefill(prefilled);
-    }
+    _applyPrefill(prefilled);
 
     final seededText = widget.prefilledText?.trim();
-    if (draft == null && seededText != null && seededText.isNotEmpty) {
+    if (seededText != null && seededText.isNotEmpty) {
       _taskNameController.value = TextEditingValue(
         text: seededText,
         selection: TextSelection.collapsed(offset: seededText.length),
@@ -193,7 +164,6 @@ class _QuickAddModalState extends State<QuickAddModal>
   void dispose() {
     _parserDebounce?.cancel();
     _animationController.dispose();
-    _draftActivityListenable.removeListener(_persistQuickAddDraft);
     _taskNameController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
@@ -499,7 +469,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   void _handleLocationEdited(String value) {
-    if (_isApplyingParser || _isApplyingDraft) {
+    if (_isApplyingParser) {
       return;
     }
     _locationLocked = value.trim().isNotEmpty;
@@ -597,70 +567,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
   }
 
-  void _applyDraft(QuickAddDraft draft) {
-    _suppressDraftSync = true;
-    _isApplyingDraft = true;
-    _taskNameController.value = TextEditingValue(
-      text: draft.title,
-      selection: TextSelection.collapsed(offset: draft.title.length),
-    );
-    _descriptionController.value = TextEditingValue(
-      text: draft.description,
-      selection: TextSelection.collapsed(offset: draft.description.length),
-    );
-    _locationController.value = TextEditingValue(
-      text: draft.location,
-      selection: TextSelection.collapsed(offset: draft.location.length),
-    );
-    _checklistController
-      ..setItems(draft.checklist)
-      ..setPendingEntry(draft.pendingChecklistEntry);
-    draft.snapshot.applyTo(_formController);
-    _queuedCriticalPathIds
-      ..clear()
-      ..addAll(draft.queuedCriticalPathIds);
-    _locationLocked = draft.location.trim().isNotEmpty;
-    _scheduleLocked =
-        draft.snapshot.startTime != null || draft.snapshot.endTime != null;
-    _deadlineLocked = draft.snapshot.deadline != null;
-    _recurrenceLocked = draft.snapshot.recurrence.isActive;
-    _priorityLocked = draft.snapshot.isImportant || draft.snapshot.isUrgent;
-    _remindersLocked =
-        draft.snapshot.reminders != ReminderPreferences.defaults();
-    _isApplyingDraft = false;
-    _suppressDraftSync = false;
-  }
-
-  void _persistQuickAddDraft() {
-    if (_suppressDraftSync) {
-      return;
-    }
-    final CalendarTaskDraftStore? store = _draftStore;
-    if (store == null) {
-      return;
-    }
-    final QuickAddDraft draft = QuickAddDraft(
-      title: _taskNameController.text,
-      description: _descriptionController.text,
-      location: _locationController.text,
-      checklist: _checklistController.items.toList(),
-      pendingChecklistEntry: _checklistController.pendingEntry,
-      snapshot: TaskDraftSnapshot.fromController(_formController),
-      queuedCriticalPathIds: List<String>.from(_queuedCriticalPathIds),
-    );
-    if (!draft.hasContent) {
-      store.clearQuickAddDraft();
-      return;
-    }
-    store.setQuickAddDraft(draft);
-  }
-
-  void _clearQuickAddDraft() {
-    _draftStore?.clearQuickAddDraft();
-  }
-
   Future<void> _handleCancelPressed() async {
-    _clearQuickAddDraft();
     await _dismissModal();
   }
 
@@ -684,7 +591,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     setState(() {
       _queuedCriticalPathIds.add(pathId);
     });
-    _persistQuickAddDraft();
   }
 
   void _removeQueuedCriticalPath(String pathId) {
@@ -694,14 +600,13 @@ class _QuickAddModalState extends State<QuickAddModal>
     setState(() {
       _queuedCriticalPathIds.removeWhere((id) => id == pathId);
     });
-    _persistQuickAddDraft();
   }
 
   Future<void> _queueCriticalPathForDraft() async {
     _setFormError(null);
     final BaseCalendarBloc? bloc = widget.calendarBloc;
     if (bloc == null) {
-      _setFormError('Critical paths are unavailable in this view.');
+      _setFormError(context.l10n.calendarCriticalPathUnavailable);
       return;
     }
     await showCriticalPathPicker(
@@ -710,12 +615,12 @@ class _QuickAddModalState extends State<QuickAddModal>
       stayOpen: true,
       onPathSelected: (path) async {
         _addQueuedCriticalPath(path.id);
-        return 'Will add to "${path.name}" on save';
+        return context.l10n.calendarCriticalPathQueuedAdd(path.name);
       },
       onCreateNewPath: () async {
         final String? name = await promptCriticalPathName(
           context: context,
-          title: 'New critical path',
+          title: context.l10n.calendarCriticalPathsNew,
         );
         if (!mounted || name == null) {
           return null;
@@ -731,7 +636,7 @@ class _QuickAddModalState extends State<QuickAddModal>
           return null;
         }
         _addQueuedCriticalPath(createdId);
-        return 'Created "$name" and queued';
+        return context.l10n.calendarCriticalPathQueuedCreate(name);
       },
     );
   }
@@ -758,7 +663,7 @@ class _QuickAddModalState extends State<QuickAddModal>
         hasQueuedPaths ? calendarBloc?.state.model.tasks.keys.toSet() : null;
     if (hasQueuedPaths && calendarBloc == null) {
       _formController.setSubmitting(false);
-      _setFormError('Critical paths are unavailable in this view.');
+      _setFormError(context.l10n.calendarCriticalPathUnavailable);
       return;
     }
 
@@ -827,7 +732,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
 
     widget.onTaskAdded(task);
-    _clearQuickAddDraft();
 
     if (hasQueuedPaths && calendarBloc != null && previousIds != null) {
       final CalendarTask? createdTask =
@@ -846,7 +750,7 @@ class _QuickAddModalState extends State<QuickAddModal>
         }
       } else {
         _setFormError(
-          'Task saved but could not be added to a critical path.',
+          context.l10n.calendarCriticalPathAddAfterSaveFailed,
         );
       }
     }
@@ -855,7 +759,6 @@ class _QuickAddModalState extends State<QuickAddModal>
       setState(() {
         _queuedCriticalPathIds.clear();
       });
-      _persistQuickAddDraft();
     }
 
     if (!mounted) return;
@@ -1228,7 +1131,7 @@ class _QuickAddModalContent extends StatelessWidget {
                         ),
                         const SizedBox(height: calendarGutterMd),
                         TaskSecondaryButton(
-                          label: 'Add to critical path',
+                          label: context.l10n.calendarAddToCriticalPath,
                           icon: Icons.route,
                           onPressed:
                               formController.isSubmitting || !hasCalendarBloc

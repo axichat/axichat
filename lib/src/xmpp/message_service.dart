@@ -242,6 +242,7 @@ final class _OutboundMessageSummary {
     required this.hasBody,
     required this.hasHtml,
     required this.flags,
+    required this.chatJid,
   });
 
   final _OutboundMessageKind kind;
@@ -250,6 +251,7 @@ final class _OutboundMessageSummary {
   final bool hasBody;
   final bool hasHtml;
   final List<_OutboundMessageFlag> flags;
+  final String? chatJid;
 
   String toLogPayload({String? errorName}) {
     final List<String> parts = <String>[
@@ -330,6 +332,18 @@ String? _normalizeBareJidValue(String? jid) {
     return mox.JID.fromString(trimmed).toBare().toString().toLowerCase();
   } on Exception {
     return trimmed.toLowerCase();
+  }
+}
+
+String? _normalizeMucRoomJidCandidate(String? jid) {
+  final normalized = _normalizeBareJidValue(jid);
+  if (normalized == null) return null;
+  try {
+    final parsed = mox.JID.fromString(normalized);
+    if (parsed.local.isEmpty) return null;
+    return parsed.toBare().toString();
+  } on Exception {
+    return null;
   }
 }
 
@@ -2198,7 +2212,7 @@ mixin MessageService
         }
         if (!hasProgress) {
           _log.fine(_mamGlobalNoProgressLog);
-          break;
+          throw XmppMessageException();
         }
         before = null;
         start = null;
@@ -2388,6 +2402,7 @@ mixin MessageService
     required mox.MessageEvent stanza,
     required ChatType chatType,
     required _OutboundMessageKind kind,
+    required String chatJid,
   }) {
     final String? stanzaId = stanza.id;
     if (stanzaId == null || stanzaId.isEmpty) {
@@ -2425,6 +2440,7 @@ mixin MessageService
         _OutboundMessageFlag.uploadNotification,
       if (extensions.get<XhtmlImData>() != null) _OutboundMessageFlag.xhtml,
     ];
+    final String? normalizedChatJid = _normalizeBareJidValue(chatJid);
     final _OutboundMessageSummary summary = _OutboundMessageSummary(
       kind: kind,
       chatType: chatType,
@@ -2432,6 +2448,7 @@ mixin MessageService
       hasBody: hasBody,
       hasHtml: hasHtml,
       flags: flags,
+      chatJid: normalizedChatJid,
     );
     _outboundMessageSummaries[stanzaId] = summary;
     _trimOutboundMessageSummaries();
@@ -2582,6 +2599,7 @@ mixin MessageService
         stanza: stanza,
         chatType: chatType,
         kind: _OutboundMessageKind.message,
+        chatJid: message.chatJid,
       );
       final sent = await _connection.sendMessage(
         stanza,
@@ -2801,6 +2819,7 @@ mixin MessageService
         stanza: stanza,
         chatType: chatType,
         kind: _OutboundMessageKind.attachment,
+        chatJid: message.chatJid,
       );
       final sent = await _connection.sendMessage(
         stanza,
@@ -4256,20 +4275,103 @@ mixin MessageService
   //   });
   // }
 
+  MessageError _resolveMessageError(
+    mox.StanzaError? stanzaError,
+  ) {
+    return switch (stanzaError) {
+      mox.ServiceUnavailableError _ => MessageError.serviceUnavailable,
+      mox.RemoteServerNotFoundError _ => MessageError.serverNotFound,
+      mox.RemoteServerTimeoutError _ => MessageError.serverTimeout,
+      _ => MessageError.unknown,
+    };
+  }
+
+  bool _matchesStanzaErrorType(String? errorType, String expected) {
+    if (errorType == null) return true;
+    return errorType == expected;
+  }
+
+  bool _shouldAttemptMucRepair(
+    StanzaErrorConditionData? conditionData,
+  ) {
+    if (conditionData == null) return false;
+    final String condition = conditionData.condition;
+    final String? errorType = conditionData.type;
+    if (condition == _errorConditionNotAcceptable &&
+        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
+      return true;
+    }
+    if (condition == _errorConditionResourceConstraint &&
+        _matchesStanzaErrorType(errorType, _errorTypeWait)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _shouldAttemptMucRepairForRoom({
+    required String roomJid,
+    required StanzaErrorConditionData? conditionData,
+  }) {
+    if (!_shouldAttemptMucRepair(conditionData)) return false;
+    late final String key;
+    try {
+      key = _roomKey(roomJid);
+    } on Exception {
+      return false;
+    }
+    final RoomState? room = _roomStates[key];
+    final bool hasSelfPresence = room?.hasSelfPresence == true;
+    final bool roomCreated = room?.roomCreated == true;
+    final bool pendingConfig = _instantRoomPendingRooms.contains(key);
+    if (pendingConfig) return true;
+    if (room == null) return false;
+    if (roomCreated) return true;
+    return !hasSelfPresence;
+  }
+
+  String? _resolveGroupChatRoomJid({
+    required mox.MessageEvent event,
+    required _OutboundMessageSummary summary,
+  }) {
+    final String? summaryJid = _normalizeMucRoomJidCandidate(summary.chatJid);
+    if (summaryJid != null) return summaryJid;
+    final String? fromBare =
+        _normalizeMucRoomJidCandidate(event.from.toBare().toString());
+    final String? toBare =
+        _normalizeMucRoomJidCandidate(event.to.toBare().toString());
+    final String? ownBare = _normalizeBareJidValue(_myJid?.toBare().toString());
+    if (ownBare == null || ownBare.isEmpty) {
+      return fromBare ?? toBare;
+    }
+    if (fromBare != null && fromBare != ownBare) return fromBare;
+    if (toBare != null && toBare != ownBare) return toBare;
+    return null;
+  }
+
+  Future<void> _repairMucJoin(String roomJid) async {
+    try {
+      final String normalizedRoom = _roomKey(roomJid);
+      await ensureJoined(
+        roomJid: normalizedRoom,
+        allowRejoin: true,
+        forceRejoin: true,
+      );
+    } on Exception {
+      // Join failures are already reflected in message errors.
+    }
+  }
+
   Future<bool> _handleError(mox.MessageEvent event) async {
-    if (event.type != 'error') return false;
+    if (event.type != _messageTypeError) return false;
 
     _log.info('Handling error message...');
     final stanzaId = event.id;
     if (stanzaId == null) return true;
 
     final stanzaError = event.error;
-    final error = switch (stanzaError) {
-      mox.ServiceUnavailableError _ => MessageError.serviceUnavailable,
-      mox.RemoteServerNotFoundError _ => MessageError.serverNotFound,
-      mox.RemoteServerTimeoutError _ => MessageError.serverTimeout,
-      _ => MessageError.unknown,
-    };
+    final MessageError error = _resolveMessageError(stanzaError);
+    final StanzaErrorConditionData? errorCondition =
+        event.extensions.get<StanzaErrorConditionData>();
 
     await _dbOp<XmppDatabase>(
       (db) => db.saveMessageError(
@@ -4282,6 +4384,19 @@ mixin MessageService
     if (summary == null) {
       _log.info(_outboundMessageRejectedMissingSummaryLog);
       return true;
+    }
+    if (summary.chatType == ChatType.groupChat) {
+      final String? roomJid = _resolveGroupChatRoomJid(
+        event: event,
+        summary: summary,
+      );
+      if (roomJid != null &&
+          _shouldAttemptMucRepairForRoom(
+            roomJid: roomJid,
+            conditionData: errorCondition,
+          )) {
+        unawaited(_repairMucJoin(roomJid));
+      }
     }
     final String errorName = stanzaError == null
         ? _outboundSummaryUnknownType

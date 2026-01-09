@@ -11158,8 +11158,14 @@ class _ChatComposerSection extends StatelessWidget {
     }
     final children = <Widget>[];
     if (notices.isNotEmpty) {
+      final noticePadding = EdgeInsets.symmetric(horizontal: horizontalPadding);
       for (var i = 0; i < notices.length; i++) {
-        children.add(notices[i]);
+        children.add(
+          Padding(
+            padding: noticePadding,
+            child: notices[i],
+          ),
+        );
         if (i != notices.length - 1) {
           children.add(const SizedBox(height: 8));
         }

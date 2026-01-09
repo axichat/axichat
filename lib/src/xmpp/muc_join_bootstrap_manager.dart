@@ -153,12 +153,54 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     final fromAttr = presence.from;
     if (fromAttr == null || fromAttr.isEmpty) return state;
     final fromJid = mox.JID.fromString(fromAttr);
+    final String? presenceType = presence.type;
+    final bool isErrorPresence = presenceType == _presenceTypeError;
     final nick = fromJid.resource;
-    if (nick.isEmpty) return state;
+    if (nick.isEmpty && !isErrorPresence) return state;
 
     final mucUser = presence.firstTag('x', xmlns: _mucUserXmlns);
     final item = mucUser?.firstTag('item');
-    if (mucUser == null || item == null) return state;
+    if (mucUser == null || item == null) {
+      if (!isErrorPresence) return state;
+      final roomJid = fromJid.toBare().toString();
+      final String? resolvedNick = _resolveSelfPresenceNick(
+        roomJid: roomJid,
+        stanzaNick: nick,
+      );
+      if (resolvedNick == null) return state;
+      final Set<String> statuses = mucUser
+              ?.findTags('status')
+              .map((status) => status.attributes['code'])
+              .whereType<String>()
+              .toSet() ??
+          const <String>{};
+      if (!_isSelfPresenceForError(
+        presence: presence,
+        roomJid: roomJid,
+        nick: resolvedNick,
+        statusCodes: statuses,
+      )) {
+        return state;
+      }
+      final occupantJid =
+          nick.isNotEmpty ? fromJid.toString() : '$roomJid/$resolvedNick';
+      getAttributes().sendEvent(
+        MucSelfPresenceEvent(
+          roomJid: roomJid,
+          occupantJid: occupantJid,
+          nick: resolvedNick,
+          affiliation: OccupantAffiliation.none.xmlValue,
+          role: OccupantRole.none.xmlValue,
+          isAvailable: false,
+          isError: true,
+          isNickChange: false,
+          statusCodes: statuses,
+          reason: null,
+          newNick: null,
+        ),
+      );
+      return state;
+    }
 
     final statuses = mucUser
         .findTags('status')
@@ -172,14 +214,9 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     final isSelfByJid = itemJid is String && itemJid.isNotEmpty
         ? _matchesBareJid(itemJid, ownBareJid)
         : false;
-    final storedNick = _nickForRoom(roomJid);
-    final isSelfByNick = storedNick?.isNotEmpty == true
-        ? storedNick!.toLowerCase() == nick.toLowerCase()
-        : false;
     final isSelfPresence = statuses.contains(mucStatusSelfPresence) ||
         statuses.contains(mucStatusNickAssigned) ||
-        isSelfByJid ||
-        isSelfByNick;
+        isSelfByJid;
     if (!isSelfPresence) return state;
     final resolvedStatuses = statuses.contains(mucStatusSelfPresence)
         ? statuses
@@ -187,7 +224,6 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
             ...statuses,
             ..._selfPresenceFallbackStatusCodes,
           };
-    final String? presenceType = presence.type;
     final bool isError = presenceType == _presenceTypeError;
     final bool isUnavailable = presenceType == _presenceTypeUnavailable;
     final bool isAvailable = !isUnavailable && !isError;
@@ -234,5 +270,35 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     final normalizedRight = _normalizeRoomKey(right);
     if (normalizedLeft == null || normalizedRight == null) return false;
     return normalizedLeft == normalizedRight;
+  }
+
+  String? _resolveSelfPresenceNick({
+    required String roomJid,
+    required String stanzaNick,
+  }) {
+    if (stanzaNick.isNotEmpty) return stanzaNick;
+    final storedNick = _nickForRoom(roomJid);
+    if (storedNick == null || storedNick.isEmpty) return null;
+    return storedNick;
+  }
+
+  bool _isSelfPresenceForError({
+    required mox.Stanza presence,
+    required String roomJid,
+    required String nick,
+    required Set<String> statusCodes,
+  }) {
+    if (statusCodes.contains(mucStatusSelfPresence) ||
+        statusCodes.contains(mucStatusNickAssigned)) {
+      return true;
+    }
+    final String? toAttr = presence.to;
+    final String ownBareJid = getAttributes().getFullJID().toBare().toString();
+    if (toAttr != null && toAttr.isNotEmpty) {
+      if (_matchesBareJid(toAttr, ownBareJid)) return true;
+    }
+    final storedNick = _nickForRoom(roomJid);
+    if (storedNick == null || storedNick.isEmpty) return false;
+    return storedNick.toLowerCase() == nick.toLowerCase();
   }
 }

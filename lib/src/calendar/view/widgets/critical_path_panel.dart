@@ -11,19 +11,17 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const String _criticalPathShareActionLabel = 'Share to chat';
-const String _criticalPathProgressSeparator = 'of';
-const String _criticalPathProgressSuffix = 'tasks completed in order';
-const String _criticalPathProgressHint =
-    'Complete tasks in the listed order to advance';
 const int _criticalPathTaskUnit = 1;
 const int _criticalPathZeroCount = 0;
 const double _criticalPathZeroProgress = 0.0;
 const double _criticalPathMaxProgress = 1.0;
+const int _criticalPathSingleTaskCount = 1;
+const Duration _criticalPathUpdateTimeout = Duration(seconds: 2);
 
 class CriticalPathPanel extends StatelessWidget {
   const CriticalPathPanel({
@@ -81,6 +79,7 @@ class CriticalPathPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
+    final l10n = context.l10n;
     final TextStyle headerStyle = TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w600,
@@ -162,7 +161,7 @@ class CriticalPathPanel extends StatelessWidget {
                         ),
                         const SizedBox(width: calendarInsetSm),
                         Text(
-                          'Completed',
+                          l10n.calendarCriticalPathCompletedLabel,
                           style: context.textTheme.small.copyWith(
                             color: hideCompleted
                                 ? colors.primary
@@ -359,6 +358,7 @@ class CriticalPathCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final double progressValue = progress.progressValue;
     final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
     final bool highlighted = isFocused || isActive;
@@ -406,13 +406,15 @@ class CriticalPathCard extends StatelessWidget {
             ),
             const SizedBox(height: calendarInsetSm),
             Text(
-              '${progress.completed} $_criticalPathProgressSeparator '
-              '${progress.total} $_criticalPathProgressSuffix',
+              l10n.calendarCriticalPathProgressSummary(
+                progress.completed,
+                progress.total,
+              ),
               style: context.textTheme.muted.copyWith(fontSize: 12),
             ),
             const SizedBox(height: calendarInsetSm),
             Text(
-              _criticalPathProgressHint,
+              l10n.calendarCriticalPathProgressHint,
               style: context.textTheme.muted.copyWith(fontSize: 11),
             ),
             const SizedBox(height: calendarInsetSm),
@@ -468,6 +470,7 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: _startValue, end: _targetValue),
       duration: widget.animationDuration,
@@ -482,11 +485,11 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Progress',
+                  l10n.calendarCriticalPathProgressLabel,
                   style: context.textTheme.muted.copyWith(fontSize: 12),
                 ),
                 Text(
-                  '$percent%',
+                  l10n.calendarCriticalPathProgressPercent(percent),
                   style: context.textTheme.muted.copyWith(
                     color: colors.primary,
                     fontWeight: FontWeight.w700,
@@ -564,6 +567,10 @@ class _PathActionsState extends State<_PathActions> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
+    final String focusLabel = widget.isFocused
+        ? l10n.calendarCriticalPathUnfocus
+        : l10n.calendarCriticalPathFocus;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -581,7 +588,7 @@ class _PathActionsState extends State<_PathActions> {
                   color: colors.primary,
                 ),
                 const SizedBox(width: calendarInsetLg),
-                Text(widget.isFocused ? 'Unfocus' : 'Focus'),
+                Text(focusLabel),
               ],
             ),
           ).withTapBounce(),
@@ -605,7 +612,7 @@ class _PathActionsState extends State<_PathActions> {
                   ),
                   AxiMenuAction(
                     icon: Icons.send,
-                    label: _criticalPathShareActionLabel,
+                    label: l10n.calendarCriticalPathShareAction,
                     onPressed: () {
                       _closeMenu();
                       widget.onShare();
@@ -1025,8 +1032,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                                               return;
                                             }
                                             busyNotifier.value = false;
-                                            statusNotifier.value = status ??
-                                                'Added to ${path.name}';
+                                            if (status != null) {
+                                              statusNotifier.value = status;
+                                            }
                                             return;
                                           }
                                           Navigator.of(sheetContext).pop(
@@ -1303,6 +1311,42 @@ Future<String?> promptCriticalPathName({
   return result.trim();
 }
 
+Future<bool> _waitForTasksInCriticalPath({
+  required BaseCalendarBloc bloc,
+  required String pathId,
+  required Set<String> taskIds,
+}) async {
+  bool containsAll(CalendarState state) {
+    final CalendarCriticalPath? path = state.model.criticalPaths[pathId];
+    if (path == null || path.isArchived) {
+      return false;
+    }
+    return taskIds.every(path.taskIds.contains);
+  }
+
+  if (containsAll(bloc.state)) {
+    return true;
+  }
+
+  try {
+    await bloc.stream
+        .map(containsAll)
+        .firstWhere((isReady) => isReady)
+        .timeout(_criticalPathUpdateTimeout);
+    return true;
+  } on TimeoutException {
+    return false;
+  }
+}
+
+String? _resolveCriticalPathName({
+  required BaseCalendarBloc bloc,
+  required String pathId,
+  required Map<String, String> fallbackNames,
+}) {
+  return bloc.state.model.criticalPaths[pathId]?.name ?? fallbackNames[pathId];
+}
+
 Future<void> addTaskToCriticalPath({
   required BuildContext context,
   required BaseCalendarBloc bloc,
@@ -1322,9 +1366,15 @@ Future<void> addTasksToCriticalPath({
 }) async {
   if (tasks.isEmpty) return;
 
-  final CriticalPathPickerResult? result = await showCriticalPathPicker(
+  final List<CalendarCriticalPath> paths = bloc.state.criticalPaths;
+  final Map<String, String> pathNamesById = <String, String>{}
+    ..addEntries(paths.map((path) => MapEntry(path.id, path.name)));
+  final int taskCount = tasks.length;
+  final Set<String> targetTaskIds = <String>{}
+    ..addAll(tasks.map((task) => baseTaskIdFrom(task.id)));
+  await showCriticalPathPicker(
     context: context,
-    paths: bloc.state.criticalPaths,
+    paths: paths,
     stayOpen: true,
     onPathSelected: (path) async {
       for (final CalendarTask task in tasks) {
@@ -1335,7 +1385,37 @@ Future<void> addTasksToCriticalPath({
           ),
         );
       }
-      return 'Added to "${path.name}"';
+      final bool added = await _waitForTasksInCriticalPath(
+        bloc: bloc,
+        pathId: path.id,
+        taskIds: targetTaskIds,
+      );
+      if (!context.mounted) {
+        return null;
+      }
+      if (!added) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAddFailed(taskCount),
+        );
+        return null;
+      }
+      final String? resolvedName = _resolveCriticalPathName(
+        bloc: bloc,
+        pathId: path.id,
+        fallbackNames: pathNamesById,
+      );
+      if (resolvedName == null) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAddFailed(taskCount),
+        );
+        return null;
+      }
+      return context.l10n.calendarCriticalPathAddSuccess(
+        taskCount,
+        resolvedName,
+      );
     },
     onCreateNewPath: () async {
       final String? name = await promptCriticalPathName(
@@ -1345,8 +1425,8 @@ Future<void> addTasksToCriticalPath({
       if (!context.mounted || name == null) {
         return null;
       }
-      final Set<String> previousIds =
-          bloc.state.criticalPaths.map((path) => path.id).toSet();
+      final Set<String> previousIds = <String>{}
+        ..addAll(bloc.state.criticalPaths.map((path) => path.id));
       bloc.add(
         CalendarEvent.criticalPathCreated(
           name: name,
@@ -1357,10 +1437,18 @@ Future<void> addTasksToCriticalPath({
         bloc: bloc,
         previousIds: previousIds,
       );
-      if (createdId == null) {
+      if (!context.mounted) {
         return null;
       }
-      for (final CalendarTask task in tasks.skip(1)) {
+      if (createdId == null) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathCreateFailed,
+        );
+        return null;
+      }
+      for (final CalendarTask task
+          in tasks.skip(_criticalPathSingleTaskCount)) {
         bloc.add(
           CalendarEvent.criticalPathTaskAdded(
             pathId: createdId,
@@ -1368,42 +1456,24 @@ Future<void> addTasksToCriticalPath({
           ),
         );
       }
-      return 'Created "$name" and added task${tasks.length > 1 ? 's' : ''}.';
+      final bool createdAndAdded = await _waitForTasksInCriticalPath(
+        bloc: bloc,
+        pathId: createdId,
+        taskIds: targetTaskIds,
+      );
+      if (!context.mounted) {
+        return null;
+      }
+      if (!createdAndAdded) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAddFailed(taskCount),
+        );
+        return null;
+      }
+      return context.l10n.calendarCriticalPathCreateSuccess(taskCount, name);
     },
   );
-  if (!context.mounted) {
-    return;
-  }
-  if (result == null) {
-    return;
-  }
-
-  if (result.createNew) {
-    final String? name = await promptCriticalPathName(
-      context: context,
-      title: context.l10n.calendarCriticalPathsNew,
-    );
-    if (!context.mounted) {
-      return;
-    }
-    if (name == null) {
-      return;
-    }
-    return;
-  }
-
-  final String? pathId = result.pathId;
-  if (pathId == null) {
-    return;
-  }
-  for (final CalendarTask task in tasks) {
-    bloc.add(
-      CalendarEvent.criticalPathTaskAdded(
-        pathId: pathId,
-        taskId: task.id,
-      ),
-    );
-  }
 }
 
 Future<String?> waitForNewPathId({
@@ -1416,7 +1486,7 @@ Future<String?> waitForNewPathId({
           (state) => state.criticalPaths.map((path) => path.id).toSet(),
         )
         .firstWhere((ids) => ids.length > previousIds.length)
-        .timeout(const Duration(seconds: 2));
+        .timeout(_criticalPathUpdateTimeout);
     final Set<String> difference = updatedIds.difference(previousIds);
     return difference.isNotEmpty ? difference.first : null;
   } on TimeoutException {

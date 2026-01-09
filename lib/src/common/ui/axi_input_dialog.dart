@@ -8,6 +8,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const double _inputDialogSpinnerDimension = 16.0;
+const double _inputDialogSpinnerPadding = 1.0;
+const double _inputDialogSpinnerSlotSize =
+    _inputDialogSpinnerDimension + (_inputDialogSpinnerPadding * 2);
+const double _inputDialogSpinnerGap = 8.0;
+const Duration _inputDialogLoadingAnimation =
+    Duration(milliseconds: 200);
+
 class AxiInputDialog extends StatelessWidget {
   const AxiInputDialog({
     super.key,
@@ -34,6 +42,11 @@ class AxiInputDialog extends StatelessWidget {
     );
     final resolvedCallbackText = callbackText ?? context.l10n.commonContinue;
     const loadingSemanticsLabel = 'Loading';
+    final spinner = AxiProgressIndicator(
+      dimension: _inputDialogSpinnerDimension,
+      color: context.colorScheme.primaryForeground,
+      semanticsLabel: loadingSemanticsLabel,
+    );
     return ShadDialog(
       title: resolvedTitle,
       actions: [
@@ -45,17 +58,24 @@ class AxiInputDialog extends StatelessWidget {
         ShadButton(
           enabled: callback != null && !loading,
           onPressed: loading ? null : callback,
-          leading: AnimatedCrossFade(
-            crossFadeState:
-                loading ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 200),
-            firstChild: const SizedBox(),
-            secondChild: AxiProgressIndicator(
-              color: context.colorScheme.primaryForeground,
-              semanticsLabel: loadingSemanticsLabel,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: _inputDialogLoadingAnimation,
+                curve: Curves.easeInOut,
+                width: loading ? _inputDialogSpinnerSlotSize : 0,
+                height: loading ? _inputDialogSpinnerSlotSize : 0,
+                child: loading ? spinner : null,
+              ),
+              AnimatedContainer(
+                duration: _inputDialogLoadingAnimation,
+                curve: Curves.easeInOut,
+                width: loading ? _inputDialogSpinnerGap : 0,
+              ),
+              Text(resolvedCallbackText),
+            ],
           ),
-          child: Text(resolvedCallbackText),
         ).withTapBounce(enabled: callback != null && !loading),
       ],
       child: content,

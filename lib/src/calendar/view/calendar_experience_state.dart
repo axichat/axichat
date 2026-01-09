@@ -30,6 +30,8 @@ import 'widgets/calendar_scaffolds.dart';
 import 'widgets/calendar_sidebar_host.dart';
 import 'task_sidebar.dart';
 
+const bool _calendarLoadingOverlayEnabled = false;
+
 /// Base [State] used by both the authenticated and guest calendar surfaces to
 /// host the shared drag/tab interactions, sidebars, and layout switching.
 abstract class CalendarExperienceState<W extends StatefulWidget,
@@ -491,6 +493,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
 
   /// Only show the blocking overlay when the calendar is empty and bootstrapping.
   bool shouldShowLoadingOverlay(CalendarState state) =>
+      _calendarLoadingOverlayEnabled &&
       state.isLoading &&
       state.model.tasks.isEmpty &&
       state.model.dayEvents.isEmpty;

@@ -2655,6 +2655,96 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calendarCriticalPathsTitle => 'Critical paths';
 
   @override
+  String get calendarCriticalPathShareAction => 'Share to chat';
+
+  @override
+  String calendarCriticalPathProgressSummary(int completed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '$completed of $total tasks completed in order',
+      one: '$completed of $total task completed in order',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathProgressHint =>
+      'Complete tasks in the listed order to advance';
+
+  @override
+  String get calendarCriticalPathProgressLabel => 'Progress';
+
+  @override
+  String calendarCriticalPathProgressPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get calendarCriticalPathFocus => 'Focus';
+
+  @override
+  String get calendarCriticalPathUnfocus => 'Unfocus';
+
+  @override
+  String get calendarCriticalPathCompletedLabel => 'Completed';
+
+  @override
+  String calendarCriticalPathQueuedAdd(Object name) {
+    return 'Will add to \"$name\" on save';
+  }
+
+  @override
+  String calendarCriticalPathQueuedCreate(Object name) {
+    return 'Created \"$name\" and queued';
+  }
+
+  @override
+  String get calendarCriticalPathUnavailable =>
+      'Critical paths are unavailable in this view.';
+
+  @override
+  String get calendarCriticalPathAddAfterSaveFailed =>
+      'Task saved but could not be added to a critical path.';
+
+  @override
+  String calendarCriticalPathAddSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Added $count tasks to \"$name\".',
+      one: 'Added to \"$name\".',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathCreateSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Created \"$name\" and added tasks.',
+      one: 'Created \"$name\" and added task.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathAddFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Unable to add tasks to a critical path.',
+      one: 'Unable to add task to a critical path.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathCreateFailed =>
+      'Unable to create a critical path.';
+
+  @override
   String calendarDeleteTaskConfirm(Object title) {
     return 'Delete \"$title\"?';
   }

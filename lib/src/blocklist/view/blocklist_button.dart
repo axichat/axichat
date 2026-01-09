@@ -11,6 +11,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const double _blocklistSpinnerDimension = 16.0;
+const double _blocklistSpinnerPadding = 1.0;
+const double _blocklistSpinnerSlotSize =
+    _blocklistSpinnerDimension + (_blocklistSpinnerPadding * 2);
+const double _blocklistSpinnerGap = 8.0;
+
 class BlocklistAddButton extends StatelessWidget {
   const BlocklistAddButton({super.key});
 
@@ -75,6 +81,11 @@ class BlocklistUnblockAllButton extends StatelessWidget {
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) => state is BlocklistLoading && state.jid == null,
       builder: (context, disabled) {
+        final spinner = AxiProgressIndicator(
+          dimension: _blocklistSpinnerDimension,
+          color: context.colorScheme.foreground,
+          semanticsLabel: context.l10n.blocklistWaitingForUnblock,
+        );
         return ShadButton.destructive(
           enabled: !disabled,
           onPressed: () async {
@@ -83,13 +94,24 @@ class BlocklistUnblockAllButton extends StatelessWidget {
               context.read<BlocklistCubit?>()?.unblockAll();
             }
           },
-          leading: disabled
-              ? AxiProgressIndicator(
-                  color: context.colorScheme.foreground,
-                  semanticsLabel: context.l10n.blocklistWaitingForUnblock,
-                )
-              : null,
-          child: Text(context.l10n.blocklistUnblockAll),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: baseAnimationDuration,
+                curve: Curves.easeInOut,
+                width: disabled ? _blocklistSpinnerSlotSize : 0,
+                height: disabled ? _blocklistSpinnerSlotSize : 0,
+                child: disabled ? spinner : null,
+              ),
+              AnimatedContainer(
+                duration: baseAnimationDuration,
+                curve: Curves.easeInOut,
+                width: disabled ? _blocklistSpinnerGap : 0,
+              ),
+              Text(context.l10n.blocklistUnblockAll),
+            ],
+          ),
         ).withTapBounce(enabled: !disabled);
       },
     );
