@@ -22,6 +22,7 @@ import 'package:axichat/src/calendar/view/sync_controls.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
@@ -50,6 +51,7 @@ const String _chatCalendarAvailabilityShareMissingJidMessage =
 const bool _chatCalendarActionShowTransferMenu = false;
 const bool _chatCalendarActionMenuGhost = true;
 const bool _chatCalendarActionUsePrimary = true;
+const bool _chatCalendarSurfacePopEnabledDefault = true;
 const String _chatCalendarHeaderAssertMessage =
     'ChatCalendarWidget requires onBackPressed when showHeader and showBackButton are true.';
 
@@ -63,6 +65,15 @@ CalendarAvailabilityShareCoordinator? _maybeReadAvailabilityShareCoordinator(
     );
   } on FlutterError {
     return null;
+  }
+}
+
+bool _resolveChatCalendarSurfacePopEnabled(BuildContext context) {
+  try {
+    return context.watch<ChatsCubit?>()?.state.openChatCalendar ??
+        _chatCalendarSurfacePopEnabledDefault;
+  } on FlutterError {
+    return _chatCalendarSurfacePopEnabledDefault;
   }
 }
 
@@ -110,6 +121,8 @@ class _ChatCalendarWidgetState
   bool _desktopInitialViewSynced = false;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
+  late final GlobalKey<NavigatorState> _calendarNavigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
   CalendarChatAcl? buildNavigationChatAcl(CalendarState state) =>
@@ -257,7 +270,7 @@ class _ChatCalendarWidgetState
           widget.onBackPressed != null,
       _chatCalendarHeaderAssertMessage,
     );
-    return CalendarHoverTitleScope(
+    final Widget calendarBody = CalendarHoverTitleScope(
       controller: _hoverTitleController,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -279,6 +292,11 @@ class _ChatCalendarWidgetState
           Expanded(child: tintedLayout),
         ],
       ),
+    );
+    return CalendarSurfaceNavigator(
+      navigatorKey: _calendarNavigatorKey,
+      enablePop: _resolveChatCalendarSurfacePopEnabled(context),
+      child: calendarBody,
     );
   }
 

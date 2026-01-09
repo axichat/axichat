@@ -262,6 +262,8 @@ const _messageArrivalDuration = Duration(milliseconds: 420);
 const _messageArrivalCurve = Curves.easeOutCubic;
 const Curve _chatOverlayFadeCurve = Curves.easeOutCubic;
 const Offset _chatCalendarSlideOffset = Offset(0.0, 0.04);
+const double _chatCalendarTransitionVisibleValue = 1.0;
+const double _chatCalendarTransitionHiddenValue = 0.0;
 const _chatHorizontalPadding = 16.0;
 const _chatPinnedPanelHorizontalPadding = _chatHorizontalPadding;
 const _chatPinnedPanelVerticalPadding = 12.0;
@@ -7945,6 +7947,16 @@ class _ChatState extends State<Chat> {
                               ),
                             ],
                           );
+                          final Widget calendarOverlay = _ChatCalendarOverlay(
+                            key: ValueKey(
+                              '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
+                            ),
+                            chat: chatEntity,
+                            calendarAvailable: chatCalendarAvailable,
+                            participants: chatCalendarParticipants,
+                            avatarPaths: chatCalendarAvatarPaths,
+                            calendarBloc: chatCalendarBloc,
+                          );
                           final Widget overlayChild = switch (_chatRoute) {
                             _ChatRoute.main => const SizedBox.expand(),
                             _ChatRoute.search => const _ChatSearchOverlay(
@@ -7965,16 +7977,7 @@ class _ChatState extends State<Chat> {
                             _ChatRoute.gallery => _ChatGalleryOverlay(
                                 chat: chatEntity,
                               ),
-                            _ChatRoute.calendar => _ChatCalendarOverlay(
-                                key: ValueKey(
-                                  '$_chatCalendarPanelKeyPrefix${chatEntity?.jid ?? _chatPanelKeyFallback}',
-                                ),
-                                chat: chatEntity,
-                                calendarAvailable: chatCalendarAvailable,
-                                participants: chatCalendarParticipants,
-                                avatarPaths: chatCalendarAvatarPaths,
-                                calendarBloc: chatCalendarBloc,
-                              ),
+                            _ChatRoute.calendar => const SizedBox.expand(),
                           };
 
                           final bool isDesktopPlatform =
@@ -7986,11 +7989,11 @@ class _ChatState extends State<Chat> {
                               !_chatRoute.isMain && !_previousChatRoute.isMain;
                           final bool isCalendarEnter = _chatRoute.isCalendar;
                           final Key chatRouteKey = ValueKey(_chatRoute);
+                          final Duration overlayDuration =
+                              context.watch<SettingsCubit>().animationDuration;
                           final Widget overlayStack = PageTransitionSwitcher(
                             reverse: isLeavingToMain,
-                            duration: context
-                                .watch<SettingsCubit>()
-                                .animationDuration,
+                            duration: overlayDuration,
                             layoutBuilder: (entries) => Stack(
                               fit: StackFit.expand,
                               children: entries,
@@ -8067,11 +8070,20 @@ class _ChatState extends State<Chat> {
                               child: overlayChild,
                             ),
                           );
+                          final Widget calendarOverlayVisibility =
+                              _ChatCalendarOverlayVisibility(
+                            visible: _chatRoute.isCalendar,
+                            duration: overlayDuration,
+                            curve: _chatOverlayFadeCurve,
+                            useDesktopFade: isDesktopPlatform,
+                            child: calendarOverlay,
+                          );
                           return Stack(
                             fit: StackFit.expand,
                             children: [
                               chatMainBody,
                               overlayStack,
+                              calendarOverlayVisibility,
                             ],
                           );
                         },
@@ -9645,6 +9657,124 @@ class _ChatCalendarOverlay extends StatelessWidget {
           participants: participants,
           avatarPaths: avatarPaths,
           calendarBloc: resolvedBloc,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatCalendarOverlayVisibility extends StatefulWidget {
+  const _ChatCalendarOverlayVisibility({
+    required this.visible,
+    required this.duration,
+    required this.curve,
+    required this.useDesktopFade,
+    required this.child,
+  });
+
+  final bool visible;
+  final Duration duration;
+  final Curve curve;
+  final bool useDesktopFade;
+  final Widget child;
+
+  @override
+  State<_ChatCalendarOverlayVisibility> createState() =>
+      _ChatCalendarOverlayVisibilityState();
+}
+
+class _ChatCalendarOverlayVisibilityState
+    extends State<_ChatCalendarOverlayVisibility>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+    value: widget.visible
+        ? _chatCalendarTransitionVisibleValue
+        : _chatCalendarTransitionHiddenValue,
+  );
+
+  late CurvedAnimation _curve = CurvedAnimation(
+    parent: _controller,
+    curve: widget.curve,
+    reverseCurve: widget.curve,
+  );
+
+  late Animation<double> _opacity = _curve;
+  late Animation<Offset> _slide = Tween<Offset>(
+    begin: _chatCalendarSlideOffset,
+    end: Offset.zero,
+  ).animate(_curve);
+
+  @override
+  void didUpdateWidget(covariant _ChatCalendarOverlayVisibility oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+      _syncVisibility();
+    }
+    if (oldWidget.curve != widget.curve) {
+      _curve = CurvedAnimation(
+        parent: _controller,
+        curve: widget.curve,
+        reverseCurve: widget.curve,
+      );
+      _opacity = _curve;
+      _slide = Tween<Offset>(
+        begin: _chatCalendarSlideOffset,
+        end: Offset.zero,
+      ).animate(_curve);
+    }
+    if (oldWidget.visible != widget.visible) {
+      _syncVisibility();
+    }
+  }
+
+  void _syncVisibility() {
+    final double target = widget.visible
+        ? _chatCalendarTransitionVisibleValue
+        : _chatCalendarTransitionHiddenValue;
+    if (widget.duration == Duration.zero) {
+      _controller
+        ..stop()
+        ..value = target;
+      return;
+    }
+    _controller.animateTo(
+      target,
+      duration: widget.duration,
+      curve: Curves.linear,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool visible = widget.visible;
+    final Widget transitionChild = widget.useDesktopFade
+        ? FadeTransition(
+            opacity: _opacity,
+            child: widget.child,
+          )
+        : SlideTransition(
+            position: _slide,
+            child: FadeScaleTransition(
+              animation: _opacity,
+              child: widget.child,
+            ),
+          );
+    return TickerMode(
+      enabled: visible,
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: ExcludeSemantics(
+          excluding: !visible,
+          child: transitionChild,
         ),
       ),
     );

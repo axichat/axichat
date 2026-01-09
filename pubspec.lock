@@ -1093,10 +1093,11 @@ packages:
   moxlib:
     dependency: "direct main"
     description:
-      name: moxlib
-      sha256: "2a76a632d23ea73906964cee4463352995e40199036162217ea323a6c3846e73"
-      url: "https://git.polynom.me/api/packages/Moxxy/pub/"
-    source: hosted
+      path: "."
+      ref: "v0.2.0"
+      resolved-ref: "83be3c882631a6a434d64f3e5887f9304bfefe30"
+      url: "https://gitlab.com/axichat/moxlib.git"
+    source: git
     version: "0.2.0"
   moxxmpp:
     dependency: "direct main"
