@@ -2990,6 +2990,96 @@ abstract class AppLocalizations {
   /// **'Delete account'**
   String get profileDeleteAccount;
 
+  /// No description provided for @profileExportActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Export {label}'**
+  String profileExportActionLabel(Object label);
+
+  /// No description provided for @profileExportXmppMessagesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'XMPP messages'**
+  String get profileExportXmppMessagesLabel;
+
+  /// No description provided for @profileExportXmppContactsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'XMPP contacts'**
+  String get profileExportXmppContactsLabel;
+
+  /// No description provided for @profileExportEmailMessagesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Emails'**
+  String get profileExportEmailMessagesLabel;
+
+  /// No description provided for @profileExportEmailContactsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email contacts'**
+  String get profileExportEmailContactsLabel;
+
+  /// No description provided for @profileExportShareText.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat export: {label}'**
+  String profileExportShareText(Object label);
+
+  /// No description provided for @profileExportShareSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat {label} export'**
+  String profileExportShareSubject(Object label);
+
+  /// No description provided for @profileExportReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} export ready.'**
+  String profileExportReadyMessage(Object label);
+
+  /// No description provided for @profileExportEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No {label} to export.'**
+  String profileExportEmptyMessage(Object label);
+
+  /// No description provided for @profileExportFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to export {label}.'**
+  String profileExportFailedMessage(Object label);
+
+  /// No description provided for @profileExportFormatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose export format'**
+  String get profileExportFormatTitle;
+
+  /// No description provided for @profileExportFormatCsvTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'CSV (.csv)'**
+  String get profileExportFormatCsvTitle;
+
+  /// No description provided for @profileExportFormatCsvSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Works with most address books.'**
+  String get profileExportFormatCsvSubtitle;
+
+  /// No description provided for @profileExportFormatVcardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'vCard (.vcf)'**
+  String get profileExportFormatVcardTitle;
+
+  /// No description provided for @profileExportFormatVcardSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard contact cards.'**
+  String get profileExportFormatVcardSubtitle;
+
   /// No description provided for @termsAcceptLabel.
   ///
   /// In en, this message translates to:

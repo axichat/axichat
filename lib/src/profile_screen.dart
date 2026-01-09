@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
@@ -8,6 +10,7 @@ import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -16,18 +19,23 @@ import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
+import 'package:axichat/src/profile/view/contact_export_sheet.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
 import 'package:axichat/src/profile/view/session_capability_indicators.dart';
+import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'authentication/view/logout_button.dart';
@@ -88,6 +96,12 @@ class ProfileScreen extends StatelessWidget {
           ),
           BlocProvider.value(
             value: locate<AuthenticationCubit>(),
+          ),
+          BlocProvider(
+            create: (context) => ProfileExportCubit(
+              xmppService: locate<XmppService>(),
+              emailService: locate<EmailService>(),
+            ),
           ),
         ],
         child: _ProfileBody(locate: locate),
@@ -325,6 +339,8 @@ class _ProfileCardSection extends StatelessWidget {
       padding: const EdgeInsets.all(12.0),
       child: BlocBuilder<ProfileCubit, ProfileState>(
         builder: (context, profileState) {
+          final exportState = context.watch<ProfileExportCubit>().state;
+          final exportEnabled = !exportState.isBusy;
           final usernameStyle = context.textTheme.large.copyWith(
             fontWeight: FontWeight.w700,
             color: context.colorScheme.foreground,
@@ -361,6 +377,46 @@ class _ProfileCardSection extends StatelessWidget {
                     const AttachmentGalleryRoute().location,
                     extra: locate,
                   ),
+                ),
+                AxiMenuAction(
+                  label: l10n.profileExportActionLabel(
+                    ProfileExportKind.xmppMessages.label(l10n),
+                  ),
+                  icon: LucideIcons.messagesSquare,
+                  enabled: exportEnabled,
+                  onPressed: exportEnabled
+                      ? () => unawaited(_handleXmppMessageExport(context))
+                      : null,
+                ),
+                AxiMenuAction(
+                  label: l10n.profileExportActionLabel(
+                    ProfileExportKind.xmppContacts.label(l10n),
+                  ),
+                  icon: LucideIcons.users,
+                  enabled: exportEnabled,
+                  onPressed: exportEnabled
+                      ? () => unawaited(_handleXmppContactsExport(context))
+                      : null,
+                ),
+                AxiMenuAction(
+                  label: l10n.profileExportActionLabel(
+                    ProfileExportKind.emailMessages.label(l10n),
+                  ),
+                  icon: LucideIcons.mail,
+                  enabled: exportEnabled,
+                  onPressed: exportEnabled
+                      ? () => unawaited(_handleEmailMessageExport(context))
+                      : null,
+                ),
+                AxiMenuAction(
+                  label: l10n.profileExportActionLabel(
+                    ProfileExportKind.emailContacts.label(l10n),
+                  ),
+                  icon: LucideIcons.userRound,
+                  enabled: exportEnabled,
+                  onPressed: exportEnabled
+                      ? () => unawaited(_handleEmailContactsExport(context))
+                      : null,
                 ),
                 AxiMenuAction(
                   label: l10n.profileChangePassword,
@@ -540,6 +596,118 @@ class _ProfileCardSection extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _handleXmppMessageExport(BuildContext context) async {
+    final bool confirmed = await _confirmMessageExport(context);
+    if (!context.mounted || !confirmed) {
+      return;
+    }
+    final result =
+        await context.read<ProfileExportCubit>().exportXmppMessages();
+    if (!context.mounted) {
+      return;
+    }
+    await _handleExportResult(context, result);
+  }
+
+  Future<void> _handleEmailMessageExport(BuildContext context) async {
+    final bool confirmed = await _confirmMessageExport(context);
+    if (!context.mounted || !confirmed) {
+      return;
+    }
+    final result =
+        await context.read<ProfileExportCubit>().exportEmailMessages();
+    if (!context.mounted) {
+      return;
+    }
+    await _handleExportResult(context, result);
+  }
+
+  Future<void> _handleXmppContactsExport(BuildContext context) async {
+    final ContactExportFormat? format = await showContactExportFormatSheet(
+      context,
+    );
+    if (!context.mounted || format == null) {
+      return;
+    }
+    final result =
+        await context.read<ProfileExportCubit>().exportXmppContacts(format);
+    if (!context.mounted) {
+      return;
+    }
+    await _handleExportResult(context, result);
+  }
+
+  Future<void> _handleEmailContactsExport(BuildContext context) async {
+    final ContactExportFormat? format = await showContactExportFormatSheet(
+      context,
+    );
+    if (!context.mounted || format == null) {
+      return;
+    }
+    final result =
+        await context.read<ProfileExportCubit>().exportEmailContacts(format);
+    if (!context.mounted) {
+      return;
+    }
+    await _handleExportResult(context, result);
+  }
+
+  Future<bool> _confirmMessageExport(BuildContext context) async {
+    final l10n = context.l10n;
+    final bool? confirmed = await confirm(
+      context,
+      title: l10n.chatExportWarningTitle,
+      message: l10n.chatExportWarningMessage,
+      confirmLabel: l10n.commonContinue,
+      cancelLabel: l10n.commonCancel,
+      destructiveConfirm: false,
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _handleExportResult(
+    BuildContext context,
+    ProfileExportResult result,
+  ) async {
+    final showToast = ShadToaster.maybeOf(context)?.show;
+    final l10n = context.l10n;
+    final label = result.kind.label(l10n);
+    if (result.outcome.isEmpty) {
+      showToast?.call(
+        FeedbackToast.info(
+          message: l10n.profileExportEmptyMessage(label),
+        ),
+      );
+      return;
+    }
+    if (result.outcome.isFailure || result.file == null) {
+      showToast?.call(
+        FeedbackToast.error(
+          message: l10n.profileExportFailedMessage(label),
+        ),
+      );
+      return;
+    }
+    try {
+      await Share.shareXFiles(
+        [XFile(result.file!.path)],
+        text: l10n.profileExportShareText(label),
+        subject: l10n.profileExportShareSubject(label),
+      );
+      showToast?.call(
+        FeedbackToast.success(
+          message: l10n.profileExportReadyMessage(label),
+        ),
+      );
+    } on Exception {
+      showToast?.call(
+        FeedbackToast.error(
+          message: l10n.profileExportFailedMessage(label),
+        ),
+      );
+    }
+  }
 }
 
 class _ProfileLegalLinks extends StatelessWidget {
@@ -699,4 +867,13 @@ class _ProfileFormPage extends StatelessWidget {
       ),
     );
   }
+}
+
+extension ProfileExportKindLabels on ProfileExportKind {
+  String label(AppLocalizations l10n) => switch (this) {
+        ProfileExportKind.xmppMessages => l10n.profileExportXmppMessagesLabel,
+        ProfileExportKind.xmppContacts => l10n.profileExportXmppContactsLabel,
+        ProfileExportKind.emailMessages => l10n.profileExportEmailMessagesLabel,
+        ProfileExportKind.emailContacts => l10n.profileExportEmailContactsLabel,
+      };
 }

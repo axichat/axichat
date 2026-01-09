@@ -492,19 +492,19 @@ class _LoginScreenState extends State<LoginScreen>
         body: SafeArea(
           child: Column(
             children: [
-              const const AxiAppBar(
+              const AxiAppBar(
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-              const LanguageSelector(
+                    LanguageSelector(
                       compact: true,
                       labelStyle: LanguageLabelStyle.compact,
                     ),
-                    ox(width: 8),
-                    AxiVer,
+                    SizedBox(width: 8),
+                    AxiVersion(),
                     if (kDebugMode) ...[
-                      SizedBox(wid,
-                      DeleteCredentialsBconst utton(),
+                      SizedBox(width: 8),
+                      DeleteCredentialsButton(),
                     ],
                   ],
                 ),
