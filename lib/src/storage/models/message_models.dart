@@ -24,6 +24,7 @@ const uuid = Uuid();
 const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
 const int _maxCalendarTaskIcsBytes = maxMessageHtmlBytes;
 const int deltaAccountIdLegacy = 0;
+const String _messageTypeGroupChat = 'groupchat';
 
 // ENUMS WARNING: New values must only be added to the end of the list.
 // If not, the database will break
@@ -256,6 +257,7 @@ class Message with _$Message implements Insertable<Message> {
     String? occupantID,
     String? body,
     String? htmlBody,
+    String? subject,
     @Default(MessageError.none) MessageError error,
     @Default(MessageWarning.none) MessageWarning warning,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
@@ -291,6 +293,7 @@ class Message with _$Message implements Insertable<Message> {
     required String chatJid,
     required String? body,
     required String? htmlBody,
+    required String? subject,
     required DateTime timestamp,
     required MessageError error,
     required MessageWarning warning,
@@ -382,6 +385,7 @@ class Message with _$Message implements Insertable<Message> {
       chatJid: chatJid,
       body: invite?.displayBody ?? (resolvedText.isEmpty ? null : resolvedText),
       htmlBody: normalizedHtml,
+      subject: null,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
       noStore: get<mox.MessageProcessingHintData>()?.hints.contains(
                 mox.MessageProcessingHint.noStore,
@@ -451,10 +455,11 @@ class Message with _$Message implements Insertable<Message> {
     mox.JID? toJidOverride,
     String? type,
   }) {
+    final bool includeChatState = type != _messageTypeGroupChat;
     final extensions = <mox.StanzaHandlerExtension>[
       const mox.MarkableData(true),
       mox.MessageIdData(stanzaID),
-      mox.ChatState.active,
+      if (includeChatState) mox.ChatState.active,
     ];
 
     var outgoingBody = plainText;
@@ -553,6 +558,9 @@ class Message with _$Message implements Insertable<Message> {
     }
     if (htmlBody != null) {
       map['html_body'] = Variable<String>(htmlBody);
+    }
+    if (subject != null) {
+      map['subject'] = Variable<String>(subject);
     }
     if (timestamp != null) {
       map['timestamp'] = Variable<DateTime>(timestamp!);
@@ -885,6 +893,8 @@ class Messages extends Table {
   TextColumn get chatJid => text()();
 
   TextColumn get body => text().nullable()();
+
+  TextColumn get subject => text().nullable()();
 
   TextColumn get htmlBody => text().nullable()();
 

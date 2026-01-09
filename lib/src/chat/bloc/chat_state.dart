@@ -40,6 +40,8 @@ class ChatState with _$ChatState {
     String? emailSubject,
     @Default(0) int emailSubjectHydrationId,
     String? emailSubjectHydrationText,
+    @Default(true) bool emailSubjectAutofillEligible,
+    @Default(false) bool emailSubjectAutofilled,
     @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,
     @Default(ConnectionState.notConnected) ConnectionState xmppConnectionState,
     @Default(false) bool supportsHttpFileUpload,

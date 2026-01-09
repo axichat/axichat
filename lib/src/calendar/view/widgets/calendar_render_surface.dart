@@ -1570,8 +1570,8 @@ class RenderCalendarSurface extends RenderBox
   }
 
   Map<String, OverlapInfo> _computeOverlapMap() {
-    final Map<DateTime, List<CalendarTask>> grouped =
-        <DateTime, List<CalendarTask>>{};
+    final Map<DateTime, Map<String, CalendarTask>> grouped =
+        <DateTime, Map<String, CalendarTask>>{};
     RenderBox? child = firstChild;
     while (child != null) {
       final parentData = child.parentData as CalendarSurfaceParentData;
@@ -1582,15 +1582,18 @@ class RenderCalendarSurface extends RenderBox
           task.scheduledTime!.month,
           task.scheduledTime!.day,
         );
-        grouped.putIfAbsent(normalized, () => <CalendarTask>[]);
-        grouped[normalized]!.add(task);
+        final tasksForDate =
+            grouped.putIfAbsent(normalized, () => <String, CalendarTask>{});
+        tasksForDate.putIfAbsent(task.id, () => task);
       }
       child = childAfter(child);
     }
 
     final Map<String, OverlapInfo> overlaps = <String, OverlapInfo>{};
-    grouped.forEach((_, tasks) {
-      overlaps.addAll(calculateOverlapColumns(tasks));
+    grouped.forEach((_, tasksById) {
+      overlaps.addAll(
+        calculateOverlapColumns(tasksById.values.toList()),
+      );
     });
     return overlaps;
   }

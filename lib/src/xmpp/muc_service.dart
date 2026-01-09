@@ -53,6 +53,7 @@ const _vCardTypeTag = 'TYPE';
 const _roomAvatarFieldMissingLog =
     'Room configuration form missing avatar field.';
 const _roomConfigSubmitFailedLog = 'Room configuration update rejected.';
+const _instantRoomConfigFailedLog = 'Instant room configuration failed.';
 const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
@@ -401,7 +402,7 @@ mixin MucService on XmppBase, BaseStreamService {
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<MucSelfPresenceEvent>((event) async {
-        _handleSelfPresence(event);
+        await _handleSelfPresence(event);
       })
       ..registerHandler<mox.MemberJoinedEvent>((event) async {
         _handleMemberUpsert(event.roomJid, event.member);
@@ -416,7 +417,7 @@ mixin MucService on XmppBase, BaseStreamService {
         _handleMemberNickChanged(event.roomJid, event.oldNick, event.newNick);
       })
       ..registerHandler<mox.OwnDataChangedEvent>((event) async {
-        _handleOwnDataChanged(
+        await _handleOwnDataChanged(
           roomJid: event.roomJid,
           nick: event.nick,
           affiliation: event.affiliation,
@@ -550,7 +551,7 @@ mixin MucService on XmppBase, BaseStreamService {
         if (!roomState.joined) {
           roomState.joined = true;
         }
-        _handleOwnDataChanged(
+        await _handleOwnDataChanged(
           roomJid: roomBare,
           nick: nick,
           affiliation: affiliation,
@@ -768,10 +769,6 @@ mixin MucService on XmppBase, BaseStreamService {
         )
             .then((result) {
           if (result.isType<mox.MUCError>()) {
-            _markRoomLeft(
-              normalizedRoom,
-              statusCodes: const <String>{},
-            );
             _completeJoinAttempt(
               normalizedRoom,
               error: XmppMessageException(),
@@ -779,10 +776,6 @@ mixin MucService on XmppBase, BaseStreamService {
             return;
           }
         }).catchError((Object error, StackTrace stackTrace) {
-          _markRoomLeft(
-            normalizedRoom,
-            statusCodes: const <String>{},
-          );
           _completeJoinAttempt(
             normalizedRoom,
             error: error,
@@ -2143,7 +2136,7 @@ mixin MucService on XmppBase, BaseStreamService {
     );
   }
 
-  void _handleSelfPresence(MucSelfPresenceEvent event) {
+  Future<void> _handleSelfPresence(MucSelfPresenceEvent event) async {
     final roomJid = _roomKey(event.roomJid);
     if (!event.isAvailable && !event.isNickChange) {
       final Set<String> statusCodes =
@@ -2191,11 +2184,13 @@ mixin MucService on XmppBase, BaseStreamService {
     );
     if (event.statusCodes.contains(mucStatusRoomCreated)) {
       _instantRoomConfiguredRooms.remove(roomJid);
-      unawaited(
-        _ensureInstantRoomConfiguration(
+      try {
+        await _ensureInstantRoomConfiguration(
           roomJid: roomJid,
-        ),
-      );
+        );
+      } on Exception catch (error, stackTrace) {
+        _mucLog.fine(_instantRoomConfigFailedLog, error, stackTrace);
+      }
     }
     _completeJoinAttempt(roomJid);
     if (event.statusCodes.contains(mucStatusConfigurationChanged)) {
@@ -2213,18 +2208,18 @@ mixin MucService on XmppBase, BaseStreamService {
     ));
   }
 
-  void _handleOwnDataChanged({
+  Future<void> _handleOwnDataChanged({
     required mox.JID roomJid,
     required String nick,
     required mox.Affiliation affiliation,
     required mox.Role role,
-  }) {
+  }) async {
     final key = _roomKey(roomJid.toBare().toString());
     final statusCodes =
         _roomStates[key]?.selfPresenceStatusCodes.isNotEmpty == true
             ? _roomStates[key]!.selfPresenceStatusCodes
             : _selfPresenceFallbackStatusCodes;
-    _handleSelfPresence(
+    await _handleSelfPresence(
       MucSelfPresenceEvent(
         roomJid: roomJid.toBare().toString(),
         occupantJid: roomJid.toBare().withResource(nick).toString(),
