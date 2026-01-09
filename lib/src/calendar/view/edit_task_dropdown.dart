@@ -54,6 +54,8 @@ const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
 const List<TaskChecklistItem> _emptyChecklistItems = <TaskChecklistItem>[];
 const double _taskPopoverMinWidth = 320.0;
 const Alignment _taskPopoverTransformAlignment = Alignment.centerLeft;
+const int _initialPopoverRevision = 0;
+const int _popoverRevisionStep = 1;
 const String _occurrenceScopeTitle = 'Apply changes to';
 const String _occurrenceScopeInstanceLabel = 'This instance';
 const String _occurrenceScopeFutureLabel = 'This and future';
@@ -148,6 +150,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   late final TextEditingController _locationController;
   late final TaskChecklistController _checklistController;
   final FocusNode _titleFocusNode = FocusNode();
+  final ValueNotifier<int> _popoverBodyRevision =
+      ValueNotifier<int>(_initialPopoverRevision);
   CalendarTaskDraftStore? _draftStore;
   bool _suppressDraftSync = false;
   bool _suppressChecklistPersist = false;
@@ -205,6 +209,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       ..removeListener(_handleChecklistChanged)
       ..dispose();
     _titleFocusNode.dispose();
+    _popoverBodyRevision.dispose();
     super.dispose();
   }
 
@@ -213,6 +218,16 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       return;
     }
     setState(() {});
+  }
+
+  void _bumpPopoverRevision() {
+    _popoverBodyRevision.value += _popoverRevisionStep;
+  }
+
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    _bumpPopoverRevision();
   }
 
   @override
@@ -799,9 +814,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         final double safeBottom = mediaQuery.viewPadding.bottom;
         final BoxBorder? popoverBorder =
             isSheet ? null : Border.all(color: calendarBorderColor);
-        final Widget surfaceBody = buildBody(
-          keyboardInset: keyboardInset,
-          safeBottom: safeBottom,
+        final Widget surfaceBody = ValueListenableBuilder<int>(
+          valueListenable: _popoverBodyRevision,
+          builder: (context, _, __) {
+            return buildBody(
+              keyboardInset: keyboardInset,
+              safeBottom: safeBottom,
+            );
+          },
         );
         final Widget surfaced = _TaskPopoverSurface(
           width: isSheet ? double.infinity : calendarTaskPopoverWidth,

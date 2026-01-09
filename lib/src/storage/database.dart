@@ -5,6 +5,7 @@
 
 import 'dart:io';
 
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:drift/drift.dart';
@@ -54,6 +55,7 @@ const String _databaseJournalSuffix = '-journal';
 const int _messageAttachmentMaxCount = 50;
 const int _messageAttachmentSortOrderStart = 0;
 const int _messageAttachmentSortOrderStep = 1;
+const int _lastMessagePageSize = 25;
 const int _pinnedMessagesSchemaVersion = 26;
 const int _schemaVersion = _pinnedMessagesSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
@@ -1869,6 +1871,15 @@ WHERE delta_chat_id IS NOT NULL
         );
       }
     });
+  }
+
+  bool _isInternalSyncEnvelope(String? body) {
+    final trimmed = body?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return false;
+    }
+    return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed) ||
+        CalendarSyncMessage.looksLikeEnvelope(trimmed);
   }
 
   @override

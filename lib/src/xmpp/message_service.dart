@@ -37,6 +37,40 @@ const String _mamOriginRejectedLog =
 const String _mucMutationRejectedLog =
     'Rejected group chat mutation from unknown occupant.';
 const bool _mucSendAllowRejoin = true;
+const int _outboundSummaryLimit = 80;
+const String _outboundMessageRejectedLog = 'Outbound message rejected';
+const String _outboundMessageRejectedMissingSummaryLog =
+    'Outbound message rejected without summary';
+const String _outboundSummaryUnknownType = 'unknown';
+const String _outboundSummaryPrefixSeparator = ': ';
+const String _outboundSummarySeparator = '; ';
+const String _outboundSummaryPairSeparator = '=';
+const String _outboundSummaryFlagSeparator = ',';
+const String _outboundSummaryKindLabel = 'kind';
+const String _outboundSummaryChatTypeLabel = 'chat_type';
+const String _outboundSummaryMessageTypeLabel = 'message_type';
+const String _outboundSummaryHasBodyLabel = 'has_body';
+const String _outboundSummaryHasHtmlLabel = 'has_html';
+const String _outboundSummaryFlagsLabel = 'flags';
+const String _outboundSummaryErrorLabel = 'error';
+const String _outboundSummaryKindMessage = 'message';
+const String _outboundSummaryKindAttachment = 'attachment';
+const String _outboundSummaryChatTypeChat = 'chat';
+const String _outboundSummaryChatTypeGroup = 'group';
+const String _outboundSummaryChatTypeNote = 'note';
+const String _outboundSummaryFlagChatState = 'chat_state';
+const String _outboundSummaryFlagMarkable = 'markable';
+const String _outboundSummaryFlagReceipt = 'receipt';
+const String _outboundSummaryFlagMarker = 'marker';
+const String _outboundSummaryFlagProcessingHints = 'processing_hints';
+const String _outboundSummaryFlagReply = 'reply';
+const String _outboundSummaryFlagRetraction = 'retraction';
+const String _outboundSummaryFlagCorrection = 'correction';
+const String _outboundSummaryFlagOmemo = 'omemo';
+const String _outboundSummaryFlagOob = 'oob';
+const String _outboundSummaryFlagSfs = 'sfs';
+const String _outboundSummaryFlagUploadNotification = 'upload_notification';
+const String _outboundSummaryFlagXhtml = 'xhtml';
 const String _pinPubSubNamespace = 'urn:axi:pins';
 const String _pinPubSubNodePrefix = 'urn:axi:pins:';
 const String _pinTag = 'pin';
@@ -140,6 +174,103 @@ final class _MessageStatusSyncEnvelope {
   }
 
   static bool isEnvelope(String raw) => tryParseEnvelope(raw) != null;
+}
+
+enum _OutboundMessageKind {
+  message,
+  attachment,
+}
+
+extension _OutboundMessageKindView on _OutboundMessageKind {
+  String get label => switch (this) {
+        _OutboundMessageKind.message => _outboundSummaryKindMessage,
+        _OutboundMessageKind.attachment => _outboundSummaryKindAttachment,
+      };
+}
+
+enum _OutboundMessageFlag {
+  chatState,
+  markable,
+  receipt,
+  marker,
+  processingHints,
+  reply,
+  retraction,
+  correction,
+  omemo,
+  oob,
+  sfs,
+  uploadNotification,
+  xhtml,
+}
+
+extension _OutboundMessageFlagView on _OutboundMessageFlag {
+  String get label => switch (this) {
+        _OutboundMessageFlag.chatState => _outboundSummaryFlagChatState,
+        _OutboundMessageFlag.markable => _outboundSummaryFlagMarkable,
+        _OutboundMessageFlag.receipt => _outboundSummaryFlagReceipt,
+        _OutboundMessageFlag.marker => _outboundSummaryFlagMarker,
+        _OutboundMessageFlag.processingHints =>
+          _outboundSummaryFlagProcessingHints,
+        _OutboundMessageFlag.reply => _outboundSummaryFlagReply,
+        _OutboundMessageFlag.retraction => _outboundSummaryFlagRetraction,
+        _OutboundMessageFlag.correction => _outboundSummaryFlagCorrection,
+        _OutboundMessageFlag.omemo => _outboundSummaryFlagOmemo,
+        _OutboundMessageFlag.oob => _outboundSummaryFlagOob,
+        _OutboundMessageFlag.sfs => _outboundSummaryFlagSfs,
+        _OutboundMessageFlag.uploadNotification =>
+          _outboundSummaryFlagUploadNotification,
+        _OutboundMessageFlag.xhtml => _outboundSummaryFlagXhtml,
+      };
+}
+
+extension _ChatTypeLogView on ChatType {
+  String get logLabel => switch (this) {
+        ChatType.chat => _outboundSummaryChatTypeChat,
+        ChatType.groupChat => _outboundSummaryChatTypeGroup,
+        ChatType.note => _outboundSummaryChatTypeNote,
+      };
+}
+
+final class _OutboundMessageSummary {
+  const _OutboundMessageSummary({
+    required this.kind,
+    required this.chatType,
+    required this.messageType,
+    required this.hasBody,
+    required this.hasHtml,
+    required this.flags,
+  });
+
+  final _OutboundMessageKind kind;
+  final ChatType chatType;
+  final String messageType;
+  final bool hasBody;
+  final bool hasHtml;
+  final List<_OutboundMessageFlag> flags;
+
+  String toLogPayload({String? errorName}) {
+    final List<String> parts = <String>[
+      _pair(_outboundSummaryKindLabel, kind.label),
+      _pair(_outboundSummaryChatTypeLabel, chatType.logLabel),
+      _pair(_outboundSummaryMessageTypeLabel, messageType),
+      _pair(_outboundSummaryHasBodyLabel, hasBody),
+      _pair(_outboundSummaryHasHtmlLabel, hasHtml),
+    ];
+    if (flags.isNotEmpty) {
+      final String joinedFlags =
+          flags.map((flag) => flag.label).join(_outboundSummaryFlagSeparator);
+      parts.add(_pair(_outboundSummaryFlagsLabel, joinedFlags));
+    }
+    if (errorName != null && errorName.isNotEmpty) {
+      parts.add(_pair(_outboundSummaryErrorLabel, errorName));
+    }
+    return parts.join(_outboundSummarySeparator);
+  }
+
+  String _pair(String label, Object value) {
+    return '$label$_outboundSummaryPairSeparator$value';
+  }
 }
 
 extension MessageEvent on mox.MessageEvent {
@@ -1533,6 +1664,9 @@ mixin MessageService
 
   final _messageStream = StreamController<Message>.broadcast();
 
+  final Map<String, _OutboundMessageSummary> _outboundMessageSummaries =
+      <String, _OutboundMessageSummary>{};
+
   static const _stableKeyLimit = 500;
   static const _mamDiscoChatLimit = 500;
   static const Duration _conversationIndexMutedForeverDuration =
@@ -2208,7 +2342,10 @@ mixin MessageService
     final managerJoined = managerState?.joined == true;
     final localState = roomStateFor(normalizedRoom);
     final localJoined = localState?.hasSelfPresence == true;
-    if (managerJoined && localJoined) return;
+    if (managerJoined && localJoined) {
+      await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
+      return;
+    }
 
     try {
       await ensureJoined(
@@ -2223,9 +2360,81 @@ mixin MessageService
     final updatedManagerJoined = updatedManagerState?.joined == true;
     final updatedLocalState = roomStateFor(normalizedRoom);
     final updatedLocalJoined = updatedLocalState?.hasSelfPresence == true;
-    if (updatedManagerJoined && updatedLocalJoined) return;
+    if (updatedManagerJoined && updatedLocalJoined) {
+      await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
+      return;
+    }
 
     throw XmppMessageException();
+  }
+
+  String _resolveOutboundMessageType(String? messageType) {
+    final trimmed = messageType?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return _outboundSummaryUnknownType;
+    }
+    return trimmed;
+  }
+
+  void _trackOutboundMessageSummary({
+    required mox.MessageEvent stanza,
+    required ChatType chatType,
+    required _OutboundMessageKind kind,
+  }) {
+    final String? stanzaId = stanza.id;
+    if (stanzaId == null || stanzaId.isEmpty) {
+      return;
+    }
+
+    final String messageType = _resolveOutboundMessageType(stanza.type);
+    final mox.TypedMap<mox.StanzaHandlerExtension> extensions =
+        stanza.extensions;
+    final bool hasBody =
+        extensions.get<mox.MessageBodyData>()?.body?.isNotEmpty ?? false;
+    final bool hasHtml =
+        extensions.get<XhtmlImData>()?.xhtmlBody.isNotEmpty ?? false;
+    final List<_OutboundMessageFlag> flags = <_OutboundMessageFlag>[
+      if (extensions.get<mox.ChatState>() != null)
+        _OutboundMessageFlag.chatState,
+      if (extensions.get<mox.MarkableData>() != null)
+        _OutboundMessageFlag.markable,
+      if (extensions.get<mox.MessageDeliveryReceiptData>() != null)
+        _OutboundMessageFlag.receipt,
+      if (extensions.get<mox.ChatMarkerData>() != null)
+        _OutboundMessageFlag.marker,
+      if (extensions.get<mox.MessageProcessingHintData>() != null)
+        _OutboundMessageFlag.processingHints,
+      if (extensions.get<mox.ReplyData>() != null) _OutboundMessageFlag.reply,
+      if (extensions.get<mox.MessageRetractionData>() != null)
+        _OutboundMessageFlag.retraction,
+      if (extensions.get<mox.LastMessageCorrectionData>() != null)
+        _OutboundMessageFlag.correction,
+      if (extensions.get<mox.OmemoData>() != null) _OutboundMessageFlag.omemo,
+      if (extensions.get<mox.OOBData>() != null) _OutboundMessageFlag.oob,
+      if (extensions.get<mox.StatelessFileSharingData>() != null)
+        _OutboundMessageFlag.sfs,
+      if (extensions.get<mox.FileUploadNotificationData>() != null)
+        _OutboundMessageFlag.uploadNotification,
+      if (extensions.get<XhtmlImData>() != null) _OutboundMessageFlag.xhtml,
+    ];
+    final _OutboundMessageSummary summary = _OutboundMessageSummary(
+      kind: kind,
+      chatType: chatType,
+      messageType: messageType,
+      hasBody: hasBody,
+      hasHtml: hasHtml,
+      flags: flags,
+    );
+    _outboundMessageSummaries[stanzaId] = summary;
+    _trimOutboundMessageSummaries();
+  }
+
+  void _trimOutboundMessageSummaries() {
+    if (_outboundMessageSummaries.length <= _outboundSummaryLimit) {
+      return;
+    }
+    final String oldestKey = _outboundMessageSummaries.keys.first;
+    _outboundMessageSummaries.remove(oldestKey);
   }
 
   Future<void> sendMessage({
@@ -2355,11 +2564,16 @@ mixin MessageService
     }
 
     try {
-      final stanza = _buildOutgoingMessageEvent(
+      final mox.MessageEvent stanza = _buildOutgoingMessageEvent(
         message: message,
         quotedMessage: quotedMessage,
         extraExtensions: resolvedExtensions,
         chatType: chatType,
+      );
+      _trackOutboundMessageSummary(
+        stanza: stanza,
+        chatType: chatType,
+        kind: _OutboundMessageKind.message,
       );
       final sent = await _connection.sendMessage(
         stanza,
@@ -2569,11 +2783,16 @@ mixin MessageService
         sfsData,
         mox.OOBData(getUrl, filename),
       ];
-      final stanza = _buildOutgoingMessageEvent(
+      final mox.MessageEvent stanza = _buildOutgoingMessageEvent(
         message: message,
         quotedMessage: quotedMessage,
         extraExtensions: extraExtensions,
         chatType: chatType,
+      );
+      _trackOutboundMessageSummary(
+        stanza: stanza,
+        chatType: chatType,
+        kind: _OutboundMessageKind.attachment,
       );
       final sent = await _connection.sendMessage(
         stanza,
@@ -4049,6 +4268,19 @@ mixin MessageService
         stanzaID: stanzaId,
         error: error,
       ),
+    );
+    final _OutboundMessageSummary? summary =
+        _outboundMessageSummaries.remove(stanzaId);
+    if (summary == null) {
+      _log.info(_outboundMessageRejectedMissingSummaryLog);
+      return true;
+    }
+    final String errorName = stanzaError == null
+        ? _outboundSummaryUnknownType
+        : stanzaError.runtimeType.toString();
+    _log.info(
+      '$_outboundMessageRejectedLog$_outboundSummaryPrefixSeparator'
+      '${summary.toLogPayload(errorName: errorName)}',
     );
     return true;
   }
