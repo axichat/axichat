@@ -1642,6 +1642,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileDeleteAccount => 'Delete account';
 
   @override
+  String profileExportActionLabel(Object label) {
+    return 'Export $label';
+  }
+
+  @override
+  String get profileExportXmppMessagesLabel => 'XMPP messages';
+
+  @override
+  String get profileExportXmppContactsLabel => 'XMPP contacts';
+
+  @override
+  String get profileExportEmailMessagesLabel => 'Emails';
+
+  @override
+  String get profileExportEmailContactsLabel => 'Email contacts';
+
+  @override
+  String profileExportShareText(Object label) {
+    return 'Axichat export: $label';
+  }
+
+  @override
+  String profileExportShareSubject(Object label) {
+    return 'Axichat $label export';
+  }
+
+  @override
+  String profileExportReadyMessage(Object label) {
+    return '$label export ready.';
+  }
+
+  @override
+  String profileExportEmptyMessage(Object label) {
+    return 'No $label to export.';
+  }
+
+  @override
+  String profileExportFailedMessage(Object label) {
+    return 'Unable to export $label.';
+  }
+
+  @override
+  String get profileExportFormatTitle => 'Choose export format';
+
+  @override
+  String get profileExportFormatCsvTitle => 'CSV (.csv)';
+
+  @override
+  String get profileExportFormatCsvSubtitle => 'Works with most address books.';
+
+  @override
+  String get profileExportFormatVcardTitle => 'vCard (.vcf)';
+
+  @override
+  String get profileExportFormatVcardSubtitle => 'Standard contact cards.';
+
+  @override
   String get termsAcceptLabel => 'I accept the terms and conditions';
 
   @override
