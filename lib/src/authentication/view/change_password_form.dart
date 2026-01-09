@@ -130,24 +130,20 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                     color: context.colorScheme.primaryForeground,
                     semanticsLabel: l10n.authChangePasswordProgressLabel,
                   );
+                  final spinnerSlot = ButtonSpinnerSlot(
+                    isVisible: loading,
+                    spinner: spinner,
+                    slotSize: _changePasswordSpinnerSlotSize,
+                    gap: _changePasswordSpinnerGap,
+                    duration: animationDuration,
+                  );
                   return ShadButton(
                     enabled: !loading,
                     onPressed: () => _onPressed(context),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        AnimatedContainer(
-                          duration: animationDuration,
-                          curve: Curves.easeInOut,
-                          width: loading ? _changePasswordSpinnerSlotSize : 0,
-                          height: loading ? _changePasswordSpinnerSlotSize : 0,
-                          child: loading ? spinner : null,
-                        ),
-                        AnimatedContainer(
-                          duration: animationDuration,
-                          curve: Curves.easeInOut,
-                          width: loading ? _changePasswordSpinnerGap : 0,
-                        ),
+                        spinnerSlot,
                         Text(l10n.commonContinue),
                       ],
                     ),

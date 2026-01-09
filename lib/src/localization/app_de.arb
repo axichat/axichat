@@ -1047,7 +1047,7 @@
     }
   },
   "calendarBackToCalendar": "Zurück zum Kalender",
-  "calendarLoadingMessage": "Loading calendar...",
+  "calendarLoadingMessage": "Kalender wird geladen...",
   "calendarCriticalPathAddTask": "Aufgabe hinzufügen",
   "calendarCriticalPathAddToTitle": "Zum kritischen Pfad hinzufügen",
   "calendarCriticalPathCreatePrompt": "Erstelle einen kritischen Pfad, um zu beginnen",
@@ -1060,23 +1060,23 @@
   "calendarCriticalPathsAll": "Alle Pfade",
   "calendarCriticalPathsEmpty": "Noch keine kritischen Pfade",
   "calendarCriticalPathsNew": "Neuer kritischer Pfad",
-  "calendarCriticalPathRenameTitle": "Rename critical path",
-  "calendarCriticalPathDeleteTitle": "Delete critical path",
+  "calendarCriticalPathRenameTitle": "Kritischen Pfad umbenennen",
+  "calendarCriticalPathDeleteTitle": "Kritischen Pfad löschen",
   "calendarCriticalPathsTitle": "Kritische Pfade",
   "calendarCriticalPathShareAction": "Im Chat teilen",
-  "calendarCriticalPathShareTitle": "Share critical path",
-  "calendarCriticalPathShareSubtitle": "Send a critical path to a chat.",
-  "calendarCriticalPathShareTargetLabel": "Share with",
-  "calendarCriticalPathShareButtonLabel": "Share",
-  "calendarCriticalPathShareMissingChats": "No eligible chats available.",
-  "calendarCriticalPathShareMissingRecipient": "Select a chat to share with.",
-  "calendarCriticalPathShareMissingService": "Calendar sharing is unavailable.",
-  "calendarCriticalPathShareDenied": "Calendar cards are disabled for your role in this room.",
-  "calendarCriticalPathShareFailed": "Failed to share critical path.",
-  "calendarCriticalPathShareSuccess": "Critical path shared.",
-  "calendarCriticalPathShareChatTypeDirect": "Direct chat",
-  "calendarCriticalPathShareChatTypeGroup": "Group chat",
-  "calendarCriticalPathShareChatTypeNote": "Notes",
+  "calendarCriticalPathShareTitle": "Kritischen Pfad teilen",
+  "calendarCriticalPathShareSubtitle": "Einen kritischen Pfad an einen Chat senden.",
+  "calendarCriticalPathShareTargetLabel": "Teilen mit",
+  "calendarCriticalPathShareButtonLabel": "Teilen",
+  "calendarCriticalPathShareMissingChats": "Keine geeigneten Chats verfügbar.",
+  "calendarCriticalPathShareMissingRecipient": "Wähle einen Chat zum Teilen aus.",
+  "calendarCriticalPathShareMissingService": "Kalenderfreigabe ist nicht verfügbar.",
+  "calendarCriticalPathShareDenied": "Kalenderkarten sind für deine Rolle in diesem Raum deaktiviert.",
+  "calendarCriticalPathShareFailed": "Kritischer Pfad konnte nicht geteilt werden.",
+  "calendarCriticalPathShareSuccess": "Kritischer Pfad geteilt.",
+  "calendarCriticalPathShareChatTypeDirect": "Direkter Chat",
+  "calendarCriticalPathShareChatTypeGroup": "Gruppenchat",
+  "calendarCriticalPathShareChatTypeNote": "Notizen",
   "calendarCriticalPathProgressSummary": "{total, plural, one {{completed} von {total} Aufgabe in Reihenfolge abgeschlossen} other {{completed} von {total} Aufgaben in Reihenfolge abgeschlossen}}",
   "@calendarCriticalPathProgressSummary": {
     "description": "Summary of completed tasks in a critical path.",
@@ -1149,37 +1149,37 @@
     }
   },
   "calendarCriticalPathCreateFailed": "Kritischer Pfad konnte nicht erstellt werden.",
-  "calendarTaskSearchTitle": "Search tasks",
-  "calendarTaskSearchAddToTitle": "Add to {name}",
+  "calendarTaskSearchTitle": "Aufgaben suchen",
+  "calendarTaskSearchAddToTitle": "Zu {name} hinzufügen",
   "@calendarTaskSearchAddToTitle": {
     "placeholders": {
       "name": {}
     }
   },
-  "calendarTaskSearchSubtitle": "Search titles, descriptions, locations, categories, priorities, and deadlines.",
-  "calendarTaskSearchAddToSubtitle": "Tap a task to append it to the critical path order.",
+  "calendarTaskSearchSubtitle": "Titel, Beschreibungen, Orte, Kategorien, Prioritäten und Fristen durchsuchen.",
+  "calendarTaskSearchAddToSubtitle": "Tippe auf eine Aufgabe, um sie an die Reihenfolge des kritischen Pfads anzuhängen.",
   "calendarTaskSearchHint": "title:, desc:, location:, category:work, priority:urgent, status:done",
   "@calendarTaskSearchHint": {
     "description": "Search query hint. Keep filter tokens (title:, desc:, etc) in English."
   },
-  "calendarTaskSearchEmptyPrompt": "Start typing to search tasks",
-  "calendarTaskSearchEmptyNoResults": "No results found",
-  "calendarTaskSearchEmptyHint": "Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.",
+  "calendarTaskSearchEmptyPrompt": "Tippe, um Aufgaben zu suchen",
+  "calendarTaskSearchEmptyNoResults": "Keine Ergebnisse gefunden",
+  "calendarTaskSearchEmptyHint": "Verwende Filter wie title:, desc:, location:, priority:critical, status:done, deadline:today.",
   "@calendarTaskSearchEmptyHint": {
     "description": "Search tips. Keep filter tokens (title:, desc:, etc) in English."
   },
-  "calendarTaskSearchFilterScheduled": "Scheduled",
-  "calendarTaskSearchFilterUnscheduled": "Unscheduled",
-  "calendarTaskSearchFilterReminders": "Reminders",
-  "calendarTaskSearchFilterOpen": "Open",
-  "calendarTaskSearchFilterCompleted": "Completed",
-  "calendarTaskSearchDueDate": "Due {date}",
+  "calendarTaskSearchFilterScheduled": "Geplant",
+  "calendarTaskSearchFilterUnscheduled": "Ohne Termin",
+  "calendarTaskSearchFilterReminders": "Erinnerungen",
+  "calendarTaskSearchFilterOpen": "Offen",
+  "calendarTaskSearchFilterCompleted": "Erledigt",
+  "calendarTaskSearchDueDate": "Fällig {date}",
   "@calendarTaskSearchDueDate": {
     "placeholders": {
       "date": {}
     }
   },
-  "calendarTaskSearchOverdueDate": "Overdue · {date}",
+  "calendarTaskSearchOverdueDate": "Überfällig · {date}",
   "@calendarTaskSearchOverdueDate": {
     "placeholders": {
       "date": {}

@@ -264,7 +264,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             if (chat != null && _xmppAllowedForChat(chat)) {
               final streamReady = xmppService.lastStreamReady;
               final shouldCatchUp = streamReady?.isResumed != true;
-              if (shouldCatchUp) {
+              if (shouldCatchUp && !_shouldSkipInitialMamSync(chat)) {
                 unawaited(_catchUpFromMam());
               }
               unawaited(_prefetchPeerAvatar(chat));
@@ -442,6 +442,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat.isEmailBacked) return false;
     final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     return candidate.trim().isNotEmpty;
+  }
+
+  bool _shouldSkipInitialMamSync(Chat chat) {
+    if (chat.type != ChatType.chat) return false;
+    final xmppService = _xmppService;
+    if (xmppService == null) return false;
+    return xmppService.hasGlobalMamSyncForCurrentSession;
   }
 
   bool get _shouldUseCoreDraftFallback {
@@ -976,7 +983,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _subscribeToPinnedMessages(event.chat);
     }
     _resetMamCursors(resetContext);
-    if (_xmppAllowedForChat(event.chat)) {
+    if (_xmppAllowedForChat(event.chat) &&
+        !_shouldSkipInitialMamSync(event.chat)) {
       unawaited(_hydrateLatestFromMam(event.chat));
     }
     unawaited(_roomSubscription?.cancel());

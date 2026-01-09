@@ -182,8 +182,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
   RecurrenceFormValue _recurrence = const RecurrenceFormValue();
   ReminderPreferences _reminders = ReminderPreferences.defaults();
-  CalendarIcsStatus? _status;
-  CalendarTransparency? _transparency;
   List<String> _categories = _emptyCategories;
   String? _url;
   CalendarGeo? _geo;
@@ -296,8 +294,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       );
       _reminders = split.reminders;
       _advancedAlarms = split.advancedAlarms;
-      _status = task.icsMeta?.status;
-      _transparency = task.icsMeta?.transparency;
       _categories =
           List<String>.from(task.icsMeta?.categories ?? _emptyCategories);
       _url = task.icsMeta?.url;
@@ -405,8 +401,13 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   bool _isTouched(_TaskEditField field) => _touchedFields.contains(field);
 
   CalendarTask _resolveLatestTaskSnapshot() {
+    final Map<String, CalendarTask> tasks = context.read<B>().state.model.tasks;
+    final CalendarTask? directTask = tasks[widget.task.id];
+    if (directTask != null) {
+      return directTask;
+    }
     final String baseId = baseTaskIdFrom(widget.task.id);
-    final CalendarTask? baseTask = context.read<B>().state.model.tasks[baseId];
+    final CalendarTask? baseTask = tasks[baseId];
     if (baseTask == null) {
       return widget.task;
     }
@@ -540,9 +541,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _EditTaskInlineActionsSection(
-                      inlineActions: inlineActions,
-                    ),
+                    if (isSheet)
+                      _EditTaskInlineActionsSection(
+                        inlineActions: inlineActions,
+                      ),
                     if (widget.task.isOccurrence &&
                         widget.onOccurrenceUpdated != null) ...[
                       const SizedBox(height: calendarFormGap),

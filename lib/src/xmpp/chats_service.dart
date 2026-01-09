@@ -448,8 +448,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       if (connectionState != ConnectionState.connected) return;
       final roomJid = _safeBareJid(jid);
       if (roomJid == null) return;
-      final roomState = roomStateFor(roomJid);
-      if (roomState?.hasSelfPresence != true) {
+      final hasPresence = await _hasMucPresenceForSend(roomJid: roomJid);
+      if (!hasPresence) {
         unawaited(ensureJoined(roomJid: roomJid, allowRejoin: true));
         return;
       }

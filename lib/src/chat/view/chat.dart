@@ -354,6 +354,7 @@ const _recipientVisibilityCcLabel = 'CC';
 const _recipientVisibilityBccLabel = 'BCC';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
+const _composerNoticeHorizontalInset = 4.0;
 const _guestDesktopHorizontalPadding = _chatHorizontalPadding + 6.0;
 const _messageListTailSpacer = 36.0;
 const _messageLoadingSpinnerSize = 16.0;
@@ -11158,7 +11159,9 @@ class _ChatComposerSection extends StatelessWidget {
     }
     final children = <Widget>[];
     if (notices.isNotEmpty) {
-      final noticePadding = EdgeInsets.symmetric(horizontal: horizontalPadding);
+      final noticePadding = EdgeInsets.symmetric(
+        horizontal: horizontalPadding + _composerNoticeHorizontalInset,
+      );
       for (var i = 0; i < notices.length; i++) {
         children.add(
           Padding(

@@ -27,8 +27,10 @@ const int _inviteRoomJidMaxLength = 1024;
 const int _calendarFragmentPayloadMaxLength = 200000;
 const int _calendarTaskIcsPayloadMaxLength = 200000;
 const int _calendarAvailabilityPayloadMaxLength = 200000;
+const String _xmlNamespaceAttr = 'xmlns';
 const String _messageTypeError = 'error';
 const String _errorTypeAttr = 'type';
+const String _errorTextTag = 'text';
 const String _errorTypeModify = 'modify';
 const String _errorTypeWait = 'wait';
 const String _errorConditionNotAcceptable = 'not-acceptable';
@@ -412,7 +414,19 @@ String? _normalizeInviteText(String? text, {required int maxLength}) {
 String? _normalizeStanzaErrorType(String? rawType) {
   final trimmed = rawType?.trim();
   if (trimmed == null || trimmed.isEmpty) return null;
-  return trimmed;
+  return trimmed.toLowerCase();
+}
+
+mox.XMLNode? _findStanzaErrorConditionNode(mox.XMLNode errorNode) {
+  for (final child in errorNode.children) {
+    final String? xmlns = child.attributes[_xmlNamespaceAttr]?.toString();
+    if (xmlns != mox.fullStanzaXmlns) continue;
+    final tag = child.tag.trim();
+    if (tag.isEmpty) continue;
+    if (tag == _errorTextTag) continue;
+    return child;
+  }
+  return null;
 }
 
 StanzaErrorConditionData? _parseStanzaErrorCondition(mox.Stanza stanza) {
@@ -420,8 +434,7 @@ StanzaErrorConditionData? _parseStanzaErrorCondition(mox.Stanza stanza) {
   if (stanzaType != _messageTypeError) return null;
   final mox.XMLNode? errorNode = stanza.firstTag(_errorTag);
   if (errorNode == null) return null;
-  final mox.XMLNode? conditionNode =
-      errorNode.firstTagByXmlns(mox.fullStanzaXmlns);
+  final mox.XMLNode? conditionNode = _findStanzaErrorConditionNode(errorNode);
   final String? condition = conditionNode?.tag.trim();
   if (condition == null || condition.isEmpty) return null;
   final String? normalizedType = _normalizeStanzaErrorType(

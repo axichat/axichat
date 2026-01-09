@@ -299,10 +299,10 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
               onPressed: busy ? null : _handleShuffle,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                spacing: avatarActionSpacing,
                 children: [
-                  if (_shuffling)
-                    SizedBox.square(
+                  ButtonSpinnerSlot(
+                    isVisible: _shuffling,
+                    spinner: SizedBox.square(
                       dimension: avatarActionIconSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
@@ -312,12 +312,18 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                         backgroundColor:
                             colors.primaryForeground.withValues(alpha: 0.2),
                       ),
-                    )
-                  else
+                    ),
+                    slotSize: avatarActionIconSize,
+                    gap: avatarActionSpacing,
+                    duration: baseAnimationDuration,
+                  ),
+                  if (!_shuffling) ...[
                     const Icon(
                       LucideIcons.refreshCw,
                       size: avatarActionIconSize,
                     ),
+                    const SizedBox(width: avatarActionSpacing),
+                  ],
                   Text(l10n.signupAvatarShuffle),
                 ],
               ),
@@ -328,10 +334,10 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                   : () => unawaited(_handleShuffleBackground()),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                spacing: avatarActionSpacing,
                 children: [
-                  if (_shufflingBackground)
-                    SizedBox.square(
+                  ButtonSpinnerSlot(
+                    isVisible: _shufflingBackground,
+                    spinner: SizedBox.square(
                       dimension: avatarActionIconSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
@@ -341,12 +347,18 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                         backgroundColor:
                             colors.secondaryForeground.withValues(alpha: 0.2),
                       ),
-                    )
-                  else
+                    ),
+                    slotSize: avatarActionIconSize,
+                    gap: avatarActionSpacing,
+                    duration: baseAnimationDuration,
+                  ),
+                  if (!_shufflingBackground) ...[
                     const Icon(
                       LucideIcons.palette,
                       size: avatarActionIconSize,
                     ),
+                    const SizedBox(width: avatarActionSpacing),
+                  ],
                   Text(l10n.signupAvatarBackgroundColor),
                 ],
               ),

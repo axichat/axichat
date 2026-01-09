@@ -2661,7 +2661,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarBackToCalendar => 'Retour au calendrier';
 
   @override
-  String get calendarLoadingMessage => 'Loading calendar...';
+  String get calendarLoadingMessage => 'Chargement du calendrier...';
 
   @override
   String get calendarCriticalPathAddTask => 'Ajouter une tâche';
@@ -2704,10 +2704,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarCriticalPathsNew => 'Nouveau chemin critique';
 
   @override
-  String get calendarCriticalPathRenameTitle => 'Rename critical path';
+  String get calendarCriticalPathRenameTitle => 'Renommer le chemin critique';
 
   @override
-  String get calendarCriticalPathDeleteTitle => 'Delete critical path';
+  String get calendarCriticalPathDeleteTitle => 'Supprimer le chemin critique';
 
   @override
   String get calendarCriticalPathsTitle => 'Chemins critiques';
@@ -2716,46 +2716,46 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarCriticalPathShareAction => 'Partager dans le chat';
 
   @override
-  String get calendarCriticalPathShareTitle => 'Share critical path';
+  String get calendarCriticalPathShareTitle => 'Partager le chemin critique';
 
   @override
   String get calendarCriticalPathShareSubtitle =>
-      'Send a critical path to a chat.';
+      'Envoyez un chemin critique dans un chat.';
 
   @override
-  String get calendarCriticalPathShareTargetLabel => 'Share with';
+  String get calendarCriticalPathShareTargetLabel => 'Partager avec';
 
   @override
-  String get calendarCriticalPathShareButtonLabel => 'Share';
+  String get calendarCriticalPathShareButtonLabel => 'Partager';
 
   @override
   String get calendarCriticalPathShareMissingChats =>
-      'No eligible chats available.';
+      'Aucun chat éligible disponible.';
 
   @override
   String get calendarCriticalPathShareMissingRecipient =>
-      'Select a chat to share with.';
+      'Sélectionnez un chat pour partager.';
 
   @override
   String get calendarCriticalPathShareMissingService =>
-      'Calendar sharing is unavailable.';
+      'Le partage du calendrier n\'est pas disponible.';
 
   @override
   String get calendarCriticalPathShareDenied =>
-      'Calendar cards are disabled for your role in this room.';
+      'Les cartes de calendrier sont désactivées pour votre rôle dans cette salle.';
 
   @override
   String get calendarCriticalPathShareFailed =>
-      'Failed to share critical path.';
+      'Échec du partage du chemin critique.';
 
   @override
-  String get calendarCriticalPathShareSuccess => 'Critical path shared.';
+  String get calendarCriticalPathShareSuccess => 'Chemin critique partagé.';
 
   @override
-  String get calendarCriticalPathShareChatTypeDirect => 'Direct chat';
+  String get calendarCriticalPathShareChatTypeDirect => 'Discussion directe';
 
   @override
-  String get calendarCriticalPathShareChatTypeGroup => 'Group chat';
+  String get calendarCriticalPathShareChatTypeGroup => 'Discussion de groupe';
 
   @override
   String get calendarCriticalPathShareChatTypeNote => 'Notes';
@@ -2848,58 +2848,59 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de créer un chemin critique.';
 
   @override
-  String get calendarTaskSearchTitle => 'Search tasks';
+  String get calendarTaskSearchTitle => 'Rechercher des tâches';
 
   @override
   String calendarTaskSearchAddToTitle(Object name) {
-    return 'Add to $name';
+    return 'Ajouter à $name';
   }
 
   @override
   String get calendarTaskSearchSubtitle =>
-      'Search titles, descriptions, locations, categories, priorities, and deadlines.';
+      'Recherchez des titres, descriptions, lieux, catégories, priorités et échéances.';
 
   @override
   String get calendarTaskSearchAddToSubtitle =>
-      'Tap a task to append it to the critical path order.';
+      'Touchez une tâche pour l\'ajouter à l\'ordre du chemin critique.';
 
   @override
   String get calendarTaskSearchHint =>
       'title:, desc:, location:, category:work, priority:urgent, status:done';
 
   @override
-  String get calendarTaskSearchEmptyPrompt => 'Start typing to search tasks';
+  String get calendarTaskSearchEmptyPrompt =>
+      'Commencez à taper pour rechercher des tâches';
 
   @override
-  String get calendarTaskSearchEmptyNoResults => 'No results found';
+  String get calendarTaskSearchEmptyNoResults => 'Aucun résultat';
 
   @override
   String get calendarTaskSearchEmptyHint =>
-      'Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.';
+      'Utilisez des filtres comme title:, desc:, location:, priority:critical, status:done, deadline:today.';
 
   @override
-  String get calendarTaskSearchFilterScheduled => 'Scheduled';
+  String get calendarTaskSearchFilterScheduled => 'Planifiées';
 
   @override
-  String get calendarTaskSearchFilterUnscheduled => 'Unscheduled';
+  String get calendarTaskSearchFilterUnscheduled => 'Non planifiées';
 
   @override
-  String get calendarTaskSearchFilterReminders => 'Reminders';
+  String get calendarTaskSearchFilterReminders => 'Rappels';
 
   @override
-  String get calendarTaskSearchFilterOpen => 'Open';
+  String get calendarTaskSearchFilterOpen => 'Ouvertes';
 
   @override
-  String get calendarTaskSearchFilterCompleted => 'Completed';
+  String get calendarTaskSearchFilterCompleted => 'Terminées';
 
   @override
   String calendarTaskSearchDueDate(Object date) {
-    return 'Due $date';
+    return 'Échéance $date';
   }
 
   @override
   String calendarTaskSearchOverdueDate(Object date) {
-    return 'Overdue · $date';
+    return 'En retard · $date';
   }
 
   @override

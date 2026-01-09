@@ -46,6 +46,13 @@ class AxiInputDialog extends StatelessWidget {
       color: context.colorScheme.primaryForeground,
       semanticsLabel: loadingSemanticsLabel,
     );
+    final spinnerSlot = ButtonSpinnerSlot(
+      isVisible: loading,
+      spinner: spinner,
+      slotSize: _inputDialogSpinnerSlotSize,
+      gap: _inputDialogSpinnerGap,
+      duration: _inputDialogLoadingAnimation,
+    );
     return ShadDialog(
       title: resolvedTitle,
       actions: [
@@ -60,18 +67,7 @@ class AxiInputDialog extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedContainer(
-                duration: _inputDialogLoadingAnimation,
-                curve: Curves.easeInOut,
-                width: loading ? _inputDialogSpinnerSlotSize : 0,
-                height: loading ? _inputDialogSpinnerSlotSize : 0,
-                child: loading ? spinner : null,
-              ),
-              AnimatedContainer(
-                duration: _inputDialogLoadingAnimation,
-                curve: Curves.easeInOut,
-                width: loading ? _inputDialogSpinnerGap : 0,
-              ),
+              spinnerSlot,
               Text(resolvedCallbackText),
             ],
           ),

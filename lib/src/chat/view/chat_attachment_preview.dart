@@ -2015,26 +2015,15 @@ class _EncryptedAttachment extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            AnimatedContainer(
+                            ButtonSpinnerSlot(
+                              isVisible: downloading,
+                              spinner: _AttachmentSpinner(
+                                size: _attachmentRemoteSpinnerSize,
+                                color: colors.primaryForeground,
+                              ),
+                              slotSize: _attachmentRemoteSpinnerSize,
+                              gap: _attachmentRemoteSpacing,
                               duration: baseAnimationDuration,
-                              curve: Curves.easeInOut,
-                              width: downloading
-                                  ? _attachmentRemoteSpinnerSize
-                                  : 0,
-                              height: downloading
-                                  ? _attachmentRemoteSpinnerSize
-                                  : 0,
-                              child: downloading
-                                  ? _AttachmentSpinner(
-                                      size: _attachmentRemoteSpinnerSize,
-                                      color: colors.primaryForeground,
-                                    )
-                                  : null,
-                            ),
-                            AnimatedContainer(
-                              duration: baseAnimationDuration,
-                              curve: Curves.easeInOut,
-                              width: downloading ? _attachmentRemoteSpacing : 0,
                             ),
                             Text(
                               downloading
@@ -2119,26 +2108,15 @@ class _RemoteImageAttachment extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            AnimatedContainer(
+                            ButtonSpinnerSlot(
+                              isVisible: downloading,
+                              spinner: _AttachmentSpinner(
+                                size: _attachmentRemoteSpinnerSize,
+                                color: colors.primaryForeground,
+                              ),
+                              slotSize: _attachmentRemoteSpinnerSize,
+                              gap: _attachmentRemoteSpacing,
                               duration: baseAnimationDuration,
-                              curve: Curves.easeInOut,
-                              width: downloading
-                                  ? _attachmentRemoteSpinnerSize
-                                  : 0,
-                              height: downloading
-                                  ? _attachmentRemoteSpinnerSize
-                                  : 0,
-                              child: downloading
-                                  ? _AttachmentSpinner(
-                                      size: _attachmentRemoteSpinnerSize,
-                                      color: colors.primaryForeground,
-                                    )
-                                  : null,
-                            ),
-                            AnimatedContainer(
-                              duration: baseAnimationDuration,
-                              curve: Curves.easeInOut,
-                              width: downloading ? _attachmentRemoteSpacing : 0,
                             ),
                             Text(
                               downloading
@@ -2223,26 +2201,15 @@ class _RemoteVideoAttachment extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            AnimatedContainer(
+                            ButtonSpinnerSlot(
+                              isVisible: downloading,
+                              spinner: _AttachmentSpinner(
+                                size: _attachmentRemoteSpinnerSize,
+                                color: colors.primaryForeground,
+                              ),
+                              slotSize: _attachmentRemoteSpinnerSize,
+                              gap: _attachmentRemoteSpacing,
                               duration: baseAnimationDuration,
-                              curve: Curves.easeInOut,
-                              width: downloading
-                                  ? _attachmentRemoteSpinnerSize
-                                  : 0,
-                              height: downloading
-                                  ? _attachmentRemoteSpinnerSize
-                                  : 0,
-                              child: downloading
-                                  ? _AttachmentSpinner(
-                                      size: _attachmentRemoteSpinnerSize,
-                                      color: colors.primaryForeground,
-                                    )
-                                  : null,
-                            ),
-                            AnimatedContainer(
-                              duration: baseAnimationDuration,
-                              curve: Curves.easeInOut,
-                              width: downloading ? _attachmentRemoteSpacing : 0,
                             ),
                             Text(
                               downloading

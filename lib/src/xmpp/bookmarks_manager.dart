@@ -26,6 +26,7 @@ const _deliverNotificationsEnabled = true;
 const _deliverPayloadsEnabled = true;
 const _persistItemsEnabled = true;
 const _presenceBasedDeliveryDisabled = false;
+const Duration _ensureNodeBackoff = Duration(minutes: 5);
 
 final class MucBookmark {
   const MucBookmark({
@@ -196,6 +197,9 @@ final class BookmarksManager extends mox.XmppManagerBase {
   Stream<MucBookmarkUpdate> get updates => _updatesController.stream;
 
   final Map<String, MucBookmark> _cache = {};
+  DateTime? _lastEnsureAttempt;
+  bool _ensureNodeInFlight = false;
+  bool _nodeReady = false;
 
   @override
   Future<bool> isSupported() async => true;
@@ -294,37 +298,64 @@ final class BookmarksManager extends mox.XmppManagerBase {
     }
   }
 
+  bool _shouldAttemptEnsureNode() {
+    if (_ensureNodeInFlight || _nodeReady) return false;
+    final lastAttempt = _lastEnsureAttempt;
+    if (lastAttempt == null) return true;
+    final now = DateTime.timestamp();
+    return now.difference(lastAttempt) >= _ensureNodeBackoff;
+  }
+
   Future<void> ensureNode() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-
-    final config = _nodeConfig();
-    final configured = await pubsub.configureNode(host, _bookmarksNode, config);
-    if (!configured.isType<mox.PubSubError>()) {
-      return;
-    }
-
+    if (!_shouldAttemptEnsureNode()) return;
+    _ensureNodeInFlight = true;
+    _lastEnsureAttempt = DateTime.timestamp();
     try {
-      final created = await pubsub.createNodeWithConfig(
-        host,
-        _createNodeConfig(),
-        nodeId: _bookmarksNode,
-      );
-      if (created != null) {
-        await pubsub.configureNode(host, _bookmarksNode, config);
+      final config = _nodeConfig();
+      final configured =
+          await pubsub.configureNode(host, _bookmarksNode, config);
+      if (!configured.isType<mox.PubSubError>()) {
+        _nodeReady = true;
         return;
       }
-    } on Exception {
-      // ignore and retry below
-    }
 
-    try {
-      final created = await pubsub.createNode(host, nodeId: _bookmarksNode);
-      if (created == null) return;
-      await pubsub.configureNode(host, _bookmarksNode, config);
-    } on Exception {
-      return;
+      try {
+        final created = await pubsub.createNodeWithConfig(
+          host,
+          _createNodeConfig(),
+          nodeId: _bookmarksNode,
+        );
+        if (created != null) {
+          final applied = await pubsub.configureNode(
+            host,
+            _bookmarksNode,
+            config,
+          );
+          if (!applied.isType<mox.PubSubError>()) {
+            _nodeReady = true;
+          }
+          return;
+        }
+      } on Exception {
+        // ignore and retry below
+      }
+
+      try {
+        final created = await pubsub.createNode(host, nodeId: _bookmarksNode);
+        if (created == null) return;
+        final applied =
+            await pubsub.configureNode(host, _bookmarksNode, config);
+        if (!applied.isType<mox.PubSubError>()) {
+          _nodeReady = true;
+        }
+      } on Exception {
+        return;
+      }
+    } finally {
+      _ensureNodeInFlight = false;
     }
   }
 

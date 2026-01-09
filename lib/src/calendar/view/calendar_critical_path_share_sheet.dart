@@ -277,6 +277,13 @@ class _CriticalPathShareActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const spinner = SizedBox(
+      width: _criticalPathShareHeaderIconSize,
+      height: _criticalPathShareHeaderIconSize,
+      child: CircularProgressIndicator(
+        strokeWidth: _criticalPathShareProgressStrokeWidth,
+      ),
+    );
     return Align(
       alignment: Alignment.centerRight,
       child: ShadButton(
@@ -285,20 +292,20 @@ class _CriticalPathShareActionRow extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (isBusy)
-              const SizedBox(
-                width: _criticalPathShareHeaderIconSize,
-                height: _criticalPathShareHeaderIconSize,
-                child: CircularProgressIndicator(
-                  strokeWidth: _criticalPathShareProgressStrokeWidth,
-                ),
-              )
-            else
+            ButtonSpinnerSlot(
+              isVisible: isBusy,
+              spinner: spinner,
+              slotSize: _criticalPathShareHeaderIconSize,
+              gap: _criticalPathShareSectionSpacing,
+              duration: baseAnimationDuration,
+            ),
+            if (!isBusy) ...[
               const Icon(
                 LucideIcons.share2,
                 size: _criticalPathShareHeaderIconSize,
               ),
-            const SizedBox(width: _criticalPathShareSectionSpacing),
+              const SizedBox(width: _criticalPathShareSectionSpacing),
+            ],
             Text(label),
           ],
         ),

@@ -197,6 +197,13 @@ class _LoginFormState extends State<LoginForm> {
                           color: context.colorScheme.primaryForeground,
                           semanticsLabel: l10n.authLoginPending,
                         );
+                        final spinnerSlot = ButtonSpinnerSlot(
+                          isVisible: loading,
+                          spinner: spinner,
+                          slotSize: _loginSpinnerSlotSize,
+                          gap: _loginSpinnerGap,
+                          duration: animationDuration,
+                        );
                         final button = ShadButton(
                           key: loginSubmitKey,
                           enabled: !loading,
@@ -204,18 +211,7 @@ class _LoginFormState extends State<LoginForm> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              AnimatedContainer(
-                                duration: animationDuration,
-                                curve: Curves.easeInOut,
-                                width: loading ? _loginSpinnerSlotSize : 0,
-                                height: loading ? _loginSpinnerSlotSize : 0,
-                                child: loading ? spinner : null,
-                              ),
-                              AnimatedContainer(
-                                duration: animationDuration,
-                                curve: Curves.easeInOut,
-                                width: loading ? _loginSpinnerGap : 0,
-                              ),
+                              spinnerSlot,
                               Text(l10n.authLogin),
                             ],
                           ),
