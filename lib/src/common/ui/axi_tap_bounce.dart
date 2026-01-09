@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+const Set<PointerDeviceKind> _tapBouncePointerKinds = <PointerDeviceKind>{
+  PointerDeviceKind.touch,
+  PointerDeviceKind.stylus,
+  PointerDeviceKind.invertedStylus,
+};
 
 class AxiTapBounce extends StatefulWidget {
   const AxiTapBounce({
@@ -38,7 +45,19 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     });
   }
 
-  void _handlePointerDown(PointerDownEvent event) => _setPressed(true);
+  bool _shouldHandlePointerDown(PointerDownEvent event) {
+    if (_tapBouncePointerKinds.contains(event.kind)) {
+      return true;
+    }
+    return event.buttons != 0;
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!_shouldHandlePointerDown(event)) {
+      return;
+    }
+    _setPressed(true);
+  }
 
   void _handlePointerEnd(PointerEvent event) => _setPressed(false);
 

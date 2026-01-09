@@ -65,6 +65,7 @@ enum MessageDiffField {
   occupantId,
   body,
   htmlBody,
+  subject,
   error,
   warning,
   encryptionProtocol,
@@ -236,6 +237,7 @@ extension MessageDiffX on Message {
     addIf(occupantID != other.occupantID, MessageDiffField.occupantId);
     addIf(body != other.body, MessageDiffField.body);
     addIf(htmlBody != other.htmlBody, MessageDiffField.htmlBody);
+    addIf(subject != other.subject, MessageDiffField.subject);
     addIf(error != other.error, MessageDiffField.error);
     addIf(warning != other.warning, MessageDiffField.warning);
     addIf(
@@ -1507,6 +1509,7 @@ class DeltaEventConsumer {
     final rawText = clampMessageText(msg.text);
     final rawHtml = clampMessageHtml(msg.html);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(rawHtml);
+    final sanitizedSubject = sanitizeEmailHeaderValue(msg.subject);
     final resolvedBody = rawText?.trim().isNotEmpty == true
         ? rawText
         : (normalizedHtml == null
@@ -1515,6 +1518,7 @@ class DeltaEventConsumer {
     var next = message.copyWith(
       body: resolvedBody?.trim().isEmpty == true ? null : resolvedBody,
       htmlBody: normalizedHtml,
+      subject: sanitizedSubject,
     );
     next = await _applyShareMetadata(
       db: db,

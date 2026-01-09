@@ -3,6 +3,7 @@
 
 // ignore_for_file: avoid_renaming_method_parameters
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
@@ -56,8 +57,14 @@ const int _messageAttachmentMaxCount = 50;
 const int _messageAttachmentSortOrderStart = 0;
 const int _messageAttachmentSortOrderStep = 1;
 const int _lastMessagePageSize = 25;
+const int _emptyTimestampMillis = 0;
+const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
+const int _messageStatusSyncEnvelopeVersion = 1;
+const String _messageStatusSyncEnvelopeVersionKey = 'v';
+const String _messageStatusSyncEnvelopeIdKey = 'id';
 const int _pinnedMessagesSchemaVersion = 26;
-const int _schemaVersion = _pinnedMessagesSchemaVersion;
+const int _messageSubjectSchemaVersion = 27;
+const int _schemaVersion = _messageSubjectSchemaVersion;
 final RegExp _attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
 
 abstract interface class XmppDatabase implements Database {
@@ -1512,6 +1519,9 @@ WHERE delta_chat_id IS NOT NULL
         if (from < _pinnedMessagesSchemaVersion) {
           await m.createTable(pinnedMessages);
         }
+        if (from < _messageSubjectSchemaVersion) {
+          await m.addColumn(messages, messages.subject);
+        }
       },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -1782,13 +1792,33 @@ WHERE delta_chat_id IS NOT NULL
         .toList();
   }
 
-  Future<Message?> getLastMessageForChat(String jid) async {
-    final messages = await getChatMessages(jid, start: 0, end: 1);
-
-    if (messages.isEmpty) {
-      return null;
+  Future<Message?> getLastMessageForChat(
+    String jid, {
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    const int startOffset = 0;
+    const int pageSize = _lastMessagePageSize;
+    int offset = startOffset;
+    while (true) {
+      final messages = await getChatMessages(
+        jid,
+        start: offset,
+        end: pageSize,
+        filter: filter,
+      );
+      if (messages.isEmpty) {
+        return null;
+      }
+      for (final message in messages) {
+        if (!_isInternalSyncEnvelope(message.body)) {
+          return message;
+        }
+      }
+      if (messages.length < pageSize) {
+        return null;
+      }
+      offset += pageSize;
     }
-    return messages.last;
   }
 
   @override
@@ -1879,7 +1909,32 @@ WHERE delta_chat_id IS NOT NULL
       return false;
     }
     return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed) ||
-        CalendarSyncMessage.looksLikeEnvelope(trimmed);
+        CalendarSyncMessage.looksLikeEnvelope(trimmed) ||
+        _isMessageStatusSyncEnvelope(trimmed);
+  }
+
+  bool _isMessageStatusSyncEnvelope(String raw) {
+    if (!raw.contains(_messageStatusSyncEnvelopeKey)) {
+      return false;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return false;
+      }
+      final payload = decoded[_messageStatusSyncEnvelopeKey];
+      if (payload is! Map<String, dynamic>) {
+        return false;
+      }
+      final version = payload[_messageStatusSyncEnvelopeVersionKey] as int?;
+      if (version != _messageStatusSyncEnvelopeVersion) {
+        return false;
+      }
+      final id = payload[_messageStatusSyncEnvelopeIdKey] as String?;
+      return id != null && id.trim().isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
@@ -1893,13 +1948,26 @@ WHERE delta_chat_id IS NOT NULL
     final hasBody = trimmedBody?.isNotEmpty == true;
     final hasAttachment = message.fileMetadataID?.isNotEmpty == true;
     final messageTimestamp = message.timestamp ?? DateTime.timestamp();
-    final lastMessagePreview = await _messagePreview(
-      trimmedBody: trimmedBody,
-      fileMetadataId: message.fileMetadataID,
-      hasAttachment: hasAttachment,
-      pseudoMessageType: message.pseudoMessageType,
-      pseudoMessageData: message.pseudoMessageData,
-    );
+    final bool shouldUpdateChatSummary = !_isInternalSyncEnvelope(message.body);
+    final bool shouldIncrementUnread =
+        shouldUpdateChatSummary && (hasBody || hasAttachment);
+    final int unreadIncrement = shouldIncrementUnread.toBinary;
+    final DateTime? existingLastChangeTimestamp = shouldUpdateChatSummary
+        ? null
+        : (await getChat(message.chatJid))?.lastChangeTimestamp;
+    final DateTime resolvedLastChangeTimestamp = shouldUpdateChatSummary
+        ? messageTimestamp
+        : (existingLastChangeTimestamp ??
+            DateTime.fromMillisecondsSinceEpoch(_emptyTimestampMillis));
+    final String? lastMessagePreview = shouldUpdateChatSummary
+        ? await _messagePreview(
+            trimmedBody: trimmedBody,
+            fileMetadataId: message.fileMetadataID,
+            hasAttachment: hasAttachment,
+            pseudoMessageType: message.pseudoMessageType,
+            pseudoMessageData: message.pseudoMessageData,
+          )
+        : null;
     final chatTitle = _chatTitleForIdentifier(message.chatJid);
     await transaction(() async {
       await into(chats).insert(
@@ -1907,9 +1975,9 @@ WHERE delta_chat_id IS NOT NULL
           jid: message.chatJid,
           title: chatTitle,
           type: chatType,
-          unreadCount: Value((hasBody || hasAttachment).toBinary),
+          unreadCount: Value(unreadIncrement),
           lastMessage: Value.absentIfNull(lastMessagePreview),
-          lastChangeTimestamp: messageTimestamp,
+          lastChangeTimestamp: resolvedLastChangeTimestamp,
           encryptionProtocol: Value(message.encryptionProtocol),
           contactJid:
               Value(chatType == ChatType.groupChat ? null : message.chatJid),
@@ -1919,7 +1987,7 @@ WHERE delta_chat_id IS NOT NULL
             type: excluded.type,
             unreadCount: const Constant(0).iif(
               old.open.isValue(true),
-              old.unreadCount + Constant((hasBody || hasAttachment).toBinary),
+              old.unreadCount + Constant(unreadIncrement),
             ),
             lastMessage: old.lastMessage,
             lastChangeTimestamp: old.lastChangeTimestamp,
@@ -1946,11 +2014,13 @@ WHERE delta_chat_id IS NOT NULL
           'Message insert ignored; retrying with upsert',
         );
         await into(messages).insertOnConflictUpdate(messageToSave);
-        await _updateChatSummaryIfNewer(
-          jid: message.chatJid,
-          timestamp: messageTimestamp,
-          lastMessage: lastMessagePreview,
-        );
+        if (shouldUpdateChatSummary) {
+          await _updateChatSummaryIfNewer(
+            jid: message.chatJid,
+            timestamp: messageTimestamp,
+            lastMessage: lastMessagePreview,
+          );
+        }
         return;
       }
 
@@ -1967,11 +2037,13 @@ WHERE delta_chat_id IS NOT NULL
           fileMetadataId: incomingMetadataId!,
         );
       }
-      await _updateChatSummaryIfNewer(
-        jid: message.chatJid,
-        timestamp: messageTimestamp,
-        lastMessage: lastMessagePreview,
-      );
+      if (shouldUpdateChatSummary) {
+        await _updateChatSummaryIfNewer(
+          jid: message.chatJid,
+          timestamp: messageTimestamp,
+          lastMessage: lastMessagePreview,
+        );
+      }
 
       final incomingBody = messageToSave.body?.trim();
       final hasIncomingBody = incomingBody?.isNotEmpty == true;
@@ -2638,20 +2710,23 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   Future<void> _refreshChatSummaryAfterTrim({required String jid}) async {
-    const int summaryStartOffset = 0;
-    const int summaryPageSize = 1;
     const int emptyUnreadCount = 0;
-    const int emptyTimestampMillis = 0;
     const summaryFilter = MessageTimelineFilter.allWithContact;
     final chat = await getChat(jid);
     if (chat == null) return;
-    final messages = await getChatMessages(
+    final lastMessage = await getLastMessageForChat(
       jid,
-      start: summaryStartOffset,
-      end: summaryPageSize,
       filter: summaryFilter,
     );
-    final lastMessage = messages.isEmpty ? null : messages.first;
+    final bool hasVisibleMessage = lastMessage != null;
+    final bool hasAnyMessages = hasVisibleMessage ||
+        (await getChatMessages(
+          jid,
+          start: 0,
+          end: 1,
+          filter: summaryFilter,
+        ))
+            .isNotEmpty;
     final String? trimmedBody = lastMessage?.body?.trim();
     final bool hasAttachment = lastMessage?.fileMetadataID?.isNotEmpty == true;
     final String? lastMessagePreview = lastMessage == null
@@ -2664,9 +2739,9 @@ WHERE email_from_address IN ($placeholderClause)
             pseudoMessageData: lastMessage.pseudoMessageData,
           );
     final DateTime emptyTimestamp =
-        DateTime.fromMillisecondsSinceEpoch(emptyTimestampMillis);
+        DateTime.fromMillisecondsSinceEpoch(_emptyTimestampMillis);
     final DateTime nextTimestamp = lastMessage?.timestamp ??
-        (lastMessage == null ? emptyTimestamp : chat.lastChangeTimestamp);
+        (hasAnyMessages ? chat.lastChangeTimestamp : emptyTimestamp);
     final int nextUnreadCount =
         lastMessage == null ? emptyUnreadCount : chat.unreadCount;
     final updated = chat.copyWith(
