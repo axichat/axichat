@@ -339,8 +339,7 @@ XmppService? _maybeReadXmppService(BuildContext context) {
 
 extension _ChatTypeLabelX on ChatType {
   String label(BuildContext context) => switch (this) {
-        ChatType.chat =>
-          context.l10n.calendarCriticalPathShareChatTypeDirect,
+        ChatType.chat => context.l10n.calendarCriticalPathShareChatTypeDirect,
         ChatType.groupChat =>
           context.l10n.calendarCriticalPathShareChatTypeGroup,
         ChatType.note => context.l10n.calendarCriticalPathShareChatTypeNote,

@@ -2034,8 +2034,7 @@ class _EncryptedAttachment extends StatelessWidget {
                             AnimatedContainer(
                               duration: baseAnimationDuration,
                               curve: Curves.easeInOut,
-                              width:
-                                  downloading ? _attachmentRemoteSpacing : 0,
+                              width: downloading ? _attachmentRemoteSpacing : 0,
                             ),
                             Text(
                               downloading
@@ -2139,8 +2138,7 @@ class _RemoteImageAttachment extends StatelessWidget {
                             AnimatedContainer(
                               duration: baseAnimationDuration,
                               curve: Curves.easeInOut,
-                              width:
-                                  downloading ? _attachmentRemoteSpacing : 0,
+                              width: downloading ? _attachmentRemoteSpacing : 0,
                             ),
                             Text(
                               downloading
@@ -2244,8 +2242,7 @@ class _RemoteVideoAttachment extends StatelessWidget {
                             AnimatedContainer(
                               duration: baseAnimationDuration,
                               curve: Curves.easeInOut,
-                              width:
-                                  downloading ? _attachmentRemoteSpacing : 0,
+                              width: downloading ? _attachmentRemoteSpacing : 0,
                             ),
                             Text(
                               downloading

@@ -2661,6 +2661,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarBackToCalendar => 'Retour au calendrier';
 
   @override
+  String get calendarLoadingMessage => 'Loading calendar...';
+
+  @override
   String get calendarCriticalPathAddTask => 'Ajouter une tâche';
 
   @override
@@ -2701,10 +2704,61 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarCriticalPathsNew => 'Nouveau chemin critique';
 
   @override
+  String get calendarCriticalPathRenameTitle => 'Rename critical path';
+
+  @override
+  String get calendarCriticalPathDeleteTitle => 'Delete critical path';
+
+  @override
   String get calendarCriticalPathsTitle => 'Chemins critiques';
 
   @override
   String get calendarCriticalPathShareAction => 'Partager dans le chat';
+
+  @override
+  String get calendarCriticalPathShareTitle => 'Share critical path';
+
+  @override
+  String get calendarCriticalPathShareSubtitle =>
+      'Send a critical path to a chat.';
+
+  @override
+  String get calendarCriticalPathShareTargetLabel => 'Share with';
+
+  @override
+  String get calendarCriticalPathShareButtonLabel => 'Share';
+
+  @override
+  String get calendarCriticalPathShareMissingChats =>
+      'No eligible chats available.';
+
+  @override
+  String get calendarCriticalPathShareMissingRecipient =>
+      'Select a chat to share with.';
+
+  @override
+  String get calendarCriticalPathShareMissingService =>
+      'Calendar sharing is unavailable.';
+
+  @override
+  String get calendarCriticalPathShareDenied =>
+      'Calendar cards are disabled for your role in this room.';
+
+  @override
+  String get calendarCriticalPathShareFailed =>
+      'Failed to share critical path.';
+
+  @override
+  String get calendarCriticalPathShareSuccess => 'Critical path shared.';
+
+  @override
+  String get calendarCriticalPathShareChatTypeDirect => 'Direct chat';
+
+  @override
+  String get calendarCriticalPathShareChatTypeGroup => 'Group chat';
+
+  @override
+  String get calendarCriticalPathShareChatTypeNote => 'Notes';
 
   @override
   String calendarCriticalPathProgressSummary(int completed, int total) {
@@ -2792,6 +2846,61 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get calendarCriticalPathCreateFailed =>
       'Impossible de créer un chemin critique.';
+
+  @override
+  String get calendarTaskSearchTitle => 'Search tasks';
+
+  @override
+  String calendarTaskSearchAddToTitle(Object name) {
+    return 'Add to $name';
+  }
+
+  @override
+  String get calendarTaskSearchSubtitle =>
+      'Search titles, descriptions, locations, categories, priorities, and deadlines.';
+
+  @override
+  String get calendarTaskSearchAddToSubtitle =>
+      'Tap a task to append it to the critical path order.';
+
+  @override
+  String get calendarTaskSearchHint =>
+      'title:, desc:, location:, category:work, priority:urgent, status:done';
+
+  @override
+  String get calendarTaskSearchEmptyPrompt => 'Start typing to search tasks';
+
+  @override
+  String get calendarTaskSearchEmptyNoResults => 'No results found';
+
+  @override
+  String get calendarTaskSearchEmptyHint =>
+      'Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.';
+
+  @override
+  String get calendarTaskSearchFilterScheduled => 'Scheduled';
+
+  @override
+  String get calendarTaskSearchFilterUnscheduled => 'Unscheduled';
+
+  @override
+  String get calendarTaskSearchFilterReminders => 'Reminders';
+
+  @override
+  String get calendarTaskSearchFilterOpen => 'Open';
+
+  @override
+  String get calendarTaskSearchFilterCompleted => 'Completed';
+
+  @override
+  String calendarTaskSearchDueDate(Object date) {
+    return 'Due $date';
+  }
+
+  @override
+  String calendarTaskSearchOverdueDate(Object date) {
+    return 'Overdue · $date';
+  }
 
   @override
   String calendarDeleteTaskConfirm(Object title) {
@@ -3357,6 +3466,75 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get settingsAutoDownloadArchivesDescription =>
       'Only for trusted chats.';
+
+  @override
+  String get emailContactsImportTitle => 'Import contacts';
+
+  @override
+  String get emailContactsImportSubtitle =>
+      'Gmail, Outlook, Yahoo CSVs, or vCards.';
+
+  @override
+  String get emailContactsImportFileAccessError =>
+      'Unable to access the selected file.';
+
+  @override
+  String get emailContactsImportAction => 'Import';
+
+  @override
+  String get emailContactsImportFormatLabel => 'Format';
+
+  @override
+  String get emailContactsImportFileLabel => 'File';
+
+  @override
+  String get emailContactsImportNoFile => 'No file selected';
+
+  @override
+  String get emailContactsImportChooseFile => 'Choose file';
+
+  @override
+  String get emailContactsImportFormatGmail => 'Gmail CSV';
+
+  @override
+  String get emailContactsImportFormatOutlook => 'Outlook CSV';
+
+  @override
+  String get emailContactsImportFormatYahoo => 'Yahoo CSV';
+
+  @override
+  String get emailContactsImportFormatGenericCsv => 'Generic CSV';
+
+  @override
+  String get emailContactsImportFormatVcard => 'vCard (VCF)';
+
+  @override
+  String get emailContactsImportNoValidContacts => 'No valid contacts found.';
+
+  @override
+  String get emailContactsImportAccountRequired =>
+      'Set up email before importing contacts.';
+
+  @override
+  String get emailContactsImportEmptyFile => 'The selected file is empty.';
+
+  @override
+  String get emailContactsImportReadFailure => 'Couldn\'t read that file.';
+
+  @override
+  String get emailContactsImportUnsupportedFile => 'Unsupported file type.';
+
+  @override
+  String get emailContactsImportNoContacts => 'No contacts found in that file.';
+
+  @override
+  String get emailContactsImportFailed => 'Import failed.';
+
+  @override
+  String emailContactsImportSuccess(
+      Object imported, Object duplicates, Object invalid, Object failed) {
+    return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
+  }
 
   @override
   String get chatChooseTextToAdd => 'Choisir le texte à ajouter';

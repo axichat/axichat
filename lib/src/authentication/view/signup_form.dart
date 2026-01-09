@@ -1130,8 +1130,9 @@ class _SignupFormState extends State<SignupForm>
                                       AnimatedContainer(
                                         duration: animationDuration,
                                         curve: Curves.easeInOut,
-                                        width:
-                                            loading ? _signupButtonSpinnerGap : 0,
+                                        width: loading
+                                            ? _signupButtonSpinnerGap
+                                            : 0,
                                       ),
                                       Text(l10n.authSignUp),
                                     ],
