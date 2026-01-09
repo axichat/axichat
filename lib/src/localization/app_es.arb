@@ -1060,6 +1060,79 @@
   "calendarCriticalPathsEmpty": "Aún no hay rutas críticas",
   "calendarCriticalPathsNew": "Nueva ruta crítica",
   "calendarCriticalPathsTitle": "Rutas críticas",
+  "calendarCriticalPathShareAction": "Compartir en el chat",
+  "calendarCriticalPathProgressSummary": "{total, plural, one {{completed} de {total} tarea completada en orden} other {{completed} de {total} tareas completadas en orden}}",
+  "@calendarCriticalPathProgressSummary": {
+    "description": "Summary of completed tasks in a critical path.",
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathProgressHint": "Completa las tareas en el orden indicado para avanzar.",
+  "calendarCriticalPathProgressLabel": "Progreso",
+  "calendarCriticalPathProgressPercent": "{percent}%",
+  "@calendarCriticalPathProgressPercent": {
+    "description": "Progress percentage label for critical path progress.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathFocus": "Enfocar",
+  "calendarCriticalPathUnfocus": "Quitar foco",
+  "calendarCriticalPathCompletedLabel": "Completadas",
+  "calendarCriticalPathQueuedAdd": "Se añadirá a \"{name}\" al guardar",
+  "@calendarCriticalPathQueuedAdd": {
+    "description": "Status message when queuing a critical path for a draft.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarCriticalPathQueuedCreate": "Se creó \"{name}\" y se puso en cola",
+  "@calendarCriticalPathQueuedCreate": {
+    "description": "Status message when creating a critical path and queuing it.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarCriticalPathUnavailable": "Las rutas críticas no están disponibles en esta vista.",
+  "calendarCriticalPathAddAfterSaveFailed": "La tarea se guardó, pero no se pudo añadir a una ruta crítica.",
+  "calendarCriticalPathAddSuccess": "{count, plural, one {Añadido a \"{name}\".} other {Se añadieron {count} tareas a \"{name}\".}}",
+  "@calendarCriticalPathAddSuccess": {
+    "description": "Success message after adding tasks to a critical path.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {}
+    }
+  },
+  "calendarCriticalPathCreateSuccess": "{count, plural, one {Se creó \"{name}\" y se añadió la tarea.} other {Se creó \"{name}\" y se añadieron las tareas.}}",
+  "@calendarCriticalPathCreateSuccess": {
+    "description": "Success message after creating a critical path and adding tasks.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {}
+    }
+  },
+  "calendarCriticalPathAddFailed": "{count, plural, one {No se pudo añadir la tarea a una ruta crítica.} other {No se pudieron añadir las tareas a una ruta crítica.}}",
+  "@calendarCriticalPathAddFailed": {
+    "description": "Error message when adding tasks to a critical path fails.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathCreateFailed": "No se pudo crear una ruta crítica.",
   "calendarDeleteTaskConfirm": "¿Eliminar \"{title}\"?",
   "@calendarDeleteTaskConfirm": {
     "placeholders": {

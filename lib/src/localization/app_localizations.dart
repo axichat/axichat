@@ -4844,6 +4844,102 @@ abstract class AppLocalizations {
   /// **'Critical paths'**
   String get calendarCriticalPathsTitle;
 
+  /// No description provided for @calendarCriticalPathShareAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Share to chat'**
+  String get calendarCriticalPathShareAction;
+
+  /// Summary of completed tasks in a critical path.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, one {{completed} of {total} task completed in order} other {{completed} of {total} tasks completed in order}}'**
+  String calendarCriticalPathProgressSummary(int completed, int total);
+
+  /// No description provided for @calendarCriticalPathProgressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete tasks in the listed order to advance'**
+  String get calendarCriticalPathProgressHint;
+
+  /// No description provided for @calendarCriticalPathProgressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress'**
+  String get calendarCriticalPathProgressLabel;
+
+  /// Progress percentage label for critical path progress.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String calendarCriticalPathProgressPercent(int percent);
+
+  /// No description provided for @calendarCriticalPathFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus'**
+  String get calendarCriticalPathFocus;
+
+  /// No description provided for @calendarCriticalPathUnfocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfocus'**
+  String get calendarCriticalPathUnfocus;
+
+  /// No description provided for @calendarCriticalPathCompletedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get calendarCriticalPathCompletedLabel;
+
+  /// Status message when queuing a critical path for a draft.
+  ///
+  /// In en, this message translates to:
+  /// **'Will add to \"{name}\" on save'**
+  String calendarCriticalPathQueuedAdd(Object name);
+
+  /// Status message when creating a critical path and queuing it.
+  ///
+  /// In en, this message translates to:
+  /// **'Created \"{name}\" and queued'**
+  String calendarCriticalPathQueuedCreate(Object name);
+
+  /// No description provided for @calendarCriticalPathUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical paths are unavailable in this view.'**
+  String get calendarCriticalPathUnavailable;
+
+  /// No description provided for @calendarCriticalPathAddAfterSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Task saved but could not be added to a critical path.'**
+  String get calendarCriticalPathAddAfterSaveFailed;
+
+  /// Success message after adding tasks to a critical path.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {Added to \"{name}\".} other {Added {count} tasks to \"{name}\".}}'**
+  String calendarCriticalPathAddSuccess(int count, Object name);
+
+  /// Success message after creating a critical path and adding tasks.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {Created \"{name}\" and added task.} other {Created \"{name}\" and added tasks.}}'**
+  String calendarCriticalPathCreateSuccess(int count, Object name);
+
+  /// Error message when adding tasks to a critical path fails.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {Unable to add task to a critical path.} other {Unable to add tasks to a critical path.}}'**
+  String calendarCriticalPathAddFailed(int count);
+
+  /// No description provided for @calendarCriticalPathCreateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to create a critical path.'**
+  String get calendarCriticalPathCreateFailed;
+
   /// No description provided for @calendarDeleteTaskConfirm.
   ///
   /// In en, this message translates to:

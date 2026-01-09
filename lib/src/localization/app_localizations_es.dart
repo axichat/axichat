@@ -2692,6 +2692,96 @@ class AppLocalizationsEs extends AppLocalizations {
   String get calendarCriticalPathsTitle => 'Rutas críticas';
 
   @override
+  String get calendarCriticalPathShareAction => 'Compartir en el chat';
+
+  @override
+  String calendarCriticalPathProgressSummary(int completed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '$completed de $total tareas completadas en orden',
+      one: '$completed de $total tarea completada en orden',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathProgressHint =>
+      'Completa las tareas en el orden indicado para avanzar.';
+
+  @override
+  String get calendarCriticalPathProgressLabel => 'Progreso';
+
+  @override
+  String calendarCriticalPathProgressPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get calendarCriticalPathFocus => 'Enfocar';
+
+  @override
+  String get calendarCriticalPathUnfocus => 'Quitar foco';
+
+  @override
+  String get calendarCriticalPathCompletedLabel => 'Completadas';
+
+  @override
+  String calendarCriticalPathQueuedAdd(Object name) {
+    return 'Se añadirá a \"$name\" al guardar';
+  }
+
+  @override
+  String calendarCriticalPathQueuedCreate(Object name) {
+    return 'Se creó \"$name\" y se puso en cola';
+  }
+
+  @override
+  String get calendarCriticalPathUnavailable =>
+      'Las rutas críticas no están disponibles en esta vista.';
+
+  @override
+  String get calendarCriticalPathAddAfterSaveFailed =>
+      'La tarea se guardó, pero no se pudo añadir a una ruta crítica.';
+
+  @override
+  String calendarCriticalPathAddSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Se añadieron $count tareas a \"$name\".',
+      one: 'Añadido a \"$name\".',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathCreateSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Se creó \"$name\" y se añadieron las tareas.',
+      one: 'Se creó \"$name\" y se añadió la tarea.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathAddFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'No se pudieron añadir las tareas a una ruta crítica.',
+      one: 'No se pudo añadir la tarea a una ruta crítica.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathCreateFailed =>
+      'No se pudo crear una ruta crítica.';
+
+  @override
   String calendarDeleteTaskConfirm(Object title) {
     return '¿Eliminar \"$title\"?';
   }

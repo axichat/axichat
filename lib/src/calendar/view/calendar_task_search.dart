@@ -18,6 +18,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/task_input.dart' as task_input;
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_text_field.dart';
@@ -31,10 +32,7 @@ typedef CalendarSearchTileBuilder = Widget Function(
   bool allowContextMenu,
 });
 
-const String _searchHintText =
-    'title:, desc:, location:, category:work, priority:urgent, status:done';
-const String _searchSubtitleText =
-    'Search titles, descriptions, locations, categories, priorities, and deadlines.';
+const int _taskSearchSingleCount = 1;
 const String _queryKeyCategory = 'category';
 const String _queryKeyCategoryShort = 'cat';
 const String _queryKeyTag = 'tag';
@@ -73,7 +71,10 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
       );
       FeedbackSystem.showSuccess(
         context,
-        'Added to ${resolvedTargetPath.name}',
+        context.l10n.calendarCriticalPathAddSuccess(
+          _taskSearchSingleCount,
+          resolvedTargetPath.name,
+        ),
       );
     };
   } else {
@@ -149,11 +150,13 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
   Widget build(BuildContext context) {
     final bool isCompact = ResponsiveHelper.isCompact(context);
     final CalendarCriticalPath? targetPath = widget.targetPath;
-    final String title =
-        targetPath != null ? 'Add to ${targetPath.name}' : 'Search tasks';
+    final l10n = context.l10n;
+    final String title = targetPath != null
+        ? l10n.calendarTaskSearchAddToTitle(targetPath.name)
+        : l10n.calendarTaskSearchTitle;
     final String subtitle = targetPath != null
-        ? 'Tap a task to append it to the critical path order.'
-        : _searchSubtitleText;
+        ? l10n.calendarTaskSearchAddToSubtitle
+        : l10n.calendarTaskSearchSubtitle;
     return BlocBuilder<B, CalendarState>(
       bloc: widget.bloc,
       builder: (context, state) {
@@ -213,7 +216,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                           TaskTextField(
                             controller: _queryController,
                             focusNode: _queryFocusNode,
-                            hintText: _searchHintText,
+                            hintText: l10n.calendarTaskSearchHint,
                             textInputAction: TextInputAction.search,
                             onSubmitted: _handleSubmitted,
                             onChanged: (_) => setState(() {}),
@@ -390,7 +393,7 @@ class _FilterRow extends StatelessWidget {
                 ),
                 const SizedBox(width: calendarInsetSm),
                 Text(
-                  filter.label,
+                  filter.label(context),
                   style: context.textTheme.small.copyWith(
                     color: textColor,
                     fontWeight: FontWeight.w700,
@@ -403,6 +406,15 @@ class _FilterRow extends StatelessWidget {
       }).toList(),
     );
   }
+}
+
+String _formatDeadlineLabel(BuildContext context, DateTime deadline) {
+  final DateTime now = DateTime.now();
+  final String formatted = TimeFormatter.formatFriendlyDate(deadline);
+  if (deadline.isBefore(now)) {
+    return context.l10n.calendarTaskSearchOverdueDate(formatted);
+  }
+  return context.l10n.calendarTaskSearchDueDate(formatted);
 }
 
 class _ResultMetadata extends StatelessWidget {
@@ -430,7 +442,7 @@ class _ResultMetadata extends StatelessWidget {
       tags.add(
         _MetadataTag(
           icon: Icons.calendar_today_outlined,
-          label: _deadlineLabel(deadline),
+          label: _formatDeadlineLabel(context, deadline),
         ),
       );
     }
@@ -444,13 +456,6 @@ class _ResultMetadata extends StatelessWidget {
     );
   }
 
-  String _deadlineLabel(DateTime deadline) {
-    final DateTime now = DateTime.now();
-    if (deadline.isBefore(now)) {
-      return 'Overdue · ${TimeFormatter.formatFriendlyDate(deadline)}';
-    }
-    return 'Due ${TimeFormatter.formatFriendlyDate(deadline)}';
-  }
 }
 
 class _MetadataTag extends StatelessWidget {
@@ -527,14 +532,16 @@ class _EmptySearchState extends StatelessWidget {
             ),
             const SizedBox(height: calendarGutterSm),
             Text(
-              showHint ? 'Start typing to search tasks' : 'No results found',
+              showHint
+                  ? context.l10n.calendarTaskSearchEmptyPrompt
+                  : context.l10n.calendarTaskSearchEmptyNoResults,
               style: context.textTheme.small.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: calendarInsetSm),
             Text(
-              'Use filters like title:, desc:, location:, priority:critical, status:done, deadline:today.',
+              context.l10n.calendarTaskSearchEmptyHint,
               style: hintStyle,
               textAlign: TextAlign.center,
             ),
@@ -557,7 +564,7 @@ class _SearchResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    final String? subtitle = _subtitle();
+    final String? subtitle = _subtitle(context);
     return CalendarTaskTitleHoverReporter(
       title: task.title,
       child: Material(
@@ -592,28 +599,38 @@ class _SearchResultTile extends StatelessWidget {
     );
   }
 
-  String? _subtitle() {
+  String? _subtitle(BuildContext context) {
     if (task.scheduledTime != null) {
       return TimeFormatter.formatFriendlyDateTime(task.scheduledTime!);
     }
     if (task.deadline != null) {
-      return 'Due ${TimeFormatter.formatFriendlyDate(task.deadline!)}';
+      return _formatDeadlineLabel(context, task.deadline!);
     }
     return task.description?.isNotEmpty == true ? task.description : null;
   }
 }
 
 enum _QuickFilter {
-  scheduled('Scheduled', Icons.event_available),
-  unscheduled('Unscheduled', Icons.list_alt_outlined),
-  reminders('Reminders', Icons.alarm),
-  open('Open', Icons.radio_button_unchecked),
-  completed('Completed', Icons.check_circle_outline);
+  scheduled(Icons.event_available),
+  unscheduled(Icons.list_alt_outlined),
+  reminders(Icons.alarm),
+  open(Icons.radio_button_unchecked),
+  completed(Icons.check_circle_outline);
 
-  const _QuickFilter(this.label, this.icon);
+  const _QuickFilter(this.icon);
 
-  final String label;
   final IconData icon;
+}
+
+extension _QuickFilterLabelX on _QuickFilter {
+  String label(BuildContext context) => switch (this) {
+        _QuickFilter.scheduled => context.l10n.calendarTaskSearchFilterScheduled,
+        _QuickFilter.unscheduled =>
+          context.l10n.calendarTaskSearchFilterUnscheduled,
+        _QuickFilter.reminders => context.l10n.calendarTaskSearchFilterReminders,
+        _QuickFilter.open => context.l10n.calendarTaskSearchFilterOpen,
+        _QuickFilter.completed => context.l10n.calendarTaskSearchFilterCompleted,
+      };
 }
 
 class _QuickFilterEvaluator {

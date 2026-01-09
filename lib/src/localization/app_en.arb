@@ -1124,6 +1124,7 @@
     }
   },
   "calendarBackToCalendar": "Back to calendar",
+  "calendarLoadingMessage": "Loading calendar...",
   "calendarCriticalPathAddTask": "Add task",
   "calendarCriticalPathAddToTitle": "Add to critical path",
   "calendarCriticalPathCreatePrompt": "Create a critical path to get started",
@@ -1136,7 +1137,95 @@
   "calendarCriticalPathsAll": "All paths",
   "calendarCriticalPathsEmpty": "No critical paths yet",
   "calendarCriticalPathsNew": "New critical path",
+  "calendarCriticalPathRenameTitle": "Rename critical path",
+  "calendarCriticalPathDeleteTitle": "Delete critical path",
   "calendarCriticalPathsTitle": "Critical paths",
+  "calendarCriticalPathShareAction": "Share to chat",
+  "calendarCriticalPathShareTitle": "Share critical path",
+  "calendarCriticalPathShareSubtitle": "Send a critical path to a chat.",
+  "calendarCriticalPathShareTargetLabel": "Share with",
+  "calendarCriticalPathShareButtonLabel": "Share",
+  "calendarCriticalPathShareMissingChats": "No eligible chats available.",
+  "calendarCriticalPathShareMissingRecipient": "Select a chat to share with.",
+  "calendarCriticalPathShareMissingService": "Calendar sharing is unavailable.",
+  "calendarCriticalPathShareDenied": "Calendar cards are disabled for your role in this room.",
+  "calendarCriticalPathShareFailed": "Failed to share critical path.",
+  "calendarCriticalPathShareSuccess": "Critical path shared.",
+  "calendarCriticalPathShareChatTypeDirect": "Direct chat",
+  "calendarCriticalPathShareChatTypeGroup": "Group chat",
+  "calendarCriticalPathShareChatTypeNote": "Notes",
+  "calendarCriticalPathProgressSummary": "{total, plural, one {{completed} of {total} task completed in order} other {{completed} of {total} tasks completed in order}}",
+  "@calendarCriticalPathProgressSummary": {
+    "description": "Summary of completed tasks in a critical path.",
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathProgressHint": "Complete tasks in the listed order to advance",
+  "calendarCriticalPathProgressLabel": "Progress",
+  "calendarCriticalPathProgressPercent": "{percent}%",
+  "@calendarCriticalPathProgressPercent": {
+    "description": "Progress percentage label for critical path progress.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathFocus": "Focus",
+  "calendarCriticalPathUnfocus": "Unfocus",
+  "calendarCriticalPathCompletedLabel": "Completed",
+  "calendarCriticalPathQueuedAdd": "Will add to \"{name}\" on save",
+  "@calendarCriticalPathQueuedAdd": {
+    "description": "Status message when queuing a critical path for a draft.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarCriticalPathQueuedCreate": "Created \"{name}\" and queued",
+  "@calendarCriticalPathQueuedCreate": {
+    "description": "Status message when creating a critical path and queuing it.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "calendarCriticalPathUnavailable": "Critical paths are unavailable in this view.",
+  "calendarCriticalPathAddAfterSaveFailed": "Task saved but could not be added to a critical path.",
+  "calendarCriticalPathAddSuccess": "{count, plural, one {Added to \"{name}\".} other {Added {count} tasks to \"{name}\".}}",
+  "@calendarCriticalPathAddSuccess": {
+    "description": "Success message after adding tasks to a critical path.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {}
+    }
+  },
+  "calendarCriticalPathCreateSuccess": "{count, plural, one {Created \"{name}\" and added task.} other {Created \"{name}\" and added tasks.}}",
+  "@calendarCriticalPathCreateSuccess": {
+    "description": "Success message after creating a critical path and adding tasks.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {}
+    }
+  },
+  "calendarCriticalPathAddFailed": "{count, plural, one {Unable to add task to a critical path.} other {Unable to add tasks to a critical path.}}",
+  "@calendarCriticalPathAddFailed": {
+    "description": "Error message when adding tasks to a critical path fails.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarCriticalPathCreateFailed": "Unable to create a critical path.",
   "calendarDeleteTaskConfirm": "Delete \"{title}\"?",
   "@calendarDeleteTaskConfirm": {
     "placeholders": {

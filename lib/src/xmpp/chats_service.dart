@@ -443,8 +443,16 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       _chatLog.fine('Skipping chat state for foreign domain: $jid');
       return;
     }
-    if (_isMucChatJid(jid)) {
-      return;
+    final isMuc = _isMucChatJid(jid);
+    if (isMuc) {
+      if (connectionState != ConnectionState.connected) return;
+      final roomJid = _safeBareJid(jid);
+      if (roomJid == null) return;
+      final roomState = roomStateFor(roomJid);
+      if (roomState?.hasSelfPresence != true) {
+        unawaited(ensureJoined(roomJid: roomJid, allowRejoin: true));
+        return;
+      }
     }
     final messageType = _chatStateMessageType(jid);
     await _connection.sendChatState(

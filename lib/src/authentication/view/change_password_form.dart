@@ -12,6 +12,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const double _changePasswordSpinnerDimension = 16.0;
+const double _changePasswordSpinnerPadding = 1.0;
+const double _changePasswordSpinnerSlotSize =
+    _changePasswordSpinnerDimension + (_changePasswordSpinnerPadding * 2);
+const double _changePasswordSpinnerGap = 8.0;
+
 class ChangePasswordForm extends StatefulWidget {
   const ChangePasswordForm({super.key});
 
@@ -62,6 +68,8 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
       builder: (context, state) {
         final l10n = context.l10n;
         final loading = state is AuthenticationPasswordChangeInProgress;
+        final animationDuration =
+            context.watch<SettingsCubit>().animationDuration;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -117,23 +125,32 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
               const SizedBox.square(dimension: 16.0),
               Builder(
                 builder: (context) {
+                  final spinner = AxiProgressIndicator(
+                    dimension: _changePasswordSpinnerDimension,
+                    color: context.colorScheme.primaryForeground,
+                    semanticsLabel: l10n.authChangePasswordProgressLabel,
+                  );
                   return ShadButton(
                     enabled: !loading,
                     onPressed: () => _onPressed(context),
-                    leading: AnimatedCrossFade(
-                      crossFadeState: loading
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
-                      duration:
-                          context.watch<SettingsCubit>().animationDuration,
-                      firstChild: const SizedBox(),
-                      secondChild: AxiProgressIndicator(
-                        color: context.colorScheme.primaryForeground,
-                        semanticsLabel: l10n.authChangePasswordProgressLabel,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedContainer(
+                          duration: animationDuration,
+                          curve: Curves.easeInOut,
+                          width: loading ? _changePasswordSpinnerSlotSize : 0,
+                          height: loading ? _changePasswordSpinnerSlotSize : 0,
+                          child: loading ? spinner : null,
+                        ),
+                        AnimatedContainer(
+                          duration: animationDuration,
+                          curve: Curves.easeInOut,
+                          width: loading ? _changePasswordSpinnerGap : 0,
+                        ),
+                        Text(l10n.commonContinue),
+                      ],
                     ),
-                    trailing: const SizedBox.shrink(),
-                    child: Text(l10n.commonContinue),
                   ).withTapBounce(enabled: !loading);
                 },
               ),

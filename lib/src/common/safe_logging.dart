@@ -15,6 +15,7 @@ class SafeLogging {
   static const int _maxInputLengthForFullSanitize = 1024;
   static const int _xmppTrafficScanLimit = 512;
   static const int _xmppErrorScanLimit = 2048;
+  static const int _xmppTrafficVerboseMaxLength = 4096;
   static const int _notFoundIndex = -1;
 
   static const String _xmppTrafficOutPrefix = '==>';
@@ -81,6 +82,12 @@ class SafeLogging {
     _xmppErrorTextTagName,
   };
 
+  static bool _verboseXmppTraffic = false;
+
+  static void setVerboseXmppTraffic({required bool enabled}) {
+    _verboseXmppTraffic = enabled;
+  }
+
   static String sanitizeMessage(String message) => _sanitize(message);
 
   static String sanitizeError(Object? error) =>
@@ -92,13 +99,26 @@ class SafeLogging {
   static String _sanitize(String input) {
     if (input.startsWith(_xmppTrafficOutPrefix) ||
         input.startsWith(_xmppTrafficInPrefix)) {
-      return _summarizeXmppTraffic(input);
+      return _verboseXmppTraffic
+          ? _sanitizeXmppTraffic(input)
+          : _summarizeXmppTraffic(input);
     }
 
     if (input.length > _maxInputLengthForFullSanitize) {
       return '$redactedSecret (log omitted, ${input.length} chars)';
     }
 
+    return _sanitizeContent(input);
+  }
+
+  static String _sanitizeXmppTraffic(String input) {
+    if (input.length > _xmppTrafficVerboseMaxLength) {
+      return _summarizeXmppTraffic(input);
+    }
+    return _sanitizeContent(input);
+  }
+
+  static String _sanitizeContent(String input) {
     var output = input;
     output = output.replaceAllMapped(
       _xmlBodyPattern,

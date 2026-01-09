@@ -53,6 +53,11 @@ const int _captchaXmlMaxNodes = 4000;
 const int _captchaXmlMaxDepth = 32;
 const Duration _captchaXmlMaxParseDuration = Duration(milliseconds: 120);
 const int _httpOkStatus = 200;
+const double _signupButtonSpinnerDimension = 16.0;
+const double _signupButtonSpinnerPadding = 1.0;
+const double _signupButtonSpinnerSlotSize =
+    _signupButtonSpinnerDimension + (_signupButtonSpinnerPadding * 2);
+const double _signupButtonSpinnerGap = 8.0;
 const XmlParseLimits _captchaXmlParseLimits = XmlParseLimits(
   maxBytes: _captchaXmlMaxBytes,
   maxNodes: _captchaXmlMaxNodes,
@@ -1052,21 +1057,39 @@ class _SignupFormState extends State<SignupForm>
                                     onPressed: () async {
                                       await _handleContinuePressed(context);
                                     },
-                                    leading: AnimatedCrossFade(
-                                      crossFadeState: isCheckingPwned
-                                          ? CrossFadeState.showSecond
-                                          : CrossFadeState.showFirst,
-                                      duration: animationDuration,
-                                      firstChild: const SizedBox(),
-                                      secondChild: AxiProgressIndicator(
-                                        color: context
-                                            .colorScheme.primaryForeground,
-                                        semanticsLabel:
-                                            l10n.authPasswordPending,
-                                      ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        AnimatedContainer(
+                                          duration: animationDuration,
+                                          curve: Curves.easeInOut,
+                                          width: isCheckingPwned
+                                              ? _signupButtonSpinnerSlotSize
+                                              : 0,
+                                          height: isCheckingPwned
+                                              ? _signupButtonSpinnerSlotSize
+                                              : 0,
+                                          child: isCheckingPwned
+                                              ? AxiProgressIndicator(
+                                                  dimension:
+                                                      _signupButtonSpinnerDimension,
+                                                  color: context.colorScheme
+                                                      .primaryForeground,
+                                                  semanticsLabel:
+                                                      l10n.authPasswordPending,
+                                                )
+                                              : null,
+                                        ),
+                                        AnimatedContainer(
+                                          duration: animationDuration,
+                                          curve: Curves.easeInOut,
+                                          width: isCheckingPwned
+                                              ? _signupButtonSpinnerGap
+                                              : 0,
+                                        ),
+                                        Text(l10n.signupContinue),
+                                      ],
                                     ),
-                                    trailing: const SizedBox.shrink(),
-                                    child: Text(l10n.signupContinue),
                                   ).withTapBounce(
                                     enabled: !loading && !isCheckingPwned,
                                   ),
@@ -1081,20 +1104,38 @@ class _SignupFormState extends State<SignupForm>
                                   onPressed: cleanupBlocked
                                       ? null
                                       : () => _onPressed(context),
-                                  leading: AnimatedCrossFade(
-                                    crossFadeState: loading
-                                        ? CrossFadeState.showSecond
-                                        : CrossFadeState.showFirst,
-                                    duration: animationDuration,
-                                    firstChild: const SizedBox(),
-                                    secondChild: AxiProgressIndicator(
-                                      color:
-                                          context.colorScheme.primaryForeground,
-                                      semanticsLabel: l10n.authSignupPending,
-                                    ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      AnimatedContainer(
+                                        duration: animationDuration,
+                                        curve: Curves.easeInOut,
+                                        width: loading
+                                            ? _signupButtonSpinnerSlotSize
+                                            : 0,
+                                        height: loading
+                                            ? _signupButtonSpinnerSlotSize
+                                            : 0,
+                                        child: loading
+                                            ? AxiProgressIndicator(
+                                                dimension:
+                                                    _signupButtonSpinnerDimension,
+                                                color: context.colorScheme
+                                                    .primaryForeground,
+                                                semanticsLabel:
+                                                    l10n.authSignupPending,
+                                              )
+                                            : null,
+                                      ),
+                                      AnimatedContainer(
+                                        duration: animationDuration,
+                                        curve: Curves.easeInOut,
+                                        width:
+                                            loading ? _signupButtonSpinnerGap : 0,
+                                      ),
+                                      Text(l10n.authSignUp),
+                                    ],
                                   ),
-                                  trailing: const SizedBox.shrink(),
-                                  child: Text(l10n.authSignUp),
                                 ).withTapBounce(
                                   enabled: !loading && !cleanupBlocked,
                                 )

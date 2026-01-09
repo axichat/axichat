@@ -678,6 +678,8 @@ void _configureLogging() {
   if (_foregroundLoggerConfigured) return;
   _foregroundLoggerConfigured = true;
 
+  SafeLogging.setVerboseXmppTraffic(enabled: kDebugMode);
+
   if (kDebugMode) {
     Logger.root
       ..level = Level.ALL

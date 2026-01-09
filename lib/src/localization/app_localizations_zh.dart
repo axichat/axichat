@@ -2583,6 +2583,92 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarCriticalPathsTitle => '关键路径';
 
   @override
+  String get calendarCriticalPathShareAction => '分享到聊天';
+
+  @override
+  String calendarCriticalPathProgressSummary(int completed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '已按顺序完成$completed/$total项任务',
+      one: '已按顺序完成$completed/$total项任务',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathProgressHint => '按列表顺序完成任务以推进进度。';
+
+  @override
+  String get calendarCriticalPathProgressLabel => '进度';
+
+  @override
+  String calendarCriticalPathProgressPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get calendarCriticalPathFocus => '聚焦';
+
+  @override
+  String get calendarCriticalPathUnfocus => '取消聚焦';
+
+  @override
+  String get calendarCriticalPathCompletedLabel => '已完成';
+
+  @override
+  String calendarCriticalPathQueuedAdd(Object name) {
+    return '保存时将添加到“$name”';
+  }
+
+  @override
+  String calendarCriticalPathQueuedCreate(Object name) {
+    return '已创建“$name”并加入队列';
+  }
+
+  @override
+  String get calendarCriticalPathUnavailable => '此视图中无法使用关键路径。';
+
+  @override
+  String get calendarCriticalPathAddAfterSaveFailed => '任务已保存，但无法添加到关键路径。';
+
+  @override
+  String calendarCriticalPathAddSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已将$count个任务添加到“$name”。',
+      one: '已添加到“$name”。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathCreateSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已创建“$name”并添加$count个任务。',
+      one: '已创建“$name”并添加任务。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathAddFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '无法将这些任务添加到关键路径。',
+      one: '无法将任务添加到关键路径。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathCreateFailed => '无法创建关键路径。';
+
+  @override
   String calendarDeleteTaskConfirm(Object title) {
     return '删除“$title”？';
   }
@@ -5713,6 +5799,92 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarCriticalPathsTitle => '關鍵路徑';
+
+  @override
+  String get calendarCriticalPathShareAction => '分享至聊天';
+
+  @override
+  String calendarCriticalPathProgressSummary(int completed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '已按順序完成$completed/$total項任務',
+      one: '已按順序完成$completed/$total項任務',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathProgressHint => '按清單順序完成任務以推進進度。';
+
+  @override
+  String get calendarCriticalPathProgressLabel => '進度';
+
+  @override
+  String calendarCriticalPathProgressPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get calendarCriticalPathFocus => '聚焦';
+
+  @override
+  String get calendarCriticalPathUnfocus => '取消聚焦';
+
+  @override
+  String get calendarCriticalPathCompletedLabel => '已完成';
+
+  @override
+  String calendarCriticalPathQueuedAdd(Object name) {
+    return '儲存時將新增到「$name」';
+  }
+
+  @override
+  String calendarCriticalPathQueuedCreate(Object name) {
+    return '已建立「$name」並加入佇列';
+  }
+
+  @override
+  String get calendarCriticalPathUnavailable => '此檢視中無法使用關鍵路徑。';
+
+  @override
+  String get calendarCriticalPathAddAfterSaveFailed => '任務已儲存，但無法新增到關鍵路徑。';
+
+  @override
+  String calendarCriticalPathAddSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已將$count個任務新增到「$name」。',
+      one: '已新增到「$name」。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathCreateSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已建立「$name」並新增$count個任務。',
+      one: '已建立「$name」並新增任務。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathAddFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '無法將這些任務新增到關鍵路徑。',
+      one: '無法將任務新增到關鍵路徑。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathCreateFailed => '無法建立關鍵路徑。';
 
   @override
   String calendarDeleteTaskConfirm(Object title) {

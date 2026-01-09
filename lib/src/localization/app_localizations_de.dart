@@ -2697,6 +2697,96 @@ class AppLocalizationsDe extends AppLocalizations {
   String get calendarCriticalPathsTitle => 'Kritische Pfade';
 
   @override
+  String get calendarCriticalPathShareAction => 'Im Chat teilen';
+
+  @override
+  String calendarCriticalPathProgressSummary(int completed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '$completed von $total Aufgaben in Reihenfolge abgeschlossen',
+      one: '$completed von $total Aufgabe in Reihenfolge abgeschlossen',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathProgressHint =>
+      'Schließe Aufgaben in der angegebenen Reihenfolge ab, um voranzukommen.';
+
+  @override
+  String get calendarCriticalPathProgressLabel => 'Fortschritt';
+
+  @override
+  String calendarCriticalPathProgressPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get calendarCriticalPathFocus => 'Fokussieren';
+
+  @override
+  String get calendarCriticalPathUnfocus => 'Fokus entfernen';
+
+  @override
+  String get calendarCriticalPathCompletedLabel => 'Abgeschlossen';
+
+  @override
+  String calendarCriticalPathQueuedAdd(Object name) {
+    return 'Wird beim Speichern zu \"$name\" hinzugefügt';
+  }
+
+  @override
+  String calendarCriticalPathQueuedCreate(Object name) {
+    return '\"$name\" erstellt und vorgemerkt';
+  }
+
+  @override
+  String get calendarCriticalPathUnavailable =>
+      'Kritische Pfade sind in dieser Ansicht nicht verfügbar.';
+
+  @override
+  String get calendarCriticalPathAddAfterSaveFailed =>
+      'Aufgabe gespeichert, konnte aber keinem kritischen Pfad hinzugefügt werden.';
+
+  @override
+  String calendarCriticalPathAddSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Aufgaben zu \"$name\" hinzugefügt.',
+      one: 'Zu \"$name\" hinzugefügt.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathCreateSuccess(int count, Object name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '\"$name\" erstellt und Aufgaben hinzugefügt.',
+      one: '\"$name\" erstellt und Aufgabe hinzugefügt.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarCriticalPathAddFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Aufgaben konnten einem kritischen Pfad nicht hinzugefügt werden.',
+      one: 'Aufgabe konnte einem kritischen Pfad nicht hinzugefügt werden.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCriticalPathCreateFailed =>
+      'Kritischer Pfad konnte nicht erstellt werden.';
+
+  @override
   String calendarDeleteTaskConfirm(Object title) {
     return '\"$title\" löschen?';
   }

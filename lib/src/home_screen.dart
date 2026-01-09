@@ -25,7 +25,6 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
-import 'package:axichat/src/calendar/view/controllers/task_form_draft_store.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
@@ -499,132 +498,124 @@ class _HomeScreenState extends State<HomeScreen> {
       body: DefaultTabController(
         length: tabs.length,
         animationDuration: context.watch<SettingsCubit>().animationDuration,
-        child: MultiRepositoryProvider(
+        child: MultiBlocProvider(
           providers: [
-            if (calendarStorage != null)
-              RepositoryProvider<CalendarTaskDraftStore>(
-                create: (_) => CalendarTaskDraftStore(),
+            BlocProvider(
+              create: (context) => HomeSearchCubit(
+                tabs: tabs.map((tab) => tab.id).toList(),
+                initialFilters: initialTabFilters,
               ),
-          ],
-          child: MultiBlocProvider(
-            providers: [
+            ),
+            if (isRoster)
               BlocProvider(
-                create: (context) => HomeSearchCubit(
-                  tabs: tabs.map((tab) => tab.id).toList(),
-                  initialFilters: initialTabFilters,
+                create: (context) => RosterCubit(
+                  rosterService: context.read<XmppService>(),
                 ),
               ),
-              if (isRoster)
-                BlocProvider(
-                  create: (context) => RosterCubit(
-                    rosterService: context.read<XmppService>(),
-                  ),
-                ),
+            BlocProvider(
+              create: (context) => ProfileCubit(
+                xmppService: context.read<XmppService>(),
+                presenceService: isPresence
+                    ? context.read<XmppService>() as PresenceService
+                    : null,
+                omemoService: isOmemo
+                    ? context.read<XmppService>() as OmemoService
+                    : null,
+              ),
+            ),
+            if (isBlocking)
               BlocProvider(
-                create: (context) => ProfileCubit(
+                create: (context) => BlocklistCubit(
                   xmppService: context.read<XmppService>(),
-                  presenceService: isPresence
-                      ? context.read<XmppService>() as PresenceService
-                      : null,
-                  omemoService: isOmemo
-                      ? context.read<XmppService>() as OmemoService
-                      : null,
                 ),
               ),
-              if (isBlocking)
-                BlocProvider(
-                  create: (context) => BlocklistCubit(
-                    xmppService: context.read<XmppService>(),
-                  ),
-                ),
-              // Always provide CalendarBloc for logged-in users
-              if (calendarStorage != null)
-                BlocProvider<CalendarBloc>(
-                  create: (context) {
-                    final reminderController =
-                        context.read<CalendarReminderController>();
-                    final xmppService = context.read<XmppService>();
-                    const bool seedDemoCalendar = kEnableDemoChats;
-                    final storage = calendarStorage;
+            // Always provide CalendarBloc for logged-in users
+            if (calendarStorage != null)
+              BlocProvider<CalendarBloc>(
+                create: (context) {
+                  final reminderController =
+                      context.read<CalendarReminderController>();
+                  final xmppService = context.read<XmppService>();
+                  const bool seedDemoCalendar = kEnableDemoChats;
+                  final storage = calendarStorage;
 
-                    final CalendarBloc bloc = CalendarBloc(
-                      reminderController: reminderController,
-                      syncManagerBuilder: (bloc) {
-                        final manager = CalendarSyncManager(
-                          readModel: () => bloc.currentModel,
-                          applyModel: (model) async {
+                  final CalendarBloc bloc = CalendarBloc(
+                    reminderController: reminderController,
+                    syncManagerBuilder: (bloc) {
+                      final manager = CalendarSyncManager(
+                        readModel: () => bloc.currentModel,
+                        applyModel: (model) async {
+                          if (bloc.isClosed) return;
+                          bloc.add(
+                            CalendarEvent.remoteModelApplied(model: model),
+                          );
+                        },
+                        sendCalendarMessage: (outbound) async {
+                          if (bloc.isClosed) {
+                            return;
+                          }
+                          final jid = xmppService.myJid;
+                          if (jid != null) {
+                            await xmppService.sendCalendarSyncMessage(
+                              jid: jid,
+                              outbound: outbound,
+                            );
+                          }
+                        },
+                        sendSnapshotFile: xmppService.uploadCalendarSnapshot,
+                      );
+
+                      xmppService
+                        ..setCalendarSyncCallback(
+                          (inbound) async {
+                            if (bloc.isClosed) return false;
+                            return await manager.onCalendarMessage(inbound);
+                          },
+                        )
+                        ..setCalendarSyncWarningCallback(
+                          (warning) async {
                             if (bloc.isClosed) return;
                             bloc.add(
-                              CalendarEvent.remoteModelApplied(model: model),
+                              CalendarEvent.syncWarningRaised(
+                                warning: warning,
+                              ),
                             );
                           },
-                          sendCalendarMessage: (outbound) async {
-                            if (bloc.isClosed) {
-                              return;
-                            }
-                            final jid = xmppService.myJid;
-                            if (jid != null) {
-                              await xmppService.sendCalendarSyncMessage(
-                                jid: jid,
-                                outbound: outbound,
-                              );
-                            }
-                          },
-                          sendSnapshotFile: xmppService.uploadCalendarSnapshot,
                         );
-
-                        xmppService
-                          ..setCalendarSyncCallback(
-                            (inbound) async {
-                              if (bloc.isClosed) return false;
-                              return await manager.onCalendarMessage(inbound);
-                            },
-                          )
-                          ..setCalendarSyncWarningCallback(
-                            (warning) async {
-                              if (bloc.isClosed) return;
-                              bloc.add(
-                                CalendarEvent.syncWarningRaised(
-                                  warning: warning,
-                                ),
-                              );
-                            },
-                          );
-                        return manager;
-                      },
-                      availabilityCoordinator: availabilityShareCoordinator,
-                      storage: storage,
-                      onDispose: () {
-                        xmppService
-                          ..clearCalendarSyncCallback()
-                          ..clearCalendarSyncWarningCallback();
-                      },
-                    )..add(const CalendarEvent.started());
-                    if (seedDemoCalendar) {
-                      bloc.add(
-                        CalendarEvent.remoteModelApplied(
-                          model: DemoCalendar.franklin(
-                            anchor: DateTime.now(),
-                          ),
+                      return manager;
+                    },
+                    availabilityCoordinator: availabilityShareCoordinator,
+                    storage: storage,
+                    onDispose: () {
+                      xmppService
+                        ..clearCalendarSyncCallback()
+                        ..clearCalendarSyncWarningCallback();
+                    },
+                  )..add(const CalendarEvent.started());
+                  if (seedDemoCalendar) {
+                    bloc.add(
+                      CalendarEvent.remoteModelApplied(
+                        model: DemoCalendar.franklin(
+                          anchor: DateTime.now(),
                         ),
-                      );
-                    }
-                    return bloc;
-                  },
-                ),
-              BlocProvider(
-                create: (context) => ConnectivityCubit(
-                  xmppBase: context.read<XmppService>(),
-                ),
+                      ),
+                    );
+                  }
+                  return bloc;
+                },
               ),
-              BlocProvider(
-                create: (context) => EmailSyncCubit(
-                  emailService: context.read<EmailService>(),
-                ),
+            BlocProvider(
+              create: (context) => ConnectivityCubit(
+                xmppBase: context.read<XmppService>(),
               ),
-            ],
-            child: calendarAwareContent,
-          ),
+            ),
+            BlocProvider(
+              create: (context) => EmailSyncCubit(
+                emailService: context.read<EmailService>(),
+              ),
+            ),
+          ],
+          child: calendarAwareContent,
         ),
       ),
     );

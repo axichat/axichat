@@ -10,8 +10,8 @@ import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
-import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
+import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
@@ -3964,53 +3964,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (metadata == null) {
         continue;
       }
-      if (_isCalendarSnapshotMetadata(metadata)) {
+      if (metadata.isCalendarSnapshot) {
         snapshotIds.add(metadataId);
       }
     }
     return snapshotIds;
-  }
-
-  bool _isCalendarSnapshotMetadata(FileMetadataData metadata) {
-    final normalizedMimeType = metadata.mimeType?.trim().toLowerCase();
-    if (normalizedMimeType == CalendarSnapshotCodec.mimeType) {
-      return true;
-    }
-    final snapshotExtension = CalendarSnapshotCodec.fileExtension.toLowerCase();
-    if (_matchesSnapshotExtension(metadata.filename, snapshotExtension)) {
-      return true;
-    }
-    final sources = metadata.sourceUrls;
-    if (sources == null || sources.isEmpty) {
-      return false;
-    }
-    for (final source in sources) {
-      final sourcePath = _snapshotSourcePath(source);
-      if (_matchesSnapshotExtension(sourcePath, snapshotExtension)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool _matchesSnapshotExtension(
-    String value,
-    String snapshotExtension,
-  ) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-    return trimmed.toLowerCase().endsWith(snapshotExtension);
-  }
-
-  String _snapshotSourcePath(String source) {
-    final trimmed = source.trim();
-    if (trimmed.isEmpty) {
-      return trimmed;
-    }
-    final uri = Uri.tryParse(trimmed);
-    return (uri?.path ?? trimmed);
   }
 
   Future<

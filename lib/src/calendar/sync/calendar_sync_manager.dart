@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -20,6 +21,9 @@ import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 
 /// Threshold of updates before sending a snapshot.
 const int kSnapshotThreshold = 50;
+const int _calendarSyncBatchIntervalSeconds = 30;
+const Duration _calendarSyncBatchInterval =
+    Duration(seconds: _calendarSyncBatchIntervalSeconds);
 const String _snapshotFallbackName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _snapshotChecksumMismatchLog =
@@ -29,6 +33,7 @@ const String _snapshotVersionUnsupportedLogPrefix =
 const String _snapshotVersionUnsupportedLogSuffix = ')';
 const String _inlineSnapshotSentLog = 'Sent inline calendar snapshot';
 const String _inlineSnapshotFailedLog = 'Error sending inline snapshot';
+const String _batchFlushFailedLog = 'Failed to flush batched calendar updates';
 const String _calendarSyncEntityTask = 'task';
 const String _calendarSyncEntityDayEvent = 'day_event';
 const String _calendarSyncEntityCriticalPath = 'critical_path';
@@ -62,6 +67,7 @@ class CalendarSyncManager {
   final Future<void> Function(CalendarSyncState) _writeSyncState;
   final List<CalendarSyncOutbound> _pendingEnvelopes = <CalendarSyncOutbound>[];
   Future<void>? _pendingFlush;
+  Timer? _batchFlushTimer;
 
   /// Handles an incoming calendar sync message.
   Future<bool> onCalendarMessage(CalendarSyncInbound inbound) async {
@@ -375,8 +381,7 @@ class CalendarSyncManager {
 
   /// Send task update to other devices
   Future<void> sendTaskUpdate(CalendarTask task, String operation) async {
-    await _flushPendingEnvelopes();
-    await _sendUpdate(
+    _queueUpdate(
       payloadId: task.id,
       operation: operation,
       data: task.toJson(),
@@ -386,8 +391,7 @@ class CalendarSyncManager {
   }
 
   Future<void> sendDayEventUpdate(DayEvent event, String operation) async {
-    await _flushPendingEnvelopes();
-    await _sendUpdate(
+    _queueUpdate(
       payloadId: event.id,
       operation: operation,
       data: event.toJson(),
@@ -400,8 +404,7 @@ class CalendarSyncManager {
     CalendarJournal journal,
     String operation,
   ) async {
-    await _flushPendingEnvelopes();
-    await _sendUpdate(
+    _queueUpdate(
       payloadId: journal.id,
       operation: operation,
       data: journal.toJson(),
@@ -415,8 +418,7 @@ class CalendarSyncManager {
     CalendarCriticalPath path,
     String operation,
   ) async {
-    await _flushPendingEnvelopes();
-    await _sendUpdate(
+    _queueUpdate(
       payloadId: path.id,
       operation: operation,
       data: path.toJson(),
@@ -442,23 +444,23 @@ class CalendarSyncManager {
     await _maybeSendSnapshot();
   }
 
-  Future<void> _sendUpdate({
+  void _queueUpdate({
     required String payloadId,
     required String operation,
     required Map<String, dynamic> data,
     required String entity,
-  }) async {
-    final syncMessage = CalendarSyncMessage.update(
+  }) {
+    final CalendarSyncMessage syncMessage = CalendarSyncMessage.update(
       taskId: payloadId,
       operation: operation,
       data: data,
       entity: entity,
     );
 
-    final messageJson = jsonEncode({
+    final String messageJson = jsonEncode({
       'calendar_sync': syncMessage.toJson(),
     });
-    await _sendEnvelope(CalendarSyncOutbound(envelope: messageJson));
+    _queueEnvelope(CalendarSyncOutbound(envelope: messageJson));
   }
 
   String _calculateChecksum(Map<String, dynamic> data) {
@@ -691,33 +693,49 @@ class CalendarSyncManager {
     return candidate.isNotEmpty ? candidate : _snapshotFallbackName;
   }
 
-  Future<void> _sendEnvelope(
-    CalendarSyncOutbound outbound, {
-    int clearQueueUntil = 0,
-  }) async {
+  void _queueEnvelope(CalendarSyncOutbound outbound) {
+    _pendingEnvelopes.add(outbound);
+    _ensureBatchTimer();
+  }
+
+  Future<void> _sendEnvelope(CalendarSyncOutbound outbound) async {
     try {
-      await _flushPendingEnvelopes();
       await _sendCalendarMessage(outbound);
-      _clearPendingUpTo(clearQueueUntil);
-      if (_pendingEnvelopes.isNotEmpty) {
-        await _flushPendingEnvelopes();
-      }
     } catch (_) {
-      _pendingEnvelopes.add(outbound);
+      _queueEnvelope(outbound);
       rethrow;
     }
   }
 
-  void _clearPendingUpTo(int clearQueueUntil) {
-    if (clearQueueUntil <= 0 || _pendingEnvelopes.isEmpty) {
+  void _ensureBatchTimer() {
+    if (_batchFlushTimer != null) {
       return;
     }
-    final toClear = clearQueueUntil > _pendingEnvelopes.length
-        ? _pendingEnvelopes.length
-        : clearQueueUntil;
-    if (toClear > 0) {
-      _pendingEnvelopes.removeRange(0, toClear);
+    _batchFlushTimer = Timer.periodic(
+      _calendarSyncBatchInterval,
+      _onBatchTimerTick,
+    );
+  }
+
+  void _onBatchTimerTick(Timer timer) {
+    if (_pendingEnvelopes.isEmpty) {
+      _stopBatchTimer();
+      return;
     }
+    unawaited(_flushPendingEnvelopes().catchError(_logBatchFlushError));
+  }
+
+  void _stopBatchTimer() {
+    _batchFlushTimer?.cancel();
+    _batchFlushTimer = null;
+  }
+
+  void _logBatchFlushError(Object error, StackTrace stackTrace) {
+    developer.log(
+      '$_batchFlushFailedLog: $error',
+      name: 'CalendarSyncManager',
+      stackTrace: stackTrace,
+    );
   }
 
   Future<void> _flushPendingEnvelopes() async {
@@ -744,6 +762,9 @@ class CalendarSyncManager {
       }
     } finally {
       _pendingFlush = null;
+      if (_pendingEnvelopes.isEmpty) {
+        _stopBatchTimer();
+      }
     }
   }
 }
